@@ -1,9 +1,9 @@
 import { defineConfig, loadEnv } from "vite";
 import solid from "vite-plugin-solid";
+import tailwindcss from '@tailwindcss/vite'
+import path from "path"
 
-// @ts-expect-error process is a nodejs global
 const envCwd = process.cwd();
-// @ts-expect-error process is a nodejs global
 const processEnv = process.env;
 
 // https://vite.dev/config/
@@ -12,7 +12,14 @@ export default defineConfig(({ mode }) => {
   const host = env.TAURI_DEV_HOST || processEnv.TAURI_DEV_HOST;
 
   return {
-    plugins: [solid()],
+    plugins: [solid(), tailwindcss()],
+
+    // ShadCN UI path alias
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
 
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
     //
