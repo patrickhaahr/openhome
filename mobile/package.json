@@ -5,16 +5,19 @@
   "type": "module",
   "scripts": {
     "start": "vite",
-    "dev":   "run tauri android dev",
-    "build": "run tauri build && vite build",
+    "dev": "vite",
+    "android": "tauri android dev",
+    "build": "vite build",
     "serve": "vite preview",
     "check": "cargo clippy -- -D warnings"
   },
   "license": "MIT",
   "dependencies": {
-    "solid-js": "^1.9.3",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
+    "@tauri-apps/plugin-http": "^2.5.6",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-store": "^2.4.2",
+    "solid-js": "^1.9.3"
   },
   "devDependencies": {
     "typescript": "~5.6.2",

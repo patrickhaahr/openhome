@@ -1,51 +1,58 @@
-import { createSignal } from "solid-js";
-import logo from "./assets/logo.svg";
-import { invoke } from "@tauri-apps/api/core";
+import type { Component } from "solid-js";
+import { createResource, Show, useTransition, ErrorBoundary, Suspense } from "solid-js";
+import { getHealthStatus, getHealthUrl, HealthResponse } from "./api";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = createSignal("");
-  const [name, setName] = createSignal("");
+interface AppProps {}
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name: name() }));
-  }
+const App: Component<AppProps> = () => {
+  const [isPending, startTransition] = useTransition();
+
+  const [healthData, { refetch }] = createResource(async () => {
+    const url = await getHealthUrl();
+    const response: HealthResponse = await getHealthStatus(url);
+    return { url, status: response.status };
+  });
+
+  const handleRefresh = () => {
+    startTransition(() => {
+      refetch();
+    });
+  };
 
   return (
-    <main class="container">
-      <h1>Welcome to Tauri + Solid</h1>
-
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://solidjs.com" target="_blank">
-          <img src={logo} class="logo solid" alt="Solid logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and Solid logos to learn more.</p>
-
-      <form
-        class="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg()}</p>
-    </main>
+    <ErrorBoundary fallback={(err) => (
+      <main class="container">
+        <h1>Home App</h1>
+        <p class="error">Error: {err.message}</p>
+        <button onClick={() => window.location.reload()}>Reload</button>
+      </main>
+    )}>
+      <Suspense fallback={<main class="container"><h1>Home App</h1><p>Loading...</p></main>}>
+        <main class="container">
+          <h1>Home App</h1>
+          
+          <div class="health-section">
+            <h2>API Health</h2>
+            <Show when={healthData.error}>
+              {(err) => <p class="error">Error: {err().message}</p>}
+            </Show>
+            <Show when={healthData()}>
+              {(data) => (
+                <>
+                  <p>Request URL: <strong>{data().url}</strong></p>
+                  <p>Status: <strong>{data().status}</strong></p>
+                </>
+              )}
+            </Show>
+            <button onClick={handleRefresh} disabled={isPending()}>
+              {isPending() ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+        </main>
+      </Suspense>
+    </ErrorBoundary>
   );
-}
+};
 
 export default App;

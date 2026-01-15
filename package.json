@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@tauri-apps/plugin-http": "^2.5.6"
+  }
+}

@@ -1,0 +1,3 @@
+[api]
+base_url = "https://api.home-app.local"
+timeout_seconds = 30
