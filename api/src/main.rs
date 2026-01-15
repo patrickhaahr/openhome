@@ -4,11 +4,14 @@ use tokio::signal;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod auth;
 mod error;
 mod routes;
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -16,8 +19,18 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    dotenvy::dotenv().ok();
+
+    let api_key = auth::ApiKey::new(
+        std::env::var("API_KEY").expect("API_KEY environment variable must be set"),
+    );
+    let api_key_clone = api_key.clone();
+
     let app = Router::new()
         .merge(routes::health::router())
+        .layer(axum::middleware::from_fn(move |req, next| {
+            auth::auth_middleware(req, next, api_key_clone.clone())
+        }))
         .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind("0.0.0.0:8000").await.unwrap();

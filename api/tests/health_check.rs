@@ -1,30 +1,35 @@
-use axum::{Router, body::to_bytes};
-use http::{Request, StatusCode};
-use rpi_api::routes::health::router;
-use tower::ServiceExt;
+mod common;
 
-fn create_test_app() -> Router {
-    router()
+use http::StatusCode;
+
+#[tokio::test]
+async fn test_should_return_ok_status_with_valid_api_key() {
+    let app = common::test_app();
+
+    let (status, body) = common::send_request(&app, "/api/health", Some("test-api-key")).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "ok");
 }
 
 #[tokio::test]
-async fn test_health_check_returns_ok_status() {
-    let app = create_test_app();
+async fn test_should_return_unauthorized_without_api_key() {
+    let app = common::test_app();
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/health")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let (status, body) = common::send_request(&app, "/api/health", None).await;
 
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["error"], "Missing or invalid API key");
+    assert_eq!(body["status"], 401);
+}
 
-    let body = to_bytes(response.into_body(), 1024).await.unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+#[tokio::test]
+async fn test_should_return_unauthorized_with_invalid_api_key() {
+    let app = common::test_app();
 
-    assert_eq!(json["status"], "ok");
+    let (status, body) = common::send_request(&app, "/api/health", Some("wrong-api-key")).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["error"], "Missing or invalid API key");
+    assert_eq!(body["status"], 401);
 }
