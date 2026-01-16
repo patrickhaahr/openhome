@@ -4,6 +4,7 @@ import { getHealthStatus, getHealthUrl } from "./api";
 import { baseUrl } from "./stores/config";
 import Settings from "./pages/settings";
 import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
+import FactCard from "./components/fact-card";
 
 const App: Component = () => {
   const [isPending, startTransition] = useTransition();
@@ -47,6 +48,10 @@ const App: Component = () => {
               <Suspense fallback={
                 <p class="text-text-secondary">Loading...</p>
               }>
+                <div class="mb-6">
+                  <FactCard />
+                </div>
+                
                 <div class="rounded-xl bg-bg-secondary p-4 sm:p-6">
                   <h2 class="mb-4 text-lg font-medium text-text-primary">API Health</h2>
                   
