@@ -28,6 +28,7 @@ async fn main() {
 
     let app = Router::new()
         .merge(routes::health::router())
+        .merge(routes::facts::router())
         .layer(axum::middleware::from_fn(move |req, next| {
             auth::auth_middleware(req, next, api_key_clone.clone())
         }))

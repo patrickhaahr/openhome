@@ -2,15 +2,17 @@ use axum::Router;
 use axum::body::Body;
 use http::{Request, StatusCode};
 use rpi_api::auth::{ApiKey, auth_middleware};
-use rpi_api::routes::health::router;
+use rpi_api::routes::{health::router, facts::router as facts_router};
 use tower::ServiceExt;
 
 pub fn test_app() -> Router {
     let api_key = ApiKey::new("test-api-key".to_string());
     let api_key_clone = api_key.clone();
-    router().layer(axum::middleware::from_fn(move |req, next| {
-        auth_middleware(req, next, api_key_clone.clone())
-    }))
+    router()
+        .merge(facts_router())
+        .layer(axum::middleware::from_fn(move |req, next| {
+            auth_middleware(req, next, api_key_clone.clone())
+        }))
 }
 
 pub async fn send_request(
