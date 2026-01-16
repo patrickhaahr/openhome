@@ -1,5 +1,5 @@
 import { Component, createResource, Show, Suspense } from "solid-js";
-import { getRandomFact } from "../api";
+import { getRandomFact } from "../api/facts";
 import { Button } from "./ui/button";
 import {
   Card,
