@@ -1,7 +1,8 @@
 import type { Component } from "solid-js";
 import { createSignal, createEffect, on, Show } from "solid-js";
 import { saveSettings, saveApiKey, baseUrl, timeoutSeconds, isLoaded } from "../stores/config";
-import { getHealthStatus, getKeyringStatus, type KeyringDiagnostics } from "../api";
+import { getKeyringStatus, type KeyringDiagnostics } from "../api";
+import { getHealthStatus } from "../api/health";
 
 interface SettingsProps {
   onSaved: () => void;
