@@ -1,109 +1,66 @@
 # AGENTS.md - Guidelines for AI Coding Agents
 
-Rust axum API for homelab control (Docker, IR, AdGuard, plants) accessible via Tailscale.
+Rust axum API for a homelab service that serves facts, RSS feeds, and a timeline, protected by an API key.
 
-## Build & Test Commands
+## Project Scope
 
-| Command | Description |
-|---------|-------------|
-| `cargo build` | Build project |
-| `cargo build --release` | Release build |
-| `cargo run` | Development mode |
-| `cargo clippy` | Linter (fix warnings) |
-| `cargo clippy -- -D warnings` | Treat warnings as errors |
-| `cargo fmt` | Format code |
-| `cargo test` | Run all tests |
-| `cargo test test_name -- --exact` | Run single test |
+This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide guidelines.
 
-## Architecture (see PLAN.md)
+## Runtime & Data Notes
 
-**Route Priority:** 0) `/api/health` (no auth) → 1) Docker, IR → 2) AdGuard → 3) Plants
+- HTTP server binds to `0.0.0.0:8000`.
+- SQLite database is configured via `DATABASE_URL`.
+- Migrations live in `migrations/` and are applied on startup.
+- API auth expects `Authorization: Bearer <API_KEY>`.
+- Feed refresh runs on startup and every 24 hours in the background.
 
-**Middleware:** Health bypasses auth → Validate `X-API-Key` → CORS (Tailscale IPs) → Logging
+## Routes
 
-**Caching:** Docker: 5s, Plants: 60s, Health/IR/AdGuard: none (real-time)
-
-## Code Style
-
-**Rust Conventions:**
-- Run `cargo fmt` and `cargo clippy -- -D warnings` before committing
-- Use `async fn`, `Result<T, E>`, `Option<T>`, and `?` for errors
-- Avoid `.unwrap()`/`.expect()` (tests/main only)
-- Explicit error context: `.map_err(|e| Error::NetworkFailed(format!("Failed: {}", e)))?`
-
-**Import Order:**
-1. `use std::` → 2. `use tokio::` → 3. External crates → 4. Internal → 5. `use crate::`
-
-```rust
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use axum::{extract::State, routing::get, Router};
-use reqwest::Client;
-use crate::error::Error;
-```
-
-**Naming:** PascalCase structs/enums, snake_case functions/modules, SCREAMING_SNAKE_CASE constants
-
-**Error Handling:** Consistent JSON `{"error": "msg", "status": 401}` with status codes (401/404/422/502/503/504)
-
-```rust
-#[derive(Debug)]
-pub enum Error { Unauthorized(String), NotFound(String), ServiceUnavailable(String) }
-
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
-        let (status, msg) = match self {
-            Error::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m),
-            Error::NotFound(m) => (StatusCode::NOT_FOUND, m),
-            Error::ServiceUnavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m),
-        };
-        (status, Json(json!({"error": msg, "status": status.as_u16()}))).into_response()
-    }
-}
-```
-
-**Caching:** `Arc<RwLock<HashMap<String, (Instant, T)>>>` with read-lock check, write-lock update
-
-```rust
-async fn get_or_update<T>(cache: &Cache, key: &str, ttl: Duration, fetch: impl Fn() -> impl Future<Output = T>) -> T {
-    if let Some((ts, val)) = cache.read().await.get(key) {
-        if ts.elapsed() < ttl { return val.clone(); }
-    }
-    let val = fetch().await;
-    cache.write().await.insert(key.to_string(), (Instant::now(), val.clone()));
-    val
-}
-```
-
-**Logging:** `tracing` with INFO (requests), WARN (transient failures), ERROR (persistent failures)
-
-```rust
-info!(method = %method, path = %path, status = %status, "Request completed");
-```
-
-**Security:** Constant-time API key comparison, validate inputs, env vars for secrets, no logging of secrets
+- Health: `/api/health`
+- Facts: `/api/facts/random`
+- Feeds: `/api/feeds`, `/api/feeds/{id}`, `/api/feeds/refresh`
+- Timeline: `/api/timeline`, `/api/items/{id}/read`
 
 ## Project Structure
 
 ```
-src/
-├── main.rs          # Entry point, router setup
-├── mod.rs           # Module declarations
-├── docker.rs        # Docker container endpoints
-├── adguard.rs       # AdGuard Home endpoints
-├── plants.rs        # Plant sensor endpoints
-├── ir.rs            # IR control endpoints
-├── error.rs         # Error types and IntoResponse
-└── config.rs        # App config, state
+api/
+├── migrations/              # SQLx migrations
+└── src/
+    ├── auth.rs              # API key auth middleware
+    ├── error.rs             # AppError and JSON error response
+    ├── lib.rs               # AppState and module wiring
+    ├── main.rs              # Server bootstrap and scheduler
+    ├── routes/              # HTTP route handlers
+    │   ├── facts.rs
+    │   ├── feeds.rs
+    │   ├── health.rs
+    │   ├── timeline.rs
+    │   └── mod.rs
+    └── services/            # Domain services
+        ├── feed.rs
+        └── mod.rs
 ```
+
+## Available Skills
+
+- `axum` - Expert guide for building production-ready web APIs with Axum 0.8+
+
+## SQLx Usage
+
+- Use `query!`/`query_as!` for compile-time checked SQL.
+- Keep SQL strings in handlers/services; avoid string concatenation.
+- Map unique violations to conflicts rather than internal errors.
+
+## Logging
+
+- Use `tracing` with structured fields.
+- Prefer `info` for lifecycle events and `warn` for recoverable failures.
 
 ## Key Takeaways
 
-1. Format and lint before committing
-2. Implement routes by priority
-3. Consistent error JSON format
-4. Cache slow endpoints only
-5. Structured logging with tracing
-6. Follow Rust idioms (Result, ?, explicit context)
-7. Modular code: `docker`, `adguard`, `plants`, `ir` modules
-8. Use 'Axum' skill for comprehensive detailed patterns
+1. Format and lint before committing.
+2. Keep errors explicit, JSON-shaped, and safe.
+3. Validate all inputs and reject unsafe URLs.
+4. Prefer SQLx compile-time query macros.
+5. Keep handlers thin; push logic to services.
