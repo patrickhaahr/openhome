@@ -8,6 +8,7 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use rpi_api::auth;
+use rpi_api::services::feed;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -44,11 +45,28 @@ async fn main() -> anyhow::Result<()> {
         .merge(rpi_api::routes::health::router())
         .merge(rpi_api::routes::facts::router())
         .merge(rpi_api::routes::feeds::router())
-        .with_state(state)
+        .merge(rpi_api::routes::timeline::router())
+        .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             rpi_api::auth::auth_middleware(req, next, api_key_clone.clone())
         }))
         .layer(TraceLayer::new_for_http());
+
+    let scheduler_state = state.clone();
+    tokio::spawn(async move {
+        tracing::info!("Starting RSS feed scheduler (initial fetch + 24h interval)");
+        if let Err(e) = feed::refresh_all_feeds(&scheduler_state.db).await {
+            tracing::warn!(error = %e, "Initial RSS feed refresh failed");
+        }
+        loop {
+            tokio::time::sleep(Duration::from_secs(24 * 60 * 60)).await;
+            tracing::info!("Running scheduled RSS feed refresh");
+            if let Err(e) = feed::refresh_all_feeds(&scheduler_state.db).await {
+                tracing::warn!(error = %e, "Scheduled RSS feed refresh failed");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        }
+    });
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
     tracing::info!("Listening on {}", listener.local_addr()?);
