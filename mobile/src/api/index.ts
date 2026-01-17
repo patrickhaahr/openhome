@@ -12,9 +12,12 @@ export interface KeyringDiagnostics {
   keyring_accessible: boolean;
 }
 
+const API_METHODS = ["GET", "POST", "DELETE"] as const;
+type ApiMethod = (typeof API_METHODS)[number];
+
 interface CallApiOptions {
   path: string;
-  method: "GET" | "POST";
+  method: ApiMethod;
   body?: unknown;
   apiKeyOverride?: string;
 }
