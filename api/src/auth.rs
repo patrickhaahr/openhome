@@ -47,9 +47,9 @@ pub async fn auth_middleware(
     match key {
         Some(k) => {
             if k.as_bytes().ct_eq(api_key.as_str().as_bytes()).into() {
-                 Ok(next.run(req).await)
+                Ok(next.run(req).await)
             } else {
-                 warn!(
+                warn!(
                     provided_length = k.len(),
                     expected_length = api_key.len(),
                     "Auth failed: invalid key"

@@ -5,10 +5,12 @@ use rpi_api::AppState;
 use rpi_api::auth::{ApiKey, auth_middleware};
 use rpi_api::routes::{
     facts::router as facts_router, feeds::router as feeds_router, health::router,
+    timeline::router as timeline_router,
 };
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 
+#[allow(dead_code)]
 pub async fn test_app() -> Router {
     test_app_with_db().await.0
 }
@@ -25,6 +27,7 @@ pub async fn test_app_with_db() -> (Router, AppState) {
     let app = router()
         .merge(facts_router())
         .merge(feeds_router())
+        .merge(timeline_router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             auth_middleware(req, next, api_key_clone.clone())
