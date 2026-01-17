@@ -30,6 +30,8 @@ thiserror = "2.0.17"
 log = "0.4.29"
 android_logger = "0.15.1"
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "sync-secret-service", "linux-native"] }
+url = "2.5"
+percent-encoding = "2"
 
 [profile.release]
 codegen-units = 1          # Better optimization at cost of compile time
