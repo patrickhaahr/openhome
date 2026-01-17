@@ -1,8 +1,8 @@
 import type { Component } from "solid-js";
-import { Home, Settings } from "lucide-solid";
+import { Home, Settings, Rss } from "lucide-solid";
 import { cn } from "@/lib/utils";
 
-export type NavPage = "home" | "settings";
+export type NavPage = "home" | "rss" | "settings";
 
 interface BottomNavProps {
   currentPage: NavPage;
@@ -25,7 +25,20 @@ const BottomNav: Component<BottomNavProps> = (props) => {
           <Home class="size-6" />
           <span class="text-xs font-medium">Home</span>
         </button>
-        
+
+        <button
+          onClick={() => props.onNavigate("rss")}
+          class={cn(
+            "flex flex-col items-center justify-center gap-1 px-6 py-2 transition-colors",
+            props.currentPage === "rss"
+              ? "text-accent"
+              : "text-text-secondary hover:text-text-primary"
+          )}
+        >
+          <Rss class="size-6" />
+          <span class="text-xs font-medium">RSS</span>
+        </button>
+
         <button
           onClick={() => props.onNavigate("settings")}
           class={cn(

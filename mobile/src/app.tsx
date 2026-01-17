@@ -1,6 +1,7 @@
 import type { Component } from "solid-js";
 import { createSignal, Show, ErrorBoundary } from "solid-js";
 import Settings from "./pages/settings";
+import Rss from "./pages/rss";
 import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
 import FactCard from "./components/fact-card";
 import ApiStatus from "./components/ui/api-status";
@@ -22,7 +23,7 @@ const App: Component = () => {
             </h1>
           </header>
 
-          <Show when={currentPage() === "settings"} fallback={
+          <Show when={currentPage() === "home"}>
             <ErrorBoundary fallback={(err) => (
               <p class="rounded-lg bg-error/10 px-4 py-3 text-error">
                 {err.message}
@@ -33,8 +34,26 @@ const App: Component = () => {
                 <ApiStatus />
               </div>
             </ErrorBoundary>
-          }>
-            <Settings onSaved={() => {}} />
+          </Show>
+
+          <Show when={currentPage() === "rss"}>
+            <ErrorBoundary fallback={(err) => (
+              <p class="rounded-lg bg-error/10 px-4 py-3 text-error">
+                {err.message}
+              </p>
+            )}>
+              <Rss />
+            </ErrorBoundary>
+          </Show>
+
+          <Show when={currentPage() === "settings"}>
+            <ErrorBoundary fallback={(err) => (
+              <p class="rounded-lg bg-error/10 px-4 py-3 text-error">
+                {err.message}
+              </p>
+            )}>
+              <Settings onSaved={() => {}} />
+            </ErrorBoundary>
           </Show>
         </div>
       </main>
