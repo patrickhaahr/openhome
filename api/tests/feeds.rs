@@ -76,7 +76,10 @@ async fn test_should_return_400_for_invalid_url() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(response["error"], "Invalid URL: relative URL without a base");
+    assert_eq!(
+        response["error"],
+        "Invalid URL: relative URL without a base"
+    );
 }
 
 #[tokio::test]

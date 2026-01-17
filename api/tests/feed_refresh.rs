@@ -67,5 +67,8 @@ async fn test_should_reject_private_host_feed_url() {
     assert_eq!(result.feed_id, feed_id);
     assert_eq!(result.items_inserted, 0);
     assert_eq!(result.duplicates_skipped, 0);
-    assert_eq!(result.error, Some("refusing to fetch non-global address".to_string()));
+    assert_eq!(
+        result.error,
+        Some("refusing to fetch non-global address".to_string())
+    );
 }
