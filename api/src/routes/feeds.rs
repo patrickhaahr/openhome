@@ -1,55 +1,21 @@
-use crate::error::{AppError, Result};
+use std::net::IpAddr;
+
 use axum::{
     Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{Decode, Sqlite, Type};
+use url::Url;
+
+use crate::error::{AppError, Result};
 
 #[derive(Debug, Serialize)]
 struct Feed {
     id: i64,
     url: String,
-    enabled: bool,
-}
-
-#[derive(Debug)]
-struct FeedDb {
-    id: i64,
-    url: String,
-    enabled: DbBool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct DbBool(bool);
-
-impl Type<Sqlite> for DbBool {
-    fn type_info() -> <Sqlite as sqlx::Database>::TypeInfo {
-        <i64 as Type<Sqlite>>::type_info()
-    }
-}
-
-impl<'r> Decode<'r, Sqlite> for DbBool {
-    fn decode(
-        value: <Sqlite as sqlx::Database>::ValueRef<'r>,
-    ) -> std::result::Result<Self, sqlx::error::BoxDynError> {
-        let int = <i64 as Decode<Sqlite>>::decode(value)?;
-        Ok(DbBool(int != 0))
-    }
-}
-
-impl From<DbBool> for bool {
-    fn from(val: DbBool) -> bool {
-        val.0
-    }
-}
-
-impl From<bool> for DbBool {
-    fn from(val: bool) -> Self {
-        DbBool(val)
-    }
+    title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,40 +23,80 @@ struct CreateFeed {
     url: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateFeed {
-    enabled: bool,
+fn validate_url(raw: &str) -> Result<Url> {
+    let url = Url::parse(raw).map_err(|e| AppError::Validation(format!("Invalid URL: {}", e)))?;
+
+    if url.scheme() != "https" {
+        return Err(AppError::Validation(
+            "URL must use HTTPS scheme".to_string(),
+        ));
+    }
+
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(AppError::Validation(
+            "URL must not contain userinfo (username or password)".to_string(),
+        ));
+    }
+
+    let Some(host) = url.host_str() else {
+        return Err(AppError::Validation("URL missing host".to_string()));
+    };
+
+    let host_lower = host.to_lowercase();
+    if host_lower == "localhost"
+        || host_lower.ends_with(".localhost")
+        || host_lower.ends_with(".local")
+    {
+        return Err(AppError::Validation(
+            "URL host is not allowed (localhost or .local)".to_string(),
+        ));
+    }
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        let is_private = match ip {
+            IpAddr::V4(addr) => {
+                addr.is_private()
+                    || addr.is_loopback()
+                    || addr.is_link_local()
+                    || addr.is_multicast()
+                    || addr.is_unspecified()
+            }
+            IpAddr::V6(addr) => {
+                addr.is_loopback()
+                    || addr.is_unicast_link_local()
+                    || addr.is_unspecified()
+                    || addr.is_unique_local()
+                    || addr.is_multicast()
+            }
+        };
+        if is_private {
+            return Err(AppError::Validation(
+                "URL host is a private or reserved IP address".to_string(),
+            ));
+        }
+    }
+
+    Ok(url)
 }
 
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/api/feeds", get(get_feeds))
         .route("/api/feeds", post(create_feed))
-        .route("/api/feeds/{id}", put(update_feed))
         .route("/api/feeds/{id}", delete(delete_feed))
 }
 
 async fn get_feeds(State(state): State<crate::AppState>) -> Result<Json<Vec<Feed>>> {
     let feeds = sqlx::query_as!(
-        FeedDb,
+        Feed,
         r#"
-        SELECT id, url, enabled as "enabled!: DbBool"
+        SELECT id, url, title
         FROM feeds
-        WHERE enabled = 1
         "#
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch feeds: {}", e)))?;
-
-    let feeds: Vec<Feed> = feeds
-        .into_iter()
-        .map(|f| Feed {
-            id: f.id,
-            url: f.url,
-            enabled: f.enabled.into(),
-        })
-        .collect();
 
     Ok(Json(feeds))
 }
@@ -99,20 +105,20 @@ async fn create_feed(
     State(state): State<crate::AppState>,
     Json(payload): Json<CreateFeed>,
 ) -> Result<(StatusCode, Json<Feed>)> {
-    if !payload.url.starts_with("http://") && !payload.url.starts_with("https://") {
-        return Err(AppError::Validation(
-            "URL must start with http:// or https://".to_string(),
-        ));
-    }
+    let validated_url = match validate_url(&payload.url) {
+        Ok(url) => url,
+        Err(e) => return Err(e),
+    };
 
+    let feed_url = validated_url.as_str().to_string();
     let feed = sqlx::query_as!(
-        FeedDb,
+        Feed,
         r#"
-        INSERT INTO feeds (url, enabled)
-        VALUES ($1, 1)
-        RETURNING id, url, enabled as "enabled!: DbBool"
+        INSERT INTO feeds (url)
+        VALUES ($1)
+        RETURNING id, url, title
         "#,
-        payload.url
+        feed_url
     )
     .fetch_one(&state.db)
     .await
@@ -123,43 +129,7 @@ async fn create_feed(
         other => AppError::Internal(anyhow::anyhow!("Failed to create feed: {}", other)),
     })?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(Feed {
-            id: feed.id,
-            url: feed.url,
-            enabled: feed.enabled.into(),
-        }),
-    ))
-}
-
-async fn update_feed(
-    State(state): State<crate::AppState>,
-    Path(id): Path<i64>,
-    Json(payload): Json<UpdateFeed>,
-) -> Result<Json<Feed>> {
-    let enabled_db: i64 = if payload.enabled { 1 } else { 0 };
-    let feed = sqlx::query_as!(
-        FeedDb,
-        r#"
-        UPDATE feeds
-        SET enabled = $1
-        WHERE id = $2
-        RETURNING id, url, enabled as "enabled!: DbBool"
-        "#,
-        enabled_db,
-        id
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update feed: {}", e)))?
-    .ok_or_else(|| AppError::NotFound(format!("Feed with id {} not found", id)))?;
-
-    Ok(Json(Feed {
-        id: feed.id,
-        url: feed.url,
-        enabled: feed.enabled.into(),
-    }))
+    Ok((StatusCode::CREATED, Json(feed)))
 }
 
 async fn delete_feed(

@@ -23,7 +23,7 @@ async fn test_should_create_feed_and_return_201() {
 
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(response["url"], "https://example.com/feed.xml");
-    assert_eq!(response["enabled"], true);
+    assert_eq!(response["title"], serde_json::Value::Null);
     assert!(response["id"].is_number());
 }
 
@@ -76,7 +76,7 @@ async fn test_should_return_400_for_invalid_url() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(response["error"], "URL must start with http:// or https://");
+    assert_eq!(response["error"], "Invalid URL: relative URL without a base");
 }
 
 #[tokio::test]
@@ -156,71 +156,13 @@ async fn test_should_return_404_when_deleting_nonexistent_feed() {
 }
 
 #[tokio::test]
-async fn test_should_update_feed_enabled_status() {
-    let (app, _state) = test_app_with_db().await;
-
-    let create_body = json!({
-        "url": "https://example.com/feed.xml"
-    });
-
-    let (status, create_response) = send_request_with_method(
-        app.clone(),
-        "/api/feeds",
-        Method::POST,
-        Some(create_body),
-        Some("test-api-key"),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::CREATED);
-    let feed_id = create_response["id"].as_i64().unwrap();
-
-    let update_body = json!({
-        "enabled": false
-    });
-
-    let (status, response) = send_request_with_method(
-        app,
-        &format!("/api/feeds/{}", feed_id),
-        Method::PUT,
-        Some(update_body),
-        Some("test-api-key"),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(response["enabled"], false);
-}
-
-#[tokio::test]
-async fn test_should_return_404_when_updating_nonexistent_feed() {
-    let app = common::test_app().await;
-
-    let update_body = json!({
-        "enabled": false
-    });
-
-    let (status, response) = send_request_with_method(
-        app,
-        "/api/feeds/99999",
-        Method::PUT,
-        Some(update_body),
-        Some("test-api-key"),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(response["error"], "Feed with id 99999 not found");
-}
-
-#[tokio::test]
 async fn test_should_get_feeds() {
     let feed1_body = json!({ "url": "https://example.com/feed1.xml" });
     let feed2_body = json!({ "url": "https://example.com/feed2.xml" });
 
-    let app1 = common::test_app().await;
+    let (app, _state) = test_app_with_db().await;
     let (_status, _response) = send_request_with_method(
-        app1,
+        app.clone(),
         "/api/feeds",
         Method::POST,
         Some(feed1_body),
@@ -228,9 +170,8 @@ async fn test_should_get_feeds() {
     )
     .await;
 
-    let app2 = common::test_app().await;
     let (_status, _response) = send_request_with_method(
-        app2,
+        app.clone(),
         "/api/feeds",
         Method::POST,
         Some(feed2_body),
@@ -238,11 +179,16 @@ async fn test_should_get_feeds() {
     )
     .await;
 
-    let app3 = common::test_app().await;
     let (status, response) =
-        send_request_with_method(app3, "/api/feeds", Method::GET, None, Some("test-api-key")).await;
+        send_request_with_method(app, "/api/feeds", Method::GET, None, Some("test-api-key")).await;
 
     assert_eq!(status, StatusCode::OK);
     let feeds = response.as_array().unwrap();
-    assert_eq!(feeds.len(), 0);
+    assert_eq!(feeds.len(), 2);
+    let urls: Vec<&str> = feeds
+        .iter()
+        .filter_map(|feed| feed["url"].as_str())
+        .collect();
+    assert!(urls.contains(&"https://example.com/feed1.xml"));
+    assert!(urls.contains(&"https://example.com/feed2.xml"));
 }

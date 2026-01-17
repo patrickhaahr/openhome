@@ -3,6 +3,7 @@ CREATE TABLE feeds (
     url TEXT UNIQUE NOT NULL,
     enabled BOOLEAN DEFAULT TRUE
 );
+
 CREATE TABLE feed_items (
     id INTEGER PRIMARY KEY,
     feed_id INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
