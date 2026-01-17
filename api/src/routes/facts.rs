@@ -14,7 +14,7 @@ struct FactResponse {
     text: String,
 }
 
-pub fn router() -> Router {
+pub fn router() -> Router<crate::AppState> {
     Router::new().route("/api/facts/random", get(get_random_fact))
 }
 

@@ -12,6 +12,6 @@ pub async fn health_check() -> Json<HealthResponse> {
     })
 }
 
-pub fn router() -> Router {
+pub fn router() -> Router<crate::AppState> {
     Router::new().route("/api/health", get(health_check))
 }
