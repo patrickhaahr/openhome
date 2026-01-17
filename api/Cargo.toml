@@ -13,6 +13,8 @@ reqwest = "0.13.1"
 serde = "1.0.228"
 serde_json = "1.0.149"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+feed-rs = "0.3"
+url = "2.5"
 subtle = "2.6.1"
 thiserror = "2.0.17"
 tokio = { version = "1.49.0", features = ["full"] }
