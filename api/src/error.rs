@@ -13,6 +13,8 @@ pub enum AppError {
     Conflict(String),
     #[error("Validation error")]
     Validation(String),
+    #[error("Unprocessable entity")]
+    Unprocessable(String),
     #[error("Internal server error")]
     Internal(#[from] anyhow::Error),
 }
@@ -31,6 +33,7 @@ impl IntoResponse for AppError {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            AppError::Unprocessable(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg.clone()),
             AppError::Internal(err) => {
                 tracing::error!(error = ?err, "Internal server error");
                 (
