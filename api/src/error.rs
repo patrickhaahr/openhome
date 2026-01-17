@@ -9,6 +9,10 @@ pub enum AppError {
     Unauthorized(String),
     #[error("Not found")]
     NotFound(String),
+    #[error("Conflict")]
+    Conflict(String),
+    #[error("Validation error")]
+    Validation(String),
     #[error("Internal server error")]
     Internal(#[from] anyhow::Error),
 }
@@ -25,6 +29,8 @@ impl IntoResponse for AppError {
         let (status, message) = match &self {
             AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
+            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
+            AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Internal(err) => {
                 tracing::error!(error = ?err, "Internal server error");
                 (
