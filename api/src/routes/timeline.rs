@@ -26,6 +26,7 @@ struct TimelineCompactItem {
     id: i64,
     title: String,
     description: Option<String>,
+    link: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,7 +101,8 @@ fn build_timeline_query(view: TimelineView, with_unread_filter: bool, with_curso
             SELECT
                 fi.id,
                 fi.title,
-                fi.description
+                fi.description,
+                fi.link
         "#
         }
     };
