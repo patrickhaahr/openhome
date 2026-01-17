@@ -2,16 +2,61 @@ pub mod config;
 pub mod error;
 
 use error::AppError;
-use reqwest::Method;
-use serde::Serialize;
-use std::time::Duration;
-use std::sync::Mutex;
 use keyring::Entry;
+use reqwest::{Client, Method};
+use serde::Serialize;
+use std::path::Path;
+use std::sync::Mutex;
+use std::time::Duration;
+
+fn validate_base_url(url: &str) -> Result<String, AppError> {
+    let url_str = url.trim_end_matches('/');
+    let parsed_url = url::Url::parse(url_str)
+        .map_err(|_| AppError::Config("Invalid base URL".into()))?;
+    if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+        return Err(AppError::Config(
+            "Base URL must use http or https scheme".into(),
+        ));
+    }
+    Ok(url_str.to_string())
+}
+
+fn is_path_safe(path: &str) -> bool {
+    let normalized = path.trim_start_matches('/');
+
+    if normalized.is_empty() || normalized.contains("..") || normalized.contains('\\') {
+        return false;
+    }
+
+    if normalized.contains("://") || normalized.starts_with("file:") || normalized.starts_with("data:") {
+        return false;
+    }
+
+    if let Ok(decoded) = percent_encoding::percent_decode_str(normalized).decode_utf8()
+        && (decoded.contains("..") || decoded.contains('\\'))
+    {
+        return false;
+    }
+
+    let path_obj = Path::new(normalized);
+    if path_obj.components().any(|c| {
+        if let Some(comp) = c.as_os_str().to_str() {
+            comp == ".." || comp.contains('\0')
+        } else {
+            false
+        }
+    }) {
+        return false;
+    }
+
+    true
+}
 
 // Define a struct to hold our configuration state
 pub struct ConfigState {
     pub config: config::AppConfig,
     pub api_key: Mutex<Option<String>>,
+    pub http_client: Client,
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -116,33 +161,40 @@ async fn call_api(
     body: Option<serde_json::Value>,
     base_url: String,
     timeout_seconds: u64,
-    #[allow(unused_variables)] api_key_override: Option<String>,
+    api_key_override: Option<String>,
 ) -> Result<ApiResponse, AppError> {
     let method_upper = method.to_uppercase();
     let req_method = match method_upper.as_str() {
         "GET" => Method::GET,
         "POST" => Method::POST,
-        _ => return Err(AppError::Config("Only GET and POST are allowed".into())),
+        "DELETE" => Method::DELETE,
+        _ => return Err(AppError::Config("Only GET, POST, and DELETE are allowed".into())),
     };
 
-    if base_url.trim().is_empty() {
-        return Err(AppError::Config("Base URL cannot be empty".into()));
+    let path_normalized = path.trim_start_matches('/');
+    if !is_path_safe(path_normalized) {
+        return Err(AppError::Config("Invalid path".into()));
     }
+    if !path_normalized.starts_with("api/") {
+        return Err(AppError::Config("Path must start with /api/".into()));
+    }
+
     if !(1..=300).contains(&timeout_seconds) {
         return Err(AppError::Config(
             "Timeout must be between 1 and 300 seconds".into(),
         ));
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout_seconds))
-        .build()?;
+    let base_url = if cfg!(debug_assertions) {
+        if base_url.trim().is_empty() {
+            return Err(AppError::Config("Base URL cannot be empty".into()));
+        }
+        validate_base_url(&base_url)?
+    } else {
+        validate_base_url(&state.config.api.base_url)?
+    };
 
-    let url = format!(
-        "{}/{}",
-        base_url.trim_end_matches('/'),
-        path.trim_start_matches('/')
-    );
+    let url = format!("{}/{}", base_url, path_normalized);
 
     // Key resolution: debug override (debug only) -> memory cache -> keyring
     #[cfg(debug_assertions)]
@@ -207,7 +259,8 @@ async fn call_api(
         }
     };
 
-    let mut request = client.request(req_method, url);
+    let mut request = state.http_client.request(req_method, url)
+        .timeout(Duration::from_secs(timeout_seconds));
 
     if let Some(k) = key {
         request = request.bearer_auth(k);
@@ -257,10 +310,16 @@ pub fn run() {
         eprintln!("API config validation warning: {error}");
     }
 
-    tauri::Builder::default()
+    let http_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client");
+
+    if let Err(e) = tauri::Builder::default()
         .manage(ConfigState {
             config,
             api_key: Mutex::new(None),
+            http_client,
         })
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
@@ -272,6 +331,46 @@ pub fn run() {
             call_api,
             get_keyring_diagnostics
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!()) {
+            eprintln!("error running tauri application: {}", e);
+            #[cfg(not(mobile))]
+            std::process::exit(1);
+        }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_path_safe_valid_paths() {
+        assert!(is_path_safe("api/timeline"));
+        assert!(is_path_safe("api/feed/items"));
+        assert!(is_path_safe("api/v1/users/123"));
+    }
+
+    #[test]
+    fn test_is_path_safe_invalid_paths() {
+        assert!(!is_path_safe("../etc/passwd"));
+        assert!(!is_path_safe("api/../../secret"));
+        assert!(!is_path_safe("api\\windows\\path"));
+        assert!(!is_path_safe("file:///etc/passwd"));
+        assert!(!is_path_safe("data:text/plain,malicious"));
+        assert!(!is_path_safe("api/%2e%2e/etc"));
+        assert!(!is_path_safe("api/.."));
+    }
+
+    #[test]
+    fn test_validate_base_url_valid() {
+        assert!(validate_base_url("http://localhost:8080").is_ok());
+        assert!(validate_base_url("https://api.example.com").is_ok());
+        assert!(validate_base_url("http://192.168.1.1:3000").is_ok());
+    }
+
+    #[test]
+    fn test_validate_base_url_invalid() {
+        assert!(validate_base_url("ftp://example.com").is_err());
+        assert!(validate_base_url("file:///path").is_err());
+        assert!(validate_base_url("invalid-url").is_err());
+    }
 }
