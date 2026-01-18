@@ -5,6 +5,7 @@ import Rss from "./pages/rss";
 import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
 import FactCard from "./components/fact-card";
 import ApiStatus from "./components/ui/api-status";
+import AdguardControl from "./components/adguard-control";
 
 const App: Component = () => {
   const [currentPage, setCurrentPage] = createSignal<NavPage>("home");
@@ -32,6 +33,7 @@ const App: Component = () => {
               <div class="space-y-6">
                 <FactCard />
                 <ApiStatus />
+                <AdguardControl />
               </div>
             </ErrorBoundary>
           </Show>
