@@ -1,8 +1,8 @@
-import type { Component, SuspenseProps } from "solid-js";
+import type { Component } from "solid-js";
 import { Suspense, ErrorBoundary } from "solid-js";
 import RssFeed from "../components/rss-feed";
 
-const LoadingFallback: Component<SuspenseProps> = (props) => {
+const LoadingFallback: Component = () => {
   return (
     <div class="animate-pulse space-y-4">
       <div class="h-32 rounded-lg bg-surface-secondary" />
