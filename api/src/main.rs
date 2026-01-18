@@ -8,7 +8,8 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use rpi_api::auth;
-use rpi_api::services::{adguard, feed};
+use rpi_api::routes;
+use rpi_api::services::{adguard, docker, feed};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,6 +40,24 @@ async fn main() -> anyhow::Result<()> {
     let adguard_password = std::env::var("ADGUARD_PASSWORD").unwrap_or_default();
     let adguard_insecure_tls = std::env::var("ADGUARD_INSECURE_TLS").unwrap_or_default() == "true";
 
+    let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {
+        match docker::DockerService::new() {
+            Ok(service) => {
+                tracing::info!("Docker service initialized successfully");
+                Some(service)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to initialize Docker service");
+                None
+            }
+        }
+    } else {
+        tracing::warn!(
+            "Docker socket not found at /var/run/docker.sock, Docker integration disabled"
+        );
+        None
+    };
+
     let adguard_service = if !adguard_host.is_empty() {
         Some(adguard::AdguardService::new(
             &adguard_host,
@@ -54,6 +73,8 @@ async fn main() -> anyhow::Result<()> {
     let state = rpi_api::AppState {
         db,
         adguard_service,
+        docker_service,
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(rpi_api::DockerCache::default())),
     };
 
     let api_key = auth::ApiKey::new(
@@ -62,11 +83,12 @@ async fn main() -> anyhow::Result<()> {
     let api_key_clone = api_key.clone();
 
     let app = Router::new()
-        .merge(rpi_api::routes::health::router())
-        .merge(rpi_api::routes::facts::router())
-        .merge(rpi_api::routes::feeds::router())
-        .merge(rpi_api::routes::timeline::router())
-        .merge(rpi_api::routes::adguard::router())
+        .merge(routes::health::router())
+        .merge(routes::facts::router())
+        .merge(routes::feeds::router())
+        .merge(routes::timeline::router())
+        .merge(routes::adguard::router())
+        .merge(routes::docker::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             rpi_api::auth::auth_middleware(req, next, api_key_clone.clone())
