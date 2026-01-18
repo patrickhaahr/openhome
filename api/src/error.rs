@@ -19,6 +19,10 @@ pub enum AppError {
     ServiceUnavailable(String),
     #[error("Internal server error")]
     Internal(#[from] anyhow::Error),
+    #[error("Docker error: {0}")]
+    DockerError(String),
+    #[error("Container not found: {0}")]
+    ContainerNotFound(String),
 }
 
 #[derive(Serialize)]
@@ -42,6 +46,20 @@ impl IntoResponse for AppError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "An internal error occurred".to_string(),
+                )
+            }
+            AppError::DockerError(msg) => {
+                tracing::error!(error = %msg, "Docker error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Docker daemon error".to_string(),
+                )
+            }
+            AppError::ContainerNotFound(name) => {
+                tracing::warn!(container = %name, "Container not found");
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("Container '{}' not found", name),
                 )
             }
         };
