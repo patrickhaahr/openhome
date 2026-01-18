@@ -6,10 +6,11 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 axum = { version = "0.8.8", features = ["macros"] }
+base64 = "0.22"
 bollard = "0.20.0"
 dotenvy = "0.15.7"
 http = "1.4.0"
-reqwest = "0.13.1"
+reqwest = { version = "0.13.1", features = ["json"] }
 serde = "1.0.228"
 serde_json = "1.0.149"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
@@ -31,3 +32,4 @@ serde = "1.0.228"
 serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["full"] }
 tower = "0.5.3"
+wiremock = "0.6"
