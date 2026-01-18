@@ -1,4 +1,4 @@
-import { callApi } from "./index";
+import { callApi } from "./client";
 import { baseUrl } from "../stores/config";
 
 export interface HealthResponse {

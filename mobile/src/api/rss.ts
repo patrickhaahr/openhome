@@ -1,4 +1,4 @@
-import { callApi } from "./index";
+import { callApi } from "./client";
 
 export interface TimelineCompactItem {
   id: number;
