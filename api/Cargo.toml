@@ -7,7 +7,8 @@ edition = "2024"
 anyhow = "1.0.100"
 axum = { version = "0.8.8", features = ["macros"] }
 base64 = "0.22"
-bollard = "0.20.0"
+bollard = { version = "0.20.0", features = ["chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15.7"
 http = "1.4.0"
 reqwest = { version = "0.13.1", features = ["json"] }
@@ -15,6 +16,7 @@ serde = "1.0.228"
 serde_json = "1.0.149"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
 feed-rs = "0.3"
+futures-util = "0.3"
 url = "2.5"
 subtle = "2.6.1"
 thiserror = "2.0.17"
