@@ -4,9 +4,11 @@ use axum::http::{Method, Request, StatusCode};
 use rpi_api::AppState;
 use rpi_api::auth::{ApiKey, auth_middleware};
 use rpi_api::routes::{
-    facts::router as facts_router, feeds::router as feeds_router, health::router,
+    adguard::router as adguard_router, facts::router as facts_router,
+    feeds::router as feeds_router, health::router as health_router,
     timeline::router as timeline_router,
 };
+use rpi_api::services::adguard::AdguardService;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 
@@ -16,15 +18,43 @@ pub async fn test_app() -> Router {
 }
 
 pub async fn test_app_with_db() -> (Router, AppState) {
+    test_app_with_db_and_adguard(None).await
+}
+
+#[allow(dead_code)]
+pub async fn test_app_with_adguard() -> Router {
+    test_app_with_db_and_adguard(Some(true)).await.0
+}
+
+#[allow(dead_code)]
+pub fn create_mock_state_with_adguard(service: AdguardService) -> AppState {
+    let db = SqlitePool::connect_lazy("sqlite::memory:").unwrap();
+    AppState {
+        db,
+        adguard_service: Some(service),
+    }
+}
+
+pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Router, AppState) {
     let api_key = ApiKey::new("test-api-key".to_string());
     let api_key_clone = api_key.clone();
 
     let db = SqlitePool::connect(":memory:").await.unwrap();
     sqlx::migrate!("./migrations").run(&db).await.unwrap();
 
-    let state = AppState { db: db.clone() };
+    let adguard_service = if adguard_enabled.unwrap_or(false) {
+        Some(AdguardService::new("http://localhost:9999", "test", "test", false).unwrap())
+    } else {
+        None
+    };
 
-    let app = router()
+    let state = AppState {
+        db: db.clone(),
+        adguard_service,
+    };
+
+    let app = health_router()
+        .merge(adguard_router())
         .merge(facts_router())
         .merge(feeds_router())
         .merge(timeline_router())
