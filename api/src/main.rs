@@ -8,7 +8,7 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use rpi_api::auth;
-use rpi_api::services::feed;
+use rpi_api::services::{adguard, feed};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -34,7 +34,27 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("./migrations").run(&db).await?;
 
-    let state = rpi_api::AppState { db };
+    let adguard_host = std::env::var("ADGUARD_HOST").unwrap_or_default();
+    let adguard_username = std::env::var("ADGUARD_USERNAME").unwrap_or_default();
+    let adguard_password = std::env::var("ADGUARD_PASSWORD").unwrap_or_default();
+    let adguard_insecure_tls = std::env::var("ADGUARD_INSECURE_TLS").unwrap_or_default() == "true";
+
+    let adguard_service = if !adguard_host.is_empty() {
+        Some(adguard::AdguardService::new(
+            &adguard_host,
+            &adguard_username,
+            &adguard_password,
+            adguard_insecure_tls,
+        )?)
+    } else {
+        tracing::warn!("ADGUARD_HOST not set, AdGuard integration disabled");
+        None
+    };
+
+    let state = rpi_api::AppState {
+        db,
+        adguard_service,
+    };
 
     let api_key = auth::ApiKey::new(
         std::env::var("API_KEY").expect("API_KEY environment variable must be set"),
@@ -46,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(rpi_api::routes::facts::router())
         .merge(rpi_api::routes::feeds::router())
         .merge(rpi_api::routes::timeline::router())
+        .merge(rpi_api::routes::adguard::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             rpi_api::auth::auth_middleware(req, next, api_key_clone.clone())
