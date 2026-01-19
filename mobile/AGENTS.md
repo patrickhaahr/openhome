@@ -15,6 +15,7 @@ This file contains mobile-specific guidelines. General project guidelines are in
 - Run a single frontend test:
   - `bun vitest run --reporter=verbose src/components/Button/Button.test.tsx`
   - `bun vitest run -t "test name" src/components/Button/Button.test.tsx`
+  -  `bun tsc --noEmit --strict --pretty`
 
 ## Error Handling
 
