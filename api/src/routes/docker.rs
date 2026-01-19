@@ -11,7 +11,8 @@ use serde::Deserialize;
 
 use crate::error::{AppError, Result};
 use crate::models::docker::{
-    ContainerDetailResponse, ContainerListResponse, RestartRequest, RestartResponse,
+    ContainerDetailResponse, ContainerListResponse, RestartRequest, RestartResponse, StartResponse,
+    StopRequest, StopResponse,
 };
 use crate::{AppState, CONTAINER_CACHE_TTL_SECONDS};
 
@@ -30,6 +31,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/docker", get(list_containers))
         .route("/api/docker/{name}", get(get_container))
+        .route("/api/docker/{name}/start", post(start_container))
+        .route("/api/docker/{name}/stop", post(stop_container))
         .route("/api/docker/{name}/restart", post(restart_container))
         .route("/api/docker/{name}/logs", get(get_logs))
 }
@@ -52,7 +55,7 @@ async fn list_containers(State(state): State<AppState>) -> Result<Json<Container
         .docker_service
         .as_ref()
         .ok_or_else(|| AppError::ServiceUnavailable("Docker service not available".to_string()))?;
-    let containers = tokio::time::timeout(Duration::from_secs(10), service.list_containers(false))
+    let containers = tokio::time::timeout(Duration::from_secs(10), service.list_containers(true))
         .await
         .map_err(|_| anyhow::anyhow!("Docker request timed out"))?
         .map_err(|e| anyhow::anyhow!("Failed to list containers: {e}"))?;
@@ -86,6 +89,7 @@ async fn restart_container(
     Path(name): Path<String>,
     Json(req): Json<RestartRequest>,
 ) -> Result<Json<RestartResponse>> {
+    const MAX_TIMEOUT_SECONDS: u64 = 300;
     let service = state
         .docker_service
         .as_ref()
@@ -94,8 +98,9 @@ async fn restart_container(
         .await
         .map_err(|_| anyhow::anyhow!("Docker request timed out"))?
         .map_err(|err| map_docker_error(err, &name))?;
+    let outer_timeout = (req.timeout_seconds + 5).min(MAX_TIMEOUT_SECONDS);
     tokio::time::timeout(
-        Duration::from_secs(30),
+        Duration::from_secs(outer_timeout),
         service.restart_container(&name, req.timeout_seconds),
     )
     .await
@@ -111,11 +116,78 @@ async fn restart_container(
     }))
 }
 
+async fn start_container(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<StartResponse>> {
+    const START_TIMEOUT_SECONDS: u64 = 30;
+    let service = state.docker_service.as_ref()
+        .ok_or_else(|| AppError::ServiceUnavailable("Docker service not available".to_string()))?;
+
+    let detail = tokio::time::timeout(Duration::from_secs(5), service.inspect_container(&name))
+        .await
+        .map_err(|_| anyhow::anyhow!("Docker request timed out"))?
+        .map_err(|err| map_docker_error(err, &name))?;
+
+    if detail.state == "running" {
+        return Ok(Json(StartResponse {
+            success: true,
+            message: format!("Container {} is already running", name),
+        }));
+    }
+
+    tokio::time::timeout(Duration::from_secs(START_TIMEOUT_SECONDS), service.start_container(&name))
+        .await
+        .map_err(|_| anyhow::anyhow!("Start request timed out"))?
+        .map_err(|err| map_docker_error(err, &name))?;
+
+    {
+        let mut cache = state.docker_cache.lock().await;
+        cache.last_updated = None;
+    }
+
+    Ok(Json(StartResponse {
+        success: true,
+        message: format!("Container {} started", name),
+    }))
+}
+
+async fn stop_container(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(req): Json<StopRequest>,
+) -> Result<Json<StopResponse>> {
+    const MAX_TIMEOUT_SECONDS: u64 = 300;
+    let service = state.docker_service.as_ref()
+        .ok_or_else(|| AppError::ServiceUnavailable("Docker service not available".to_string()))?;
+
+    let stopped = tokio::time::timeout(Duration::from_secs((req.timeout_seconds + 5).min(MAX_TIMEOUT_SECONDS)), service.stop_container(&name, req.timeout_seconds))
+        .await
+        .map_err(|_| anyhow::anyhow!("Stop request timed out"))?
+        .map_err(|err| map_docker_error(err, &name))?;
+
+    {
+        let mut cache = state.docker_cache.lock().await;
+        cache.last_updated = None;
+    }
+
+    Ok(Json(StopResponse {
+        success: true,
+        message: if stopped {
+            format!("Container {} stopped", name)
+        } else {
+            format!("Container {} was not running", name)
+        },
+        stopped,
+    }))
+}
+
 async fn get_logs(
     State(state): State<AppState>,
     Path(name): Path<String>,
     Query(query): Query<LogsQuery>,
 ) -> Result<String> {
+    const LOGS_TIMEOUT_SECONDS: u64 = 30;
     let since = query
         .since
         .as_deref()
@@ -133,7 +205,7 @@ async fn get_logs(
         .as_ref()
         .ok_or_else(|| AppError::ServiceUnavailable("Docker service not available".to_string()))?;
     let logs = tokio::time::timeout(
-        Duration::from_secs(30),
+        Duration::from_secs(LOGS_TIMEOUT_SECONDS),
         service.get_container_logs(&name, tail, since, query.timestamps),
     )
     .await
