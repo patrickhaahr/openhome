@@ -4,3 +4,4 @@ target
 .opencode
 gen/
 data
+package-lock.json
