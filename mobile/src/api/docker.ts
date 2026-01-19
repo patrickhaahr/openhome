@@ -23,6 +23,17 @@ export interface DockerRestartResponse {
   message: string;
 }
 
+export interface DockerStartResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface DockerStopResponse {
+  success: boolean;
+  message: string;
+  stopped: boolean;
+}
+
 export interface DockerLogsParams {
   tail?: number;
   since?: string;
@@ -155,4 +166,66 @@ export async function restartDockerContainer(
   }
 
   throw new Error(`Failed to restart container: Status ${response.status}`);
+}
+
+export async function startDockerContainer(
+  containerName: string
+): Promise<DockerStartResponse> {
+  const response = await callApi({
+    path: `/api/docker/${encodeURIComponent(containerName)}/start`,
+    method: "POST",
+  });
+
+  if (response.status >= 200 && response.status < 300) {
+    if (
+      typeof response.data !== "object" ||
+      response.data === null ||
+      !("success" in response.data)
+    ) {
+      throw new Error("Invalid start response shape: missing success");
+    }
+    return response.data as DockerStartResponse;
+  }
+
+  if (response.status === 404) {
+    throw new Error(`Container "${containerName}" not found`);
+  }
+
+  if (response.status === 503) {
+    throw new Error("Docker service is not available");
+  }
+
+  throw new Error(`Failed to start container: Status ${response.status}`);
+}
+
+export async function stopDockerContainer(
+  containerName: string,
+  timeoutSeconds: number
+): Promise<DockerStopResponse> {
+  const response = await callApi({
+    path: `/api/docker/${encodeURIComponent(containerName)}/stop`,
+    method: "POST",
+    body: { timeout_seconds: timeoutSeconds },
+  });
+
+  if (response.status >= 200 && response.status < 300) {
+    if (
+      typeof response.data !== "object" ||
+      response.data === null ||
+      !("success" in response.data)
+    ) {
+      throw new Error("Invalid stop response shape: missing success");
+    }
+    return response.data as DockerStopResponse;
+  }
+
+  if (response.status === 404) {
+    throw new Error(`Container "${containerName}" not found`);
+  }
+
+  if (response.status === 503) {
+    throw new Error("Docker service is not available");
+  }
+
+  throw new Error(`Failed to stop container: Status ${response.status}`);
 }
