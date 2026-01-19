@@ -4,7 +4,7 @@ use bollard::errors::Error;
 use bollard::models::{HostConfig, PortSummary};
 use bollard::query_parameters::{
     InspectContainerOptions, ListContainersOptionsBuilder, LogsOptionsBuilder,
-    RestartContainerOptionsBuilder,
+    RestartContainerOptionsBuilder, StopContainerOptionsBuilder,
 };
 use chrono::{DateTime, TimeZone, Utc};
 use futures_util::stream::TryStreamExt;
@@ -36,6 +36,7 @@ impl DockerService {
                 .as_ref()
                 .and_then(|h| h.status.as_ref())
                 .map(|s| s.as_ref().to_string());
+            let uptime_seconds = parse_uptime_seconds(container.status.as_deref());
             statuses.push(ContainerStatus {
                 name: container
                     .names
@@ -46,7 +47,7 @@ impl DockerService {
                 display_status,
                 state,
                 health_status,
-                uptime_seconds: None,
+                uptime_seconds,
                 image: container.image.as_ref().cloned().unwrap_or_default(),
                 ports: parse_ports(container.ports.as_ref()),
                 labels: container.labels.as_ref().cloned().unwrap_or_default(),
@@ -123,13 +124,45 @@ impl DockerService {
     }
 
     pub async fn restart_container(&self, name: &str, timeout: u64) -> Result<(), Error> {
+        let timeout_i32 = timeout
+            .try_into()
+            .map_err(|_| Error::DockerResponseServerError {
+                status_code: 400,
+                message: format!("Timeout exceeds maximum allowed value: {}", timeout),
+            })?;
         let options = Some(
             RestartContainerOptionsBuilder::new()
-                .t(timeout as i32)
+                .t(timeout_i32)
                 .build(),
         );
         self.client.restart_container(name, options).await?;
         Ok(())
+    }
+
+    pub async fn start_container(&self, name: &str) -> Result<(), Error> {
+        self.client.start_container(name, None).await?;
+        Ok(())
+    }
+
+    pub async fn stop_container(&self, name: &str, timeout: u64) -> Result<bool, Error> {
+        let inspect = self.inspect_container(name).await?;
+        if inspect.state != "running" {
+            return Ok(false);
+        }
+
+        let timeout_i32 = timeout
+            .try_into()
+            .map_err(|_| Error::DockerResponseServerError {
+                status_code: 400,
+                message: format!("Timeout exceeds maximum allowed value: {}", timeout),
+            })?;
+        let options = Some(
+            StopContainerOptionsBuilder::new()
+                .t(timeout_i32)
+                .build(),
+        );
+        self.client.stop_container(name, options).await?;
+        Ok(true)
     }
 
     pub async fn get_container_logs(
@@ -161,6 +194,33 @@ impl DockerService {
             .join("");
         Ok(logs)
     }
+}
+
+fn parse_uptime_seconds(status: Option<&str>) -> Option<i64> {
+    let status = status?;
+    if !status.starts_with("Up ") {
+        return None;
+    }
+
+    let rest = &status[3..];
+
+    let (value, unit) = if let Some(space_idx) = rest.find(' ') {
+        let value: i64 = rest[..space_idx].parse().ok()?;
+        let unit = &rest[space_idx + 1..];
+        (value, unit)
+    } else {
+        return None;
+    };
+
+    let seconds = match unit {
+        s if s.starts_with("second") => value,
+        s if s.starts_with("minute") => value * 60,
+        s if s.starts_with("hour") => value * 3600,
+        s if s.starts_with("day") => value * 86400,
+        _ => return None,
+    };
+
+    Some(seconds)
 }
 
 fn map_display_status(state: Option<&str>) -> String {
@@ -219,5 +279,130 @@ fn parse_binds(host_config: Option<&HostConfig>) -> Vec<String> {
         hc.binds.as_ref().map(|b| b.to_vec()).unwrap_or_default()
     } else {
         Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_uptime_seconds_with_seconds() {
+        let result = parse_uptime_seconds(Some("Up 30 seconds"));
+        assert_eq!(result, Some(30));
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_with_minutes() {
+        let result = parse_uptime_seconds(Some("Up 5 minutes"));
+        assert_eq!(result, Some(300)); // 5 * 60
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_with_hours() {
+        let result = parse_uptime_seconds(Some("Up 2 hours"));
+        assert_eq!(result, Some(7200)); // 2 * 3600
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_with_days() {
+        let result = parse_uptime_seconds(Some("Up 1 day"));
+        assert_eq!(result, Some(86400)); // 1 * 86400
+    }
+
+#[test]
+    fn test_parse_uptime_seconds_with_complex_time() {
+        let result = parse_uptime_seconds(Some("Up 30 invalidunit"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_returns_none_for_exited_container() {
+        let result = parse_uptime_seconds(Some("Exited (0) 2 weeks ago"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_returns_none_for_none_input() {
+        let result = parse_uptime_seconds(None);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_returns_none_for_empty_string() {
+        let result = parse_uptime_seconds(Some(""));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_returns_none_for_invalid_format() {
+        let result = parse_uptime_seconds(Some("Running for 5 minutes"));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_handles_plural_seconds() {
+        let result = parse_uptime_seconds(Some("Up 45 seconds"));
+        assert_eq!(result, Some(45));
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_handles_plural_minutes() {
+        let result = parse_uptime_seconds(Some("Up 10 minutes"));
+        assert_eq!(result, Some(600)); // 10 * 60
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_handles_plural_hours() {
+        let result = parse_uptime_seconds(Some("Up 3 hours"));
+        assert_eq!(result, Some(10800)); // 3 * 3600
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_handles_plural_days() {
+        let result = parse_uptime_seconds(Some("Up 7 days"));
+        assert_eq!(result, Some(604800)); // 7 * 86400
+    }
+
+    #[test]
+    fn test_parse_uptime_seconds_handles_large_values() {
+        let result = parse_uptime_seconds(Some("Up 999 days"));
+        assert_eq!(result, Some(999 * 86400));
+    }
+
+    #[test]
+    fn test_map_display_status_running() {
+        let result = map_display_status(Some("running"));
+        assert_eq!(result, "running");
+    }
+
+    #[test]
+    fn test_map_display_status_exited() {
+        let result = map_display_status(Some("exited"));
+        assert_eq!(result, "stopped");
+    }
+
+    #[test]
+    fn test_map_display_status_dead() {
+        let result = map_display_status(Some("dead"));
+        assert_eq!(result, "stopped");
+    }
+
+    #[test]
+    fn test_map_display_status_restarting() {
+        let result = map_display_status(Some("restarting"));
+        assert_eq!(result, "restarting");
+    }
+
+    #[test]
+    fn test_map_display_status_unknown_state() {
+        let result = map_display_status(Some("paused"));
+        assert_eq!(result, "paused");
+    }
+
+    #[test]
+    fn test_map_display_status_none() {
+        let result = map_display_status(None);
+        assert_eq!(result, "unknown");
     }
 }
