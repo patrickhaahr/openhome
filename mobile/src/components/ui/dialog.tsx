@@ -14,9 +14,9 @@ interface DialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const Dialog: Component<DialogProps & { children: unknown }> = (props) => {
+const Dialog: Component<DialogProps & { children?: any }> = (props) => {
   return (
-    <Show when={props.open}>
+      <Show when={!!props.open}>
       {props.children}
     </Show>
   );

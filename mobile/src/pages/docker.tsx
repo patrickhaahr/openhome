@@ -12,12 +12,14 @@ import {
   Show,
   Switch,
 } from "solid-js";
-import { RefreshCcw, Terminal, RotateCw, Filter } from "lucide-solid";
+import { RefreshCcw, Terminal, RotateCw, Filter, Play, Square } from "lucide-solid";
 
 import {
   listDockerContainers,
   getDockerLogs,
   restartDockerContainer,
+  startDockerContainer,
+  stopDockerContainer,
   type DockerContainerStatus,
 } from "@/api/docker";
 import { Button } from "@/components/ui/button";
@@ -30,31 +32,13 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ConfirmDialog, useDialogState } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { formatUptime, formatPorts, toTitleCase } from "@/utils/formatters";
 
 const RESTART_TIMEOUT_SECONDS = 10;
+const STOP_TIMEOUT_SECONDS = 10;
 const TAIL_PRESETS = [50, 200, 500, 1000];
-
-const formatUptime = (seconds: number | null): string => {
-  if (seconds === null) return "Unknown uptime";
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ${minutes % 60}m`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ${hours % 24}h`;
-};
-
-const formatPorts = (ports: string[]): string => {
-  if (ports.length === 0) return "No ports exposed";
-  return ports.join(", ");
-};
-
-const toTitleCase = (value: string): string =>
-  value.replace(/(^\w|_\w)/g, (match) => match.replace("_", " ").toUpperCase());
 
 const statusMeta = (container: DockerContainerStatus) => {
   const state = container.state.toLowerCase();
@@ -104,9 +88,8 @@ const Docker: Component = () => {
   const [tailCount, setTailCount] = createSignal(200);
   const [lastLogsSignature, setLastLogsSignature] = createSignal<string | null>(null);
   const [autoScroll, setAutoScroll] = createSignal(true);
-  const [restartTarget, setRestartTarget] = createSignal<DockerContainerStatus | null>(null);
   const [actionError, setActionError] = createSignal<string | null>(null);
-  const restartDialog = useDialogState(false);
+  const [restartingContainer, setRestartingContainer] = createSignal<string | null>(null);
 
   let logsViewport: HTMLDivElement | undefined;
   let refreshTimer: number | undefined;
@@ -147,28 +130,6 @@ const Docker: Component = () => {
     setLogsText("");
     setLogsError(null);
     setLastLogsSignature(null);
-  };
-
-  const handleRestart = (container: DockerContainerStatus) => {
-    setRestartTarget(container);
-    setActionError(null);
-    restartDialog.setOpen(true);
-  };
-
-  const confirmRestart = async () => {
-    const target = restartTarget();
-    if (!target) return;
-
-    setActionError(null);
-    try {
-      await restartDockerContainer(target.name, RESTART_TIMEOUT_SECONDS);
-      restartDialog.setOpen(false);
-      setRestartTarget(null);
-      refetch();
-    } catch (err) {
-      console.error("Failed to restart container:", err);
-      setActionError(err instanceof Error ? err.message : "Failed to restart container");
-    }
   };
 
   const handleLogsBack = () => {
@@ -213,16 +174,6 @@ const Docker: Component = () => {
 
   return (
     <div class="min-h-[calc(100vh-5rem)]">
-      <ConfirmDialog
-        open={restartDialog.open()}
-        onOpenChange={restartDialog.setOpen}
-        title="Restart container"
-        description={`Restart ${restartTarget()?.name ?? "this container"}? (timeout ${RESTART_TIMEOUT_SECONDS}s)`}
-        confirmLabel="Restart"
-        onConfirm={confirmRestart}
-        isConfirmDisabled={!restartTarget()}
-      />
-
       <Show
         when={!logsOpen()}
         fallback={
@@ -412,10 +363,64 @@ const Docker: Component = () => {
                               <Terminal class="size-4" />
                               Logs
                             </Button>
+
+                            <Show when={container.state !== "running"}>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={async () => {
+                                  setActionError(null);
+                                  try {
+                                    await startDockerContainer(container.name);
+                                    refetch();
+                                  } catch (err) {
+                                    console.error("Failed to start container:", err);
+                                    setActionError(err instanceof Error ? err.message : "Failed to start container");
+                                  }
+                                }}
+                              >
+                                <Play class="size-4" />
+                                Start
+                              </Button>
+                            </Show>
+
+                            <Show when={container.state === "running"}>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={async () => {
+                                  setActionError(null);
+                                  try {
+                                    await stopDockerContainer(container.name, STOP_TIMEOUT_SECONDS);
+                                    refetch();
+                                  } catch (err) {
+                                    console.error("Failed to stop container:", err);
+                                    setActionError(err instanceof Error ? err.message : "Failed to stop container");
+                                  }
+                                }}
+                              >
+                                <Square class="size-4" />
+                                Stop
+                              </Button>
+                            </Show>
+
                             <Button
-                              variant="destructive"
+                              variant="outline"
                               size="sm"
-                              onClick={() => handleRestart(container)}
+                              onClick={async () => {
+                                setActionError(null);
+                                setRestartingContainer(container.name);
+                                try {
+                                  await restartDockerContainer(container.name, RESTART_TIMEOUT_SECONDS);
+                                  refetch();
+                                } catch (err) {
+                                  console.error("Failed to restart container:", err);
+                                  setActionError(err instanceof Error ? err.message : "Failed to restart container");
+                                } finally {
+                                  setRestartingContainer(null);
+                                }
+                              }}
+                              disabled={restartingContainer() === container.name}
                             >
                               <RotateCw class="size-4" />
                               Restart
