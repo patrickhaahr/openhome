@@ -62,3 +62,104 @@ pub struct RestartRequest {
 fn default_timeout() -> u64 {
     10
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StartResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StopResponse {
+    pub success: bool,
+    pub message: String,
+    pub stopped: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StopRequest {
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_start_response_serialization() {
+        let response = StartResponse {
+            success: true,
+            message: "Container started".to_string(),
+        };
+        
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"message\":\"Container started\""));
+    }
+
+    #[test]
+    fn test_start_response_deserialization() {
+        let json = r#"{"success": true, "message": "Container started"}"#;
+        let response: StartResponse = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(response.success, true);
+        assert_eq!(response.message, "Container started");
+    }
+
+    #[test]
+    fn test_stop_response_serialization() {
+        let response = StopResponse {
+            success: true,
+            message: "Container stopped".to_string(),
+            stopped: true,
+        };
+        
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"message\":\"Container stopped\""));
+        assert!(json.contains("\"stopped\":true"));
+    }
+
+    #[test]
+    fn test_stop_response_deserialization() {
+        let json = r#"{"success": true, "message": "Container stopped", "stopped": true}"#;
+        let response: StopResponse = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(response.success, true);
+        assert_eq!(response.message, "Container stopped");
+        assert_eq!(response.stopped, true);
+    }
+
+    #[test]
+    fn test_stop_response_with_stopped_false() {
+        let json = r#"{"success": true, "message": "Container was not running", "stopped": false}"#;
+        let response: StopResponse = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(response.success, true);
+        assert_eq!(response.stopped, false);
+    }
+
+    #[test]
+    fn test_stop_request_deserialization_with_timeout() {
+        let json = r#"{"timeout_seconds": 30}"#;
+        let request: StopRequest = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(request.timeout_seconds, 30);
+    }
+
+    #[test]
+    fn test_stop_request_default_timeout() {
+        let json = r#"{}"#;
+        let request: StopRequest = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(request.timeout_seconds, 10); // default_timeout() returns 10
+    }
+
+    #[test]
+    fn test_stop_request_deserialization_without_timeout_field() {
+        let json = r#""#;
+        let result = serde_json::from_str::<StopRequest>(json);
+        assert!(result.is_err());
+    }
+}
