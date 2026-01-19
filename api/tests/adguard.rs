@@ -151,18 +151,18 @@ async fn test_pause_endpoint_with_adguard_service() {
         .await;
 
     let service =
-        rpi_api::services::adguard::AdguardService::new(&mock_server.uri(), "test", "test", false)
+        openhome_api::services::adguard::AdguardService::new(&mock_server.uri(), "test", "test", false)
             .unwrap();
     let state = common::create_mock_state_with_adguard(service);
 
     let app = Router::new()
-        .merge(rpi_api::routes::adguard::router())
+        .merge(openhome_api::routes::adguard::router())
         .with_state(state)
         .layer(axum::middleware::from_fn(|req, next| {
-            rpi_api::auth::auth_middleware(
+            openhome_api::auth::auth_middleware(
                 req,
                 next,
-                rpi_api::auth::ApiKey::new("test-api-key".to_string()),
+                openhome_api::auth::ApiKey::new("test-api-key".to_string()),
             )
         }));
 

@@ -1,3 +1,3 @@
 [api]
-base_url = "https://api.home-app.local"
+base_url = "https://api.openhome.local"
 timeout_seconds = 30

@@ -7,9 +7,9 @@ use tokio::signal;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use rpi_api::auth;
-use rpi_api::routes;
-use rpi_api::services::{adguard, docker, feed};
+use openhome_api::auth;
+use openhome_api::routes;
+use openhome_api::services::{adguard, docker, feed};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -70,11 +70,11 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    let state = rpi_api::AppState {
+    let state = openhome_api::AppState {
         db,
         adguard_service,
         docker_service,
-        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(rpi_api::DockerCache::default())),
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(openhome_api::DockerCache::default())),
     };
 
     let api_key = auth::ApiKey::new(
@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::docker::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
-            rpi_api::auth::auth_middleware(req, next, api_key_clone.clone())
+            openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())
         }))
         .layer(TraceLayer::new_for_http());
 

@@ -1,15 +1,15 @@
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
-use rpi_api::AppState;
-use rpi_api::auth::{ApiKey, auth_middleware};
-use rpi_api::routes::{
+use openhome_api::AppState;
+use openhome_api::auth::{ApiKey, auth_middleware};
+use openhome_api::routes::{
     adguard::router as adguard_router, docker::router as docker_router,
     facts::router as facts_router, feeds::router as feeds_router, health::router as health_router,
     timeline::router as timeline_router,
 };
-use rpi_api::services::adguard::AdguardService;
-use rpi_api::services::docker::DockerService;
+use openhome_api::services::adguard::AdguardService;
+use openhome_api::services::docker::DockerService;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 
@@ -34,7 +34,7 @@ pub fn create_mock_state_with_adguard(service: AdguardService) -> AppState {
         db,
         adguard_service: Some(service),
         docker_service: None,
-        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(rpi_api::DockerCache::default())),
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(openhome_api::DockerCache::default())),
     }
 }
 
@@ -55,7 +55,7 @@ pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Rou
         db: db.clone(),
         adguard_service,
         docker_service: None,
-        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(rpi_api::DockerCache::default())),
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(openhome_api::DockerCache::default())),
     };
 
     let app = health_router()
@@ -97,7 +97,7 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
         db: db.clone(),
         adguard_service,
         docker_service,
-        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(rpi_api::DockerCache::default())),
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(openhome_api::DockerCache::default())),
     };
 
     let app = health_router()

@@ -1,7 +1,7 @@
 mod common;
 
 use common::test_app_with_db;
-use rpi_api::services::feed;
+use openhome_api::services::feed;
 
 #[tokio::test]
 async fn test_should_return_error_for_invalid_feed_url() {

@@ -1,5 +1,5 @@
 [package]
-name = "rpi-api"
+name = "openhome-api"
 version = "0.1.0"
 edition = "2024"
 

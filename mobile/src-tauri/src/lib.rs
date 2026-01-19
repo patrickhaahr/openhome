@@ -92,7 +92,7 @@ async fn save_api_key(
     }
     
     // Save to keyring
-    let entry = Entry::new("com.patrickhaahr.home-app", "api_key")?;
+    let entry = Entry::new("com.patrickhaahr.openhome", "api_key")?;
     entry.set_password(trimmed)?;
 
     // Update memory cache
@@ -113,7 +113,7 @@ struct KeyringDiagnostics {
 
 #[tauri::command]
 async fn get_keyring_diagnostics() -> Result<KeyringDiagnostics, AppError> {
-    let entry = match Entry::new("com.patrickhaahr.home-app", "api_key") {
+    let entry = match Entry::new("com.patrickhaahr.openhome", "api_key") {
         Ok(e) => e,
         Err(e) => {
              return Ok(KeyringDiagnostics {
@@ -231,7 +231,7 @@ async fn call_api(
             Some(k)
         } else {
             // Try keyring
-            let entry = Entry::new("com.patrickhaahr.home-app", "api_key")?;
+            let entry = Entry::new("com.patrickhaahr.openhome", "api_key")?;
             match entry.get_password() {
                 Ok(k) => {
                     #[cfg(debug_assertions)]
@@ -294,7 +294,7 @@ pub fn run() {
     android_logger::init_once(
         android_logger::Config::default()
             .with_max_level(log::LevelFilter::Debug)
-            .with_tag("home-app")
+            .with_tag("openhome")
     );
 
     let config = match config::AppConfig::load() {
