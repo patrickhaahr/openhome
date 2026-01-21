@@ -12,20 +12,33 @@ interface AdguardControlProps {
   class?: string;
 }
 
-const formatTimeUntil = (isoString: string | null): string => {
-  if (!isoString) return "";
+const formatTimeUntil = (isoString: string | null, durationMs: number): string => {
+  // Try using the ISO string first
+  if (isoString) {
+    const now = new Date();
+    const until = new Date(isoString);
+    const diffMs = until.getTime() - now.getTime();
+    
+    if (diffMs <= 0) return "Expired";
+    
+    const minutes = Math.floor(diffMs / 60000);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    return `${minutes}m`;
+  }
   
-  const now = new Date();
-  const until = new Date(isoString);
-  const diffMs = until.getTime() - now.getTime();
+  // Fallback to duration if no ISO string
+  if (durationMs > 0) {
+    const minutes = Math.floor(durationMs / 60000);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return "<1m";
+  }
   
-  if (diffMs <= 0) return "Expired";
-  
-  const minutes = Math.floor(diffMs / 60000);
-  const hours = Math.floor(minutes / 60);
-  
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  return `${minutes}m`;
+  return "";
 };
 
 const PAUSE_OPTIONS = [5, 15, 30, 60];
@@ -35,10 +48,6 @@ const AdguardControl = (props: AdguardControlProps) => {
   const [isLoading, setIsLoading] = createSignal<string | null>(null);
   const [showPauseOptions, setShowPauseOptions] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  
-  const isEnabled = () => status()?.protection_enabled ?? false;
-  const isPaused = () => !isEnabled() && !!status()?.protection_disabled_until;
-  const isDisabled = () => !isEnabled() && !status()?.protection_disabled_until;
   
   const handleEnable = async () => {
     setIsLoading("enable");
@@ -108,7 +117,14 @@ const AdguardControl = (props: AdguardControlProps) => {
             }
           >
             <Show when={status()}>
-              {(s) => (
+              {(s) => {
+                // Compute status states from the unwrapped value
+                // Check both protection_disabled_until AND protection_disabled_duration
+                const enabled = () => s().protection_enabled;
+                const paused = () => !s().protection_enabled && (!!s().protection_disabled_until || s().protection_disabled_duration > 0);
+                const disabled = () => !s().protection_enabled && !s().protection_disabled_until && s().protection_disabled_duration === 0;
+                
+                return (
                 <div class="flex flex-col items-center">
                   {/* Central status indicator */}
                   <div class="relative mb-6">
@@ -116,9 +132,9 @@ const AdguardControl = (props: AdguardControlProps) => {
                     <div
                       class={cn(
                         "absolute inset-0 rounded-full blur-xl transition-all duration-500",
-                        isEnabled() && "bg-success/20",
-                        isPaused() && "bg-warning/20",
-                        isDisabled() && "bg-error/20"
+                        enabled() && "bg-success/20",
+                        paused() && "bg-warning/20",
+                        disabled() && "bg-error/20"
                       )}
                     />
                     
@@ -127,19 +143,19 @@ const AdguardControl = (props: AdguardControlProps) => {
                       class={cn(
                         "relative size-24 rounded-full flex items-center justify-center transition-all duration-300",
                         "border-2",
-                        isEnabled() && "border-success/30 bg-success/5",
-                        isPaused() && "border-warning/30 bg-warning/5",
-                        isDisabled() && "border-error/30 bg-error/5"
+                        enabled() && "border-success/30 bg-success/5",
+                        paused() && "border-warning/30 bg-warning/5",
+                        disabled() && "border-error/30 bg-error/5"
                       )}
                     >
                       <Switch>
-                        <Match when={isEnabled()}>
+                        <Match when={enabled()}>
                           <Shield class="size-10 text-success" />
                         </Match>
-                        <Match when={isPaused()}>
+                        <Match when={paused()}>
                           <Clock class="size-10 text-warning" />
                         </Match>
-                        <Match when={isDisabled()}>
+                        <Match when={disabled()}>
                           <ShieldOff class="size-10 text-error" />
                         </Match>
                       </Switch>
@@ -150,13 +166,13 @@ const AdguardControl = (props: AdguardControlProps) => {
                   <div class="text-center mb-6">
                     <p class={cn(
                       "text-sm font-medium tracking-wide",
-                      isEnabled() && "text-success",
-                      isPaused() && "text-warning",
-                      isDisabled() && "text-error"
+                      enabled() && "text-success",
+                      paused() && "text-warning",
+                      disabled() && "text-error"
                     )}>
-                      {isEnabled() && "Protected"}
-                      {isPaused() && `Paused · ${formatTimeUntil(s().protection_disabled_until)}`}
-                      {isDisabled() && "Unprotected"}
+                      {enabled() && "Protected"}
+                      {paused() && `Paused · ${formatTimeUntil(s().protection_disabled_until, s().protection_disabled_duration)}`}
+                      {disabled() && "Unprotected"}
                     </p>
                     <p class="text-text-muted text-xs mt-1">
                       AdGuard {s().running ? `v${s().version}` : "offline"}
@@ -174,7 +190,7 @@ const AdguardControl = (props: AdguardControlProps) => {
                   <div class="flex items-center justify-center gap-3">
                     <Switch>
                       {/* When protection is OFF or PAUSED - show enable button */}
-                      <Match when={!isEnabled()}>
+                      <Match when={!enabled()}>
                         <button
                           onClick={handleEnable}
                           disabled={isLoading() === "enable"}
@@ -195,7 +211,7 @@ const AdguardControl = (props: AdguardControlProps) => {
                       </Match>
                       
                       {/* When protection is ON - show pause and disable buttons */}
-                      <Match when={isEnabled()}>
+                      <Match when={enabled()}>
                         {/* Pause button */}
                         <div class="relative">
                           <button
@@ -284,7 +300,7 @@ const AdguardControl = (props: AdguardControlProps) => {
                     </button>
                   </div>
                 </div>
-              )}
+              )}}
             </Show>
           </Show>
         </Suspense>
