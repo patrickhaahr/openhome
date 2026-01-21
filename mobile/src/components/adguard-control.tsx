@@ -263,16 +263,17 @@ const AdguardControl = (props: AdguardControlProps) => {
                       </Match>
                     </Switch>
                     
-                    {/* Refresh button - always visible */}
+                    {/* Refresh button - hidden on mobile, visible on desktop */}
                     <button
                       onClick={() => refetch()}
                       disabled={status.loading}
                       class={cn(
-                        "flex items-center justify-center size-12 rounded-2xl",
+                        "items-center justify-center size-12 rounded-2xl",
                         "bg-white/5 hover:bg-white/8 border border-border",
                         "text-text-muted hover:text-text-secondary",
                         "transition-all duration-200",
-                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                        "hidden md:flex" // Hide on mobile, show on desktop
                       )}
                       title="Refresh status"
                     >
