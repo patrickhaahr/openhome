@@ -4,22 +4,38 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-bg-primary: #0f0f0f;
-  --color-bg-secondary: #1a1a1a;
-  --color-bg-tertiary: #252525;
-  --color-text-primary: #f5f5f5;
-  --color-text-secondary: #a0a0a0;
-  --color-text-muted: #666666;
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
+  --color-bg-primary: #09090b;
+  --color-bg-secondary: #0f0f12;
+  --color-bg-tertiary: #18181b;
+  --color-bg-card: #0f0f12;
+  --color-bg-elevated: #18181b;
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #52525b;
+  --color-accent: #a855f7;
+  --color-accent-hover: #9333ea;
+  --color-accent-glow: rgba(168, 85, 247, 0.15);
   --color-success: #22c55e;
+  --color-success-glow: rgba(34, 197, 94, 0.15);
   --color-error: #ef4444;
-  --color-border: #333333;
+  --color-error-glow: rgba(239, 68, 68, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-glow: rgba(245, 158, 11, 0.15);
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.03);
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: local('SF Pro Display'), local('-apple-system');
+  font-weight: 100 900;
+  font-display: swap;
 }
 
 body {
   @apply bg-bg-primary text-text-primary antialiased;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'SF Pro Display', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.01em;
 }
 
 @theme inline {

@@ -4,7 +4,7 @@ import Rss from "./pages/rss";
 import Docker from "./pages/docker";
 import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
 import FactCard from "./components/fact-card";
-import ApiStatus from "./components/ui/api-status";
+import ApiStatusIndicator from "./components/ui/api-status-indicator";
 import AdguardControl from "./components/adguard-control";
 import ApiKeySetup from "./pages/api-key-setup";
 import { getKeyringStatus } from "./api/client";
@@ -40,36 +40,45 @@ const App: Component = () => {
   return (
     <Show when={!isCheckingKey()}>
       <Show when={!isApiKeyValid()} fallback={
-        <div class="flex min-h-screen flex-col bg-bg-primary">
-          <main class="flex-1 px-4 py-6 pb-20 sm:px-6 lg:px-8">
-            <div class="mx-auto max-w-lg">
-              <Show when={isHomePage()}>
-                <header class="mb-6">
-                  <h1 class="text-xl font-semibold text-text-primary sm:text-2xl">
-                    Home App
-                  </h1>
-                </header>
-              </Show>
+        <div class="relative flex min-h-screen flex-col bg-bg-primary overflow-hidden">
+          {/* Subtle gradient orb background */}
+          <div class="pointer-events-none absolute -top-32 -right-32 h-64 w-64 rounded-full bg-accent/5 blur-3xl" />
+          <div class="pointer-events-none absolute top-1/2 -left-32 h-48 w-48 rounded-full bg-accent/3 blur-3xl" />
+          
+          {/* API Status Indicator - fixed top right */}
+          <Show when={isHomePage()}>
+            <div class="fixed right-4 top-4 z-50">
+              <ApiStatusIndicator />
+            </div>
+          </Show>
 
+          <main class="relative flex-1 px-5 pt-8 pb-24">
+            <div class="mx-auto max-w-md">
               <Show when={currentPage() === "home"}>
                 <ErrorBoundary fallback={(err) => (
-                  <p class="rounded-lg bg-error/10 px-4 py-3 text-error">
+                  <div class="rounded-2xl bg-error/5 border border-error/10 px-4 py-3 text-error text-sm">
                     {err.message}
-                  </p>
+                  </div>
                 )}>
-                  <div class="space-y-6">
-                    <FactCard />
-                    <ApiStatus />
-                    <AdguardControl />
+                  <div class="space-y-8">
+                    {/* Fact section - hero area */}
+                    <section class="pt-4">
+                      <FactCard />
+                    </section>
+                    
+                    {/* AdGuard Control - main action area */}
+                    <section>
+                      <AdguardControl />
+                    </section>
                   </div>
                 </ErrorBoundary>
               </Show>
 
               <Show when={currentPage() === "rss"}>
                 <ErrorBoundary fallback={(err) => (
-                  <p class="rounded-lg bg-error/10 px-4 py-3 text-error">
+                  <div class="rounded-2xl bg-error/5 border border-error/10 px-4 py-3 text-error text-sm">
                     {err.message}
-                  </p>
+                  </div>
                 )}>
                   <Rss />
                 </ErrorBoundary>
@@ -77,9 +86,9 @@ const App: Component = () => {
 
               <Show when={currentPage() === "docker"}>
                 <ErrorBoundary fallback={(err) => (
-                  <p class="rounded-lg bg-error/10 px-4 py-3 text-error">
+                  <div class="rounded-2xl bg-error/5 border border-error/10 px-4 py-3 text-error text-sm">
                     {err.message}
-                  </p>
+                  </div>
                 )}>
                   <Docker />
                 </ErrorBoundary>

@@ -1,57 +1,57 @@
 import { Component, createResource, Show, Suspense } from "solid-js";
 import { getRandomFact } from "../api/facts";
-import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
-import { Skeleton } from "./ui/skeleton";
+import { RefreshCw } from "lucide-solid";
+import { cn } from "@/lib/utils";
 
 const FactCard: Component = () => {
   const [fact, { refetch }] = createResource(getRandomFact);
 
   return (
-    <Card class="w-full">
-      <CardHeader>
-        <CardTitle>Random Fact</CardTitle>
-        <CardDescription>Useless knowledge for your day</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Suspense
+    <div class="relative">
+      {/* Refresh button - subtle, top right */}
+      <button
+        onClick={() => refetch()}
+        disabled={fact.loading}
+        class={cn(
+          "absolute -top-1 right-0 p-2 rounded-full",
+          "text-text-muted hover:text-text-secondary hover:bg-white/5",
+          "transition-all duration-200",
+          "disabled:opacity-50 disabled:cursor-not-allowed"
+        )}
+        title="New fact"
+      >
+        <RefreshCw 
+          class={cn(
+            "size-4 transition-transform duration-500",
+            fact.loading && "animate-spin"
+          )} 
+        />
+      </button>
+
+      {/* The fact */}
+      <Suspense
+        fallback={
+          <div class="space-y-3 pr-10">
+            <div class="h-5 w-full rounded bg-white/5 animate-pulse" />
+            <div class="h-5 w-4/5 rounded bg-white/5 animate-pulse" />
+            <div class="h-5 w-3/5 rounded bg-white/5 animate-pulse" />
+          </div>
+        }
+      >
+        <Show
+          when={!fact.error}
           fallback={
-            <div class="space-y-2">
-              <Skeleton class="h-4 w-full" />
-              <Skeleton class="h-4 w-[90%]" />
-              <Skeleton class="h-4 w-[80%]" />
-            </div>
+            <p class="text-error/80 text-sm italic pr-10">
+              Could not load fact
+            </p>
           }
         >
-          <Show
-            when={!fact.error}
-            fallback={
-              <div class="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-                Failed to load fact: {fact.error?.message}
-              </div>
-            }
-          >
-            <p class="leading-7">{fact()?.text}</p>
-          </Show>
-        </Suspense>
-      </CardContent>
-      <CardFooter>
-        <Button 
-          onClick={() => refetch()} 
-          disabled={fact.loading}
-          class="w-full sm:w-auto"
-        >
-          {fact.loading ? "Loading..." : "Refresh Fact"}
-        </Button>
-      </CardFooter>
-    </Card>
+          <p class="text-lg leading-relaxed text-text-primary/90 font-light tracking-tight pr-10">
+            {fact()?.text}
+          </p>
+        </Show>
+      </Suspense>
+    </div>
   );
 };
 

@@ -1,20 +1,11 @@
-import { createResource, createSignal, Show, Suspense, Switch, Match } from "solid-js";
+import { createResource, createSignal, Show, Suspense, Switch, Match, For } from "solid-js";
 import {
   getAdguardStatus,
   enableProtection,
   disableProtection,
   pauseProtection,
 } from "@/api/adguard";
-import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
-import { Skeleton } from "./ui/skeleton";
+import { Shield, ShieldOff, Pause, Play, RefreshCw, Clock } from "lucide-solid";
 import { cn } from "@/lib/utils";
 
 interface AdguardControlProps {
@@ -28,58 +19,26 @@ const formatTimeUntil = (isoString: string | null): string => {
   const until = new Date(isoString);
   const diffMs = until.getTime() - now.getTime();
   
-  if (diffMs <= 0) return "Already expired";
+  if (diffMs <= 0) return "Expired";
   
   const minutes = Math.floor(diffMs / 60000);
   const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
   
-  if (days > 0) return `${days}d ${hours % 24}h`;
   if (hours > 0) return `${hours}h ${minutes % 60}m`;
   return `${minutes}m`;
 };
 
-const StatusBadge = (props: { enabled: boolean; disabledUntil: string | null }) => {
-  const isEnabled = () => props.enabled;
-  const isPaused = () => !props.enabled && !!props.disabledUntil;
-  const isDisabled = () => !props.enabled && !props.disabledUntil;
-  
-  return (
-    <div class="flex items-center gap-2">
-      <div
-        class={cn(
-          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide uppercase",
-          isEnabled() && "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
-          isPaused() && "bg-amber-500/15 text-amber-400 border border-amber-500/30",
-          isDisabled() && "bg-red-500/15 text-red-400 border border-red-500/30"
-        )}
-      >
-        <span
-          class={cn(
-            "w-1.5 h-1.5 rounded-full",
-            isEnabled() && "bg-emerald-400 animate-pulse",
-            isPaused() && "bg-amber-400",
-            isDisabled() && "bg-red-400"
-          )}
-        />
-        {isEnabled() && "Protection ON"}
-        {isPaused() && "Paused"}
-        {isDisabled() && "Protection OFF"}
-      </div>
-      {isPaused() && props.disabledUntil && (
-        <span class="text-xs text-muted-foreground">
-          until {formatTimeUntil(props.disabledUntil)}
-        </span>
-      )}
-    </div>
-  );
-};
+const PAUSE_OPTIONS = [5, 15, 30, 60];
 
 const AdguardControl = (props: AdguardControlProps) => {
   const [status, { refetch }] = createResource(getAdguardStatus);
   const [isLoading, setIsLoading] = createSignal<string | null>(null);
-  const [pauseMinutes, setPauseMinutes] = createSignal(5);
+  const [showPauseOptions, setShowPauseOptions] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  
+  const isEnabled = () => status()?.protection_enabled ?? false;
+  const isPaused = () => !isEnabled() && !!status()?.protection_disabled_until;
+  const isDisabled = () => !isEnabled() && !status()?.protection_disabled_until;
   
   const handleEnable = async () => {
     setIsLoading("enable");
@@ -88,7 +47,7 @@ const AdguardControl = (props: AdguardControlProps) => {
       await enableProtection();
       refetch();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to enable protection");
+      setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setIsLoading(null);
     }
@@ -101,206 +60,243 @@ const AdguardControl = (props: AdguardControlProps) => {
       await disableProtection();
       refetch();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to disable protection");
+      setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setIsLoading(null);
     }
   };
   
-  const handlePause = async () => {
+  const handlePause = async (minutes: number) => {
     setIsLoading("pause");
     setError(null);
+    setShowPauseOptions(false);
     try {
-      await pauseProtection(pauseMinutes());
+      await pauseProtection(minutes);
       refetch();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to pause protection");
+      setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setIsLoading(null);
     }
   };
   
   return (
-    <Card class={cn("w-full", props.class)}>
-      <CardHeader>
-        <div class="flex items-center justify-between">
-          <div>
-            <CardTitle class="flex items-center gap-2">
-              <span>AdGuard Protection</span>
-            </CardTitle>
-            <CardDescription>Network-level ad blocking control</CardDescription>
-          </div>
-          <Switch>
-            <Match when={status.loading}>
-              <div class="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </Match>
-            <Match when={status()}>
-              <StatusBadge 
-                enabled={status()!.protection_enabled} 
-                disabledUntil={status()!.protection_disabled_until}
-              />
-            </Match>
-          </Switch>
-        </div>
-      </CardHeader>
-      
-      <CardContent>
+    <div class={cn("relative", props.class)}>
+      {/* Main control card */}
+      <div class="rounded-3xl bg-bg-card border border-border p-6">
         <Suspense
           fallback={
-            <div class="space-y-3">
-              <Skeleton class="h-4 w-full" />
-              <Skeleton class="h-4 w-[70%]" />
-              <div class="flex gap-2 pt-2">
-                <Skeleton class="h-9 w-20" />
-                <Skeleton class="h-9 w-24" />
-              </div>
+            <div class="flex flex-col items-center gap-6 py-4">
+              <div class="size-20 rounded-full bg-white/5 animate-pulse" />
+              <div class="h-4 w-24 rounded bg-white/5 animate-pulse" />
             </div>
           }
         >
           <Show
             when={!status.error}
             fallback={
-              <div class="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
-                <p class="font-medium">Failed to load status</p>
-                <p class="mt-1 opacity-80">{status.error?.message}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
+              <div class="text-center py-8">
+                <ShieldOff class="mx-auto size-12 text-error/50 mb-3" />
+                <p class="text-text-secondary text-sm">Connection failed</p>
+                <button
                   onClick={() => refetch()}
-                  class="mt-3"
+                  class="mt-3 text-xs text-accent hover:text-accent-hover transition-colors"
                 >
-                  Try Again
-                </Button>
+                  Retry
+                </button>
               </div>
             }
           >
             <Show when={status()}>
               {(s) => (
-                <div class="space-y-4">
-                  {/* Version and running info */}
-                  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                    <span>v{s().version}</span>
-                    <span class="flex items-center gap-1.5">
-                      <span
-                        class={cn(
-                          "w-1.5 h-1.5 rounded-full",
-                          s().running ? "bg-emerald-500" : "bg-red-500"
-                        )}
-                      />
-                      {s().running ? "Running" : "Not running"}
-                    </span>
+                <div class="flex flex-col items-center">
+                  {/* Central status indicator */}
+                  <div class="relative mb-6">
+                    {/* Glow ring */}
+                    <div
+                      class={cn(
+                        "absolute inset-0 rounded-full blur-xl transition-all duration-500",
+                        isEnabled() && "bg-success/20",
+                        isPaused() && "bg-warning/20",
+                        isDisabled() && "bg-error/20"
+                      )}
+                    />
+                    
+                    {/* Shield icon container */}
+                    <div
+                      class={cn(
+                        "relative size-24 rounded-full flex items-center justify-center transition-all duration-300",
+                        "border-2",
+                        isEnabled() && "border-success/30 bg-success/5",
+                        isPaused() && "border-warning/30 bg-warning/5",
+                        isDisabled() && "border-error/30 bg-error/5"
+                      )}
+                    >
+                      <Switch>
+                        <Match when={isEnabled()}>
+                          <Shield class="size-10 text-success" />
+                        </Match>
+                        <Match when={isPaused()}>
+                          <Clock class="size-10 text-warning" />
+                        </Match>
+                        <Match when={isDisabled()}>
+                          <ShieldOff class="size-10 text-error" />
+                        </Match>
+                      </Switch>
+                    </div>
                   </div>
                   
-                  {/* Error message */}
-                  <Show when={error()}>
-                    {(e) => (
-                      <div class="rounded-lg bg-destructive/10 p-3 text-sm text-destructive animate-in fade-in slide-in-from-top-1">
-                        {e()}
-                      </div>
-                    )}
-                  </Show>
+                  {/* Status text */}
+                  <div class="text-center mb-6">
+                    <p class={cn(
+                      "text-sm font-medium tracking-wide",
+                      isEnabled() && "text-success",
+                      isPaused() && "text-warning",
+                      isDisabled() && "text-error"
+                    )}>
+                      {isEnabled() && "Protected"}
+                      {isPaused() && `Paused · ${formatTimeUntil(s().protection_disabled_until)}`}
+                      {isDisabled() && "Unprotected"}
+                    </p>
+                    <p class="text-text-muted text-xs mt-1">
+                      AdGuard {s().running ? `v${s().version}` : "offline"}
+                    </p>
+                  </div>
                   
-                  {/* Pause duration input */}
-                  <Show when={s().protection_enabled}>
-                    <div class="flex flex-wrap items-center gap-3">
-                      <label class="text-sm font-medium text-foreground">
-                        Pause for
-                      </label>
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min="1"
-                          max="1440"
-                          value={pauseMinutes()}
-                          onInput={(e) => setPauseMinutes(Math.max(1, parseInt(e.currentTarget.value) || 5))}
-                          disabled={isLoading() === "pause"}
-                          class="w-20 h-9 rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
-                        />
-                        <span class="text-sm text-muted-foreground">min</span>
-                      </div>
+                  {/* Error toast */}
+                  <Show when={error()}>
+                    <div class="w-full mb-4 px-4 py-2 rounded-xl bg-error/10 border border-error/20 text-error text-xs text-center">
+                      {error()}
                     </div>
                   </Show>
+                  
+                  {/* Action buttons */}
+                  <div class="flex items-center justify-center gap-3">
+                    <Switch>
+                      {/* When protection is OFF or PAUSED - show enable button */}
+                      <Match when={!isEnabled()}>
+                        <button
+                          onClick={handleEnable}
+                          disabled={isLoading() === "enable"}
+                          class={cn(
+                            "flex items-center justify-center gap-2 px-6 py-3 rounded-2xl",
+                            "bg-success/10 hover:bg-success/15 border border-success/20",
+                            "text-success text-sm font-medium",
+                            "transition-all duration-200",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          <Play class={cn(
+                            "size-4",
+                            isLoading() === "enable" && "animate-pulse"
+                          )} />
+                          <span>Enable</span>
+                        </button>
+                      </Match>
+                      
+                      {/* When protection is ON - show pause and disable buttons */}
+                      <Match when={isEnabled()}>
+                        {/* Pause button */}
+                        <div class="relative">
+                          <button
+                            onClick={() => setShowPauseOptions(!showPauseOptions())}
+                            disabled={isLoading() === "pause"}
+                            class={cn(
+                              "flex items-center justify-center size-12 rounded-2xl",
+                              "bg-warning/10 hover:bg-warning/15 border border-warning/20",
+                              "text-warning transition-all duration-200",
+                              "disabled:opacity-50 disabled:cursor-not-allowed"
+                            )}
+                            title="Pause protection"
+                          >
+                            <Pause class={cn(
+                              "size-5",
+                              isLoading() === "pause" && "animate-pulse"
+                            )} />
+                          </button>
+                          
+                          {/* Pause duration popup */}
+                          <Show when={showPauseOptions()}>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10">
+                              <div class="flex gap-1 p-1.5 rounded-2xl bg-bg-elevated border border-border shadow-xl">
+                                <For each={PAUSE_OPTIONS}>
+                                  {(mins) => (
+                                    <button
+                                      onClick={() => handlePause(mins)}
+                                      class={cn(
+                                        "px-3 py-1.5 rounded-xl text-xs font-medium",
+                                        "bg-transparent hover:bg-white/5",
+                                        "text-text-secondary hover:text-text-primary",
+                                        "transition-colors"
+                                      )}
+                                    >
+                                      {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                                    </button>
+                                  )}
+                                </For>
+                              </div>
+                              {/* Arrow */}
+                              <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                                <div class="border-8 border-transparent border-t-border" />
+                              </div>
+                            </div>
+                          </Show>
+                        </div>
+                        
+                        {/* Disable button */}
+                        <button
+                          onClick={handleDisable}
+                          disabled={isLoading() === "disable"}
+                          class={cn(
+                            "flex items-center justify-center size-12 rounded-2xl",
+                            "bg-error/10 hover:bg-error/15 border border-error/20",
+                            "text-error transition-all duration-200",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                          title="Disable protection"
+                        >
+                          <ShieldOff class={cn(
+                            "size-5",
+                            isLoading() === "disable" && "animate-pulse"
+                          )} />
+                        </button>
+                      </Match>
+                    </Switch>
+                    
+                    {/* Refresh button - always visible */}
+                    <button
+                      onClick={() => refetch()}
+                      disabled={status.loading}
+                      class={cn(
+                        "flex items-center justify-center size-12 rounded-2xl",
+                        "bg-white/5 hover:bg-white/8 border border-border",
+                        "text-text-muted hover:text-text-secondary",
+                        "transition-all duration-200",
+                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                      )}
+                      title="Refresh status"
+                    >
+                      <RefreshCw class={cn(
+                        "size-4",
+                        status.loading && "animate-spin"
+                      )} />
+                    </button>
+                  </div>
                 </div>
               )}
             </Show>
           </Show>
         </Suspense>
-      </CardContent>
+      </div>
       
-      <CardFooter class="flex flex-wrap gap-2">
-        <Show when={status()}>
-          {(s) => (
-            <Switch>
-              <Match when={!s().protection_enabled}>
-                <Button
-                  onClick={handleEnable}
-                  disabled={isLoading() === "enable"}
-                  class="flex-1 min-w-[120px]"
-                >
-                  <Show when={isLoading() === "enable"} fallback={s().protection_disabled_until ? "Resume Protection" : "Enable Protection"}>
-                    {s().protection_disabled_until ? "Resuming..." : "Enabling..."}
-                  </Show>
-                </Button>
-              </Match>
-
-              <Match when={s().protection_enabled}>
-                <div class="flex flex-wrap gap-2 w-full">
-                  <Button
-                    variant="outline"
-                    onClick={handlePause}
-                    disabled={isLoading() === "pause"}
-                    class="flex-1 min-w-[100px]"
-                  >
-                    <Show when={isLoading() === "pause"} fallback={`Pause ${pauseMinutes()} min`}>
-                      Pausing...
-                    </Show>
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDisable}
-                    disabled={isLoading() === "disable"}
-                    class="flex-1 min-w-[100px]"
-                  >
-                    <Show when={isLoading() === "disable"} fallback="Disable Protection">
-                      Disabling...
-                    </Show>
-                  </Button>
-                </div>
-              </Match>
-            </Switch>
-          )}
-        </Show>
-        
-        {/* Refresh button when loaded */}
-        <Show when={!status.loading && status()}>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            class="size-9"
-            title="Refresh status"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class={cn("transition-transform", status.loading && "animate-spin")}
-            >
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-              <path d="M16 16h5v5" />
-            </svg>
-          </Button>
-        </Show>
-      </CardFooter>
-    </Card>
+      {/* Click outside to close pause options */}
+      <Show when={showPauseOptions()}>
+        <div
+          class="fixed inset-0 z-0"
+          onClick={() => setShowPauseOptions(false)}
+        />
+      </Show>
+    </div>
   );
 };
 
