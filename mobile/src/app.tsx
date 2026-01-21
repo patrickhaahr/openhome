@@ -6,6 +6,8 @@ import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
 import FactCard from "./components/fact-card";
 import ApiStatusIndicator from "./components/ui/api-status-indicator";
 import AdguardControl from "./components/adguard-control";
+import DockerHealth from "./components/docker-health";
+import RssPreview from "./components/rss-preview";
 import ApiKeySetup from "./pages/api-key-setup";
 import { getKeyringStatus } from "./api/client";
 import { isLoaded } from "./stores/config";
@@ -60,15 +62,21 @@ const App: Component = () => {
                     {err.message}
                   </div>
                 )}>
-                  <div class="space-y-8">
+                  <div class="space-y-6">
                     {/* Fact section - hero area */}
-                    <section class="pt-4">
+                    <section class="pt-2">
                       <FactCard />
                     </section>
                     
-                    {/* AdGuard Control - main action area */}
-                    <section>
+                    {/* Status row - AdGuard + Docker health */}
+                    <section class="space-y-3">
                       <AdguardControl />
+                      <DockerHealth />
+                    </section>
+                    
+                    {/* RSS Preview - latest reads */}
+                    <section class="pt-2">
+                      <RssPreview />
                     </section>
                   </div>
                 </ErrorBoundary>
