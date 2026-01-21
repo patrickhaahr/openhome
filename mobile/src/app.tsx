@@ -1,13 +1,12 @@
 import type { Component } from "solid-js";
 import { createMemo, createSignal, onMount, Show, ErrorBoundary } from "solid-js";
-import Rss from "./pages/rss";
 import Docker from "./pages/docker";
 import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
 import FactCard from "./components/fact-card";
 import ApiStatusIndicator from "./components/ui/api-status-indicator";
 import AdguardControl from "./components/adguard-control";
 import DockerHealth from "./components/docker-health";
-import RssPreview from "./components/rss-preview";
+import RssFeed from "./components/rss-feed";
 import ApiKeySetup from "./pages/api-key-setup";
 import { getKeyringStatus } from "./api/client";
 import { isLoaded } from "./stores/config";
@@ -74,21 +73,11 @@ const App: Component = () => {
                       <DockerHealth />
                     </section>
                     
-                    {/* RSS Preview - latest reads */}
+                    {/* RSS Feed - scrollable timeline */}
                     <section class="pt-2">
-                      <RssPreview />
+                      <RssFeed />
                     </section>
                   </div>
-                </ErrorBoundary>
-              </Show>
-
-              <Show when={currentPage() === "rss"}>
-                <ErrorBoundary fallback={(err) => (
-                  <div class="rounded-2xl bg-error/5 border border-error/10 px-4 py-3 text-error text-sm">
-                    {err.message}
-                  </div>
-                )}>
-                  <Rss />
                 </ErrorBoundary>
               </Show>
 

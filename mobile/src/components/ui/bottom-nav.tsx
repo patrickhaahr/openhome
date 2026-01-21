@@ -1,8 +1,8 @@
 import type { Component, Accessor } from "solid-js";
-import { Home, Rss, Boxes } from "lucide-solid";
+import { Home, Boxes } from "lucide-solid";
 import { cn } from "@/lib/utils";
 
-export type NavPage = "home" | "rss" | "docker";
+export type NavPage = "home" | "docker";
 
 interface BottomNavProps {
   currentPage: Accessor<NavPage>;
@@ -29,22 +29,6 @@ const BottomNav: Component<BottomNavProps> = (props) => {
             <Home class="size-5" />
             <span class="text-[10px] font-medium tracking-wide">Home</span>
             {props.currentPage() === "home" && (
-              <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
-            )}
-          </button>
-
-          <button
-            onClick={() => props.onNavigate("rss")}
-            class={cn(
-              "relative flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all duration-200",
-              props.currentPage() === "rss"
-                ? "text-accent"
-                : "text-text-muted hover:text-text-secondary"
-            )}
-          >
-            <Rss class="size-5" />
-            <span class="text-[10px] font-medium tracking-wide">RSS</span>
-            {props.currentPage() === "rss" && (
               <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
             )}
           </button>
