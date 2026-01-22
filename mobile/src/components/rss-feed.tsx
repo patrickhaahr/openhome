@@ -201,11 +201,11 @@ const RssFeed: Component = () => {
       {/* Section header */}
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <Rss class="size-4 text-text-muted" />
           <h2 class="text-sm font-medium text-text-secondary tracking-wide">RSS Feed</h2>
           <span class="text-xs text-text-muted">
             {itemCount()} stories from {feedCount()} sources
           </span>
+          <Rss class="size-4 text-text-muted" />
         </div>
         
         {/* Manage Feeds Button */}

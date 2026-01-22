@@ -32,7 +32,11 @@ const getOverallHealth = (containers: DockerContainerStatus[]): HealthStatus => 
   return hasUnhealthy ? "unhealthy" : "healthy";
 };
 
-const DockerHealth: Component = () => {
+interface DockerHealthProps {
+  onClick?: () => void;
+}
+
+const DockerHealth: Component<DockerHealthProps> = (props) => {
   const [containersData] = createResource(listDockerContainers);
   
   const health = (): HealthStatus => {
@@ -50,7 +54,10 @@ const DockerHealth: Component = () => {
   const totalCount = () => containersData()?.containers.length ?? 0;
 
   return (
-    <div class="rounded-2xl bg-bg-card border border-border p-4">
+    <button
+      onClick={() => props.onClick?.()}
+      class="w-full rounded-2xl bg-bg-card border border-border p-4 text-left transition-colors hover:bg-bg-card/80 hover:border-border-subtle focus:outline-none focus:ring-2 focus:ring-accent/20"
+    >
       <div class="flex items-center gap-3">
         {/* Docker icon */}
         <DockerIcon
@@ -120,7 +127,7 @@ const DockerHealth: Component = () => {
           )}
         />
       </div>
-    </div>
+    </button>
   );
 };
 

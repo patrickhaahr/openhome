@@ -70,7 +70,7 @@ const App: Component = () => {
                     {/* Status row - AdGuard + Docker health */}
                     <section class="space-y-3">
                       <AdguardControl />
-                      <DockerHealth />
+                      <DockerHealth onClick={() => setCurrentPage("docker")} />
                     </section>
                     
                     {/* RSS Feed - scrollable timeline */}
