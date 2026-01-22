@@ -1,5 +1,6 @@
 import type { Component } from "solid-js";
 import { createSignal, For, Show, onMount, onCleanup, createMemo, createEffect } from "solid-js";
+import { Portal } from "solid-js/web";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getTimelineCompact, getFeeds, createFeed, deleteFeed, type TimelineCompactItem, type FeedItem } from "../api/rss";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,6 @@ import {
   DialogContent,
   DialogTitle,
   DialogDescription,
-  ConfirmDialog,
 } from "./ui/dialog";
 
 // Strip HTML tags from description
@@ -49,9 +49,11 @@ const RssFeed: Component = () => {
   const [newFeedUrl, setNewFeedUrl] = createSignal("");
   const [showFeedManager, setShowFeedManager] = createSignal(false);
   const [isAddingFeed, setIsAddingFeed] = createSignal(false);
-  const [deleteConfirm, setDeleteConfirm] = createSignal<{open: boolean; feed: FeedItem | null}>({open: false, feed: null});
-  
+  const [deletedFeeds, setDeletedFeeds] = createSignal<FeedItem[]>([]);
+  const [showUndo, setShowUndo] = createSignal(false);
+
   let statusTimer: number | undefined;
+  let undoTimer: number | undefined;
   let sentinelRef: HTMLDivElement | undefined;
   let observer: IntersectionObserver | undefined;
   let scrollRoot: HTMLElement | null = null;
@@ -134,21 +136,45 @@ const RssFeed: Component = () => {
     }
   };
 
-  const handleDeleteFeed = async () => {
-    const feed = deleteConfirm().feed;
-    if (!feed) return;
-    
-    setDeleteConfirm({open: false, feed: null});
-    
+  const handleDeleteFeed = async (feed: FeedItem) => {
     try {
       await deleteFeed(feed.id);
-      setStatus("Feed removed", "success");
       await loadFeeds();
       await loadTimeline(true);
+
+      setDeletedFeeds(prev => [...prev, feed]);
+      setShowUndo(true);
+
+      if (undoTimer !== undefined) {
+        window.clearTimeout(undoTimer);
+      }
+      undoTimer = window.setTimeout(() => {
+        setDeletedFeeds([]);
+        setShowUndo(false);
+      }, 3000);
     } catch (e) {
       console.error("Failed to delete feed:", e);
       setStatus("Failed to remove feed", "error");
     }
+  };
+
+  const handleUndo = async () => {
+    const feeds = deletedFeeds();
+    setShowUndo(false);
+    if (undoTimer !== undefined) {
+      window.clearTimeout(undoTimer);
+    }
+
+    try {
+      await Promise.all(feeds.map(f => createFeed(f.url)));
+      await loadFeeds();
+      await loadTimeline(true);
+      setStatus(`Restored ${feeds.length} feed(s)`, "success");
+    } catch (e) {
+      console.error("Failed to restore feeds:", e);
+      setStatus("Failed to restore feeds", "error");
+    }
+    setDeletedFeeds([]);
   };
 
   const openHttpUrl = async (raw: string) => {
@@ -250,6 +276,9 @@ const RssFeed: Component = () => {
   onCleanup(() => {
     if (statusTimer !== undefined) {
       window.clearTimeout(statusTimer);
+    }
+    if (undoTimer !== undefined) {
+      window.clearTimeout(undoTimer);
     }
     observer?.disconnect();
     setScrollRoot(null);
@@ -391,11 +420,12 @@ const RssFeed: Component = () => {
 
       {/* Feed Manager Modal */}
       <Dialog open={showFeedManager()} onOpenChange={setShowFeedManager}>
-        <DialogPortal>
-          <DialogOverlay 
-            onClick={() => setShowFeedManager(false)} 
-            class="bg-black/60 backdrop-blur-md"
-          />
+        <Portal mount={document.body}>
+          <DialogPortal>
+            <DialogOverlay 
+              onClick={() => setShowFeedManager(false)} 
+              class="bg-black/60 backdrop-blur-md"
+            />
           <DialogContent 
             open={showFeedManager()} 
             onOpenChange={setShowFeedManager}
@@ -483,12 +513,11 @@ const RssFeed: Component = () => {
                           </p>
                         </div>
                         <button
-                          onClick={() => setDeleteConfirm({open: true, feed})}
+                          onClick={() => handleDeleteFeed(feed)}
                           class={cn(
                             "size-8 rounded-xl flex items-center justify-center flex-shrink-0",
                             "bg-transparent hover:bg-error/10 border border-transparent hover:border-error/20",
                             "text-text-muted hover:text-error",
-                            "opacity-0 group-hover:opacity-100",
                             "transition-all duration-200"
                           )}
                         >
@@ -502,18 +531,37 @@ const RssFeed: Component = () => {
             </div>
           </DialogContent>
         </DialogPortal>
+        </Portal>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
-        open={deleteConfirm().open}
-        onOpenChange={(open) => setDeleteConfirm({open, feed: deleteConfirm().feed})}
-        title="Remove Feed"
-        description={`Remove "${deleteConfirm().feed?.title ?? 'this feed'}" from your sources?`}
-        confirmLabel="Remove"
-        cancelLabel="Keep"
-        onConfirm={handleDeleteFeed}
-      />
+      {/* Undo Snackbar */}
+      <Show when={showUndo() && deletedFeeds().length > 0}>
+        <Portal mount={document.body}>
+          <div
+            class="fixed bottom-24 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300"
+          >
+            <div class="rounded-2xl bg-bg-secondary/95 backdrop-blur-xl border border-border px-4 py-3 shadow-xl">
+              <div class="flex items-center gap-3">
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-text-primary">
+                    {deletedFeeds().length === 1 ? "Feed removed" : `${deletedFeeds().length} feeds removed`}
+                  </p>
+                  <p class="text-xs text-text-muted truncate">
+                    {deletedFeeds()[0]?.title ?? "Untitled Feed"}
+                    {deletedFeeds().length > 1 && ` +${deletedFeeds().length - 1} more`}
+                  </p>
+                </div>
+                <button
+                  onClick={handleUndo}
+                  class="px-3 py-1.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-medium transition-colors whitespace-nowrap"
+                >
+                  Undo
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
     </div>
   );
 };
