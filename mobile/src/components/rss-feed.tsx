@@ -18,7 +18,6 @@ import {
   DialogPortal,
   DialogOverlay,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
   ConfirmDialog,
