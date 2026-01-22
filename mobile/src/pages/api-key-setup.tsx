@@ -1,8 +1,8 @@
 import type { Component } from "solid-js";
-import { createSignal, Show, createMemo } from "solid-js";
-import { saveApiKey } from "../stores/config";
+import { createSignal, Show, createMemo, onMount } from "solid-js";
+import { saveApiKey, saveSettings, baseUrl, timeoutSeconds } from "../stores/config";
 import { getHealthStatus } from "../api/health";
-import { Key, ArrowRight, Check, Loader2 } from "lucide-solid";
+import { Key, ArrowRight, Check, Loader2, Globe } from "lucide-solid";
 import { cn } from "@/lib/utils";
 
 interface ApiKeySetupProps {
@@ -11,13 +11,19 @@ interface ApiKeySetupProps {
 
 const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
   const [apiKey, setApiKey] = createSignal("");
+  const [baseUrlInput, setBaseUrlInput] = createSignal("");
   const [status, setStatus] = createSignal<"idle" | "saving" | "validating" | "success" | "error">("idle");
   const [_errorMessage, setErrorMessage] = createSignal("");
+
+  // Initialize base URL input with current value
+  onMount(() => {
+    setBaseUrlInput(baseUrl());
+  });
 
   const isLoading = createMemo(() => status() === "saving" || status() === "validating");
   const isSuccess = createMemo(() => status() === "success");
   const isError = createMemo(() => status() === "error");
-  const hasInput = createMemo(() => apiKey().trim().length > 0);
+  const hasInput = createMemo(() => apiKey().trim().length > 0 && baseUrlInput().trim().length > 0);
 
   const handleSave = async () => {
     const key = apiKey();
@@ -31,6 +37,8 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
     setErrorMessage("");
 
     try {
+      // Save base URL first
+      await saveSettings(baseUrlInput(), timeoutSeconds());
       await saveApiKey(key);
       setStatus("validating");
       await getHealthStatus();
@@ -91,15 +99,46 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
         </div>
 
         {/* Input area */}
-        <div class="space-y-4">
-          {/* Input container */}
+        <div class="space-y-3">
+          {/* Base URL input */}
           <div class={cn(
             "relative rounded-2xl border bg-bg-secondary/60 backdrop-blur-sm transition-all duration-300",
             isError() 
               ? "border-error/40" 
               : isSuccess()
                 ? "border-success/40"
-                : hasInput()
+                : baseUrlInput().trim()
+                  ? "border-accent/30"
+                  : "border-border"
+          )}>
+            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
+              <Globe class="size-4" />
+            </div>
+            <input
+              type="url"
+              value={baseUrlInput()}
+              onInput={(e) => {
+                setBaseUrlInput(e.currentTarget.value);
+                if (isError()) setStatus("idle");
+              }}
+              placeholder="https://api.example.com"
+              disabled={isLoading() || isSuccess()}
+              class={cn(
+                "w-full bg-transparent pl-11 pr-5 py-3.5 text-sm text-text-primary placeholder:text-text-muted/60",
+                "focus:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+                "font-mono"
+              )}
+            />
+          </div>
+
+          {/* API Key input container */}
+          <div class={cn(
+            "relative rounded-2xl border bg-bg-secondary/60 backdrop-blur-sm transition-all duration-300",
+            isError() 
+              ? "border-error/40" 
+              : isSuccess()
+                ? "border-success/40"
+                : apiKey().trim()
                   ? "border-accent/30"
                   : "border-border"
           )}>
