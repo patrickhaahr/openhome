@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
-import { createSignal, Show, createMemo, onMount } from "solid-js";
-import { saveApiKey, saveSettings, baseUrl, timeoutSeconds } from "../stores/config";
+import { createSignal, Show, createMemo, createEffect } from "solid-js";
+import { saveApiKey, saveSettings, baseUrl, timeoutSeconds, apiKey as storedApiKey, isLoaded } from "../stores/config";
 import { getHealthStatus } from "../api/health";
 import { Key, ArrowRight, Check, Loader2, Globe } from "lucide-solid";
 import { cn } from "@/lib/utils";
@@ -14,10 +14,17 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
   const [baseUrlInput, setBaseUrlInput] = createSignal("");
   const [status, setStatus] = createSignal<"idle" | "saving" | "validating" | "success" | "error">("idle");
   const [_errorMessage, setErrorMessage] = createSignal("");
+  const [hasInitialized, setHasInitialized] = createSignal(false);
 
-  // Initialize base URL input with current value
-  onMount(() => {
+  // Initialize base URL input and API key with current values
+  createEffect(() => {
+    if (!isLoaded() || hasInitialized()) {
+      return;
+    }
+
     setBaseUrlInput(baseUrl());
+    setApiKey(storedApiKey());
+    setHasInitialized(true);
   });
 
   const isLoading = createMemo(() => status() === "saving" || status() === "validating");
@@ -98,8 +105,9 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
           </div>
         </div>
 
-        {/* Input area */}
-        <div class="space-y-3">
+        {/* Input area - only show after loaded */}
+        <Show when={isLoaded()}>
+          <div class="space-y-3">
           {/* Base URL input */}
           <div class={cn(
             "relative rounded-2xl border bg-bg-secondary/60 backdrop-blur-sm transition-all duration-300",
@@ -186,6 +194,7 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
             </Show>
           </div>
         </div>
+      </Show>
       </div>
 
       {/* Subtle bottom decoration */}

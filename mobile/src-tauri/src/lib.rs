@@ -103,6 +103,39 @@ async fn save_api_key(
     Ok(())
 }
 
+#[tauri::command]
+fn get_api_key(state: tauri::State<'_, ConfigState>) -> Result<Option<String>, AppError> {
+    if let Ok(cache) = state.api_key.lock()
+        && let Some(key) = cache.clone()
+    {
+        return Ok(Some(key));
+    }
+
+    let entry = match Entry::new("com.patrickhaahr.openhome", "api_key") {
+        Ok(entry) => entry,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[get_api_key] Keyring init error: {}", e);
+            return Ok(None);
+        }
+    };
+
+    match entry.get_password() {
+        Ok(key) => {
+            if let Ok(mut cache) = state.api_key.lock() {
+                *cache = Some(key.clone());
+            }
+            Ok(Some(key))
+        }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[get_api_key] Keyring error: {}", e);
+            Ok(None)
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct KeyringDiagnostics {
     key_present: bool,
@@ -328,6 +361,7 @@ pub fn run() {
             greet,
             get_api_config,
             save_api_key,
+            get_api_key,
             call_api,
             get_keyring_diagnostics
         ])

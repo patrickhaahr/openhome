@@ -11,6 +11,7 @@ let store: Store | null = null;
 
 const [baseUrl, setBaseUrl] = createSignal<string>("");
 const [timeoutSeconds, setTimeoutSeconds] = createSignal<number>(30);
+const [apiKey, setApiKey] = createSignal<string>("");
 const [isLoaded, setIsLoaded] = createSignal(false);
 
 const initStore = async () => {
@@ -40,6 +41,16 @@ const initStore = async () => {
       // If static fails, keep existing or defaults (empty/30)
       if (storedUrl) setBaseUrl(storedUrl);
       if (storedTimeout) setTimeoutSeconds(storedTimeout);
+    }
+
+    // Load API key from secure storage
+    try {
+      const key = await invoke<string | null>("get_api_key");
+      if (key) {
+        setApiKey(key);
+      }
+    } catch (e) {
+      console.error("Failed to load API key", e);
     }
     
     setIsLoaded(true);
@@ -75,4 +86,4 @@ export const saveSettings = async (url: string, timeout: number) => {
   setTimeoutSeconds(timeout);
 };
 
-export { baseUrl, timeoutSeconds, isLoaded };
+export { baseUrl, timeoutSeconds, apiKey, isLoaded };
