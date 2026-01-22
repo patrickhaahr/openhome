@@ -12,6 +12,7 @@ interface ApiKeySetupProps {
 const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
   const [apiKey, setApiKey] = createSignal("");
   const [status, setStatus] = createSignal<"idle" | "saving" | "validating" | "success" | "error">("idle");
+  const [_errorMessage, setErrorMessage] = createSignal("");
 
   const isLoading = createMemo(() => status() === "saving" || status() === "validating");
   const isSuccess = createMemo(() => status() === "success");
