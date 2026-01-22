@@ -15,7 +15,9 @@ Homelab control app with a Rust Axum API and Tauri v2 mobile frontend.
 
 ## Screenshots
 
-> No screenshots available yet.
+<img src="assets/screen1.png" alt="Screen 1" width="200">
+<img src="assets/screen2.png" alt="Screen 2" width="200">
+<img src="assets/screen3.png" alt="Screen 3" width="200">
 
 ## Development
 
