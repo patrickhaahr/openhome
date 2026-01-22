@@ -52,6 +52,8 @@ const RssFeed: Component = () => {
   const [deleteConfirm, setDeleteConfirm] = createSignal<{open: boolean; feed: FeedItem | null}>({open: false, feed: null});
   
   let statusTimer: number | undefined;
+  let sentinelRef: HTMLDivElement | undefined;
+  let observer: IntersectionObserver | undefined;
 
   const feedCount = createMemo(() => feeds().length);
   const itemCount = createMemo(() => timelineItems().length);
@@ -172,13 +174,8 @@ const RssFeed: Component = () => {
     }
   };
 
-  const handleScroll = () => {
-    const scrollY = window.scrollY;
-    const windowHeight = window.innerHeight;
-    const documentHeight = document.documentElement.scrollHeight;
-    const isNearBottom = scrollY + windowHeight >= documentHeight - 300;
-
-    if (isNearBottom && hasMore() && !isLoadingMore()) {
+  const loadMoreIfNeeded = () => {
+    if (hasMore() && !isLoadingMore()) {
       loadTimeline(false);
     }
   };
@@ -186,14 +183,45 @@ const RssFeed: Component = () => {
   onMount(() => {
     loadFeeds();
     loadTimeline(true);
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    
+    // Find the scroll container (the overflow-y-auto parent from SwipeablePages)
+    const findScrollParent = (el: HTMLElement | null): HTMLElement | null => {
+      while (el) {
+        const style = getComputedStyle(el);
+        if (style.overflowY === "auto" || style.overflowY === "scroll") {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    };
+    
+    // Use IntersectionObserver to detect when sentinel is visible
+    // Need to specify root as the scroll container for proper detection
+    const scrollRoot = sentinelRef ? findScrollParent(sentinelRef) : null;
+    
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreIfNeeded();
+        }
+      },
+      { 
+        root: scrollRoot,
+        rootMargin: "300px" 
+      }
+    );
+    
+    if (sentinelRef) {
+      observer.observe(sentinelRef);
+    }
   });
 
   onCleanup(() => {
     if (statusTimer !== undefined) {
       window.clearTimeout(statusTimer);
     }
-    window.removeEventListener("scroll", handleScroll);
+    observer?.disconnect();
   });
 
   return (
@@ -308,6 +336,9 @@ const RssFeed: Component = () => {
                 </button>
               )}
             </For>
+            
+            {/* Sentinel for infinite scroll */}
+            <div ref={sentinelRef} class="h-1" />
             
             {/* Loading more indicator */}
             <Show when={isLoadingMore() && !isLoadingInitial()}>
