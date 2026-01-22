@@ -1,0 +1,25 @@
+services:
+  api:
+    build: .
+    container_name: openhome-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist SQLite databases
+      - ./data:/app/data
+      # Docker socket for container monitoring (read-only)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    env_file:
+      - .env
+    environment:
+      - RUST_LOG=info
+      # Override DB paths to use container paths
+      - DATABASE_URL=sqlite:/app/data/app.db
+      - AUTH_DATABASE_URL=sqlite:/app/data/auth.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

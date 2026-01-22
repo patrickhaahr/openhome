@@ -1,0 +1,35 @@
+# Build artifacts
+target/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+README*
+AGENTS*
+
+# Environment files (loaded at runtime via env_file)
+.env
+.env.*
+!.env.example
+
+# Data directory (mounted as volume)
+data/
+
+# Docker files (not needed in build context)
+Dockerfile
+compose.yml
+docker-compose.yml
+.dockerignore
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test files
+tests/

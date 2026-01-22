@@ -35,3 +35,10 @@ serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["full"] }
 tower = "0.5.3"
 wiremock = "0.6"
+
+[profile.release]
+opt-level = "s"      # Optimize for size with good performance balance
+lto = true           # Link-Time Optimization for smaller binary
+codegen-units = 1    # Better optimization at cost of compile time
+panic = "abort"      # Smaller binary, no unwinding
+strip = true         # Strip debug symbols
