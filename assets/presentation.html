@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>openhome - Project Presentation</title>
+  <style>
+    /* ===== THEME (from mobile UI) ===== */
+    :root {
+      --bg-primary: #09090b;
+      --bg-secondary: #0f0f12;
+      --bg-tertiary: #18181b;
+      --bg-card: #0f0f12;
+      --bg-elevated: #18181b;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #52525b;
+      --accent: #a855f7;
+      --accent-hover: #9333ea;
+      --accent-glow: rgba(168, 85, 247, 0.15);
+      --success: #22c55e;
+      --success-glow: rgba(34, 197, 94, 0.15);
+      --error: #ef4444;
+      --warning: #f59e0b;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-subtle: rgba(255, 255, 255, 0.03);
+      --radius: 0.625rem;
+    }
+
+    /* ===== RESET & BASE ===== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: 'SF Pro Display', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== PRESENTATION CONTAINER ===== */
+    .presentation {
+      height: 100vh;
+      width: 100vw;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ===== SLIDES ===== */
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 60px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(100px);
+      transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+    }
+
+    .slide.prev {
+      transform: translateX(-100px);
+    }
+
+    /* ===== SLIDE COUNTER ===== */
+    .slide-counter {
+      position: fixed;
+      bottom: 30px;
+      right: 40px;
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 500;
+      z-index: 100;
+    }
+
+    /* ===== NAVIGATION HINT ===== */
+    .nav-hint {
+      position: fixed;
+      bottom: 30px;
+      left: 40px;
+      font-size: 12px;
+      color: var(--text-muted);
+      z-index: 100;
+    }
+
+    .nav-hint kbd {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: inherit;
+      font-size: 11px;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1 {
+      font-size: 4rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.03em;
+    }
+
+    h2 {
+      font-size: 2.5rem;
+      font-weight: 600;
+      margin-bottom: 2rem;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-secondary);
+    }
+
+    p {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 700px;
+      text-align: center;
+    }
+
+    /* ===== TITLE SLIDE ===== */
+    .title-text {
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 50%, var(--text-primary) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient 4s ease infinite;
+    }
+
+    @keyframes gradient {
+      0%, 100% { background-position: 0% center; }
+      50% { background-position: 100% center; }
+    }
+
+    /* ===== TECH BADGES ===== */
+    .tech-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+
+    .badge {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 8px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .badge:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+
+    .badge.accent {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ===== CONTENT GRID ===== */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .content-full {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) + 8px);
+      padding: 24px;
+    }
+
+    .card h3 {
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+    }
+
+    /* ===== FRAMEWORK LIST ===== */
+    .framework-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .framework-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .framework-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .framework-icon.rust { background: linear-gradient(135deg, #f74c00, #b7410e); }
+    .framework-icon.dotnet { background: linear-gradient(135deg, #512bd4, #7b3ff2); }
+    .framework-icon.js { background: linear-gradient(135deg, #f7df1e, #e6c700); color: #000; }
+
+    .framework-info {
+      flex: 1;
+    }
+
+    .framework-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .framework-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ===== COMPARISON CHART ===== */
+    .comparison-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .chart-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .chart-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .chart-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bar-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .bar-label {
+      width: 65px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 32px;
+      background: var(--bg-elevated);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      min-width: 20px;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .bar-fill.electron {
+      background: linear-gradient(90deg, #47848f, #3a6b72);
+    }
+
+    .bar-fill.tauri {
+      background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    }
+
+    .bar-value {
+      width: 80px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: right;
+    }
+
+    .bar-value.good {
+      color: var(--success);
+    }
+
+    .bar-value.bad {
+      color: var(--error);
+    }
+
+    /* ===== CODE BLOCK ===== */
+    .code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-x: auto;
+      text-align: left;
+    }
+
+    .code-block .keyword { color: #c678dd; }
+    .code-block .function { color: #61afef; }
+    .code-block .string { color: #98c379; }
+    .code-block .comment { color: var(--text-muted); }
+    .code-block .variable { color: #e5c07b; }
+    .code-block .operator { color: #56b6c2; }
+
+    /* ===== SIGNAL DIAGRAM ===== */
+    .signal-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      margin: 24px 0;
+    }
+
+    .signal-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 24px;
+      text-align: center;
+    }
+
+    .signal-box.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .signal-box-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .signal-box-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .signal-arrow {
+      color: var(--text-muted);
+      font-size: 24px;
+    }
+
+    /* ===== ARCHITECTURE DIAGRAM ===== */
+    .architecture {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    .arch-row {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      align-items: stretch;
+    }
+
+    .arch-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) + 4px);
+      padding: 20px;
+      min-width: 160px;
+      text-align: center;
+    }
+
+    .arch-box.primary {
+      border-color: var(--accent);
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+
+    .arch-box.success {
+      border-color: var(--success);
+      box-shadow: 0 0 20px var(--success-glow);
+    }
+
+    .arch-box-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .arch-box-title {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .arch-box-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .arch-group {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: calc(var(--radius) + 8px);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .arch-group-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .arch-group-items {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .arch-mini {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .arch-mini-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .arch-mini-dot.green { background: var(--success); }
+    .arch-mini-dot.purple { background: var(--accent); }
+    .arch-mini-dot.yellow { background: var(--warning); }
+
+    .arch-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      gap: 4px;
+    }
+
+    .arch-connector-line {
+      width: 2px;
+      height: 30px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+    }
+
+    .arch-connector-arrow {
+      font-size: 18px;
+      color: var(--accent);
+    }
+
+    /* ===== FEATURE LIST ===== */
+    .feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .feature-check {
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    /* ===== STATS ROW ===== */
+    .stats-row {
+      display: flex;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ===== THANK YOU SLIDE ===== */
+    .thank-you-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+
+    .summary-points {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 30px;
+      text-align: left;
+    }
+
+    .summary-point {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 15px;
+    }
+
+    .summary-point-icon {
+      font-size: 20px;
+    }
+
+    /* ===== TAURI ARCHITECTURE ===== */
+    .tauri-arch {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tauri-layer {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .tauri-layer.highlight {
+      border-color: var(--success);
+      background: var(--success-glow);
+    }
+
+    .tauri-layer.rust {
+      border-color: #f74c00;
+      background: rgba(247, 76, 0, 0.1);
+    }
+
+    .tauri-layer-label {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .tauri-layer-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .tauri-layer-items {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .tauri-tech {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .tauri-tech.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .tauri-arrow {
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="presentation">
+    
+    <!-- SLIDE 1: Title -->
+    <section class="slide active" data-slide="1">
+      <h1 class="title-text">openhome</h1>
+      <p>Homelab control app with a Rust Axum API and Tauri v2 mobile frontend</p>
+      <div class="tech-badges">
+        <span class="badge accent">Tauri v2</span>
+        <span class="badge">Rust</span>
+        <span class="badge">Axum</span>
+        <span class="badge accent">SolidJS</span>
+        <span class="badge">TypeScript</span>
+        <span class="badge">SQLite</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: Tauri v2 -->
+    <section class="slide" data-slide="2">
+      <h2>Tauri v2</h2>
+      <div class="content-grid">
+        <!-- Left: Framework Support -->
+        <div class="card">
+          <h3>Multi-Framework Support</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; text-align: left;">
+            Tauri v2 uses your system's native WebView. Write your backend in any language:
+          </p>
+          <div class="framework-list">
+            <div class="framework-item">
+              <div class="framework-icon rust">Rs</div>
+              <div class="framework-info">
+                <div class="framework-name">Rust</div>
+                <div class="framework-desc">Native performance, memory safe</div>
+              </div>
+            </div>
+            <div class="framework-item">
+              <div class="framework-icon dotnet">C#</div>
+              <div class="framework-info">
+                <div class="framework-name">.NET</div>
+                <div class="framework-desc">Enterprise ecosystem, cross-platform</div>
+              </div>
+            </div>
+            <div class="framework-item">
+              <div class="framework-icon js">JS</div>
+              <div class="framework-info">
+                <div class="framework-name">JavaScript</div>
+                <div class="framework-desc">React, Vue, Solid, Svelte, etc.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Memory Comparison -->
+        <div class="card">
+          <h3>Tauri vs Electron</h3>
+          <div class="comparison-chart">
+            <div class="chart-row">
+              <div class="chart-label">Memory Usage (idle)</div>
+              <div class="chart-bars">
+                <div class="bar-container">
+                  <span class="bar-label">Electron</span>
+                  <div class="bar-track">
+                    <div class="bar-fill electron" data-width="85"></div>
+                  </div>
+                  <span class="bar-value bad">~250 MB</span>
+                </div>
+                <div class="bar-container">
+                  <span class="bar-label">Tauri</span>
+                  <div class="bar-track">
+                    <div class="bar-fill tauri" data-width="14"></div>
+                  </div>
+                  <span class="bar-value good">~35 MB</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-row">
+              <div class="chart-label">App Bundle Size</div>
+              <div class="chart-bars">
+                <div class="bar-container">
+                  <span class="bar-label">Electron</span>
+                  <div class="bar-track">
+                    <div class="bar-fill electron" data-width="90"></div>
+                  </div>
+                  <span class="bar-value bad">>100 MB</span>
+                </div>
+                <div class="bar-container">
+                  <span class="bar-label">Tauri</span>
+                  <div class="bar-track">
+                    <div class="bar-fill tauri" data-width="18"></div>
+                  </div>
+                  <span class="bar-value good">~20 MB</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-row">
+              <div class="chart-label">Startup Time</div>
+              <div class="chart-bars">
+                <div class="bar-container">
+                  <span class="bar-label">Electron</span>
+                  <div class="bar-track">
+                    <div class="bar-fill electron" data-width="80"></div>
+                  </div>
+                  <span class="bar-value bad">1-2 sec</span>
+                </div>
+                <div class="bar-container">
+                  <span class="bar-label">Tauri</span>
+                  <div class="bar-track">
+                    <div class="bar-fill tauri" data-width="20"></div>
+                  </div>
+                  <span class="bar-value good"><0.5 sec</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: Tauri Details -->
+    <section class="slide" data-slide="3">
+      <h2>How Tauri Works</h2>
+      <div class="content-grid">
+        <!-- Left: Architecture -->
+        <div class="card">
+          <h3>Architecture</h3>
+          <div class="tauri-arch">
+            <div class="tauri-layer">
+              <div class="tauri-layer-label">Your Frontend</div>
+              <div class="tauri-layer-items">
+                <span class="tauri-tech">React</span>
+                <span class="tauri-tech">Vue</span>
+                <span class="tauri-tech active">SolidJS</span>
+                <span class="tauri-tech">Svelte</span>
+              </div>
+            </div>
+            <div class="tauri-arrow">&#8595;</div>
+            <div class="tauri-layer highlight">
+              <div class="tauri-layer-label">System WebView</div>
+              <div class="tauri-layer-sub">WebKit (macOS/iOS) &bull; WebView2 (Windows) &bull; WebKitGTK (Linux)</div>
+            </div>
+            <div class="tauri-arrow">&#8595;</div>
+            <div class="tauri-layer rust">
+              <div class="tauri-layer-label">Rust Core</div>
+              <div class="tauri-layer-sub">Commands, IPC, System APIs, Plugins</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Why Tauri -->
+        <div class="card">
+          <h3>Why Tauri over Electron?</h3>
+          <div class="feature-list" style="gap: 14px;">
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span><strong>No bundled browser</strong> - uses system WebView</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span><strong>Rust backend</strong> - memory safe, fast</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span><strong>Security first</strong> - opt-in permissions</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span><strong>Mobile support</strong> - iOS & Android (v2)</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span><strong>Plugin system</strong> - keyring, http, fs, etc.</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span><strong>IPC via commands</strong> - type-safe frontend ↔ Rust</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: SolidJS -->
+    <section class="slide" data-slide="4">
+      <h2>SolidJS</h2>
+      <p style="margin-bottom: 30px;">Fine-grained reactivity with Signals - no Virtual DOM</p>
+      
+      <div class="content-grid">
+        <div class="card">
+          <h3>Signals & Reactivity</h3>
+          <div class="signal-diagram">
+            <div class="signal-box active">
+              <div class="signal-box-title">Signal</div>
+              <div class="signal-box-value">count()</div>
+            </div>
+            <div class="signal-arrow">-></div>
+            <div class="signal-box">
+              <div class="signal-box-title">Derived</div>
+              <div class="signal-box-value">doubled()</div>
+            </div>
+            <div class="signal-arrow">-></div>
+            <div class="signal-box">
+              <div class="signal-box-title">Effect</div>
+              <div class="signal-box-value">DOM</div>
+            </div>
+          </div>
+          <div class="feature-list">
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span>No Virtual DOM diffing overhead</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span>Updates only what actually changed</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span>Familiar JSX syntax</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-check">+</span>
+              <span>Tiny runtime (~7KB gzipped)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Code Example</h3>
+          <div class="code-block">
+<span class="keyword">import</span> { <span class="function">createSignal</span>, <span class="function">createEffect</span> } <span class="keyword">from</span> <span class="string">"solid-js"</span>;
+
+<span class="comment">// Create a reactive signal</span>
+<span class="keyword">const</span> [<span class="variable">count</span>, <span class="variable">setCount</span>] = <span class="function">createSignal</span>(<span class="string">0</span>);
+
+<span class="comment">// Derived state - auto-updates</span>
+<span class="keyword">const</span> <span class="variable">doubled</span> = () <span class="operator">=></span> <span class="function">count</span>() * <span class="string">2</span>;
+
+<span class="comment">// Effect runs when dependencies change</span>
+<span class="function">createEffect</span>(() <span class="operator">=></span> {
+  console.<span class="function">log</span>(<span class="string">"Count:"</span>, <span class="function">count</span>());
+});
+
+<span class="comment">// In JSX - only this span re-renders</span>
+&lt;span&gt;{<span class="function">count</span>()}&lt;/span&gt;
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: Architecture -->
+    <section class="slide" data-slide="5">
+      <h2>Architecture</h2>
+      <div class="architecture">
+        <!-- Top Row: Mobile App -->
+        <div class="arch-row">
+          <div class="arch-box primary">
+            <div class="arch-box-icon">&#128241;</div>
+            <div class="arch-box-title">Tauri Mobile App</div>
+            <div class="arch-box-sub">SolidJS + TypeScript</div>
+          </div>
+        </div>
+
+        <!-- Connector -->
+        <div class="arch-connector">
+          <div class="arch-connector-arrow">&#8595;</div>
+          <span>HTTP requests + API key from Keyring</span>
+          <div class="arch-connector-arrow">&#8593;</div>
+        </div>
+
+        <!-- Middle Row: Raspberry Pi -->
+        <div class="arch-row">
+          <div class="arch-group">
+            <div class="arch-group-title">Raspberry Pi 5</div>
+            <div class="arch-group-items">
+              <div class="arch-box success">
+                <div class="arch-box-icon">&#9881;</div>
+                <div class="arch-box-title">Axum API</div>
+                <div class="arch-box-sub">Rust HTTP Server</div>
+              </div>
+            </div>
+            <div class="arch-group-items">
+              <div class="arch-mini">
+                <span class="arch-mini-dot green"></span>
+                Docker Containers
+              </div>
+              <div class="arch-mini">
+                <span class="arch-mini-dot purple"></span>
+                SQLite DB
+              </div>
+              <div class="arch-mini">
+                <span class="arch-mini-dot yellow"></span>
+                Feed Parser
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Row: External Services -->
+        <div class="arch-connector">
+          <div class="arch-connector-arrow">&#8595;</div>
+          <span>Manages / Queries</span>
+        </div>
+
+        <div class="arch-row">
+          <div class="arch-box">
+            <div class="arch-box-icon">&#128737;</div>
+            <div class="arch-box-title">AdGuard Home</div>
+            <div class="arch-box-sub">Router DNS filtering</div>
+          </div>
+          <div class="arch-box">
+            <div class="arch-box-icon">&#128230;</div>
+            <div class="arch-box-title">Docker</div>
+            <div class="arch-box-sub">Jellyfin, Caddy, etc.</div>
+          </div>
+          <div class="arch-box">
+            <div class="arch-box-icon">&#127760;</div>
+            <div class="arch-box-title">External APIs</div>
+            <div class="arch-box-sub">Facts, Events</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: Thank You -->
+    <section class="slide" data-slide="6">
+      <div class="thank-you-icon">&#127968;</div>
+      <h2>openhome</h2>
+      <p>A modern, lightweight homelab control system</p>
+      
+      <div class="summary-points">
+        <div class="summary-point">
+          <span class="summary-point-icon">&#9889;</span>
+          <span><strong>Tauri v2</strong> - 7x less memory than Electron, instant startup</span>
+        </div>
+        <div class="summary-point">
+          <span class="summary-point-icon">&#128161;</span>
+          <span><strong>SolidJS</strong> - Fine-grained reactivity, no VDOM overhead</span>
+        </div>
+        <div class="summary-point">
+          <span class="summary-point-icon">&#128274;</span>
+          <span><strong>Secure</strong> - API key stored in system keyring, not plaintext</span>
+        </div>
+        <div class="summary-point">
+          <span class="summary-point-icon">&#127793;</span>
+          <span><strong>Self-hosted</strong> - Runs on Raspberry Pi 5, full control</span>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-value">~20MB</div>
+          <div class="stat-label">App Size</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">~35MB</div>
+          <div class="stat-label">Memory</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">&lt;0.5s</div>
+          <div class="stat-label">Startup</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation -->
+    <div class="slide-counter">
+      <span id="current">1</span> / <span id="total">6</span>
+    </div>
+    <div class="nav-hint">
+      <kbd>&#8592;</kbd> <kbd>&#8594;</kbd> or <kbd>Space</kbd> to navigate
+    </div>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const currentEl = document.getElementById('current');
+    const totalEl = document.getElementById('total');
+    let currentSlide = 0;
+
+    totalEl.textContent = slides.length;
+
+    function showSlide(index) {
+      // Bounds check
+      if (index < 0) index = 0;
+      if (index >= slides.length) index = slides.length - 1;
+
+      // Update classes
+      slides.forEach((slide, i) => {
+        slide.classList.remove('active', 'prev');
+        if (i === index) {
+          slide.classList.add('active');
+        } else if (i < index) {
+          slide.classList.add('prev');
+        }
+      });
+
+      currentSlide = index;
+      currentEl.textContent = index + 1;
+    }
+
+    function nextSlide() {
+      showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      showSlide(currentSlide - 1);
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      switch(e.key) {
+        case 'ArrowRight':
+        case ' ':
+        case 'Enter':
+          e.preventDefault();
+          nextSlide();
+          break;
+        case 'ArrowLeft':
+        case 'Backspace':
+          e.preventDefault();
+          prevSlide();
+          break;
+        case 'Home':
+          e.preventDefault();
+          showSlide(0);
+          break;
+        case 'End':
+          e.preventDefault();
+          showSlide(slides.length - 1);
+          break;
+      }
+    });
+
+    // Click navigation (left half = prev, right half = next)
+    document.addEventListener('click', (e) => {
+      const x = e.clientX;
+      const width = window.innerWidth;
+      
+      if (x < width / 3) {
+        prevSlide();
+      } else if (x > width * 2 / 3) {
+        nextSlide();
+      }
+    });
+
+    // Touch swipe support
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
+
+    document.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    });
+
+    function handleSwipe() {
+      const diff = touchStartX - touchEndX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) {
+          nextSlide();
+        } else {
+          prevSlide();
+        }
+      }
+    }
+
+    // Animate bars on slide 2
+    function animateBars() {
+      const bars = document.querySelectorAll('.bar-fill');
+      bars.forEach(bar => {
+        const targetWidth = bar.dataset.width;
+        bar.style.width = '0%';
+        setTimeout(() => {
+          bar.style.width = targetWidth + '%';
+        }, 150);
+      });
+    }
+
+    // Initialize bars at 0
+    document.querySelectorAll('.bar-fill').forEach(bar => {
+      bar.style.width = '0%';
+    });
+
+    // Re-animate when slide 2 becomes active
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.target.classList.contains('active') && 
+            mutation.target.dataset.slide === '2') {
+          animateBars();
+        }
+      });
+    });
+
+    slides.forEach(slide => {
+      observer.observe(slide, { attributes: true, attributeFilter: ['class'] });
+    });
+  </script>
+</body>
+</html>
