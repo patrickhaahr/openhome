@@ -4,19 +4,26 @@ import { createSignal, onCleanup, onMount, createEffect, For } from "solid-js";
 interface SwipeablePagesProps {
   currentIndex: Accessor<number>;
   onIndexChange: (index: number) => void;
+  onScrollDirectionChange?: (direction: "up" | "down") => void;
   children: JSX.Element[];
 }
 
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.3;
 
+const SCROLL_THRESHOLD = 10;
+
 const SwipeablePages = (props: SwipeablePagesProps) => {
   let containerRef: HTMLDivElement | undefined;
+  const pageRefs: HTMLDivElement[] = [];
   
   const [touchStart, setTouchStart] = createSignal<{ x: number; y: number; time: number } | null>(null);
   const [touchDelta, setTouchDelta] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
   const [isHorizontalSwipe, setIsHorizontalSwipe] = createSignal<boolean | null>(null);
+  
+  // Scroll tracking - per page to avoid cross-page interference
+  const scrollState = new Map<HTMLDivElement, { lastScrollY: number; accumulator: number }>();
   
   const pageCount = () => props.children.length;
 
@@ -92,6 +99,39 @@ const SwipeablePages = (props: SwipeablePagesProps) => {
     setIsHorizontalSwipe(null);
   };
 
+  const handleScroll = (e: Event) => {
+    const target = e.target as HTMLDivElement;
+    const currentScrollY = target.scrollTop;
+    
+    // Get or initialize scroll state for this specific page
+    let state = scrollState.get(target);
+    if (!state) {
+      state = { lastScrollY: currentScrollY, accumulator: 0 };
+      scrollState.set(target, state);
+      return; // Skip first scroll event to establish baseline
+    }
+    
+    const delta = currentScrollY - state.lastScrollY;
+    
+    // Accumulate scroll to avoid jitter
+    if (Math.sign(delta) !== Math.sign(state.accumulator)) {
+      state.accumulator = 0;
+    }
+    state.accumulator += delta;
+    
+    if (Math.abs(state.accumulator) > SCROLL_THRESHOLD) {
+      // At top of page, always show navbar
+      if (currentScrollY <= 0) {
+        props.onScrollDirectionChange?.("up");
+      } else {
+        props.onScrollDirectionChange?.(state.accumulator > 0 ? "down" : "up");
+      }
+      state.accumulator = 0;
+    }
+    
+    state.lastScrollY = currentScrollY;
+  };
+
   onMount(() => {
     if (!containerRef) return;
     
@@ -99,10 +139,18 @@ const SwipeablePages = (props: SwipeablePagesProps) => {
     containerRef.addEventListener("touchmove", handleTouchMove, { passive: false });
     containerRef.addEventListener("touchend", handleTouchEnd, { passive: true });
     
+    // Add scroll listeners to each page
+    pageRefs.forEach((ref) => {
+      ref.addEventListener("scroll", handleScroll, { passive: true });
+    });
+    
     onCleanup(() => {
       containerRef?.removeEventListener("touchstart", handleTouchStart);
       containerRef?.removeEventListener("touchmove", handleTouchMove);
       containerRef?.removeEventListener("touchend", handleTouchEnd);
+      pageRefs.forEach((ref) => {
+        ref.removeEventListener("scroll", handleScroll);
+      });
     });
   });
 
@@ -127,8 +175,9 @@ const SwipeablePages = (props: SwipeablePagesProps) => {
         }}
       >
         <For each={props.children}>
-          {(page) => (
+          {(page, index) => (
             <div 
+              ref={(el) => (pageRefs[index()] = el)}
               class="flex-shrink-0 overflow-y-auto"
               style={{ width: `${100 / pageCount()}%` }}
             >

@@ -18,8 +18,13 @@ const App: Component = () => {
   const [pageIndex, setPageIndex] = createSignal(0);
   const [isApiKeyValid, setIsApiKeyValid] = createSignal(false);
   const [isCheckingKey, setIsCheckingKey] = createSignal(true);
+  const [isNavVisible, setIsNavVisible] = createSignal(true);
 
   const currentPage = createMemo(() => PAGES[pageIndex()]);
+  
+  const handleScrollDirection = (direction: "up" | "down") => {
+    setIsNavVisible(direction === "up");
+  };
 
   onMount(async () => {
     if (isLoaded()) {
@@ -62,7 +67,7 @@ const App: Component = () => {
           </Show>
 
           <main class="relative flex-1 pt-8 pb-24">
-            <SwipeablePages currentIndex={pageIndex} onIndexChange={setPageIndex}>
+            <SwipeablePages currentIndex={pageIndex} onIndexChange={setPageIndex} onScrollDirectionChange={handleScrollDirection}>
               {[
                 /* Home Page */
                 <div class="px-5 pb-4">
@@ -109,7 +114,7 @@ const App: Component = () => {
             </SwipeablePages>
           </main>
 
-          <BottomNav currentPage={currentPage} onNavigate={handleNavigate} />
+          <BottomNav currentPage={currentPage} onNavigate={handleNavigate} visible={isNavVisible} />
         </div>
       }>
         <ApiKeySetup onValidated={handleApiKeyValidated} />

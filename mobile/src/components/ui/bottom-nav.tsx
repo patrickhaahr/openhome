@@ -7,48 +7,41 @@ export type NavPage = "home" | "docker";
 interface BottomNavProps {
   currentPage: Accessor<NavPage>;
   onNavigate: (page: NavPage) => void;
+  visible?: Accessor<boolean>;
 }
 
 const BottomNav: Component<BottomNavProps> = (props) => {
+  const isVisible = () => props.visible?.() ?? true;
+  
   return (
-    <nav class="fixed bottom-0 left-0 right-0 z-50">
-      {/* Gradient fade */}
-      <div class="absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-bg-primary to-transparent pointer-events-none" />
-      
-      <div class="bg-bg-primary/80 backdrop-blur-xl border-t border-border-subtle">
-        <div class="mx-auto flex h-16 max-w-md items-center justify-around px-6">
-          <button
-            onClick={() => props.onNavigate("home")}
-            class={cn(
-              "relative flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all duration-200",
-              props.currentPage() === "home"
-                ? "text-accent"
-                : "text-text-muted hover:text-text-secondary"
-            )}
-          >
-            <Home class="size-5" />
-            <span class="text-[10px] font-medium tracking-wide">Home</span>
-            {props.currentPage() === "home" && (
-              <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
-            )}
-          </button>
+    <nav 
+      class="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-6 transition-transform duration-300 ease-out"
+      style={{ transform: isVisible() ? "translateY(0)" : "translateY(calc(100% + 1.5rem))" }}
+    >
+      <div class="flex items-center gap-1 rounded-full bg-bg-secondary/90 backdrop-blur-xl p-1.5 shadow-lg shadow-black/20 border border-white/5">
+        <button
+          onClick={() => props.onNavigate("home")}
+          class={cn(
+            "flex items-center justify-center p-2.5 rounded-full transition-all duration-200",
+            props.currentPage() === "home"
+              ? "bg-accent text-white"
+              : "text-text-muted"
+          )}
+        >
+          <Home class="size-5" />
+        </button>
 
-          <button
-            onClick={() => props.onNavigate("docker")}
-            class={cn(
-              "relative flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all duration-200",
-              props.currentPage() === "docker"
-                ? "text-accent"
-                : "text-text-muted hover:text-text-secondary"
-            )}
-          >
-            <Boxes class="size-5" />
-            <span class="text-[10px] font-medium tracking-wide">Docker</span>
-            {props.currentPage() === "docker" && (
-              <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
-            )}
-          </button>
-        </div>
+        <button
+          onClick={() => props.onNavigate("docker")}
+          class={cn(
+            "flex items-center justify-center p-2.5 rounded-full transition-all duration-200",
+            props.currentPage() === "docker"
+              ? "bg-accent text-white"
+              : "text-text-muted"
+          )}
+        >
+          <Boxes class="size-5" />
+        </button>
       </div>
     </nav>
   );
