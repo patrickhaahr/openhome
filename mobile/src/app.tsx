@@ -61,16 +61,16 @@ const App: Component = () => {
           
           {/* API Status Indicator - fixed top right */}
           <Show when={isHomePage()}>
-            <div class="fixed right-4 top-4 z-50">
+            <div class="fixed right-4 top-12 z-50">
               <ApiStatusIndicator />
             </div>
           </Show>
 
-          <main class="relative flex-1 pt-8 pb-24">
+          <main class="relative flex-1 pt-24 pb-24">
             <SwipeablePages currentIndex={pageIndex} onIndexChange={setPageIndex} onScrollDirectionChange={handleScrollDirection}>
               {[
                 /* Home Page */
-                <div class="px-5 pb-4">
+                <div class="px-5 pt-8 pb-4">
                   <div class="mx-auto max-w-md">
                     <ErrorBoundary fallback={(err) => (
                       <div class="rounded-2xl bg-error/5 border border-error/10 px-4 py-3 text-error text-sm">

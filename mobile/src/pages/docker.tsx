@@ -309,7 +309,7 @@ const Docker: Component = () => {
         <div class="space-y-8 animate-in fade-in duration-500">
           
           {/* Hero Section - Docker Whale */}
-          <section class="flex flex-col items-center pt-4 pb-8">
+          <section class="flex flex-col items-center pt-12 pb-8">
             {/* Docker Whale */}
             <div>
               <DockerWhale 
