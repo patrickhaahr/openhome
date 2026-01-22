@@ -1,5 +1,5 @@
 import type { Component } from "solid-js";
-import { createSignal, For, Show, onMount, onCleanup, createMemo } from "solid-js";
+import { createSignal, For, Show, onMount, onCleanup, createMemo, createEffect } from "solid-js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getTimelineCompact, getFeeds, createFeed, deleteFeed, type TimelineCompactItem, type FeedItem } from "../api/rss";
 import { cn } from "@/lib/utils";
@@ -54,6 +54,7 @@ const RssFeed: Component = () => {
   let statusTimer: number | undefined;
   let sentinelRef: HTMLDivElement | undefined;
   let observer: IntersectionObserver | undefined;
+  let scrollRoot: HTMLElement | null = null;
 
   const feedCount = createMemo(() => feeds().length);
   const itemCount = createMemo(() => timelineItems().length);
@@ -180,41 +181,70 @@ const RssFeed: Component = () => {
     }
   };
 
+  const findScrollParent = (el: HTMLElement | null): HTMLElement | null => {
+    let current: HTMLElement | null = el;
+    while (current) {
+      const style = getComputedStyle(current);
+      if (style.overflowY === "auto" || style.overflowY === "scroll" || style.overflowY === "overlay") {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  };
+
+  const handleScroll = () => {
+    if (!scrollRoot) return;
+    const isNearBottom = scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 300;
+    if (isNearBottom) {
+      loadMoreIfNeeded();
+    }
+  };
+
+  const setScrollRoot = (nextRoot: HTMLElement | null) => {
+    if (scrollRoot === nextRoot) return;
+    scrollRoot?.removeEventListener("scroll", handleScroll);
+    scrollRoot = nextRoot;
+    scrollRoot?.addEventListener("scroll", handleScroll, { passive: true });
+  };
+
   onMount(() => {
     loadFeeds();
     loadTimeline(true);
-    
-    // Find the scroll container (the overflow-y-auto parent from SwipeablePages)
-    const findScrollParent = (el: HTMLElement | null): HTMLElement | null => {
-      while (el) {
-        const style = getComputedStyle(el);
-        if (style.overflowY === "auto" || style.overflowY === "scroll") {
-          return el;
-        }
-        el = el.parentElement;
-      }
-      return null;
-    };
-    
-    // Use IntersectionObserver to detect when sentinel is visible
-    // Need to specify root as the scroll container for proper detection
-    const scrollRoot = sentinelRef ? findScrollParent(sentinelRef) : null;
-    
-    observer = new IntersectionObserver(
+  });
+
+  createEffect(() => {
+    timelineItems().length;
+    isLoadingInitial();
+    if (isLoadingInitial()) {
+      observer?.disconnect();
+      return;
+    }
+    if (!sentinelRef || !sentinelRef.isConnected) {
+      observer?.disconnect();
+      setScrollRoot(null);
+      return;
+    }
+
+    const root = findScrollParent(sentinelRef);
+    setScrollRoot(root);
+    observer?.disconnect();
+
+    const observerInstance = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
+        if (entries[0]?.isIntersecting) {
           loadMoreIfNeeded();
         }
       },
-      { 
-        root: scrollRoot,
-        rootMargin: "300px" 
+      {
+        root,
+        rootMargin: "300px",
       }
     );
-    
-    if (sentinelRef) {
-      observer.observe(sentinelRef);
-    }
+
+    observerInstance.observe(sentinelRef);
+    observer = observerInstance;
+    handleScroll();
   });
 
   onCleanup(() => {
@@ -222,6 +252,7 @@ const RssFeed: Component = () => {
       window.clearTimeout(statusTimer);
     }
     observer?.disconnect();
+    setScrollRoot(null);
   });
 
   return (
