@@ -15,6 +15,12 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("Configuration error: {0}")]
     Config(String),
+    #[error("Crypto error: {0}")]
+    Crypto(#[from] crate::crypto::CryptoError),
+    #[error("Biometric authentication failed")]
+    BiometricFailed,
+    #[error("Biometric unavailable: {0}")]
+    BiometricUnavailable(String),
 }
 
 impl From<keyring::Error> for AppError {
@@ -26,6 +32,18 @@ impl From<keyring::Error> for AppError {
             }
             _ => AppError::KeyringUnavailable(err.to_string()),
         }
+    }
+}
+
+impl From<base64::DecodeError> for AppError {
+    fn from(_err: base64::DecodeError) -> Self {
+        AppError::Crypto(crate::crypto::CryptoError::InvalidCiphertext)
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::Config(format!("JSON error: {}", err))
     }
 }
 

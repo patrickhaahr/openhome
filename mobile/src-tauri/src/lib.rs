@@ -1,6 +1,8 @@
 pub mod config;
+pub mod crypto;
 pub mod error;
 
+use base64::Engine;
 use error::AppError;
 use keyring::Entry;
 use reqwest::{Client, Method};
@@ -9,10 +11,20 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use tauri_plugin_biometric::BiometricExt;
+
+#[derive(Serialize, Clone, Copy)]
+pub enum ApiKeyStatus {
+    NotSet,
+    Locked,
+    Unlocked,
+}
+
 fn validate_base_url(url: &str) -> Result<String, AppError> {
     let url_str = url.trim_end_matches('/');
-    let parsed_url = url::Url::parse(url_str)
-        .map_err(|_| AppError::Config("Invalid base URL".into()))?;
+    let parsed_url =
+        url::Url::parse(url_str).map_err(|_| AppError::Config("Invalid base URL".into()))?;
     if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
         return Err(AppError::Config(
             "Base URL must use http or https scheme".into(),
@@ -28,7 +40,10 @@ fn is_path_safe(path: &str) -> bool {
         return false;
     }
 
-    if normalized.contains("://") || normalized.starts_with("file:") || normalized.starts_with("data:") {
+    if normalized.contains("://")
+        || normalized.starts_with("file:")
+        || normalized.starts_with("data:")
+    {
         return false;
     }
 
@@ -56,6 +71,7 @@ fn is_path_safe(path: &str) -> bool {
 pub struct ConfigState {
     pub config: config::AppConfig,
     pub api_key: Mutex<Option<String>>,
+    pub master_key: Mutex<Option<[u8; 32]>>,
     pub http_client: Client,
 }
 
@@ -77,25 +93,45 @@ fn greet(name: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_api_config(state: tauri::State<ConfigState>) -> Result<config::ApiConfig, String> {
-    state.config.api.sanitize()
-}
-
-#[tauri::command]
-async fn save_api_key(
-    state: tauri::State<'_, ConfigState>, 
-    key: String
+async fn set_api_key(
+    _app: tauri::AppHandle,
+    state: tauri::State<'_, ConfigState>,
+    key: String,
 ) -> Result<(), AppError> {
     let trimmed = key.trim();
     if trimmed.is_empty() {
         return Err(AppError::Config("API key cannot be empty".into()));
     }
-    
-    // Save to keyring
-    let entry = Entry::new("com.patrickhaahr.openhome", "api_key")?;
-    entry.set_password(trimmed)?;
 
-    // Update memory cache
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        use tauri_plugin_biometric::{BiometricExt, AuthOptions};
+
+        let options = AuthOptions {
+            allow_device_credential: true,
+            cancel_title: Some("API key will not be saved".to_string()),
+            fallback_title: Some("Use device PIN/password".to_string()),
+            title: Some("Save API Key".to_string()),
+            subtitle: Some("Authenticate to securely save your API key".to_string()),
+            confirmation_required: Some(true),
+        };
+
+        app.biometric()
+            .authenticate("Save API Key".to_string(), options)
+            .map_err(|e| AppError::BiometricUnavailable(e.to_string()))?;
+    }
+
+    let master_key = state.master_key
+        .lock()
+        .map_err(|_| AppError::Config("Failed to access master key".into()))?
+        .ok_or(AppError::Config("Master key not initialized".into()))?;
+
+    let payload = crypto::encrypt_api_key(trimmed, &master_key)?;
+
+    let encrypted_json = serde_json::to_string(&payload)?;
+    let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
+    entry.set_password(&encrypted_json)?;
+
     if let Ok(mut cache) = state.api_key.lock() {
         *cache = Some(trimmed.to_string());
     }
@@ -104,36 +140,85 @@ async fn save_api_key(
 }
 
 #[tauri::command]
-fn get_api_key(state: tauri::State<'_, ConfigState>) -> Result<Option<String>, AppError> {
-    if let Ok(cache) = state.api_key.lock()
-        && let Some(key) = cache.clone()
+async fn unlock_and_cache_api_key(
+    _app: tauri::AppHandle,
+    state: tauri::State<'_, ConfigState>,
+) -> Result<(), AppError> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     {
-        return Ok(Some(key));
+        use tauri_plugin_biometric::{BiometricExt, AuthOptions};
+
+        let options = AuthOptions {
+            allow_device_credential: true,
+            cancel_title: Some("API key will remain locked".to_string()),
+            fallback_title: Some("Use device PIN/password".to_string()),
+            title: Some("Unlock API Key".to_string()),
+            subtitle: Some("Authenticate to access your API key".to_string()),
+            confirmation_required: Some(true),
+        };
+
+        app.biometric()
+            .authenticate("Unlock API Key".to_string(), options)
+            .map_err(|e| AppError::BiometricUnavailable(e.to_string()))?;
     }
 
-    let entry = match Entry::new("com.patrickhaahr.openhome", "api_key") {
-        Ok(entry) => entry,
-        Err(e) => {
-            #[cfg(debug_assertions)]
-            eprintln!("[get_api_key] Keyring init error: {}", e);
-            return Ok(None);
-        }
+    let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
+    let encrypted_json = entry.get_password()
+        .map_err(|e| match e {
+            keyring::Error::NoEntry => AppError::MissingApiKey,
+            _ => AppError::KeyringUnavailable(e.to_string()),
+        })?;
+
+    let payload: crypto::EncryptedPayload = serde_json::from_str(&encrypted_json)
+        .map_err(|e| AppError::Config(format!("Invalid encrypted payload: {}", e)))?;
+
+    let master_key = state.master_key
+        .lock()
+        .map_err(|_| AppError::Config("Failed to access master key".into()))?
+        .ok_or(AppError::Config("Master key not initialized".into()))?;
+
+    let api_key = crypto::decrypt_api_key(&payload, &master_key)?;
+
+    if let Ok(mut cache) = state.api_key.lock() {
+        *cache = Some(api_key);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_api_key_cache(state: tauri::State<'_, ConfigState>) -> Result<(), AppError> {
+    if let Ok(mut cache) = state.api_key.lock()
+        && let Some(mut key) = cache.take()
+    {
+        crypto::zeroize_string(&mut key);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_api_key_status(state: tauri::State<'_, ConfigState>) -> ApiKeyStatus {
+    if let Ok(cache) = state.api_key.lock()
+        && cache.is_some()
+    {
+        return ApiKeyStatus::Unlocked;
+    }
+
+    let entry = match Entry::new("com.patrickhaahr.openhome", "api_key_encrypted") {
+        Ok(e) => e,
+        Err(_) => return ApiKeyStatus::NotSet,
     };
 
     match entry.get_password() {
-        Ok(key) => {
-            if let Ok(mut cache) = state.api_key.lock() {
-                *cache = Some(key.clone());
-            }
-            Ok(Some(key))
-        }
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => {
-            #[cfg(debug_assertions)]
-            eprintln!("[get_api_key] Keyring error: {}", e);
-            Ok(None)
-        }
+        Ok(_) => ApiKeyStatus::Locked,
+        Err(keyring::Error::NoEntry) => ApiKeyStatus::NotSet,
+        Err(_) => ApiKeyStatus::NotSet,
     }
+}
+
+#[tauri::command]
+fn get_api_config(state: tauri::State<ConfigState>) -> Result<config::ApiConfig, String> {
+    state.config.api.sanitize()
 }
 
 #[derive(Serialize)]
@@ -149,7 +234,7 @@ async fn get_keyring_diagnostics() -> Result<KeyringDiagnostics, AppError> {
     let entry = match Entry::new("com.patrickhaahr.openhome", "api_key") {
         Ok(e) => e,
         Err(e) => {
-             return Ok(KeyringDiagnostics {
+            return Ok(KeyringDiagnostics {
                 key_present: false,
                 key_length: None,
                 keyring_accessible: false,
@@ -186,8 +271,10 @@ struct ApiResponse {
     data: serde_json::Value,
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn call_api(
+    _app: tauri::AppHandle,
     state: tauri::State<'_, ConfigState>,
     path: String,
     method: String,
@@ -201,7 +288,11 @@ async fn call_api(
         "GET" => Method::GET,
         "POST" => Method::POST,
         "DELETE" => Method::DELETE,
-        _ => return Err(AppError::Config("Only GET, POST, and DELETE are allowed".into())),
+        _ => {
+            return Err(AppError::Config(
+                "Only GET, POST, and DELETE are allowed".into(),
+            ));
+        }
     };
 
     let path_normalized = path.trim_start_matches('/');
@@ -229,12 +320,29 @@ async fn call_api(
 
     let url = format!("{}/{}", base_url, path_normalized);
 
-    // Key resolution: debug override (debug only) -> memory cache -> keyring
-    #[cfg(debug_assertions)]
-    let key: Option<String> = if let Some(ref override_key) = api_key_override {
-        let trimmed = override_key.trim();
-        if !trimmed.is_empty() {
-            Some(trimmed.to_string())
+    let key: Option<String> = if cfg!(debug_assertions) {
+        if let Some(ref override_key) = api_key_override {
+            let trimmed = override_key.trim();
+            if !trimmed.is_empty() {
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                {
+                    use tauri_plugin_biometric::{BiometricExt, AuthOptions};
+                    let options = AuthOptions {
+                        allow_device_credential: true,
+                        cancel_title: Some("API call will fail".to_string()),
+                        fallback_title: Some("Use device PIN/password".to_string()),
+                        title: Some("API Key Override".to_string()),
+                        subtitle: Some("Authenticate to use debug override".to_string()),
+                        confirmation_required: Some(true),
+                    };
+                    app.biometric()
+                        .authenticate("API Key Override".to_string(), options)
+                        .map_err(|e| AppError::BiometricUnavailable(e.to_string()))?;
+                }
+                Some(trimmed.to_string())
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -242,57 +350,20 @@ async fn call_api(
         None
     };
 
-    #[cfg(not(debug_assertions))]
-    let key: Option<String> = None;
-
-    // If no override, try cache then keyring
     let key = if key.is_some() {
-        #[cfg(debug_assertions)]
-        eprintln!("[call_api] Using override key");
         key
     } else {
-        // Try memory cache first
-        let cached_key = if let Ok(cache) = state.api_key.lock() {
-            cache.clone()
-        } else {
-            None
-        };
+        let cached_key = state.api_key
+            .lock()
+            .map_err(|_| AppError::Config("Failed to access API key cache".into()))?
+            .clone();
 
-        if let Some(k) = cached_key {
-            #[cfg(debug_assertions)]
-            eprintln!("[call_api] Using cached key");
-            Some(k)
-        } else {
-            // Try keyring
-            let entry = Entry::new("com.patrickhaahr.openhome", "api_key")?;
-            match entry.get_password() {
-                Ok(k) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("[call_api] Got key from keyring, length={}", k.len());
-                    
-                    // Update cache
-                    if let Ok(mut cache) = state.api_key.lock() {
-                        *cache = Some(k.clone());
-                    }
-                    
-                    Some(k)
-                }
-                Err(keyring::Error::NoEntry) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("[call_api] No key in keyring");
-                    None
-                }
-                Err(e) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("[call_api] Keyring error: {}", e);
-                    // Don't fail the call, just no auth
-                    None
-                }
-            }
-        }
+        Some(cached_key.ok_or(AppError::MissingApiKey)?)
     };
 
-    let mut request = state.http_client.request(req_method, url)
+    let mut request = state
+        .http_client
+        .request(req_method, url)
         .timeout(Duration::from_secs(timeout_seconds));
 
     if let Some(k) = key {
@@ -321,13 +392,67 @@ async fn call_api(
     Ok(ApiResponse { status, data })
 }
 
+fn initialize_or_create_master_key() -> [u8; 32] {
+    let entry = match Entry::new("com.patrickhaahr.openhome", "master_key") {
+        Ok(e) => e,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[master_key] Keyring init error: {}", e);
+
+            return crypto::generate_master_key().unwrap_or([0u8; 32]);
+        }
+    };
+
+    match entry.get_password() {
+        Ok(stored_key) => {
+            let key_bytes = base64::engine::general_purpose::STANDARD.decode(&stored_key);
+            match key_bytes {
+                Ok(ref bytes) if bytes.len() == 32 => {
+                    let mut key: [u8; 32] = [0u8; 32];
+                    key.copy_from_slice(bytes);
+                    #[cfg(debug_assertions)]
+                    eprintln!("[master_key] Loaded from keyring");
+                    key
+                }
+                _ => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("[master_key] Invalid stored key, regenerating");
+                    create_and_store_master_key(&entry)
+                }
+            }
+        }
+        Err(keyring::Error::NoEntry) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[master_key] No entry, creating new key");
+            create_and_store_master_key(&entry)
+        }
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[master_key] Keyring error: {}, regenerating", e);
+            create_and_store_master_key(&entry)
+        }
+    }
+}
+
+fn create_and_store_master_key(entry: &keyring::Entry) -> [u8; 32] {
+    let key = crypto::generate_master_key().unwrap_or([0u8; 32]);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(key);
+
+    if let Err(e) = entry.set_password(&encoded) {
+        #[cfg(debug_assertions)]
+        eprintln!("[master_key] Failed to store: {}", e);
+    }
+
+    key
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "android")]
     android_logger::init_once(
         android_logger::Config::default()
             .with_max_level(log::LevelFilter::Debug)
-            .with_tag("openhome")
+            .with_tag("openhome"),
     );
 
     let config = match config::AppConfig::load() {
@@ -343,15 +468,23 @@ pub fn run() {
         eprintln!("API config validation warning: {error}");
     }
 
+    let master_key = initialize_or_create_master_key();
+
     let http_client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .expect("Failed to create HTTP client");
 
-    if let Err(e) = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = builder.plugin(tauri_plugin_biometric::init());
+
+    if let Err(e) = builder
         .manage(ConfigState {
             config,
             api_key: Mutex::new(None),
+            master_key: Mutex::new(Some(master_key)),
             http_client,
         })
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -360,16 +493,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             get_api_config,
-            save_api_key,
-            get_api_key,
             call_api,
-            get_keyring_diagnostics
+            get_keyring_diagnostics,
+            set_api_key,
+            unlock_and_cache_api_key,
+            clear_api_key_cache,
+            get_api_key_status,
         ])
-        .run(tauri::generate_context!()) {
-            eprintln!("error running tauri application: {}", e);
-            #[cfg(not(mobile))]
-            std::process::exit(1);
-        }
+        .run(tauri::generate_context!())
+    {
+        eprintln!("error running tauri application: {}", e);
+        #[cfg(not(mobile))]
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]

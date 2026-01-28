@@ -2,16 +2,32 @@
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile-capability",
   "description": "Capability for mobile devices",
-  "platforms": ["android", "iOS"],
-  "windows": ["main"],
+  "platforms": [
+    "android",
+    "iOS"
+  ],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "http://10.0.2.2:8000/*" }, { "url": "https://api.openhome.local/*" }, { "url": "http://192.168.8.222:8000/*" }],
+      "allow": [
+        {
+          "url": "http://10.0.2.2:8000/*"
+        },
+        {
+          "url": "https://api.openhome.local/*"
+        },
+        {
+          "url": "http://192.168.8.222:8000/*"
+        }
+      ],
       "deny": []
     },
-    "store:default"
+    "store:default",
+    "biometric:default"
   ]
 }
