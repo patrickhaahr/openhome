@@ -1,10 +1,14 @@
 # openhome
 
-Homelab control app with a Rust Axum API and Tauri v2 mobile frontend.
-
-**Tech Stack:** Tauri v2 | Rust | Axum | SolidJS | TypeScript | SQLite
-
-![Architecture](assets/architecture.png)
+<p align="center">
+  <img src="assets/app-icon.png" alt="OpenHome App Icon" width="150">
+  <br><br>
+  Homelab control app with a Rust Axum API and Tauri v2 mobile frontend.
+  <br><br>
+  <strong>Tech Stack:</strong> Tauri v2 | Rust | Axum | SolidJS | TypeScript | SQLite
+  <br><br>
+  <img src="assets/architecture.png" alt="Architecture">
+</p>
 
 ## Features
 
@@ -15,9 +19,9 @@ Homelab control app with a Rust Axum API and Tauri v2 mobile frontend.
 
 ## Screenshots
 
-<img src="assets/screen1.png" alt="Screen 1" width="200">
-<img src="assets/screen2.png" alt="Screen 2" width="200">
-<img src="assets/screen3.png" alt="Screen 3" width="200">
+| Screen 1 | Screen 2 | Screen 3 |
+|:-|:-|:-|
+| ![Screen 1](assets/screen1.png) | ![Screen 2](assets/screen2.png) | ![Screen 3](assets/screen3.png) |
 
 ## Development
 
