@@ -1,7 +1,7 @@
 use base64::Engine;
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Key, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;

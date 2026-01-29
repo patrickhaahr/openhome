@@ -45,17 +45,40 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
     setErrorMessage("");
 
     try {
-      // Save base URL first
       await saveSettings(baseUrlInput(), timeoutSeconds());
-      // Save API key with biometric authentication
-      await invoke("set_api_key", { key: key.trim() });
       setStatus("validating");
-      await getHealthStatus();
-      setStatus("success");
-      // Reload auth status to reflect the new key
-      await auth.loadStatus();
-      setTimeout(props.onValidated, 600);
-    } catch {
+
+      try {
+        await getHealthStatus(key.trim());
+        setStatus("saving");
+
+        try {
+          await invoke("set_api_key", { key: key.trim() });
+          setStatus("success");
+          await auth.loadStatus();
+          setTimeout(props.onValidated, 600);
+        } catch (saveError: any) {
+          const errorMessage = saveError?.toString?.() || String(saveError);
+          if (errorMessage.includes("cancelled")) {
+            setErrorMessage("Biometric authentication cancelled.");
+          } else {
+            setErrorMessage("Failed to save API key. Please try again.");
+          }
+          setStatus("error");
+        }
+      } catch (healthError: any) {
+        const errorMessage = healthError?.toString?.() || String(healthError);
+        if (errorMessage.includes("401") || errorMessage.includes("403")) {
+          setErrorMessage("Invalid API key. Please check and try again.");
+        } else if (errorMessage.includes("Failed to fetch") || errorMessage.includes("ECONNREFUSED")) {
+          setErrorMessage("Cannot connect to server. Check your base URL.");
+        } else {
+          setErrorMessage("Validation failed. Please check your API key and base URL.");
+        }
+        setStatus("error");
+      }
+    } catch (configError: any) {
+      setErrorMessage("Failed to save settings. Please try again.");
       setStatus("error");
     }
   };
@@ -197,6 +220,13 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
               </div>
             </Show>
           </div>
+
+          {/* Error message */}
+          <Show when={isError() && _errorMessage()}>
+            <div class="mt-4 text-center text-sm text-error animate-in fade-in duration-300">
+              {_errorMessage()}
+            </div>
+          </Show>
         </div>
       </Show>
       </div>

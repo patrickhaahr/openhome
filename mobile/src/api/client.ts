@@ -39,7 +39,7 @@ export async function callApi(options: CallApiOptions): Promise<ApiResponse> {
     apiKeyOverride: null,
   };
 
-  if (import.meta.env.DEV && options.apiKeyOverride) {
+  if (options.apiKeyOverride) {
     params.apiKeyOverride = options.apiKeyOverride;
   }
 

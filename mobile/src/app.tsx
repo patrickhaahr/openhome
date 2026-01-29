@@ -1,6 +1,5 @@
 import type { Component } from "solid-js";
 import { createMemo, createSignal, onMount, Show, ErrorBoundary, onCleanup } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Docker from "./pages/docker";
 import BottomNav, { type NavPage } from "./components/ui/bottom-nav";
@@ -40,18 +39,10 @@ const App: Component = () => {
     await auth.loadStatus();
   });
 
-  // Visibility change lock listener with debounce
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === "hidden") {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        await invoke("clear_api_key_cache");
-        await auth.loadStatus();
-      }, 500);
-    } else {
-      if (debounceTimer) clearTimeout(debounceTimer);
+  // Visibility change listener - reload status on resume
+  const handleVisibilityChange = async () => {
+    if (document.visibilityState === "visible") {
+      await auth.loadStatus();
     }
   };
 
@@ -61,13 +52,11 @@ const App: Component = () => {
 
   onCleanup(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
-    if (debounceTimer) clearTimeout(debounceTimer);
   });
 
   // Auth resume event listener
   const handleAuthResume = async () => {
-    // The unlock screen handles status reload on successful auth
-    // Routing will show unlock screen if locked based on current auth status
+    await auth.loadStatus();
   };
 
   let unlistenAuthResume: (() => void) | null = null;
