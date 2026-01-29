@@ -1,11 +1,12 @@
 import type { Component } from "solid-js";
 import { createSignal, Show, onMount } from "solid-js";
-import { Lock, Fingerprint, Loader2, AlertCircle } from "lucide-solid";
+import { Lock, Fingerprint, Loader2, AlertCircle, RotateCcw } from "lucide-solid";
 import { auth } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 
 const ApiKeyUnlock: Component = () => {
   const [isLoading, setIsLoading] = createSignal(false);
+  const [isResetting, setIsResetting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [hasAttempted, setHasAttempted] = createSignal(false);
 
@@ -28,6 +29,33 @@ const ApiKeyUnlock: Component = () => {
       console.error("Unlock failed:", e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (isResetting()) return;
+
+    const confirmed = window.confirm(
+      "This will permanently delete your API key. You will need to enter it again. Are you sure?"
+    );
+
+    if (!confirmed) return;
+
+    setIsResetting(true);
+    setError(null);
+
+    try {
+      await auth.reset();
+    } catch (e: any) {
+      const errorMessage = e?.toString?.() || String(e);
+      if (errorMessage.includes("cancelled")) {
+        setError("Reset cancelled.");
+      } else {
+        setError("Failed to reset. Please try again.");
+      }
+      console.error("Reset failed:", e);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -137,6 +165,28 @@ const ApiKeyUnlock: Component = () => {
           <p class="mt-6 text-center text-xs text-text-muted">
             Use Face ID, fingerprint, or device PIN
           </p>
+        </Show>
+
+        {/* Reset button */}
+        <Show when={hasAttempted() && !error()}>
+          <button
+            onClick={handleReset}
+            disabled={isResetting()}
+            class={cn(
+              "mt-8 w-full flex items-center justify-center gap-2 text-sm",
+              "text-text-muted hover:text-text-primary",
+              "transition-colors duration-300",
+              isResetting() && "cursor-wait opacity-60"
+            )}
+          >
+            <Show when={!isResetting()}>
+              <RotateCcw class="size-4" />
+            </Show>
+            <Show when={isResetting()}>
+              <Loader2 class="size-4 animate-spin" />
+            </Show>
+            <span>Reset API Key</span>
+          </button>
         </Show>
       </div>
 
