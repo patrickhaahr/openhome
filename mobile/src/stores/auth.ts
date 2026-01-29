@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createStore } from "solid-js/store";
 
+const AUTH_TIMEOUT_MINUTES = 5;
+
 type ApiKeyStatus = "NotSet" | "Locked" | "Unlocked";
 
 interface AuthState {
@@ -29,10 +31,23 @@ const loadStatus = async (): Promise<void> => {
 const unlock = async (): Promise<void> => {
   setState("isLoading", true);
   try {
-    await invoke("unlock_and_cache_api_key");
+    await invoke("biometric_resume_auth", { timeoutMinutes: AUTH_TIMEOUT_MINUTES });
     await loadStatus();
   } catch (e) {
     console.error("Failed to unlock:", e);
+    throw e;
+  } finally {
+    setState("isLoading", false);
+  }
+};
+
+const reset = async (): Promise<void> => {
+  setState("isLoading", true);
+  try {
+    await invoke("reset_api_key");
+    await loadStatus();
+  } catch (e) {
+    console.error("Failed to reset:", e);
     throw e;
   } finally {
     setState("isLoading", false);
@@ -55,4 +70,5 @@ export const auth = {
   notSet,
   loadStatus,
   unlock,
+  reset,
 };
