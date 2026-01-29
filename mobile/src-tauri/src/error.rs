@@ -5,8 +5,8 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Missing API key")]
     MissingApiKey,
-    #[error("Keyring unavailable")]
-    KeyringUnavailable(String),
+    #[error("Vault unavailable: {0}")]
+    VaultUnavailable(String),
     #[error("API key rejected")]
     ApiKeyRejected,
     #[error("Network error: {0}")]
@@ -15,32 +15,12 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("Configuration error: {0}")]
     Config(String),
-    #[error("Crypto error: {0}")]
-    Crypto(#[from] crate::crypto::CryptoError),
     #[error("Biometric authentication failed")]
     BiometricFailed,
     #[error("Biometric unavailable: {0}")]
     BiometricUnavailable(String),
     #[error("Biometric authentication cancelled")]
     BiometricCancelled,
-}
-
-impl From<keyring::Error> for AppError {
-    fn from(err: keyring::Error) -> Self {
-        match err {
-            keyring::Error::NoEntry => AppError::MissingApiKey,
-            keyring::Error::NoStorageAccess(_) | keyring::Error::PlatformFailure(_) => {
-                AppError::KeyringUnavailable(err.to_string())
-            }
-            _ => AppError::KeyringUnavailable(err.to_string()),
-        }
-    }
-}
-
-impl From<base64::DecodeError> for AppError {
-    fn from(_err: base64::DecodeError) -> Self {
-        AppError::Crypto(crate::crypto::CryptoError::InvalidCiphertext)
-    }
 }
 
 impl From<serde_json::Error> for AppError {

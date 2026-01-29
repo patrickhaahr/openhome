@@ -1,21 +1,44 @@
 pub mod config;
-pub mod crypto;
 pub mod error;
 
-use base64::Engine;
 use error::AppError;
-use keyring::Entry;
-use reqwest::{Client, Method};
+use iota_stronghold::procedures::Runner;
+use iota_stronghold::{Client, KeyProvider, Location, SnapshotPath, Stronghold};
+use reqwest::{Client as HttpClient, Method};
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use zeroize::Zeroizing;
 
 use tauri::Emitter;
 #[cfg(not(target_os = "android"))]
 use tauri::Listener;
-#[cfg(target_os = "android")]
 use tauri::Manager;
+
+const fn str_to_bytes<const N: usize>(s: &str) -> [u8; N] {
+    assert!(s.len() == N);
+    let bytes = s.as_bytes();
+    let mut arr = [0u8; N];
+    let mut i = 0;
+    while i < N {
+        arr[i] = bytes[i];
+        i += 1;
+    }
+    arr
+}
+
+// ARCHITECTURAL DECISION: Static Compile-Time Key (GrapheneOS Reliability)
+// Hardcoded password instead of Device-Specific Random Key
+// We explicitly bypass the OS Keyring/Keystore to prevent data loss.
+// Hardware-backed keys are often invalidated by GrapheneOS updates or security state changes.
+// This static key ensures the vault remains accessible across updates and Seedvault backups.
+// Security relies on the strict Application Sandbox.
+// REQUIREMENT: Value must be exactly 32 bytes.
+const VAULT_PASSWORD: [u8; 32] = str_to_bytes(std::env!("VAULT_PASSWORD"));
+const VAULT_FILE: &str = "openhome_vault.hold";
+const CLIENT_NAME: &str = "openhome_client";
+const API_KEY_STORE_KEY: &str = "api_key";
 
 #[derive(Serialize, Clone, Copy)]
 pub enum ApiKeyStatus {
@@ -92,8 +115,7 @@ fn is_path_safe(path: &str) -> bool {
 pub struct ConfigState {
     pub config: config::AppConfig,
     pub api_key: Mutex<Option<String>>,
-    pub master_key: Mutex<Option<[u8; 32]>>,
-    pub http_client: Client,
+    pub http_client: HttpClient,
     pub last_unlock_time: Mutex<Option<Instant>>,
 }
 
@@ -112,6 +134,80 @@ fn greet(name: &str) -> Result<String, String> {
         "Hello, {}! You've been greeted from Rust!",
         trimmed_name
     ))
+}
+
+/// Returns the path to the vault file in app data directory
+fn get_vault_path(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+    let app_data_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| AppError::Config(format!("Failed to get app data dir: {}", e)))?;
+    let vault_path = app_data_dir.join(VAULT_FILE);
+    Ok(vault_path)
+}
+
+/// Creates a KeyProvider from the static vault password
+fn create_key_provider() -> Result<KeyProvider, AppError> {
+    let password_bytes = Zeroizing::new(VAULT_PASSWORD.to_vec());
+    KeyProvider::try_from(password_bytes)
+        .map_err(|e| AppError::VaultUnavailable(format!("Failed to create key provider: {:?}", e)))
+}
+
+/// Opens or creates the Stronghold vault at the given path
+fn open_stronghold(vault_path: &Path) -> Result<Stronghold, AppError> {
+    let stronghold = Stronghold::default();
+    let snapshot_path = SnapshotPath::from_path(vault_path);
+    let key_provider = create_key_provider()?;
+
+    // If snapshot exists, load it
+    let snapshot_exists = snapshot_path.exists();
+    if snapshot_exists {
+        match stronghold.load_snapshot(&key_provider, &snapshot_path) {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(AppError::VaultUnavailable(format!(
+                    "Failed to load vault snapshot: {:?}",
+                    e
+                )));
+            }
+        }
+    }
+
+    Ok(stronghold)
+}
+
+/// Loads or creates the Stronghold client
+fn load_stronghold_client(app: &tauri::AppHandle) -> Result<(Stronghold, Client), AppError> {
+    let vault_path = get_vault_path(app)?;
+    let stronghold = open_stronghold(&vault_path)?;
+
+    let client_name_bytes = CLIENT_NAME.as_bytes().to_vec();
+
+    // Try to load existing client, or create new one
+    let client = match stronghold.load_client(client_name_bytes.clone()) {
+        Ok(client) => client,
+        Err(_) => stronghold.create_client(client_name_bytes).map_err(|e| {
+            AppError::VaultUnavailable(format!("Failed to create Stronghold client: {:?}", e))
+        })?,
+    };
+
+    Ok((stronghold, client))
+}
+
+/// Saves the Stronghold snapshot to disk
+fn commit_stronghold(stronghold: &Stronghold, vault_path: &Path) -> Result<(), AppError> {
+    let snapshot_path = SnapshotPath::from_path(vault_path);
+    let key_provider = create_key_provider()?;
+    let client_name_bytes = CLIENT_NAME.as_bytes().to_vec();
+
+    // CRITICAL: Must write client before committing
+    stronghold
+        .write_client(client_name_bytes)
+        .map_err(|e| AppError::VaultUnavailable(format!("Failed to write client: {:?}", e)))?;
+
+    stronghold
+        .commit_with_keyprovider(&snapshot_path, &key_provider)
+        .map_err(|e| AppError::VaultUnavailable(format!("Failed to commit vault: {:?}", e)))
 }
 
 #[tauri::command]
@@ -144,18 +240,33 @@ async fn set_api_key(
             .map_err(convert_biometric_error)?;
     }
 
-    let master_key = state
-        .master_key
-        .lock()
-        .map_err(|_| AppError::Config("Failed to access master key".into()))?
-        .ok_or(AppError::Config("Master key not initialized".into()))?;
+    // Load stronghold and get client
+    let (stronghold, client) = load_stronghold_client(&app).map_err(|e| {
+        eprintln!("[set_api_key] Failed to load stronghold client: {:?}", e);
+        e
+    })?;
 
-    let payload = crypto::encrypt_api_key(trimmed, &master_key)?;
+    let store = client.store();
 
-    let encrypted_json = serde_json::to_string(&payload)?;
-    let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
-    entry.set_password(&encrypted_json)?;
+    // Store API key in Stronghold
+    let key_bytes = API_KEY_STORE_KEY.as_bytes().to_vec();
+    let value_bytes = trimmed.as_bytes().to_vec();
+    store.insert(key_bytes, value_bytes, None).map_err(|e| {
+        eprintln!("[set_api_key] Failed to insert into store: {:?}", e);
+        AppError::VaultUnavailable(format!("Failed to store API key: {:?}", e))
+    })?;
 
+    // Save stronghold to disk
+    let vault_path = get_vault_path(&app).map_err(|e| {
+        eprintln!("[set_api_key] Failed to get vault path: {:?}", e);
+        e
+    })?;
+    commit_stronghold(&stronghold, &vault_path).map_err(|e| {
+        eprintln!("[set_api_key] Failed to commit stronghold: {:?}", e);
+        e
+    })?;
+
+    // Cache the API key in memory
     if let Ok(mut cache) = state.api_key.lock() {
         *cache = Some(trimmed.to_string());
     }
@@ -191,23 +302,20 @@ async fn unlock_and_cache_api_key(
             .map_err(convert_biometric_error)?;
     }
 
-    let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
-    let encrypted_json = entry.get_password().map_err(|e| match e {
-        keyring::Error::NoEntry => AppError::MissingApiKey,
-        _ => AppError::KeyringUnavailable(e.to_string()),
-    })?;
+    // Load API key from Stronghold
+    let (stronghold, client) = load_stronghold_client(&app)?;
+    let _ = stronghold; // Keep stronghold alive while we use client
+    let store = client.store();
 
-    let payload: crypto::EncryptedPayload = serde_json::from_str(&encrypted_json)
-        .map_err(|e| AppError::Config(format!("Invalid encrypted payload: {}", e)))?;
+    let key_bytes = API_KEY_STORE_KEY.as_bytes().to_vec();
+    let value_bytes = store
+        .get(&key_bytes)
+        .map_err(|_| AppError::MissingApiKey)?
+        .ok_or(AppError::MissingApiKey)?;
 
-    let master_key = state
-        .master_key
-        .lock()
-        .map_err(|_| AppError::Config("Failed to access master key".into()))?
-        .ok_or(AppError::Config("Master key not initialized".into()))?;
+    let api_key = String::from_utf8(value_bytes).map_err(|_| AppError::MissingApiKey)?;
 
-    let api_key = crypto::decrypt_api_key(&payload, &master_key)?;
-
+    // Cache the API key in memory
     if let Ok(mut cache) = state.api_key.lock() {
         *cache = Some(api_key);
     }
@@ -221,10 +329,8 @@ async fn unlock_and_cache_api_key(
 
 #[tauri::command]
 fn clear_api_key_cache(state: tauri::State<'_, ConfigState>) -> Result<(), AppError> {
-    if let Ok(mut cache) = state.api_key.lock()
-        && let Some(mut key) = cache.take()
-    {
-        crypto::zeroize_string(&mut key);
+    if let Ok(mut cache) = state.api_key.lock() {
+        *cache = None;
     }
     Ok(())
 }
@@ -265,23 +371,20 @@ async fn biometric_resume_auth(
             .map_err(convert_biometric_error)?;
     }
 
-    let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
-    let encrypted_json = entry.get_password().map_err(|e| match e {
-        keyring::Error::NoEntry => AppError::MissingApiKey,
-        _ => AppError::KeyringUnavailable(e.to_string()),
-    })?;
+    // Load API key from Stronghold
+    let (stronghold, client) = load_stronghold_client(&app)?;
+    let _ = stronghold; // Keep stronghold alive while we use client
+    let store = client.store();
 
-    let payload: crypto::EncryptedPayload = serde_json::from_str(&encrypted_json)
-        .map_err(|e| AppError::Config(format!("Invalid encrypted payload: {}", e)))?;
+    let key_bytes = API_KEY_STORE_KEY.as_bytes().to_vec();
+    let value_bytes = store
+        .get(&key_bytes)
+        .map_err(|_| AppError::MissingApiKey)?
+        .ok_or(AppError::MissingApiKey)?;
 
-    let master_key = state
-        .master_key
-        .lock()
-        .map_err(|_| AppError::Config("Failed to access master key".into()))?
-        .ok_or(AppError::Config("Master key not initialized".into()))?;
+    let api_key = String::from_utf8(value_bytes).map_err(|_| AppError::MissingApiKey)?;
 
-    let api_key = crypto::decrypt_api_key(&payload, &master_key)?;
-
+    // Cache the API key in memory
     if let Ok(mut cache) = state.api_key.lock() {
         *cache = Some(api_key);
     }
@@ -317,23 +420,31 @@ async fn reset_api_key(
             .map_err(convert_biometric_error)?;
     }
 
-    if let Ok(mut cache) = state.api_key.lock()
-        && let Some(mut key) = cache.take()
-    {
-        crypto::zeroize_string(&mut key);
+    // Clear cache
+    if let Ok(mut cache) = state.api_key.lock() {
+        *cache = None;
     }
 
-    let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
-    entry
-        .delete_credential()
-        .or_else(|e| {
-            if matches!(e, keyring::Error::NoEntry) {
-                Ok(())
-            } else {
-                Err(e)
-            }
-        })
-        .map_err(|e| AppError::KeyringUnavailable(e.to_string()))?;
+    // Remove from Stronghold
+    let (stronghold, client) = load_stronghold_client(&app)?;
+    let key_bytes = API_KEY_STORE_KEY.as_bytes().to_vec();
+
+    // Create location for the key and revoke it
+    let location = Location::generic(
+        API_KEY_STORE_KEY.as_bytes().to_vec(),
+        API_KEY_STORE_KEY.as_bytes().to_vec(),
+    );
+    client
+        .revoke_data(&location)
+        .map_err(|e| AppError::VaultUnavailable(format!("Failed to remove API key: {:?}", e)))?;
+
+    // Also try to remove from store
+    let store = client.store();
+    let _ = store.delete(&key_bytes);
+
+    // Save stronghold to disk
+    let vault_path = get_vault_path(&app)?;
+    commit_stronghold(&stronghold, &vault_path)?;
 
     if let Ok(mut last_time) = state.last_unlock_time.lock() {
         *last_time = None;
@@ -343,22 +454,38 @@ async fn reset_api_key(
 }
 
 #[tauri::command]
-fn get_api_key_status(state: tauri::State<'_, ConfigState>) -> ApiKeyStatus {
+async fn get_api_key_status(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ConfigState>,
+) -> Result<ApiKeyStatus, AppError> {
+    // Check if already unlocked in cache
     if let Ok(cache) = state.api_key.lock()
         && cache.is_some()
     {
-        return ApiKeyStatus::Unlocked;
+        return Ok(ApiKeyStatus::Unlocked);
     }
 
-    let entry = match Entry::new("com.patrickhaahr.openhome", "api_key_encrypted") {
-        Ok(e) => e,
-        Err(_) => return ApiKeyStatus::NotSet,
+    // Check if vault exists and has API key
+    let vault_path = match get_vault_path(&app) {
+        Ok(path) => path,
+        Err(_) => return Ok(ApiKeyStatus::NotSet),
     };
 
-    match entry.get_password() {
-        Ok(_) => ApiKeyStatus::Locked,
-        Err(keyring::Error::NoEntry) => ApiKeyStatus::NotSet,
-        Err(_) => ApiKeyStatus::NotSet,
+    if !vault_path.exists() {
+        return Ok(ApiKeyStatus::NotSet);
+    }
+
+    match load_stronghold_client(&app) {
+        Ok((stronghold, client)) => {
+            let _ = stronghold; // Keep stronghold alive
+            let store = client.store();
+            let key_bytes = API_KEY_STORE_KEY.as_bytes().to_vec();
+            match store.get(&key_bytes) {
+                Ok(Some(_)) => Ok(ApiKeyStatus::Locked),
+                _ => Ok(ApiKeyStatus::NotSet),
+            }
+        }
+        Err(_) => Ok(ApiKeyStatus::NotSet),
     }
 }
 
@@ -376,9 +503,9 @@ struct KeyringDiagnostics {
 }
 
 #[tauri::command]
-async fn get_keyring_diagnostics() -> Result<KeyringDiagnostics, AppError> {
-    let entry = match Entry::new("com.patrickhaahr.openhome", "api_key") {
-        Ok(e) => e,
+async fn get_keyring_diagnostics(app: tauri::AppHandle) -> Result<KeyringDiagnostics, AppError> {
+    let vault_path = match get_vault_path(&app) {
+        Ok(path) => path,
         Err(e) => {
             return Ok(KeyringDiagnostics {
                 key_present: false,
@@ -389,19 +516,35 @@ async fn get_keyring_diagnostics() -> Result<KeyringDiagnostics, AppError> {
         }
     };
 
-    match entry.get_password() {
-        Ok(password) => Ok(KeyringDiagnostics {
-            key_present: true,
-            key_length: Some(password.len()),
-            keyring_accessible: true,
-            error_message: None,
-        }),
-        Err(keyring::Error::NoEntry) => Ok(KeyringDiagnostics {
+    if !vault_path.exists() {
+        return Ok(KeyringDiagnostics {
             key_present: false,
             key_length: None,
             keyring_accessible: true,
-            error_message: Some("No Entry".to_string()),
-        }),
+            error_message: Some("Vault file does not exist".to_string()),
+        });
+    }
+
+    match load_stronghold_client(&app) {
+        Ok((stronghold, client)) => {
+            let _ = stronghold; // Keep stronghold alive
+            let store = client.store();
+            let key_bytes = API_KEY_STORE_KEY.as_bytes().to_vec();
+            match store.get(&key_bytes) {
+                Ok(Some(value_bytes)) => Ok(KeyringDiagnostics {
+                    key_present: true,
+                    key_length: Some(value_bytes.len()),
+                    keyring_accessible: true,
+                    error_message: None,
+                }),
+                _ => Ok(KeyringDiagnostics {
+                    key_present: false,
+                    key_length: None,
+                    keyring_accessible: true,
+                    error_message: Some("No API key entry found".to_string()),
+                }),
+            }
+        }
         Err(e) => Ok(KeyringDiagnostics {
             key_present: false,
             key_length: None,
@@ -421,7 +564,7 @@ struct ApiResponse {
 #[tauri::command]
 #[allow(unused_variables)]
 async fn call_api(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     state: tauri::State<'_, ConfigState>,
     path: String,
     method: String,
@@ -463,8 +606,6 @@ async fn call_api(
 
     let url = format!("{}/{}", base_url, path_normalized);
 
-    let mut override_key: Option<String> = None;
-
     let key: Option<String> = if let Some(ref api_key) = api_key_override {
         let trimmed = api_key.trim();
         if !trimmed.is_empty() {
@@ -475,9 +616,7 @@ async fn call_api(
                 .unwrap_or(false);
 
             if !has_cached {
-                let key = trimmed.to_string();
-                override_key = Some(key.clone());
-                Some(key)
+                Some(trimmed.to_string())
             } else {
                 None
             }
@@ -525,66 +664,12 @@ async fn call_api(
 
     // Map 401 to structured error
     if status == 401 {
-        if let Some(mut key) = override_key {
-            crypto::zeroize_string(&mut key);
-        }
         return Err(AppError::ApiKeyRejected);
     }
 
     let result = ApiResponse { status, data };
 
-    if let Some(mut key) = override_key {
-        crypto::zeroize_string(&mut key);
-    }
-
     Ok(result)
-}
-
-fn initialize_or_create_master_key() -> [u8; 32] {
-    let entry = match Entry::new("com.patrickhaahr.openhome", "master_key") {
-        Ok(e) => e,
-        Err(_e) => {
-            eprintln!("[master_key] Keyring init error: {}", _e);
-            return crypto::generate_master_key().unwrap_or([0u8; 32]);
-        }
-    };
-
-    match entry.get_password() {
-        Ok(stored_key) => {
-            let key_bytes = base64::engine::general_purpose::STANDARD.decode(&stored_key);
-            match key_bytes {
-                Ok(ref bytes) if bytes.len() == 32 => {
-                    let mut key: [u8; 32] = [0u8; 32];
-                    key.copy_from_slice(bytes);
-                    eprintln!("[master_key] Loaded from keyring");
-                    key
-                }
-                _ => {
-                    eprintln!("[master_key] Invalid stored key, regenerating");
-                    create_and_store_master_key(&entry)
-                }
-            }
-        }
-        Err(keyring::Error::NoEntry) => {
-            eprintln!("[master_key] No entry, creating new key");
-            create_and_store_master_key(&entry)
-        }
-        Err(_e) => {
-            eprintln!("[master_key] Keyring error: {}, regenerating", _e);
-            create_and_store_master_key(&entry)
-        }
-    }
-}
-
-fn create_and_store_master_key(entry: &keyring::Entry) -> [u8; 32] {
-    let key = crypto::generate_master_key().unwrap_or([0u8; 32]);
-    let encoded = base64::engine::general_purpose::STANDARD.encode(key);
-
-    if let Err(_e) = entry.set_password(&encoded) {
-        eprintln!("[master_key] Failed to store: {}", _e);
-    }
-
-    key
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -608,9 +693,7 @@ pub fn run() {
         eprintln!("API config validation warning: {_error}");
     }
 
-    let master_key = initialize_or_create_master_key();
-
-    let http_client = reqwest::Client::builder()
+    let http_client = HttpClient::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .expect("Failed to create HTTP client");
@@ -624,7 +707,6 @@ pub fn run() {
         .manage(ConfigState {
             config,
             api_key: Mutex::new(None),
-            master_key: Mutex::new(Some(master_key)),
             http_client,
             last_unlock_time: Mutex::new(None),
         })
@@ -639,7 +721,6 @@ pub fn run() {
             {
                 let handle_emit = handle.clone();
                 handle.listen("tauri://resumed", move |_| {
-                    eprintln!("[tauri] App resumed");
                     let _ = handle_emit.emit_to("main", "auth:resume", ());
                 });
             }
@@ -652,7 +733,6 @@ pub fn run() {
                     window.on_window_event(move |event| {
                         if let tauri::WindowEvent::Focused(focused) = event {
                             if *focused {
-                                eprintln!("[window] Focused (resumed)");
                                 let _ = handle_clone.emit("auth:resume", ());
                             }
                         }
