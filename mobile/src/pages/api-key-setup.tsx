@@ -61,8 +61,10 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
           const errorMessage = saveError?.toString?.() || String(saveError);
           if (errorMessage.includes("cancelled")) {
             setErrorMessage("Biometric authentication cancelled.");
+          } else if (errorMessage.includes("unavailable")) {
+            setErrorMessage("Secure storage unavailable. Please try again.");
           } else {
-            setErrorMessage("Failed to save API key. Please try again.");
+            setErrorMessage(`Failed to save: ${errorMessage}`);
           }
           setStatus("error");
         }
