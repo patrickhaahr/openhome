@@ -21,6 +21,8 @@ pub enum AppError {
     BiometricFailed,
     #[error("Biometric unavailable: {0}")]
     BiometricUnavailable(String),
+    #[error("Biometric authentication cancelled")]
+    BiometricCancelled,
 }
 
 impl From<keyring::Error> for AppError {

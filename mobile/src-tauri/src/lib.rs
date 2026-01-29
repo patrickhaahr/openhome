@@ -11,8 +11,11 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-use tauri_plugin_biometric::BiometricExt;
+use tauri::{Emitter};
+#[cfg(not(target_os = "android"))]
+use tauri::Listener;
+#[cfg(target_os = "android")]
+use tauri::Manager;
 
 #[derive(Serialize, Clone, Copy)]
 pub enum ApiKeyStatus {
@@ -31,6 +34,18 @@ fn validate_base_url(url: &str) -> Result<String, AppError> {
         ));
     }
     Ok(url_str.to_string())
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn convert_biometric_error(err: tauri_plugin_biometric::Error) -> AppError {
+    let err_str = err.to_string().to_lowercase();
+    if err_str.contains("cancel") || err_str.contains("cancelled") || err_str.contains("user cancelled") {
+        AppError::BiometricCancelled
+    } else if err_str.contains("not available") || err_str.contains("unavailable") || err_str.contains("no biometric") {
+        AppError::BiometricUnavailable(err.to_string())
+    } else {
+        AppError::BiometricFailed
+    }
 }
 
 fn is_path_safe(path: &str) -> bool {
@@ -93,8 +108,9 @@ fn greet(name: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn set_api_key(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     state: tauri::State<'_, ConfigState>,
     key: String,
 ) -> Result<(), AppError> {
@@ -118,7 +134,7 @@ async fn set_api_key(
 
         app.biometric()
             .authenticate("Save API Key".to_string(), options)
-            .map_err(|e| AppError::BiometricUnavailable(e.to_string()))?;
+            .map_err(convert_biometric_error)?;
     }
 
     let master_key = state.master_key
@@ -140,8 +156,9 @@ async fn set_api_key(
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 async fn unlock_and_cache_api_key(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     state: tauri::State<'_, ConfigState>,
 ) -> Result<(), AppError> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -159,7 +176,7 @@ async fn unlock_and_cache_api_key(
 
         app.biometric()
             .authenticate("Unlock API Key".to_string(), options)
-            .map_err(|e| AppError::BiometricUnavailable(e.to_string()))?;
+            .map_err(convert_biometric_error)?;
     }
 
     let entry = Entry::new("com.patrickhaahr.openhome", "api_key_encrypted")?;
@@ -273,8 +290,9 @@ struct ApiResponse {
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
+#[allow(unused_variables)]
 async fn call_api(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     state: tauri::State<'_, ConfigState>,
     path: String,
     method: String,
@@ -320,6 +338,8 @@ async fn call_api(
 
     let url = format!("{}/{}", base_url, path_normalized);
 
+    let mut debug_override_key: Option<String> = None;
+
     let key: Option<String> = if cfg!(debug_assertions) {
         if let Some(ref override_key) = api_key_override {
             let trimmed = override_key.trim();
@@ -337,9 +357,11 @@ async fn call_api(
                     };
                     app.biometric()
                         .authenticate("API Key Override".to_string(), options)
-                        .map_err(|e| AppError::BiometricUnavailable(e.to_string()))?;
+                        .map_err(convert_biometric_error)?;
                 }
-                Some(trimmed.to_string())
+                let key = trimmed.to_string();
+                debug_override_key = Some(key.clone());
+                Some(key)
             } else {
                 None
             }
@@ -386,18 +408,27 @@ async fn call_api(
 
     // Map 401 to structured error
     if status == 401 {
+        if let Some(mut key) = debug_override_key {
+            crypto::zeroize_string(&mut key);
+        }
         return Err(AppError::ApiKeyRejected);
     }
 
-    Ok(ApiResponse { status, data })
+    let result = ApiResponse { status, data };
+
+    if let Some(mut key) = debug_override_key {
+        crypto::zeroize_string(&mut key);
+    }
+
+    Ok(result)
 }
 
 fn initialize_or_create_master_key() -> [u8; 32] {
     let entry = match Entry::new("com.patrickhaahr.openhome", "master_key") {
         Ok(e) => e,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("[master_key] Keyring init error: {}", e);
+            eprintln!("[master_key] Keyring init error: {}", _e);
 
             return crypto::generate_master_key().unwrap_or([0u8; 32]);
         }
@@ -426,9 +457,9 @@ fn initialize_or_create_master_key() -> [u8; 32] {
             eprintln!("[master_key] No entry, creating new key");
             create_and_store_master_key(&entry)
         }
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("[master_key] Keyring error: {}, regenerating", e);
+            eprintln!("[master_key] Keyring error: {}, regenerating", _e);
             create_and_store_master_key(&entry)
         }
     }
@@ -438,9 +469,9 @@ fn create_and_store_master_key(entry: &keyring::Entry) -> [u8; 32] {
     let key = crypto::generate_master_key().unwrap_or([0u8; 32]);
     let encoded = base64::engine::general_purpose::STANDARD.encode(key);
 
-    if let Err(e) = entry.set_password(&encoded) {
+    if let Err(_e) = entry.set_password(&encoded) {
         #[cfg(debug_assertions)]
-        eprintln!("[master_key] Failed to store: {}", e);
+        eprintln!("[master_key] Failed to store: {}", _e);
     }
 
     key
@@ -463,9 +494,9 @@ pub fn run() {
         }
     };
 
-    if let Err(error) = config.api.clone().sanitize() {
+    if let Err(_error) = config.api.clone().sanitize() {
         #[cfg(debug_assertions)]
-        eprintln!("API config validation warning: {error}");
+        eprintln!("API config validation warning: {_error}");
     }
 
     let master_key = initialize_or_create_master_key();
@@ -490,6 +521,39 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
+        .setup(|app| {
+            let handle = app.handle().clone();
+
+            // Handle app resume events (works for iOS, macOS, Linux, Windows)
+            #[cfg(not(target_os = "android"))]
+            {
+                let handle_emit = handle.clone();
+                handle.listen("tauri://resumed", move |_| {
+                    #[cfg(debug_assertions)]
+                    eprintln!("[tauri] App resumed");
+                    let _ = handle_emit.emit_to("main", "auth:resume", ());
+                });
+            }
+
+            // Android resume handling - use window focus events
+            #[cfg(target_os = "android")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let handle_clone = handle.clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::Focused(focused) = event {
+                            if *focused {
+                                #[cfg(debug_assertions)]
+                                eprintln!("[window] Focused (resumed)");
+                                let _ = handle_clone.emit("auth:resume", ());
+                            }
+                        }
+                    });
+                }
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             get_api_config,
