@@ -1,7 +1,9 @@
 import type { Component } from "solid-js";
 import { createSignal, Show, createMemo, createEffect } from "solid-js";
-import { saveApiKey, saveSettings, baseUrl, timeoutSeconds, apiKey as storedApiKey, isLoaded } from "../stores/config";
+import { invoke } from "@tauri-apps/api/core";
+import { saveSettings, baseUrl, timeoutSeconds, isLoaded } from "../stores/config";
 import { getHealthStatus } from "../api/health";
+import { auth } from "@/stores/auth";
 import { Key, ArrowRight, Check, Loader2, Globe } from "lucide-solid";
 import { cn } from "@/lib/utils";
 
@@ -16,14 +18,13 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
   const [_errorMessage, setErrorMessage] = createSignal("");
   const [hasInitialized, setHasInitialized] = createSignal(false);
 
-  // Initialize base URL input and API key with current values
+  // Initialize base URL input with current value
   createEffect(() => {
     if (!isLoaded() || hasInitialized()) {
       return;
     }
 
     setBaseUrlInput(baseUrl());
-    setApiKey(storedApiKey());
     setHasInitialized(true);
   });
 
@@ -46,10 +47,13 @@ const ApiKeySetup: Component<ApiKeySetupProps> = (props) => {
     try {
       // Save base URL first
       await saveSettings(baseUrlInput(), timeoutSeconds());
-      await saveApiKey(key);
+      // Save API key with biometric authentication
+      await invoke("set_api_key", { key: key.trim() });
       setStatus("validating");
       await getHealthStatus();
       setStatus("success");
+      // Reload auth status to reflect the new key
+      await auth.loadStatus();
       setTimeout(props.onValidated, 600);
     } catch {
       setStatus("error");
