@@ -3,8 +3,6 @@ services:
     build: .
     container_name: openhome-api
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     volumes:
       # Persist SQLite databases
       - ./data:/app/data
@@ -16,10 +14,16 @@ services:
       - RUST_LOG=info
       # Override DB paths to use container paths
       - DATABASE_URL=sqlite:/app/data/app.db
-      - AUTH_DATABASE_URL=sqlite:/app/data/auth.db
+      - API_KEY=${API_KEY}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD-SHELL", "curl -f -H \"Authorization: Bearer $$API_KEY\" http://localhost:8000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+    networks:
+      - caddy
+
+networks:
+  caddy:
+    external: true
+
