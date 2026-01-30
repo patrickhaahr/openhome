@@ -24,14 +24,19 @@ pub struct AppConfig {
     pub api: ApiConfig,
 }
 
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            api: ApiConfig {
+                base_url: String::new(),
+                timeout_seconds: 30,
+            },
+        }
+    }
+}
+
 impl AppConfig {
     pub fn load() -> Result<Self, String> {
-        #[cfg(debug_assertions)]
-        let config_str = include_str!("../config.dev.toml");
-
-        #[cfg(not(debug_assertions))]
-        let config_str = include_str!("../config.prod.toml");
-
-        toml::from_str(config_str).map_err(|e| format!("Failed to parse config: {}", e))
+        Ok(Self::default())
     }
 }

@@ -490,8 +490,8 @@ async fn get_api_key_status(
 }
 
 #[tauri::command]
-fn get_api_config(state: tauri::State<ConfigState>) -> Result<config::ApiConfig, String> {
-    state.config.api.sanitize()
+fn get_api_config(state: tauri::State<ConfigState>) -> config::ApiConfig {
+    state.config.api.clone()
 }
 
 #[derive(Serialize)]
@@ -681,17 +681,7 @@ pub fn run() {
             .with_tag("openhome"),
     );
 
-    let config = match config::AppConfig::load() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Fatal error loading config: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    if let Err(_error) = config.api.clone().sanitize() {
-        eprintln!("API config validation warning: {_error}");
-    }
+    let config = config::AppConfig::default();
 
     let http_client = HttpClient::builder()
         .timeout(Duration::from_secs(30))
