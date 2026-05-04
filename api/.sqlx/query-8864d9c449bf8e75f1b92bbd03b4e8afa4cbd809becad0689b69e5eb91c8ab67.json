@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE feed_items SET read_at = datetime('now')\n        WHERE id = $1 AND read_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "8864d9c449bf8e75f1b92bbd03b4e8afa4cbd809becad0689b69e5eb91c8ab67"
+}

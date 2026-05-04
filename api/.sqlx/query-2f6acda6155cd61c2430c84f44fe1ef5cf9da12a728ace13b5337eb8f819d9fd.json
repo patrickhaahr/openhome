@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT etag, last_modified FROM feeds WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "etag",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_modified",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "2f6acda6155cd61c2430c84f44fe1ef5cf9da12a728ace13b5337eb8f819d9fd"
+}

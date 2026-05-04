@@ -6,6 +6,5 @@ gen/
 data
 package-lock.json
 .env
-.sqlx
 .direnv/
 .envrc

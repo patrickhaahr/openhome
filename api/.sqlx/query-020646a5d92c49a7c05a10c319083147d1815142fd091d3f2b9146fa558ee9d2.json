@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO feeds (url)\n        VALUES ($1)\n        RETURNING id, url, title\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "url",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "020646a5d92c49a7c05a10c319083147d1815142fd091d3f2b9146fa558ee9d2"
+}
