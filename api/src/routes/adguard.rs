@@ -100,6 +100,7 @@ mod tests {
             db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
             adguard_service: service,
             docker_service: None,
+            ir_service: None,
             docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
                 crate::DockerCache::default(),
             )),

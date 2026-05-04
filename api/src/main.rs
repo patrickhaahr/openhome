@@ -9,7 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use openhome_api::auth;
 use openhome_api::routes;
-use openhome_api::services::{adguard, docker, feed};
+use openhome_api::services::{adguard, docker, feed, ir};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,6 +39,7 @@ async fn main() -> anyhow::Result<()> {
     let adguard_username = std::env::var("ADGUARD_USERNAME").unwrap_or_default();
     let adguard_password = std::env::var("ADGUARD_PASSWORD").unwrap_or_default();
     let adguard_insecure_tls = std::env::var("ADGUARD_INSECURE_TLS").unwrap_or_default() == "true";
+    let ir_base_url = std::env::var("IR_BASE_URL").unwrap_or_default();
 
     let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {
         match docker::DockerService::new() {
@@ -70,11 +71,21 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    let ir_service = if !ir_base_url.is_empty() {
+        Some(ir::IrService::new(&ir_base_url)?)
+    } else {
+        tracing::warn!("IR_BASE_URL not set, IR integration disabled");
+        None
+    };
+
     let state = openhome_api::AppState {
         db,
         adguard_service,
         docker_service,
-        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(openhome_api::DockerCache::default())),
+        ir_service,
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+            openhome_api::DockerCache::default(),
+        )),
     };
 
     let api_key = auth::ApiKey::new(
@@ -89,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::timeline::router())
         .merge(routes::adguard::router())
         .merge(routes::docker::router())
+        .merge(routes::ir::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())

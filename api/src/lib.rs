@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 
 use crate::services::adguard::AdguardService;
 use crate::services::docker::DockerService;
+use crate::services::ir::IrService;
 
 pub mod auth;
 pub mod error;
@@ -18,6 +19,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub adguard_service: Option<AdguardService>,
     pub docker_service: Option<DockerService>,
+    pub ir_service: Option<IrService>,
     pub docker_cache: Arc<Mutex<DockerCache>>,
 }
 
