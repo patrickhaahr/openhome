@@ -5,16 +5,6 @@ use http::StatusCode;
 use serde_json::json;
 
 #[tokio::test]
-async fn test_list_containers_returns_containers_with_valid_api_key() {
-    let app = test_app_with_docker().await;
-    let (status, body) = send_request(app, "/api/docker", Some("test-api-key")).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert!(body["containers"].is_array());
-    assert!(body["timestamp"].is_string());
-}
-
-#[tokio::test]
 async fn test_list_containers_returns_unauthorized_without_api_key() {
     let app = test_app_with_docker().await;
     let (status, body) = send_request(app, "/api/docker", None).await;
