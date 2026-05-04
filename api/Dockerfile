@@ -1,26 +1,28 @@
-# Minimal runtime image for pre-built binary
-# Build binary on dev machine with:
-#   cross build --release --target aarch64-unknown-linux-musl
-
-FROM alpine:3.21
-
-# Install runtime dependencies
-RUN apk add --no-cache \
-    ca-certificates \
-    libgcc \
-    curl
+FROM rust:1.87-bookworm AS builder
 
 WORKDIR /app
 
-# Copy pre-built binary (cross-compiled for ARM64)
-COPY openhome-api /app/openhome-api
-RUN chmod +x /app/openhome-api
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY migrations ./migrations
 
-# Copy migrations for SQLx runtime migrations
-COPY migrations /app/migrations
+RUN cargo build --release
 
-# Create data directory for SQLite databases
-RUN mkdir -p /app/data
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --uid 10001 appuser
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/openhome-api /app/openhome-api
+
+RUN mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 
