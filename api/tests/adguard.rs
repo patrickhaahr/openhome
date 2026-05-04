@@ -150,9 +150,13 @@ async fn test_pause_endpoint_with_adguard_service() {
         .mount(&mock_server)
         .await;
 
-    let service =
-        openhome_api::services::adguard::AdguardService::new(&mock_server.uri(), "test", "test", false)
-            .unwrap();
+    let service = openhome_api::services::adguard::AdguardService::new(
+        &mock_server.uri(),
+        "test",
+        "test",
+        false,
+    )
+    .unwrap();
     let state = common::create_mock_state_with_adguard(service);
 
     let app = Router::new()

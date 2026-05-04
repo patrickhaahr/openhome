@@ -121,7 +121,9 @@ async fn start_container(
     Path(name): Path<String>,
 ) -> Result<Json<StartResponse>> {
     const START_TIMEOUT_SECONDS: u64 = 30;
-    let service = state.docker_service.as_ref()
+    let service = state
+        .docker_service
+        .as_ref()
         .ok_or_else(|| AppError::ServiceUnavailable("Docker service not available".to_string()))?;
 
     let detail = tokio::time::timeout(Duration::from_secs(5), service.inspect_container(&name))
@@ -136,10 +138,13 @@ async fn start_container(
         }));
     }
 
-    tokio::time::timeout(Duration::from_secs(START_TIMEOUT_SECONDS), service.start_container(&name))
-        .await
-        .map_err(|_| anyhow::anyhow!("Start request timed out"))?
-        .map_err(|err| map_docker_error(err, &name))?;
+    tokio::time::timeout(
+        Duration::from_secs(START_TIMEOUT_SECONDS),
+        service.start_container(&name),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("Start request timed out"))?
+    .map_err(|err| map_docker_error(err, &name))?;
 
     {
         let mut cache = state.docker_cache.lock().await;
@@ -158,13 +163,18 @@ async fn stop_container(
     Json(req): Json<StopRequest>,
 ) -> Result<Json<StopResponse>> {
     const MAX_TIMEOUT_SECONDS: u64 = 300;
-    let service = state.docker_service.as_ref()
+    let service = state
+        .docker_service
+        .as_ref()
         .ok_or_else(|| AppError::ServiceUnavailable("Docker service not available".to_string()))?;
 
-    let stopped = tokio::time::timeout(Duration::from_secs((req.timeout_seconds + 5).min(MAX_TIMEOUT_SECONDS)), service.stop_container(&name, req.timeout_seconds))
-        .await
-        .map_err(|_| anyhow::anyhow!("Stop request timed out"))?
-        .map_err(|err| map_docker_error(err, &name))?;
+    let stopped = tokio::time::timeout(
+        Duration::from_secs((req.timeout_seconds + 5).min(MAX_TIMEOUT_SECONDS)),
+        service.stop_container(&name, req.timeout_seconds),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("Stop request timed out"))?
+    .map_err(|err| map_docker_error(err, &name))?;
 
     {
         let mut cache = state.docker_cache.lock().await;

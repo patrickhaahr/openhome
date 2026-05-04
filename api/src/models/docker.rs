@@ -92,7 +92,7 @@ mod tests {
             success: true,
             message: "Container started".to_string(),
         };
-        
+
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"success\":true"));
         assert!(json.contains("\"message\":\"Container started\""));
@@ -102,7 +102,7 @@ mod tests {
     fn test_start_response_deserialization() {
         let json = r#"{"success": true, "message": "Container started"}"#;
         let response: StartResponse = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(response.success, true);
         assert_eq!(response.message, "Container started");
     }
@@ -114,7 +114,7 @@ mod tests {
             message: "Container stopped".to_string(),
             stopped: true,
         };
-        
+
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"success\":true"));
         assert!(json.contains("\"message\":\"Container stopped\""));
@@ -125,7 +125,7 @@ mod tests {
     fn test_stop_response_deserialization() {
         let json = r#"{"success": true, "message": "Container stopped", "stopped": true}"#;
         let response: StopResponse = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(response.success, true);
         assert_eq!(response.message, "Container stopped");
         assert_eq!(response.stopped, true);
@@ -135,7 +135,7 @@ mod tests {
     fn test_stop_response_with_stopped_false() {
         let json = r#"{"success": true, "message": "Container was not running", "stopped": false}"#;
         let response: StopResponse = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(response.success, true);
         assert_eq!(response.stopped, false);
     }
@@ -144,7 +144,7 @@ mod tests {
     fn test_stop_request_deserialization_with_timeout() {
         let json = r#"{"timeout_seconds": 30}"#;
         let request: StopRequest = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(request.timeout_seconds, 30);
     }
 
@@ -152,7 +152,7 @@ mod tests {
     fn test_stop_request_default_timeout() {
         let json = r#"{}"#;
         let request: StopRequest = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(request.timeout_seconds, 10); // default_timeout() returns 10
     }
 

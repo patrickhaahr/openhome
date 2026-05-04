@@ -130,11 +130,7 @@ impl DockerService {
                 status_code: 400,
                 message: format!("Timeout exceeds maximum allowed value: {}", timeout),
             })?;
-        let options = Some(
-            RestartContainerOptionsBuilder::new()
-                .t(timeout_i32)
-                .build(),
-        );
+        let options = Some(RestartContainerOptionsBuilder::new().t(timeout_i32).build());
         self.client.restart_container(name, options).await?;
         Ok(())
     }
@@ -156,11 +152,7 @@ impl DockerService {
                 status_code: 400,
                 message: format!("Timeout exceeds maximum allowed value: {}", timeout),
             })?;
-        let options = Some(
-            StopContainerOptionsBuilder::new()
-                .t(timeout_i32)
-                .build(),
-        );
+        let options = Some(StopContainerOptionsBuilder::new().t(timeout_i32).build());
         self.client.stop_container(name, options).await?;
         Ok(true)
     }
@@ -310,7 +302,7 @@ mod tests {
         assert_eq!(result, Some(86400)); // 1 * 86400
     }
 
-#[test]
+    #[test]
     fn test_parse_uptime_seconds_with_complex_time() {
         let result = parse_uptime_seconds(Some("Up 30 invalidunit"));
         assert_eq!(result, None);
