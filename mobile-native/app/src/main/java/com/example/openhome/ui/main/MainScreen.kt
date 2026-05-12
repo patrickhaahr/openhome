@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -25,7 +27,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -43,6 +49,8 @@ import com.example.openhome.data.IrState
 import com.example.openhome.data.IrStatus
 import com.example.openhome.data.SetupRepository
 import com.example.openhome.theme.OpenhomeTheme
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen(
@@ -214,6 +222,28 @@ private fun AppShell(
   onSendRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  val tabs = TopLevelTab.entries
+  val selectedPage = state.selectedTab.ordinal
+  val pagerState = rememberPagerState(initialPage = selectedPage) { tabs.size }
+  val coroutineScope = rememberCoroutineScope()
+  val currentSelectedTab by rememberUpdatedState(state.selectedTab)
+  val currentOnTabSelected by rememberUpdatedState(onTabSelected)
+
+  LaunchedEffect(selectedPage) {
+    if (pagerState.currentPage != selectedPage && pagerState.targetPage != selectedPage) {
+      pagerState.animateScrollToPage(selectedPage)
+    }
+  }
+
+  LaunchedEffect(pagerState) {
+    snapshotFlow { pagerState.settledPage }.distinctUntilChanged().collect { settledPage ->
+      val settledTab = tabs[settledPage]
+      if (settledTab != currentSelectedTab) {
+        currentOnTabSelected(settledTab)
+      }
+    }
+  }
+
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
@@ -228,33 +258,54 @@ private fun AppShell(
     },
     bottomBar = {
       NavigationBar {
-        TopLevelTab.entries.forEach { tab ->
-          NavigationBarItem(selected = state.selectedTab == tab, onClick = { onTabSelected(tab) }, icon = {}, label = { Text(tab.label) })
+        tabs.forEach { tab ->
+          NavigationBarItem(
+            selected = pagerState.currentPage == tab.ordinal,
+            onClick = {
+              coroutineScope.launch {
+                pagerState.animateScrollToPage(tab.ordinal)
+              }
+            },
+            icon = {},
+            label = { Text(tab.label) },
+            modifier = Modifier.testTag("top-level-tab-${tab.name.lowercase()}"),
+          )
         }
       }
     },
   ) { innerPadding ->
-    Column(
-      modifier = Modifier.fillMaxSize().padding(innerPadding).padding(24.dp).verticalScroll(rememberScrollState()),
-      verticalArrangement = Arrangement.spacedBy(24.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-      when (state.selectedTab) {
-        TopLevelTab.Home -> {
-          HomeTab(
-            irState = state.irState,
-            homeRemoteControlsState = state.homeRemoteControlsState,
-            onRetryIrStatus = onRetryIrStatus,
-            onSendHomeRemoteCommand = onSendHomeRemoteCommand,
-          )
-        }
-        TopLevelTab.Remote -> {
-          RemoteTab(
-            irState = state.irState,
-            remoteControlsState = state.remoteControlsState,
-            onRetryIrStatus = onRetryIrStatus,
-            onSendRemoteCommand = onSendRemoteCommand,
-          )
+    HorizontalPager(
+      state = pagerState,
+      modifier = Modifier.fillMaxSize().padding(innerPadding).testTag("main-tabs-pager"),
+    ) { page ->
+      val tab = tabs[page]
+      Column(
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState())
+            .testTag(if (tab == TopLevelTab.Home) "home-tab-page" else "remote-tab-page"),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        when (tab) {
+          TopLevelTab.Home -> {
+            HomeTab(
+              irState = state.irState,
+              homeRemoteControlsState = state.homeRemoteControlsState,
+              onRetryIrStatus = onRetryIrStatus,
+              onSendHomeRemoteCommand = onSendHomeRemoteCommand,
+            )
+          }
+          TopLevelTab.Remote -> {
+            RemoteTab(
+              irState = state.irState,
+              remoteControlsState = state.remoteControlsState,
+              onRetryIrStatus = onRetryIrStatus,
+              onSendRemoteCommand = onSendRemoteCommand,
+            )
+          }
         }
       }
     }

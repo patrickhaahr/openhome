@@ -1,9 +1,15 @@
 package com.example.openhome.ui.main
 
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.assertExists
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -11,6 +17,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import junit.framework.TestCase.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -27,19 +36,19 @@ class MainScreenTest {
   fun setupFlow_showsBaseUrlAndApiKeyFields() {
     renderScreen(configurationFormState())
 
-    composeTestRule.onNodeWithText("Set up OpenHome").assertExists()
-    composeTestRule.onNodeWithText("Base URL").assertExists()
-    composeTestRule.onNodeWithText("API Key").assertExists()
-    composeTestRule.onNodeWithText("Validate and continue").assertExists()
+    composeTestRule.onNodeWithText("Set up OpenHome").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Base URL").assertIsDisplayed()
+    composeTestRule.onNodeWithText("API Key").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Validate and continue").assertIsDisplayed()
   }
 
   @Test
   fun appShell_showsInitialTabs() {
     renderScreen(MainScreenUiState.App())
 
-    composeTestRule.onNodeWithText("Home").assertExists()
-    composeTestRule.onNodeWithText("Remote").assertExists()
-    composeTestRule.onNodeWithTag("open-reconfiguration").assertExists()
+    composeTestRule.onNodeWithText("Home").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Remote").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("open-reconfiguration").assertIsDisplayed()
   }
 
   @Test
@@ -52,10 +61,10 @@ class MainScreenTest {
       ),
     )
 
-    composeTestRule.onNodeWithText("Update configuration").assertExists()
-    composeTestRule.onNodeWithText("Save configuration").assertExists()
-    composeTestRule.onNodeWithTag("configuration-cancel").assertExists()
-    composeTestRule.onNodeWithText("https://openhome.example").assertExists()
+    composeTestRule.onNodeWithText("Update configuration").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Save configuration").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("configuration-cancel").assertIsDisplayed()
+    composeTestRule.onNodeWithText("https://openhome.example").assertIsDisplayed()
   }
 
   @Test
@@ -66,9 +75,9 @@ class MainScreenTest {
       ),
     )
 
-    composeTestRule.onNodeWithText("Quick controls").assertExists()
-    composeTestRule.onNodeWithText("Bluetooth").assertExists()
-    composeTestRule.onNodeWithText("Optical").assertExists()
+    composeTestRule.onNodeWithText("Quick controls").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Bluetooth").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Optical").assertIsDisplayed()
     assertEquals(1, composeTestRule.onAllNodesWithText("Bluetooth").fetchSemanticsNodes().size)
     assertEquals(1, composeTestRule.onAllNodesWithText("Optical").fetchSemanticsNodes().size)
   }
@@ -107,6 +116,34 @@ class MainScreenTest {
   }
 
   @Test
+  fun appShell_swipeLeftMovesFromHomeToRemote() {
+    renderSwipeableApp(initialTab = TopLevelTab.Home)
+
+    composeTestRule.onNodeWithTag("top-level-tab-home").assertIsSelected()
+    composeTestRule.onNodeWithTag("top-level-tab-remote").assertIsNotSelected()
+
+    composeTestRule.onNodeWithTag("main-tabs-pager").performTouchInput { swipeLeft() }
+    composeTestRule.waitForIdle()
+
+    composeTestRule.onNodeWithTag("top-level-tab-remote").assertIsSelected()
+    composeTestRule.onNodeWithTag("top-level-tab-home").assertIsNotSelected()
+  }
+
+  @Test
+  fun appShell_swipeRightMovesFromRemoteToHome() {
+    renderSwipeableApp(initialTab = TopLevelTab.Remote)
+
+    composeTestRule.onNodeWithTag("top-level-tab-remote").assertIsSelected()
+    composeTestRule.onNodeWithTag("top-level-tab-home").assertIsNotSelected()
+
+    composeTestRule.onNodeWithTag("main-tabs-pager").performTouchInput { swipeRight() }
+    composeTestRule.waitForIdle()
+
+    composeTestRule.onNodeWithTag("top-level-tab-home").assertIsSelected()
+    composeTestRule.onNodeWithTag("top-level-tab-remote").assertIsNotSelected()
+  }
+
+  @Test
   fun remoteTab_showsFullV1RemoteButtonSet() {
     renderScreen(
       MainScreenUiState.App(
@@ -115,12 +152,12 @@ class MainScreenTest {
       ),
     )
 
-    composeTestRule.onNodeWithTag("remote-power").assertExists()
-    composeTestRule.onNodeWithTag("remote-bluetooth").assertExists()
-    composeTestRule.onNodeWithTag("remote-optical").assertExists()
-    composeTestRule.onNodeWithTag("remote-mute").assertExists()
-    composeTestRule.onNodeWithTag("remote-volume-down").assertExists()
-    composeTestRule.onNodeWithTag("remote-volume-up").assertExists()
+    composeTestRule.onNodeWithTag("remote-power").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("remote-bluetooth").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("remote-optical").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("remote-mute").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("remote-volume-down").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("remote-volume-up").assertIsDisplayed()
     assertEquals(6, composeTestRule.onAllNodesWithTag("remote-button").fetchSemanticsNodes().size)
   }
 
@@ -135,10 +172,10 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithTag("remote-power").assertIsEnabled()
     composeTestRule.onNodeWithTag("remote-mute").assertIsEnabled()
-    composeTestRule.onNodeWithTag("remote-bluetooth").assertExists().assertIsNotEnabled()
-    composeTestRule.onNodeWithTag("remote-optical").assertExists().assertIsNotEnabled()
-    composeTestRule.onNodeWithTag("remote-volume-down").assertExists().assertIsNotEnabled()
-    composeTestRule.onNodeWithTag("remote-volume-up").assertExists().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-bluetooth").assertIsDisplayed().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-optical").assertIsDisplayed().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-volume-down").assertIsDisplayed().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-volume-up").assertIsDisplayed().assertIsNotEnabled()
   }
 
   @Test
@@ -186,7 +223,7 @@ class MainScreenTest {
       ),
     )
 
-    composeTestRule.onNodeWithText("Power failed: IR bridge offline").assertExists()
+    composeTestRule.onNodeWithText("Power failed: IR bridge offline").assertIsDisplayed()
   }
 
   private fun renderScreen(
@@ -206,6 +243,25 @@ class MainScreenTest {
         onRetryIrStatus = {},
         onSendHomeRemoteCommand = onSendHomeRemoteCommand,
         onSendRemoteCommand = onSendRemoteCommand,
+      )
+    }
+  }
+
+  private fun renderSwipeableApp(initialTab: TopLevelTab) {
+    composeTestRule.setContent {
+      var selectedTab by remember { mutableStateOf(initialTab) }
+
+      MainScreenContent(
+        state = MainScreenUiState.App(selectedTab = selectedTab, irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = REMOTE_BUTTON_COMMANDS))),
+        onBaseUrlChanged = {},
+        onApiKeyChanged = {},
+        onSubmitSetup = {},
+        onOpenReconfiguration = {},
+        onCancelReconfiguration = {},
+        onTabSelected = { selectedTab = it },
+        onRetryIrStatus = {},
+        onSendHomeRemoteCommand = {},
+        onSendRemoteCommand = {},
       )
     }
   }
