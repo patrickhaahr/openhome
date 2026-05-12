@@ -1,6 +1,5 @@
 package com.example.openhome.ui.main
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -35,13 +33,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.openhome.data.DefaultSetupRepository
+import com.example.openhome.data.SetupRepository
 import com.example.openhome.theme.OpenhomeTheme
 
 @Composable
 fun MainScreen(
+  setupRepository: SetupRepository,
   modifier: Modifier = Modifier,
-  viewModel: MainScreenViewModel = viewModel(factory = mainScreenViewModelFactory(LocalContext.current.applicationContext)),
+  viewModel: MainScreenViewModel = viewModel(factory = mainScreenViewModelFactory(setupRepository)),
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   MainScreenContent(
@@ -186,10 +185,10 @@ private val TopLevelTab.description: String
       TopLevelTab.Remote -> "Infrared commands stay visible and disabled until the app loads remote state."
     }
 
-private fun mainScreenViewModelFactory(context: Context) =
+private fun mainScreenViewModelFactory(setupRepository: SetupRepository) =
   viewModelFactory {
     initializer {
-      MainScreenViewModel(setupRepository = DefaultSetupRepository(context))
+      MainScreenViewModel(setupRepository = setupRepository)
     }
   }
 

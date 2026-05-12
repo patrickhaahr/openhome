@@ -14,6 +14,7 @@
 
 - Type: AFK
 - Blocked by: None
+- Status: Done
 
 #### What to build
 
@@ -21,16 +22,17 @@ Build the native `Setup Flow` for `mobile-native` so a user can enter a `Base UR
 
 #### Acceptance criteria
 
-- [ ] A fresh install opens into the native `Setup Flow`
-- [ ] The app validates the entered `Base URL` and `API Key` with `GET /api/health` using `Authorization: Bearer <API_KEY>`
-- [ ] Invalid configuration shows a clear error and does not enter the app
-- [ ] Valid configuration is persisted locally and the next app launch skips setup
-- [ ] After successful setup, the app opens directly into the initial tab shell with `Home` selected
+- [x] A fresh install opens into the native `Setup Flow`
+- [x] The app validates the entered `Base URL` and `API Key` with `GET /api/health` using `Authorization: Bearer <API_KEY>`
+- [x] Invalid configuration shows a clear error and does not enter the app
+- [x] Valid configuration is persisted locally and the next app launch skips setup
+- [x] After successful setup, the app opens directly into the initial tab shell with `Home` selected
 
 ### 2. Initial tab shell and authorized client
 
 - Type: AFK
-- Blocked by: 1
+- Blocked by: None
+- Status: Done
 
 #### What to build
 
@@ -38,16 +40,17 @@ Build the initial native app shell with the `Home Tab` and `Remote` tab, backed 
 
 #### Acceptance criteria
 
-- [ ] After setup, the app shows exactly two tabs: `Home` and `Remote`
-- [ ] `Home` is the default selected tab on app start
-- [ ] The shared client reads the stored `Base URL` and `API Key` for every API request
-- [ ] The native client does not show a launch-time `Unlock Flow`
-- [ ] A missing or invalid stored configuration returns the user to the `Setup Flow`
+- [x] After setup, the app shows exactly two tabs: `Home` and `Remote`
+- [x] `Home` is the default selected tab on app start
+- [x] The shared client reads the stored `Base URL` and `API Key` for every API request
+- [x] The native client does not show a launch-time `Unlock Flow`
+- [x] A missing or invalid stored configuration returns the user to the `Setup Flow`
 
 ### 3. IR status preload from Home
 
 - Type: AFK
-- Blocked by: 2
+- Blocked by: None
+- Status: Ready
 
 #### What to build
 

@@ -34,14 +34,14 @@ class MainScreenViewModelTest {
   fun uiState_withoutStoredConfiguration_showsSetupFlow() = runTest {
     val viewModel = MainScreenViewModel(FakeSetupRepository())
 
-    assertEquals(MainScreenUiState.Setup(), viewModel.awaitSetupState())
+    assertEquals(MainScreenUiState.Setup(), viewModel.awaitState<MainScreenUiState.Setup>())
   }
 
   @Test
   fun uiState_withStoredConfiguration_showsHomeTab() = runTest {
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION))
 
-    assertEquals(MainScreenUiState.App(), viewModel.awaitAppState())
+    assertEquals(MainScreenUiState.App(), viewModel.awaitState<MainScreenUiState.App>())
   }
 
   @Test
@@ -55,7 +55,7 @@ class MainScreenViewModelTest {
     advanceUntilIdle()
 
     assertEquals(listOf(VALID_CONFIGURATION), repository.savedConfigurations)
-    assertEquals(MainScreenUiState.App(), viewModel.awaitAppState())
+    assertEquals(MainScreenUiState.App(), viewModel.awaitState<MainScreenUiState.App>())
   }
 
   @Test
@@ -68,7 +68,7 @@ class MainScreenViewModelTest {
     viewModel.submitSetup()
     advanceUntilIdle()
 
-    val setupState = viewModel.awaitSetupState()
+    val setupState = viewModel.awaitState<MainScreenUiState.Setup>()
     assertEquals("OpenHome rejected that Base URL or API Key.", setupState.errorMessage)
     assertTrue(repository.savedConfigurations.isEmpty())
   }
@@ -89,14 +89,23 @@ class MainScreenViewModelTest {
         isSaving = false,
         errorMessage = "Couldn't persist configuration.",
       ),
-      viewModel.awaitSetupState(),
+      viewModel.awaitState<MainScreenUiState.Setup>(),
     )
+  }
+
+  @Test
+  fun uiState_whenStoredConfigurationIsRemoved_returnsToSetupFlow() = runTest {
+    val repository = FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION)
+    val viewModel = MainScreenViewModel(repository)
+
+    assertEquals(MainScreenUiState.App(), viewModel.awaitState<MainScreenUiState.App>())
+    repository.updateConfiguration(null)
+
+    assertEquals(MainScreenUiState.Setup(), viewModel.awaitState<MainScreenUiState.Setup>())
   }
 }
 
-private suspend fun MainScreenViewModel.awaitSetupState(): MainScreenUiState.Setup = uiState.first { it is MainScreenUiState.Setup } as MainScreenUiState.Setup
-
-private suspend fun MainScreenViewModel.awaitAppState(): MainScreenUiState.App = uiState.first { it is MainScreenUiState.App } as MainScreenUiState.App
+private suspend inline fun <reified T : MainScreenUiState> MainScreenViewModel.awaitState(): T = uiState.first { it is T } as T
 
 private class FakeSetupRepository(
   initialConfiguration: StoredConfiguration? = null,
@@ -116,6 +125,10 @@ private class FakeSetupRepository(
       savedConfigurations += attemptedConfiguration
       configurationState.value = attemptedConfiguration
     }
+  }
+
+  fun updateConfiguration(configuration: StoredConfiguration?) {
+    configurationState.value = configuration
   }
 }
 

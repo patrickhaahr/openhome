@@ -11,12 +11,18 @@ import androidx.compose.ui.Modifier
 import com.example.openhome.theme.OpenhomeTheme
 
 class MainActivity : ComponentActivity() {
+  private val appContainer by lazy { OpenHomeAppContainer(applicationContext) }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
     enableEdgeToEdge()
     setContent {
-      OpenhomeTheme { Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() } }
+      OpenhomeTheme {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+          MainNavigation(setupRepository = appContainer.setupRepository)
+        }
+      }
     }
   }
 }

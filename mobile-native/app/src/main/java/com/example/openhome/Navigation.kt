@@ -8,10 +8,11 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.example.openhome.data.SetupRepository
 import com.example.openhome.ui.main.MainScreen
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(setupRepository: SetupRepository) {
   val backStack = rememberNavBackStack(Main)
 
   NavDisplay(
@@ -20,7 +21,7 @@ fun MainNavigation() {
     entryProvider =
       entryProvider {
         entry<Main> {
-          MainScreen(modifier = Modifier.safeDrawingPadding().padding(16.dp))
+          MainScreen(setupRepository = setupRepository, modifier = Modifier.safeDrawingPadding().padding(16.dp))
         }
       },
   )
