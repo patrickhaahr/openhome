@@ -1,6 +1,8 @@
 package com.example.openhome.theme
 
+import android.annotation.SuppressLint
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -38,13 +40,20 @@ fun OpenhomeTheme(
 ) {
   val colorScheme =
     when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-        val context = LocalContext.current
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-      }
+      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicColorScheme(darkTheme)
       darkTheme -> DarkColorScheme
       else -> LightColorScheme
     }
 
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }
+
+@RequiresApi(Build.VERSION_CODES.S)
+@SuppressLint("NewApi")
+@Composable
+private fun dynamicColorScheme(darkTheme: Boolean) =
+  if (darkTheme) {
+    dynamicDarkColorScheme(LocalContext.current)
+  } else {
+    dynamicLightColorScheme(LocalContext.current)
+  }

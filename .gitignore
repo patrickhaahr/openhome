@@ -4,6 +4,10 @@ target
 .opencode
 gen/
 data
+!mobile-native/app/src/main/java/com/example/openhome/data/
+!mobile-native/app/src/main/java/com/example/openhome/data/**
+!mobile-native/app/src/test/java/com/example/openhome/data/
+!mobile-native/app/src/test/java/com/example/openhome/data/**
 package-lock.json
 .env
 .direnv/
