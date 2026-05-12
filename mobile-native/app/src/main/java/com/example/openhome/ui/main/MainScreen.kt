@@ -33,14 +33,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.openhome.data.IrRepository
+import com.example.openhome.data.IrState
+import com.example.openhome.data.IrStatus
 import com.example.openhome.data.SetupRepository
 import com.example.openhome.theme.OpenhomeTheme
 
 @Composable
 fun MainScreen(
   setupRepository: SetupRepository,
+  irRepository: IrRepository,
   modifier: Modifier = Modifier,
-  viewModel: MainScreenViewModel = viewModel(factory = mainScreenViewModelFactory(setupRepository)),
+  viewModel: MainScreenViewModel = viewModel(factory = mainScreenViewModelFactory(setupRepository, irRepository)),
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   MainScreenContent(
@@ -49,6 +53,7 @@ fun MainScreen(
     onApiKeyChanged = viewModel::onApiKeyChanged,
     onSubmitSetup = viewModel::submitSetup,
     onTabSelected = viewModel::onTabSelected,
+    onRetryIrStatus = viewModel::retryIrStatus,
     modifier = modifier,
   )
 }
@@ -60,12 +65,13 @@ internal fun MainScreenContent(
   onApiKeyChanged: (String) -> Unit,
   onSubmitSetup: () -> Unit,
   onTabSelected: (TopLevelTab) -> Unit,
+  onRetryIrStatus: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   when (state) {
     MainScreenUiState.Loading -> LoadingScreen(modifier)
     is MainScreenUiState.Setup -> SetupScreen(state, onBaseUrlChanged, onApiKeyChanged, onSubmitSetup, modifier)
-    is MainScreenUiState.App -> AppShell(state, onTabSelected, modifier)
+    is MainScreenUiState.App -> AppShell(state, onTabSelected, onRetryIrStatus, modifier)
   }
 }
 
@@ -131,7 +137,12 @@ private fun SetupScreen(
 }
 
 @Composable
-private fun AppShell(state: MainScreenUiState.App, onTabSelected: (TopLevelTab) -> Unit, modifier: Modifier = Modifier) {
+private fun AppShell(
+  state: MainScreenUiState.App,
+  onTabSelected: (TopLevelTab) -> Unit,
+  onRetryIrStatus: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Scaffold(
     modifier = modifier.fillMaxSize(),
     bottomBar = {
@@ -143,27 +154,100 @@ private fun AppShell(state: MainScreenUiState.App, onTabSelected: (TopLevelTab) 
     },
   ) { innerPadding ->
     Column(
-      modifier = Modifier.fillMaxSize().padding(innerPadding).padding(24.dp),
-      verticalArrangement = Arrangement.Center,
+      modifier = Modifier.fillMaxSize().padding(innerPadding).padding(24.dp).verticalScroll(rememberScrollState()),
+      verticalArrangement = Arrangement.spacedBy(24.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      Text(text = state.selectedTab.label, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-      Text(text = state.selectedTab.description, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-      if (state.selectedTab == TopLevelTab.Remote) {
-        RemoteButtonLayout(modifier = Modifier.fillMaxWidth().padding(top = 24.dp))
+      when (state.selectedTab) {
+        TopLevelTab.Home -> HomeTab(irState = state.irState, onRetryIrStatus = onRetryIrStatus)
+        TopLevelTab.Remote -> RemoteTab(irState = state.irState, onRetryIrStatus = onRetryIrStatus)
       }
     }
   }
 }
 
 @Composable
-private fun RemoteButtonLayout(modifier: Modifier = Modifier) {
+private fun HomeTab(irState: IrState, onRetryIrStatus: () -> Unit, modifier: Modifier = Modifier) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    TabHeader(title = TopLevelTab.Home.label, description = "OpenHome is configured and ready.")
+    when (irState) {
+      IrState.Idle, IrState.Loading -> IrLoadingState(message = "Loading shared IR status for Home and Remote.")
+      is IrState.Error -> IrErrorState(message = irState.message, onRetryIrStatus = onRetryIrStatus)
+      is IrState.Loaded -> IrLoadedState(status = irState.status)
+    }
+  }
+}
+
+@Composable
+private fun RemoteTab(irState: IrState, onRetryIrStatus: () -> Unit, modifier: Modifier = Modifier) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    TabHeader(
+      title = TopLevelTab.Remote.label,
+      description = "This tab reflects the shared IR state preload before command sending is added.",
+    )
+
+    when (irState) {
+      IrState.Idle, IrState.Loading -> IrLoadingState(message = "Loading the IR remote state.")
+      is IrState.Error -> IrErrorState(message = irState.message, onRetryIrStatus = onRetryIrStatus)
+      is IrState.Loaded -> {
+        IrLoadedState(status = irState.status)
+        Text(
+          text = "Command sending is added in the next slice, so the full remote stays visible while using the shared availability state.",
+          style = MaterialTheme.typography.bodyMedium,
+          textAlign = TextAlign.Center,
+        )
+      }
+    }
+
+    RemoteButtonLayout(modifier = Modifier.fillMaxWidth(), irState = irState)
+  }
+}
+
+@Composable
+private fun TabHeader(title: String, description: String, modifier: Modifier = Modifier) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(text = title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+    Text(text = description, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+  }
+}
+
+@Composable
+private fun IrLoadingState(message: String, modifier: Modifier = Modifier) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    CircularProgressIndicator()
+    Text(text = message, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+  }
+}
+
+@Composable
+private fun IrErrorState(message: String, onRetryIrStatus: () -> Unit, modifier: Modifier = Modifier) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(text = message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+    OutlinedButton(onClick = onRetryIrStatus) {
+      Text("Retry IR status")
+    }
+  }
+}
+
+@Composable
+private fun IrLoadedState(status: IrStatus, modifier: Modifier = Modifier) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(text = status.message, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+    Text(text = availableCommandsText(status.availableCommands), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+  }
+}
+
+@Composable
+private fun RemoteButtonLayout(irState: IrState, modifier: Modifier = Modifier) {
+  val isLoaded = irState is IrState.Loaded
+  val availableCommands = (irState as? IrState.Loaded)?.status?.availableCommands.orEmpty()
+
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     REMOTE_BUTTON_ROWS.forEach { buttonRow ->
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        buttonRow.forEach { label ->
+        buttonRow.forEach { button ->
           OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.weight(1f)) {
-            Text(text = label, textAlign = TextAlign.Center)
+            Text(text = remoteButtonLabel(button, availableCommands, isLoaded), textAlign = TextAlign.Center)
           }
         }
       }
@@ -178,25 +262,42 @@ private val TopLevelTab.label: String
       TopLevelTab.Remote -> "Remote"
     }
 
-private val TopLevelTab.description: String
-  get() =
-    when (this) {
-      TopLevelTab.Home -> "OpenHome is configured and ready."
-      TopLevelTab.Remote -> "Infrared commands stay visible and disabled until the app loads remote state."
-    }
-
-private fun mainScreenViewModelFactory(setupRepository: SetupRepository) =
+private fun mainScreenViewModelFactory(setupRepository: SetupRepository, irRepository: IrRepository) =
   viewModelFactory {
     initializer {
-      MainScreenViewModel(setupRepository = setupRepository)
+      MainScreenViewModel(setupRepository = setupRepository, irRepository = irRepository)
     }
+  }
+
+private fun availableCommandsText(availableCommands: Set<String>): String =
+  if (availableCommands.isEmpty()) {
+    "The Axum API did not report any available IR commands."
+  } else {
+    "Available commands: ${availableCommands.joinToString(", ")}."
+  }
+
+private fun remoteButtonLabel(button: RemoteButtonDefinition, availableCommands: Set<String>, isLoaded: Boolean): String =
+  if (isLoaded && button.command !in availableCommands) {
+    "${button.label}\nUnavailable"
+  } else {
+    button.label
   }
 
 private val REMOTE_BUTTON_ROWS =
   listOf(
-    listOf("Power", "Bluetooth", "Optical"),
-    listOf("Mute", "Volume -", "Volume +"),
+    listOf(
+      RemoteButtonDefinition(command = "power", label = "Power"),
+      RemoteButtonDefinition(command = "bluetooth", label = "Bluetooth"),
+      RemoteButtonDefinition(command = "optical", label = "Optical"),
+    ),
+    listOf(
+      RemoteButtonDefinition(command = "mute", label = "Mute"),
+      RemoteButtonDefinition(command = "volume-down", label = "Volume -"),
+      RemoteButtonDefinition(command = "volume-up", label = "Volume +"),
+    ),
   )
+
+private data class RemoteButtonDefinition(val command: String, val label: String)
 
 @Preview(showBackground = true)
 @Composable
@@ -208,6 +309,7 @@ fun SetupScreenPreview() {
       onApiKeyChanged = {},
       onSubmitSetup = {},
       onTabSelected = {},
+      onRetryIrStatus = {},
     )
   }
 }
@@ -216,6 +318,13 @@ fun SetupScreenPreview() {
 @Composable
 fun AppShellPreview() {
   OpenhomeTheme {
-    MainScreenContent(state = MainScreenUiState.App(), onBaseUrlChanged = {}, onApiKeyChanged = {}, onSubmitSetup = {}, onTabSelected = {})
+    MainScreenContent(
+      state = MainScreenUiState.App(irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth", "optical")))),
+      onBaseUrlChanged = {},
+      onApiKeyChanged = {},
+      onSubmitSetup = {},
+      onTabSelected = {},
+      onRetryIrStatus = {},
+    )
   }
 }

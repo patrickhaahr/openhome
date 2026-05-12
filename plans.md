@@ -50,7 +50,7 @@ Build the initial native app shell with the `Home Tab` and `Remote` tab, backed 
 
 - Type: AFK
 - Blocked by: None
-- Status: Ready
+- Status: Done
 
 #### What to build
 
@@ -58,12 +58,12 @@ Build a shared IR state source that starts from `Home` by calling `GET /api/ir`,
 
 #### Acceptance criteria
 
-- [ ] The `Home Tab` triggers `GET /api/ir` when the authorized app opens
-- [ ] The app stores the result in one shared IR state source used by both `Home` and `Remote`
-- [ ] The `Remote` tab retries `GET /api/ir` automatically when entered after a failed preload
-- [ ] Manual retry is available when IR status fails to load
-- [ ] IR buttons remain disabled until `GET /api/ir` succeeds
-- [ ] Commands missing from `available_commands` remain visible but disabled
+- [x] The `Home Tab` triggers `GET /api/ir` when the authorized app opens
+- [x] The app stores the result in one shared IR state source used by both `Home` and `Remote`
+- [x] The `Remote` tab retries `GET /api/ir` automatically when entered after a failed preload
+- [x] Manual retry is available when IR status fails to load
+- [x] IR buttons remain disabled until `GET /api/ir` succeeds
+- [x] Commands missing from `available_commands` remain visible but disabled
 
 ### 4. Home Remote Controls
 

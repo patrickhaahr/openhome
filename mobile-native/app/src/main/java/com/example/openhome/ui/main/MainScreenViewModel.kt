@@ -2,27 +2,49 @@ package com.example.openhome.ui.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.openhome.data.IrRepository
+import com.example.openhome.data.IrState
 import com.example.openhome.data.SetupRepository
+import com.example.openhome.data.StoredConfiguration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class MainScreenViewModel(private val setupRepository: SetupRepository) : ViewModel() {
+class MainScreenViewModel(
+  private val setupRepository: SetupRepository,
+  private val irRepository: IrRepository,
+) : ViewModel() {
   private val setupForm = MutableStateFlow(SetupForm())
   private val isSaving = MutableStateFlow(false)
   private val setupErrorMessage = MutableStateFlow<String?>(null)
   private val selectedTab = MutableStateFlow(TopLevelTab.Home)
+  private var activeConfiguration: StoredConfiguration? = null
 
-  val uiState: StateFlow<MainScreenUiState> =
+  init {
+    observeConfiguration()
+  }
+
+  private val baseUiState: StateFlow<MainScreenUiState> =
     combine(setupRepository.configuration, setupForm, isSaving, setupErrorMessage, selectedTab) { configuration, form, saving, errorMessage, currentTab ->
         if (configuration == null) {
           MainScreenUiState.Setup(baseUrl = form.baseUrl, apiKey = form.apiKey, isSaving = saving, errorMessage = errorMessage)
         } else {
           MainScreenUiState.App(selectedTab = currentTab)
+        }
+      }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
+
+  val uiState: StateFlow<MainScreenUiState> =
+    combine(baseUiState, irRepository.state) { state, irState ->
+        when (state) {
+          MainScreenUiState.Loading -> MainScreenUiState.Loading
+          is MainScreenUiState.Setup -> state
+          is MainScreenUiState.App -> state.copy(irState = irState)
         }
       }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
@@ -62,11 +84,49 @@ class MainScreenViewModel(private val setupRepository: SetupRepository) : ViewMo
 
   fun onTabSelected(tab: TopLevelTab) {
     selectedTab.value = tab
+    if (tab == TopLevelTab.Remote && irRepository.state.value is IrState.Error) {
+      refreshIrStatus()
+    }
+  }
+
+  fun retryIrStatus() {
+    refreshIrStatus()
   }
 
   private fun updateSetupForm(transform: SetupForm.() -> SetupForm) {
     setupForm.value = setupForm.value.transform()
     setupErrorMessage.value = null
+  }
+
+  private fun observeConfiguration() {
+    viewModelScope.launch {
+      setupRepository.configuration.collect { configuration ->
+        val previousConfiguration = activeConfiguration
+        if (configuration == previousConfiguration) {
+          return@collect
+        }
+
+        activeConfiguration = configuration
+
+        if (previousConfiguration != null || configuration == null) {
+          irRepository.reset()
+        }
+
+        if (configuration != null) {
+          refreshIrStatus()
+        }
+      }
+    }
+  }
+
+  private fun refreshIrStatus() {
+    if (activeConfiguration == null || irRepository.state.value is IrState.Loading) {
+      return
+    }
+
+    viewModelScope.launch {
+      irRepository.refresh()
+    }
   }
 
   private fun showSetupError(throwable: Throwable) {
@@ -89,7 +149,10 @@ sealed interface MainScreenUiState {
     val errorMessage: String? = null,
   ) : MainScreenUiState
 
-  data class App(val selectedTab: TopLevelTab = TopLevelTab.Home) : MainScreenUiState
+  data class App(
+    val selectedTab: TopLevelTab = TopLevelTab.Home,
+    val irState: IrState = IrState.Idle,
+  ) : MainScreenUiState
 }
 
 enum class TopLevelTab {
