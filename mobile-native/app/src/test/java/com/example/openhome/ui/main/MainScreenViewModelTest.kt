@@ -40,7 +40,7 @@ class MainScreenViewModelTest {
   fun uiState_withoutStoredConfiguration_showsSetupFlow() = runTest {
     val viewModel = MainScreenViewModel(FakeSetupRepository(), FakeIrRepository())
 
-    assertEquals(MainScreenUiState.Setup(), viewModel.awaitState<MainScreenUiState.Setup>())
+    assertEquals(configurationFormState(), viewModel.awaitState<MainScreenUiState.ConfigurationForm>())
   }
 
   @Test
@@ -80,7 +80,7 @@ class MainScreenViewModelTest {
     viewModel.submitSetup()
     advanceUntilIdle()
 
-    val setupState = viewModel.awaitState<MainScreenUiState.Setup>()
+    val setupState = viewModel.awaitState<MainScreenUiState.ConfigurationForm>()
     assertEquals("OpenHome rejected that Base URL or API Key.", setupState.errorMessage)
     assertTrue(repository.savedConfigurations.isEmpty())
   }
@@ -95,13 +95,13 @@ class MainScreenViewModelTest {
     advanceUntilIdle()
 
     assertEquals(
-      MainScreenUiState.Setup(
+      configurationFormState(
         baseUrl = VALID_CONFIGURATION.baseUrl,
         apiKey = VALID_CONFIGURATION.apiKey,
         isSaving = false,
         errorMessage = "Couldn't persist configuration.",
       ),
-      viewModel.awaitState<MainScreenUiState.Setup>(),
+      viewModel.awaitState<MainScreenUiState.ConfigurationForm>(),
     )
   }
 
@@ -117,7 +117,7 @@ class MainScreenViewModelTest {
     repository.updateConfiguration(null)
     advanceUntilIdle()
 
-    assertEquals(MainScreenUiState.Setup(), viewModel.awaitState<MainScreenUiState.Setup>())
+    assertEquals(configurationFormState(), viewModel.awaitState<MainScreenUiState.ConfigurationForm>())
     assertEquals(1, irRepository.resetCallCount)
   }
 
@@ -142,6 +142,101 @@ class MainScreenViewModelTest {
     assertEquals(
       appState(
         irState = IrState.Loaded(IrStatus(message = "New server ready", availableCommands = setOf("bluetooth"))),
+      ),
+      viewModel.awaitState<MainScreenUiState.App>(),
+    )
+  }
+
+  @Test
+  fun openReconfiguration_withStoredConfiguration_showsPrefilledForm() = runTest {
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), FakeIrRepository())
+
+    advanceUntilIdle()
+    viewModel.openReconfiguration()
+    advanceUntilIdle()
+
+    assertEquals(
+      configurationFormState(mode = ConfigurationFormMode.Reconfigure, baseUrl = VALID_CONFIGURATION.baseUrl, apiKey = VALID_CONFIGURATION.apiKey),
+      viewModel.awaitState<MainScreenUiState.ConfigurationForm>(),
+    )
+  }
+
+  @Test
+  fun cancelReconfiguration_returnsToPreviouslySelectedTab() = runTest {
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), FakeIrRepository())
+
+    advanceUntilIdle()
+    viewModel.onTabSelected(TopLevelTab.Remote)
+    viewModel.openReconfiguration()
+    advanceUntilIdle()
+    viewModel.onBaseUrlChanged(UPDATED_CONFIGURATION.baseUrl)
+    viewModel.onApiKeyChanged(UPDATED_CONFIGURATION.apiKey)
+    viewModel.cancelReconfiguration()
+    advanceUntilIdle()
+
+    assertEquals(appState(selectedTab = TopLevelTab.Remote), viewModel.awaitState<MainScreenUiState.App>())
+  }
+
+  @Test
+  fun submitReconfiguration_withInvalidConfiguration_keepsPreviousConfigurationActive() = runTest {
+    val repository =
+      FakeSetupRepository(
+        initialConfiguration = VALID_CONFIGURATION,
+        saveResult = Result.failure(IllegalStateException("OpenHome rejected that Base URL or API Key.")),
+      )
+    val irRepository = FakeIrRepository()
+    val viewModel = MainScreenViewModel(repository, irRepository)
+
+    advanceUntilIdle()
+    viewModel.openReconfiguration()
+    advanceUntilIdle()
+    viewModel.onBaseUrlChanged(UPDATED_CONFIGURATION.baseUrl)
+    viewModel.onApiKeyChanged("wrong")
+    viewModel.submitSetup()
+    advanceUntilIdle()
+
+    assertEquals(
+      configurationFormState(
+        mode = ConfigurationFormMode.Reconfigure,
+        baseUrl = UPDATED_CONFIGURATION.baseUrl,
+        apiKey = "wrong",
+        errorMessage = "OpenHome rejected that Base URL or API Key.",
+      ),
+      viewModel.awaitState<MainScreenUiState.ConfigurationForm>(),
+    )
+    assertEquals(VALID_CONFIGURATION, repository.configuration.first())
+    assertEquals(1, irRepository.refreshCallCount)
+  }
+
+  @Test
+  fun submitReconfiguration_withValidConfiguration_updatesConfigAndReturnsToApp() = runTest {
+    val repository = FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION)
+    val irRepository =
+      FakeIrRepository(
+        refreshResults =
+          mutableListOf(
+            Result.success(DEFAULT_IR_STATUS),
+            Result.success(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+          ),
+      )
+    val viewModel = MainScreenViewModel(repository, irRepository)
+
+    advanceUntilIdle()
+    viewModel.onTabSelected(TopLevelTab.Remote)
+    viewModel.openReconfiguration()
+    advanceUntilIdle()
+    viewModel.onBaseUrlChanged(UPDATED_CONFIGURATION.baseUrl)
+    viewModel.onApiKeyChanged(UPDATED_CONFIGURATION.apiKey)
+    viewModel.submitSetup()
+    advanceUntilIdle()
+
+    assertEquals(listOf(UPDATED_CONFIGURATION), repository.savedConfigurations)
+    assertEquals(UPDATED_CONFIGURATION, repository.configuration.first())
+    assertEquals(2, irRepository.refreshCallCount)
+    assertEquals(
+      appState(
+        selectedTab = TopLevelTab.Remote,
+        irState = IrState.Loaded(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
@@ -513,6 +608,21 @@ private fun appState(
     irState = irState,
     homeRemoteControlsState = homeRemoteControlsState,
     remoteControlsState = remoteControlsState,
+  )
+
+private fun configurationFormState(
+  mode: ConfigurationFormMode = ConfigurationFormMode.Setup,
+  baseUrl: String = "",
+  apiKey: String = "",
+  isSaving: Boolean = false,
+  errorMessage: String? = null,
+): MainScreenUiState.ConfigurationForm =
+  MainScreenUiState.ConfigurationForm(
+    mode = mode,
+    baseUrl = baseUrl,
+    apiKey = apiKey,
+    isSaving = isSaving,
+    errorMessage = errorMessage,
   )
 
 private val VALID_CONFIGURATION = StoredConfiguration(baseUrl = "http://192.168.1.20:8000", apiKey = "secret")

@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,6 +22,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -54,6 +57,8 @@ fun MainScreen(
     onBaseUrlChanged = viewModel::onBaseUrlChanged,
     onApiKeyChanged = viewModel::onApiKeyChanged,
     onSubmitSetup = viewModel::submitSetup,
+    onOpenReconfiguration = viewModel::openReconfiguration,
+    onCancelReconfiguration = viewModel::cancelReconfiguration,
     onTabSelected = viewModel::onTabSelected,
     onRetryIrStatus = viewModel::retryIrStatus,
     onSendHomeRemoteCommand = viewModel::sendHomeRemoteCommand,
@@ -68,6 +73,8 @@ internal fun MainScreenContent(
   onBaseUrlChanged: (String) -> Unit,
   onApiKeyChanged: (String) -> Unit,
   onSubmitSetup: () -> Unit,
+  onOpenReconfiguration: () -> Unit,
+  onCancelReconfiguration: () -> Unit,
   onTabSelected: (TopLevelTab) -> Unit,
   onRetryIrStatus: () -> Unit,
   onSendHomeRemoteCommand: (String) -> Unit,
@@ -76,8 +83,9 @@ internal fun MainScreenContent(
 ) {
   when (state) {
     MainScreenUiState.Loading -> LoadingScreen(modifier)
-    is MainScreenUiState.Setup -> SetupScreen(state, onBaseUrlChanged, onApiKeyChanged, onSubmitSetup, modifier)
-    is MainScreenUiState.App -> AppShell(state, onTabSelected, onRetryIrStatus, onSendHomeRemoteCommand, onSendRemoteCommand, modifier)
+    is MainScreenUiState.ConfigurationForm ->
+      ConfigurationFormScreen(state, onBaseUrlChanged, onApiKeyChanged, onSubmitSetup, onCancelReconfiguration, modifier)
+    is MainScreenUiState.App -> AppShell(state, onOpenReconfiguration, onTabSelected, onRetryIrStatus, onSendHomeRemoteCommand, onSendRemoteCommand, modifier)
   }
 }
 
@@ -89,14 +97,50 @@ private fun LoadingScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SetupScreen(
-  state: MainScreenUiState.Setup,
+private fun ConfigurationFormScreen(
+  state: MainScreenUiState.ConfigurationForm,
   onBaseUrlChanged: (String) -> Unit,
   onApiKeyChanged: (String) -> Unit,
   onSubmitSetup: () -> Unit,
+  onCancelReconfiguration: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val isEditingEnabled = !state.isSaving
+  val screenConfig = state.mode.screenConfig()
+
+  SetupForm(
+    title = screenConfig.title,
+    description = screenConfig.description,
+    baseUrl = state.baseUrl,
+    apiKey = state.apiKey,
+    isSaving = state.isSaving,
+    errorMessage = state.errorMessage,
+    submitLabel = screenConfig.submitLabel,
+    onBaseUrlChanged = onBaseUrlChanged,
+    onApiKeyChanged = onApiKeyChanged,
+    onSubmit = onSubmitSetup,
+    secondaryActionLabel = screenConfig.secondaryActionLabel,
+    onSecondaryAction = screenConfig.secondaryAction(onCancelReconfiguration),
+    modifier = modifier,
+  )
+}
+
+@Composable
+private fun SetupForm(
+  title: String,
+  description: String,
+  baseUrl: String,
+  apiKey: String,
+  isSaving: Boolean,
+  errorMessage: String?,
+  submitLabel: String,
+  onBaseUrlChanged: (String) -> Unit,
+  onApiKeyChanged: (String) -> Unit,
+  onSubmit: () -> Unit,
+  modifier: Modifier = Modifier,
+  secondaryActionLabel: String? = null,
+  onSecondaryAction: (() -> Unit)? = null,
+) {
+  val isEditingEnabled = !isSaving
 
   Column(
     modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -104,13 +148,10 @@ private fun SetupScreen(
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Column(modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-      Text(text = "Set up OpenHome", style = MaterialTheme.typography.headlineMedium)
-      Text(
-        text = "Enter the Axum API Base URL and API Key. The app validates them with /api/health before saving.",
-        style = MaterialTheme.typography.bodyMedium,
-      )
+      Text(text = title, style = MaterialTheme.typography.headlineMedium)
+      Text(text = description, style = MaterialTheme.typography.bodyMedium)
       OutlinedTextField(
-        value = state.baseUrl,
+        value = baseUrl,
         onValueChange = onBaseUrlChanged,
         modifier = Modifier.fillMaxWidth(),
         label = { Text("Base URL") },
@@ -119,7 +160,7 @@ private fun SetupScreen(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
       )
       OutlinedTextField(
-        value = state.apiKey,
+        value = apiKey,
         onValueChange = onApiKeyChanged,
         modifier = Modifier.fillMaxWidth(),
         label = { Text("API Key") },
@@ -127,24 +168,46 @@ private fun SetupScreen(
         enabled = isEditingEnabled,
         visualTransformation = PasswordVisualTransformation(),
       )
-      if (state.errorMessage != null) {
-        Text(text = state.errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+      if (errorMessage != null) {
+        Text(text = errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
       }
-      Button(onClick = onSubmitSetup, enabled = isEditingEnabled, modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-          if (state.isSaving) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+      if (secondaryActionLabel != null && onSecondaryAction != null) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+          OutlinedButton(onClick = onSecondaryAction, enabled = isEditingEnabled, modifier = Modifier.weight(1f).testTag("configuration-cancel")) {
+            Text(secondaryActionLabel)
           }
-          Text(if (state.isSaving) "Validating..." else "Validate and continue")
+          SubmitSetupButton(
+            label = submitLabel,
+            isSaving = isSaving,
+            enabled = isEditingEnabled,
+            onSubmit = onSubmit,
+            modifier = Modifier.weight(1f),
+          )
         }
+      } else {
+        SubmitSetupButton(label = submitLabel, isSaving = isSaving, enabled = isEditingEnabled, onSubmit = onSubmit, modifier = Modifier.fillMaxWidth())
       }
     }
   }
 }
 
 @Composable
+private fun SubmitSetupButton(label: String, isSaving: Boolean, enabled: Boolean, onSubmit: () -> Unit, modifier: Modifier = Modifier) {
+  Button(onClick = onSubmit, enabled = enabled, modifier = modifier) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      if (isSaving) {
+        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+      }
+      Text(if (isSaving) "Validating..." else label)
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun AppShell(
   state: MainScreenUiState.App,
+  onOpenReconfiguration: () -> Unit,
   onTabSelected: (TopLevelTab) -> Unit,
   onRetryIrStatus: () -> Unit,
   onSendHomeRemoteCommand: (String) -> Unit,
@@ -153,6 +216,16 @@ private fun AppShell(
 ) {
   Scaffold(
     modifier = modifier.fillMaxSize(),
+    topBar = {
+      TopAppBar(
+        title = { Text("OpenHome") },
+        actions = {
+          TextButton(onClick = onOpenReconfiguration, modifier = Modifier.testTag("open-reconfiguration")) {
+            Text("Reconfigure")
+          }
+        },
+      )
+    },
     bottomBar = {
       NavigationBar {
         TopLevelTab.entries.forEach { tab ->
@@ -406,15 +479,48 @@ private fun remoteErrorText(state: RemoteControlsState, controls: List<RemoteBut
   return "$errorLabel failed: $errorMessage"
 }
 
+private fun ConfigurationFormMode.screenConfig(): ConfigurationScreenConfig =
+  when (this) {
+    ConfigurationFormMode.Setup ->
+      ConfigurationScreenConfig(
+        title = "Set up OpenHome",
+        description = "Enter the Axum API Base URL and API Key. The app validates them with /api/health before saving.",
+        submitLabel = "Validate and continue",
+      )
+    ConfigurationFormMode.Reconfigure ->
+      ConfigurationScreenConfig(
+        title = "Update configuration",
+        description = "Replace the stored Axum API Base URL and API Key. The current configuration stays active until /api/health succeeds.",
+        submitLabel = "Save configuration",
+        secondaryActionLabel = "Cancel",
+      )
+  }
+
+private data class ConfigurationScreenConfig(
+  val title: String,
+  val description: String,
+  val submitLabel: String,
+  val secondaryActionLabel: String? = null,
+) {
+  fun secondaryAction(onCancelReconfiguration: () -> Unit): (() -> Unit)? =
+    if (secondaryActionLabel == null) {
+      null
+    } else {
+      onCancelReconfiguration
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun SetupScreenPreview() {
   OpenhomeTheme {
     MainScreenContent(
-      state = MainScreenUiState.Setup(baseUrl = "http://192.168.1.20:8000", apiKey = "secret"),
+      state = MainScreenUiState.ConfigurationForm(mode = ConfigurationFormMode.Setup, baseUrl = "http://192.168.1.20:8000", apiKey = "secret"),
       onBaseUrlChanged = {},
       onApiKeyChanged = {},
       onSubmitSetup = {},
+      onOpenReconfiguration = {},
+      onCancelReconfiguration = {},
       onTabSelected = {},
       onRetryIrStatus = {},
       onSendHomeRemoteCommand = {},
@@ -432,6 +538,8 @@ fun AppShellPreview() {
       onBaseUrlChanged = {},
       onApiKeyChanged = {},
       onSubmitSetup = {},
+      onOpenReconfiguration = {},
+      onCancelReconfiguration = {},
       onTabSelected = {},
       onRetryIrStatus = {},
       onSendHomeRemoteCommand = {},

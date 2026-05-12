@@ -107,6 +107,7 @@ Build the dedicated `Remote` tab as a fixed client-owned `IR Remote` using the v
 
 - Type: AFK
 - Blocked by: 2
+- Status: Done
 
 #### What to build
 
@@ -114,11 +115,11 @@ Add an in-app way to reopen configuration, change the stored `Base URL` and `API
 
 #### Acceptance criteria
 
-- [ ] A user can reopen configuration after initial setup
-- [ ] Saving changes revalidates the new `Base URL` and `API Key` with `GET /api/health`
-- [ ] Invalid replacement settings are rejected and the previous working configuration remains active
-- [ ] Valid replacement settings become the active configuration for future API calls
-- [ ] After successful reconfiguration, the app returns to the authorized tab shell
+- [x] A user can reopen configuration after initial setup
+- [x] Saving changes revalidates the new `Base URL` and `API Key` with `GET /api/health`
+- [x] Invalid replacement settings are rejected and the previous working configuration remains active
+- [x] Valid replacement settings become the active configuration for future API calls
+- [x] After successful reconfiguration, the app returns to the authorized tab shell
 
 ## Notes
 

@@ -25,7 +25,7 @@ class MainScreenTest {
 
   @Test
   fun setupFlow_showsBaseUrlAndApiKeyFields() {
-    renderScreen(MainScreenUiState.Setup())
+    renderScreen(configurationFormState())
 
     composeTestRule.onNodeWithText("Set up OpenHome").assertExists()
     composeTestRule.onNodeWithText("Base URL").assertExists()
@@ -39,6 +39,23 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithText("Home").assertExists()
     composeTestRule.onNodeWithText("Remote").assertExists()
+    composeTestRule.onNodeWithTag("open-reconfiguration").assertExists()
+  }
+
+  @Test
+  fun reconfigureScreen_showsPrefilledFormAndCancelAction() {
+    renderScreen(
+      configurationFormState(
+        mode = ConfigurationFormMode.Reconfigure,
+        baseUrl = "https://openhome.example",
+        apiKey = "replacement",
+      ),
+    )
+
+    composeTestRule.onNodeWithText("Update configuration").assertExists()
+    composeTestRule.onNodeWithText("Save configuration").assertExists()
+    composeTestRule.onNodeWithTag("configuration-cancel").assertExists()
+    composeTestRule.onNodeWithText("https://openhome.example").assertExists()
   }
 
   @Test
@@ -183,6 +200,8 @@ class MainScreenTest {
         onBaseUrlChanged = {},
         onApiKeyChanged = {},
         onSubmitSetup = {},
+        onOpenReconfiguration = {},
+        onCancelReconfiguration = {},
         onTabSelected = {},
         onRetryIrStatus = {},
         onSendHomeRemoteCommand = onSendHomeRemoteCommand,
@@ -190,4 +209,11 @@ class MainScreenTest {
       )
     }
   }
+
+  private fun configurationFormState(
+    mode: ConfigurationFormMode = ConfigurationFormMode.Setup,
+    baseUrl: String = "",
+    apiKey: String = "",
+  ): MainScreenUiState.ConfigurationForm =
+    MainScreenUiState.ConfigurationForm(mode = mode, baseUrl = baseUrl, apiKey = apiKey)
 }

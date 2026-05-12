@@ -19,17 +19,25 @@ import java.net.UnknownHostException
 
 data class StoredConfiguration(val baseUrl: String, val apiKey: String)
 
+internal const val PREFERENCES_NAME = "openhome_configuration"
+internal const val BASE_URL_KEY = "base_url"
+internal const val API_KEY_KEY = "api_key"
+
 interface SetupRepository {
   val configuration: Flow<StoredConfiguration?>
 
   suspend fun validateAndSave(baseUrl: String, apiKey: String): Result<StoredConfiguration>
 }
 
-class DefaultSetupRepository(
-  context: Context,
+class DefaultSetupRepository internal constructor(
+  private val sharedPreferences: SharedPreferences,
   private val healthCheckClient: HealthCheckClient = DefaultHealthCheckClient(),
 ) : SetupRepository {
-  private val sharedPreferences = createEncryptedSharedPreferences(context)
+  constructor(
+    context: Context,
+    healthCheckClient: HealthCheckClient = DefaultHealthCheckClient(),
+  ) : this(sharedPreferences = createEncryptedSharedPreferences(context), healthCheckClient = healthCheckClient)
+
   private val configurationState = MutableStateFlow(sharedPreferences.readConfiguration())
 
   override val configuration: Flow<StoredConfiguration?> = configurationState.asStateFlow()
@@ -59,27 +67,32 @@ class DefaultSetupRepository(
     val parsedBaseUrl = URI(baseUrl)
     require(parsedBaseUrl.scheme == "http" || parsedBaseUrl.scheme == "https") { "Base URL must use http or https." }
     require(!parsedBaseUrl.host.isNullOrBlank()) { "Base URL must include a host." }
+    require(parsedBaseUrl.rawQuery == null && parsedBaseUrl.rawFragment == null) { "Base URL must not include a query or fragment." }
   }
 
-  private fun saveConfiguration(configuration: StoredConfiguration) {
-    sharedPreferences.edit().apply {
-      putString(BASE_URL_KEY, configuration.baseUrl)
-      putString(API_KEY_KEY, configuration.apiKey)
-      apply()
+  private suspend fun saveConfiguration(configuration: StoredConfiguration) {
+    withContext(Dispatchers.IO) {
+      val previousConfiguration = sharedPreferences.readConfiguration()
+      val saved = writeConfiguration(configuration)
+
+      if (!saved) {
+        writeConfiguration(previousConfiguration)
+        throw IllegalStateException("Couldn't persist configuration.")
+      }
     }
   }
 
-  private fun createEncryptedSharedPreferences(context: Context): SharedPreferences {
-    val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-
-    return EncryptedSharedPreferences.create(
-      PREFERENCES_NAME,
-      masterKeyAlias,
-      context,
-      EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-      EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
-  }
+  private fun writeConfiguration(configuration: StoredConfiguration?): Boolean =
+    sharedPreferences.edit().run {
+      if (configuration == null) {
+        remove(BASE_URL_KEY)
+        remove(API_KEY_KEY)
+      } else {
+        putString(BASE_URL_KEY, configuration.baseUrl)
+        putString(API_KEY_KEY, configuration.apiKey)
+      }
+      commit()
+    }
 
   private fun SharedPreferences.readConfiguration(): StoredConfiguration? {
     val storedBaseUrl = getString(BASE_URL_KEY, null)?.trim().orEmpty()
@@ -91,11 +104,18 @@ class DefaultSetupRepository(
     return runCatching { createStoredConfiguration(storedBaseUrl, storedApiKey) }.getOrNull()
   }
 
-  private companion object {
-    const val PREFERENCES_NAME = "openhome_configuration"
-    const val BASE_URL_KEY = "base_url"
-    const val API_KEY_KEY = "api_key"
-  }
+}
+
+private fun createEncryptedSharedPreferences(context: Context): SharedPreferences {
+  val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+
+  return EncryptedSharedPreferences.create(
+    PREFERENCES_NAME,
+    masterKeyAlias,
+    context,
+    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+  )
 }
 
 internal fun normalizeSetupInput(value: String): String = value.trim().removeSurrounding("\"").trim()
@@ -126,9 +146,9 @@ class DefaultHealthCheckClient : HealthCheckClient {
       }.recoverCatching { throwable ->
         when (throwable) {
           is UnknownHostException, is ConnectException, is SocketTimeoutException ->
-            throw IOException("Couldn't reach the Axum API. Check the Base URL and try again.", throwable)
+            throw IOException(REACHABILITY_ERROR_MESSAGE, throwable)
           is IOException -> throw throwable
-          else -> throw IOException("Couldn't reach the Axum API. Check the Base URL and try again.", throwable)
+          else -> throw IOException(REACHABILITY_ERROR_MESSAGE, throwable)
         }
       }
     }
@@ -139,5 +159,6 @@ class DefaultHealthCheckClient : HealthCheckClient {
     val SUCCESS_RESPONSE_CODES = 200..299
     const val CONNECT_TIMEOUT_MILLIS = 5_000
     const val READ_TIMEOUT_MILLIS = 5_000
+    const val REACHABILITY_ERROR_MESSAGE = "Couldn't reach the Axum API. Check the Base URL and try again."
   }
 }
