@@ -13,7 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 class MainScreenViewModel(
   private val setupRepository: SetupRepository,
@@ -23,6 +25,8 @@ class MainScreenViewModel(
   private val isSaving = MutableStateFlow(false)
   private val setupErrorMessage = MutableStateFlow<String?>(null)
   private val selectedTab = MutableStateFlow(TopLevelTab.Home)
+  private val homeRemoteControlsState = MutableStateFlow(HomeRemoteControlsState())
+  private val homeRemoteControlsGeneration = AtomicLong(0)
   private var activeConfiguration: StoredConfiguration? = null
 
   init {
@@ -40,11 +44,11 @@ class MainScreenViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
 
   val uiState: StateFlow<MainScreenUiState> =
-    combine(baseUiState, irRepository.state) { state, irState ->
+    combine(baseUiState, irRepository.state, homeRemoteControlsState) { state, irState, currentHomeRemoteControlsState ->
         when (state) {
           MainScreenUiState.Loading -> MainScreenUiState.Loading
           is MainScreenUiState.Setup -> state
-          is MainScreenUiState.App -> state.copy(irState = irState)
+          is MainScreenUiState.App -> state.copy(irState = irState, homeRemoteControlsState = currentHomeRemoteControlsState)
         }
       }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
@@ -93,6 +97,35 @@ class MainScreenViewModel(
     refreshIrStatus()
   }
 
+  fun sendHomeRemoteCommand(command: String) {
+    if (command !in HOME_REMOTE_CONTROL_COMMANDS || activeConfiguration == null) {
+      return
+    }
+
+    val irStatus = (irRepository.state.value as? IrState.Loaded)?.status ?: return
+    if (command !in irStatus.availableCommands || command in homeRemoteControlsState.value.sendingCommands) {
+      return
+    }
+
+    val generation = homeRemoteControlsGeneration.get()
+    startSendingHomeRemoteCommand(command)
+
+    viewModelScope.launch {
+      val result =
+        try {
+          irRepository.sendCommand(command)
+        } catch (exception: CancellationException) {
+          throw exception
+        } catch (throwable: Throwable) {
+          Result.failure(throwable)
+        }
+
+      result
+        .onSuccess { finishSendingHomeRemoteCommand(generation, command) }
+        .onFailure { throwable -> showHomeRemoteSendError(generation, command, throwable) }
+    }
+  }
+
   private fun updateSetupForm(transform: SetupForm.() -> SetupForm) {
     setupForm.value = setupForm.value.transform()
     setupErrorMessage.value = null
@@ -107,6 +140,7 @@ class MainScreenViewModel(
         }
 
         activeConfiguration = configuration
+        resetHomeRemoteControlsState()
 
         if (previousConfiguration != null || configuration == null) {
           irRepository.reset()
@@ -133,9 +167,45 @@ class MainScreenViewModel(
     setupErrorMessage.value = throwable.message ?: DEFAULT_VALIDATION_ERROR
   }
 
+  private fun startSendingHomeRemoteCommand(command: String) {
+    homeRemoteControlsState.update { currentState ->
+      currentState.copy(sendingCommands = currentState.sendingCommands + command, errorMessage = null, errorCommand = null)
+    }
+  }
+
+  private fun finishSendingHomeRemoteCommand(generation: Long, command: String) {
+    updateHomeRemoteControlsStateIfCurrent(generation) { currentState ->
+      currentState.copy(sendingCommands = currentState.sendingCommands - command)
+    }
+  }
+
+  private fun showHomeRemoteSendError(generation: Long, command: String, throwable: Throwable) {
+    updateHomeRemoteControlsStateIfCurrent(generation) { currentState ->
+      currentState.copy(
+        sendingCommands = currentState.sendingCommands - command,
+        errorMessage = throwable.message ?: DEFAULT_SEND_ERROR,
+        errorCommand = command,
+      )
+    }
+  }
+
+  private fun resetHomeRemoteControlsState() {
+    homeRemoteControlsGeneration.incrementAndGet()
+    homeRemoteControlsState.value = HomeRemoteControlsState()
+  }
+
+  private fun updateHomeRemoteControlsStateIfCurrent(generation: Long, transform: (HomeRemoteControlsState) -> HomeRemoteControlsState) {
+    if (homeRemoteControlsGeneration.get() != generation) {
+      return
+    }
+
+    homeRemoteControlsState.update(transform)
+  }
+
   private companion object {
     const val STOP_TIMEOUT_MILLIS = 5_000L
     const val DEFAULT_VALIDATION_ERROR = "Couldn't validate that configuration."
+    const val DEFAULT_SEND_ERROR = "Couldn't send that IR command."
   }
 }
 
@@ -152,8 +222,15 @@ sealed interface MainScreenUiState {
   data class App(
     val selectedTab: TopLevelTab = TopLevelTab.Home,
     val irState: IrState = IrState.Idle,
+    val homeRemoteControlsState: HomeRemoteControlsState = HomeRemoteControlsState(),
   ) : MainScreenUiState
 }
+
+data class HomeRemoteControlsState(
+  val sendingCommands: Set<String> = emptySet(),
+  val errorMessage: String? = null,
+  val errorCommand: String? = null,
+)
 
 enum class TopLevelTab {
   Home,

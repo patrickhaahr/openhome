@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +55,7 @@ fun MainScreen(
     onSubmitSetup = viewModel::submitSetup,
     onTabSelected = viewModel::onTabSelected,
     onRetryIrStatus = viewModel::retryIrStatus,
+    onSendHomeRemoteCommand = viewModel::sendHomeRemoteCommand,
     modifier = modifier,
   )
 }
@@ -66,12 +68,13 @@ internal fun MainScreenContent(
   onSubmitSetup: () -> Unit,
   onTabSelected: (TopLevelTab) -> Unit,
   onRetryIrStatus: () -> Unit,
+  onSendHomeRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   when (state) {
     MainScreenUiState.Loading -> LoadingScreen(modifier)
     is MainScreenUiState.Setup -> SetupScreen(state, onBaseUrlChanged, onApiKeyChanged, onSubmitSetup, modifier)
-    is MainScreenUiState.App -> AppShell(state, onTabSelected, onRetryIrStatus, modifier)
+    is MainScreenUiState.App -> AppShell(state, onTabSelected, onRetryIrStatus, onSendHomeRemoteCommand, modifier)
   }
 }
 
@@ -141,6 +144,7 @@ private fun AppShell(
   state: MainScreenUiState.App,
   onTabSelected: (TopLevelTab) -> Unit,
   onRetryIrStatus: () -> Unit,
+  onSendHomeRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Scaffold(
@@ -159,7 +163,14 @@ private fun AppShell(
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       when (state.selectedTab) {
-        TopLevelTab.Home -> HomeTab(irState = state.irState, onRetryIrStatus = onRetryIrStatus)
+        TopLevelTab.Home -> {
+          HomeTab(
+            irState = state.irState,
+            homeRemoteControlsState = state.homeRemoteControlsState,
+            onRetryIrStatus = onRetryIrStatus,
+            onSendHomeRemoteCommand = onSendHomeRemoteCommand,
+          )
+        }
         TopLevelTab.Remote -> RemoteTab(irState = state.irState, onRetryIrStatus = onRetryIrStatus)
       }
     }
@@ -167,13 +178,26 @@ private fun AppShell(
 }
 
 @Composable
-private fun HomeTab(irState: IrState, onRetryIrStatus: () -> Unit, modifier: Modifier = Modifier) {
+private fun HomeTab(
+  irState: IrState,
+  homeRemoteControlsState: HomeRemoteControlsState,
+  onRetryIrStatus: () -> Unit,
+  onSendHomeRemoteCommand: (String) -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
     TabHeader(title = TopLevelTab.Home.label, description = "OpenHome is configured and ready.")
     when (irState) {
       IrState.Idle, IrState.Loading -> IrLoadingState(message = "Loading shared IR status for Home and Remote.")
       is IrState.Error -> IrErrorState(message = irState.message, onRetryIrStatus = onRetryIrStatus)
-      is IrState.Loaded -> IrLoadedState(status = irState.status)
+      is IrState.Loaded -> {
+        IrLoadedState(status = irState.status)
+        HomeRemoteControls(
+          status = irState.status,
+          controlsState = homeRemoteControlsState,
+          onSendHomeRemoteCommand = onSendHomeRemoteCommand,
+        )
+      }
     }
   }
 }
@@ -238,6 +262,49 @@ private fun IrLoadedState(status: IrStatus, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun HomeRemoteControls(
+  status: IrStatus,
+  controlsState: HomeRemoteControlsState,
+  onSendHomeRemoteCommand: (String) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(text = "Quick controls", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      HOME_REMOTE_CONTROLS.forEach { control ->
+        val isSending = control.command in controlsState.sendingCommands
+        val isAvailable = control.command in status.availableCommands
+        OutlinedButton(
+          onClick = { onSendHomeRemoteCommand(control.command) },
+          enabled = isAvailable && !isSending,
+          modifier = Modifier.weight(1f).testTag("home-remote-${control.command}"),
+        ) {
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (isSending) {
+              CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("home-remote-${control.command}-progress"), strokeWidth = 2.dp)
+            }
+            Text(
+              text = remoteButtonLabel(control.command, control.label, status.availableCommands, true),
+              textAlign = TextAlign.Center,
+              modifier = Modifier.testTag("home-remote-${control.command}-label"),
+            )
+          }
+        }
+      }
+    }
+
+    if (controlsState.errorMessage != null) {
+      Text(
+        text = homeRemoteErrorText(controlsState, HOME_REMOTE_CONTROLS),
+        color = MaterialTheme.colorScheme.error,
+        style = MaterialTheme.typography.bodyMedium,
+        textAlign = TextAlign.Center,
+      )
+    }
+  }
+}
+
+@Composable
 private fun RemoteButtonLayout(irState: IrState, modifier: Modifier = Modifier) {
   val isLoaded = irState is IrState.Loaded
   val availableCommands = (irState as? IrState.Loaded)?.status?.availableCommands.orEmpty()
@@ -247,7 +314,7 @@ private fun RemoteButtonLayout(irState: IrState, modifier: Modifier = Modifier) 
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         buttonRow.forEach { button ->
           OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.weight(1f)) {
-            Text(text = remoteButtonLabel(button, availableCommands, isLoaded), textAlign = TextAlign.Center)
+            Text(text = remoteButtonLabel(button.command, button.label, availableCommands, isLoaded), textAlign = TextAlign.Center)
           }
         }
       }
@@ -276,11 +343,11 @@ private fun availableCommandsText(availableCommands: Set<String>): String =
     "Available commands: ${availableCommands.joinToString(", ")}."
   }
 
-private fun remoteButtonLabel(button: RemoteButtonDefinition, availableCommands: Set<String>, isLoaded: Boolean): String =
-  if (isLoaded && button.command !in availableCommands) {
-    "${button.label}\nUnavailable"
+private fun remoteButtonLabel(command: String, label: String, availableCommands: Set<String>, isLoaded: Boolean): String =
+  if (isLoaded && command !in availableCommands) {
+    "$label\nUnavailable"
   } else {
-    button.label
+    label
   }
 
 private val REMOTE_BUTTON_ROWS =
@@ -299,6 +366,12 @@ private val REMOTE_BUTTON_ROWS =
 
 private data class RemoteButtonDefinition(val command: String, val label: String)
 
+private fun homeRemoteErrorText(state: HomeRemoteControlsState, controls: List<HomeRemoteControlDefinition>): String {
+  val errorMessage = state.errorMessage.orEmpty()
+  val errorLabel = controls.firstOrNull { it.command == state.errorCommand }?.label ?: return errorMessage
+  return "$errorLabel failed: $errorMessage"
+}
+
 @Preview(showBackground = true)
 @Composable
 fun SetupScreenPreview() {
@@ -310,6 +383,7 @@ fun SetupScreenPreview() {
       onSubmitSetup = {},
       onTabSelected = {},
       onRetryIrStatus = {},
+      onSendHomeRemoteCommand = {},
     )
   }
 }
@@ -325,6 +399,7 @@ fun AppShellPreview() {
       onSubmitSetup = {},
       onTabSelected = {},
       onRetryIrStatus = {},
+      onSendHomeRemoteCommand = {},
     )
   }
 }

@@ -197,6 +197,100 @@ class MainScreenViewModelTest {
       viewModel.awaitState<MainScreenUiState.App>(),
     )
   }
+
+  @Test
+  fun sendHomeRemoteCommand_withAvailableCommand_sendsWithoutRefreshingIrStatus() = runTest {
+    val sendResult = CompletableDeferred<Result<Unit>>()
+    val irRepository =
+      FakeIrRepository(
+        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical")))),
+        pendingSendResults = mutableMapOf("bluetooth" to sendResult),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("bluetooth")
+    advanceUntilIdle()
+
+    assertEquals(setOf("bluetooth"), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState.sendingCommands)
+    assertEquals(listOf("bluetooth"), irRepository.sentCommands)
+    assertEquals(1, irRepository.refreshCallCount)
+
+    sendResult.complete(Result.success(Unit))
+    advanceUntilIdle()
+
+    assertEquals(HomeRemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState)
+    assertEquals(1, irRepository.refreshCallCount)
+  }
+
+  @Test
+  fun sendHomeRemoteCommand_withFailedCommand_showsActionErrorWithoutChangingIrState() = runTest {
+    val initialStatus = IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical"))
+    val irRepository =
+      FakeIrRepository(
+        refreshResults = mutableListOf(Result.success(initialStatus)),
+        sendResults = mutableMapOf("optical" to Result.failure(IllegalStateException("IR bridge offline"))),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("optical")
+    advanceUntilIdle()
+
+    assertEquals(
+      HomeRemoteControlsState(errorMessage = "IR bridge offline", errorCommand = "optical"),
+      viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState,
+    )
+    assertEquals(IrState.Loaded(initialStatus), viewModel.awaitState<MainScreenUiState.App>().irState)
+  }
+
+  @Test
+  fun sendHomeRemoteCommand_withUnavailableCommand_doesNothing() = runTest {
+    val irRepository =
+      FakeIrRepository(
+        initialState = IrState.Loaded(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth"))),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("optical")
+    advanceUntilIdle()
+
+    assertTrue(irRepository.sentCommands.isEmpty())
+    assertEquals(HomeRemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState)
+  }
+
+  @Test
+  fun sendHomeRemoteCommand_whenConfigurationChanges_ignoresStaleCompletion() = runTest {
+    val pendingSend = CompletableDeferred<Result<Unit>>()
+    val repository = FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION)
+    val irRepository =
+      FakeIrRepository(
+        refreshResults =
+          mutableListOf(
+            Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical"))),
+            Result.success(IrStatus(message = "Office ready", availableCommands = setOf("bluetooth", "optical"))),
+          ),
+        pendingSendResults = mutableMapOf("bluetooth" to pendingSend),
+      )
+    val viewModel = MainScreenViewModel(repository, irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("bluetooth")
+    advanceUntilIdle()
+
+    repository.updateConfiguration(UPDATED_CONFIGURATION)
+    advanceUntilIdle()
+    pendingSend.complete(Result.failure(IllegalStateException("Old server offline")))
+    advanceUntilIdle()
+
+    assertEquals(
+      appState(
+        irState = IrState.Loaded(IrStatus(message = "Office ready", availableCommands = setOf("bluetooth", "optical"))),
+      ),
+      viewModel.awaitState<MainScreenUiState.App>(),
+    )
+  }
 }
 
 private suspend inline fun <reified T : MainScreenUiState> MainScreenViewModel.awaitState(): T = uiState.first { it is T } as T
@@ -230,6 +324,8 @@ private class FakeIrRepository(
   initialState: IrState = IrState.Idle,
   private val refreshResults: MutableList<Result<IrStatus>> = mutableListOf(Result.success(DEFAULT_IR_STATUS)),
   private val pendingRefreshes: MutableList<CompletableDeferred<Result<IrStatus>>> = mutableListOf(),
+  private val sendResults: MutableMap<String, Result<Unit>> = mutableMapOf(),
+  private val pendingSendResults: MutableMap<String, CompletableDeferred<Result<Unit>>> = mutableMapOf(),
 ) : IrRepository {
   private val stateFlow = MutableStateFlow(initialState)
 
@@ -238,6 +334,8 @@ private class FakeIrRepository(
 
   var resetCallCount = 0
     private set
+
+  val sentCommands = mutableListOf<String>()
 
   override val state: StateFlow<IrState> = stateFlow.asStateFlow()
 
@@ -249,6 +347,11 @@ private class FakeIrRepository(
       .onSuccess { stateFlow.value = IrState.Loaded(it) }
       .onFailure { throwable -> stateFlow.value = IrState.Error(throwable.message ?: "Couldn't load IR status from the Axum API.") }
     return result
+  }
+
+  override suspend fun sendCommand(command: String): Result<Unit> {
+    sentCommands += command
+    return pendingSendResults.remove(command)?.await() ?: sendResults.remove(command) ?: Result.success(Unit)
   }
 
   override fun reset() {

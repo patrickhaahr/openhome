@@ -69,6 +69,7 @@ Build a shared IR state source that starts from `Home` by calling `GET /api/ir`,
 
 - Type: AFK
 - Blocked by: 3
+- Status: Done
 
 #### What to build
 
@@ -76,12 +77,12 @@ Add `Home Remote Controls` to the `Home Tab` for the v1 quick actions `bluetooth
 
 #### Acceptance criteria
 
-- [ ] The `Home Tab` shows exactly two quick controls: `bluetooth` and `optical`
-- [ ] Tapping a quick control sends `POST /api/ir/send` with JSON `{ "command": "..." }`
-- [ ] Only the tapped control is blocked while its request is in flight
-- [ ] Successful sends do not show a success message
-- [ ] Failed sends show an action-level error without invalidating the full IR state
-- [ ] The app does not auto-refresh `GET /api/ir` after a successful send
+- [x] The `Home Tab` shows exactly two quick controls: `bluetooth` and `optical`
+- [x] Tapping a quick control sends `POST /api/ir/send` with JSON `{ "command": "..." }`
+- [x] Only the tapped control is blocked while its request is in flight
+- [x] Successful sends do not show a success message
+- [x] Failed sends show an action-level error without invalidating the full IR state
+- [x] The app does not auto-refresh `GET /api/ir` after a successful send
 
 ### 5. Remote tab v1 IR Remote
 

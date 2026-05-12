@@ -57,6 +57,40 @@ class IrRepositoryTest {
     assertEquals(IrState.Idle, repository.state.value)
     refreshJob.join()
   }
+
+  @Test
+  fun sendCommand_withSuccessfulResponse_postsJsonWithoutChangingSharedState() = runTest {
+    val client = QueueingOpenHomeClient(mutableListOf(irStatusResponse(message = "Living room remote ready", commands = listOf("bluetooth", "optical")), successResponse()))
+    val repository = DefaultIrRepository(openHomeClient = client)
+
+    repository.refresh()
+    val result = repository.sendCommand("bluetooth")
+
+    assertTrue(result.isSuccess)
+    val request = client.requests[1]
+    assertEquals("/api/ir/send", request.path)
+    assertEquals("POST", request.method)
+    assertEquals("application/json", request.contentType)
+    assertEquals("{" + "\"command\":\"bluetooth\"}", request.body?.toString(Charsets.UTF_8))
+    assertEquals(
+      IrState.Loaded(IrStatus(message = "Living room remote ready", availableCommands = setOf("bluetooth", "optical"))),
+      repository.state.value,
+    )
+  }
+
+  @Test
+  fun sendCommand_withApiError_keepsSharedStateLoaded() = runTest {
+    val readyState = IrState.Loaded(IrStatus(message = "Living room remote ready", availableCommands = setOf("bluetooth", "optical")))
+    val client = QueueingOpenHomeClient(mutableListOf(irStatusResponse(message = "Living room remote ready", commands = listOf("bluetooth", "optical")), errorResponse(message = "Unknown command 'party'", statusCode = 404)))
+    val repository = DefaultIrRepository(openHomeClient = client)
+
+    repository.refresh()
+    val result = repository.sendCommand("party")
+
+    assertTrue(result.isFailure)
+    assertEquals("Unknown command 'party'", result.exceptionOrNull()?.message)
+    assertEquals(readyState, repository.state.value)
+  }
 }
 
 private class FakeOpenHomeClient(private val result: Result<OpenHomeResponse>) : OpenHomeClient {
@@ -74,6 +108,15 @@ private class BlockingOpenHomeClient(private val result: CompletableDeferred<Res
   override suspend fun execute(request: OpenHomeRequest): Result<OpenHomeResponse> {
     requests += request
     return result.await()
+  }
+}
+
+private class QueueingOpenHomeClient(private val results: MutableList<Result<OpenHomeResponse>>) : OpenHomeClient {
+  val requests = mutableListOf<OpenHomeRequest>()
+
+  override suspend fun execute(request: OpenHomeRequest): Result<OpenHomeResponse> {
+    requests += request
+    return results.removeFirstOrNull() ?: Result.failure(IllegalStateException("No response queued for ${request.path}"))
   }
 }
 
@@ -95,3 +138,5 @@ private fun irStatusResponse(message: String, commands: List<String>, statusCode
 
 private fun errorResponse(message: String, statusCode: Int): Result<OpenHomeResponse> =
   Result.success(OpenHomeResponse(statusCode = statusCode, body = """{"error":"$message"}""".encodeToByteArray()))
+
+private fun successResponse(statusCode: Int = 200): Result<OpenHomeResponse> = Result.success(OpenHomeResponse(statusCode = statusCode, body = byteArrayOf()))

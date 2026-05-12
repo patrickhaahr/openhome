@@ -3,9 +3,11 @@ package com.example.openhome.data
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -29,6 +31,8 @@ interface IrRepository {
 
   suspend fun refresh(): Result<IrStatus>
 
+  suspend fun sendCommand(command: String): Result<Unit>
+
   fun reset()
 }
 
@@ -44,7 +48,7 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
 
     val result =
       openHomeClient.execute(OpenHomeRequest(path = IR_STATUS_PATH)).mapCatching { response ->
-        response.requireSuccess()
+        response.requireSuccess(DEFAULT_LOAD_ERROR)
         response.toIrStatus()
       }
 
@@ -57,6 +61,12 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
     return result
   }
 
+  override suspend fun sendCommand(command: String): Result<Unit> =
+    openHomeClient.execute(sendCommandRequest(command))
+      .mapCatching { response ->
+        response.requireSuccess(DEFAULT_SEND_ERROR)
+      }
+
   override fun reset() {
     refreshGeneration.incrementAndGet()
     stateFlow.value = IrState.Idle
@@ -68,9 +78,9 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
     }
   }
 
-  private fun OpenHomeResponse.requireSuccess() {
+  private fun OpenHomeResponse.requireSuccess(defaultErrorMessage: String) {
     if (statusCode !in SUCCESS_RESPONSE_CODES) {
-      throw IOException(body.readErrorMessage() ?: DEFAULT_LOAD_ERROR)
+      throw IOException(body.readErrorMessage() ?: defaultErrorMessage)
     }
   }
 
@@ -95,15 +105,29 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
       jsonParser.parseToJsonElement(decodeToString()).jsonObject[ERROR_KEY]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() }
     }.getOrNull()
 
+  private fun sendCommandRequest(command: String) =
+    OpenHomeRequest(
+      path = IR_SEND_PATH,
+      method = "POST",
+      body = jsonParser.encodeToString(SendCommandRequest(command = command)).encodeToByteArray(),
+      contentType = JSON_CONTENT_TYPE,
+    )
+
+  @Serializable
+  private data class SendCommandRequest(val command: String)
+
   private companion object {
     val jsonParser = Json { ignoreUnknownKeys = true }
     val SUCCESS_RESPONSE_CODES = 200..299
     const val IR_STATUS_PATH = "/api/ir"
+    const val IR_SEND_PATH = "/api/ir/send"
     const val AVAILABLE_COMMANDS_KEY = "available_commands"
     const val MESSAGE_KEY = "message"
     const val ERROR_KEY = "error"
+    const val JSON_CONTENT_TYPE = "application/json"
     const val DEFAULT_READY_MESSAGE = "IR remote ready"
     const val DEFAULT_LOAD_ERROR = "Couldn't load IR status from the Axum API."
     const val DEFAULT_PARSE_ERROR = "Couldn't read IR status from the Axum API."
+    const val DEFAULT_SEND_ERROR = "Couldn't send that IR command to the Axum API."
   }
 }
