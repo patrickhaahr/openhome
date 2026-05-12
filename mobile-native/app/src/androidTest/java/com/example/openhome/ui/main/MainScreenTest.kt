@@ -1,6 +1,7 @@
 package com.example.openhome.ui.main
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
@@ -88,7 +89,94 @@ class MainScreenTest {
     assertEquals(0, composeTestRule.onAllNodesWithTag("home-remote-optical-progress").fetchSemanticsNodes().size)
   }
 
-  private fun renderScreen(state: MainScreenUiState, onSendHomeRemoteCommand: (String) -> Unit = {}) {
+  @Test
+  fun remoteTab_showsFullV1RemoteButtonSet() {
+    renderScreen(
+      MainScreenUiState.App(
+        selectedTab = TopLevelTab.Remote,
+        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = REMOTE_BUTTON_COMMANDS)),
+      ),
+    )
+
+    composeTestRule.onNodeWithTag("remote-power").assertExists()
+    composeTestRule.onNodeWithTag("remote-bluetooth").assertExists()
+    composeTestRule.onNodeWithTag("remote-optical").assertExists()
+    composeTestRule.onNodeWithTag("remote-mute").assertExists()
+    composeTestRule.onNodeWithTag("remote-volume-down").assertExists()
+    composeTestRule.onNodeWithTag("remote-volume-up").assertExists()
+    assertEquals(6, composeTestRule.onAllNodesWithTag("remote-button").fetchSemanticsNodes().size)
+  }
+
+  @Test
+  fun remoteTab_unavailableCommandsRemainVisibleButDisabled() {
+    renderScreen(
+      MainScreenUiState.App(
+        selectedTab = TopLevelTab.Remote,
+        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("power", "mute"))),
+      ),
+    )
+
+    composeTestRule.onNodeWithTag("remote-power").assertIsEnabled()
+    composeTestRule.onNodeWithTag("remote-mute").assertIsEnabled()
+    composeTestRule.onNodeWithTag("remote-bluetooth").assertExists().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-optical").assertExists().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-volume-down").assertExists().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-volume-up").assertExists().assertIsNotEnabled()
+  }
+
+  @Test
+  fun remoteTab_buttonClick_callsHandler() {
+    var tappedCommand: String? = null
+
+    renderScreen(
+      MainScreenUiState.App(
+        selectedTab = TopLevelTab.Remote,
+        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = REMOTE_BUTTON_COMMANDS)),
+      ),
+      onSendRemoteCommand = { tappedCommand = it },
+    )
+
+    composeTestRule.onNodeWithTag("remote-power").performClick()
+
+    assertEquals("power", tappedCommand)
+  }
+
+  @Test
+  fun remoteTab_onlyTappedButtonIsBlockedWhileSending() {
+    renderScreen(
+      MainScreenUiState.App(
+        selectedTab = TopLevelTab.Remote,
+        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("power", "mute"))),
+        remoteControlsState = RemoteControlsState(sendingCommands = setOf("power")),
+      ),
+    )
+
+    composeTestRule.onNodeWithTag("remote-power").assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-mute").assertIsEnabled()
+    composeTestRule.onNodeWithTag("remote-power-label").assertTextEquals("Power")
+    composeTestRule.onNodeWithTag("remote-mute-label").assertTextEquals("Mute")
+    assertEquals(1, composeTestRule.onAllNodesWithTag("remote-power-progress").fetchSemanticsNodes().size)
+    assertEquals(0, composeTestRule.onAllNodesWithTag("remote-mute-progress").fetchSemanticsNodes().size)
+  }
+
+  @Test
+  fun remoteTab_failedCommandShowsActionLocalError() {
+    renderScreen(
+      MainScreenUiState.App(
+        selectedTab = TopLevelTab.Remote,
+        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("power"))),
+        remoteControlsState = RemoteControlsState(errorMessage = "IR bridge offline", errorCommand = "power"),
+      ),
+    )
+
+    composeTestRule.onNodeWithText("Power failed: IR bridge offline").assertExists()
+  }
+
+  private fun renderScreen(
+    state: MainScreenUiState,
+    onSendHomeRemoteCommand: (String) -> Unit = {},
+    onSendRemoteCommand: (String) -> Unit = {},
+  ) {
     composeTestRule.setContent {
       MainScreenContent(
         state = state,
@@ -98,6 +186,7 @@ class MainScreenTest {
         onTabSelected = {},
         onRetryIrStatus = {},
         onSendHomeRemoteCommand = onSendHomeRemoteCommand,
+        onSendRemoteCommand = onSendRemoteCommand,
       )
     }
   }

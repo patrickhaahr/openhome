@@ -26,7 +26,9 @@ class MainScreenViewModel(
   private val setupErrorMessage = MutableStateFlow<String?>(null)
   private val selectedTab = MutableStateFlow(TopLevelTab.Home)
   private val homeRemoteControlsState = MutableStateFlow(HomeRemoteControlsState())
+  private val remoteControlsState = MutableStateFlow(RemoteControlsState())
   private val homeRemoteControlsGeneration = AtomicLong(0)
+  private val remoteControlsGeneration = AtomicLong(0)
   private var activeConfiguration: StoredConfiguration? = null
 
   init {
@@ -44,11 +46,16 @@ class MainScreenViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
 
   val uiState: StateFlow<MainScreenUiState> =
-    combine(baseUiState, irRepository.state, homeRemoteControlsState) { state, irState, currentHomeRemoteControlsState ->
+    combine(baseUiState, irRepository.state, homeRemoteControlsState, remoteControlsState) { state, irState, currentHomeRemoteControlsState, currentRemoteControlsState ->
         when (state) {
           MainScreenUiState.Loading -> MainScreenUiState.Loading
           is MainScreenUiState.Setup -> state
-          is MainScreenUiState.App -> state.copy(irState = irState, homeRemoteControlsState = currentHomeRemoteControlsState)
+          is MainScreenUiState.App ->
+            state.copy(
+              irState = irState,
+              homeRemoteControlsState = currentHomeRemoteControlsState,
+              remoteControlsState = currentRemoteControlsState,
+            )
         }
       }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
@@ -102,8 +109,7 @@ class MainScreenViewModel(
       return
     }
 
-    val irStatus = (irRepository.state.value as? IrState.Loaded)?.status ?: return
-    if (command !in irStatus.availableCommands || command in homeRemoteControlsState.value.sendingCommands) {
+    if (!canSendCommand(command)) {
       return
     }
 
@@ -111,18 +117,32 @@ class MainScreenViewModel(
     startSendingHomeRemoteCommand(command)
 
     viewModelScope.launch {
-      val result =
-        try {
-          irRepository.sendCommand(command)
-        } catch (exception: CancellationException) {
-          throw exception
-        } catch (throwable: Throwable) {
-          Result.failure(throwable)
-        }
+      val result = runSendCommand(command)
 
       result
         .onSuccess { finishSendingHomeRemoteCommand(generation, command) }
         .onFailure { throwable -> showHomeRemoteSendError(generation, command, throwable) }
+    }
+  }
+
+  fun sendRemoteCommand(command: String) {
+    if (command !in REMOTE_BUTTON_COMMANDS || activeConfiguration == null) {
+      return
+    }
+
+    if (!canSendCommand(command)) {
+      return
+    }
+
+    val generation = remoteControlsGeneration.get()
+    startSendingRemoteCommand(command)
+
+    viewModelScope.launch {
+      val result = runSendCommand(command)
+
+      result
+        .onSuccess { finishSendingRemoteCommand(generation, command) }
+        .onFailure { throwable -> showRemoteSendError(generation, command, throwable) }
     }
   }
 
@@ -141,6 +161,7 @@ class MainScreenViewModel(
 
         activeConfiguration = configuration
         resetHomeRemoteControlsState()
+        resetRemoteControlsState()
 
         if (previousConfiguration != null || configuration == null) {
           irRepository.reset()
@@ -162,6 +183,23 @@ class MainScreenViewModel(
       irRepository.refresh()
     }
   }
+
+  private suspend fun runSendCommand(command: String): Result<Unit> =
+    try {
+      irRepository.sendCommand(command)
+    } catch (exception: CancellationException) {
+      throw exception
+    } catch (throwable: Throwable) {
+      Result.failure(throwable)
+    }
+
+  private fun canSendCommand(command: String): Boolean {
+    val irStatus = (irRepository.state.value as? IrState.Loaded)?.status ?: return false
+    return command in irStatus.availableCommands && !isCommandInFlight(command)
+  }
+
+  private fun isCommandInFlight(command: String): Boolean =
+    command in homeRemoteControlsState.value.sendingCommands || command in remoteControlsState.value.sendingCommands
 
   private fun showSetupError(throwable: Throwable) {
     setupErrorMessage.value = throwable.message ?: DEFAULT_VALIDATION_ERROR
@@ -194,12 +232,47 @@ class MainScreenViewModel(
     homeRemoteControlsState.value = HomeRemoteControlsState()
   }
 
+  private fun startSendingRemoteCommand(command: String) {
+    remoteControlsState.update { currentState ->
+      currentState.copy(sendingCommands = currentState.sendingCommands + command, errorMessage = null, errorCommand = null)
+    }
+  }
+
+  private fun finishSendingRemoteCommand(generation: Long, command: String) {
+    updateRemoteControlsStateIfCurrent(generation) { currentState ->
+      currentState.copy(sendingCommands = currentState.sendingCommands - command)
+    }
+  }
+
+  private fun showRemoteSendError(generation: Long, command: String, throwable: Throwable) {
+    updateRemoteControlsStateIfCurrent(generation) { currentState ->
+      currentState.copy(
+        sendingCommands = currentState.sendingCommands - command,
+        errorMessage = throwable.message ?: DEFAULT_SEND_ERROR,
+        errorCommand = command,
+      )
+    }
+  }
+
+  private fun resetRemoteControlsState() {
+    remoteControlsGeneration.incrementAndGet()
+    remoteControlsState.value = RemoteControlsState()
+  }
+
   private fun updateHomeRemoteControlsStateIfCurrent(generation: Long, transform: (HomeRemoteControlsState) -> HomeRemoteControlsState) {
     if (homeRemoteControlsGeneration.get() != generation) {
       return
     }
 
     homeRemoteControlsState.update(transform)
+  }
+
+  private fun updateRemoteControlsStateIfCurrent(generation: Long, transform: (RemoteControlsState) -> RemoteControlsState) {
+    if (remoteControlsGeneration.get() != generation) {
+      return
+    }
+
+    remoteControlsState.update(transform)
   }
 
   private companion object {
@@ -223,10 +296,17 @@ sealed interface MainScreenUiState {
     val selectedTab: TopLevelTab = TopLevelTab.Home,
     val irState: IrState = IrState.Idle,
     val homeRemoteControlsState: HomeRemoteControlsState = HomeRemoteControlsState(),
+    val remoteControlsState: RemoteControlsState = RemoteControlsState(),
   ) : MainScreenUiState
 }
 
 data class HomeRemoteControlsState(
+  val sendingCommands: Set<String> = emptySet(),
+  val errorMessage: String? = null,
+  val errorCommand: String? = null,
+)
+
+data class RemoteControlsState(
   val sendingCommands: Set<String> = emptySet(),
   val errorMessage: String? = null,
   val errorCommand: String? = null,

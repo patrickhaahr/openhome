@@ -88,6 +88,7 @@ Add `Home Remote Controls` to the `Home Tab` for the v1 quick actions `bluetooth
 
 - Type: AFK
 - Blocked by: 3
+- Status: Done
 
 #### What to build
 
@@ -95,12 +96,12 @@ Build the dedicated `Remote` tab as a fixed client-owned `IR Remote` using the v
 
 #### Acceptance criteria
 
-- [ ] The `Remote` tab shows the full v1 `Remote Button Set`
-- [ ] Each `Remote Button` maps to the backend command name as its canonical ID
-- [ ] The UI can use client-facing labels or icons without changing the backend command IDs
-- [ ] Unavailable commands remain visible but disabled based on shared IR state
-- [ ] Only the tapped button is blocked while its send request is in flight
-- [ ] Successful sends are silent and failed sends stay action-local
+ - [x] The `Remote` tab shows the full v1 `Remote Button Set`
+ - [x] Each `Remote Button` maps to the backend command name as its canonical ID
+ - [x] The UI can use client-facing labels or icons without changing the backend command IDs
+ - [x] Unavailable commands remain visible but disabled based on shared IR state
+ - [x] Only the tapped button is blocked while its send request is in flight
+ - [x] Successful sends are silent and failed sends stay action-local
 
 ### 6. In-app reconfiguration
 

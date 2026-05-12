@@ -291,6 +291,148 @@ class MainScreenViewModelTest {
       viewModel.awaitState<MainScreenUiState.App>(),
     )
   }
+
+  @Test
+  fun sendRemoteCommand_whenSameCommandIsAlreadySendingFromHome_doesNothing() = runTest {
+    val pendingSend = CompletableDeferred<Result<Unit>>()
+    val irRepository =
+      FakeIrRepository(
+        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical")))),
+        pendingSendResults = mutableMapOf("bluetooth" to pendingSend),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("bluetooth")
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("bluetooth")
+    advanceUntilIdle()
+
+    assertEquals(listOf("bluetooth"), irRepository.sentCommands)
+    assertEquals(setOf("bluetooth"), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState.sendingCommands)
+    assertEquals(RemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState)
+
+    pendingSend.complete(Result.success(Unit))
+    advanceUntilIdle()
+  }
+
+  @Test
+  fun sendRemoteCommand_withAvailableCommand_sendsWithoutRefreshingIrStatus() = runTest {
+    val sendResult = CompletableDeferred<Result<Unit>>()
+    val irRepository =
+      FakeIrRepository(
+        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("power", "mute")))),
+        pendingSendResults = mutableMapOf("power" to sendResult),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("power")
+    advanceUntilIdle()
+
+    assertEquals(setOf("power"), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState.sendingCommands)
+    assertEquals(listOf("power"), irRepository.sentCommands)
+    assertEquals(1, irRepository.refreshCallCount)
+
+    sendResult.complete(Result.success(Unit))
+    advanceUntilIdle()
+
+    assertEquals(RemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState)
+    assertEquals(1, irRepository.refreshCallCount)
+  }
+
+  @Test
+  fun sendRemoteCommand_withFailedCommand_showsActionErrorWithoutChangingIrState() = runTest {
+    val initialStatus = IrStatus(message = "Living room ready", availableCommands = setOf("mute", "power"))
+    val irRepository =
+      FakeIrRepository(
+        refreshResults = mutableListOf(Result.success(initialStatus)),
+        sendResults = mutableMapOf("mute" to Result.failure(IllegalStateException("IR bridge offline"))),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("mute")
+    advanceUntilIdle()
+
+    assertEquals(
+      RemoteControlsState(errorMessage = "IR bridge offline", errorCommand = "mute"),
+      viewModel.awaitState<MainScreenUiState.App>().remoteControlsState,
+    )
+    assertEquals(IrState.Loaded(initialStatus), viewModel.awaitState<MainScreenUiState.App>().irState)
+  }
+
+  @Test
+  fun sendRemoteCommand_withUnavailableCommand_doesNothing() = runTest {
+    val irRepository =
+      FakeIrRepository(
+        initialState = IrState.Loaded(IrStatus(message = "Living room ready", availableCommands = setOf("power"))),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("mute")
+    advanceUntilIdle()
+
+    assertTrue(irRepository.sentCommands.isEmpty())
+    assertEquals(RemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState)
+  }
+
+  @Test
+  fun sendRemoteCommand_whenConfigurationChanges_ignoresStaleCompletion() = runTest {
+    val pendingSend = CompletableDeferred<Result<Unit>>()
+    val repository = FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION)
+    val irRepository =
+      FakeIrRepository(
+        refreshResults =
+          mutableListOf(
+            Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("power", "mute"))),
+            Result.success(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+          ),
+        pendingSendResults = mutableMapOf("power" to pendingSend),
+      )
+    val viewModel = MainScreenViewModel(repository, irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("power")
+    advanceUntilIdle()
+
+    repository.updateConfiguration(UPDATED_CONFIGURATION)
+    advanceUntilIdle()
+    pendingSend.complete(Result.failure(IllegalStateException("Old server offline")))
+    advanceUntilIdle()
+
+    assertEquals(
+      appState(
+        irState = IrState.Loaded(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+      ),
+      viewModel.awaitState<MainScreenUiState.App>(),
+    )
+  }
+
+  @Test
+  fun sendHomeRemoteCommand_whenSameCommandIsAlreadySendingFromRemote_doesNothing() = runTest {
+    val pendingSend = CompletableDeferred<Result<Unit>>()
+    val irRepository =
+      FakeIrRepository(
+        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical")))),
+        pendingSendResults = mutableMapOf("bluetooth" to pendingSend),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("bluetooth")
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("bluetooth")
+    advanceUntilIdle()
+
+    assertEquals(listOf("bluetooth"), irRepository.sentCommands)
+    assertEquals(HomeRemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState)
+    assertEquals(setOf("bluetooth"), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState.sendingCommands)
+
+    pendingSend.complete(Result.success(Unit))
+    advanceUntilIdle()
+  }
 }
 
 private suspend inline fun <reified T : MainScreenUiState> MainScreenViewModel.awaitState(): T = uiState.first { it is T } as T
@@ -363,7 +505,15 @@ private class FakeIrRepository(
 private fun appState(
   selectedTab: TopLevelTab = TopLevelTab.Home,
   irState: IrState = IrState.Loaded(DEFAULT_IR_STATUS),
-): MainScreenUiState.App = MainScreenUiState.App(selectedTab = selectedTab, irState = irState)
+  homeRemoteControlsState: HomeRemoteControlsState = HomeRemoteControlsState(),
+  remoteControlsState: RemoteControlsState = RemoteControlsState(),
+): MainScreenUiState.App =
+  MainScreenUiState.App(
+    selectedTab = selectedTab,
+    irState = irState,
+    homeRemoteControlsState = homeRemoteControlsState,
+    remoteControlsState = remoteControlsState,
+  )
 
 private val VALID_CONFIGURATION = StoredConfiguration(baseUrl = "http://192.168.1.20:8000", apiKey = "secret")
 
