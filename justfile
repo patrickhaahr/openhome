@@ -7,9 +7,21 @@ test:
     cargo test
 
 [working-directory: "api"]
+test-one name:
+    cargo test {{name}} -- --exact
+
+[working-directory: "api"]
+test-integration name:
+    cargo test --test {{name}}
+
+[working-directory: "api"]
 fmt:
     cargo fmt
     cargo clippy
+
+[working-directory: "api"]
+lint:
+    cargo clippy -- -D warnings
 
 [working-directory: "api"]
 go:
@@ -36,3 +48,8 @@ android-lint:
 android-test:
     #!/run/current-system/sw/bin/nu
     ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; ./gradlew :app:testDebugUnitTest'
+
+[working-directory: "mobile-native"]
+android-test-ui:
+    #!/run/current-system/sw/bin/nu
+    ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; ./gradlew :app:connectedDebugAndroidTest'
