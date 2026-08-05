@@ -326,9 +326,14 @@ private fun HomeTab(
       IrState.Idle, IrState.Loading -> IrLoadingState(message = "Loading shared IR status for Home and Remote.")
       is IrState.Error -> IrErrorState(message = irState.message, onRetryIrStatus = onRetryIrStatus)
       is IrState.Loaded -> {
-        IrLoadedState(status = irState.status)
+        val edifierCommands = irState.status.edifierCommands
+        IrLoadedState(
+          message = irState.status.message,
+          remoteName = "Edifier",
+          availableCommands = edifierCommands,
+        )
         HomeRemoteControls(
-          status = irState.status,
+          availableCommands = edifierCommands,
           controlsState = homeRemoteControlsState,
           onSendHomeRemoteCommand = onSendHomeRemoteCommand,
         )
@@ -346,12 +351,17 @@ private fun RemoteTab(
   modifier: Modifier = Modifier,
 ) {
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-    TabHeader(title = TopLevelTab.Remote.label, description = "Use the full v1 IR Remote from the shared IR status.")
+    TabHeader(title = TopLevelTab.Remote.label, description = "Control the LG TV.")
 
     when (irState) {
       IrState.Idle, IrState.Loading -> IrLoadingState(message = "Loading the IR remote state.")
       is IrState.Error -> IrErrorState(message = irState.message, onRetryIrStatus = onRetryIrStatus)
-      is IrState.Loaded -> IrLoadedState(status = irState.status)
+      is IrState.Loaded ->
+        IrLoadedState(
+          message = irState.status.message,
+          remoteName = "LG TV",
+          availableCommands = irState.status.lgTvCommands,
+        )
     }
 
     RemoteButtonLayout(
@@ -399,40 +409,47 @@ private fun IrErrorState(message: String, onRetryIrStatus: () -> Unit, modifier:
 }
 
 @Composable
-private fun IrLoadedState(status: IrStatus, modifier: Modifier = Modifier) {
+private fun IrLoadedState(
+  message: String,
+  remoteName: String,
+  availableCommands: Set<String>,
+  modifier: Modifier = Modifier,
+) {
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(text = status.message, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-    Text(text = availableCommandsText(status.availableCommands), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+    Text(text = message, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+    Text(text = availableCommandsText(remoteName, availableCommands), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
   }
 }
 
 @Composable
 private fun HomeRemoteControls(
-  status: IrStatus,
+  availableCommands: Set<String>,
   controlsState: HomeRemoteControlsState,
   onSendHomeRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(text = "Quick controls", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-      HOME_REMOTE_CONTROLS.forEach { control ->
-        val isSending = control.command in controlsState.sendingCommands
-        val isAvailable = control.command in status.availableCommands
-        OutlinedButton(
-          onClick = { onSendHomeRemoteCommand(control.command) },
-          enabled = isAvailable && !isSending,
-          modifier = Modifier.weight(1f).testTag("home-remote-${control.command}"),
-        ) {
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (isSending) {
-              CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("home-remote-${control.command}-progress"), strokeWidth = 2.dp)
+    Text(text = "Edifier controls", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+    HOME_REMOTE_CONTROL_ROWS.forEach { controlRow ->
+      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        controlRow.forEach { control ->
+          val isSending = control.command in controlsState.sendingCommands
+          val isAvailable = control.command in availableCommands
+          OutlinedButton(
+            onClick = { onSendHomeRemoteCommand(control.command) },
+            enabled = isAvailable && !isSending,
+            modifier = Modifier.weight(1f).testTag("home-remote-${control.command}"),
+          ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+              if (isSending) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("home-remote-${control.command}-progress"), strokeWidth = 2.dp)
+              }
+              Text(
+                text = remoteButtonLabel(control.command, control.label, availableCommands, true),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("home-remote-${control.command}-label"),
+              )
             }
-            Text(
-              text = remoteButtonLabel(control.command, control.label, status.availableCommands, true),
-              textAlign = TextAlign.Center,
-              modifier = Modifier.testTag("home-remote-${control.command}-label"),
-            )
           }
         }
       }
@@ -458,12 +475,16 @@ private fun RemoteButtonLayout(
 ) {
   val loadedState = irState as? IrState.Loaded
   val isLoaded = loadedState != null
-  val availableCommands = loadedState?.status?.availableCommands.orEmpty()
+  val availableCommands = loadedState?.status?.lgTvCommands.orEmpty()
 
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     REMOTE_BUTTON_ROWS.forEach { buttonRow ->
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         buttonRow.forEach { button ->
+          if (button == null) {
+            Box(modifier = Modifier.weight(1f))
+            return@forEach
+          }
           val isSending = button.command in controlsState.sendingCommands
           val isAvailable = button.command in availableCommands
           Box(modifier = Modifier.weight(1f).testTag("remote-button")) {
@@ -504,11 +525,11 @@ private fun mainScreenViewModelFactory(setupRepository: SetupRepository, irRepos
     }
   }
 
-private fun availableCommandsText(availableCommands: Set<String>): String =
+private fun availableCommandsText(remoteName: String, availableCommands: Set<String>): String =
   if (availableCommands.isEmpty()) {
-    "The Axum API did not report any available IR commands."
+    "The Axum API did not report any available $remoteName commands."
   } else {
-    "Available commands: ${availableCommands.joinToString(", ")}."
+    "Available $remoteName commands: ${availableCommands.joinToString(", ")}."
   }
 
 private fun remoteButtonLabel(command: String, label: String, availableCommands: Set<String>, isLoaded: Boolean): String =
@@ -585,7 +606,17 @@ fun SetupScreenPreview() {
 fun AppShellPreview() {
   OpenhomeTheme {
     MainScreenContent(
-      state = MainScreenUiState.App(irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth", "optical")))),
+      state =
+        MainScreenUiState.App(
+          irState =
+            IrState.Loaded(
+              IrStatus(
+                message = "IR remote ready",
+                edifierCommands = setOf("bluetooth", "optical"),
+                lgTvCommands = setOf("power", "mute"),
+              ),
+            ),
+        ),
       onBaseUrlChanged = {},
       onApiKeyChanged = {},
       onSubmitSetup = {},

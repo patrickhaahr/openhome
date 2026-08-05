@@ -65,7 +65,7 @@ class OpenHomeClientTest {
 
     val result = client.execute(
       OpenHomeRequest(
-        path = "/api/ir/send",
+        path = "/api/ir/edifier",
         method = "POST",
         body = "{\"command\":\"bluetooth\"}".encodeToByteArray(),
         contentType = "application/json",

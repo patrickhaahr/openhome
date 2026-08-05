@@ -1,12 +1,12 @@
 use axum::{
     Json, Router,
-    extract::{Query, State},
-    routing::get,
+    extract::State,
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, Result};
-use crate::services::ir::{IrService, IrServiceError, IrStatusResponse};
+use crate::services::ir::{IrRemote, IrService, IrServiceError, IrStatusResponse};
 
 #[derive(Debug, Deserialize)]
 pub struct SendCommandRequest {
@@ -19,10 +19,10 @@ pub struct SendCommandResponse {
 }
 
 pub fn router() -> Router<crate::AppState> {
-    Router::new().route("/api/ir", get(get_status)).route(
-        "/api/ir/send",
-        get(send_command_from_query).post(send_command_from_json),
-    )
+    Router::new()
+        .route("/api/ir", get(get_status))
+        .route("/api/ir/edifier", post(send_edifier_command))
+        .route("/api/ir/lgtv", post(send_lgtv_command))
 }
 
 async fn get_status(State(state): State<crate::AppState>) -> Result<Json<IrStatusResponse>> {
@@ -32,23 +32,24 @@ async fn get_status(State(state): State<crate::AppState>) -> Result<Json<IrStatu
     Ok(Json(status))
 }
 
-async fn send_command_from_query(
-    State(state): State<crate::AppState>,
-    Query(payload): Query<SendCommandRequest>,
-) -> Result<Json<SendCommandResponse>> {
-    send_command(state, payload).await
-}
-
-async fn send_command_from_json(
+async fn send_edifier_command(
     State(state): State<crate::AppState>,
     Json(payload): Json<SendCommandRequest>,
 ) -> Result<Json<SendCommandResponse>> {
-    send_command(state, payload).await
+    send_command(state, payload, IrRemote::Edifier).await
+}
+
+async fn send_lgtv_command(
+    State(state): State<crate::AppState>,
+    Json(payload): Json<SendCommandRequest>,
+) -> Result<Json<SendCommandResponse>> {
+    send_command(state, payload, IrRemote::LgTv).await
 }
 
 async fn send_command(
     state: crate::AppState,
     payload: SendCommandRequest,
+    remote: IrRemote,
 ) -> Result<Json<SendCommandResponse>> {
     let command = payload
         .command
@@ -58,7 +59,10 @@ async fn send_command(
         .ok_or_else(|| AppError::Validation("command is required".to_string()))?;
     let service = ir_service(&state)?;
 
-    let message = service.send_command(command).await.map_err(map_ir_error)?;
+    let message = service
+        .send_command(remote, command)
+        .await
+        .map_err(map_ir_error)?;
 
     Ok(Json(SendCommandResponse { message }))
 }

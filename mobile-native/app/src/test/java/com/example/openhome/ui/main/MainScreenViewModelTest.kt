@@ -1,6 +1,7 @@
 package com.example.openhome.ui.main
 
 import com.example.openhome.data.IrRepository
+import com.example.openhome.data.IrRemote
 import com.example.openhome.data.IrState
 import com.example.openhome.data.IrStatus
 import com.example.openhome.data.SetupRepository
@@ -135,13 +136,13 @@ class MainScreenViewModelTest {
 
     assertEquals(2, irRepository.refreshCallCount)
 
-    initialRefresh.complete(Result.success(IrStatus(message = "Old server ready", availableCommands = setOf("mute"))))
-    updatedRefresh.complete(Result.success(IrStatus(message = "New server ready", availableCommands = setOf("bluetooth"))))
+    initialRefresh.complete(Result.success(irStatus(message = "Old server ready", lgTvCommands = setOf("mute"))))
+    updatedRefresh.complete(Result.success(irStatus(message = "New server ready", edifierCommands = setOf("bluetooth"))))
     advanceUntilIdle()
 
     assertEquals(
       appState(
-        irState = IrState.Loaded(IrStatus(message = "New server ready", availableCommands = setOf("bluetooth"))),
+        irState = IrState.Loaded(irStatus(message = "New server ready", edifierCommands = setOf("bluetooth"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
@@ -216,7 +217,7 @@ class MainScreenViewModelTest {
         refreshResults =
           mutableListOf(
             Result.success(DEFAULT_IR_STATUS),
-            Result.success(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+            Result.success(irStatus(message = "Office ready", lgTvCommands = setOf("power", "mute"))),
           ),
       )
     val viewModel = MainScreenViewModel(repository, irRepository)
@@ -236,7 +237,7 @@ class MainScreenViewModelTest {
     assertEquals(
       appState(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+        irState = IrState.Loaded(irStatus(message = "Office ready", lgTvCommands = setOf("power", "mute"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
@@ -249,7 +250,7 @@ class MainScreenViewModelTest {
         refreshResults =
           mutableListOf(
             Result.failure(IllegalStateException("Couldn't load IR status from the Axum API.")),
-            Result.success(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth"))),
+            Result.success(irStatus(message = "IR remote ready", edifierCommands = setOf("bluetooth"))),
           ),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
@@ -262,7 +263,7 @@ class MainScreenViewModelTest {
     assertEquals(
       appState(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth"))),
+        irState = IrState.Loaded(irStatus(message = "IR remote ready", edifierCommands = setOf("bluetooth"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
@@ -275,7 +276,7 @@ class MainScreenViewModelTest {
         refreshResults =
           mutableListOf(
             Result.failure(IllegalStateException("Couldn't load IR status from the Axum API.")),
-            Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("optical", "bluetooth"))),
+            Result.success(irStatus(message = "Living room ready", edifierCommands = setOf("optical", "bluetooth"))),
           ),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
@@ -287,7 +288,7 @@ class MainScreenViewModelTest {
     assertEquals(2, irRepository.refreshCallCount)
     assertEquals(
       appState(
-        irState = IrState.Loaded(IrStatus(message = "Living room ready", availableCommands = setOf("optical", "bluetooth"))),
+        irState = IrState.Loaded(irStatus(message = "Living room ready", edifierCommands = setOf("optical", "bluetooth"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
@@ -298,8 +299,8 @@ class MainScreenViewModelTest {
     val sendResult = CompletableDeferred<Result<Unit>>()
     val irRepository =
       FakeIrRepository(
-        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical")))),
-        pendingSendResults = mutableMapOf("bluetooth" to sendResult),
+        refreshResults = mutableListOf(Result.success(irStatus(message = "Living room ready", edifierCommands = setOf("bluetooth", "optical")))),
+        pendingSendResults = mutableMapOf((IrRemote.Edifier to "bluetooth") to sendResult),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
 
@@ -308,7 +309,7 @@ class MainScreenViewModelTest {
     advanceUntilIdle()
 
     assertEquals(setOf("bluetooth"), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState.sendingCommands)
-    assertEquals(listOf("bluetooth"), irRepository.sentCommands)
+    assertEquals(listOf(IrRemote.Edifier to "bluetooth"), irRepository.sentCommands)
     assertEquals(1, irRepository.refreshCallCount)
 
     sendResult.complete(Result.success(Unit))
@@ -320,11 +321,11 @@ class MainScreenViewModelTest {
 
   @Test
   fun sendHomeRemoteCommand_withFailedCommand_showsActionErrorWithoutChangingIrState() = runTest {
-    val initialStatus = IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical"))
+    val initialStatus = irStatus(message = "Living room ready", edifierCommands = setOf("bluetooth", "optical"))
     val irRepository =
       FakeIrRepository(
         refreshResults = mutableListOf(Result.success(initialStatus)),
-        sendResults = mutableMapOf("optical" to Result.failure(IllegalStateException("IR bridge offline"))),
+        sendResults = mutableMapOf((IrRemote.Edifier to "optical") to Result.failure(IllegalStateException("IR bridge offline"))),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
 
@@ -343,7 +344,7 @@ class MainScreenViewModelTest {
   fun sendHomeRemoteCommand_withUnavailableCommand_doesNothing() = runTest {
     val irRepository =
       FakeIrRepository(
-        initialState = IrState.Loaded(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth"))),
+        initialState = IrState.Loaded(irStatus(message = "Living room ready", edifierCommands = setOf("bluetooth"), lgTvCommands = setOf("optical"))),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
 
@@ -363,10 +364,10 @@ class MainScreenViewModelTest {
       FakeIrRepository(
         refreshResults =
           mutableListOf(
-            Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical"))),
-            Result.success(IrStatus(message = "Office ready", availableCommands = setOf("bluetooth", "optical"))),
+            Result.success(irStatus(message = "Living room ready", edifierCommands = setOf("bluetooth", "optical"))),
+            Result.success(irStatus(message = "Office ready", edifierCommands = setOf("bluetooth", "optical"))),
           ),
-        pendingSendResults = mutableMapOf("bluetooth" to pendingSend),
+        pendingSendResults = mutableMapOf((IrRemote.Edifier to "bluetooth") to pendingSend),
       )
     val viewModel = MainScreenViewModel(repository, irRepository)
 
@@ -381,34 +382,10 @@ class MainScreenViewModelTest {
 
     assertEquals(
       appState(
-        irState = IrState.Loaded(IrStatus(message = "Office ready", availableCommands = setOf("bluetooth", "optical"))),
+        irState = IrState.Loaded(irStatus(message = "Office ready", edifierCommands = setOf("bluetooth", "optical"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
-  }
-
-  @Test
-  fun sendRemoteCommand_whenSameCommandIsAlreadySendingFromHome_doesNothing() = runTest {
-    val pendingSend = CompletableDeferred<Result<Unit>>()
-    val irRepository =
-      FakeIrRepository(
-        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical")))),
-        pendingSendResults = mutableMapOf("bluetooth" to pendingSend),
-      )
-    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
-
-    advanceUntilIdle()
-    viewModel.sendHomeRemoteCommand("bluetooth")
-    advanceUntilIdle()
-    viewModel.sendRemoteCommand("bluetooth")
-    advanceUntilIdle()
-
-    assertEquals(listOf("bluetooth"), irRepository.sentCommands)
-    assertEquals(setOf("bluetooth"), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState.sendingCommands)
-    assertEquals(RemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState)
-
-    pendingSend.complete(Result.success(Unit))
-    advanceUntilIdle()
   }
 
   @Test
@@ -416,8 +393,8 @@ class MainScreenViewModelTest {
     val sendResult = CompletableDeferred<Result<Unit>>()
     val irRepository =
       FakeIrRepository(
-        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("power", "mute")))),
-        pendingSendResults = mutableMapOf("power" to sendResult),
+        refreshResults = mutableListOf(Result.success(irStatus(message = "Living room ready", lgTvCommands = setOf("power", "mute")))),
+        pendingSendResults = mutableMapOf((IrRemote.LgTv to "power") to sendResult),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
 
@@ -426,7 +403,7 @@ class MainScreenViewModelTest {
     advanceUntilIdle()
 
     assertEquals(setOf("power"), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState.sendingCommands)
-    assertEquals(listOf("power"), irRepository.sentCommands)
+    assertEquals(listOf(IrRemote.LgTv to "power"), irRepository.sentCommands)
     assertEquals(1, irRepository.refreshCallCount)
 
     sendResult.complete(Result.success(Unit))
@@ -437,12 +414,54 @@ class MainScreenViewModelTest {
   }
 
   @Test
+  fun matchingCommandsOnDifferentRemotes_canSendConcurrently() = runTest {
+    val edifierSend = CompletableDeferred<Result<Unit>>()
+    val lgTvSend = CompletableDeferred<Result<Unit>>()
+    val irRepository =
+      FakeIrRepository(
+        refreshResults =
+          mutableListOf(
+            Result.success(
+              irStatus(
+                message = "Living room ready",
+                edifierCommands = setOf("power"),
+                lgTvCommands = setOf("power"),
+              ),
+            ),
+          ),
+        pendingSendResults =
+          mutableMapOf(
+            (IrRemote.Edifier to "power") to edifierSend,
+            (IrRemote.LgTv to "power") to lgTvSend,
+          ),
+      )
+    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
+
+    advanceUntilIdle()
+    viewModel.sendHomeRemoteCommand("power")
+    advanceUntilIdle()
+    viewModel.sendRemoteCommand("power")
+    advanceUntilIdle()
+
+    assertEquals(
+      listOf(IrRemote.Edifier to "power", IrRemote.LgTv to "power"),
+      irRepository.sentCommands,
+    )
+    assertEquals(setOf("power"), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState.sendingCommands)
+    assertEquals(setOf("power"), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState.sendingCommands)
+
+    edifierSend.complete(Result.success(Unit))
+    lgTvSend.complete(Result.success(Unit))
+    advanceUntilIdle()
+  }
+
+  @Test
   fun sendRemoteCommand_withFailedCommand_showsActionErrorWithoutChangingIrState() = runTest {
-    val initialStatus = IrStatus(message = "Living room ready", availableCommands = setOf("mute", "power"))
+    val initialStatus = irStatus(message = "Living room ready", lgTvCommands = setOf("mute", "power"))
     val irRepository =
       FakeIrRepository(
         refreshResults = mutableListOf(Result.success(initialStatus)),
-        sendResults = mutableMapOf("mute" to Result.failure(IllegalStateException("IR bridge offline"))),
+        sendResults = mutableMapOf((IrRemote.LgTv to "mute") to Result.failure(IllegalStateException("IR bridge offline"))),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
 
@@ -461,7 +480,7 @@ class MainScreenViewModelTest {
   fun sendRemoteCommand_withUnavailableCommand_doesNothing() = runTest {
     val irRepository =
       FakeIrRepository(
-        initialState = IrState.Loaded(IrStatus(message = "Living room ready", availableCommands = setOf("power"))),
+        initialState = IrState.Loaded(irStatus(message = "Living room ready", edifierCommands = setOf("mute"), lgTvCommands = setOf("power"))),
       )
     val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
 
@@ -481,10 +500,10 @@ class MainScreenViewModelTest {
       FakeIrRepository(
         refreshResults =
           mutableListOf(
-            Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("power", "mute"))),
-            Result.success(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+            Result.success(irStatus(message = "Living room ready", lgTvCommands = setOf("power", "mute"))),
+            Result.success(irStatus(message = "Office ready", lgTvCommands = setOf("power", "mute"))),
           ),
-        pendingSendResults = mutableMapOf("power" to pendingSend),
+        pendingSendResults = mutableMapOf((IrRemote.LgTv to "power") to pendingSend),
       )
     val viewModel = MainScreenViewModel(repository, irRepository)
 
@@ -499,35 +518,12 @@ class MainScreenViewModelTest {
 
     assertEquals(
       appState(
-        irState = IrState.Loaded(IrStatus(message = "Office ready", availableCommands = setOf("power", "mute"))),
+        irState = IrState.Loaded(irStatus(message = "Office ready", lgTvCommands = setOf("power", "mute"))),
       ),
       viewModel.awaitState<MainScreenUiState.App>(),
     )
   }
 
-  @Test
-  fun sendHomeRemoteCommand_whenSameCommandIsAlreadySendingFromRemote_doesNothing() = runTest {
-    val pendingSend = CompletableDeferred<Result<Unit>>()
-    val irRepository =
-      FakeIrRepository(
-        refreshResults = mutableListOf(Result.success(IrStatus(message = "Living room ready", availableCommands = setOf("bluetooth", "optical")))),
-        pendingSendResults = mutableMapOf("bluetooth" to pendingSend),
-      )
-    val viewModel = MainScreenViewModel(FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION), irRepository)
-
-    advanceUntilIdle()
-    viewModel.sendRemoteCommand("bluetooth")
-    advanceUntilIdle()
-    viewModel.sendHomeRemoteCommand("bluetooth")
-    advanceUntilIdle()
-
-    assertEquals(listOf("bluetooth"), irRepository.sentCommands)
-    assertEquals(HomeRemoteControlsState(), viewModel.awaitState<MainScreenUiState.App>().homeRemoteControlsState)
-    assertEquals(setOf("bluetooth"), viewModel.awaitState<MainScreenUiState.App>().remoteControlsState.sendingCommands)
-
-    pendingSend.complete(Result.success(Unit))
-    advanceUntilIdle()
-  }
 }
 
 private suspend inline fun <reified T : MainScreenUiState> MainScreenViewModel.awaitState(): T = uiState.first { it is T } as T
@@ -561,8 +557,8 @@ private class FakeIrRepository(
   initialState: IrState = IrState.Idle,
   private val refreshResults: MutableList<Result<IrStatus>> = mutableListOf(Result.success(DEFAULT_IR_STATUS)),
   private val pendingRefreshes: MutableList<CompletableDeferred<Result<IrStatus>>> = mutableListOf(),
-  private val sendResults: MutableMap<String, Result<Unit>> = mutableMapOf(),
-  private val pendingSendResults: MutableMap<String, CompletableDeferred<Result<Unit>>> = mutableMapOf(),
+  private val sendResults: MutableMap<Pair<IrRemote, String>, Result<Unit>> = mutableMapOf(),
+  private val pendingSendResults: MutableMap<Pair<IrRemote, String>, CompletableDeferred<Result<Unit>>> = mutableMapOf(),
 ) : IrRepository {
   private val stateFlow = MutableStateFlow(initialState)
 
@@ -572,7 +568,7 @@ private class FakeIrRepository(
   var resetCallCount = 0
     private set
 
-  val sentCommands = mutableListOf<String>()
+  val sentCommands = mutableListOf<Pair<IrRemote, String>>()
 
   override val state: StateFlow<IrState> = stateFlow.asStateFlow()
 
@@ -586,9 +582,10 @@ private class FakeIrRepository(
     return result
   }
 
-  override suspend fun sendCommand(command: String): Result<Unit> {
-    sentCommands += command
-    return pendingSendResults.remove(command)?.await() ?: sendResults.remove(command) ?: Result.success(Unit)
+  override suspend fun sendCommand(remote: IrRemote, command: String): Result<Unit> {
+    val request = remote to command
+    sentCommands += request
+    return pendingSendResults.remove(request)?.await() ?: sendResults.remove(request) ?: Result.success(Unit)
   }
 
   override fun reset() {
@@ -629,4 +626,10 @@ private val VALID_CONFIGURATION = StoredConfiguration(baseUrl = "http://192.168.
 
 private val UPDATED_CONFIGURATION = StoredConfiguration(baseUrl = "http://192.168.1.21:8000", apiKey = "secret-2")
 
-private val DEFAULT_IR_STATUS = IrStatus(message = "IR remote ready", availableCommands = emptySet())
+private fun irStatus(
+  message: String,
+  edifierCommands: Set<String> = emptySet(),
+  lgTvCommands: Set<String> = emptySet(),
+): IrStatus = IrStatus(message = message, edifierCommands = edifierCommands, lgTvCommands = lgTvCommands)
+
+private val DEFAULT_IR_STATUS = irStatus(message = "IR remote ready")

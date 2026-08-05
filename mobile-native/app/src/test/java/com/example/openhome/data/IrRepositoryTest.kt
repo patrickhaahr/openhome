@@ -12,8 +12,15 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class IrRepositoryTest {
   @Test
-  fun refresh_withSuccessfulResponse_loadsSharedIrStatus() = runTest {
-    val client = FakeOpenHomeClient(irStatusResponse(message = "Living room remote ready", commands = listOf("bluetooth", "optical", "mute")))
+  fun refresh_withSuccessfulResponse_loadsDeviceCommandSets() = runTest {
+    val client =
+      FakeOpenHomeClient(
+        irStatusResponse(
+          message = "Living room remote ready",
+          edifierCommands = listOf("bluetooth", "optical"),
+          lgTvCommands = listOf("power", "mute"),
+        ),
+      )
     val repository = DefaultIrRepository(openHomeClient = client)
 
     val result = repository.refresh()
@@ -21,7 +28,13 @@ class IrRepositoryTest {
     assertTrue(result.isSuccess)
     assertEquals(OpenHomeRequest(path = "/api/ir"), client.requests.single())
     assertEquals(
-      IrState.Loaded(IrStatus(message = "Living room remote ready", availableCommands = setOf("bluetooth", "optical", "mute"))),
+      IrState.Loaded(
+        IrStatus(
+          message = "Living room remote ready",
+          edifierCommands = setOf("bluetooth", "optical"),
+          lgTvCommands = setOf("power", "mute"),
+        ),
+      ),
       repository.state.value,
     )
   }
@@ -51,7 +64,7 @@ class IrRepositoryTest {
     repository.reset()
     assertEquals(IrState.Idle, repository.state.value)
 
-    response.complete(irStatusResponse(message = "Living room remote ready", commands = listOf("bluetooth")))
+    response.complete(irStatusResponse(message = "Living room remote ready", edifierCommands = listOf("bluetooth")))
     advanceUntilIdle()
 
     assertEquals(IrState.Idle, repository.state.value)
@@ -59,33 +72,63 @@ class IrRepositoryTest {
   }
 
   @Test
-  fun sendCommand_withSuccessfulResponse_postsJsonWithoutChangingSharedState() = runTest {
-    val client = QueueingOpenHomeClient(mutableListOf(irStatusResponse(message = "Living room remote ready", commands = listOf("bluetooth", "optical")), successResponse()))
+  fun sendCommand_toEdifier_postsJsonToDevicePathWithoutChangingSharedState() = runTest {
+    val status =
+      IrStatus(
+        message = "Living room remote ready",
+        edifierCommands = setOf("bluetooth", "optical"),
+        lgTvCommands = setOf("power"),
+      )
+    val client = QueueingOpenHomeClient(mutableListOf(irStatusResponse(status), successResponse()))
     val repository = DefaultIrRepository(openHomeClient = client)
 
     repository.refresh()
-    val result = repository.sendCommand("bluetooth")
+    val result = repository.sendCommand(IrRemote.Edifier, "bluetooth")
 
     assertTrue(result.isSuccess)
     val request = client.requests[1]
-    assertEquals("/api/ir/send", request.path)
+    assertEquals("/api/ir/edifier", request.path)
     assertEquals("POST", request.method)
     assertEquals("application/json", request.contentType)
     assertEquals("{" + "\"command\":\"bluetooth\"}", request.body?.toString(Charsets.UTF_8))
     assertEquals(
-      IrState.Loaded(IrStatus(message = "Living room remote ready", availableCommands = setOf("bluetooth", "optical"))),
+      IrState.Loaded(status),
       repository.state.value,
     )
   }
 
   @Test
+  fun sendCommand_toLgTv_usesLgTvPath() = runTest {
+    val client = FakeOpenHomeClient(successResponse())
+    val repository = DefaultIrRepository(openHomeClient = client)
+
+    val result = repository.sendCommand(IrRemote.LgTv, "power")
+
+    assertTrue(result.isSuccess)
+    assertEquals("/api/ir/lgtv", client.requests.single().path)
+    assertEquals("{" + "\"command\":\"power\"}", client.requests.single().body?.toString(Charsets.UTF_8))
+  }
+
+  @Test
   fun sendCommand_withApiError_keepsSharedStateLoaded() = runTest {
-    val readyState = IrState.Loaded(IrStatus(message = "Living room remote ready", availableCommands = setOf("bluetooth", "optical")))
-    val client = QueueingOpenHomeClient(mutableListOf(irStatusResponse(message = "Living room remote ready", commands = listOf("bluetooth", "optical")), errorResponse(message = "Unknown command 'party'", statusCode = 404)))
+    val readyStatus =
+      IrStatus(
+        message = "Living room remote ready",
+        edifierCommands = setOf("bluetooth", "optical"),
+        lgTvCommands = setOf("power"),
+      )
+    val readyState = IrState.Loaded(readyStatus)
+    val client =
+      QueueingOpenHomeClient(
+        mutableListOf(
+          irStatusResponse(readyStatus),
+          errorResponse(message = "Unknown command 'party'", statusCode = 404),
+        ),
+      )
     val repository = DefaultIrRepository(openHomeClient = client)
 
     repository.refresh()
-    val result = repository.sendCommand("party")
+    val result = repository.sendCommand(IrRemote.Edifier, "party")
 
     assertTrue(result.isFailure)
     assertEquals("Unknown command 'party'", result.exceptionOrNull()?.message)
@@ -120,8 +163,14 @@ private class QueueingOpenHomeClient(private val results: MutableList<Result<Ope
   }
 }
 
-private fun irStatusResponse(message: String, commands: List<String>, statusCode: Int = 200): Result<OpenHomeResponse> {
-  val commandsJson = commands.joinToString(separator = ", ") { command -> "\"$command\"" }
+private fun irStatusResponse(
+  message: String,
+  edifierCommands: List<String> = emptyList(),
+  lgTvCommands: List<String> = emptyList(),
+  statusCode: Int = 200,
+): Result<OpenHomeResponse> {
+  val edifierCommandsJson = edifierCommands.joinToString(separator = ", ") { command -> "\"$command\"" }
+  val lgTvCommandsJson = lgTvCommands.joinToString(separator = ", ") { command -> "\"$command\"" }
   return Result.success(
     OpenHomeResponse(
       statusCode = statusCode,
@@ -129,12 +178,23 @@ private fun irStatusResponse(message: String, commands: List<String>, statusCode
         """
         {
           "message": "$message",
-          "available_commands": [$commandsJson]
+          "remotes": {
+            "edifier": [$edifierCommandsJson],
+            "lgtv": [$lgTvCommandsJson]
+          }
         }
         """.trimIndent().encodeToByteArray(),
     ),
   )
 }
+
+private fun irStatusResponse(status: IrStatus, statusCode: Int = 200): Result<OpenHomeResponse> =
+  irStatusResponse(
+    message = status.message,
+    edifierCommands = status.edifierCommands.toList(),
+    lgTvCommands = status.lgTvCommands.toList(),
+    statusCode = statusCode,
+  )
 
 private fun errorResponse(message: String, statusCode: Int): Result<OpenHomeResponse> =
   Result.success(OpenHomeResponse(statusCode = statusCode, body = """{"error":"$message"}""".encodeToByteArray()))

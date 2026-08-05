@@ -11,7 +11,7 @@ bollard = { version = "0.20.0", features = ["chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15.7"
 http = "1.4.0"
-reqwest = { version = "0.13.1", features = ["json"] }
+reqwest = { version = "0.13.1", features = ["form", "json"] }
 serde = "1.0.228"
 serde_json = "1.0.149"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }

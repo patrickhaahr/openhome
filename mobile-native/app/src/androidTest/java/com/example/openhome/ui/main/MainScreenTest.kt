@@ -68,18 +68,17 @@ class MainScreenTest {
   }
 
   @Test
-  fun homeTab_showsExactlyTwoQuickControls() {
+  fun homeTab_showsAllEdifierControls() {
     renderScreen(
       MainScreenUiState.App(
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth", "optical"))),
+        irState = IrState.Loaded(irStatus(edifierCommands = HOME_REMOTE_CONTROL_COMMANDS)),
       ),
     )
 
-    composeTestRule.onNodeWithText("Quick controls").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Bluetooth").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Optical").assertIsDisplayed()
-    assertEquals(1, composeTestRule.onAllNodesWithText("Bluetooth").fetchSemanticsNodes().size)
-    assertEquals(1, composeTestRule.onAllNodesWithText("Optical").fetchSemanticsNodes().size)
+    composeTestRule.onNodeWithText("Edifier controls").assertIsDisplayed()
+    HOME_REMOTE_CONTROL_COMMANDS.forEach { command ->
+      composeTestRule.onNodeWithTag("home-remote-$command").assertIsDisplayed().assertIsEnabled()
+    }
   }
 
   @Test
@@ -88,7 +87,7 @@ class MainScreenTest {
 
     renderScreen(
       MainScreenUiState.App(
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth", "optical"))),
+        irState = IrState.Loaded(irStatus(edifierCommands = setOf("bluetooth", "optical"))),
       ),
       onSendHomeRemoteCommand = { tappedCommand = it },
     )
@@ -102,7 +101,7 @@ class MainScreenTest {
   fun homeTab_onlyTappedQuickControlIsBlockedWhileSending() {
     renderScreen(
       MainScreenUiState.App(
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("bluetooth", "optical"))),
+        irState = IrState.Loaded(irStatus(edifierCommands = setOf("bluetooth", "optical"))),
         homeRemoteControlsState = HomeRemoteControlsState(sendingCommands = setOf("bluetooth")),
       ),
     )
@@ -148,17 +147,51 @@ class MainScreenTest {
     renderScreen(
       MainScreenUiState.App(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = REMOTE_BUTTON_COMMANDS)),
+        irState = IrState.Loaded(irStatus(lgTvCommands = REMOTE_BUTTON_COMMANDS)),
       ),
     )
 
     composeTestRule.onNodeWithTag("remote-power").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("remote-bluetooth").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("remote-optical").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("remote-input").assertIsDisplayed()
     composeTestRule.onNodeWithTag("remote-mute").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("remote-volume-down").assertIsDisplayed()
     composeTestRule.onNodeWithTag("remote-volume-up").assertIsDisplayed()
-    assertEquals(6, composeTestRule.onAllNodesWithTag("remote-button").fetchSemanticsNodes().size)
+    assertEquals(31, composeTestRule.onAllNodesWithTag("remote-button").fetchSemanticsNodes().size)
+    assertEquals(
+      setOf(
+        "power",
+        "input",
+        "volume-up",
+        "volume-down",
+        "mute",
+        "home",
+        "settings",
+        "up",
+        "down",
+        "left",
+        "right",
+        "ok",
+        "back",
+        "exit",
+        "channel-up",
+        "channel-down",
+        "guide",
+        "info",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "hdmi-1",
+        "hdmi-2",
+        "hdmi-3",
+      ),
+      REMOTE_BUTTON_COMMANDS,
+    )
   }
 
   @Test
@@ -166,14 +199,13 @@ class MainScreenTest {
     renderScreen(
       MainScreenUiState.App(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("power", "mute"))),
+        irState = IrState.Loaded(irStatus(edifierCommands = setOf("bluetooth"), lgTvCommands = setOf("power", "mute"))),
       ),
     )
 
     composeTestRule.onNodeWithTag("remote-power").assertIsEnabled()
     composeTestRule.onNodeWithTag("remote-mute").assertIsEnabled()
-    composeTestRule.onNodeWithTag("remote-bluetooth").assertIsDisplayed().assertIsNotEnabled()
-    composeTestRule.onNodeWithTag("remote-optical").assertIsDisplayed().assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("remote-input").assertIsDisplayed().assertIsNotEnabled()
     composeTestRule.onNodeWithTag("remote-volume-down").assertIsDisplayed().assertIsNotEnabled()
     composeTestRule.onNodeWithTag("remote-volume-up").assertIsDisplayed().assertIsNotEnabled()
   }
@@ -185,7 +217,7 @@ class MainScreenTest {
     renderScreen(
       MainScreenUiState.App(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = REMOTE_BUTTON_COMMANDS)),
+        irState = IrState.Loaded(irStatus(lgTvCommands = REMOTE_BUTTON_COMMANDS)),
       ),
       onSendRemoteCommand = { tappedCommand = it },
     )
@@ -200,7 +232,7 @@ class MainScreenTest {
     renderScreen(
       MainScreenUiState.App(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("power", "mute"))),
+        irState = IrState.Loaded(irStatus(lgTvCommands = setOf("power", "mute"))),
         remoteControlsState = RemoteControlsState(sendingCommands = setOf("power")),
       ),
     )
@@ -218,7 +250,7 @@ class MainScreenTest {
     renderScreen(
       MainScreenUiState.App(
         selectedTab = TopLevelTab.Remote,
-        irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = setOf("power"))),
+        irState = IrState.Loaded(irStatus(lgTvCommands = setOf("power"))),
         remoteControlsState = RemoteControlsState(errorMessage = "IR bridge offline", errorCommand = "power"),
       ),
     )
@@ -252,7 +284,7 @@ class MainScreenTest {
       var selectedTab by remember { mutableStateOf(initialTab) }
 
       MainScreenContent(
-        state = MainScreenUiState.App(selectedTab = selectedTab, irState = IrState.Loaded(IrStatus(message = "IR remote ready", availableCommands = REMOTE_BUTTON_COMMANDS))),
+        state = MainScreenUiState.App(selectedTab = selectedTab, irState = IrState.Loaded(irStatus(lgTvCommands = REMOTE_BUTTON_COMMANDS))),
         onBaseUrlChanged = {},
         onApiKeyChanged = {},
         onSubmitSetup = {},
@@ -272,4 +304,9 @@ class MainScreenTest {
     apiKey: String = "",
   ): MainScreenUiState.ConfigurationForm =
     MainScreenUiState.ConfigurationForm(mode = mode, baseUrl = baseUrl, apiKey = apiKey)
+
+  private fun irStatus(
+    edifierCommands: Set<String> = emptySet(),
+    lgTvCommands: Set<String> = emptySet(),
+  ): IrStatus = IrStatus(message = "IR remote ready", edifierCommands = edifierCommands, lgTvCommands = lgTvCommands)
 }

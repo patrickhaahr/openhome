@@ -3,6 +3,7 @@ package com.example.openhome.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.openhome.data.IrRepository
+import com.example.openhome.data.IrRemote
 import com.example.openhome.data.IrState
 import com.example.openhome.data.SetupRepository
 import com.example.openhome.data.StoredConfiguration
@@ -123,15 +124,15 @@ class MainScreenViewModel(
       return
     }
 
-    if (!canSendCommand(command)) {
+    if (!canSendCommand(IrRemote.Edifier, command)) {
       return
     }
 
     sendCommand(
+      remote = IrRemote.Edifier,
       command = command,
-      generation = homeRemoteControlsGeneration.get(),
-      updateState = { transform -> homeRemoteControlsState.update(transform) },
-      generationIsCurrent = { homeRemoteControlsGeneration.get() == it },
+      controlsState = homeRemoteControlsState,
+      controlsGeneration = homeRemoteControlsGeneration,
     )
   }
 
@@ -140,15 +141,15 @@ class MainScreenViewModel(
       return
     }
 
-    if (!canSendCommand(command)) {
+    if (!canSendCommand(IrRemote.LgTv, command)) {
       return
     }
 
     sendCommand(
+      remote = IrRemote.LgTv,
       command = command,
-      generation = remoteControlsGeneration.get(),
-      updateState = { transform -> remoteControlsState.update(transform) },
-      generationIsCurrent = { remoteControlsGeneration.get() == it },
+      controlsState = remoteControlsState,
+      controlsGeneration = remoteControlsGeneration,
     )
   }
 
@@ -210,26 +211,30 @@ class MainScreenViewModel(
   }
 
   private fun sendCommand(
+    remote: IrRemote,
     command: String,
-    generation: Long,
-    updateState: (((CommandControlsState) -> CommandControlsState)) -> Unit,
-    generationIsCurrent: (Long) -> Boolean,
+    controlsState: MutableStateFlow<CommandControlsState>,
+    controlsGeneration: AtomicLong,
   ) {
-    updateState { currentState ->
+    val generation = controlsGeneration.get()
+    controlsState.update { currentState ->
       currentState.copy(sendingCommands = currentState.sendingCommands + command, errorMessage = null, errorCommand = null)
     }
 
     viewModelScope.launch {
-      val result = runSendCommand(command)
+      val result = runSendCommand(remote, command)
+      if (controlsGeneration.get() != generation) {
+        return@launch
+      }
 
       result
         .onSuccess {
-          updateControlsStateIfCurrent(generation, updateState, generationIsCurrent) { currentState ->
+          controlsState.update { currentState ->
             currentState.copy(sendingCommands = currentState.sendingCommands - command)
           }
         }
         .onFailure { throwable ->
-          updateControlsStateIfCurrent(generation, updateState, generationIsCurrent) { currentState ->
+          controlsState.update { currentState ->
             currentState.copy(
               sendingCommands = currentState.sendingCommands - command,
               errorMessage = throwable.message ?: DEFAULT_SEND_ERROR,
@@ -240,22 +245,31 @@ class MainScreenViewModel(
     }
   }
 
-  private suspend fun runSendCommand(command: String): Result<Unit> =
+  private suspend fun runSendCommand(remote: IrRemote, command: String): Result<Unit> =
     try {
-      irRepository.sendCommand(command)
+      irRepository.sendCommand(remote, command)
     } catch (exception: CancellationException) {
       throw exception
     } catch (throwable: Throwable) {
       Result.failure(throwable)
     }
 
-  private fun canSendCommand(command: String): Boolean {
+  private fun canSendCommand(remote: IrRemote, command: String): Boolean {
     val irStatus = (irRepository.state.value as? IrState.Loaded)?.status ?: return false
-    return command in irStatus.availableCommands && !isCommandInFlight(command)
+    val availableCommands =
+      when (remote) {
+        IrRemote.Edifier -> irStatus.edifierCommands
+        IrRemote.LgTv -> irStatus.lgTvCommands
+      }
+    return command in availableCommands && !isCommandInFlight(remote, command)
   }
 
-  private fun isCommandInFlight(command: String): Boolean =
-    command in homeRemoteControlsState.value.sendingCommands || command in remoteControlsState.value.sendingCommands
+  private fun isCommandInFlight(remote: IrRemote, command: String): Boolean =
+    command in
+      when (remote) {
+        IrRemote.Edifier -> homeRemoteControlsState.value.sendingCommands
+        IrRemote.LgTv -> remoteControlsState.value.sendingCommands
+      }
 
   private fun showSetupError(throwable: Throwable) {
     localUiState.update { currentState -> currentState.copy(form = currentState.form.copy(errorMessage = throwable.message ?: DEFAULT_VALIDATION_ERROR)) }
@@ -269,19 +283,6 @@ class MainScreenViewModel(
   private fun resetRemoteControlsState() {
     remoteControlsGeneration.incrementAndGet()
     remoteControlsState.value = RemoteControlsState()
-  }
-
-  private fun updateControlsStateIfCurrent(
-    generation: Long,
-    updateState: (((CommandControlsState) -> CommandControlsState)) -> Unit,
-    generationIsCurrent: (Long) -> Boolean,
-    transform: (CommandControlsState) -> CommandControlsState,
-  ) {
-    if (!generationIsCurrent(generation)) {
-      return
-    }
-
-    updateState(transform)
   }
 
   private companion object {

@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.jsonArray
@@ -14,7 +13,16 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 
-data class IrStatus(val message: String, val availableCommands: Set<String>)
+data class IrStatus(
+  val message: String,
+  val edifierCommands: Set<String>,
+  val lgTvCommands: Set<String>,
+)
+
+enum class IrRemote(val path: String) {
+  Edifier("/api/ir/edifier"),
+  LgTv("/api/ir/lgtv"),
+}
 
 sealed interface IrState {
   data object Idle : IrState
@@ -31,7 +39,7 @@ interface IrRepository {
 
   suspend fun refresh(): Result<IrStatus>
 
-  suspend fun sendCommand(command: String): Result<Unit>
+  suspend fun sendCommand(remote: IrRemote, command: String): Result<Unit>
 
   fun reset()
 }
@@ -61,8 +69,8 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
     return result
   }
 
-  override suspend fun sendCommand(command: String): Result<Unit> =
-    openHomeClient.execute(sendCommandRequest(command))
+  override suspend fun sendCommand(remote: IrRemote, command: String): Result<Unit> =
+    openHomeClient.execute(sendCommandRequest(remote, command))
       .mapCatching { response ->
         response.requireSuccess(DEFAULT_SEND_ERROR)
       }
@@ -87,16 +95,21 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
   private fun OpenHomeResponse.toIrStatus(): IrStatus =
     runCatching {
       val responseJson = jsonParser.parseToJsonElement(body.decodeToString()).jsonObject
+      val remotes = responseJson[REMOTES_KEY]?.jsonObject
       IrStatus(
         message = responseJson[MESSAGE_KEY]?.jsonPrimitive?.content?.trim().orEmpty().ifBlank { DEFAULT_READY_MESSAGE },
-        availableCommands = responseJson.readAvailableCommands(),
+        edifierCommands = remotes.readCommands(EDIFIER_KEY),
+        lgTvCommands = remotes.readCommands(LG_TV_KEY),
       )
     }.getOrElse { throwable ->
       throw IOException(DEFAULT_PARSE_ERROR, throwable)
     }
 
-  private fun JsonObject.readAvailableCommands(): Set<String> =
-    (this[AVAILABLE_COMMANDS_KEY]?.jsonArray ?: JsonArray(emptyList()))
+  private fun JsonObject?.readCommands(remote: String): Set<String> =
+    this
+      ?.get(remote)
+      ?.jsonArray
+      .orEmpty()
       .mapNotNull { element -> element.jsonPrimitive.content.trim().takeIf { it.isNotEmpty() } }
       .toSet()
 
@@ -105,9 +118,9 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
       jsonParser.parseToJsonElement(decodeToString()).jsonObject[ERROR_KEY]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() }
     }.getOrNull()
 
-  private fun sendCommandRequest(command: String) =
+  private fun sendCommandRequest(remote: IrRemote, command: String) =
     OpenHomeRequest(
-      path = IR_SEND_PATH,
+      path = remote.path,
       method = "POST",
       body = jsonParser.encodeToString(SendCommandRequest(command = command)).encodeToByteArray(),
       contentType = JSON_CONTENT_TYPE,
@@ -120,8 +133,9 @@ class DefaultIrRepository(private val openHomeClient: OpenHomeClient) : IrReposi
     val jsonParser = Json { ignoreUnknownKeys = true }
     val SUCCESS_RESPONSE_CODES = 200..299
     const val IR_STATUS_PATH = "/api/ir"
-    const val IR_SEND_PATH = "/api/ir/send"
-    const val AVAILABLE_COMMANDS_KEY = "available_commands"
+    const val REMOTES_KEY = "remotes"
+    const val EDIFIER_KEY = "edifier"
+    const val LG_TV_KEY = "lgtv"
     const val MESSAGE_KEY = "message"
     const val ERROR_KEY = "error"
     const val JSON_CONTENT_TYPE = "application/json"
