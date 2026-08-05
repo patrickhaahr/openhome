@@ -90,14 +90,14 @@ impl IrService {
         remote: IrRemote,
         command: &str,
     ) -> Result<String, IrServiceError> {
-        let url = Url::parse(&format!("{}/send", self.base_url)).map_err(|error| {
-            IrServiceError::ServiceUnavailable(format!("Invalid IR device URL: {error}"))
-        })?;
+        let url = Url::parse(&format!("{}/remotes/{}", self.base_url, remote.as_str())).map_err(
+            |error| IrServiceError::ServiceUnavailable(format!("Invalid IR device URL: {error}")),
+        )?;
 
         let response = self
             .client
             .post(url)
-            .form(&[("remote", remote.as_str()), ("command", command)])
+            .form(&[("command", command)])
             .send()
             .await
             .map_err(map_request_error)?;
@@ -151,7 +151,7 @@ fn default_ready_message() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{body_string_contains, method, path};
+    use wiremock::matchers::{body_string, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -190,13 +190,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_send_command_posts_remote_and_command_form_fields() {
+    async fn test_send_command_posts_command_to_remote_resource() {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("POST"))
-            .and(path("/send"))
-            .and(body_string_contains("remote=edifier"))
-            .and(body_string_contains("command=mute"))
+            .and(path("/remotes/edifier"))
+            .and(body_string("command=mute"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({ "message": "Sent command: mute" })),
@@ -239,7 +238,7 @@ mod tests {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("POST"))
-            .and(path("/send"))
+            .and(path("/remotes/edifier"))
             .respond_with(
                 ResponseTemplate::new(400)
                     .set_body_json(serde_json::json!({ "error": "Missing form field: command" })),
@@ -263,7 +262,7 @@ mod tests {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("POST"))
-            .and(path("/send"))
+            .and(path("/remotes/edifier"))
             .respond_with(
                 ResponseTemplate::new(404)
                     .set_body_json(serde_json::json!({ "error": "Unknown command" })),

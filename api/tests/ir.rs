@@ -3,7 +3,7 @@ mod common;
 use axum::Router;
 use http::StatusCode;
 use serde_json::json;
-use wiremock::matchers::{body_string_contains, method, path};
+use wiremock::matchers::{body_string, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn ir_test_app(service: openhome_api::services::ir::IrService) -> Router {
@@ -105,9 +105,8 @@ async fn test_send_endpoint_proxies_command_to_device() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/send"))
-        .and(body_string_contains("remote=edifier"))
-        .and(body_string_contains("command=mute"))
+        .and(path("/remotes/edifier"))
+        .and(body_string("command=mute"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({ "message": "Sent command: mute" })),
         )
@@ -131,13 +130,12 @@ async fn test_send_endpoint_proxies_command_to_device() {
 }
 
 #[tokio::test]
-async fn test_lgtv_send_endpoint_proxies_remote_and_clean_command() {
+async fn test_lgtv_send_endpoint_proxies_command_to_remote_resource() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/send"))
-        .and(body_string_contains("remote=lgtv"))
-        .and(body_string_contains("command=hdmi-1"))
+        .and(path("/remotes/lgtv"))
+        .and(body_string("command=hdmi-1"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({ "message": "Sent command: hdmi-1" })),
         )
@@ -177,9 +175,8 @@ async fn test_send_endpoint_returns_404_for_unknown_command() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/send"))
-        .and(body_string_contains("remote=edifier"))
-        .and(body_string_contains("command=party"))
+        .and(path("/remotes/edifier"))
+        .and(body_string("command=party"))
         .respond_with(
             ResponseTemplate::new(404).set_body_json(json!({ "error": "Unknown command" })),
         )
