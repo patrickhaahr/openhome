@@ -1,5 +1,5 @@
 {
-  description = "OpenHome API development shell";
+  description = "OpenHome development shell";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -158,9 +158,12 @@
             cargo
             cargo-watch
             clippy
+            esptool
             jdk17
             just
+            minicom
             openssl
+            platformio
             pkg-config
             rust-analyzer
             rustc
@@ -174,8 +177,8 @@
             export DATABASE_URL="sqlite:$repo_root/api/data/app.db"
             export JAVA_HOME="${pkgs.jdk17}"
             export PATH="$JAVA_HOME/bin:$PATH"
-            echo "OpenHome API shell"
-            echo "Run API commands from repo root, e.g. cargo test --manifest-path api/Cargo.toml"
+            echo "OpenHome development shell"
+            echo "Run 'just' from the repo root to list available commands"
           '';
         };
       });
