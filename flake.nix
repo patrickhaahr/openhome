@@ -162,6 +162,7 @@
             jdk17
             just
             minicom
+            nodejs_22
             openssl
             platformio
             pkg-config
@@ -170,6 +171,7 @@
             rustfmt
             sqlite
             sqlx-cli
+            watchman
           ];
 
           shellHook = ''

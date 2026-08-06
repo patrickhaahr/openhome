@@ -1,0 +1,52 @@
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import type { RemoteCommand } from '../domain/remotes';
+import { colors } from './theme';
+
+type Props = {
+  readonly control: RemoteCommand;
+  readonly available: boolean;
+  readonly sending: boolean;
+  readonly onPress: (command: string) => void;
+};
+
+/** Render one command while keeping unavailable controls visible. */
+export function ControlButton({ control, available, sending, onPress }: Props) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={control.label}
+      accessibilityState={{ disabled: !available || sending, busy: sending }}
+      disabled={!available || sending}
+      onPress={() => onPress(control.command)}
+      style={({ pressed }) => [styles.button, !available && styles.unavailable, pressed && styles.pressed]}
+    >
+      <View style={styles.content}>
+        {sending ? <ActivityIndicator color={colors.signal} size="small" /> : null}
+        <Text style={[styles.label, !available && styles.unavailableLabel]}>{control.label}</Text>
+        {!available ? <Text style={styles.status}>UNAVAILABLE</Text> : null}
+      </View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  button: {
+    alignItems: 'center',
+    backgroundColor: colors.panelRaised,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 58,
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+  },
+  content: { alignItems: 'center', gap: 3 },
+  label: { color: colors.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
+  pressed: { backgroundColor: colors.signalDark, borderColor: colors.signal },
+  status: { color: colors.muted, fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
+  unavailable: { backgroundColor: colors.panel, opacity: 0.56 },
+  unavailableLabel: { color: colors.muted },
+});

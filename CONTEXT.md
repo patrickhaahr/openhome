@@ -37,7 +37,7 @@ A client-side step where the user enters the Base URL and API Key and validates 
 _Avoid_: Account onboarding, server registration
 
 **Native Client Access**:
-The access model for `mobile-native`: complete Setup Flow once, then open directly into the app without a launch-time Unlock Flow.
+The access model for `mobile-native` and `mobile-expo`: complete Setup Flow once, then open directly into the app without a launch-time Unlock Flow.
 _Avoid_: Biometric gate, locked-by-default startup
 
 **Initial Native Tabs**:
@@ -97,6 +97,7 @@ _Avoid_: Full remote shortcut set, implicit defaults
 - A user completes the **Setup Flow** before first use of the **Mobile Client**.
 - Some **Mobile Clients** use an **Unlock Flow** before the stored **API Key** can be used.
 - `mobile-native` uses **Native Client Access**.
+- `mobile-expo` uses **Native Client Access** and preserves the same initial capabilities as `mobile-native`.
 - `mobile-native` starts with **Initial Native Tabs** only.
 - An **IR Remote** exposes one or more **Commands**.
 - A **Mobile Client** triggers **IR Remote** **Commands** by calling the **Axum API**.

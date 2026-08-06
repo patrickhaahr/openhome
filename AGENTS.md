@@ -5,6 +5,7 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-native/A
 ## Current Repo Reality
 
 - `mobile-native/` is the active Android app.
+- `mobile-expo/` is the Expo reimplementation of `mobile-native/`.
 - `mobile/` is the old Tauri/SolidJS client and is deprecated. Do not treat it as the default mobile target unless the task explicitly says so.
 - The root `README.md` is stale and still describes the deprecated Tauri client. Prefer `justfile`, `flake.nix`, `CONTEXT.md`, and the service-specific `AGENTS.md` files as sources of truth.
 
@@ -25,6 +26,11 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-native/A
   - `just android-lint`
   - `just android-test`
   - `just android-test-ui`
+- Expo:
+  - `just expo-install`
+  - `just expo-start`
+  - `just expo-android`
+  - `just expo-check`
 
 ## Verified Workflow Gotchas
 
@@ -36,8 +42,9 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-native/A
 
 - `api/` is a standalone Rust Axum service. `api/migrations/` is live SQLx migration state.
 - `mobile-native/` is a standalone Gradle project with a single `:app` module.
+- `mobile-expo/` is a standalone Expo app. Keep domain rules, application state, infrastructure adapters, and UI components separated under `src/`.
 - Use the domain language in `CONTEXT.md` when changing product behavior.
-- Mobile clients talk only to the Axum API. Do not add direct device, bridge, or LAN integration code to `mobile-native/`.
+- Mobile clients talk only to the Axum API. Do not add direct device, bridge, or LAN integration code to `mobile-native/` or `mobile-expo/`.
 
 ## Verification Bias
 
