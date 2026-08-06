@@ -5,8 +5,10 @@
   "dependencies": {
     "expo": "~57.0.11",
     "expo-build-properties": "~57.0.9",
+    "expo-location": "~57.0.8",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.8",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0"

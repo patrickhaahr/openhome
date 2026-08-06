@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 
+import type { HomeGeofenceActions, HomeGeofenceState } from '../application/use-home-geofence';
 import type { CommandState, IrState, OpenHomeActions, OpenHomeState, TopLevelTab } from '../application/use-open-home';
 import { homeRemoteRows, tvRemoteRows, type RemoteCommand } from '../domain/remotes';
 import { ControlButton } from './control-button';
@@ -11,10 +12,12 @@ type ReadyState = Extract<OpenHomeState, { readonly tag: 'ready' }>;
 type Props = {
   readonly state: ReadyState;
   readonly actions: OpenHomeActions;
+  readonly homeGeofence: HomeGeofenceState;
+  readonly homeGeofenceActions: HomeGeofenceActions;
 };
 
 /** Render Home and Remote as a swipeable, two-tab control console. */
-export function ConfiguredScreen({ state, actions }: Props) {
+export function ConfiguredScreen({ state, actions, homeGeofence, homeGeofenceActions }: Props) {
   const pager = useRef<ScrollView>(null);
   const [pageWidth, setPageWidth] = useState(0);
 
@@ -64,7 +67,7 @@ export function ConfiguredScreen({ state, actions }: Props) {
         style={styles.pager}
       >
         <ScrollView contentContainerStyle={styles.pageContent} style={{ width: pageWidth }}>
-          <HomePage state={state} actions={actions} />
+          <HomePage state={state} actions={actions} homeGeofence={homeGeofence} homeGeofenceActions={homeGeofenceActions} />
         </ScrollView>
         <ScrollView contentContainerStyle={styles.pageContent} style={{ width: pageWidth }}>
           <RemotePage state={state} actions={actions} />
@@ -79,7 +82,7 @@ export function ConfiguredScreen({ state, actions }: Props) {
   );
 }
 
-function HomePage({ state, actions }: Props) {
+function HomePage({ state, actions, homeGeofence, homeGeofenceActions }: Props) {
   return (
     <View style={styles.stack}>
       <PageHeading eyebrow="QUICK CONTROL" title="Home" description="The controls you reach for first." />
@@ -90,6 +93,7 @@ function HomePage({ state, actions }: Props) {
         </View>
         <CommandError state={state.light} commands={[{ command: 'on', label: 'Light on' }, { command: 'off', label: 'Light off' }]} />
       </Section>
+      <HomeAutomation state={homeGeofence} actions={homeGeofenceActions} />
       <IrSummary state={state.ir} remote="EDIFIER" onRetry={actions.retryIrStatus} />
       <Section title="EDIFIER">
         <RemoteRows
@@ -103,7 +107,7 @@ function HomePage({ state, actions }: Props) {
   );
 }
 
-function RemotePage({ state, actions }: Props) {
+function RemotePage({ state, actions }: Pick<Props, 'state' | 'actions'>) {
   return (
     <View style={styles.stack}>
       <PageHeading eyebrow="IR REMOTE" title="LG TV" description="A fixed layout. Live availability." />
@@ -117,6 +121,47 @@ function RemotePage({ state, actions }: Props) {
         />
       </Section>
     </View>
+  );
+}
+
+function HomeAutomation({ state, actions }: { readonly state: HomeGeofenceState; readonly actions: HomeGeofenceActions }) {
+  return (
+    <Section title="LEAVE HOME AUTOMATION">
+      <Text style={styles.automationDescription}>
+        {state.tag === 'ready' && state.home !== null
+          ? `Configured with the operating system for a ${state.home.radiusMeters} meter radius. Your lights turn off when this device leaves it.`
+          : 'Set this location as home. Your lights will turn off when this device leaves the radius.'}
+      </Text>
+      <View style={styles.radiusRow}>
+        <TextInput
+          accessibilityLabel="Home radius in meters"
+          editable={state.tag === 'ready' && !state.saving}
+          keyboardType="number-pad"
+          onChangeText={actions.updateRadius}
+          placeholder="150"
+          placeholderTextColor={colors.muted}
+          style={styles.radiusInput}
+          value={state.radiusInput}
+        />
+        <Text style={styles.radiusUnit}>METERS</Text>
+      </View>
+      {state.tag === 'loading' ? <ActivityIndicator color={colors.signal} /> : (
+        <View style={styles.row}>
+          <ActionButton
+            label={state.home === null ? 'Set home here' : 'Update home here'}
+            sending={state.saving}
+            disabled={state.saving}
+            onPress={actions.setHome}
+          />
+          {state.home === null ? null : (
+            <Pressable accessibilityRole="button" disabled={state.saving} onPress={actions.disable} style={styles.secondaryAction}>
+              <Text style={styles.secondaryActionLabel}>Disable</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {state.tag === 'ready' && state.error !== null ? <Text accessibilityRole="alert" style={styles.error}>{state.error}</Text> : null}
+    </Section>
   );
 }
 
@@ -210,6 +255,7 @@ const styles = StyleSheet.create({
   actionButton: { alignItems: 'center', backgroundColor: colors.signal, borderRadius: 12, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', minHeight: 58 },
   actionLabel: { color: colors.background, fontSize: 15, fontWeight: '900' },
   actionPressed: { opacity: 0.8 },
+  automationDescription: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   commandCount: { color: colors.muted, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   configureButton: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   configureLabel: { color: colors.muted, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
@@ -225,12 +271,17 @@ const styles = StyleSheet.create({
   pageTitle: { color: colors.text, fontSize: 38, fontWeight: '900', letterSpacing: -1.5, marginTop: 2 },
   pager: { flex: 1 },
   readyDot: { backgroundColor: colors.ready, borderRadius: 4, height: 7, width: 7 },
+  radiusInput: { backgroundColor: colors.background, borderColor: colors.border, borderRadius: 10, borderWidth: 1, color: colors.text, flex: 1, fontSize: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  radiusRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  radiusUnit: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
   retry: { color: colors.signal, fontSize: 11, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
   row: { flexDirection: 'row', gap: 10 },
   rows: { gap: 10 },
   screen: { backgroundColor: colors.background, flex: 1 },
   section: { backgroundColor: colors.panel, borderColor: colors.border, borderRadius: 16, borderWidth: 1, gap: 12, padding: 14 },
   sectionTitle: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.8 },
+  secondaryAction: { alignItems: 'center', borderColor: colors.border, borderRadius: 12, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 58 },
+  secondaryActionLabel: { color: colors.text, fontSize: 14, fontWeight: '800' },
   selectedTabLabel: { color: colors.signal },
   selectedTabLine: { backgroundColor: colors.signal },
   spacer: { flex: 1 },

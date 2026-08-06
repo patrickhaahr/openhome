@@ -25,6 +25,15 @@
     "plugins": [
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow OpenHome to monitor when you leave your home region so it can turn off your lights.",
+          "locationWhenInUsePermission": "Allow OpenHome to use your current location when you set your home region.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

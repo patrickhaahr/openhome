@@ -4,6 +4,7 @@ import { parseConfiguration, type Configuration } from '../domain/configuration'
 import { failure, success, type Result } from '../domain/result';
 
 const configurationKey = 'openhome.configuration';
+const secureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 
 /** Persistent storage required by the setup flow. */
 export type ConfigurationStore = {
@@ -16,7 +17,7 @@ export function createSecureConfigurationStore(): ConfigurationStore {
   return {
     async load(): Promise<Result<Configuration | null>> {
       try {
-        const stored = await SecureStore.getItemAsync(configurationKey);
+        const stored = await SecureStore.getItemAsync(configurationKey, secureStoreOptions);
         if (stored === null) {
           return success(null);
         }
@@ -33,7 +34,7 @@ export function createSecureConfigurationStore(): ConfigurationStore {
 
     async save(configuration: Configuration): Promise<Result<void>> {
       try {
-        await SecureStore.setItemAsync(configurationKey, JSON.stringify(configuration));
+        await SecureStore.setItemAsync(configurationKey, JSON.stringify(configuration), secureStoreOptions);
         return success(undefined);
       } catch {
         return failure("Couldn't persist configuration.");

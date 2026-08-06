@@ -40,6 +40,14 @@ _Avoid_: Account onboarding, server registration
 The access model for `mobile-native` and `mobile-expo`: complete Setup Flow once, then open directly into the app without a launch-time Unlock Flow.
 _Avoid_: Biometric gate, locked-by-default startup
 
+**Home Geofence**:
+A user-configured circular region centered on the Mobile Client's current location. When the client exits the region, it asks the Axum API to turn off the lights.
+_Avoid_: Continuous GPS tracking, direct light automation
+
+**Home Radius**:
+The distance in meters from the center of the Home Geofence that defines when the Mobile Client has left home.
+_Avoid_: GPS interval, polling distance
+
 **Initial Native Tabs**:
 The first visible top-level tabs in `mobile-native`: `Home` and `Remote` only.
 _Avoid_: Placeholder tabs, future empty destinations
@@ -95,6 +103,8 @@ _Avoid_: Full remote shortcut set, implicit defaults
 - A **Mobile Client** uses a configured **Base URL** to reach the **Axum API**.
 - A **Mobile Client** authorizes requests to the **Axum API** with an **API Key**.
 - A user completes the **Setup Flow** before first use of the **Mobile Client**.
+- `mobile-expo` can register one **Home Geofence** and sends a light-off command to the **Axum API** when it exits that region.
+- A **Home Radius** defines the boundary of the **Home Geofence** in meters.
 - Some **Mobile Clients** use an **Unlock Flow** before the stored **API Key** can be used.
 - `mobile-native` uses **Native Client Access**.
 - `mobile-expo` uses **Native Client Access** and preserves the same initial capabilities as `mobile-native`.
