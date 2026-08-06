@@ -6,7 +6,7 @@ import { success } from '../domain/result';
 import { handleHomeGeofenceEvent, retryPendingHomeExit } from './handle-home-geofence-event';
 
 const configuration = { baseUrl: 'http://openhome.local:8000', apiKey: 'secret' };
-const home: HomeGeofence = { identifier: 'home-123', latitude: 51.5074, longitude: -0.1278, radiusMeters: 150 };
+const home: HomeGeofence = { identifier: 'home-123', latitude: 51.5074, longitude: -0.1278, radiusMeters: 150, provider: 'expo' };
 
 function dependencies(commands: Array<Configuration>, pending: Array<string | null>) {
   return {

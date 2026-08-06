@@ -129,7 +129,7 @@ function HomeAutomation({ state, actions }: { readonly state: HomeGeofenceState;
     <Section title="LEAVE HOME AUTOMATION">
       <Text style={styles.automationDescription}>
         {state.tag === 'ready' && state.home !== null
-          ? `Configured with the operating system for a ${state.home.radiusMeters} meter radius. Your lights turn off when this device leaves it.`
+          ? `Using ${state.home.provider === 'native' ? 'Android native' : 'Expo'} location for a ${state.home.radiusMeters} meter radius. Your lights turn off when this device leaves it.`
           : 'Set this location as home. Your lights will turn off when this device leaves the radius.'}
       </Text>
       <View style={styles.radiusRow}>
@@ -148,18 +148,21 @@ function HomeAutomation({ state, actions }: { readonly state: HomeGeofenceState;
       {state.tag === 'loading' ? <ActivityIndicator color={colors.signal} /> : (
         <View style={styles.row}>
           <ActionButton
-            label={state.home === null ? 'Set home here' : 'Update home here'}
+            label="Use Expo"
             sending={state.saving}
             disabled={state.saving}
-            onPress={actions.setHome}
+            onPress={() => actions.setHome('expo')}
           />
-          {state.home === null ? null : (
-            <Pressable accessibilityRole="button" disabled={state.saving} onPress={actions.disable} style={styles.secondaryAction}>
-              <Text style={styles.secondaryActionLabel}>Disable</Text>
-            </Pressable>
-          )}
+          <Pressable accessibilityRole="button" disabled={state.saving} onPress={() => actions.setHome('native')} style={styles.secondaryAction}>
+            <Text style={styles.secondaryActionLabel}>Use native</Text>
+          </Pressable>
         </View>
       )}
+      {state.tag === 'ready' && state.home !== null ? (
+        <Pressable accessibilityRole="button" disabled={state.saving} onPress={actions.disable} style={styles.disableAction}>
+          <Text style={styles.secondaryActionLabel}>Disable home automation</Text>
+        </Pressable>
+      ) : null}
       {state.tag === 'ready' && state.error !== null ? <Text accessibilityRole="alert" style={styles.error}>{state.error}</Text> : null}
     </Section>
   );
@@ -262,6 +265,7 @@ const styles = StyleSheet.create({
   connection: { color: colors.muted, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   connectionRow: { alignItems: 'center', flexDirection: 'row', gap: 7 },
   disabled: { opacity: 0.5 },
+  disableAction: { alignItems: 'center', paddingVertical: 8 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 19, textAlign: 'center' },
   header: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
   kicker: { color: colors.text, fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },

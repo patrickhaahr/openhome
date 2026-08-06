@@ -6,24 +6,31 @@ import { useEffect } from 'react';
 import { useHomeGeofence } from './src/application/use-home-geofence';
 import { useOpenHome } from './src/application/use-open-home';
 import { createSecureConfigurationStore } from './src/infrastructure/configuration-store';
+import { createExpoHomeGeofenceBackend } from './src/infrastructure/expo-home-geofence-backend';
 import { createHomeGeofenceService } from './src/infrastructure/home-geofence-service';
 import { createHomeGeofenceStore } from './src/infrastructure/home-geofence-store';
 import { retryPendingHomeExitCommand } from './src/infrastructure/home-geofence-task';
+import { createNativeHomeGeofenceBackend } from './src/infrastructure/native-home-geofence-backend';
 import { ConfiguredScreen } from './src/ui/configured-screen';
 import { ConfigurationScreen } from './src/ui/configuration-screen';
 import { colors } from './src/ui/theme';
 
 const configurationStore = createSecureConfigurationStore();
-const homeGeofenceService = createHomeGeofenceService(createHomeGeofenceStore());
+const homeGeofenceService = createHomeGeofenceService(createHomeGeofenceStore(), {
+  expo: createExpoHomeGeofenceBackend(),
+  native: createNativeHomeGeofenceBackend(),
+});
 
 export default function App() {
   const [state, actions] = useOpenHome(configurationStore);
   const [homeGeofence, homeGeofenceActions] = useHomeGeofence(homeGeofenceService);
 
   useEffect(() => {
+    void homeGeofenceService.resume();
     void retryPendingHomeExitCommand();
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
+        void homeGeofenceService.resume();
         void retryPendingHomeExitCommand();
       }
     });

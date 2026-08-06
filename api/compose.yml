@@ -1,22 +1,17 @@
 services:
   api:
-    build: .
-    container_name: openhome-api
+    image: patrickhaahr/openhome-api:latest
     restart: unless-stopped
     volumes:
-      # Persist SQLite databases
       - ./data:/app/data
-      # Docker socket for container monitoring (read-only)
       - /var/run/docker.sock:/var/run/docker.sock:ro
     env_file:
       - .env
     environment:
-      - RUST_LOG=info
-      # Override DB paths to use container paths
-      - DATABASE_URL=sqlite:/app/data/app.db
-      - API_KEY=${API_KEY}
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -H \"Authorization: Bearer $$API_KEY\" http://localhost:8000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f -H \"Authorization: Bearer $$API_KEY\" http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -26,4 +21,3 @@ services:
 networks:
   caddy:
     external: true
-

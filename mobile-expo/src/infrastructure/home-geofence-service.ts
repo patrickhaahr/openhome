@@ -1,85 +1,79 @@
-import * as Location from 'expo-location';
-import * as TaskManager from 'expo-task-manager';
-
-import type { HomeGeofence } from '../domain/home-geofence';
+import type { HomeGeofence, HomeGeofenceProvider } from '../domain/home-geofence';
 import { failure, success, type Result } from '../domain/result';
 import type { HomeGeofenceStore } from './home-geofence-store';
 
 /** The globally registered operating-system geofence task. */
 export const homeGeofenceTaskName = 'openhome-home-geofence';
 
-/** Operations required by the home-geofence application flow. */
+/** The Android framework Home Geofence task. */
+export const nativeHomeGeofenceTaskName = 'openhome-native-home-geofence';
+
+/** A current position returned by a location backend. */
+export type HomePosition = {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number | null;
+};
+
+/** Operating-system operations needed by one Home Geofence provider. */
+export type HomeGeofenceBackend = {
+  readonly checkAvailability: () => Promise<Result<void>>;
+  readonly getCurrentPosition: () => Promise<Result<HomePosition>>;
+  readonly start: (home: HomeGeofence) => Promise<void>;
+  readonly stop: () => Promise<void>;
+};
+
+/** Operations required by the Home Geofence application flow. */
 export type HomeGeofenceService = {
   readonly load: () => Promise<Result<HomeGeofence | null>>;
-  readonly setAtCurrentLocation: (radiusMeters: number) => Promise<Result<HomeGeofence>>;
+  readonly resume: () => Promise<Result<void>>;
+  readonly setAtCurrentLocation: (radiusMeters: number, provider: HomeGeofenceProvider) => Promise<Result<HomeGeofence>>;
   readonly disable: () => Promise<Result<void>>;
 };
 
-/** Create the Expo Location adapter for the single home geofence. */
-export function createHomeGeofenceService(store: HomeGeofenceStore): HomeGeofenceService {
-  async function register(home: HomeGeofence): Promise<void> {
-    await Location.startGeofencingAsync(homeGeofenceTaskName, [{
-      identifier: home.identifier,
-      latitude: home.latitude,
-      longitude: home.longitude,
-      radius: home.radiusMeters,
-      notifyOnEnter: false,
-      notifyOnExit: true,
-    }]);
-  }
+type Backends = Readonly<Record<HomeGeofenceProvider, HomeGeofenceBackend>>;
 
-  async function restore(previous: HomeGeofence | null): Promise<void> {
+/** Create the provider-selecting module for the single Home Geofence. */
+export function createHomeGeofenceService(store: HomeGeofenceStore, backends: Backends): HomeGeofenceService {
+  async function restore(previous: HomeGeofence | null, attemptedBackend: HomeGeofenceBackend): Promise<void> {
+    await attemptedBackend.stop();
     const restored = await store.save(previous);
     if (!restored.ok) {
       throw new Error(restored.error);
     }
-    if (previous === null) {
-      await stopMonitoring();
-      return;
-    }
-    await register(previous);
-  }
-
-  async function stopMonitoring(): Promise<void> {
-    if (await Location.hasStartedGeofencingAsync(homeGeofenceTaskName)) {
-      await Location.stopGeofencingAsync(homeGeofenceTaskName);
+    if (previous !== null) {
+      await backends[previous.provider].start(previous);
     }
   }
 
   return {
     load: store.load,
 
-    async setAtCurrentLocation(radiusMeters: number): Promise<Result<HomeGeofence>> {
-      try {
-        if (!await TaskManager.isAvailableAsync()) {
-          return failure('Background location is unavailable in this build. Use an Android or iOS development build.');
-        }
-
-        const foreground = await Location.requestForegroundPermissionsAsync();
-        if (!foreground.granted) {
-          return failure('Allow location access to set your home location.');
-        }
-        if (foreground.android?.accuracy !== undefined && foreground.android.accuracy !== 'fine') {
-          return failure('Allow precise location so OpenHome can monitor your home radius reliably.');
-        }
-        if (foreground.ios?.accuracy === 'reduced') {
-          return failure('Enable Precise Location so OpenHome can monitor your home radius reliably.');
-        }
-        const background = await Location.requestBackgroundPermissionsAsync();
-        if (!background.granted) {
-          return failure('Allow background location so OpenHome can detect when you leave home.');
-        }
-      } catch {
-        return failure("Couldn't request location access. Check location settings and try again.");
+    async resume(): Promise<Result<void>> {
+      const home = await store.load();
+      if (!home.ok || home.value === null) {
+        return home.ok ? success(undefined) : home;
       }
-
-      let location: Location.LocationObject;
       try {
-        location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        await backends[home.value.provider].start(home.value);
+        return success(undefined);
       } catch {
-        return failure("Couldn't determine your current location. Check that location services are on and try again.");
+        return failure("Couldn't resume monitoring the home location.");
       }
-      if (location.coords.accuracy === null || location.coords.accuracy > radiusMeters) {
+    },
+
+    async setAtCurrentLocation(radiusMeters, provider): Promise<Result<HomeGeofence>> {
+      const backend = backends[provider];
+      const availability = await backend.checkAvailability();
+      if (!availability.ok) {
+        return availability;
+      }
+      const position = await backend.getCurrentPosition();
+      if (!position.ok) {
+        return position;
+      }
+      const { latitude, longitude, accuracyMeters } = position.value;
+      if (accuracyMeters === null || accuracyMeters > radiusMeters) {
         return failure(`Location accuracy must be within the ${radiusMeters} meter radius. Move near a window and try again.`);
       }
 
@@ -89,9 +83,10 @@ export function createHomeGeofenceService(store: HomeGeofenceStore): HomeGeofenc
       }
       const home: HomeGeofence = {
         identifier: `home-${Date.now()}`,
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+        latitude,
+        longitude,
         radiusMeters,
+        provider,
       };
       const saved = await store.save(home);
       if (!saved.ok) {
@@ -99,11 +94,14 @@ export function createHomeGeofenceService(store: HomeGeofenceStore): HomeGeofenc
       }
 
       try {
-        await register(home);
+        await backend.start(home);
+        if (previous.value !== null && previous.value.provider !== provider) {
+          await backends[previous.value.provider].stop();
+        }
         return success(home);
       } catch {
         try {
-          await restore(previous.value);
+          await restore(previous.value, backend);
         } catch {
           return failure("Couldn't start monitoring or restore the previous home location. Disable home automation and try again.");
         }
@@ -112,16 +110,27 @@ export function createHomeGeofenceService(store: HomeGeofenceStore): HomeGeofenc
     },
 
     async disable(): Promise<Result<void>> {
+      const previous = await store.load();
+      if (!previous.ok) {
+        return previous;
+      }
+      if (previous.value !== null) {
+        try {
+          await backends[previous.value.provider].stop();
+        } catch {
+          return failure("Couldn't stop monitoring the home location.");
+        }
+      }
       const removed = await store.save(null);
       if (!removed.ok) {
+        if (previous.value !== null) {
+          try {
+            await backends[previous.value.provider].start(previous.value);
+          } catch {
+            return failure("Couldn't persist disabling home automation or restore monitoring. Try setting home again.");
+          }
+        }
         return removed;
-      }
-
-      try {
-        await stopMonitoring();
-      } catch {
-        // The callback verifies persisted state, so removing it safely disables commands even if
-        // revoked permissions prevent the operating system registration from being removed.
       }
       return success(undefined);
     },

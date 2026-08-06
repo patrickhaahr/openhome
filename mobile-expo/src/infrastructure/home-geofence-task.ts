@@ -3,7 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 
 import { handleHomeGeofenceEvent, retryPendingHomeExit } from '../application/handle-home-geofence-event';
 import { createSecureConfigurationStore } from './configuration-store';
-import { homeGeofenceTaskName } from './home-geofence-service';
+import { homeGeofenceTaskName, nativeHomeGeofenceTaskName } from './home-geofence-service';
 import { createHomeGeofenceStore } from './home-geofence-store';
 import { createOpenHomeApi } from './open-home-api';
 
@@ -22,25 +22,27 @@ const dependencies = {
   turnOffLights: async (configuration: Parameters<typeof createOpenHomeApi>[0]) => createOpenHomeApi(configuration).sendLightCommand('off'),
 };
 
-if (!TaskManager.isTaskDefined(homeGeofenceTaskName)) {
-  TaskManager.defineTask<HomeGeofenceTaskData>(homeGeofenceTaskName, async ({ data, error }) => {
-    if (error !== null) {
-      console.error(`Home geofence failed: ${error.message}`);
-      return;
-    }
+for (const taskName of [homeGeofenceTaskName, nativeHomeGeofenceTaskName]) {
+  if (!TaskManager.isTaskDefined(taskName)) {
+    TaskManager.defineTask<HomeGeofenceTaskData>(taskName, async ({ data, error }) => {
+      if (error !== null) {
+        console.error(`Home geofence failed: ${error.message}`);
+        return;
+      }
 
-    const result = await handleHomeGeofenceEvent(
-      {
-        type: data.eventType === GeofencingEventType.Exit ? 'exit' : 'enter',
-        regionIdentifier: data.region.identifier ?? '',
-        regionState: geofenceRegionState(data.region.state),
-      },
-      dependencies,
-    );
-    if (!result.ok) {
-      console.error(`Home exit could not turn off the lights: ${result.error}`);
-    }
-  });
+      const result = await handleHomeGeofenceEvent(
+        {
+          type: data.eventType === GeofencingEventType.Exit ? 'exit' : 'enter',
+          regionIdentifier: data.region.identifier ?? '',
+          regionState: geofenceRegionState(data.region.state),
+        },
+        dependencies,
+      );
+      if (!result.ok) {
+        console.error(`Home exit could not turn off the lights: ${result.error}`);
+      }
+    });
+  }
 }
 
 /** Retry a light-off command persisted by a failed background geofence event. */

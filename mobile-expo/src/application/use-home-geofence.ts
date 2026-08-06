@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef } from 'react';
 
-import { parseRadiusMeters, type HomeGeofence } from '../domain/home-geofence';
+import { parseRadiusMeters, type HomeGeofence, type HomeGeofenceProvider } from '../domain/home-geofence';
 import type { HomeGeofenceService } from '../infrastructure/home-geofence-service';
 
 /** User-visible home-geofence state. */
@@ -17,7 +17,7 @@ export type HomeGeofenceState =
 /** User actions accepted by the home-geofence flow. */
 export type HomeGeofenceActions = {
   readonly updateRadius: (value: string) => void;
-  readonly setHome: () => void;
+  readonly setHome: (provider: HomeGeofenceProvider) => void;
   readonly disable: () => void;
 };
 
@@ -47,7 +47,7 @@ export function useHomeGeofence(service: HomeGeofenceService): readonly [HomeGeo
     return () => { active = false; };
   }, [service]);
 
-  async function setHome(): Promise<void> {
+  async function setHome(provider: HomeGeofenceProvider): Promise<void> {
     const current = stateRef.current;
     if (current.tag !== 'ready' || current.saving) {
       return;
@@ -58,7 +58,7 @@ export function useHomeGeofence(service: HomeGeofenceService): readonly [HomeGeo
       return;
     }
     dispatch({ type: 'saving' });
-    const result = await service.setAtCurrentLocation(radius.value);
+    const result = await service.setAtCurrentLocation(radius.value, provider);
     dispatch(result.ok ? { type: 'saved', home: result.value } : { type: 'failed', message: result.error });
   }
 
@@ -74,7 +74,7 @@ export function useHomeGeofence(service: HomeGeofenceService): readonly [HomeGeo
 
   return [state, {
     updateRadius(value) { dispatch({ type: 'radiusChanged', value }); },
-    setHome() { void setHome(); },
+    setHome(provider) { void setHome(provider); },
     disable() { void disable(); },
   }] as const;
 }

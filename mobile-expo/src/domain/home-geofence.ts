@@ -6,7 +6,11 @@ export type HomeGeofence = {
   readonly latitude: number;
   readonly longitude: number;
   readonly radiusMeters: number;
+  readonly provider: HomeGeofenceProvider;
 };
+
+/** Location backend used to monitor the Home Geofence. */
+export type HomeGeofenceProvider = 'expo' | 'native';
 
 /** Parse a user-entered geofence radius in meters. */
 export function parseRadiusMeters(input: string): Result<number> {
@@ -40,7 +44,11 @@ export function parseHomeGeofence(value: unknown): Result<HomeGeofence> {
   if (!('radiusMeters' in value) || !isFiniteNumber(value.radiusMeters) || !Number.isInteger(value.radiusMeters) || value.radiusMeters < 100 || value.radiusMeters > 10_000) {
     return invalidHomeGeofence();
   }
-  return success({ identifier: value.identifier, latitude: value.latitude, longitude: value.longitude, radiusMeters: value.radiusMeters });
+  const provider = 'provider' in value ? value.provider : 'expo';
+  if (provider !== 'expo' && provider !== 'native') {
+    return invalidHomeGeofence();
+  }
+  return success({ identifier: value.identifier, latitude: value.latitude, longitude: value.longitude, radiusMeters: value.radiusMeters, provider });
 }
 
 function invalidHomeGeofence(): Result<never> {
