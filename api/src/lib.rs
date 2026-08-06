@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use crate::services::adguard::AdguardService;
 use crate::services::docker::DockerService;
 use crate::services::ir::IrService;
+use crate::services::switchbot::SwitchbotService;
 
 pub mod auth;
 pub mod error;
@@ -20,6 +21,7 @@ pub struct AppState {
     pub adguard_service: Option<AdguardService>,
     pub docker_service: Option<DockerService>,
     pub ir_service: Option<IrService>,
+    pub switchbot_service: Option<SwitchbotService>,
     pub docker_cache: Arc<Mutex<DockerCache>>,
 }
 

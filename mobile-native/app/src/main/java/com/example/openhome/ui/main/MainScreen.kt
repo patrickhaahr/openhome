@@ -47,6 +47,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.openhome.data.IrRepository
 import com.example.openhome.data.IrState
 import com.example.openhome.data.IrStatus
+import com.example.openhome.data.LightCommand
+import com.example.openhome.data.LightRepository
 import com.example.openhome.data.SetupRepository
 import com.example.openhome.theme.OpenhomeTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -56,8 +58,9 @@ import kotlinx.coroutines.launch
 fun MainScreen(
   setupRepository: SetupRepository,
   irRepository: IrRepository,
+  lightRepository: LightRepository,
   modifier: Modifier = Modifier,
-  viewModel: MainScreenViewModel = viewModel(factory = mainScreenViewModelFactory(setupRepository, irRepository)),
+  viewModel: MainScreenViewModel = viewModel(factory = mainScreenViewModelFactory(setupRepository, irRepository, lightRepository)),
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   MainScreenContent(
@@ -69,6 +72,7 @@ fun MainScreen(
     onCancelReconfiguration = viewModel::cancelReconfiguration,
     onTabSelected = viewModel::onTabSelected,
     onRetryIrStatus = viewModel::retryIrStatus,
+    onSendLightCommand = viewModel::sendLightCommand,
     onSendHomeRemoteCommand = viewModel::sendHomeRemoteCommand,
     onSendRemoteCommand = viewModel::sendRemoteCommand,
     modifier = modifier,
@@ -85,6 +89,7 @@ internal fun MainScreenContent(
   onCancelReconfiguration: () -> Unit,
   onTabSelected: (TopLevelTab) -> Unit,
   onRetryIrStatus: () -> Unit,
+  onSendLightCommand: (LightCommand) -> Unit,
   onSendHomeRemoteCommand: (String) -> Unit,
   onSendRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
@@ -93,7 +98,8 @@ internal fun MainScreenContent(
     MainScreenUiState.Loading -> LoadingScreen(modifier)
     is MainScreenUiState.ConfigurationForm ->
       ConfigurationFormScreen(state, onBaseUrlChanged, onApiKeyChanged, onSubmitSetup, onCancelReconfiguration, modifier)
-    is MainScreenUiState.App -> AppShell(state, onOpenReconfiguration, onTabSelected, onRetryIrStatus, onSendHomeRemoteCommand, onSendRemoteCommand, modifier)
+    is MainScreenUiState.App ->
+      AppShell(state, onOpenReconfiguration, onTabSelected, onRetryIrStatus, onSendLightCommand, onSendHomeRemoteCommand, onSendRemoteCommand, modifier)
   }
 }
 
@@ -218,6 +224,7 @@ private fun AppShell(
   onOpenReconfiguration: () -> Unit,
   onTabSelected: (TopLevelTab) -> Unit,
   onRetryIrStatus: () -> Unit,
+  onSendLightCommand: (LightCommand) -> Unit,
   onSendHomeRemoteCommand: (String) -> Unit,
   onSendRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
@@ -293,8 +300,10 @@ private fun AppShell(
           TopLevelTab.Home -> {
             HomeTab(
               irState = state.irState,
+              lightControlsState = state.lightControlsState,
               homeRemoteControlsState = state.homeRemoteControlsState,
               onRetryIrStatus = onRetryIrStatus,
+              onSendLightCommand = onSendLightCommand,
               onSendHomeRemoteCommand = onSendHomeRemoteCommand,
             )
           }
@@ -315,13 +324,19 @@ private fun AppShell(
 @Composable
 private fun HomeTab(
   irState: IrState,
+  lightControlsState: LightControlsState,
   homeRemoteControlsState: HomeRemoteControlsState,
   onRetryIrStatus: () -> Unit,
+  onSendLightCommand: (LightCommand) -> Unit,
   onSendHomeRemoteCommand: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
     TabHeader(title = TopLevelTab.Home.label, description = "OpenHome is configured and ready.")
+    LightControls(
+      state = lightControlsState,
+      onSendLightCommand = onSendLightCommand,
+    )
     when (irState) {
       IrState.Idle, IrState.Loading -> IrLoadingState(message = "Loading shared IR status for Home and Remote.")
       is IrState.Error -> IrErrorState(message = irState.message, onRetryIrStatus = onRetryIrStatus)
@@ -338,6 +353,43 @@ private fun HomeTab(
           onSendHomeRemoteCommand = onSendHomeRemoteCommand,
         )
       }
+    }
+  }
+}
+
+@Composable
+private fun LightControls(
+  state: LightControlsState,
+  onSendLightCommand: (LightCommand) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(text = "Lights", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      LightCommand.entries.forEach { command ->
+        val isSending = state.sendingCommand == command
+        OutlinedButton(
+          onClick = { onSendLightCommand(command) },
+          enabled = state.sendingCommand == null,
+          modifier = Modifier.weight(1f).testTag("light-${command.name.lowercase()}"),
+        ) {
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (isSending) {
+              CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("light-${command.name.lowercase()}-progress"), strokeWidth = 2.dp)
+            }
+            Text(if (command == LightCommand.On) "Light on" else "Light off")
+          }
+        }
+      }
+    }
+    if (state.errorMessage != null) {
+      val label = if (state.errorCommand == LightCommand.On) "Light on" else "Light off"
+      Text(
+        text = "$label failed: ${state.errorMessage}",
+        color = MaterialTheme.colorScheme.error,
+        style = MaterialTheme.typography.bodyMedium,
+        textAlign = TextAlign.Center,
+      )
     }
   }
 }
@@ -518,10 +570,10 @@ private val TopLevelTab.label: String
       TopLevelTab.Remote -> "Remote"
     }
 
-private fun mainScreenViewModelFactory(setupRepository: SetupRepository, irRepository: IrRepository) =
+private fun mainScreenViewModelFactory(setupRepository: SetupRepository, irRepository: IrRepository, lightRepository: LightRepository) =
   viewModelFactory {
     initializer {
-      MainScreenViewModel(setupRepository = setupRepository, irRepository = irRepository)
+      MainScreenViewModel(setupRepository = setupRepository, irRepository = irRepository, lightRepository = lightRepository)
     }
   }
 
@@ -595,6 +647,7 @@ fun SetupScreenPreview() {
       onCancelReconfiguration = {},
       onTabSelected = {},
       onRetryIrStatus = {},
+      onSendLightCommand = {},
       onSendHomeRemoteCommand = {},
       onSendRemoteCommand = {},
     )
@@ -624,6 +677,7 @@ fun AppShellPreview() {
       onCancelReconfiguration = {},
       onTabSelected = {},
       onRetryIrStatus = {},
+      onSendLightCommand = {},
       onSendHomeRemoteCommand = {},
       onSendRemoteCommand = {},
     )

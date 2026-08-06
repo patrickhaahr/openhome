@@ -6,11 +6,13 @@ use openhome_api::auth::{ApiKey, auth_middleware};
 use openhome_api::routes::{
     adguard::router as adguard_router, docker::router as docker_router,
     facts::router as facts_router, feeds::router as feeds_router, health::router as health_router,
-    ir::router as ir_router, timeline::router as timeline_router,
+    ir::router as ir_router, switchbot::router as switchbot_router,
+    timeline::router as timeline_router,
 };
 use openhome_api::services::adguard::AdguardService;
 use openhome_api::services::docker::DockerService;
 use openhome_api::services::ir::IrService;
+use openhome_api::services::switchbot::SwitchbotService;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 
@@ -36,6 +38,7 @@ pub fn create_mock_state_with_adguard(service: AdguardService) -> AppState {
         adguard_service: Some(service),
         docker_service: None,
         ir_service: None,
+        switchbot_service: None,
         docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
             openhome_api::DockerCache::default(),
         )),
@@ -50,6 +53,22 @@ pub fn create_mock_state_with_ir(service: IrService) -> AppState {
         adguard_service: None,
         docker_service: None,
         ir_service: Some(service),
+        switchbot_service: None,
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+            openhome_api::DockerCache::default(),
+        )),
+    }
+}
+
+#[allow(dead_code)]
+pub fn create_mock_state_with_switchbot(service: SwitchbotService) -> AppState {
+    let db = SqlitePool::connect_lazy("sqlite::memory:").unwrap();
+    AppState {
+        db,
+        adguard_service: None,
+        docker_service: None,
+        ir_service: None,
+        switchbot_service: Some(service),
         docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
             openhome_api::DockerCache::default(),
         )),
@@ -74,6 +93,7 @@ pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Rou
         adguard_service,
         docker_service: None,
         ir_service: None,
+        switchbot_service: None,
         docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
             openhome_api::DockerCache::default(),
         )),
@@ -84,6 +104,7 @@ pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Rou
         .merge(facts_router())
         .merge(feeds_router())
         .merge(ir_router())
+        .merge(switchbot_router())
         .merge(timeline_router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
@@ -120,6 +141,7 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
         adguard_service,
         docker_service,
         ir_service: None,
+        switchbot_service: None,
         docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
             openhome_api::DockerCache::default(),
         )),
@@ -131,6 +153,7 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
         .merge(facts_router())
         .merge(feeds_router())
         .merge(ir_router())
+        .merge(switchbot_router())
         .merge(timeline_router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {

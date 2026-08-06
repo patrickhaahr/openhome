@@ -20,7 +20,11 @@ class MainActivity : ComponentActivity() {
     setContent {
       OpenhomeTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-          MainNavigation(setupRepository = appContainer.setupRepository, irRepository = appContainer.irRepository)
+          MainNavigation(
+            setupRepository = appContainer.setupRepository,
+            irRepository = appContainer.irRepository,
+            lightRepository = appContainer.lightRepository,
+          )
         }
       }
     }

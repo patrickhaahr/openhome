@@ -26,6 +26,7 @@ import org.junit.Test
 
 import com.example.openhome.data.IrState
 import com.example.openhome.data.IrStatus
+import com.example.openhome.data.LightCommand
 
 /** UI tests for [com.example.openhome.ui.main.MainScreen]. */
 class MainScreenTest {
@@ -79,6 +80,31 @@ class MainScreenTest {
     HOME_REMOTE_CONTROL_COMMANDS.forEach { command ->
       composeTestRule.onNodeWithTag("home-remote-$command").assertIsDisplayed().assertIsEnabled()
     }
+  }
+
+  @Test
+  fun homeTab_lightButtonClickCallsHandler() {
+    var tappedCommand: LightCommand? = null
+
+    renderScreen(
+      MainScreenUiState.App(),
+      onSendLightCommand = { tappedCommand = it },
+    )
+
+    composeTestRule.onNodeWithTag("light-on").performClick()
+
+    assertEquals(LightCommand.On, tappedCommand)
+  }
+
+  @Test
+  fun homeTab_disablesLightButtonsWhileSwitching() {
+    renderScreen(
+      MainScreenUiState.App(lightControlsState = LightControlsState(sendingCommand = LightCommand.Off)),
+    )
+
+    composeTestRule.onNodeWithTag("light-on").assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("light-off").assertIsNotEnabled()
+    assertEquals(1, composeTestRule.onAllNodesWithTag("light-off-progress").fetchSemanticsNodes().size)
   }
 
   @Test
@@ -262,6 +288,7 @@ class MainScreenTest {
     state: MainScreenUiState,
     onSendHomeRemoteCommand: (String) -> Unit = {},
     onSendRemoteCommand: (String) -> Unit = {},
+    onSendLightCommand: (LightCommand) -> Unit = {},
   ) {
     composeTestRule.setContent {
       MainScreenContent(
@@ -273,6 +300,7 @@ class MainScreenTest {
         onCancelReconfiguration = {},
         onTabSelected = {},
         onRetryIrStatus = {},
+        onSendLightCommand = onSendLightCommand,
         onSendHomeRemoteCommand = onSendHomeRemoteCommand,
         onSendRemoteCommand = onSendRemoteCommand,
       )
@@ -292,6 +320,7 @@ class MainScreenTest {
         onCancelReconfiguration = {},
         onTabSelected = { selectedTab = it },
         onRetryIrStatus = {},
+        onSendLightCommand = {},
         onSendHomeRemoteCommand = {},
         onSendRemoteCommand = {},
       )

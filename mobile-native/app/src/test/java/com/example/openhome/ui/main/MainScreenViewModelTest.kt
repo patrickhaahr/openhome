@@ -4,6 +4,8 @@ import com.example.openhome.data.IrRepository
 import com.example.openhome.data.IrRemote
 import com.example.openhome.data.IrState
 import com.example.openhome.data.IrStatus
+import com.example.openhome.data.LightCommand
+import com.example.openhome.data.LightRepository
 import com.example.openhome.data.SetupRepository
 import com.example.openhome.data.StoredConfiguration
 import junit.framework.TestCase.assertEquals
@@ -524,6 +526,53 @@ class MainScreenViewModelTest {
     )
   }
 
+  @Test
+  fun sendLightCommand_sendsSelectedCommandAndShowsProgress() = runTest {
+    val pendingSend = CompletableDeferred<Result<Unit>>()
+    val lightRepository = FakeLightRepository(pendingResults = mutableMapOf(LightCommand.On to pendingSend))
+    val viewModel =
+      MainScreenViewModel(
+        setupRepository = FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION),
+        irRepository = FakeIrRepository(),
+        lightRepository = lightRepository,
+      )
+
+    advanceUntilIdle()
+    viewModel.sendLightCommand(LightCommand.On)
+    advanceUntilIdle()
+
+    assertEquals(LightControlsState(sendingCommand = LightCommand.On), viewModel.awaitState<MainScreenUiState.App>().lightControlsState)
+    assertEquals(listOf(LightCommand.On), lightRepository.sentCommands)
+
+    pendingSend.complete(Result.success(Unit))
+    advanceUntilIdle()
+
+    assertEquals(LightControlsState(), viewModel.awaitState<MainScreenUiState.App>().lightControlsState)
+  }
+
+  @Test
+  fun sendLightCommand_withFailureShowsActionError() = runTest {
+    val lightRepository =
+      FakeLightRepository(
+        sendResults = mutableMapOf(LightCommand.Off to Result.failure(IllegalStateException("SwitchBot unavailable"))),
+      )
+    val viewModel =
+      MainScreenViewModel(
+        setupRepository = FakeSetupRepository(initialConfiguration = VALID_CONFIGURATION),
+        irRepository = FakeIrRepository(),
+        lightRepository = lightRepository,
+      )
+
+    advanceUntilIdle()
+    viewModel.sendLightCommand(LightCommand.Off)
+    advanceUntilIdle()
+
+    assertEquals(
+      LightControlsState(errorMessage = "SwitchBot unavailable", errorCommand = LightCommand.Off),
+      viewModel.awaitState<MainScreenUiState.App>().lightControlsState,
+    )
+  }
+
 }
 
 private suspend inline fun <reified T : MainScreenUiState> MainScreenViewModel.awaitState(): T = uiState.first { it is T } as T
@@ -594,17 +643,31 @@ private class FakeIrRepository(
   }
 }
 
+private class FakeLightRepository(
+  private val sendResults: MutableMap<LightCommand, Result<Unit>> = mutableMapOf(),
+  private val pendingResults: MutableMap<LightCommand, CompletableDeferred<Result<Unit>>> = mutableMapOf(),
+) : LightRepository {
+  val sentCommands = mutableListOf<LightCommand>()
+
+  override suspend fun sendCommand(command: LightCommand): Result<Unit> {
+    sentCommands += command
+    return pendingResults.remove(command)?.await() ?: sendResults.remove(command) ?: Result.success(Unit)
+  }
+}
+
 private fun appState(
   selectedTab: TopLevelTab = TopLevelTab.Home,
   irState: IrState = IrState.Loaded(DEFAULT_IR_STATUS),
   homeRemoteControlsState: HomeRemoteControlsState = HomeRemoteControlsState(),
   remoteControlsState: RemoteControlsState = RemoteControlsState(),
+  lightControlsState: LightControlsState = LightControlsState(),
 ): MainScreenUiState.App =
   MainScreenUiState.App(
     selectedTab = selectedTab,
     irState = irState,
     homeRemoteControlsState = homeRemoteControlsState,
     remoteControlsState = remoteControlsState,
+    lightControlsState = lightControlsState,
   )
 
 private fun configurationFormState(

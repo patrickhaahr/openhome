@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.openhome.data.IrRepository
 import com.example.openhome.data.IrRemote
 import com.example.openhome.data.IrState
+import com.example.openhome.data.LightCommand
+import com.example.openhome.data.LightRepository
 import com.example.openhome.data.SetupRepository
 import com.example.openhome.data.StoredConfiguration
 import kotlinx.coroutines.CancellationException
@@ -21,12 +23,15 @@ import java.util.concurrent.atomic.AtomicLong
 class MainScreenViewModel(
   private val setupRepository: SetupRepository,
   private val irRepository: IrRepository,
+  private val lightRepository: LightRepository = UnavailableLightRepository,
 ) : ViewModel() {
   private val localUiState = MutableStateFlow(LocalUiState())
   private val homeRemoteControlsState = MutableStateFlow(HomeRemoteControlsState())
   private val remoteControlsState = MutableStateFlow(RemoteControlsState())
+  private val lightControlsState = MutableStateFlow(LightControlsState())
   private val homeRemoteControlsGeneration = AtomicLong(0)
   private val remoteControlsGeneration = AtomicLong(0)
+  private val lightControlsGeneration = AtomicLong(0)
   private var activeConfiguration: StoredConfiguration? = null
 
   init {
@@ -46,7 +51,7 @@ class MainScreenViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), MainScreenUiState.Loading)
 
   val uiState: StateFlow<MainScreenUiState> =
-    combine(baseUiState, irRepository.state, homeRemoteControlsState, remoteControlsState) { state, irState, currentHomeRemoteControlsState, currentRemoteControlsState ->
+    combine(baseUiState, irRepository.state, homeRemoteControlsState, remoteControlsState, lightControlsState) { state, irState, currentHomeRemoteControlsState, currentRemoteControlsState, currentLightControlsState ->
         when (state) {
           MainScreenUiState.Loading -> MainScreenUiState.Loading
           is MainScreenUiState.ConfigurationForm -> state
@@ -55,6 +60,7 @@ class MainScreenViewModel(
               irState = irState,
               homeRemoteControlsState = currentHomeRemoteControlsState,
               remoteControlsState = currentRemoteControlsState,
+              lightControlsState = currentLightControlsState,
             )
         }
       }
@@ -153,6 +159,33 @@ class MainScreenViewModel(
     )
   }
 
+  fun sendLightCommand(command: LightCommand) {
+    if (activeConfiguration == null || lightControlsState.value.sendingCommand != null) {
+      return
+    }
+
+    val generation = lightControlsGeneration.get()
+    lightControlsState.value = LightControlsState(sendingCommand = command)
+
+    viewModelScope.launch {
+      val result = runCommand { lightRepository.sendCommand(command) }
+      if (lightControlsGeneration.get() != generation) {
+        return@launch
+      }
+
+      lightControlsState.value =
+        result.fold(
+          onSuccess = { LightControlsState() },
+          onFailure = { throwable ->
+            LightControlsState(
+              errorMessage = throwable.message ?: DEFAULT_LIGHT_SEND_ERROR,
+              errorCommand = command,
+            )
+          },
+        )
+    }
+  }
+
   private fun updateSetupForm(transform: ConfigurationFormState.() -> ConfigurationFormState) {
     localUiState.update { currentState ->
       currentState.copy(form = currentState.form.transform().copy(errorMessage = null))
@@ -170,6 +203,7 @@ class MainScreenViewModel(
         activeConfiguration = configuration
         resetHomeRemoteControlsState()
         resetRemoteControlsState()
+        resetLightControlsState()
 
         if (configuration == null) {
           localUiState.value = LocalUiState()
@@ -222,7 +256,7 @@ class MainScreenViewModel(
     }
 
     viewModelScope.launch {
-      val result = runSendCommand(remote, command)
+      val result = runCommand { irRepository.sendCommand(remote, command) }
       if (controlsGeneration.get() != generation) {
         return@launch
       }
@@ -245,9 +279,9 @@ class MainScreenViewModel(
     }
   }
 
-  private suspend fun runSendCommand(remote: IrRemote, command: String): Result<Unit> =
+  private suspend fun runCommand(command: suspend () -> Result<Unit>): Result<Unit> =
     try {
-      irRepository.sendCommand(remote, command)
+      command()
     } catch (exception: CancellationException) {
       throw exception
     } catch (throwable: Throwable) {
@@ -285,11 +319,22 @@ class MainScreenViewModel(
     remoteControlsState.value = RemoteControlsState()
   }
 
+  private fun resetLightControlsState() {
+    lightControlsGeneration.incrementAndGet()
+    lightControlsState.value = LightControlsState()
+  }
+
   private companion object {
     const val STOP_TIMEOUT_MILLIS = 5_000L
     const val DEFAULT_VALIDATION_ERROR = "Couldn't validate that configuration."
     const val DEFAULT_SEND_ERROR = "Couldn't send that IR command."
+    const val DEFAULT_LIGHT_SEND_ERROR = "Couldn't switch the light."
   }
+}
+
+private object UnavailableLightRepository : LightRepository {
+  override suspend fun sendCommand(command: LightCommand): Result<Unit> =
+    Result.failure(IllegalStateException("Light controls are not configured."))
 }
 
 sealed interface MainScreenUiState {
@@ -308,6 +353,7 @@ sealed interface MainScreenUiState {
     val irState: IrState = IrState.Idle,
     val homeRemoteControlsState: HomeRemoteControlsState = HomeRemoteControlsState(),
     val remoteControlsState: RemoteControlsState = RemoteControlsState(),
+    val lightControlsState: LightControlsState = LightControlsState(),
   ) : MainScreenUiState
 }
 
@@ -320,6 +366,12 @@ data class CommandControlsState(
 typealias HomeRemoteControlsState = CommandControlsState
 
 typealias RemoteControlsState = CommandControlsState
+
+data class LightControlsState(
+  val sendingCommand: LightCommand? = null,
+  val errorMessage: String? = null,
+  val errorCommand: LightCommand? = null,
+)
 
 enum class TopLevelTab {
   Home,

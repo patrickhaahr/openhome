@@ -101,6 +101,7 @@ mod tests {
             adguard_service: service,
             docker_service: None,
             ir_service: None,
+            switchbot_service: None,
             docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
                 crate::DockerCache::default(),
             )),

@@ -9,7 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use openhome_api::auth;
 use openhome_api::routes;
-use openhome_api::services::{adguard, docker, feed, ir};
+use openhome_api::services::{adguard, docker, feed, ir, switchbot};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let adguard_password = std::env::var("ADGUARD_PASSWORD").unwrap_or_default();
     let adguard_insecure_tls = std::env::var("ADGUARD_INSECURE_TLS").unwrap_or_default() == "true";
     let ir_base_url = std::env::var("IR_BASE_URL").unwrap_or_default();
+    let switchbot_base_url = std::env::var("SWITCHBOT_BASE_URL").unwrap_or_default();
 
     let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {
         match docker::DockerService::new() {
@@ -78,11 +79,19 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    let switchbot_service = if !switchbot_base_url.is_empty() {
+        Some(switchbot::SwitchbotService::new(&switchbot_base_url)?)
+    } else {
+        tracing::warn!("SWITCHBOT_BASE_URL not set, SwitchBot integration disabled");
+        None
+    };
+
     let state = openhome_api::AppState {
         db,
         adguard_service,
         docker_service,
         ir_service,
+        switchbot_service,
         docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
             openhome_api::DockerCache::default(),
         )),
@@ -101,6 +110,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::adguard::router())
         .merge(routes::docker::router())
         .merge(routes::ir::router())
+        .merge(routes::switchbot::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())
