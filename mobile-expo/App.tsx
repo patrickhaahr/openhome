@@ -11,7 +11,7 @@ import { createHomeGeofenceService } from './src/infrastructure/home-geofence-se
 import { createHomeGeofenceStore } from './src/infrastructure/home-geofence-store';
 import { retryPendingHomeExitCommand } from './src/infrastructure/home-geofence-task';
 import { createNativeHomeGeofenceBackend } from './src/infrastructure/native-home-geofence-backend';
-import { ConfiguredScreen } from './src/ui/configured-screen';
+import { OpenHomeScreen } from './src/ui/open-home-screen';
 import { ConfigurationScreen } from './src/ui/configuration-screen';
 import { colors } from './src/ui/theme';
 
@@ -43,7 +43,7 @@ export default function App() {
         {state.tag === 'loading' ? <View style={styles.loading}><ActivityIndicator color={colors.signal} size="large" /></View> : null}
         {state.tag === 'configuration' ? <ConfigurationScreen state={state} actions={actions} /> : null}
         {state.tag === 'ready' ? (
-          <ConfiguredScreen
+          <OpenHomeScreen
             state={state}
             actions={actions}
             homeGeofence={homeGeofence}

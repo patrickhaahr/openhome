@@ -24,7 +24,7 @@ export function ControlButton({ control, available, sending, onPress }: Props) {
       <View style={styles.content}>
         {sending ? <ActivityIndicator color={colors.signal} size="small" /> : null}
         <Text style={[styles.label, !available && styles.unavailableLabel]}>{control.label}</Text>
-        {!available ? <Text style={styles.status}>UNAVAILABLE</Text> : null}
+        {!available ? <Text style={styles.status}>Unavailable</Text> : null}
       </View>
     </Pressable>
   );
@@ -35,18 +35,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.panelRaised,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 58,
+    minHeight: 62,
     paddingHorizontal: 6,
     paddingVertical: 10,
   },
   content: { alignItems: 'center', gap: 3 },
-  label: { color: colors.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
-  pressed: { backgroundColor: colors.signalDark, borderColor: colors.signal },
-  status: { color: colors.muted, fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
+  label: { color: colors.text, fontSize: 14, fontWeight: '700', lineHeight: 19, textAlign: 'center' },
+  pressed: { backgroundColor: colors.signalDark, borderColor: colors.signal, transform: [{ scale: 0.96 }] },
+  status: { color: colors.muted, fontSize: 11, fontWeight: '600', lineHeight: 15 },
   unavailable: { backgroundColor: colors.panel, opacity: 0.56 },
   unavailableLabel: { color: colors.muted },
 });

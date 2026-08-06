@@ -4,8 +4,8 @@ export type RemoteCommand = {
   readonly label: string;
 };
 
-/** Edifier commands shown on the Home tab. */
-export const homeRemoteRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
+/** Edifier commands shown on its dedicated remote tab. */
+export const edifierRemoteRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
   [
     { command: 'power', label: 'Power' },
     { command: 'bluetooth', label: 'Bluetooth' },

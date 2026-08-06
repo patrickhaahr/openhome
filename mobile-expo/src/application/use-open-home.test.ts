@@ -11,15 +11,15 @@ describe('OpenHome state transitions', () => {
       type: 'irLoaded',
       status: { message: 'IR ready', edifierCommands: new Set(['power']), lgTvCommands: new Set(['power']) },
     });
-    const remote = reduce(ready, { type: 'tabSelected', tab: 'remote' });
-    const editing = reduce(remote, { type: 'reconfigurationOpened' });
+    const television = reduce(ready, { type: 'tabSelected', tab: 'television' });
+    const editing = reduce(television, { type: 'reconfigurationOpened' });
     const changed = reduce(editing, { type: 'baseUrlChanged', value: 'http://replacement.local' });
     const cancelled = reduce(changed, { type: 'reconfigurationCancelled' });
 
     expect(cancelled.tag).toBe('ready');
     if (cancelled.tag === 'ready') {
       expect(cancelled.configuration).toEqual(configuration);
-      expect(cancelled.selectedTab).toBe('remote');
+      expect(cancelled.selectedTab).toBe('television');
       expect(cancelled.ir.tag).toBe('loaded');
     }
   });

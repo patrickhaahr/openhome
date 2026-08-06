@@ -1,13 +1,14 @@
-/** OpenHome control-console color palette. */
+/** OpenHome dark control-surface color palette. */
 export const colors = {
-  background: '#07111F',
-  panel: '#0D1C2D',
-  panelRaised: '#13283C',
-  border: '#25435E',
-  text: '#F2F7FA',
-  muted: '#91A7B8',
-  signal: '#FFB547',
-  signalDark: '#3A2B16',
-  ready: '#52D6A0',
-  danger: '#FF7D7D',
+  background: '#08090D',
+  panel: '#111319',
+  panelRaised: '#191C24',
+  border: '#5D6573',
+  text: '#F7F7F2',
+  muted: '#A6ABB7',
+  signal: '#F5C451',
+  signalDark: '#362C16',
+  ready: '#72D6A0',
+  readyDark: '#142C20',
+  danger: '#FF9696',
 } as const;

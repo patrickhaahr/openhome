@@ -9,6 +9,7 @@ export type HomeGeofenceState =
   | {
       readonly tag: 'ready';
       readonly home: HomeGeofence | null;
+      readonly provider: HomeGeofenceProvider;
       readonly radiusInput: string;
       readonly saving: boolean;
       readonly error: string | null;
@@ -85,6 +86,7 @@ function reduce(state: HomeGeofenceState, event: Event): HomeGeofenceState {
       return {
         tag: 'ready',
         home: event.home,
+        provider: event.home?.provider ?? 'native',
         radiusInput: event.home?.radiusMeters.toString() ?? state.radiusInput,
         saving: false,
         error: event.error,
@@ -97,7 +99,7 @@ function reduce(state: HomeGeofenceState, event: Event): HomeGeofenceState {
     case 'saving':
       return state.tag === 'ready' ? { ...state, saving: true, error: null } : state;
     case 'saved':
-      return state.tag === 'ready' ? { ...state, home: event.home, radiusInput: event.home.radiusMeters.toString(), saving: false, error: null } : state;
+      return state.tag === 'ready' ? { ...state, home: event.home, provider: event.home.provider, radiusInput: event.home.radiusMeters.toString(), saving: false, error: null } : state;
     case 'disabled':
       return state.tag === 'ready' ? { ...state, home: null, saving: false, error: null } : state;
     case 'failed':

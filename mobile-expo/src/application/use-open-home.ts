@@ -6,7 +6,7 @@ import type { ConfigurationStore } from '../infrastructure/configuration-store';
 import { createOpenHomeApi, type IrStatus, type OpenHomeApi } from '../infrastructure/open-home-api';
 
 /** A top-level destination in the configured app. */
-export type TopLevelTab = 'home' | 'remote';
+export type TopLevelTab = 'home' | 'television' | 'speaker' | 'away';
 
 /** The state of IR status loading. */
 export type IrState =
@@ -201,7 +201,7 @@ export function useOpenHome(store: ConfigurationStore): readonly [OpenHomeState,
     },
     selectTab(tab) {
       dispatch({ type: 'tabSelected', tab });
-      if (tab === 'remote' && stateRef.current.tag === 'ready' && stateRef.current.ir.tag === 'error') {
+      if ((tab === 'television' || tab === 'speaker') && stateRef.current.tag === 'ready' && stateRef.current.ir.tag === 'error') {
         retryIr();
       }
     },
