@@ -1,6 +1,7 @@
 services:
-  api:
+  openhome-api:
     image: patrickhaahr/openhome-api:latest
+    container_name: openhome-api
     restart: unless-stopped
     volumes:
       - ./data:/app/data
