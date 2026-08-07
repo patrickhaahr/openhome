@@ -23,6 +23,14 @@ The app can also register a home geofence and automatically ask the API to turn 
 | :---: | :---: |
 | <img src="assets/expo/tv.png" alt="OpenHome TV remote" width="300"> | <img src="assets/expo/speaker.png" alt="OpenHome speaker remote" width="300"> |
 
+## Hardware Demo
+
+| ESP32 infrared controller | ESP32 SwitchBot controller |
+| :---: | :---: |
+| <img src="assets/expo/esp32-infrared.jpg" alt="ESP32 infrared controller beside an Edifier speaker" width="400"> | <img src="assets/expo/esp32-switchbot.jpg" alt="ESP32 servo controller mounted above a wall light switch" width="400"> |
+
+[Watch the mobile app control the ESP32 devices](assets/expo/mobile-esp32-demo.mp4)
+
 ### Tauri Client
 
 | Home Dashboard | Docker Management |
