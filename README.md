@@ -4,6 +4,10 @@
   <img src="assets/app-icon.png" alt="OpenHome app icon" width="150">
 </p>
 
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/b9dff174-448f-4b85-b109-6cc2e2b53ebe"></video>
+</p>
+
 OpenHome is a self-hosted home control system with a cross-platform Android and iOS app. The mobile client is built with React Native and Expo and communicates exclusively with a Rust Axum API.
 
 The API authenticates the client and forwards HTTP requests to two ESP32 devices:
@@ -28,8 +32,6 @@ The app can also register a home geofence and automatically ask the API to turn 
 | ESP32 infrared controller | ESP32 SwitchBot controller |
 | :---: | :---: |
 | <img src="assets/expo/esp32-infrared.jpg" alt="ESP32 infrared controller beside an Edifier speaker" width="400"> | <img src="assets/expo/esp32-switchbot.jpg" alt="ESP32 servo controller mounted above a wall light switch" width="400"> |
-
-[Watch the mobile app control the ESP32 devices](assets/expo/mobile-esp32-demo.mp4)
 
 ### Tauri Client
 
