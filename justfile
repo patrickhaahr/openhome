@@ -32,30 +32,6 @@ go:
     cargo fmt
     cargo clippy
 
-[working-directory: "mobile-native"]
-android-build:
-    #!/run/current-system/sw/bin/nu
-    ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; ./gradlew :app:assembleDebug'
-
-[working-directory: "mobile-native"]
-android-run: android-build
-    #!/run/current-system/sw/bin/nu
-    ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; android run --apks "app/build/outputs/apk/debug/app-debug.apk" --activity "com.example.openhome.MainActivity"'
-
-[working-directory: "mobile-native"]
-android-lint:
-    #!/run/current-system/sw/bin/nu
-    ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; ./gradlew ktlintCheck :app:lint'
-
-[working-directory: "mobile-native"]
-android-test:
-    #!/run/current-system/sw/bin/nu
-    ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; ./gradlew :app:testDebugUnitTest'
-
-[working-directory: "mobile-native"]
-android-test-ui:
-    #!/run/current-system/sw/bin/nu
-    ^direnv exec /home/ph/dev/openhome /run/current-system/sw/bin/bash -lc 'set -euo pipefail; cd /home/ph/dev/openhome/mobile-native; sdk_root=$(android info | sed -n "s/^sdk: //p"); original=$(mktemp); trap "cp \"$original\" local.properties; rm -f \"$original\"" EXIT; cp local.properties "$original"; printf "sdk.dir=%s\n" "$sdk_root" > local.properties; ./gradlew :app:connectedDebugAndroidTest'
 
 [working-directory: "mobile-expo"]
 expo-install:
@@ -63,18 +39,18 @@ expo-install:
 
 [working-directory: "mobile-expo"]
 expo-start:
-    npm start
+    bun start
 
 [working-directory: "mobile-expo"]
 expo-android:
     #!/usr/bin/env bash
     set -euo pipefail
     export ANDROID_HOME="$(android info | sed -n 's/^sdk: //p')"
-    npx expo run:android --variant release --no-bundler
+    bunx expo run:android --variant release --no-bundler
 
 [working-directory: "mobile-expo"]
 expo-check:
-    npm run check
+    bun run check
 
 # Compile the ESP32 IR remote firmware.
 [working-directory: "firmware/ir-remote"]
