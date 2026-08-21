@@ -50,3 +50,13 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-native/A
 
 - For API work, default to the smallest relevant `just test...` command, then run `just lint` if Rust code changed.
 - For Android work, default to `just android-lint` and `just android-test`; use `just android-test-ui` only when the change touches instrumented UI behavior.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.

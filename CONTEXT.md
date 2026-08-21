@@ -96,6 +96,40 @@ _Avoid_: Full remote, duplicate tab
 The initial Home Remote Controls: `bluetooth` and `optical`.
 _Avoid_: Full remote shortcut set, implicit defaults
 
+### Server Operations
+
+**Server Tab**:
+A mixed Top-Level Tab on `mobile-expo` that groups server-operations surfaces: AdGuard Protection control, the Docker Health Summary, and the Compact Timeline with Feed management.
+_Avoid_: Infra dashboard, ops console
+
+**Docker Tab**:
+A Top-Level Tab on `mobile-expo` that lists Containers with their run state and exposes log inspection and lifecycle actions.
+_Avoid_: Container manager, DevOps screen
+
+**Container**:
+One Docker workload reported by the Axum API with name, image, run state, and health status.
+_Avoid_: Service, pod, stack
+
+**Docker Health Summary**:
+The client-side classification of all Containers into healthy, unhealthy, idle (none running), or offline (Axum API unreachable).
+_Avoid_: Cluster status, uptime metric
+
+**AdGuard Protection**:
+The network-level ad blocking managed through the Axum API and controlled from the Server Tab.
+_Avoid_: DNS filter, firewall setting
+
+**Protection Pause**:
+A time-boxed suspension of AdGuard Protection that resumes automatically when it ends.
+_Avoid_: Disable, timeout
+
+**Feed**:
+A subscribed RSS source whose items appear in the Compact Timeline.
+_Avoid_: Channel, subscription URL list
+
+**Compact Timeline**:
+The compact view of Feed items served by the Axum API that the Mobile Client paginates through newest-first.
+_Avoid_: Article reader, full-content feed
+
 ## Relationships
 
 - A **Mobile Client** calls the **Axum API** for every user-visible capability.
@@ -120,6 +154,10 @@ _Avoid_: Full remote shortcut set, implicit defaults
 - The **Home Tab** preloads IR state for both **Home Remote Controls** and the full **IR Remote** tab.
 - **Home Remote Controls** are a subset of the **Remote Button Set**.
 - The **V1 Home Remote Controls** are `bluetooth` and `optical`.
+- The **Server Tab** groups **AdGuard Protection** control, the **Docker Health Summary**, and the **Compact Timeline**.
+- A **Protection Pause** leaves AdGuard Protection off only until its duration ends.
+- A **Container** is inspected (logs) and lifecycle-managed (start, stop, restart) through the Axum API from the **Docker Tab**.
+- Each **Feed** contributes items to the **Compact Timeline**.
 
 ## Example dialogue
 
@@ -135,3 +173,5 @@ _Avoid_: Full remote shortcut set, implicit defaults
 - The native Android migration scope is clientside only. Resolved: the backend contract, endpoint shapes, and auth model stay unchanged while the **Mobile Client** is reimplemented natively.
 - "same auth flow" was used ambiguously. Resolved: `mobile-native` preserves the backend **API Key** contract and **Setup Flow**, but does not use the old launch-time **Unlock Flow**.
 - The tab roadmap is incremental. Resolved: `mobile-native` only shows **Initial Native Tabs** that are actually implemented, starting with `Home` and `Remote`.
+- "Top-Level Tabs mirror one API area" conflicts with the Server Tab grouping three areas. Resolved: the **Server Tab** is a deliberate mixed operations tab, playing the same role for server ops that the **Home Tab** plays for quick access.
+- "migrate features" could mean moving or copying them off the deprecated Tauri client. Resolved: AdGuard control, Docker management, and the Compact Timeline are reimplemented in `mobile-expo`; the deprecated client stays untouched.
