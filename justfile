@@ -59,7 +59,7 @@ android-test-ui:
 
 [working-directory: "mobile-expo"]
 expo-install:
-    npm ci
+    bun install
 
 [working-directory: "mobile-expo"]
 expo-start:

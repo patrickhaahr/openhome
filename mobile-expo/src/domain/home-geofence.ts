@@ -1,3 +1,4 @@
+import { isJsonNumber, isJsonObject, isJsonString, type Json } from './json';
 import { failure, success, type Result } from './result';
 
 /** A home region monitored by the operating system. */
@@ -28,33 +29,37 @@ export function parseRadiusMeters(input: string): Result<number> {
 }
 
 /** Parse persisted data into a valid home geofence. */
-export function parseHomeGeofence(value: unknown): Result<HomeGeofence> {
-  if (typeof value !== 'object' || value === null) {
+export function parseHomeGeofence(json: Json): Result<HomeGeofence> {
+  if (!isJsonObject(json)) {
     return invalidHomeGeofence();
   }
-  if (!('identifier' in value) || typeof value.identifier !== 'string' || value.identifier.length === 0) {
+  const identifier = json['identifier'];
+  const latitude = json['latitude'];
+  const longitude = json['longitude'];
+  const radiusMeters = json['radiusMeters'];
+  if (!isJsonString(identifier) || identifier.length === 0) {
     return invalidHomeGeofence();
   }
-  if (!('latitude' in value) || !isFiniteNumber(value.latitude) || value.latitude < -90 || value.latitude > 90) {
+  if (!isJsonNumber(latitude) || latitude < -90 || latitude > 90) {
     return invalidHomeGeofence();
   }
-  if (!('longitude' in value) || !isFiniteNumber(value.longitude) || value.longitude < -180 || value.longitude > 180) {
+  if (!isJsonNumber(longitude) || longitude < -180 || longitude > 180) {
     return invalidHomeGeofence();
   }
-  if (!('radiusMeters' in value) || !isFiniteNumber(value.radiusMeters) || !Number.isInteger(value.radiusMeters) || value.radiusMeters < 100 || value.radiusMeters > 10_000) {
+  if (!isJsonNumber(radiusMeters) || !Number.isInteger(radiusMeters) || radiusMeters < 100 || radiusMeters > 10_000) {
     return invalidHomeGeofence();
   }
-  const provider = 'provider' in value ? value.provider : 'expo';
-  if (provider !== 'expo' && provider !== 'native') {
+  const provider = json['provider'] ?? 'expo';
+  if (!isHomeGeofenceProvider(provider)) {
     return invalidHomeGeofence();
   }
-  return success({ identifier: value.identifier, latitude: value.latitude, longitude: value.longitude, radiusMeters: value.radiusMeters, provider });
+  return success({ identifier, latitude, longitude, radiusMeters, provider });
+}
+
+function isHomeGeofenceProvider(value: Json): value is HomeGeofenceProvider {
+  return value === 'expo' || value === 'native';
 }
 
 function invalidHomeGeofence(): Result<never> {
   return failure('The saved home location could not be read. Set it again.');
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }

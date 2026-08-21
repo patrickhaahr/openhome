@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 import { parseConfiguration, type Configuration } from '../domain/configuration';
+import { isJsonObject, isJsonString, type Json } from '../domain/json';
 import { failure, success, type Result } from '../domain/result';
 
 const configurationKey = 'openhome.configuration';
@@ -21,12 +22,7 @@ export function createSecureConfigurationStore(): ConfigurationStore {
         if (stored === null) {
           return success(null);
         }
-
-        const parsed: unknown = JSON.parse(stored);
-        if (!isStoredConfiguration(parsed)) {
-          return failure('The saved configuration could not be read. Enter it again.');
-        }
-        return parseConfiguration(parsed.baseUrl, parsed.apiKey);
+        return decodeStoredConfiguration(stored);
       } catch {
         return failure('The saved configuration could not be read. Enter it again.');
       }
@@ -43,9 +39,20 @@ export function createSecureConfigurationStore(): ConfigurationStore {
   };
 }
 
-function isStoredConfiguration(value: unknown): value is Configuration {
-  if (typeof value !== 'object' || value === null) {
-    return false;
+function decodeStoredConfiguration(stored: string): Result<Configuration | null> {
+  let json: Json;
+  try {
+    json = JSON.parse(stored);
+  } catch {
+    return failure('The saved configuration could not be read. Enter it again.');
   }
-  return 'baseUrl' in value && typeof value.baseUrl === 'string' && 'apiKey' in value && typeof value.apiKey === 'string';
+  if (!isJsonObject(json)) {
+    return failure('The saved configuration could not be read. Enter it again.');
+  }
+  const baseUrl = json['baseUrl'];
+  const apiKey = json['apiKey'];
+  if (!isJsonString(baseUrl) || !isJsonString(apiKey)) {
+    return failure('The saved configuration could not be read. Enter it again.');
+  }
+  return parseConfiguration(baseUrl, apiKey);
 }

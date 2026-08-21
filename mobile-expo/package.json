@@ -14,7 +14,9 @@
     "react-native-safe-area-context": "~5.7.0"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.79.0",
     "@types/react": "~19.2.2",
+    "oxlint": "1.79.0",
     "typescript": "~6.0.3",
     "vitest": "^4.1.10"
   },
@@ -24,6 +26,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
     "test": "vitest run",
     "check": "npm run typecheck && npm test && expo export --platform android"
   },

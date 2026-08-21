@@ -1,4 +1,5 @@
 import type { Configuration } from '../domain/configuration';
+import { isJsonArray, isJsonObject, isJsonString, type Json } from '../domain/json';
 import { failure, success, type Result } from '../domain/result';
 
 /** Status and available command sets returned by the IR API. */
@@ -22,6 +23,12 @@ type RequestOptions = {
   readonly defaultError: string;
 };
 
+/** Headers sent with every OpenHome API request. */
+type RequestHeaders = {
+  Authorization: string;
+  'Content-Type'?: string;
+};
+
 type ApiResponse = { readonly body: string };
 
 /** Create an HTTP adapter scoped to one validated configuration. */
@@ -31,12 +38,15 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
     const timeout = setTimeout(() => controller.abort(), 5_000);
 
     try {
+      const headers: RequestHeaders = {
+        Authorization: `Bearer ${configuration.apiKey}`,
+      };
+      if (options.body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+      }
       const response = await fetch(`${configuration.baseUrl}${path}`, {
         method: options.method ?? 'GET',
-        headers: {
-          Authorization: `Bearer ${configuration.apiKey}`,
-          ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        },
+        headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         redirect: 'manual',
         signal: controller.signal,
@@ -97,40 +107,44 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
 }
 
 /** Parse an untrusted IR status response. */
-export function parseIrStatus(value: unknown): Result<IrStatus> {
-  if (typeof value !== 'object' || value === null || !('remotes' in value)) {
+export function parseIrStatus(json: Json): Result<IrStatus> {
+  if (!isJsonObject(json)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
-  const remotes = value.remotes;
-  if (typeof remotes !== 'object' || remotes === null || !('edifier' in remotes) || !('lgtv' in remotes)) {
+  const remotes = json['remotes'];
+  if (!isJsonObject(remotes)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
-  if (!isStringArray(remotes.edifier) || !isStringArray(remotes.lgtv)) {
+  const edifier = remotes['edifier'];
+  const lgTv = remotes['lgtv'];
+  if (!isCommandList(edifier) || !isCommandList(lgTv)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
 
-  const message = 'message' in value && typeof value.message === 'string' && value.message.trim().length > 0
-    ? value.message.trim()
-    : 'IR remote ready';
+  const message = json['message'];
+  const trimmedMessage = isJsonString(message) ? message.trim() : '';
   return success({
-    message,
-    edifierCommands: new Set(remotes.edifier.map((command) => command.trim()).filter(Boolean)),
-    lgTvCommands: new Set(remotes.lgtv.map((command) => command.trim()).filter(Boolean)),
+    message: trimmedMessage.length > 0 ? trimmedMessage : 'IR remote ready',
+    edifierCommands: new Set(edifier.map((command) => command.trim()).filter(Boolean)),
+    lgTvCommands: new Set(lgTv.map((command) => command.trim()).filter(Boolean)),
   });
 }
 
+function isCommandList(value: Json | undefined): value is readonly string[] {
+  return isJsonArray(value) && value.every(isJsonString);
+}
+
 function readError(body: string, fallback: string): string {
+  let json: Json;
   try {
-    const value: unknown = JSON.parse(body);
-    if (typeof value === 'object' && value !== null && 'error' in value && typeof value.error === 'string' && value.error.trim().length > 0) {
-      return value.error.trim();
-    }
+    json = JSON.parse(body);
   } catch {
     return fallback;
   }
-  return fallback;
-}
-
-function isStringArray(value: unknown): value is ReadonlyArray<string> {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  if (!isJsonObject(json)) {
+    return fallback;
+  }
+  const error = json['error'];
+  const trimmedError = isJsonString(error) ? error.trim() : '';
+  return trimmedError.length > 0 ? trimmedError : fallback;
 }
