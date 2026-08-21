@@ -1,6 +1,6 @@
-import type { Configuration } from '../domain/configuration';
-import type { HomeGeofence } from '../domain/home-geofence';
-import { success, type Result } from '../domain/result';
+import type { Configuration } from "../domain/configuration";
+import type { HomeGeofence } from "../domain/home-geofence";
+import { success, type Result } from "../domain/result";
 
 type Dependencies = {
   readonly loadConfiguration: () => Promise<Result<Configuration | null>>;
@@ -12,9 +12,9 @@ type Dependencies = {
 
 /** A normalized operating-system geofence event. */
 export type HomeGeofenceEvent = {
-  readonly type: 'enter' | 'exit';
+  readonly type: "enter" | "exit";
   readonly regionIdentifier: string;
-  readonly regionState: 'inside' | 'outside' | 'unknown';
+  readonly regionState: "inside" | "outside" | "unknown";
 };
 
 /** Turn off the lights for an operating-system home geofence exit event. */
@@ -22,7 +22,7 @@ export async function handleHomeGeofenceEvent(
   event: HomeGeofenceEvent,
   dependencies: Dependencies,
 ): Promise<Result<void>> {
-  if (event.type !== 'exit' || event.regionState !== 'outside') {
+  if (event.type !== "exit" || event.regionState !== "outside") {
     return success(undefined);
   }
 

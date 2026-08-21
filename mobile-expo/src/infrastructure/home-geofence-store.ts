@@ -1,10 +1,10 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
-import { parseHomeGeofence, type HomeGeofence } from '../domain/home-geofence';
-import { failure, success, type Result } from '../domain/result';
+import { parseHomeGeofence, type HomeGeofence } from "../domain/home-geofence";
+import { failure, success, type Result } from "../domain/result";
 
-const homeGeofenceKey = 'openhome.home-geofence';
-const pendingHomeExitKey = 'openhome.pending-home-exit';
+const homeGeofenceKey = "openhome.home-geofence";
+const pendingHomeExitKey = "openhome.pending-home-exit";
 const secureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 
 /** Persistent storage for the active home geofence. */
@@ -26,7 +26,7 @@ export function createHomeGeofenceStore(): HomeGeofenceStore {
         }
         return parseHomeGeofence(JSON.parse(stored));
       } catch {
-        return failure('The saved home location could not be read. Set it again.');
+        return failure("The saved home location could not be read. Set it again.");
       }
     },
 

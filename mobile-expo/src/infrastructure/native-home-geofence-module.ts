@@ -1,7 +1,7 @@
-import { requireOptionalNativeModule } from 'expo-modules-core';
+import { requireOptionalNativeModule } from "expo-modules-core";
 
-import type { HomeGeofence } from '../domain/home-geofence';
-import type { HomePosition } from './home-geofence-service';
+import type { HomeGeofence } from "../domain/home-geofence";
+import type { HomePosition } from "./home-geofence-service";
 
 type NativeHomeGeofenceModule = {
   readonly getCurrentPositionAsync: () => Promise<HomePosition>;
@@ -11,4 +11,5 @@ type NativeHomeGeofenceModule = {
 };
 
 /** Optional Android AOSP Home Geofence native module. */
-export const nativeHomeGeofenceModule = requireOptionalNativeModule<NativeHomeGeofenceModule>('ExpoNativeHomeGeofence');
+export const nativeHomeGeofenceModule =
+  requireOptionalNativeModule<NativeHomeGeofenceModule>("ExpoNativeHomeGeofence");

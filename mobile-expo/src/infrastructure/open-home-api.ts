@@ -1,6 +1,6 @@
-import type { Configuration } from '../domain/configuration';
-import { isJsonArray, isJsonObject, isJsonString, type Json } from '../domain/json';
-import { failure, success, type Result } from '../domain/result';
+import type { Configuration } from "../domain/configuration";
+import { isJsonArray, isJsonObject, isJsonString, type Json } from "../domain/json";
+import { failure, success, type Result } from "../domain/result";
 
 /** Status and available command sets returned by the IR API. */
 export type IrStatus = {
@@ -13,12 +13,12 @@ export type IrStatus = {
 export type OpenHomeApi = {
   readonly validateConfiguration: () => Promise<Result<void>>;
   readonly getIrStatus: () => Promise<Result<IrStatus>>;
-  readonly sendIrCommand: (remote: 'edifier' | 'lgtv', command: string) => Promise<Result<void>>;
-  readonly sendLightCommand: (command: 'on' | 'off') => Promise<Result<void>>;
+  readonly sendIrCommand: (remote: "edifier" | "lgtv", command: string) => Promise<Result<void>>;
+  readonly sendLightCommand: (command: "on" | "off") => Promise<Result<void>>;
 };
 
 type RequestOptions = {
-  readonly method?: 'GET' | 'POST';
+  readonly method?: "GET" | "POST";
   readonly body?: object;
   readonly defaultError: string;
 };
@@ -26,7 +26,7 @@ type RequestOptions = {
 /** Headers sent with every OpenHome API request. */
 type RequestHeaders = {
   Authorization: string;
-  'Content-Type'?: string;
+  "Content-Type"?: string;
 };
 
 type ApiResponse = { readonly body: string };
@@ -42,13 +42,13 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         Authorization: `Bearer ${configuration.apiKey}`,
       };
       if (options.body !== undefined) {
-        headers['Content-Type'] = 'application/json';
+        headers["Content-Type"] = "application/json";
       }
       const response = await fetch(`${configuration.baseUrl}${path}`, {
-        method: options.method ?? 'GET',
+        method: options.method ?? "GET",
         headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
-        redirect: 'manual',
+        redirect: "manual",
         signal: controller.signal,
       });
 
@@ -66,14 +66,14 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
 
   return {
     async validateConfiguration(): Promise<Result<void>> {
-      const response = await request('/api/health', {
-        defaultError: 'OpenHome rejected that Base URL or API Key.',
+      const response = await request("/api/health", {
+        defaultError: "OpenHome rejected that Base URL or API Key.",
       });
       return response.ok ? success(undefined) : response;
     },
 
     async getIrStatus(): Promise<Result<IrStatus>> {
-      const response = await request('/api/ir', {
+      const response = await request("/api/ir", {
         defaultError: "Couldn't load IR status from the Axum API.",
       });
       if (!response.ok) {
@@ -87,18 +87,18 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       }
     },
 
-    async sendIrCommand(remote: 'edifier' | 'lgtv', command: string): Promise<Result<void>> {
+    async sendIrCommand(remote: "edifier" | "lgtv", command: string): Promise<Result<void>> {
       const response = await request(`/api/ir/${remote}`, {
-        method: 'POST',
+        method: "POST",
         body: { command },
         defaultError: "Couldn't send that IR command to the Axum API.",
       });
       return response.ok ? success(undefined) : response;
     },
 
-    async sendLightCommand(command: 'on' | 'off'): Promise<Result<void>> {
+    async sendLightCommand(command: "on" | "off"): Promise<Result<void>> {
       const response = await request(`/api/lights/${command}`, {
-        method: 'POST',
+        method: "POST",
         defaultError: "Couldn't switch the light.",
       });
       return response.ok ? success(undefined) : response;
@@ -111,20 +111,20 @@ export function parseIrStatus(json: Json): Result<IrStatus> {
   if (!isJsonObject(json)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
-  const remotes = json['remotes'];
+  const remotes = json["remotes"];
   if (!isJsonObject(remotes)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
-  const edifier = remotes['edifier'];
-  const lgTv = remotes['lgtv'];
+  const edifier = remotes["edifier"];
+  const lgTv = remotes["lgtv"];
   if (!isCommandList(edifier) || !isCommandList(lgTv)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
 
-  const message = json['message'];
-  const trimmedMessage = isJsonString(message) ? message.trim() : '';
+  const message = json["message"];
+  const trimmedMessage = isJsonString(message) ? message.trim() : "";
   return success({
-    message: trimmedMessage.length > 0 ? trimmedMessage : 'IR remote ready',
+    message: trimmedMessage.length > 0 ? trimmedMessage : "IR remote ready",
     edifierCommands: new Set(edifier.map((command) => command.trim()).filter(Boolean)),
     lgTvCommands: new Set(lgTv.map((command) => command.trim()).filter(Boolean)),
   });
@@ -144,7 +144,7 @@ function readError(body: string, fallback: string): string {
   if (!isJsonObject(json)) {
     return fallback;
   }
-  const error = json['error'];
-  const trimmedError = isJsonString(error) ? error.trim() : '';
+  const error = json["error"];
+  const trimmedError = isJsonString(error) ? error.trim() : "";
   return trimmedError.length > 0 ? trimmedError : fallback;
 }

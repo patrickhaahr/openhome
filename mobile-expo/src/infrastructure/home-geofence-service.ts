@@ -1,12 +1,12 @@
-import type { HomeGeofence, HomeGeofenceProvider } from '../domain/home-geofence';
-import { failure, success, type Result } from '../domain/result';
-import type { HomeGeofenceStore } from './home-geofence-store';
+import type { HomeGeofence, HomeGeofenceProvider } from "../domain/home-geofence";
+import { failure, success, type Result } from "../domain/result";
+import type { HomeGeofenceStore } from "./home-geofence-store";
 
 /** The globally registered operating-system geofence task. */
-export const homeGeofenceTaskName = 'openhome-home-geofence';
+export const homeGeofenceTaskName = "openhome-home-geofence";
 
 /** The Android framework Home Geofence task. */
-export const nativeHomeGeofenceTaskName = 'openhome-native-home-geofence';
+export const nativeHomeGeofenceTaskName = "openhome-native-home-geofence";
 
 /** A current position returned by a location backend. */
 export type HomePosition = {
@@ -27,15 +27,24 @@ export type HomeGeofenceBackend = {
 export type HomeGeofenceService = {
   readonly load: () => Promise<Result<HomeGeofence | null>>;
   readonly resume: () => Promise<Result<void>>;
-  readonly setAtCurrentLocation: (radiusMeters: number, provider: HomeGeofenceProvider) => Promise<Result<HomeGeofence>>;
+  readonly setAtCurrentLocation: (
+    radiusMeters: number,
+    provider: HomeGeofenceProvider,
+  ) => Promise<Result<HomeGeofence>>;
   readonly disable: () => Promise<Result<void>>;
 };
 
 type Backends = Readonly<Record<HomeGeofenceProvider, HomeGeofenceBackend>>;
 
 /** Create the provider-selecting module for the single Home Geofence. */
-export function createHomeGeofenceService(store: HomeGeofenceStore, backends: Backends): HomeGeofenceService {
-  async function restore(previous: HomeGeofence | null, attemptedBackend: HomeGeofenceBackend): Promise<void> {
+export function createHomeGeofenceService(
+  store: HomeGeofenceStore,
+  backends: Backends,
+): HomeGeofenceService {
+  async function restore(
+    previous: HomeGeofence | null,
+    attemptedBackend: HomeGeofenceBackend,
+  ): Promise<void> {
     await attemptedBackend.stop();
     const restored = await store.save(previous);
     if (!restored.ok) {
@@ -74,7 +83,9 @@ export function createHomeGeofenceService(store: HomeGeofenceStore, backends: Ba
       }
       const { latitude, longitude, accuracyMeters } = position.value;
       if (accuracyMeters === null || accuracyMeters > radiusMeters) {
-        return failure(`Location accuracy must be within the ${radiusMeters} meter radius. Move near a window and try again.`);
+        return failure(
+          `Location accuracy must be within the ${radiusMeters} meter radius. Move near a window and try again.`,
+        );
       }
 
       const previous = await store.load();
@@ -103,7 +114,9 @@ export function createHomeGeofenceService(store: HomeGeofenceStore, backends: Ba
         try {
           await restore(previous.value, backend);
         } catch {
-          return failure("Couldn't start monitoring or restore the previous home location. Disable home automation and try again.");
+          return failure(
+            "Couldn't start monitoring or restore the previous home location. Disable home automation and try again.",
+          );
         }
         return failure("Couldn't start monitoring the home location.");
       }
@@ -127,7 +140,9 @@ export function createHomeGeofenceService(store: HomeGeofenceStore, backends: Ba
           try {
             await backends[previous.value.provider].start(previous.value);
           } catch {
-            return failure("Couldn't persist disabling home automation or restore monitoring. Try setting home again.");
+            return failure(
+              "Couldn't persist disabling home automation or restore monitoring. Try setting home again.",
+            );
           }
         }
         return removed;

@@ -1,10 +1,10 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
-import { parseConfiguration, type Configuration } from '../domain/configuration';
-import { isJsonObject, isJsonString, type Json } from '../domain/json';
-import { failure, success, type Result } from '../domain/result';
+import { parseConfiguration, type Configuration } from "../domain/configuration";
+import { isJsonObject, isJsonString, type Json } from "../domain/json";
+import { failure, success, type Result } from "../domain/result";
 
-const configurationKey = 'openhome.configuration';
+const configurationKey = "openhome.configuration";
 const secureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 
 /** Persistent storage required by the setup flow. */
@@ -24,13 +24,17 @@ export function createSecureConfigurationStore(): ConfigurationStore {
         }
         return decodeStoredConfiguration(stored);
       } catch {
-        return failure('The saved configuration could not be read. Enter it again.');
+        return failure("The saved configuration could not be read. Enter it again.");
       }
     },
 
     async save(configuration: Configuration): Promise<Result<void>> {
       try {
-        await SecureStore.setItemAsync(configurationKey, JSON.stringify(configuration), secureStoreOptions);
+        await SecureStore.setItemAsync(
+          configurationKey,
+          JSON.stringify(configuration),
+          secureStoreOptions,
+        );
         return success(undefined);
       } catch {
         return failure("Couldn't persist configuration.");
@@ -44,15 +48,15 @@ function decodeStoredConfiguration(stored: string): Result<Configuration | null>
   try {
     json = JSON.parse(stored);
   } catch {
-    return failure('The saved configuration could not be read. Enter it again.');
+    return failure("The saved configuration could not be read. Enter it again.");
   }
   if (!isJsonObject(json)) {
-    return failure('The saved configuration could not be read. Enter it again.');
+    return failure("The saved configuration could not be read. Enter it again.");
   }
-  const baseUrl = json['baseUrl'];
-  const apiKey = json['apiKey'];
+  const baseUrl = json["baseUrl"];
+  const apiKey = json["apiKey"];
   if (!isJsonString(baseUrl) || !isJsonString(apiKey)) {
-    return failure('The saved configuration could not be read. Enter it again.');
+    return failure("The saved configuration could not be read. Enter it again.");
   }
   return parseConfiguration(baseUrl, apiKey);
 }

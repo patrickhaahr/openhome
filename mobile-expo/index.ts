@@ -1,7 +1,7 @@
-import { registerRootComponent } from 'expo';
+import { registerRootComponent } from "expo";
 
-import './src/infrastructure/home-geofence-task';
-import App from './App';
+import "./src/infrastructure/home-geofence-task";
+import App from "./App";
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

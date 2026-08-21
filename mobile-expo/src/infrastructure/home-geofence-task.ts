@@ -1,11 +1,14 @@
-import { GeofencingEventType, GeofencingRegionState, type LocationRegion } from 'expo-location';
-import * as TaskManager from 'expo-task-manager';
+import { GeofencingEventType, GeofencingRegionState, type LocationRegion } from "expo-location";
+import * as TaskManager from "expo-task-manager";
 
-import { handleHomeGeofenceEvent, retryPendingHomeExit } from '../application/handle-home-geofence-event';
-import { createSecureConfigurationStore } from './configuration-store';
-import { homeGeofenceTaskName, nativeHomeGeofenceTaskName } from './home-geofence-service';
-import { createHomeGeofenceStore } from './home-geofence-store';
-import { createOpenHomeApi } from './open-home-api';
+import {
+  handleHomeGeofenceEvent,
+  retryPendingHomeExit,
+} from "../application/handle-home-geofence-event";
+import { createSecureConfigurationStore } from "./configuration-store";
+import { homeGeofenceTaskName, nativeHomeGeofenceTaskName } from "./home-geofence-service";
+import { createHomeGeofenceStore } from "./home-geofence-store";
+import { createOpenHomeApi } from "./open-home-api";
 
 type HomeGeofenceTaskData = {
   readonly eventType: GeofencingEventType;
@@ -19,7 +22,8 @@ const dependencies = {
   loadHome: homeStore.load,
   loadPending: homeStore.loadPending,
   savePending: homeStore.savePending,
-  turnOffLights: async (configuration: Parameters<typeof createOpenHomeApi>[0]) => createOpenHomeApi(configuration).sendLightCommand('off'),
+  turnOffLights: async (configuration: Parameters<typeof createOpenHomeApi>[0]) =>
+    createOpenHomeApi(configuration).sendLightCommand("off"),
 };
 
 for (const taskName of [homeGeofenceTaskName, nativeHomeGeofenceTaskName]) {
@@ -32,8 +36,8 @@ for (const taskName of [homeGeofenceTaskName, nativeHomeGeofenceTaskName]) {
 
       const result = await handleHomeGeofenceEvent(
         {
-          type: data.eventType === GeofencingEventType.Exit ? 'exit' : 'enter',
-          regionIdentifier: data.region.identifier ?? '',
+          type: data.eventType === GeofencingEventType.Exit ? "exit" : "enter",
+          regionIdentifier: data.region.identifier ?? "",
           regionState: geofenceRegionState(data.region.state),
         },
         dependencies,
@@ -53,12 +57,12 @@ export async function retryPendingHomeExitCommand(): Promise<void> {
   }
 }
 
-function geofenceRegionState(state: LocationRegion['state']): 'inside' | 'outside' | 'unknown' {
+function geofenceRegionState(state: LocationRegion["state"]): "inside" | "outside" | "unknown" {
   if (state === GeofencingRegionState.Inside) {
-    return 'inside';
+    return "inside";
   }
   if (state === GeofencingRegionState.Outside) {
-    return 'outside';
+    return "outside";
   }
-  return 'unknown';
+  return "unknown";
 }

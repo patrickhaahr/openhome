@@ -1,11 +1,10 @@
 # AGENTS.md
 
-Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-native/AGENTS.md` before changing those areas.
+Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-expo/AGENTS.md` before changing those areas.
 
 ## Current Repo Reality
 
-- `mobile-native/` is the active Android app.
-- `mobile-expo/` is the Expo reimplementation of `mobile-native/`.
+- `mobile-expo/` is the active mobile client.
 - `mobile/` is the old Tauri/SolidJS client and is deprecated. Do not treat it as the default mobile target unless the task explicitly says so.
 - The root `README.md` is stale and still describes the deprecated Tauri client. Prefer `justfile`, `flake.nix`, `CONTEXT.md`, and the service-specific `AGENTS.md` files as sources of truth.
 
@@ -20,43 +19,28 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-native/A
   - `just fmt`
   - `just lint`
   - `just go`
-- Android native:
-  - `just android-build`
-  - `just android-run`
-  - `just android-lint`
-  - `just android-test`
-  - `just android-test-ui`
-- Expo:
+- Expo (`just groups` lists everything grouped by area):
   - `just expo-install`
   - `just expo-start`
   - `just expo-android`
+  - `just expo-typecheck`
+  - `just expo-lint`
+  - `just expo-test [<filter>]`
   - `just expo-check`
 
 ## Verified Workflow Gotchas
 
-- `flake.nix` is the real dev-shell setup: it installs `just`, Rust tooling, JDK 17, `adb`, and the `android` CLI shim.
+- `flake.nix` is the real dev-shell setup: it installs `just`, Rust tooling, JDK 17, `adb`, and the `android` CLI shim (used by `expo-android` to locate the SDK).
 - The dev shell exports `DATABASE_URL="sqlite:$repo_root/api/data/app.db"`. API commands and tests may rely on that instead of a manually exported path.
-- Android `just` recipes temporarily rewrite `mobile-native/local.properties` from `android info` before invoking Gradle, then restore it. Do not hardcode SDK paths into tracked files.
 
 ## Architecture Notes
 
 - `api/` is a standalone Rust Axum service. `api/migrations/` is live SQLx migration state.
-- `mobile-native/` is a standalone Gradle project with a single `:app` module.
 - `mobile-expo/` is a standalone Expo app. Keep domain rules, application state, infrastructure adapters, and UI components separated under `src/`.
 - Use the domain language in `CONTEXT.md` when changing product behavior.
-- Mobile clients talk only to the Axum API. Do not add direct device, bridge, or LAN integration code to `mobile-native/` or `mobile-expo/`.
+- Mobile clients talk only to the Axum API. Do not add direct device, bridge, or LAN integration code to `mobile-expo/`.
 
 ## Verification Bias
 
 - For API work, default to the smallest relevant `just test...` command, then run `just lint` if Rust code changed.
-- For Android work, default to `just android-lint` and `just android-test`; use `just android-test-ui` only when the change touches instrumented UI behavior.
-
-## Agent skills
-
-### Issue tracker
-
-Issues live as local markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+- For Expo work, default to `just expo-lint` and `just expo-test <filter>`; use `just expo-check` as the full gate (typecheck + tests + Android export) when touching shared infrastructure or shipping.
