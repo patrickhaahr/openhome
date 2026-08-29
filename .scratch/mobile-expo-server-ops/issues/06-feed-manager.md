@@ -4,12 +4,12 @@
 
 **Blocked by:** 05 — Compact Timeline (timeline must be visible so delete/undo effects are observable).
 
-**Status:** ready-for-agent
+**Status:** done (6952118)
 
-- [ ] Collapsible "manage feeds" section lists current Feeds with delete buttons
-- [ ] Adding a valid URL creates a Feed and refreshes both the feed list and the timeline
-- [ ] Invalid URLs are rejected with a clear message before any request is sent
-- [ ] Delete removes the Feed immediately and refreshes the timeline
-- [ ] Undo re-adds the deleted Feeds (batch) and refreshes the timeline
-- [ ] Create/delete failures surface inline without losing the entered URL
-- [ ] Machine tests cover add, delete, batched undo, and failure paths against the scripted fake adapter
+- [x] Collapsible "manage feeds" section lists current Feeds with delete buttons
+- [x] Adding a valid URL creates a Feed and refreshes both the feed list and the timeline
+- [x] Invalid URLs are rejected with a clear message before any request is sent
+- [x] Delete removes the Feed immediately and refreshes the timeline
+- [x] Undo re-adds the deleted Feeds (batch) and refreshes the timeline
+- [x] Create/delete failures surface inline without losing the entered URL
+- [x] Machine tests cover add, delete, batched undo, and failure paths against the scripted fake adapter
