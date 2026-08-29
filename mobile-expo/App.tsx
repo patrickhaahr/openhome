@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, AppState, StyleSheet, View } from "react-native";
+import { ActivityIndicator, AppState, Linking, StyleSheet, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
@@ -7,6 +7,7 @@ import { useAdGuard } from "./src/application/use-adguard";
 import { useDocker } from "./src/application/use-docker";
 import { useHomeGeofence } from "./src/application/use-home-geofence";
 import { useOpenHome } from "./src/application/use-open-home";
+import { useTimeline } from "./src/application/use-timeline";
 import { createSecureConfigurationStore } from "./src/infrastructure/configuration-store";
 import { createExpoHomeGeofenceBackend } from "./src/infrastructure/expo-home-geofence-backend";
 import { createHomeGeofenceService } from "./src/infrastructure/home-geofence-service";
@@ -28,6 +29,7 @@ export default function App() {
   const [homeGeofence, homeGeofenceActions] = useHomeGeofence(homeGeofenceService);
   const [adguard, adguardActions] = useAdGuard(api === null ? null : api.adguard);
   const [docker, dockerActions, dockerCounts] = useDocker(api === null ? null : api.docker);
+  const [timeline, timelineActions] = useTimeline(api === null ? null : api.rss);
 
   useEffect(() => {
     void homeGeofenceService.resume();
@@ -38,10 +40,11 @@ export default function App() {
         void retryPendingHomeExitCommand();
         adguardActions.refresh();
         dockerActions.refresh();
+        timelineActions.refresh();
       }
     });
     return () => subscription.remove();
-  }, [homeGeofenceService, adguardActions, dockerActions]);
+  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions]);
 
   return (
     <SafeAreaProvider>
@@ -65,6 +68,11 @@ export default function App() {
             docker={docker}
             dockerActions={dockerActions}
             dockerCounts={dockerCounts}
+            timeline={timeline}
+            timelineActions={timelineActions}
+            onOpenTimelineLink={(url) => {
+              void Linking.openURL(url).catch(() => {});
+            }}
           />
         ) : null}
         <StatusBar style="light" />

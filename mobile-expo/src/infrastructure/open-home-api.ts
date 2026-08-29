@@ -1,6 +1,7 @@
 import type { AdguardStatus } from "../domain/adguard";
 import type { Configuration } from "../domain/configuration";
 import type { DockerContainer } from "../domain/docker";
+import type { TimelineItem } from "../domain/rss";
 import {
   isJsonArray,
   isJsonBoolean,
@@ -35,6 +36,15 @@ export type DockerApi = {
   readonly restartContainer: (name: string) => Promise<Result<void>>;
 };
 
+/** Compact timeline operations used by the Server Tab. */
+export type RssApi = {
+  /** One newest-first page of compact feed items, resuming after `beforeId` when set. */
+  readonly compactTimeline: (
+    beforeId: number | null,
+    limit: number,
+  ) => Promise<Result<readonly TimelineItem[]>>;
+};
+
 /** Operations used by the OpenHome application layer. */
 export type OpenHomeApi = {
   readonly validateConfiguration: () => Promise<Result<void>>;
@@ -43,6 +53,7 @@ export type OpenHomeApi = {
   readonly sendLightCommand: (command: "on" | "off") => Promise<Result<void>>;
   readonly adguard: AdguardApi;
   readonly docker: DockerApi;
+  readonly rss: RssApi;
 };
 
 type RequestOptions = {
@@ -223,6 +234,23 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         return success(parseLogLines(response.value.body));
       },
     },
+
+    rss: {
+      compactTimeline: async (beforeId, limit): Promise<Result<readonly TimelineItem[]>> => {
+        const cursor = beforeId === null ? "" : `&before_id=${beforeId}`;
+        const response = await request(`/api/timeline?view=compact&limit=${limit}${cursor}`, {
+          defaultError: "Couldn't load the timeline.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseCompactTimeline(JSON.parse(response.value.body));
+        } catch {
+          return failure(TIMELINE_READ_ERROR);
+        }
+      },
+    },
   };
 }
 
@@ -296,6 +324,38 @@ const DOCKER_READ_ERROR = "Couldn't read Docker containers from the Axum API.";
 
 /** The extended request timeout shared by all docker calls. */
 const DOCKER_TIMEOUT_MS = 15_000;
+
+const TIMELINE_READ_ERROR = "Couldn't read the timeline from the Axum API.";
+
+/**
+ * Parse an untrusted compact timeline response. The compact view is a plain
+ * newest-first array of feed items; any non-conforming entry rejects the payload.
+ */
+export function parseCompactTimeline(json: Json): Result<readonly TimelineItem[]> {
+  if (!isJsonArray(json)) {
+    return failure(TIMELINE_READ_ERROR);
+  }
+  const items: TimelineItem[] = [];
+  for (const raw of json) {
+    if (!isJsonObject(raw)) {
+      return failure(TIMELINE_READ_ERROR);
+    }
+    const id = raw["id"];
+    const title = raw["title"];
+    const link = raw["link"];
+    if (!isJsonNumber(id) || !isJsonString(title) || !isJsonString(link)) {
+      return failure(TIMELINE_READ_ERROR);
+    }
+    const description = raw["description"];
+    items.push({
+      id,
+      title,
+      description: isJsonString(description) ? description : null,
+      link,
+    });
+  }
+  return success(items);
+}
 
 /**
  * Parse an untrusted Docker list response. The wire contract inherited from the old

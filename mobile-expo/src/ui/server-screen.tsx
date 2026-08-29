@@ -6,11 +6,14 @@ import {
   StyleSheet,
   Text,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { useEffect, useState } from "react";
 
 import type { AdguardActions, AdguardState } from "../application/use-adguard";
 import type { DockerActions, DockerState } from "../application/use-docker";
+import type { TimelineActions, TimelineState } from "../application/use-timeline";
 import {
   dockerHealthSummary,
   type ClassificationCounts,
@@ -31,40 +34,70 @@ type Props = {
   readonly docker: DockerState;
   readonly dockerActions: DockerActions;
   readonly dockerCounts: ClassificationCounts;
+  readonly timeline: TimelineState;
+  readonly timelineActions: TimelineActions;
+  readonly onOpenTimelineLink: (url: string) => void;
   readonly onOpenDocker: () => void;
 };
 
 /** Render the Server Tab: mixed server-operations surfaces. */
-export function ServerPage({ adguard, actions, docker, dockerActions, dockerCounts, onOpenDocker }: Props) {
+export function ServerPage({
+  adguard,
+  actions,
+  docker,
+  dockerActions,
+  dockerCounts,
+  timeline,
+  timelineActions,
+  onOpenTimelineLink,
+  onOpenDocker,
+}: Props) {
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>): void {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 400;
+    if (nearBottom) {
+      timelineActions.loadMore();
+    }
+  }
+
   return (
     <ScrollView
       contentContainerStyle={shared.pageContent}
+      onScroll={handleScroll}
       refreshControl={
         <RefreshControl
           refreshing={
             (adguard.tag === "ready" && adguard.refreshing) ||
-            (docker.tag === "ready" && docker.refreshing)
+            (docker.tag === "ready" && docker.refreshing) ||
+            (timeline.tag === "ready" && timeline.refreshing)
           }
           onRefresh={() => {
             actions.refresh();
             dockerActions.refresh();
+            timelineActions.refresh();
           }}
           colors={[colors.signal]}
           tintColor={colors.signal}
         />
       }
+      scrollEventThrottle={16}
     >
       <View style={shared.stack}>
         <PageHeading
           eyebrow="SERVER OPERATIONS"
           title="Server"
-          description="Ad blocking and server health at a glance."
+          description="Ad blocking, server health, and your feed timeline."
         />
         <AdGuardCard state={adguard} actions={actions} />
         <DockerSummaryCard
           state={docker}
           counts={dockerCounts}
           onPress={onOpenDocker}
+        />
+        <TimelineCard
+          state={timeline}
+          actions={timelineActions}
+          onOpenLink={onOpenTimelineLink}
         />
       </View>
     </ScrollView>
@@ -307,13 +340,108 @@ function DockerSummaryCard({
   );
 }
 
+/** Presentation for the Compact Timeline: a skim list, not an article reader. */
+function TimelineCard({
+  state,
+  actions,
+  onOpenLink,
+}: {
+  readonly state: TimelineState;
+  readonly actions: TimelineActions;
+  readonly onOpenLink: (url: string) => void;
+}) {
+  if (state.tag === "loading") {
+    return (
+      <View style={[shared.section, styles.card]}>
+        <View style={shared.statusPanel}>
+          <ActivityIndicator color={colors.signal} />
+          <Text style={shared.statusText}>Loading timeline</Text>
+        </View>
+      </View>
+    );
+  }
+  if (state.tag === "error") {
+    return (
+      <View style={[shared.section, styles.card]}>
+        <Text style={shared.sectionTitle}>COMPACT TIMELINE</Text>
+        <Text accessibilityRole="alert" style={shared.error}>
+          {state.message}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={actions.refresh}
+          style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
+        >
+          <Text style={shared.retry}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[shared.section, styles.card]}>
+      <Text style={shared.sectionTitle}>COMPACT TIMELINE</Text>
+      {state.items.length === 0 ? (
+        <Text style={styles.timelineEmpty}>No feed items yet.</Text>
+      ) : (
+        <View style={styles.timeline}>
+          {state.items.map((item) => (
+            <Pressable
+              key={item.id}
+              accessibilityLabel={`Open ${item.title}`}
+              accessibilityRole="link"
+              onPress={() => onOpenLink(item.link)}
+              style={({ pressed }) => [styles.timelineItem, pressed && shared.iconPressed]}
+            >
+              <Text numberOfLines={2} style={styles.timelineTitle}>
+                {item.title}
+              </Text>
+              {item.description !== null ? (
+                <Text numberOfLines={1} style={styles.timelineDescription}>
+                  {item.description}
+                </Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      )}
+      {state.loadingMore ? (
+        <View style={styles.moreRow}>
+          <ActivityIndicator color={colors.signal} size="small" />
+          <Text style={shared.sectionDetail}>Loading older items</Text>
+        </View>
+      ) : null}
+      {state.error !== null ? (
+        <>
+          <Text accessibilityRole="alert" style={shared.error}>
+            {state.error}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={actions.loadMore}
+            style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
+          >
+            <Text style={shared.retry}>Try again</Text>
+          </Pressable>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: { gap: 16 },
+  moreRow: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" },
   phaseCopy: { flex: 1, gap: 2 },
   phaseDetail: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   phaseDot: { borderRadius: 8, height: 15, marginTop: 3, width: 15 },
   phaseLabel: { color: colors.text, fontSize: 21, fontWeight: "800", letterSpacing: -0.4 },
   phaseRow: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
   runningDot: { borderRadius: 3, height: 6, width: 6 },
+  timeline: { gap: 14 },
+  timelineDescription: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  timelineEmpty: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  timelineItem: { gap: 2 },
+  timelineTitle: { color: colors.text, fontSize: 15, fontWeight: "700", lineHeight: 20 },
   versionRow: { alignItems: "center", flexDirection: "row", gap: 5 },
 });

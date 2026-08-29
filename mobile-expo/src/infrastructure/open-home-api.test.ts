@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DockerContainer } from "../domain/docker";
+import type { TimelineItem } from "../domain/rss";
 import { failure, success, type Result } from "../domain/result";
 import { createOpenHomeApi, parseAdguardStatus, parseIrStatus } from "./open-home-api";
 
@@ -458,5 +459,132 @@ describe("docker adapter", () => {
       await pending;
       expect(result).toEqual(failure(reachError));
     });
+  });
+});
+
+describe("rss adapter", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const configuration = { baseUrl: "http://openhome.test", apiKey: "secret" };
+  const readError = "Couldn't read the timeline from the Axum API.";
+  const reachError = "Couldn't reach the Axum API. Check the Base URL and try again.";
+
+  const compactPayload = [
+    { id: 7, title: "Release 2.0", description: "Shipped today", link: "https://blog.test/2" },
+    { id: 6, title: "Older post", description: null, link: "https://blog.test/1" },
+    { id: 5, title: "No description", link: "https://blog.test/0" },
+  ];
+
+  /** Deliberately loose so tests can also send malformed payloads. */
+  type TimelinePayload = unknown;
+
+  function stubFetch(handler: (init?: RequestInit) => Promise<Response>): void {
+    vi.stubGlobal(
+      "fetch",
+      (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        void url;
+        return handler(init);
+      },
+    );
+  }
+
+  function okFetch(body: TimelinePayload): void {
+    stubFetch(async () => new Response(JSON.stringify(body), { status: 200 }));
+  }
+
+  async function compactTimeline(beforeId: number | null): Promise<Result<readonly TimelineItem[]>> {
+    return createOpenHomeApi(configuration).rss.compactTimeline(beforeId, 50);
+  }
+
+  it("requests the compact view and passes before_id only when paginating", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", (url: RequestInfo | URL) => {
+      requests.push(String(url));
+      return Promise.resolve(new Response(JSON.stringify(compactPayload), { status: 200 }));
+    });
+
+    await compactTimeline(null);
+    await compactTimeline(6);
+
+    expect(requests).toEqual([
+      "http://openhome.test/api/timeline?view=compact&limit=50",
+      "http://openhome.test/api/timeline?view=compact&limit=50&before_id=6",
+    ]);
+  });
+
+  it("parses a compact timeline array, tolerating a missing description", async () => {
+    okFetch(compactPayload);
+
+    const result = await compactTimeline(null);
+
+    expect(result).toEqual({
+      ok: true,
+      value: [
+        { id: 7, title: "Release 2.0", description: "Shipped today", link: "https://blog.test/2" },
+        { id: 6, title: "Older post", description: null, link: "https://blog.test/1" },
+        { id: 5, title: "No description", description: null, link: "https://blog.test/0" },
+      ],
+    });
+  });
+
+  it("rejects malformed payloads as failures", async () => {
+    okFetch({ items: compactPayload });
+    expect(await compactTimeline(null)).toEqual(failure(readError));
+
+    okFetch(compactPayload[0]);
+    expect(await compactTimeline(null)).toEqual(failure(readError));
+
+    okFetch([{ id: "7", title: "Release 2.0", description: null, link: "https://blog.test/2" }]);
+    expect(await compactTimeline(null)).toEqual(failure(readError));
+
+    okFetch([{ title: "No id", description: null, link: "https://blog.test/2" }]);
+    expect(await compactTimeline(null)).toEqual(failure(readError));
+
+    okFetch([{ id: 7, title: "Release 2.0", description: null }]);
+    expect(await compactTimeline(null)).toEqual(failure(readError));
+  });
+
+  it("surfaces API error responses as failures", async () => {
+    stubFetch(async () => new Response(JSON.stringify({ error: "Database locked" }), { status: 500 }));
+
+    expect(await compactTimeline(null)).toEqual(failure("Database locked"));
+  });
+
+  it("falls back to a default message when an error body is unreadable", async () => {
+    stubFetch(async () => new Response("<html>", { status: 502 }));
+
+    expect(await compactTimeline(null)).toEqual(failure("Couldn't load the timeline."));
+  });
+
+  it("surfaces unreachable servers as reach failures", async () => {
+    stubFetch(async () => {
+      throw new Error("ECONNREFUSED");
+    });
+
+    expect(await compactTimeline(null)).toEqual(failure(reachError));
+  });
+
+  it("keeps the short timeout for timeline requests", async () => {
+    vi.useFakeTimers();
+    stubFetch(
+      (init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("Aborted")));
+        }),
+    );
+
+    let result: Result<readonly TimelineItem[]> | null = null;
+    const pending = compactTimeline(null).then((value) => {
+      result = value;
+    });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(result).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await pending;
+    expect(result).toEqual(failure(reachError));
   });
 });
