@@ -4,12 +4,12 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done (82b05a0 / f100a52)
 
-- [ ] Card shows Protected / Paused / Unprotected per the Axum API status payload, including remaining pause time from either the until-timestamp or duration fields
-- [ ] Enable and disable actions update the card state after success and surface errors inline without leaving the tab
-- [ ] Pause popup offers 5/15/30/60 minutes; after pausing, the card shows the pause state with countdown text
-- [ ] A failed status load shows a retry affordance; retry recovers without app restart
-- [ ] Pull-to-refresh refetches status; returning the app to the foreground also triggers a refetch
-- [ ] Adapter methods exist for status/enable/disable/pause with response-shape guards rejecting malformed payloads as failures
-- [ ] Application state machine tested against a scripted fake of the Axum API adapter interface
+- [x] Card shows Protected / Paused / Unprotected per the Axum API status payload, including remaining pause time from either the until-timestamp or duration fields
+- [x] Enable and disable actions update the card state after success and surface errors inline without leaving the tab
+- [x] Pause popup offers 5/15/30/60 minutes; after pausing, the card shows the pause state with countdown text
+- [x] A failed status load shows a retry affordance; retry recovers without app restart
+- [x] Pull-to-refresh refetches status; returning the app to the foreground also triggers a refetch
+- [x] Adapter methods exist for status/enable/disable/pause with response-shape guards rejecting malformed payloads as failures
+- [x] Application state machine tested against a scripted fake of the Axum API adapter interface
