@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 
 import { parseConfiguration, type Configuration } from "../domain/configuration";
 import type { Result } from "../domain/result";
@@ -10,7 +10,7 @@ import {
 } from "../infrastructure/open-home-api";
 
 /** A top-level destination in the configured app. */
-export type TopLevelTab = "home" | "television" | "speaker" | "away";
+export type TopLevelTab = "home" | "television" | "speaker" | "away" | "server";
 
 /** The state of IR status loading. */
 export type IrState =
@@ -93,12 +93,19 @@ type CommandTarget = "edifier" | "television" | "light";
 const emptyCommandState: CommandState = { sending: new Set(), error: null };
 
 /** Coordinate setup, persistence, and remote commands for the OpenHome UI. */
-export function useOpenHome(store: ConfigurationStore): readonly [OpenHomeState, OpenHomeActions] {
+export function useOpenHome(
+  store: ConfigurationStore,
+): readonly [OpenHomeState, OpenHomeActions, OpenHomeApi | null] {
   const [state, dispatch] = useReducer(reduce, { tag: "loading" });
   const stateRef = useRef(state);
   const generation = useRef(0);
   const refreshGeneration = useRef(0);
   stateRef.current = state;
+  const configuration = state.tag === "ready" ? state.configuration : null;
+  const api = useMemo(
+    () => (configuration === null ? null : createOpenHomeApi(configuration)),
+    [configuration],
+  );
 
   useEffect(() => {
     let active = true;
@@ -259,7 +266,7 @@ export function useOpenHome(store: ConfigurationStore): readonly [OpenHomeState,
     sendLightCommand: sendLight,
   };
 
-  return [state, actions] as const;
+  return [state, actions, api] as const;
 }
 
 /** Apply a synchronous event to application state. */

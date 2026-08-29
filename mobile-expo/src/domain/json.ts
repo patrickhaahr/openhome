@@ -26,3 +26,8 @@ export function isJsonString(value: Json | undefined): value is string {
 export function isJsonNumber(value: Json | undefined): value is number {
   return Number.isFinite(value);
 }
+
+/** Decide whether a JSON value is a boolean. */
+export function isJsonBoolean(value: Json | undefined): value is boolean {
+  return typeof value === "boolean";
+}

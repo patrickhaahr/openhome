@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, StyleSheet, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
+import { useAdGuard } from "./src/application/use-adguard";
 import { useHomeGeofence } from "./src/application/use-home-geofence";
 import { useOpenHome } from "./src/application/use-open-home";
 import { createSecureConfigurationStore } from "./src/infrastructure/configuration-store";
@@ -22,8 +23,9 @@ const homeGeofenceService = createHomeGeofenceService(createHomeGeofenceStore(),
 });
 
 export default function App() {
-  const [state, actions] = useOpenHome(configurationStore);
+  const [state, actions, api] = useOpenHome(configurationStore);
   const [homeGeofence, homeGeofenceActions] = useHomeGeofence(homeGeofenceService);
+  const [adguard, adguardActions] = useAdGuard(api === null ? null : api.adguard);
 
   useEffect(() => {
     void homeGeofenceService.resume();
@@ -32,10 +34,11 @@ export default function App() {
       if (nextState === "active") {
         void homeGeofenceService.resume();
         void retryPendingHomeExitCommand();
+        adguardActions.refresh();
       }
     });
     return () => subscription.remove();
-  }, []);
+  }, [homeGeofenceService, adguardActions]);
 
   return (
     <SafeAreaProvider>
@@ -54,6 +57,8 @@ export default function App() {
             actions={actions}
             homeGeofence={homeGeofence}
             homeGeofenceActions={homeGeofenceActions}
+            adguard={adguard}
+            adguardActions={adguardActions}
           />
         ) : null}
         <StatusBar style="light" />

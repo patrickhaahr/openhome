@@ -1,5 +1,13 @@
+import type { AdguardStatus } from "../domain/adguard";
 import type { Configuration } from "../domain/configuration";
-import { isJsonArray, isJsonObject, isJsonString, type Json } from "../domain/json";
+import {
+  isJsonArray,
+  isJsonBoolean,
+  isJsonObject,
+  isJsonNumber,
+  isJsonString,
+  type Json,
+} from "../domain/json";
 import { failure, success, type Result } from "../domain/result";
 
 /** Status and available command sets returned by the IR API. */
@@ -9,12 +17,21 @@ export type IrStatus = {
   readonly lgTvCommands: ReadonlySet<string>;
 };
 
+/** AdGuard Protection operations used by the Server Tab. */
+export type AdguardApi = {
+  readonly getStatus: () => Promise<Result<AdguardStatus>>;
+  readonly enableProtection: () => Promise<Result<AdguardStatus>>;
+  readonly disableProtection: () => Promise<Result<AdguardStatus>>;
+  readonly pauseProtection: (minutes: number) => Promise<Result<AdguardStatus>>;
+};
+
 /** Operations used by the OpenHome application layer. */
 export type OpenHomeApi = {
   readonly validateConfiguration: () => Promise<Result<void>>;
   readonly getIrStatus: () => Promise<Result<IrStatus>>;
   readonly sendIrCommand: (remote: "edifier" | "lgtv", command: string) => Promise<Result<void>>;
   readonly sendLightCommand: (command: "on" | "off") => Promise<Result<void>>;
+  readonly adguard: AdguardApi;
 };
 
 type RequestOptions = {
@@ -33,6 +50,13 @@ type ApiResponse = { readonly body: string };
 
 /** Create an HTTP adapter scoped to one validated configuration. */
 export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
+  async function adguardStatus(
+    path: string,
+    options: RequestOptions,
+  ): Promise<Result<AdguardStatus>> {
+    return parseAdguardResponse(await request(path, options));
+  }
+
   async function request(path: string, options: RequestOptions): Promise<Result<ApiResponse>> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
@@ -103,6 +127,26 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       });
       return response.ok ? success(undefined) : response;
     },
+
+    adguard: {
+      getStatus: () => adguardStatus("/api/adguard/status", { defaultError: ADGUARD_READ_ERROR }),
+      enableProtection: () =>
+        adguardStatus("/api/adguard/enable", {
+          method: "POST",
+          defaultError: "Couldn't enable AdGuard Protection.",
+        }),
+      disableProtection: () =>
+        adguardStatus("/api/adguard/disable", {
+          method: "POST",
+          defaultError: "Couldn't disable AdGuard Protection.",
+        }),
+      pauseProtection: (minutes: number) =>
+        adguardStatus("/api/adguard/pause", {
+          method: "POST",
+          body: { minutes },
+          defaultError: "Couldn't pause AdGuard Protection.",
+        }),
+    },
   };
 }
 
@@ -132,6 +176,44 @@ export function parseIrStatus(json: Json): Result<IrStatus> {
 
 function isCommandList(value: Json | undefined): value is readonly string[] {
   return isJsonArray(value) && value.every(isJsonString);
+}
+
+const ADGUARD_READ_ERROR = "Couldn't read AdGuard status from the Axum API.";
+
+/** Parse an untrusted AdGuard status response, resolving pause timing against nowMs. */
+export function parseAdguardStatus(json: Json, nowMs: number): Result<AdguardStatus> {
+  if (!isJsonObject(json)) {
+    return failure(ADGUARD_READ_ERROR);
+  }
+  const version = json["version"];
+  const running = json["running"];
+  const protectionEnabled = json["protection_enabled"];
+  if (!isJsonString(version) || !isJsonBoolean(running) || !isJsonBoolean(protectionEnabled)) {
+    return failure(ADGUARD_READ_ERROR);
+  }
+
+  const duration = json["protection_disabled_duration"];
+  const until = json["protection_disabled_until"];
+  const durationMs = isJsonNumber(duration) && duration > 0 ? duration : 0;
+  const untilMs = isJsonString(until) ? Date.parse(until) : Number.NaN;
+  const pauseEndsAtMs = Number.isFinite(untilMs)
+    ? untilMs
+    : durationMs > 0
+      ? nowMs + durationMs
+      : null;
+  return success({ version, running, protectionEnabled, pauseEndsAtMs });
+}
+
+/** Apply the AdGuard status shape guard to a raw response body. */
+function parseAdguardResponse(response: Result<{ readonly body: string }>): Result<AdguardStatus> {
+  if (!response.ok) {
+    return response;
+  }
+  try {
+    return parseAdguardStatus(JSON.parse(response.value.body), Date.now());
+  } catch {
+    return failure(ADGUARD_READ_ERROR);
+  }
 }
 
 function readError(body: string, fallback: string): string {

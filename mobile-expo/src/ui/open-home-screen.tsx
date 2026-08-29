@@ -13,6 +13,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import type { HomeGeofenceActions, HomeGeofenceState } from "../application/use-home-geofence";
+import type { AdguardActions, AdguardState } from "../application/use-adguard";
 import type {
   CommandState,
   IrState,
@@ -21,7 +22,9 @@ import type {
   TopLevelTab,
 } from "../application/use-open-home";
 import { edifierRemoteRows, tvRemoteRows, type RemoteCommand } from "../domain/remotes";
+import { ServerPage } from "./server-screen";
 import { ControlButton } from "./control-button";
+import { ActionButton, PageHeading, SecondaryAction, styles as shared } from "./shared";
 import { colors } from "./theme";
 
 type ReadyState = Extract<OpenHomeState, { readonly tag: "ready" }>;
@@ -31,11 +34,13 @@ type Props = {
   readonly actions: OpenHomeActions;
   readonly homeGeofence: HomeGeofenceState;
   readonly homeGeofenceActions: HomeGeofenceActions;
+  readonly adguard: AdguardState;
+  readonly adguardActions: AdguardActions;
 };
 
-type IconName = "home" | "television" | "speaker" | "light" | "away" | "settings";
+type IconName = "home" | "television" | "speaker" | "light" | "away" | "server" | "settings";
 
-const tabs: ReadonlyArray<TopLevelTab> = ["home", "television", "speaker", "away"];
+const tabs: ReadonlyArray<TopLevelTab> = ["home", "television", "speaker", "away", "server"];
 
 const homeEdifierRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
   [
@@ -52,8 +57,15 @@ const homeTelevisionRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
   [{ command: "power", label: "Power" }],
 ];
 
-/** Render the four primary OpenHome destinations. */
-export function OpenHomeScreen({ state, actions, homeGeofence, homeGeofenceActions }: Props) {
+/** Render the five primary OpenHome destinations. */
+export function OpenHomeScreen({
+  state,
+  actions,
+  homeGeofence,
+  homeGeofenceActions,
+  adguard,
+  adguardActions,
+}: Props) {
   const pager = useRef<ScrollView>(null);
   const [pageWidth, setPageWidth] = useState(0);
 
@@ -111,7 +123,7 @@ export function OpenHomeScreen({ state, actions, homeGeofence, homeGeofenceActio
           accessibilityRole="button"
           hitSlop={8}
           onPress={actions.openReconfiguration}
-          style={({ pressed }) => [styles.configureButton, pressed && styles.iconPressed]}
+          style={({ pressed }) => [styles.configureButton, pressed && shared.iconPressed]}
         >
           <Icon color={colors.muted} name="settings" size={20} />
         </Pressable>
@@ -142,6 +154,9 @@ export function OpenHomeScreen({ state, actions, homeGeofence, homeGeofenceActio
         <Page width={pageWidth}>
           <AwayPage state={homeGeofence} actions={homeGeofenceActions} />
         </Page>
+        <Page width={pageWidth}>
+          <ServerPage adguard={adguard} actions={adguardActions} />
+        </Page>
       </ScrollView>
 
       <View accessibilityRole="tablist" style={styles.tabs}>
@@ -169,14 +184,25 @@ export function OpenHomeScreen({ state, actions, homeGeofence, homeGeofenceActio
           selected={state.selectedTab === "away"}
           onPress={() => selectTab("away")}
         />
+        <Tab
+          icon="server"
+          label="Server"
+          selected={state.selectedTab === "server"}
+          onPress={() => selectTab("server")}
+        />
       </View>
     </View>
   );
 }
 
-function HomePage({ state, actions, homeGeofence, homeGeofenceActions }: Props) {
+function HomePage({
+  state,
+  actions,
+  homeGeofence,
+  homeGeofenceActions,
+}: Pick<Props, "state" | "actions" | "homeGeofence" | "homeGeofenceActions">) {
   return (
-    <View style={styles.stack}>
+    <View style={shared.stack}>
       <PageHeading
         eyebrow="EVERYDAY CONTROL"
         title="Home"
@@ -188,7 +214,7 @@ function HomePage({ state, actions, homeGeofence, homeGeofenceActions }: Props) 
 
       <AutomationToggle state={homeGeofence} actions={homeGeofenceActions} />
       {homeGeofence.tag === "ready" && homeGeofence.error !== null ? (
-        <Text accessibilityRole="alert" style={styles.error}>
+        <Text accessibilityRole="alert" style={shared.error}>
           {homeGeofence.error}
         </Text>
       ) : null}
@@ -212,7 +238,7 @@ function HomePage({ state, actions, homeGeofence, homeGeofenceActions }: Props) 
           />
         </CompactDeviceSection>
         <CompactDeviceSection icon="light" title="Lights">
-          <View style={styles.row}>
+          <View style={shared.row}>
             <CompactAction
               label="On"
               sending={state.light.sending.has("on")}
@@ -241,7 +267,7 @@ function HomePage({ state, actions, homeGeofence, homeGeofenceActions }: Props) 
 
 function TelevisionPage({ state, actions }: Pick<Props, "state" | "actions">) {
   return (
-    <View style={styles.stack}>
+    <View style={shared.stack}>
       <PageHeading
         eyebrow="REMOTE"
         title="TV"
@@ -264,7 +290,7 @@ function TelevisionPage({ state, actions }: Pick<Props, "state" | "actions">) {
 
 function SpeakerPage({ state, actions }: Pick<Props, "state" | "actions">) {
   return (
-    <View style={styles.stack}>
+    <View style={shared.stack}>
       <PageHeading
         eyebrow="REMOTE"
         title="Speaker"
@@ -287,7 +313,7 @@ function SpeakerPage({ state, actions }: Pick<Props, "state" | "actions">) {
 
 function Page({ width, children }: { readonly width: number; readonly children: React.ReactNode }) {
   return (
-    <ScrollView contentContainerStyle={styles.pageContent} style={{ width }}>
+    <ScrollView contentContainerStyle={shared.pageContent} style={{ width }}>
       {children}
     </ScrollView>
   );
@@ -302,7 +328,7 @@ function AwayPage({
 }) {
   const enabled = state.tag === "ready" && state.home !== null;
   return (
-    <View style={styles.stack}>
+    <View style={shared.stack}>
       <PageHeading
         eyebrow="AUTOMATION"
         title="Leave home"
@@ -352,7 +378,7 @@ function AwayPage({
           <Text style={styles.radiusUnit}>meters</Text>
         </View>
         {state.tag === "loading" ? null : (
-          <View style={styles.row}>
+          <View style={shared.row}>
             <ActionButton
               label={enabled ? "Update with Expo" : "Set with Expo"}
               sending={state.saving}
@@ -374,7 +400,7 @@ function AwayPage({
           />
         ) : null}
         {state.tag === "ready" && state.error !== null ? (
-          <Text accessibilityRole="alert" style={styles.error}>
+          <Text accessibilityRole="alert" style={shared.error}>
             {state.error}
           </Text>
         ) : null}
@@ -419,8 +445,8 @@ function AutomationToggle({
       style={({ pressed }) => [
         styles.automationToggle,
         enabled && styles.automationToggleEnabled,
-        busy && styles.disabled,
-        pressed && styles.actionPressed,
+        busy && shared.disabled,
+        pressed && shared.actionPressed,
       ]}
     >
       <View style={styles.automationToggleCopy}>
@@ -460,13 +486,13 @@ function CompactDeviceSection({
 
 function HomeSpeakerSection({ children }: { readonly children: React.ReactNode }) {
   return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
+    <View style={shared.section}>
+      <View style={shared.sectionHeader}>
         <View style={styles.deviceIdentity}>
           <Icon color={colors.signal} name="speaker" size={21} />
           <Text style={styles.deviceTitle}>Speaker</Text>
         </View>
-        <Text style={styles.sectionDetail}>Audio</Text>
+        <Text style={shared.sectionDetail}>Audio</Text>
       </View>
       {children}
     </View>
@@ -485,37 +511,17 @@ function DeviceSection({
   readonly children: React.ReactNode;
 }) {
   return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
+    <View style={shared.section}>
+      <View style={shared.sectionHeader}>
         <View style={styles.deviceIdentity}>
           <View style={styles.deviceIcon}>
             <Icon color={colors.signal} name={icon} size={21} />
           </View>
           <Text style={styles.deviceTitle}>{title}</Text>
         </View>
-        <Text style={styles.sectionDetail}>{detail}</Text>
+        <Text style={shared.sectionDetail}>{detail}</Text>
       </View>
       {children}
-    </View>
-  );
-}
-
-function PageHeading({
-  eyebrow,
-  title,
-  description,
-}: {
-  readonly eyebrow: string;
-  readonly title: string;
-  readonly description: string;
-}) {
-  return (
-    <View>
-      <Text style={styles.pageEyebrow}>{eyebrow}</Text>
-      <Text accessibilityRole="header" style={styles.pageTitle}>
-        {title}
-      </Text>
-      <Text style={styles.pageDescription}>{description}</Text>
     </View>
   );
 }
@@ -528,8 +534,8 @@ function Section({
   readonly children: React.ReactNode;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={shared.section}>
+      <Text style={shared.sectionTitle}>{title}</Text>
       {children}
     </View>
   );
@@ -538,24 +544,24 @@ function Section({
 function IrSummary({ state, onRetry }: { readonly state: IrState; readonly onRetry: () => void }) {
   if (state.tag === "loading") {
     return (
-      <View style={styles.statusPanel}>
+      <View style={shared.statusPanel}>
         <ActivityIndicator color={colors.signal} />
-        <Text style={styles.statusText}>Checking remote</Text>
+        <Text style={shared.statusText}>Checking remote</Text>
       </View>
     );
   }
   if (state.tag === "error") {
     return (
-      <View style={styles.statusPanel}>
-        <Text accessibilityRole="alert" style={styles.error}>
+      <View style={shared.statusPanel}>
+        <Text accessibilityRole="alert" style={shared.error}>
           {state.message}
         </Text>
         <Pressable
           accessibilityRole="button"
           onPress={onRetry}
-          style={({ pressed }) => [styles.retryButton, pressed && styles.actionPressed]}
+          style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
         >
-          <Text style={styles.retry}>Try again</Text>
+          <Text style={shared.retry}>Try again</Text>
         </Pressable>
       </View>
     );
@@ -577,7 +583,7 @@ function RemoteRows({
   return (
     <View style={styles.rows}>
       {rows.map((row, rowIndex) => (
-        <View key={rowIndex} style={styles.row}>
+        <View key={rowIndex} style={shared.row}>
           {row.map((control, columnIndex) =>
             control === null ? (
               <View key={`empty-${columnIndex}`} style={styles.spacer} />
@@ -601,35 +607,6 @@ function RemoteRows({
   );
 }
 
-function ActionButton({
-  label,
-  sending,
-  disabled,
-  onPress,
-}: {
-  readonly label: string;
-  readonly sending: boolean;
-  readonly disabled: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled, busy: sending }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionButton,
-        disabled && styles.disabled,
-        pressed && styles.actionPressed,
-      ]}
-    >
-      {sending ? <ActivityIndicator color={colors.background} size="small" /> : null}
-      <Text style={styles.actionLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function CompactAction({
   label,
   sending,
@@ -649,42 +626,16 @@ function CompactAction({
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.compactAction,
-        disabled && styles.disabled,
-        pressed && styles.actionPressed,
+        shared.compactAction,
+        disabled && shared.disabled,
+        pressed && shared.actionPressed,
       ]}
     >
       {sending ? (
         <ActivityIndicator color={colors.text} size="small" />
       ) : (
-        <Text style={styles.compactActionLabel}>{label}</Text>
+        <Text style={shared.compactActionLabel}>{label}</Text>
       )}
-    </Pressable>
-  );
-}
-
-function SecondaryAction({
-  label,
-  disabled,
-  onPress,
-}: {
-  readonly label: string;
-  readonly disabled: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.secondaryAction,
-        disabled && styles.disabled,
-        pressed && styles.iconPressed,
-      ]}
-    >
-      <Text style={styles.secondaryActionLabel}>{label}</Text>
     </Pressable>
   );
 }
@@ -703,7 +654,7 @@ function CommandError({
     commands.find((command) => command.command === state.error?.command)?.label ??
     state.error.command;
   return (
-    <Text accessibilityRole="alert" style={styles.error}>
+    <Text accessibilityRole="alert" style={shared.error}>
       Unable to send {label}. {state.error.message}
     </Text>
   );
@@ -726,7 +677,7 @@ function Tab({
       accessibilityRole="tab"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [styles.tab, pressed && styles.iconPressed]}
+      style={({ pressed }) => [styles.tab, pressed && shared.iconPressed]}
     >
       <View style={[styles.tabIndicator, selected && styles.selectedTabIndicator]} />
       <Icon color={selected ? colors.signal : colors.muted} name={icon} size={23} />
@@ -802,6 +753,17 @@ function Icon({
       </Text>
     );
   }
+  if (name === "server") {
+    return (
+      <Text
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        style={[styles.iconGlyph, { color, fontSize: size }]}
+      >
+        ☰
+      </Text>
+    );
+  }
   return (
     <Text
       accessibilityElementsHidden
@@ -842,25 +804,6 @@ function tabIndex(tab: TopLevelTab): number {
 }
 
 const styles = StyleSheet.create({
-  actionButton: {
-    alignItems: "center",
-    backgroundColor: colors.signal,
-    borderRadius: 14,
-    flex: 1,
-    flexDirection: "row",
-    gap: 8,
-    justifyContent: "center",
-    minHeight: 54,
-    paddingHorizontal: 10,
-  },
-  actionLabel: {
-    color: colors.background,
-    fontSize: 14,
-    fontWeight: "800",
-    lineHeight: 19,
-    textAlign: "center",
-  },
-  actionPressed: { opacity: 0.84, transform: [{ scale: 0.96 }] },
   automationDescription: { color: colors.muted, fontSize: 15, lineHeight: 23 },
   automationToggle: {
     alignItems: "center",
@@ -883,18 +826,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.2,
   },
-  compactAction: {
-    alignItems: "center",
-    backgroundColor: colors.panelRaised,
-    borderColor: colors.border,
-    borderRadius: 12,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 48,
-    paddingHorizontal: 8,
-  },
-  compactActionLabel: { color: colors.text, fontSize: 14, fontWeight: "700" },
   compactDescription: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   compactSection: {
     backgroundColor: colors.panel,
@@ -931,8 +862,6 @@ const styles = StyleSheet.create({
   },
   deviceIdentity: { alignItems: "center", flexDirection: "row", gap: 10 },
   deviceTitle: { color: colors.text, fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
-  disabled: { opacity: 0.48 },
-  error: { color: colors.danger, fontSize: 13, lineHeight: 19, textAlign: "center" },
   errorDot: { backgroundColor: colors.danger },
   header: {
     alignItems: "center",
@@ -953,7 +882,6 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   iconGlyph: { fontWeight: "700", lineHeight: 28, textAlign: "center" },
-  iconPressed: { opacity: 0.72 },
   inputLabel: { color: colors.text, fontSize: 14, fontWeight: "700", marginTop: 4 },
   kicker: { color: colors.text, fontSize: 19, fontWeight: "900", letterSpacing: -0.7 },
   bulbBase: { borderRadius: 1, bottom: 1, height: 3, position: "absolute", width: 8 },
@@ -977,17 +905,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 8,
   },
-  pageContent: { padding: 20, paddingBottom: 32 },
-  pageDescription: { color: colors.muted, fontSize: 16, lineHeight: 23, marginTop: 5 },
-  pageEyebrow: { color: colors.signal, fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },
-  pageTitle: {
-    color: colors.text,
-    fontSize: 40,
-    fontWeight: "900",
-    letterSpacing: -1.6,
-    lineHeight: 44,
-    marginTop: 3,
-  },
   radiusInput: {
     backgroundColor: colors.background,
     borderColor: colors.border,
@@ -1003,39 +920,8 @@ const styles = StyleSheet.create({
   radiusRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   radiusUnit: { color: colors.muted, fontSize: 14, fontWeight: "600" },
   readyDot: { backgroundColor: colors.ready },
-  retry: { color: colors.signal, fontSize: 14, fontWeight: "800" },
-  retryButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12 },
-  row: { flexDirection: "row", gap: 10 },
   rows: { gap: 10 },
   screen: { backgroundColor: colors.background, flex: 1 },
-  secondaryAction: {
-    alignItems: "center",
-    borderColor: colors.border,
-    borderRadius: 14,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 54,
-    paddingHorizontal: 10,
-  },
-  secondaryActionLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19,
-    textAlign: "center",
-  },
-  section: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 14,
-    padding: 16,
-  },
-  sectionDetail: { color: colors.muted, fontSize: 12, fontWeight: "600" },
-  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  sectionTitle: { color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
   selectedTabLabel: { color: colors.signal },
   selectedTabIndicator: { backgroundColor: colors.signal },
   speakerDriver: {
@@ -1049,7 +935,6 @@ const styles = StyleSheet.create({
   speakerIcon: { borderRadius: 3, borderWidth: 1.5, position: "relative" },
   speakerTweeter: { borderRadius: 2, height: 4, position: "absolute", top: 3, width: 4 },
   spacer: { flex: 1 },
-  stack: { gap: 18, width: "100%" },
   statusCopy: { flex: 1, gap: 4 },
   statusDescription: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   statusIcon: {
@@ -1062,20 +947,6 @@ const styles = StyleSheet.create({
   },
   statusIconEnabled: { backgroundColor: colors.readyDark },
   statusLabel: { color: colors.text, fontSize: 19, fontWeight: "800", letterSpacing: -0.3 },
-  statusPanel: {
-    alignItems: "center",
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 9,
-    justifyContent: "center",
-    minHeight: 52,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  statusText: { color: colors.text, fontSize: 14, fontWeight: "700" },
   switchThumb: {
     backgroundColor: colors.muted,
     borderRadius: 10,
