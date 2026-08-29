@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useState } from "react";
 
-import type { ContainerAction, DockerActions, DockerState } from "../application/use-docker";
+import type { ContainerAction, ContainerLogsState, DockerActions, DockerState } from "../application/use-docker";
 import {
   classifyContainer,
   formatPorts,
@@ -48,9 +48,20 @@ const classificationColor = {
   stopped: colors.muted,
 } satisfies Record<ContainerClassification, string>;
 
-/** Render the Docker Tab: container list filtered by health classification. */
+/** Render the Docker Tab: container list filtered by health classification, or one container's logs. */
 export function DockerPage({ state, actions, counts }: Props) {
   const [filter, setFilter] = useState<DockerFilter>("all");
+
+  if (state.tag === "ready" && state.view.tag === "logs") {
+    return (
+      <ContainerLogsPage
+        name={state.view.name}
+        logs={state.view.logs}
+        actions={actions}
+      />
+    );
+  }
+
   const containers = state.tag === "ready" ? state.containers : [];
   const visible =
     filter === "all"
@@ -132,6 +143,10 @@ export function DockerPage({ state, actions, counts }: Props) {
                 container={container}
                 acting={state.acting}
                 actions={actions}
+                onShowLogs={() => {
+                  setFilter("all");
+                  actions.openLogs(container.name);
+                }}
               />
             ))
           : null}
@@ -149,14 +164,21 @@ function ContainerRow({
   container,
   acting,
   actions,
+  onShowLogs,
 }: {
   readonly container: DockerContainer;
   readonly acting: { readonly name: string; readonly action: ContainerAction } | null;
   readonly actions: DockerActions;
+  readonly onShowLogs: () => void;
 }) {
   const classification = classifyContainer(container);
   return (
-    <View style={shared.section}>
+    <Pressable
+      accessibilityLabel={`Show logs for ${container.name}`}
+      accessibilityRole="button"
+      onPress={onShowLogs}
+      style={({ pressed }) => [shared.section, pressed && shared.actionPressed]}
+    >
       <View style={shared.sectionHeader}>
         <View style={styles.identity}>
           <View style={[styles.dot, { backgroundColor: classificationColor[classification] }]} />
@@ -190,7 +212,87 @@ function ContainerRow({
           />
         ))}
       </View>
-    </View>
+    </Pressable>
+  );
+}
+
+/** Render one container's recent logs, swapped in for the list view. */
+function ContainerLogsPage({
+  name,
+  logs,
+  actions,
+}: {
+  readonly name: string;
+  readonly logs: ContainerLogsState;
+  readonly actions: DockerActions;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={shared.pageContent}
+      refreshControl={
+        <RefreshControl
+          refreshing={logs.tag === "ready" && logs.refreshing}
+          onRefresh={actions.refresh}
+          colors={[colors.signal]}
+          tintColor={colors.signal}
+        />
+      }
+    >
+      <View style={shared.stack}>
+        <Pressable
+          accessibilityLabel="Back to the container list"
+          accessibilityRole="button"
+          onPress={actions.closeLogs}
+          style={({ pressed }) => [styles.backButton, pressed && shared.iconPressed]}
+        >
+          <Text style={styles.backLabel}>‹ Back</Text>
+        </Pressable>
+        <PageHeading
+          eyebrow="SERVER OPERATIONS"
+          title={name}
+          description="The last 200 lines, with timestamps."
+        />
+        {logs.tag === "loading" ? (
+          <View style={shared.statusPanel}>
+            <ActivityIndicator color={colors.signal} />
+            <Text style={shared.statusText}>Loading logs</Text>
+          </View>
+        ) : null}
+        {logs.tag === "error" ? (
+          <View style={shared.section}>
+            <Text accessibilityRole="alert" style={shared.error}>
+              {logs.message}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={actions.refresh}
+              style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
+            >
+              <Text style={shared.retry}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {logs.tag === "ready" && logs.lines.length === 0 ? (
+          <View style={shared.statusPanel}>
+            <Text style={shared.statusText}>No log output</Text>
+          </View>
+        ) : null}
+        {logs.tag === "ready" && logs.lines.length > 0 ? (
+          <View style={styles.logPanel}>
+            {logs.lines.map((line, index) => (
+              <Text key={index} style={styles.logLine}>
+                {line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {logs.tag === "ready" && logs.error !== null ? (
+          <Text accessibilityRole="alert" style={shared.error}>
+            {logs.error}
+          </Text>
+        ) : null}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -235,6 +337,8 @@ function capitalize(state: string): string {
 }
 
 const styles = StyleSheet.create({
+  backButton: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingRight: 12 },
+  backLabel: { color: colors.muted, fontSize: 15, fontWeight: "700" },
   chip: {
     alignItems: "center",
     backgroundColor: colors.panelRaised,
@@ -253,5 +357,14 @@ const styles = StyleSheet.create({
   dot: { borderRadius: 5, height: 10, width: 10 },
   identity: { alignItems: "center", flexDirection: "row", gap: 8, flex: 1 },
   image: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  logLine: { color: colors.text, fontSize: 12, lineHeight: 18 },
+  logPanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+    padding: 14,
+  },
   name: { color: colors.text, fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
 });

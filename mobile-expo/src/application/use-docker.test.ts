@@ -27,6 +27,7 @@ function fakeApi() {
   const calls: string[] = [];
   const pending: Array<{ resolve: (result: Result<readonly DockerContainer[]>) => void }> = [];
   const actionPending: Array<{ resolve: (result: Result<void>) => void }> = [];
+  const logPending: Array<{ resolve: (result: Result<readonly string[]>) => void }> = [];
   const api: DockerApi = {
     listContainers: () => {
       calls.push("list");
@@ -44,18 +45,22 @@ function fakeApi() {
       calls.push(`restart ${name}`);
       return new Promise((resolve) => actionPending.push({ resolve }));
     },
+    containerLogs: (name) => {
+      calls.push(`logs ${name}`);
+      return new Promise((resolve) => logPending.push({ resolve }));
+    },
   };
-  return { api, calls, pending, actionPending };
+  return { api, calls, pending, actionPending, logPending };
 }
 
 function harness() {
-  const { api, calls, pending, actionPending } = fakeApi();
+  const { api, calls, pending, actionPending, logPending } = fakeApi();
   const events: DockerEvent[] = [];
   const controller = createDockerController({
     api,
     emit: (event) => events.push(event),
   });
-  return { controller, calls, pending, actionPending, events };
+  return { controller, calls, pending, actionPending, logPending, events };
 }
 
 async function settle(): Promise<void> {
@@ -84,6 +89,7 @@ describe("docker state machine", () => {
       refreshing: false,
       acting: null,
       error: null,
+      view: { tag: "list" },
     });
   });
 
@@ -255,6 +261,185 @@ describe("docker state machine", () => {
     await settle();
 
     expect(h.events.map((event) => event.type)).toEqual(["loadStarted", "superseded"]);
+  });
+});
+
+describe("docker container logs machine", () => {
+  const lines: readonly string[] = ["2026-08-29T12:00:00Z started", "2026-08-29T12:00:01Z ready"];
+
+  /** Logs can only be opened from a loaded list, so replay from a ready base. */
+  const readyInitial = replay(
+    [
+      { type: "loadStarted" },
+      { type: "loadSucceeded", containers },
+    ],
+    initial,
+  );
+
+  function replayLogs(state: DockerState): Extract<DockerState, { tag: "ready" }>["view"] {
+    return state.tag === "ready" ? state.view : { tag: "list" };
+  }
+
+  function loadedHarness(): ReturnType<typeof harness> {
+    const h = harness();
+    h.controller.openLogs("adguard");
+    h.logPending[0]?.resolve(success(lines));
+    return h;
+  }
+
+  it("loads a container's logs after selecting it", async () => {
+    const h = harness();
+    h.controller.openLogs("adguard");
+
+    expect(h.calls).toEqual(["logs adguard"]);
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+      tag: "logs",
+      name: "adguard",
+      logs: { tag: "loading" },
+    });
+
+    h.logPending[0]?.resolve(success(lines));
+    await settle();
+
+    expect(h.events.map((event) => event.type)).toEqual([
+      "logsOpened",
+      "logsStarted",
+      "logsLoaded",
+    ]);
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+      tag: "logs",
+      name: "adguard",
+      logs: { tag: "ready", lines, refreshing: false, error: null },
+    });
+  });
+
+  it("refreshes logs in place while keeping the visible lines", async () => {
+    const h = loadedHarness();
+    await settle();
+
+    h.controller.refresh();
+    expect(h.calls).toEqual(["logs adguard", "logs adguard"]);
+    const refreshing = replayLogs(replay(h.events, readyInitial));
+    expect(
+      refreshing.tag === "logs" &&
+        refreshing.logs.tag === "ready" && {
+          lines: refreshing.logs.lines,
+          refreshing: refreshing.logs.refreshing,
+        },
+    ).toEqual({ lines, refreshing: true });
+
+    const updated = ["2026-08-29T12:00:02Z restarted"];
+    h.logPending[1]?.resolve(success(updated));
+    await settle();
+
+    const refreshed = replayLogs(replay(h.events, readyInitial));
+    expect(
+      refreshed.tag === "logs" &&
+        refreshed.logs.tag === "ready" && {
+          lines: refreshed.logs.lines,
+          refreshing: refreshed.logs.refreshing,
+        },
+    ).toEqual({ lines: updated, refreshing: false });
+  });
+
+  it("keeps the lines and reports an inline error when a logs refresh fails", async () => {
+    const h = loadedHarness();
+    await settle();
+
+    h.controller.refresh();
+    h.logPending[1]?.resolve(failure("Docker unavailable."));
+    await settle();
+
+    const state = replay(h.events, readyInitial);
+    expect(
+      state.tag === "ready" &&
+        state.view.tag === "logs" &&
+        state.view.logs.tag === "ready" && {
+          lines: state.view.logs.lines,
+          refreshing: state.view.logs.refreshing,
+          error: state.view.logs.error,
+        },
+    ).toEqual({ lines, refreshing: false, error: "Docker unavailable." });
+  });
+
+  it.each([
+    "Container adguard not found.",
+    "Couldn't load the container logs.",
+  ])("surfaces a failed first load as a retryable inline error: %s", async (message) => {
+    const h = harness();
+    h.controller.openLogs("adguard");
+    h.logPending[0]?.resolve(failure(message));
+    await settle();
+
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+      tag: "logs",
+      name: "adguard",
+      logs: { tag: "error", message },
+    });
+
+    h.controller.refresh();
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+      tag: "logs",
+      name: "adguard",
+      logs: { tag: "loading" },
+    });
+  });
+
+  it("back returns to the unfiltered list and drops a stale in-flight response", async () => {
+    const h = harness();
+    h.controller.openLogs("adguard");
+    await settle();
+    h.logPending[0]?.resolve(success(lines));
+    await settle();
+
+    h.controller.refresh();
+    h.controller.closeLogs();
+    h.logPending[1]?.resolve(success(["late"]));
+    await settle();
+
+    expect(h.calls).toEqual(["logs adguard", "logs adguard"]);
+    expect(h.events).toContainEqual({ type: "logsClosed" });
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({ tag: "list" });
+
+    h.controller.openLogs("feed-rs");
+    expect(h.calls).toEqual(["logs adguard", "logs adguard", "logs feed-rs"]);
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+      tag: "logs",
+      name: "feed-rs",
+      logs: { tag: "loading" },
+    });
+  });
+
+  it("drops a superseded logs response and keeps the latest selection", async () => {
+    const h = harness();
+    h.controller.openLogs("adguard");
+    h.controller.openLogs("feed-rs");
+
+    h.logPending[0]?.resolve(success(["stale"]));
+    await settle();
+
+    const latest = ["2026-08-29T12:00:00Z feed"];
+    h.logPending[1]?.resolve(success(latest));
+    await settle();
+
+    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+      tag: "logs",
+      name: "feed-rs",
+      logs: { tag: "ready", lines: latest, refreshing: false, error: null },
+    });
+  });
+
+  it("routes refresh to the list while no logs are open", async () => {
+    const h = harness();
+    h.controller.openLogs("adguard");
+    await settle();
+    h.logPending[0]?.resolve(success(lines));
+    await settle();
+
+    h.controller.closeLogs();
+    h.controller.refresh();
+
+    expect(h.calls).toEqual(["logs adguard", "list"]);
   });
 });
 

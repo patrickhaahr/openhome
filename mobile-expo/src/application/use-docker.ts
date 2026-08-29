@@ -7,6 +7,23 @@ import {
 } from "../domain/docker";
 import type { DockerApi } from "../infrastructure/open-home-api";
 
+/** The state of the container logs view inside the Docker Tab. */
+export type ContainerLogsState =
+  | { readonly tag: "loading" }
+  | { readonly tag: "error"; readonly message: string }
+  | {
+      readonly tag: "ready";
+      readonly lines: readonly string[];
+      /** A logs refresh is in flight; the previous lines stay visible. */
+      readonly refreshing: boolean;
+      readonly error: string | null;
+    };
+
+/** Which surface the Docker Tab renders: the container list or one container's logs. */
+export type DockerView =
+  | { readonly tag: "list" }
+  | { readonly tag: "logs"; readonly name: string; readonly logs: ContainerLogsState };
+
 /** The user-visible state of the Docker Tab. */
 export type DockerState =
   | { readonly tag: "loading" }
@@ -19,6 +36,7 @@ export type DockerState =
       /** The container lifecycle action in flight, if any. */
       readonly acting: { readonly name: string; readonly action: ContainerAction } | null;
       readonly error: string | null;
+      readonly view: DockerView;
     };
 
 /** One immediate container lifecycle action. */
@@ -27,6 +45,8 @@ export type ContainerAction = "start" | "stop" | "restart";
 /** User actions accepted by the Docker Tab. */
 export type DockerActions = {
   readonly refresh: () => void;
+  readonly openLogs: (name: string) => void;
+  readonly closeLogs: () => void;
   readonly startContainer: (name: string) => void;
   readonly stopContainer: (name: string) => void;
   readonly restartContainer: (name: string) => void;
@@ -38,8 +58,13 @@ export type DockerEvent =
   | { readonly type: "loadFailed"; readonly message: string }
   | { readonly type: "actionStarted"; readonly name: string; readonly action: ContainerAction }
   | { readonly type: "actionFinished"; readonly error: string | null }
+  | { readonly type: "logsOpened"; readonly name: string }
+  | { readonly type: "logsStarted" }
+  | { readonly type: "logsLoaded"; readonly lines: readonly string[] }
+  | { readonly type: "logsFailed"; readonly message: string }
+  | { readonly type: "logsClosed" }
   /** A superseded operation resolved; its result is dropped but its own flag must clear. */
-  | { readonly type: "superseded"; readonly of: "refresh" | "action" };
+  | { readonly type: "superseded"; readonly of: "refresh" | "action" | "logs" };
 
 const emptyCounts: ClassificationCounts = { all: 0, healthy: 0, unhealthy: 0, stopped: 0 };
 
@@ -50,6 +75,8 @@ export function createDockerController(deps: {
 }) {
   let token = 0;
   let acting = false;
+  let logsToken = 0;
+  let selected: string | null = null;
 
   async function fetchContainers(): Promise<void> {
     const current = ++token;
@@ -63,6 +90,21 @@ export function createDockerController(deps: {
       result.ok
         ? { type: "loadSucceeded", containers: result.value }
         : { type: "loadFailed", message: result.error },
+    );
+  }
+
+  async function fetchLogs(name: string): Promise<void> {
+    const current = ++logsToken;
+    deps.emit({ type: "logsStarted" });
+    const result = await deps.api.containerLogs(name);
+    if (logsToken !== current) {
+      deps.emit({ type: "superseded", of: "logs" });
+      return;
+    }
+    deps.emit(
+      result.ok
+        ? { type: "logsLoaded", lines: result.value }
+        : { type: "logsFailed", message: result.error },
     );
   }
 
@@ -87,7 +129,21 @@ export function createDockerController(deps: {
 
   return {
     refresh(): void {
-      void fetchContainers();
+      if (selected !== null) {
+        void fetchLogs(selected);
+      } else {
+        void fetchContainers();
+      }
+    },
+    openLogs(name: string): void {
+      selected = name;
+      deps.emit({ type: "logsOpened", name });
+      void fetchLogs(name);
+    },
+    closeLogs(): void {
+      selected = null;
+      logsToken += 1;
+      deps.emit({ type: "logsClosed" });
     },
     startContainer(name: string): void {
       void act(name, "start");
@@ -100,7 +156,9 @@ export function createDockerController(deps: {
     },
     cancel(): void {
       token += 1;
+      logsToken += 1;
       acting = false;
+      selected = null;
     },
   };
 }
@@ -120,6 +178,7 @@ export function useDocker(
       controller.current = null;
       return;
     }
+    dispatch({ type: "logsClosed" });
     const current = createDockerController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
@@ -136,6 +195,8 @@ export function useDocker(
     useMemo<DockerActions>(
       () => ({
         refresh: () => controller.current?.refresh(),
+        openLogs: (name) => controller.current?.openLogs(name),
+        closeLogs: () => controller.current?.closeLogs(),
         startContainer: (name) => controller.current?.startContainer(name),
         stopContainer: (name) => controller.current?.stopContainer(name),
         restartContainer: (name) => controller.current?.restartContainer(name),
@@ -160,6 +221,7 @@ export function reduce(state: DockerState, event: DockerEvent): DockerState {
             refreshing: false,
             acting: null,
             error: null,
+            view: { tag: "list" },
           };
     case "loadFailed":
       return state.tag === "ready"
@@ -171,11 +233,47 @@ export function reduce(state: DockerState, event: DockerEvent): DockerState {
         : state;
     case "actionFinished":
       return state.tag === "ready" ? { ...state, acting: null, error: event.error } : state;
+    case "logsOpened":
+      return state.tag === "ready"
+        ? { ...state, view: { tag: "logs", name: event.name, logs: { tag: "loading" } } }
+        : state;
+    case "logsStarted":
+      return updateLogs(state, (logs) =>
+        logs.tag === "ready" ? { ...logs, refreshing: true } : { tag: "loading" },
+      );
+    case "logsLoaded":
+      return updateLogs(state, () => ({
+        tag: "ready",
+        lines: event.lines,
+        refreshing: false,
+        error: null,
+      }));
+    case "logsFailed":
+      return updateLogs(state, (logs) =>
+        logs.tag === "ready"
+          ? { ...logs, refreshing: false, error: event.message }
+          : { tag: "error", message: event.message },
+      );
+    case "logsClosed":
+      return state.tag === "ready" ? { ...state, view: { tag: "list" } } : state;
     case "superseded":
+      if (event.of === "logs") {
+        return updateLogs(state, (logs) => (logs.tag === "ready" ? { ...logs, refreshing: false } : logs));
+      }
       return state.tag === "ready"
         ? event.of === "refresh"
           ? { ...state, refreshing: false }
           : { ...state, acting: null }
         : state;
   }
+}
+
+/** Apply a logs-state update to the Docker Tab state when the logs view is open. */
+function updateLogs(
+  state: DockerState,
+  update: (logs: ContainerLogsState) => ContainerLogsState,
+): DockerState {
+  return state.tag === "ready" && state.view.tag === "logs"
+    ? { ...state, view: { ...state.view, logs: update(state.view.logs) } }
+    : state;
 }

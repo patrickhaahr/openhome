@@ -377,4 +377,86 @@ describe("docker adapter", () => {
     await pending;
     expect(result).toEqual(failure(reachError));
   });
+
+  describe("containerLogs", () => {
+    async function containerLogs(name: string): Promise<Result<readonly string[]>> {
+      return createOpenHomeApi(configuration).docker.containerLogs(name);
+    }
+
+    it("requests the fixed 200-line tail with timestamps and no since filter", async () => {
+      const requests: string[] = [];
+      vi.stubGlobal("fetch", (url: RequestInfo | URL) => {
+        requests.push(String(url));
+        return Promise.resolve(
+          new Response("2026-08-29T12:00:00.000000000Z starting adguard\nready\n", {
+            status: 200,
+          }),
+        );
+      });
+
+      const result = await containerLogs("adguard");
+
+      expect(requests).toEqual([
+        "http://openhome.test/api/docker/adguard/logs?tail=200&timestamps=true",
+      ]);
+      expect(result).toEqual({
+        ok: true,
+        value: ["2026-08-29T12:00:00.000000000Z starting adguard", "ready"],
+      });
+    });
+
+    it("keeps a partial final line and drops the trailing newline of an empty body", async () => {
+      stubFetch(async () => new Response("2026-08-29T12:00:00Z partial", { status: 200 }));
+      expect(await containerLogs("adguard")).toEqual({
+        ok: true,
+        value: ["2026-08-29T12:00:00Z partial"],
+      });
+
+      stubFetch(async () => new Response("", { status: 200 }));
+      expect(await containerLogs("adguard")).toEqual({ ok: true, value: [] });
+    });
+
+    it("maps not-found and unavailable logs failures to their class messages", async () => {
+      stubFetch(
+        async () => new Response(JSON.stringify({ error: "Container not found: adguard" }), { status: 404 }),
+      );
+      expect(await containerLogs("adguard")).toEqual(failure("Container adguard not found."));
+
+      stubFetch(
+        async () => new Response(JSON.stringify({ error: "Docker service not available" }), { status: 503 }),
+      );
+      expect(await containerLogs("adguard")).toEqual(failure("Docker unavailable."));
+    });
+
+    it("surfaces other logs failures using the API error text or the default", async () => {
+      stubFetch(
+        async () => new Response(JSON.stringify({ error: "Docker daemon error" }), { status: 500 }),
+      );
+      expect(await containerLogs("adguard")).toEqual(failure("Docker daemon error"));
+
+      stubFetch(async () => new Response("<html>", { status: 500 }));
+      expect(await containerLogs("adguard")).toEqual(failure("Couldn't load the container logs."));
+    });
+
+    it("uses the extended timeout for logs requests", async () => {
+      vi.useFakeTimers();
+      stubFetch(
+        (init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new Error("Aborted")));
+          }),
+      );
+
+      let result: Result<readonly string[]> | null = null;
+      const pending = containerLogs("adguard").then((value) => {
+        result = value;
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(result).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      await pending;
+      expect(result).toEqual(failure(reachError));
+    });
+  });
 });

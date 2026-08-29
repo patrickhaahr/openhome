@@ -29,6 +29,7 @@ export type AdguardApi = {
 /** Docker container operations used by the Docker Tab. */
 export type DockerApi = {
   readonly listContainers: () => Promise<Result<readonly DockerContainer[]>>;
+  readonly containerLogs: (name: string) => Promise<Result<readonly string[]>>;
   readonly startContainer: (name: string) => Promise<Result<void>>;
   readonly stopContainer: (name: string) => Promise<Result<void>>;
   readonly restartContainer: (name: string) => Promise<Result<void>>;
@@ -203,6 +204,24 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       startContainer: (name) => containerAction(name, "start"),
       stopContainer: (name) => containerAction(name, "stop"),
       restartContainer: (name) => containerAction(name, "restart"),
+
+      containerLogs: async (name) => {
+        const response = await request(
+          `/api/docker/${encodeURIComponent(name)}/logs?tail=200&timestamps=true`,
+          {
+            defaultError: "Couldn't load the container logs.",
+            timeoutMs: DOCKER_TIMEOUT_MS,
+            statusErrors: {
+              404: `Container ${name} not found.`,
+              503: "Docker unavailable.",
+            },
+          },
+        );
+        if (!response.ok) {
+          return response;
+        }
+        return success(parseLogLines(response.value.body));
+      },
     },
   };
 }
@@ -324,6 +343,15 @@ function normalizeUptime(value: Json | undefined): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+/** Split a plain-text logs body into lines, dropping the final newline. */
+function parseLogLines(body: string): readonly string[] {
+  const lines = body.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
 }
 
 function readError(body: string, fallback: string): string {
