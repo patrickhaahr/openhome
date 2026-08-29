@@ -1,7 +1,7 @@
 import type { AdguardStatus } from "../domain/adguard";
 import type { Configuration } from "../domain/configuration";
 import type { DockerContainer } from "../domain/docker";
-import type { TimelineItem } from "../domain/rss";
+import type { Feed, TimelineItem } from "../domain/rss";
 import {
   isJsonArray,
   isJsonBoolean,
@@ -36,13 +36,16 @@ export type DockerApi = {
   readonly restartContainer: (name: string) => Promise<Result<void>>;
 };
 
-/** Compact timeline operations used by the Server Tab. */
+/** Compact timeline and Feed management operations used by the Server Tab. */
 export type RssApi = {
   /** One newest-first page of compact feed items, resuming after `beforeId` when set. */
   readonly compactTimeline: (
     beforeId: number | null,
     limit: number,
   ) => Promise<Result<readonly TimelineItem[]>>;
+  readonly listFeeds: () => Promise<Result<readonly Feed[]>>;
+  readonly createFeed: (url: string) => Promise<Result<Feed>>;
+  readonly deleteFeed: (id: number) => Promise<Result<void>>;
 };
 
 /** Operations used by the OpenHome application layer. */
@@ -57,7 +60,7 @@ export type OpenHomeApi = {
 };
 
 type RequestOptions = {
-  readonly method?: "GET" | "POST";
+  readonly method?: "GET" | "POST" | "DELETE";
   readonly body?: object;
   readonly defaultError: string;
   /** Request timeout in ms; defaults to the short timeout shared by all callers. */
@@ -250,6 +253,47 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           return failure(TIMELINE_READ_ERROR);
         }
       },
+
+      listFeeds: async (): Promise<Result<readonly Feed[]>> => {
+        const response = await request("/api/feeds", {
+          defaultError: "Couldn't load the feeds.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseFeedList(JSON.parse(response.value.body));
+        } catch {
+          return failure(FEEDS_READ_ERROR);
+        }
+      },
+
+      createFeed: async (url): Promise<Result<Feed>> => {
+        const response = await request("/api/feeds", {
+          method: "POST",
+          body: { url },
+          defaultError: "Couldn't add the feed.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseFeed(JSON.parse(response.value.body));
+        } catch {
+          return failure(FEEDS_READ_ERROR);
+        }
+      },
+
+      deleteFeed: async (id): Promise<Result<void>> => {
+        const response = await request(`/api/feeds/${id}`, {
+          method: "DELETE",
+          defaultError: "Couldn't remove the feed.",
+          statusErrors: {
+            404: `Feed ${id} not found.`,
+          },
+        });
+        return response.ok ? success(undefined) : response;
+      },
     },
   };
 }
@@ -326,6 +370,40 @@ const DOCKER_READ_ERROR = "Couldn't read Docker containers from the Axum API.";
 const DOCKER_TIMEOUT_MS = 15_000;
 
 const TIMELINE_READ_ERROR = "Couldn't read the timeline from the Axum API.";
+
+const FEEDS_READ_ERROR = "Couldn't read the feed from the Axum API.";
+
+/**
+ * Parse an untrusted Feed payload. The Axum API serves feeds as
+ * `{ id, url, title }` with `title` null until the first fetch.
+ */
+export function parseFeed(json: Json): Result<Feed> {
+  if (!isJsonObject(json) || !isJsonNumber(json["id"]) || !isJsonString(json["url"])) {
+    return failure(FEEDS_READ_ERROR);
+  }
+  const title = json["title"];
+  return success({
+    id: json["id"],
+    url: json["url"],
+    title: isJsonString(title) ? title : null,
+  });
+}
+
+/** Parse an untrusted Feed list response; any non-conforming entry rejects the payload. */
+export function parseFeedList(json: Json): Result<readonly Feed[]> {
+  if (!isJsonArray(json)) {
+    return failure(FEEDS_READ_ERROR);
+  }
+  const feeds: Feed[] = [];
+  for (const raw of json) {
+    const feed = parseFeed(raw);
+    if (!feed.ok) {
+      return failure(FEEDS_READ_ERROR);
+    }
+    feeds.push(feed.value);
+  }
+  return success(feeds);
+}
 
 /**
  * Parse an untrusted compact timeline response. The compact view is a plain

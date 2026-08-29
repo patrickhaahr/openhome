@@ -470,6 +470,7 @@ describe("rss adapter", () => {
 
   const configuration = { baseUrl: "http://openhome.test", apiKey: "secret" };
   const readError = "Couldn't read the timeline from the Axum API.";
+  const feedsReadError = "Couldn't read the feed from the Axum API.";
   const reachError = "Couldn't reach the Axum API. Check the Base URL and try again.";
 
   const compactPayload = [
@@ -586,5 +587,75 @@ describe("rss adapter", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await pending;
     expect(result).toEqual(failure(reachError));
+  });
+
+  it("lists feeds and rejects malformed payloads", async () => {
+    okFetch([
+      { id: 3, url: "https://blog.test/feed.xml", title: "Blog" },
+      { id: 4, url: "https://news.test/rss.xml", title: null },
+      { id: 5, url: "https://journal.test/feed" },
+    ]);
+    expect(await createOpenHomeApi(configuration).rss.listFeeds()).toEqual({
+      ok: true,
+      value: [
+        { id: 3, url: "https://blog.test/feed.xml", title: "Blog" },
+        { id: 4, url: "https://news.test/rss.xml", title: null },
+        { id: 5, url: "https://journal.test/feed", title: null },
+      ],
+    });
+
+    okFetch({ feeds: [] });
+    expect(await createOpenHomeApi(configuration).rss.listFeeds()).toEqual(failure(feedsReadError));
+
+    okFetch([{ url: "https://blog.test/feed.xml", title: null }]);
+    expect(await createOpenHomeApi(configuration).rss.listFeeds()).toEqual(failure(feedsReadError));
+
+    okFetch([{ id: "3", url: "https://blog.test/feed.xml", title: null }]);
+    expect(await createOpenHomeApi(configuration).rss.listFeeds()).toEqual(failure(feedsReadError));
+  });
+
+  it("creates a feed by posting the URL and guards the created shape", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", (_url: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: 9, url: "https://blog.test/feed.xml", title: null }), {
+          status: 201,
+        }),
+      );
+    });
+
+    const result = await createOpenHomeApi(configuration).rss.createFeed(
+      "https://blog.test/feed.xml",
+    );
+
+    expect(bodies).toEqual([{ url: "https://blog.test/feed.xml" }]);
+    expect(result).toEqual({
+      ok: true,
+      value: { id: 9, url: "https://blog.test/feed.xml", title: null },
+    });
+
+    okFetch({ id: 9, title: null });
+    expect(await createOpenHomeApi(configuration).rss.createFeed("https://blog.test/feed.xml"))
+      .toEqual(failure(feedsReadError));
+  });
+
+  it("surfaces feed API errors and deletes by id", async () => {
+    stubFetch(async () => new Response(JSON.stringify({ error: "Feed with this URL already exists" }), { status: 409 }));
+
+    expect(await createOpenHomeApi(configuration).rss.createFeed("https://blog.test/feed.xml"))
+      .toEqual(failure("Feed with this URL already exists"));
+
+    const urls: string[] = [];
+    const methods: string[] = [];
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(url));
+      methods.push(String(init?.method));
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    expect(await createOpenHomeApi(configuration).rss.deleteFeed(9)).toEqual(success(undefined));
+    expect(urls).toEqual(["http://openhome.test/api/feeds/9"]);
+    expect(methods).toEqual(["DELETE"]);
   });
 });

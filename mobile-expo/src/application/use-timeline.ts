@@ -40,7 +40,7 @@ export const TIMELINE_PAGE_SIZE = 50;
 
 /** Drives the timeline machine against the Axum API adapter, emitting events. */
 export function createTimelineController(deps: {
-  readonly api: RssApi;
+  readonly api: Pick<RssApi, "compactTimeline">;
   readonly emit: (event: TimelineEvent) => void;
 }) {
   let refreshToken = 0;

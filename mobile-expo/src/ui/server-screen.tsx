@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -13,6 +14,7 @@ import { useEffect, useState } from "react";
 
 import type { AdguardActions, AdguardState } from "../application/use-adguard";
 import type { DockerActions, DockerState } from "../application/use-docker";
+import type { FeedsActions, FeedsState } from "../application/use-feeds";
 import type { TimelineActions, TimelineState } from "../application/use-timeline";
 import {
   dockerHealthSummary,
@@ -36,6 +38,8 @@ type Props = {
   readonly dockerCounts: ClassificationCounts;
   readonly timeline: TimelineState;
   readonly timelineActions: TimelineActions;
+  readonly feeds: FeedsState;
+  readonly feedsActions: FeedsActions;
   readonly onOpenTimelineLink: (url: string) => void;
   readonly onOpenDocker: () => void;
 };
@@ -49,6 +53,8 @@ export function ServerPage({
   dockerCounts,
   timeline,
   timelineActions,
+  feeds,
+  feedsActions,
   onOpenTimelineLink,
   onOpenDocker,
 }: Props) {
@@ -75,6 +81,7 @@ export function ServerPage({
             actions.refresh();
             dockerActions.refresh();
             timelineActions.refresh();
+            feedsActions.refresh();
           }}
           colors={[colors.signal]}
           tintColor={colors.signal}
@@ -94,6 +101,7 @@ export function ServerPage({
           counts={dockerCounts}
           onPress={onOpenDocker}
         />
+        <FeedManagerCard state={feeds} actions={feedsActions} />
         <TimelineCard
           state={timeline}
           actions={timelineActions}
@@ -340,6 +348,138 @@ function DockerSummaryCard({
   );
 }
 
+/** Inline collapsible Feed manager: list, add by URL, delete with undo. */
+function FeedManagerCard({
+  state,
+  actions,
+}: {
+  readonly state: FeedsState;
+  readonly actions: FeedsActions;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={[shared.section, styles.card]}>
+      <Pressable
+        accessibilityLabel="Manage feeds"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((value) => !value)}
+        style={({ pressed }) => [styles.feedsHeader, pressed && shared.iconPressed]}
+      >
+        <Text style={shared.sectionTitle}>MANAGE FEEDS</Text>
+        <Text style={styles.feedsToggle}>{open ? "Hide" : "Show"}</Text>
+      </Pressable>
+      {open ? <FeedManagerBody state={state} actions={actions} /> : null}
+    </View>
+  );
+}
+
+function FeedManagerBody({
+  state,
+  actions,
+}: {
+  readonly state: FeedsState;
+  readonly actions: FeedsActions;
+}) {
+  if (state.tag === "loading") {
+    return (
+      <View style={shared.statusPanel}>
+        <ActivityIndicator color={colors.signal} />
+        <Text style={shared.statusText}>Loading feeds</Text>
+      </View>
+    );
+  }
+  if (state.tag === "error") {
+    return (
+      <>
+        <Text accessibilityRole="alert" style={shared.error}>
+          {state.message}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={actions.refresh}
+          style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
+        >
+          <Text style={shared.retry}>Try again</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {state.feeds.length === 0 ? (
+        <Text style={styles.feedEmpty}>No feeds yet. Paste a URL below to add one.</Text>
+      ) : (
+        <View style={styles.feedList}>
+          {state.feeds.map((feed) => (
+            <View key={feed.id} style={styles.feedRow}>
+              <View style={styles.feedCopy}>
+                <Text numberOfLines={1} style={styles.feedTitle}>
+                  {feed.title ?? feed.url}
+                </Text>
+                <Text numberOfLines={1} style={styles.feedUrl}>
+                  {feed.url}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityLabel={`Delete feed ${feed.title ?? feed.url}`}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: state.busy }}
+                disabled={state.busy}
+                onPress={() => actions.remove(feed)}
+                style={({ pressed }) => [
+                  styles.feedDelete,
+                  state.busy && shared.disabled,
+                  pressed && shared.actionPressed,
+                ]}
+              >
+                <Text style={styles.feedDeleteLabel}>Delete</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      {state.undoable.length > 0 ? (
+        <Pressable
+          accessibilityLabel={`Undo delete of ${state.undoable.length} ${
+            state.undoable.length === 1 ? "feed" : "feeds"
+          }`}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: state.busy }}
+          disabled={state.busy}
+          onPress={actions.undo}
+          style={({ pressed }) => [styles.feedUndo, pressed && shared.actionPressed]}
+        >
+          <Text style={shared.retry}>
+            Undo delete{state.undoable.length > 1 ? ` (${state.undoable.length})` : ""}
+          </Text>
+        </Pressable>
+      ) : null}
+      <TextInput
+        accessibilityLabel="Feed URL to add"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        onChangeText={actions.setInput}
+        placeholder="Paste a feed URL"
+        placeholderTextColor={colors.muted}
+        style={styles.feedInput}
+        value={state.input}
+      />
+      <View style={shared.row}>
+        <ActionButton label="Add feed" sending={state.busy} disabled={state.busy} onPress={actions.create} />
+      </View>
+      {state.error !== null ? (
+        <Text accessibilityRole="alert" style={shared.error}>
+          {state.error}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
 /** Presentation for the Compact Timeline: a skim list, not an article reader. */
 function TimelineCard({
   state,
@@ -431,6 +571,36 @@ function TimelineCard({
 
 const styles = StyleSheet.create({
   card: { gap: 16 },
+  feedCopy: { flex: 1, gap: 2 },
+  feedDelete: {
+    alignSelf: "center",
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: 14,
+  },
+  feedDeleteLabel: { color: colors.danger, fontSize: 13, fontWeight: "700" },
+  feedEmpty: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  feedInput: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    color: colors.text,
+    fontSize: 16,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  feedList: { gap: 12 },
+  feedRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  feedTitle: { color: colors.text, fontSize: 15, fontWeight: "700", lineHeight: 20 },
+  feedUndo: { minHeight: 44, justifyContent: "center" },
+  feedUrl: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  feedsHeader: { minHeight: 24, flexDirection: "row", justifyContent: "space-between" },
+  feedsToggle: { color: colors.signal, fontSize: 12, fontWeight: "800" },
   moreRow: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" },
   phaseCopy: { flex: 1, gap: 2 },
   phaseDetail: { color: colors.muted, fontSize: 14, lineHeight: 20 },

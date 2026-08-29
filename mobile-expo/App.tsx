@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { useAdGuard } from "./src/application/use-adguard";
 import { useDocker } from "./src/application/use-docker";
+import { useFeeds } from "./src/application/use-feeds";
 import { useHomeGeofence } from "./src/application/use-home-geofence";
 import { useOpenHome } from "./src/application/use-open-home";
 import { useTimeline } from "./src/application/use-timeline";
@@ -30,6 +31,10 @@ export default function App() {
   const [adguard, adguardActions] = useAdGuard(api === null ? null : api.adguard);
   const [docker, dockerActions, dockerCounts] = useDocker(api === null ? null : api.docker);
   const [timeline, timelineActions] = useTimeline(api === null ? null : api.rss);
+  const [feeds, feedsActions] = useFeeds(
+    api === null ? null : api.rss,
+    timelineActions.refresh,
+  );
 
   useEffect(() => {
     void homeGeofenceService.resume();
@@ -41,10 +46,11 @@ export default function App() {
         adguardActions.refresh();
         dockerActions.refresh();
         timelineActions.refresh();
+        feedsActions.refresh();
       }
     });
     return () => subscription.remove();
-  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions]);
+  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions, feedsActions]);
 
   return (
     <SafeAreaProvider>
@@ -70,6 +76,8 @@ export default function App() {
             dockerCounts={dockerCounts}
             timeline={timeline}
             timelineActions={timelineActions}
+            feeds={feeds}
+            feedsActions={feedsActions}
             onOpenTimelineLink={(url) => {
               void Linking.openURL(url).catch(() => {});
             }}

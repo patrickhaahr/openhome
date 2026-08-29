@@ -16,6 +16,7 @@ import type { HomeGeofenceActions, HomeGeofenceState } from "../application/use-
 import type { AdguardActions, AdguardState } from "../application/use-adguard";
 import type { ClassificationCounts } from "../domain/docker";
 import type { DockerActions, DockerState } from "../application/use-docker";
+import type { FeedsActions, FeedsState } from "../application/use-feeds";
 import type { TimelineActions, TimelineState } from "../application/use-timeline";
 import type {
   CommandState,
@@ -45,6 +46,8 @@ type Props = {
   readonly dockerCounts: ClassificationCounts;
   readonly timeline: TimelineState;
   readonly timelineActions: TimelineActions;
+  readonly feeds: FeedsState;
+  readonly feedsActions: FeedsActions;
   readonly onOpenTimelineLink: (url: string) => void;
 };
 
@@ -87,6 +90,8 @@ export function OpenHomeScreen({
   dockerCounts,
   timeline,
   timelineActions,
+  feeds,
+  feedsActions,
   onOpenTimelineLink,
 }: Props) {
   const pager = useRef<ScrollView>(null);
@@ -186,6 +191,8 @@ export function OpenHomeScreen({
             dockerCounts={dockerCounts}
             timeline={timeline}
             timelineActions={timelineActions}
+            feeds={feeds}
+            feedsActions={feedsActions}
             onOpenTimelineLink={onOpenTimelineLink}
             onOpenDocker={() => selectTab("docker")}
           />
