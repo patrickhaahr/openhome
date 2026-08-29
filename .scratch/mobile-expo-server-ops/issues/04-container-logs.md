@@ -4,11 +4,11 @@
 
 **Blocked by:** 02 — Container list + Docker Health Summary.
 
-**Status:** ready-for-agent
+**Status:** done (2493ba3)
 
-- [ ] Tapping a Container shows its logs with timestamps included
-- [ ] Log fetch requests the fixed tail (200) and passes no `since` filter
-- [ ] Manual refresh re-fetches the logs
-- [ ] Not-found (404) responses render "container not found"; other failures render inline
-- [ ] Back returns to the unfiltered container list without stale log state
-- [ ] Machine tests cover load, refresh, and failure paths against the scripted fake adapter
+- [x] Tapping a Container shows its logs with timestamps included
+- [x] Log fetch requests the fixed tail (200) and passes no `since` filter
+- [x] Manual refresh re-fetches the logs
+- [x] Not-found (404) responses render "container not found"; other failures render inline
+- [x] Back returns to the unfiltered container list without stale log state
+- [x] Machine tests cover load, refresh, and failure paths against the scripted fake adapter
