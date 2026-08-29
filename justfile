@@ -54,19 +54,19 @@ go:
 
 # Install Expo client dependencies
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-install:
     bun install
 
 # Start the Expo dev server
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-start:
     bun start
 
 # Build and install the Expo app on a connected Android device (release variant)
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-android:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -75,30 +75,30 @@ expo-android:
 
 # Typecheck the Expo client
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-typecheck:
     bun run typecheck
 
 # Lint the Expo client
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-lint:
     bun run lint
 
 # Format the Expo client with oxfmt
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-format:
     bun run format
 
-# Run Expo client tests, optionally filtered (e.g. just expo-test domain/json)
+# Run Expo client tests, optionally filtered (e.g. just expo-test adguard; filters are filename substrings)
 [group('expo')]
 expo-test filter='':
     @cd {{expodir}} && bunx vitest run{{ if filter == '' { '' } else { ' ' + filter } }}
 
 # Full Expo gate: typecheck + tests + Android export
 [group('expo')]
-[working-directory: '{{expodir}}']
+[working-directory: 'mobile-expo']
 expo-check:
     bun run check
 
