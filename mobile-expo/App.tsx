@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
 import { useAdGuard } from "./src/application/use-adguard";
+import { useDocker } from "./src/application/use-docker";
 import { useHomeGeofence } from "./src/application/use-home-geofence";
 import { useOpenHome } from "./src/application/use-open-home";
 import { createSecureConfigurationStore } from "./src/infrastructure/configuration-store";
@@ -26,6 +27,7 @@ export default function App() {
   const [state, actions, api] = useOpenHome(configurationStore);
   const [homeGeofence, homeGeofenceActions] = useHomeGeofence(homeGeofenceService);
   const [adguard, adguardActions] = useAdGuard(api === null ? null : api.adguard);
+  const [docker, dockerActions, dockerCounts] = useDocker(api === null ? null : api.docker);
 
   useEffect(() => {
     void homeGeofenceService.resume();
@@ -35,10 +37,11 @@ export default function App() {
         void homeGeofenceService.resume();
         void retryPendingHomeExitCommand();
         adguardActions.refresh();
+        dockerActions.refresh();
       }
     });
     return () => subscription.remove();
-  }, [homeGeofenceService, adguardActions]);
+  }, [homeGeofenceService, adguardActions, dockerActions]);
 
   return (
     <SafeAreaProvider>
@@ -59,6 +62,9 @@ export default function App() {
             homeGeofenceActions={homeGeofenceActions}
             adguard={adguard}
             adguardActions={adguardActions}
+            docker={docker}
+            dockerActions={dockerActions}
+            dockerCounts={dockerCounts}
           />
         ) : null}
         <StatusBar style="light" />

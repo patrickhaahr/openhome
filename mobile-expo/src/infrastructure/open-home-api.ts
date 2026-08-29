@@ -1,5 +1,6 @@
 import type { AdguardStatus } from "../domain/adguard";
 import type { Configuration } from "../domain/configuration";
+import type { DockerContainer } from "../domain/docker";
 import {
   isJsonArray,
   isJsonBoolean,
@@ -25,6 +26,11 @@ export type AdguardApi = {
   readonly pauseProtection: (minutes: number) => Promise<Result<AdguardStatus>>;
 };
 
+/** Docker container operations used by the Docker Tab. */
+export type DockerApi = {
+  readonly listContainers: () => Promise<Result<readonly DockerContainer[]>>;
+};
+
 /** Operations used by the OpenHome application layer. */
 export type OpenHomeApi = {
   readonly validateConfiguration: () => Promise<Result<void>>;
@@ -32,12 +38,15 @@ export type OpenHomeApi = {
   readonly sendIrCommand: (remote: "edifier" | "lgtv", command: string) => Promise<Result<void>>;
   readonly sendLightCommand: (command: "on" | "off") => Promise<Result<void>>;
   readonly adguard: AdguardApi;
+  readonly docker: DockerApi;
 };
 
 type RequestOptions = {
   readonly method?: "GET" | "POST";
   readonly body?: object;
   readonly defaultError: string;
+  /** Request timeout in ms; defaults to the short timeout shared by all callers. */
+  readonly timeoutMs?: number;
 };
 
 /** Headers sent with every OpenHome API request. */
@@ -59,7 +68,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
 
   async function request(path: string, options: RequestOptions): Promise<Result<ApiResponse>> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5_000);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 5_000);
 
     try {
       const headers: RequestHeaders = {
@@ -147,6 +156,23 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           defaultError: "Couldn't pause AdGuard Protection.",
         }),
     },
+
+    docker: {
+      listContainers: async (): Promise<Result<readonly DockerContainer[]>> => {
+        const response = await request("/api/docker", {
+          defaultError: "Couldn't load Docker containers from the Axum API.",
+          timeoutMs: 15_000,
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseContainerList(JSON.parse(response.value.body));
+        } catch {
+          return failure(DOCKER_READ_ERROR);
+        }
+      },
+    },
   };
 }
 
@@ -214,6 +240,56 @@ function parseAdguardResponse(response: Result<{ readonly body: string }>): Resu
   } catch {
     return failure(ADGUARD_READ_ERROR);
   }
+}
+
+const DOCKER_READ_ERROR = "Couldn't read Docker containers from the Axum API.";
+
+/**
+ * Parse an untrusted Docker list response. The wire contract inherited from the old
+ * client mixes PascalCase (`HealthStatus`, `Created`) and snake_case fields; both
+ * spellings are accepted, and numeric uptime may arrive as a string.
+ */
+export function parseContainerList(json: Json): Result<readonly DockerContainer[]> {
+  if (!isJsonObject(json) || !isJsonArray(json["containers"])) {
+    return failure(DOCKER_READ_ERROR);
+  }
+  const containers: DockerContainer[] = [];
+  for (const raw of json["containers"]) {
+    if (!isJsonObject(raw)) {
+      return failure(DOCKER_READ_ERROR);
+    }
+    const name = raw["name"];
+    const state = raw["state"];
+    const image = raw["image"];
+    if (!isJsonString(name) || !isJsonString(state) || !isJsonString(image)) {
+      return failure(DOCKER_READ_ERROR);
+    }
+    const health = raw["HealthStatus"] ?? raw["health_status"];
+    const ports = raw["ports"];
+    const restartCount = raw["restart_count"];
+    containers.push({
+      name,
+      state,
+      image,
+      health: isJsonString(health) ? health : null,
+      uptimeSeconds: normalizeUptime(raw["uptime_seconds"]),
+      ports: isJsonArray(ports) ? ports.map(String) : [],
+      restartCount: isJsonNumber(restartCount) ? restartCount : 0,
+    });
+  }
+  return success(containers);
+}
+
+/** Normalize an uptime given as a number, a numeric string, or an unknown shape. */
+function normalizeUptime(value: Json | undefined): number | null {
+  if (isJsonNumber(value)) {
+    return value;
+  }
+  if (isJsonString(value)) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function readError(body: string, fallback: string): string {

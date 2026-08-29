@@ -14,6 +14,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { HomeGeofenceActions, HomeGeofenceState } from "../application/use-home-geofence";
 import type { AdguardActions, AdguardState } from "../application/use-adguard";
+import type { ClassificationCounts } from "../domain/docker";
+import type { DockerActions, DockerState } from "../application/use-docker";
 import type {
   CommandState,
   IrState,
@@ -23,6 +25,7 @@ import type {
 } from "../application/use-open-home";
 import { edifierRemoteRows, tvRemoteRows, type RemoteCommand } from "../domain/remotes";
 import { ServerPage } from "./server-screen";
+import { DockerPage } from "./docker-screen";
 import { ControlButton } from "./control-button";
 import { ActionButton, PageHeading, SecondaryAction, styles as shared } from "./shared";
 import { colors } from "./theme";
@@ -36,11 +39,21 @@ type Props = {
   readonly homeGeofenceActions: HomeGeofenceActions;
   readonly adguard: AdguardState;
   readonly adguardActions: AdguardActions;
+  readonly docker: DockerState;
+  readonly dockerActions: DockerActions;
+  readonly dockerCounts: ClassificationCounts;
 };
 
-type IconName = "home" | "television" | "speaker" | "light" | "away" | "server" | "settings";
+type IconName = "home" | "television" | "speaker" | "light" | "away" | "server" | "docker" | "settings";
 
-const tabs: ReadonlyArray<TopLevelTab> = ["home", "television", "speaker", "away", "server"];
+const tabs: ReadonlyArray<TopLevelTab> = [
+  "home",
+  "television",
+  "speaker",
+  "away",
+  "server",
+  "docker",
+];
 
 const homeEdifierRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
   [
@@ -57,7 +70,7 @@ const homeTelevisionRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
   [{ command: "power", label: "Power" }],
 ];
 
-/** Render the five primary OpenHome destinations. */
+/** Render the six primary OpenHome destinations. */
 export function OpenHomeScreen({
   state,
   actions,
@@ -65,6 +78,9 @@ export function OpenHomeScreen({
   homeGeofenceActions,
   adguard,
   adguardActions,
+  docker,
+  dockerActions,
+  dockerCounts,
 }: Props) {
   const pager = useRef<ScrollView>(null);
   const [pageWidth, setPageWidth] = useState(0);
@@ -155,7 +171,17 @@ export function OpenHomeScreen({
           <AwayPage state={homeGeofence} actions={homeGeofenceActions} />
         </Page>
         <Page width={pageWidth}>
-          <ServerPage adguard={adguard} actions={adguardActions} />
+          <ServerPage
+            adguard={adguard}
+            actions={adguardActions}
+            docker={docker}
+            dockerActions={dockerActions}
+            dockerCounts={dockerCounts}
+            onOpenDocker={() => selectTab("docker")}
+          />
+        </Page>
+        <Page width={pageWidth}>
+          <DockerPage state={docker} actions={dockerActions} counts={dockerCounts} />
         </Page>
       </ScrollView>
 
@@ -189,6 +215,12 @@ export function OpenHomeScreen({
           label="Server"
           selected={state.selectedTab === "server"}
           onPress={() => selectTab("server")}
+        />
+        <Tab
+          icon="docker"
+          label="Docker"
+          selected={state.selectedTab === "docker"}
+          onPress={() => selectTab("docker")}
         />
       </View>
     </View>
@@ -761,6 +793,17 @@ function Icon({
         style={[styles.iconGlyph, { color, fontSize: size }]}
       >
         ☰
+      </Text>
+    );
+  }
+  if (name === "docker") {
+    return (
+      <Text
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        style={[styles.iconGlyph, { color, fontSize: size }]}
+      >
+        ▦
       </Text>
     );
   }

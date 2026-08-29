@@ -10,6 +10,12 @@ import {
 import { useEffect, useState } from "react";
 
 import type { AdguardActions, AdguardState } from "../application/use-adguard";
+import type { DockerActions, DockerState } from "../application/use-docker";
+import {
+  dockerHealthSummary,
+  type ClassificationCounts,
+  type DockerSummaryClassification,
+} from "../domain/docker";
 import {
   formatPauseRemaining,
   pauseOptionsMinutes,
@@ -22,17 +28,27 @@ import { colors } from "./theme";
 type Props = {
   readonly adguard: AdguardState;
   readonly actions: AdguardActions;
+  readonly docker: DockerState;
+  readonly dockerActions: DockerActions;
+  readonly dockerCounts: ClassificationCounts;
+  readonly onOpenDocker: () => void;
 };
 
 /** Render the Server Tab: mixed server-operations surfaces. */
-export function ServerPage({ adguard, actions }: Props) {
+export function ServerPage({ adguard, actions, docker, dockerActions, dockerCounts, onOpenDocker }: Props) {
   return (
     <ScrollView
       contentContainerStyle={shared.pageContent}
       refreshControl={
         <RefreshControl
-          refreshing={adguard.tag === "ready" && adguard.refreshing}
-          onRefresh={actions.refresh}
+          refreshing={
+            (adguard.tag === "ready" && adguard.refreshing) ||
+            (docker.tag === "ready" && docker.refreshing)
+          }
+          onRefresh={() => {
+            actions.refresh();
+            dockerActions.refresh();
+          }}
           colors={[colors.signal]}
           tintColor={colors.signal}
         />
@@ -45,6 +61,11 @@ export function ServerPage({ adguard, actions }: Props) {
           description="Ad blocking and server health at a glance."
         />
         <AdGuardCard state={adguard} actions={actions} />
+        <DockerSummaryCard
+          state={docker}
+          counts={dockerCounts}
+          onPress={onOpenDocker}
+        />
       </View>
     </ScrollView>
   );
@@ -224,6 +245,67 @@ const phasePresentation = {
   paused: { color: colors.signal, label: "Paused" },
   unprotected: { color: colors.danger, label: "Unprotected" },
 } satisfies Record<ProtectionPhase, { label: string; color: string }>;
+
+/** Presentation for the Docker Health Summary headline, offline included. */
+const summaryPresentation = {
+  healthy: { color: colors.ready, label: "Docker healthy" },
+  unhealthy: { color: colors.danger, label: "Docker unhealthy" },
+  idle: { color: colors.muted, label: "Docker idle" },
+  offline: { color: colors.danger, label: "Docker offline" },
+} satisfies Record<DockerSummaryClassification | "offline", { label: string; color: string }>;
+
+function DockerSummaryCard({
+  state,
+  counts,
+  onPress,
+}: {
+  readonly state: DockerState;
+  readonly counts: ClassificationCounts;
+  readonly onPress: () => void;
+}) {
+  if (state.tag === "loading") {
+    return (
+      <View style={[shared.section, styles.card]}>
+        <View style={shared.statusPanel}>
+          <ActivityIndicator color={colors.signal} />
+          <Text style={shared.statusText}>Checking containers</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const classification =
+    state.tag === "error" ? "offline" : dockerHealthSummary(state.containers);
+  const detail =
+    state.tag === "error"
+      ? state.message
+      : classification === "idle"
+        ? "No containers running."
+        : `${counts.healthy + counts.unhealthy} of ${counts.all} running.`;
+  const presentation = summaryPresentation[classification];
+
+  return (
+    <Pressable
+      accessibilityLabel={`Docker Health Summary: ${presentation.label}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [shared.section, styles.card, pressed && shared.actionPressed]}
+    >
+      <View style={styles.phaseRow}>
+        <View style={[styles.phaseDot, { backgroundColor: presentation.color }]} />
+        <View style={styles.phaseCopy}>
+          <Text style={styles.phaseLabel}>{presentation.label}</Text>
+          <Text style={styles.phaseDetail}>{detail}</Text>
+        </View>
+      </View>
+      {state.tag === "ready" && state.error !== null ? (
+        <Text accessibilityRole="alert" style={shared.error}>
+          {state.error}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
 
 const styles = StyleSheet.create({
   card: { gap: 16 },
