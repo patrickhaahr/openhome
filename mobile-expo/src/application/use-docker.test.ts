@@ -26,23 +26,36 @@ const containers: readonly DockerContainer[] = [
 function fakeApi() {
   const calls: string[] = [];
   const pending: Array<{ resolve: (result: Result<readonly DockerContainer[]>) => void }> = [];
+  const actionPending: Array<{ resolve: (result: Result<void>) => void }> = [];
   const api: DockerApi = {
     listContainers: () => {
       calls.push("list");
       return new Promise((resolve) => pending.push({ resolve }));
     },
+    startContainer: (name) => {
+      calls.push(`start ${name}`);
+      return new Promise((resolve) => actionPending.push({ resolve }));
+    },
+    stopContainer: (name) => {
+      calls.push(`stop ${name}`);
+      return new Promise((resolve) => actionPending.push({ resolve }));
+    },
+    restartContainer: (name) => {
+      calls.push(`restart ${name}`);
+      return new Promise((resolve) => actionPending.push({ resolve }));
+    },
   };
-  return { api, calls, pending };
+  return { api, calls, pending, actionPending };
 }
 
 function harness() {
-  const { api, calls, pending } = fakeApi();
+  const { api, calls, pending, actionPending } = fakeApi();
   const events: DockerEvent[] = [];
   const controller = createDockerController({
     api,
     emit: (event) => events.push(event),
   });
-  return { controller, calls, pending, events };
+  return { controller, calls, pending, actionPending, events };
 }
 
 async function settle(): Promise<void> {
@@ -69,6 +82,7 @@ describe("docker state machine", () => {
       tag: "ready",
       containers,
       refreshing: false,
+      acting: null,
       error: null,
     });
   });
@@ -117,6 +131,103 @@ describe("docker state machine", () => {
     expect(state.tag === "ready" && state.containers).toEqual(containers);
     expect(state.tag === "ready" && state.refreshing).toBe(false);
     expect(state.tag === "ready" && state.error).toBe("Couldn't reach the Axum API.");
+  });
+
+  it("dispatches a lifecycle action immediately without confirmation", async () => {
+    const h = harness();
+    h.controller.refresh();
+    h.pending[0]?.resolve(success(containers));
+    await settle();
+
+    h.controller.stopContainer("adguard");
+    expect(h.calls).toEqual(["list", "stop adguard"]);
+    expect(replay(h.events, initial)).toMatchObject({
+      tag: "ready",
+      acting: { name: "adguard", action: "stop" },
+    });
+  });
+
+  it("refreshes the list after a successful action", async () => {
+    const h = harness();
+    h.controller.refresh();
+    h.pending[0]?.resolve(success(containers));
+    await settle();
+
+    h.controller.restartContainer("adguard");
+    h.actionPending[0]?.resolve(success(undefined));
+    await settle();
+
+    expect(h.calls).toEqual(["list", "restart adguard", "list"]);
+
+    const restarted: readonly DockerContainer[] = [
+      {
+        name: "adguard",
+        state: "exited",
+        health: null,
+        image: "adguard/adguardhome",
+        uptimeSeconds: null,
+        ports: ["53:53/tcp"],
+        restartCount: 2,
+      },
+    ];
+    h.pending[1]?.resolve(success(restarted));
+    await settle();
+
+    const state = replay(h.events, initial);
+    expect(state.tag === "ready" && state.containers).toEqual(restarted);
+    expect(state.tag === "ready" && state.acting).toBeNull();
+    expect(state.tag === "ready" && state.error).toBeNull();
+  });
+
+  it.each([
+    "Container adguard not found.",
+    "Docker unavailable.",
+    "Docker daemon rejected the request.",
+  ])("surfaces an action failure inline without dropping the list: %s", async (message) => {
+    const h = harness();
+    h.controller.refresh();
+    h.pending[0]?.resolve(success(containers));
+    await settle();
+
+    h.controller.startContainer("adguard");
+    h.actionPending[0]?.resolve(failure(message));
+    await settle();
+
+    const state = replay(h.events, initial);
+    expect(state.tag === "ready" && state.containers).toEqual(containers);
+    expect(state.tag === "ready" && state.acting).toBeNull();
+    expect(state.tag === "ready" && state.error).toBe(message);
+    expect(h.calls).toEqual(["list", "start adguard"]);
+  });
+
+  it("drops a second action while one is in flight", async () => {
+    const h = harness();
+    h.controller.refresh();
+    h.pending[0]?.resolve(success(containers));
+    await settle();
+
+    h.controller.startContainer("adguard");
+    h.controller.stopContainer("adguard");
+    h.actionPending[0]?.resolve(success(undefined));
+    await settle();
+
+    expect(h.calls).toEqual(["list", "start adguard", "list"]);
+  });
+
+  it("drops a cancelled action without refreshing", async () => {
+    const h = harness();
+    h.controller.refresh();
+    h.pending[0]?.resolve(success(containers));
+    await settle();
+
+    h.controller.startContainer("adguard");
+    h.controller.cancel();
+    h.actionPending[0]?.resolve(success(undefined));
+    await settle();
+
+    expect(h.calls).toEqual(["list", "start adguard"]);
+    const state = replay(h.events, initial);
+    expect(state.tag === "ready" && state.acting).toBeNull();
   });
 
   it("drops a superseded list response", async () => {

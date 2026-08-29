@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useState } from "react";
 
-import type { DockerActions, DockerState } from "../application/use-docker";
+import type { ContainerAction, DockerActions, DockerState } from "../application/use-docker";
 import {
   classifyContainer,
   formatPorts,
@@ -126,7 +126,14 @@ export function DockerPage({ state, actions, counts }: Props) {
           </View>
         ) : null}
         {state.tag === "ready"
-          ? visible.map((container) => <ContainerRow key={container.name} container={container} />)
+          ? visible.map((container) => (
+              <ContainerRow
+                key={container.name}
+                container={container}
+                acting={state.acting}
+                actions={actions}
+              />
+            ))
           : null}
         {state.tag === "ready" && state.error !== null ? (
           <Text accessibilityRole="alert" style={shared.error}>
@@ -138,7 +145,15 @@ export function DockerPage({ state, actions, counts }: Props) {
   );
 }
 
-function ContainerRow({ container }: { readonly container: DockerContainer }) {
+function ContainerRow({
+  container,
+  acting,
+  actions,
+}: {
+  readonly container: DockerContainer;
+  readonly acting: { readonly name: string; readonly action: ContainerAction } | null;
+  readonly actions: DockerActions;
+}) {
   const classification = classifyContainer(container);
   return (
     <View style={shared.section}>
@@ -157,7 +172,61 @@ function ContainerRow({ container }: { readonly container: DockerContainer }) {
       </Text>
       <Text style={styles.detail}>{formatPorts(container.ports)}</Text>
       <Text style={styles.detail}>Restarts: {container.restartCount}</Text>
+      <View style={shared.row}>
+        {(
+          [
+            ["start", "Start"],
+            ["stop", "Stop"],
+            ["restart", "Restart"],
+          ] as const
+        ).map(([action, label]) => (
+          <RowAction
+            key={action}
+            label={label}
+            accessibilityLabel={`${label} container ${container.name}`}
+            busy={acting?.name === container.name && acting.action === action}
+            disabled={acting !== null}
+            onPress={() => actions[`${action}Container`](container.name)}
+          />
+        ))}
+      </View>
     </View>
+  );
+}
+
+/** Render one immediate lifecycle action for a container row. */
+function RowAction({
+  label,
+  accessibilityLabel,
+  busy,
+  disabled,
+  onPress,
+}: {
+  readonly label: string;
+  readonly accessibilityLabel: string;
+  readonly busy: boolean;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled, busy }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        shared.compactAction,
+        disabled && shared.disabled,
+        pressed && shared.actionPressed,
+      ]}
+    >
+      {busy ? (
+        <ActivityIndicator color={colors.text} size="small" />
+      ) : (
+        <Text style={shared.compactActionLabel}>{label}</Text>
+      )}
+    </Pressable>
   );
 }
 

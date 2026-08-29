@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DockerContainer } from "../domain/docker";
-import { failure, type Result } from "../domain/result";
+import { failure, success, type Result } from "../domain/result";
 import { createOpenHomeApi, parseAdguardStatus, parseIrStatus } from "./open-home-api";
 
 describe("parseIrStatus", () => {
@@ -168,6 +168,18 @@ describe("docker adapter", () => {
     return createOpenHomeApi(configuration).docker.listContainers();
   }
 
+  async function startContainer(name: string): Promise<Result<void>> {
+    return createOpenHomeApi(configuration).docker.startContainer(name);
+  }
+
+  async function stopContainer(name: string): Promise<Result<void>> {
+    return createOpenHomeApi(configuration).docker.stopContainer(name);
+  }
+
+  async function restartContainer(name: string): Promise<Result<void>> {
+    return createOpenHomeApi(configuration).docker.restartContainer(name);
+  }
+
   it("parses a PascalCase payload and normalizes string uptime", async () => {
     okFetch(pascalPayload);
 
@@ -243,6 +255,67 @@ describe("docker adapter", () => {
     expect(result).toEqual(failure("Docker unavailable"));
   });
 
+  it("maps not-found and unavailable action failures to their class messages", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Container 'adguard' not found", status: 404 }), {
+          status: 404,
+        }),
+    );
+    expect(await startContainer("adguard")).toEqual(failure("Container adguard not found."));
+
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Docker service not available", status: 503 }), {
+          status: 503,
+        }),
+    );
+    expect(await stopContainer("adguard")).toEqual(failure("Docker unavailable."));
+  });
+
+  it("renders other action failures using the API error text", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Docker daemon error", status: 500 }), { status: 500 }),
+    );
+
+    expect(await stopContainer("adguard")).toEqual(failure("Docker daemon error"));
+  });
+
+  it("falls back to a default message when an action error body is unreadable", async () => {
+    stubFetch(async () => new Response("<html>", { status: 500 }));
+
+    expect(await restartContainer("adguard")).toEqual(failure("Couldn't restart the container."));
+  });
+
+  it("resolves a successful action regardless of the response body", async () => {
+    stubFetch(async () => new Response("ignored", { status: 200 }));
+
+    expect(await startContainer("adguard")).toEqual(success(undefined));
+  });
+
+  it("sends lifecycle actions to the container's action path", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    });
+
+    const api = createOpenHomeApi(configuration);
+    await api.docker.startContainer("adguard");
+    await api.docker.stopContainer("feed-rs");
+    await api.docker.restartContainer("feed-rs");
+
+    expect(requests.map((request) => [request.init?.method, request.url])).toEqual([
+      ["POST", "http://openhome.test/api/docker/adguard/start"],
+      ["POST", "http://openhome.test/api/docker/feed-rs/stop"],
+      ["POST", "http://openhome.test/api/docker/feed-rs/restart"],
+    ]);
+    expect(requests[0]?.init?.body).toBeUndefined();
+    expect(requests[1]?.init?.body).toBe(JSON.stringify({ timeout_seconds: 5 }));
+    expect(requests[2]?.init?.body).toBe(JSON.stringify({ timeout_seconds: 5 }));
+  });
+
   it("uses the extended timeout for docker requests", async () => {
     vi.useFakeTimers();
     stubFetch(
@@ -254,6 +327,27 @@ describe("docker adapter", () => {
 
     let result: Result<readonly DockerContainer[]> | null = null;
     const pending = listContainers().then((value) => {
+      result = value;
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(result).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await pending;
+    expect(result).toEqual(failure(reachError));
+  });
+
+  it("uses the extended timeout for docker actions", async () => {
+    vi.useFakeTimers();
+    stubFetch(
+      (init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("Aborted")));
+        }),
+    );
+
+    let result: Result<void> | null = null;
+    const pending = startContainer("adguard").then((value) => {
       result = value;
     });
     await vi.advanceTimersByTimeAsync(5_000);

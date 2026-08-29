@@ -29,6 +29,9 @@ export type AdguardApi = {
 /** Docker container operations used by the Docker Tab. */
 export type DockerApi = {
   readonly listContainers: () => Promise<Result<readonly DockerContainer[]>>;
+  readonly startContainer: (name: string) => Promise<Result<void>>;
+  readonly stopContainer: (name: string) => Promise<Result<void>>;
+  readonly restartContainer: (name: string) => Promise<Result<void>>;
 };
 
 /** Operations used by the OpenHome application layer. */
@@ -47,6 +50,8 @@ type RequestOptions = {
   readonly defaultError: string;
   /** Request timeout in ms; defaults to the short timeout shared by all callers. */
   readonly timeoutMs?: number;
+  /** Status-specific error overrides for classed failures, e.g. 404 not found. */
+  readonly statusErrors?: Readonly<Record<number, string>>;
 };
 
 /** Headers sent with every OpenHome API request. */
@@ -87,7 +92,8 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
 
       const body = await response.text();
       if (!response.ok) {
-        return failure(readError(body, options.defaultError));
+        const statusError = options.statusErrors?.[response.status];
+        return failure(statusError ?? readError(body, options.defaultError));
       }
       return success({ body });
     } catch {
@@ -95,6 +101,27 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  /** POST one immediate container lifecycle action, keeping the extended docker timeout. */
+  async function containerAction(
+    name: string,
+    action: "start" | "stop" | "restart",
+  ): Promise<Result<void>> {
+    const response = await request(`/api/docker/${encodeURIComponent(name)}/${action}`, {
+      method: "POST",
+      // Stop/restart require a JSON body; a 5s grace keeps the server's stop
+      // wrapper (grace + 5s) inside this timeout. Starts and restarts may
+      // exceed it server-side and then surface as a reach error; retrying is safe.
+      body: action === "start" ? undefined : { timeout_seconds: 5 },
+      defaultError: `Couldn't ${action} the container.`,
+      timeoutMs: DOCKER_TIMEOUT_MS,
+      statusErrors: {
+        404: `Container ${name} not found.`,
+        503: "Docker unavailable.",
+      },
+    });
+    return response.ok ? success(undefined) : response;
   }
 
   return {
@@ -161,7 +188,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       listContainers: async (): Promise<Result<readonly DockerContainer[]>> => {
         const response = await request("/api/docker", {
           defaultError: "Couldn't load Docker containers from the Axum API.",
-          timeoutMs: 15_000,
+          timeoutMs: DOCKER_TIMEOUT_MS,
         });
         if (!response.ok) {
           return response;
@@ -172,6 +199,10 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           return failure(DOCKER_READ_ERROR);
         }
       },
+
+      startContainer: (name) => containerAction(name, "start"),
+      stopContainer: (name) => containerAction(name, "stop"),
+      restartContainer: (name) => containerAction(name, "restart"),
     },
   };
 }
@@ -243,6 +274,9 @@ function parseAdguardResponse(response: Result<{ readonly body: string }>): Resu
 }
 
 const DOCKER_READ_ERROR = "Couldn't read Docker containers from the Axum API.";
+
+/** The extended request timeout shared by all docker calls. */
+const DOCKER_TIMEOUT_MS = 15_000;
 
 /**
  * Parse an untrusted Docker list response. The wire contract inherited from the old
