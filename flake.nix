@@ -19,7 +19,7 @@
 
           src = pkgs.fetchurl {
             url = "https://dl.google.com/android/cli/latest/linux_x86_64/android-cli";
-            sha256 = "sha256-pX5XLaxz2ziLsa6UKrWt5gb8a9psHskA1X43Zd5DY0A=";
+            sha256 = "sha256-SD4puc2k9YeBGEhLmXJjiVJCqc3ayPnA05Gk71AkQNY=";
           };
 
           dontUnpack = true;
