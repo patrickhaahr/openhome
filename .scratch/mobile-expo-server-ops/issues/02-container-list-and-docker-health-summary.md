@@ -4,13 +4,13 @@
 
 **Blocked by:** 01 — AdGuard Protection control (Server Tab shell and refresh convention exist).
 
-**Status:** ready-for-agent
+**Status:** done (6241c37)
 
-- [ ] Docker Tab renders every Container from the list endpoint with state, health, image, uptime, ports, and restart counts
-- [ ] Health filter chips (all/healthy/unhealthy/stopped) filter the list; counts shown per classification
-- [ ] Parser tolerates both PascalCase and snake_case field spellings and normalizes numeric uptime given as string
-- [ ] Summary card shows healthy/unhealthy/idle/offline classification plus "N of M running"
-- [ ] Tapping the summary card switches to the Docker Tab
-- [ ] Offline (fetch failure) renders as its own summary state, distinct from idle
-- [ ] Docker requests use the extended timeout while other adapter calls keep the short one
-- [ ] Container-list parsing tested through a stubbed fetch layer; machine orchestration tested against the scripted fake adapter
+- [x] Docker Tab renders every Container from the list endpoint with state, health, image, uptime, ports, and restart counts
+- [x] Health filter chips (all/healthy/unhealthy/stopped) filter the list; counts shown per classification
+- [x] Parser tolerates both PascalCase and snake_case field spellings and normalizes numeric uptime given as string
+- [x] Summary card shows healthy/unhealthy/idle/offline classification plus "N of M running"
+- [x] Tapping the summary card switches to the Docker Tab
+- [x] Offline (fetch failure) renders as its own summary state, distinct from idle
+- [x] Docker requests use the extended timeout while other adapter calls keep the short one
+- [x] Container-list parsing tested through a stubbed fetch layer; machine orchestration tested against the scripted fake adapter
