@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Ship the authenticated CLI Client.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `openhome lights on` and `openhome lights off` call the existing light endpoints and emit their JSON responses.
 - [ ] `openhome ir status` emits the existing IR Remote status response.
