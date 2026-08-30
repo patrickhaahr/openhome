@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Control lights and IR from Nika; 03: Control AdGuard Protection.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Zaza consumes the pinned OpenHome flake package and the `hermes` user can execute `openhome` through the Hermes terminal environment.
 - [ ] The OpenHome NixOS module can install the CLI independently from Nika-only lifecycle automations.
