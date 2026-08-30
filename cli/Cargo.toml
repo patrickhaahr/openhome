@@ -1,0 +1,14 @@
+[package]
+name = "openhome-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "openhome"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.53", features = ["derive", "env"] }
+reqwest = { version = "0.13.1", default-features = false, features = ["blocking", "rustls"] }
+serde_json = "1.0.149"

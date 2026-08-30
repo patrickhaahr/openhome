@@ -10,6 +10,14 @@ OpenHome is a homelab control system with an Axum API and mobile clients. Mobile
 A user-facing app that consumes the Axum API and does not communicate directly with homelab devices or service bridges.
 _Avoid_: Direct bridge client, LAN device client
 
+**CLI Client**:
+A noninteractive command-line program that consumes the Axum API and does not communicate directly with homelab devices or service bridges.
+_Avoid_: Device script, API wrapper
+
+**Agent**:
+An automated operator that invokes a CLI Client to fulfill a user request.
+_Avoid_: Integration Service, direct device agent
+
 **Axum API**:
 The only backend boundary that mobile clients call to read state and trigger actions.
 _Avoid_: Gateway, proxy layer
@@ -133,6 +141,8 @@ _Avoid_: Article reader, full-content feed
 ## Relationships
 
 - A **Mobile Client** calls the **Axum API** for every user-visible capability.
+- A **CLI Client** calls the **Axum API** for all device and service access.
+- An **Agent** invokes a **CLI Client** to fulfill a user request.
 - The **Axum API** delegates device-specific work to one or more **Integration Services**.
 - A **Mobile Client** uses a configured **Base URL** to reach the **Axum API**.
 - A **Mobile Client** authorizes requests to the **Axum API** with an **API Key**.

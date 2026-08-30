@@ -7,6 +7,36 @@ groups:
 
 expodir := 'mobile-expo'
 
+# Build the OpenHome CLI
+[group('cli')]
+[working-directory: 'cli']
+cli-build:
+    cargo build
+
+# Run the OpenHome CLI (just cli-run health)
+[group('cli')]
+[working-directory: 'cli']
+cli-run *args:
+    cargo run -- {{args}}
+
+# Test the OpenHome CLI
+[group('cli')]
+[working-directory: 'cli']
+cli-test:
+    cargo test
+
+# Format the OpenHome CLI
+[group('cli')]
+[working-directory: 'cli']
+cli-format:
+    cargo fmt
+
+# Lint the OpenHome CLI (clippy denies warnings)
+[group('cli')]
+[working-directory: 'cli']
+cli-lint:
+    cargo clippy -- -D warnings
+
 # Run the Axum API server
 [group('api')]
 [working-directory: 'api']

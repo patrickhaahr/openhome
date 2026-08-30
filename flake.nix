@@ -147,9 +147,20 @@
 
           touch $out
         '';
+
+        openhome = pkgs.rustPlatform.buildRustPackage {
+          pname = "openhome";
+          version = "0.1.0";
+          src = ./cli;
+          cargoHash = "sha256-K1dwtDDPgax+txLfOIl1i1wQQ6aIuw9s/Dam0NjN7kI=";
+          doCheck = false; # Process tests need loopback sockets, which the Nix sandbox blocks.
+        };
       in {
         packages.android-cli = android-cli;
+        packages.openhome = openhome;
+        packages.default = openhome;
         checks.android-cli-shim = android-cli-shim-check;
+        checks.openhome = openhome;
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
