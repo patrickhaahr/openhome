@@ -36,6 +36,11 @@ enum Command {
         #[command(subcommand)]
         action: Ir,
     },
+    /// Inspect and control AdGuard Protection.
+    Adguard {
+        #[command(subcommand)]
+        action: Adguard,
+    },
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
@@ -58,6 +63,21 @@ enum Ir {
     LgTv {
         /// Command name, passed through to the API.
         command: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum Adguard {
+    /// Show whether AdGuard Protection is filtering.
+    Status,
+    /// Enable AdGuard Protection.
+    Enable,
+    /// Disable AdGuard Protection.
+    Disable,
+    /// Pause AdGuard Protection for a number of minutes.
+    Pause {
+        /// Minutes before protection resumes automatically.
+        minutes: u64,
     },
 }
 
@@ -98,6 +118,28 @@ fn request(command: &Command) -> Request {
                 post: true,
                 path: "/api/ir/lgtv",
                 body: Some(json!({ "command": command })),
+            },
+        },
+        Command::Adguard { action } => match action {
+            Adguard::Status => Request {
+                post: false,
+                path: "/api/adguard/status",
+                body: None,
+            },
+            Adguard::Enable => Request {
+                post: true,
+                path: "/api/adguard/enable",
+                body: Some(json!({})),
+            },
+            Adguard::Disable => Request {
+                post: true,
+                path: "/api/adguard/disable",
+                body: Some(json!({})),
+            },
+            Adguard::Pause { minutes } => Request {
+                post: true,
+                path: "/api/adguard/pause",
+                body: Some(json!({ "minutes": minutes })),
             },
         },
     }
