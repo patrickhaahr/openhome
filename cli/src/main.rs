@@ -6,9 +6,9 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use reqwest::blocking::Client;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 const DEFAULT_API_URL: &str = "https://openhome.haahr.me";
 
@@ -26,6 +26,81 @@ struct Cli {
 enum Command {
     /// Verify access to the OpenHome API.
     Health,
+    /// Switch the lights on or off.
+    Lights {
+        /// The light state to switch to.
+        state: LightState,
+    },
+    /// Inspect and control IR remotes.
+    Ir {
+        #[command(subcommand)]
+        action: Ir,
+    },
+}
+
+#[derive(Debug, Copy, Clone, ValueEnum)]
+enum LightState {
+    On,
+    Off,
+}
+
+#[derive(Debug, Subcommand)]
+enum Ir {
+    /// Show the IR remotes and their available commands.
+    Status,
+    /// Send a command to the Edifier speaker.
+    Edifier {
+        /// Command name, passed through to the API.
+        command: String,
+    },
+    /// Send a command to the LG TV.
+    #[command(name = "lgtv")]
+    LgTv {
+        /// Command name, passed through to the API.
+        command: String,
+    },
+}
+
+/// The API call selected by the parsed command.
+struct Request {
+    post: bool,
+    path: &'static str,
+    body: Option<Value>,
+}
+
+fn request(command: &Command) -> Request {
+    match command {
+        Command::Health => Request {
+            post: false,
+            path: "/api/health",
+            body: None,
+        },
+        Command::Lights { state } => Request {
+            post: true,
+            path: match state {
+                LightState::On => "/api/lights/on",
+                LightState::Off => "/api/lights/off",
+            },
+            body: Some(json!({})),
+        },
+        Command::Ir { action } => match action {
+            Ir::Status => Request {
+                post: false,
+                path: "/api/ir",
+                body: None,
+            },
+            Ir::Edifier { command } => Request {
+                post: true,
+                path: "/api/ir/edifier",
+                body: Some(json!({ "command": command })),
+            },
+            Ir::LgTv { command } => Request {
+                post: true,
+                path: "/api/ir/lgtv",
+                body: Some(json!({ "command": command })),
+            },
+        },
+    }
 }
 
 fn main() -> ExitCode {
@@ -41,16 +116,24 @@ fn main() -> ExitCode {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let api_key = api_key()?;
+    let request = request(&cli.command);
 
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
         .context("failed to create HTTP client")?;
-    let path = match cli.command {
-        Command::Health => "/api/health",
+    let url = format!("{}{}", cli.url.trim_end_matches('/'), request.path);
+    let mut builder = if request.post {
+        client.post(url)
+    } else {
+        client.get(url)
     };
-    let response = client
-        .get(format!("{}{path}", cli.url.trim_end_matches('/')))
+    if let Some(body) = request.body {
+        builder = builder
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body.to_string());
+    }
+    let response = builder
         .bearer_auth(&api_key)
         .send()
         .context("request failed")?;
