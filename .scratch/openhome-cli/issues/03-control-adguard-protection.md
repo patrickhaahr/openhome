@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Ship the authenticated CLI Client.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `openhome adguard status` calls the existing status endpoint and emits its JSON response.
 - [ ] `openhome adguard enable` enables AdGuard Protection through the existing endpoint and emits the resulting JSON status.
