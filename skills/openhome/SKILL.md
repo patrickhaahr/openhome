@@ -1,6 +1,6 @@
 ---
 name: openhome
-description: Control OpenHome (the smart home) through the first-party `openhome` CLI. Use for any natural-language OpenHome request: checking health, turning lights on or off, IR remote commands for the Edifier speaker or LG TV, opening TV apps, or managing AdGuard Protection (status, enable, disable, timed pause). Examples: "turn off my lights", "pause AdGuard for 30 minutes", "mute the speaker", "open YouTube on the TV".
+description: 'Control OpenHome (the smart home) through the first-party `openhome` CLI. Use for any natural-language OpenHome request: checking health, turning lights on or off, IR remote commands for the Edifier speaker or LG TV, opening TV apps, or managing AdGuard Protection (status, enable, disable, timed pause). Examples: "turn off my lights", "pause AdGuard for 30 minutes", "mute the speaker", "open YouTube on the TV".'
 metadata:
   hermes:
     category: smart-home
