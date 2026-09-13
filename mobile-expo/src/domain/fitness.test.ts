@@ -2,14 +2,23 @@ import { describe, expect, it } from "vitest";
 
 import { failure } from "./result";
 import {
+  BODY_WEIGHT_READ_ERROR,
   exerciseCategories,
   filterExercises,
+  parseBodyWeightEntry,
+  parseBodyWeightInput,
+  parseBodyWeightList,
   parseExercise,
   parseExerciseInput,
   parseExerciseList,
+  parseExerciseProgress,
+  parseProfile,
+  parseProfileInput,
   parseWorkoutDetail,
   parseWorkoutInput,
   parseWorkoutSummaryList,
+  PROFILE_READ_ERROR,
+  PROGRESS_READ_ERROR,
   WORKOUT_READ_ERROR,
   type Exercise,
   type SetInput,
@@ -392,5 +401,169 @@ describe("parseWorkoutInput", () => {
         workoutExercise({ sets: [set({ durationSeconds: 0 })] }),
       ]),
     ).toEqual(failure("Set 1 duration must be a positive number of seconds."));
+  });
+});
+
+describe("parseExerciseProgress", () => {
+  it("accepts a progress payload with the embedded exercise and points", () => {
+    expect(
+      parseExerciseProgress({
+        exercise: { id: 1, name: "Bench Press", category: "gym", muscle_group: "Chest", equipment: null },
+        data: [
+          {
+            date: "2026-09-12",
+            best_reps: 8,
+            best_weight_kg: 60,
+            total_volume_kg: 480,
+            best_rpe: 7,
+            estimated_1rm_kg: 76,
+          },
+          {
+            date: "2026-09-14",
+            best_reps: null,
+            best_weight_kg: null,
+            total_volume_kg: null,
+            best_rpe: null,
+            estimated_1rm_kg: null,
+          },
+        ],
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        exercise: exercise(1, "Bench Press"),
+        data: [
+          {
+            date: "2026-09-12",
+            bestReps: 8,
+            bestWeightKg: 60,
+            totalVolumeKg: 480,
+            bestRpe: 7,
+            estimated1RmKg: 76,
+          },
+          {
+            date: "2026-09-14",
+            bestReps: null,
+            bestWeightKg: null,
+            totalVolumeKg: null,
+            bestRpe: null,
+            estimated1RmKg: null,
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects a non-conforming payload", () => {
+    expect(parseExerciseProgress(null)).toEqual(failure(PROGRESS_READ_ERROR));
+    expect(parseExerciseProgress({ exercise: null, data: [] })).toEqual(
+      failure(PROGRESS_READ_ERROR),
+    );
+    expect(
+      parseExerciseProgress({
+        exercise: exercise(1, "Bench Press"),
+        data: [{ date: 12, best_reps: null }],
+      }),
+    ).toEqual(failure(PROGRESS_READ_ERROR));
+    expect(
+      parseExerciseProgress({
+        exercise: exercise(1, "Bench Press"),
+        data: [{ best_reps: 8 }],
+      }),
+    ).toEqual(failure(PROGRESS_READ_ERROR));
+  });
+});
+
+describe("parseBodyWeightEntry", () => {
+  it("accepts an entry with snake_case fields", () => {
+    expect(parseBodyWeightEntry({ id: 3, date: "2026-09-12", weight_kg: 72.5 })).toEqual({
+      ok: true,
+      value: { id: 3, date: "2026-09-12", weightKg: 72.5 },
+    });
+  });
+
+  it("rejects a non-conforming entry", () => {
+    expect(parseBodyWeightEntry(null)).toEqual(failure(BODY_WEIGHT_READ_ERROR));
+    expect(parseBodyWeightEntry({ id: 3, date: "2026-09-12" })).toEqual(
+      failure(BODY_WEIGHT_READ_ERROR),
+    );
+    expect(parseBodyWeightEntry({ id: "3", date: "2026-09-12", weight_kg: 72.5 })).toEqual(
+      failure(BODY_WEIGHT_READ_ERROR),
+    );
+  });
+
+  it("rejects a list with any bad entry", () => {
+    expect(parseBodyWeightList(null)).toEqual(failure(BODY_WEIGHT_READ_ERROR));
+    expect(
+      parseBodyWeightList([
+        { id: 1, date: "2026-09-12", weight_kg: 72.5 },
+        { id: 2, date: "2026-09-13" },
+      ]),
+    ).toEqual(failure(BODY_WEIGHT_READ_ERROR));
+  });
+});
+
+describe("parseBodyWeightInput", () => {
+  it("pads the date and parses the weight", () => {
+    expect(parseBodyWeightInput("2026-9-2", " 72.5 ")).toEqual({
+      ok: true,
+      value: { date: "2026-09-02", weightKg: 72.5 },
+    });
+  });
+
+  it("rejects an invalid date or non-positive weight", () => {
+    expect(parseBodyWeightInput("nope", "72")).toEqual(
+      failure("Enter a valid date in YYYY-MM-DD format."),
+    );
+    expect(parseBodyWeightInput("2026-09-02", "")).toEqual(failure("Enter a body weight in kg."));
+    expect(parseBodyWeightInput("2026-09-02", "heavy")).toEqual(
+      failure("Enter a valid body weight in kg."),
+    );
+    expect(parseBodyWeightInput("2026-09-02", "0")).toEqual(
+      failure("Enter a valid body weight in kg."),
+    );
+  });
+});
+
+describe("parseProfile", () => {
+  it("accepts a configured profile", () => {
+    expect(parseProfile({ height_cm: 182.5, sex: "male" })).toEqual({
+      ok: true,
+      value: { heightCm: 182.5, sex: "male" },
+    });
+  });
+
+  it("accepts the unconfigured profile with null fields", () => {
+    expect(parseProfile({ height_cm: null, sex: null })).toEqual({
+      ok: true,
+      value: { heightCm: null, sex: null },
+    });
+  });
+
+  it("rejects a non-conforming profile", () => {
+    expect(parseProfile(null)).toEqual(failure(PROFILE_READ_ERROR));
+    expect(parseProfile({ height_cm: "182" })).toEqual(failure(PROFILE_READ_ERROR));
+    expect(parseProfile({ height_cm: 182, sex: 3 })).toEqual(failure(PROFILE_READ_ERROR));
+  });
+});
+
+describe("parseProfileInput", () => {
+  it("parses height and trims sex", () => {
+    expect(parseProfileInput(" 182.5 ", " male ")).toEqual({
+      ok: true,
+      value: { heightCm: 182.5, sex: "male" },
+    });
+  });
+
+  it("maps blank fields to null so the API keeps the current values", () => {
+    expect(parseProfileInput("", "")).toEqual({
+      ok: true,
+      value: { heightCm: null, sex: null },
+    });
+  });
+
+  it("rejects an invalid height", () => {
+    expect(parseProfileInput("tall", "")).toEqual(failure("Enter a valid height in cm."));
+    expect(parseProfileInput("0", "")).toEqual(failure("Enter a valid height in cm."));
   });
 });

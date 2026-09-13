@@ -10,14 +10,19 @@ import {
 } from "react-native";
 import { useEffect, useRef, useState } from "react";
 
+import type { BodyActions, BodyState } from "../application/use-body";
 import type { FitnessActions, FitnessState } from "../application/use-fitness";
+import type { ProgressActions, ProgressState } from "../application/use-progress";
 import type { WorkoutsActions, WorkoutsState } from "../application/use-workouts";
 import {
   filterExercises,
+  parseBodyWeightInput,
   parseExerciseInput,
+  parseProfileInput,
   parseWorkoutInput,
   type Exercise,
   type ExerciseCategory,
+  type ProgressPoint,
   type SetInput,
   type WorkoutDetail,
   type WorkoutExerciseEntry,
@@ -27,8 +32,8 @@ import { ActionButton, PageHeading, SecondaryAction, styles as shared } from "./
 import { colors } from "./theme";
 
 type LibraryCategory = ExerciseCategory | "all";
-/** Which of the Fitness Tab's two views is showing. */
-type FitnessView = "library" | "workouts";
+/** Which of the Fitness Tab's four views is showing. */
+type FitnessView = "library" | "workouts" | "progress" | "body";
 
 type FormState = {
   readonly name: string;
@@ -53,19 +58,45 @@ const categoryLabels: ReadonlyArray<{ readonly key: ExerciseCategory; readonly l
 const viewLabels: ReadonlyArray<{ readonly key: FitnessView; readonly label: string }> = [
   { key: "library", label: "Library" },
   { key: "workouts", label: "Workouts" },
+  { key: "progress", label: "Progress" },
+  { key: "body", label: "Body" },
 ];
 
-/** Render the Fitness Tab: the exercise library and the workout log/history. */
+const viewHeadings = {
+  library: {
+    title: "Exercise library",
+    description: "Every exercise you can log, searchable and filterable.",
+  },
+  workouts: { title: "Workouts", description: "Log sessions and review what you did." },
+  progress: {
+    title: "Progress",
+    description: "Pick an exercise and see its history over time.",
+  },
+  body: {
+    title: "Body",
+    description: "Log your weight and configure your profile.",
+  },
+} satisfies Record<FitnessView, { title: string; description: string }>;
+
+/** Render the Fitness Tab: the exercise library, workout log, progress, and body views. */
 export function FitnessPage({
   state,
   actions,
   workouts,
   workoutsActions,
+  progress,
+  progressActions,
+  body,
+  bodyActions,
 }: {
   readonly state: FitnessState;
   readonly actions: FitnessActions;
   readonly workouts: WorkoutsState;
   readonly workoutsActions: WorkoutsActions;
+  readonly progress: ProgressState;
+  readonly progressActions: ProgressActions;
+  readonly body: BodyState;
+  readonly bodyActions: BodyActions;
 }) {
   const [view, setView] = useState<FitnessView>("library");
 
@@ -84,12 +115,8 @@ export function FitnessPage({
       <View style={shared.stack}>
         <PageHeading
           eyebrow="FITNESS"
-          title={view === "library" ? "Exercise library" : "Workouts"}
-          description={
-            view === "library"
-              ? "Every exercise you can log, searchable and filterable."
-              : "Log sessions and review what you did."
-          }
+          title={viewHeadings[view].title}
+          description={viewHeadings[view].description}
         />
         <View style={shared.row}>
           {viewLabels.map(({ key, label }) => (
@@ -119,6 +146,14 @@ export function FitnessPage({
             exercises={state.tag === "ready" ? state.exercises : []}
           />
         ) : null}
+        {view === "progress" ? (
+          <ProgressView
+            state={progress}
+            actions={progressActions}
+            exercises={state.tag === "ready" ? state.exercises : []}
+          />
+        ) : null}
+        {view === "body" ? <BodyView state={body} actions={bodyActions} /> : null}
       </View>
     </ScrollView>
   );
@@ -378,6 +413,7 @@ const styles = StyleSheet.create({
   detail: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   formHeader: { minHeight: 24, flexDirection: "row", justifyContent: "space-between" },
   formToggle: { color: colors.signal, fontSize: 12, fontWeight: "800" },
+  halfInput: { flex: 1 },
   input: {
     backgroundColor: colors.background,
     borderColor: colors.border,
@@ -1114,3 +1150,322 @@ const workoutStyles = StyleSheet.create({
   workoutName: { color: colors.muted, fontSize: 15, fontWeight: "700", lineHeight: 21 },
   workoutOpen: { color: colors.signal, fontSize: 12, fontWeight: "800" },
 });
+
+/** Render the per-exercise progress view: an exercise picker and its trend series. */
+function ProgressView({
+  state,
+  actions,
+  exercises,
+}: {
+  readonly state: ProgressState;
+  readonly actions: ProgressActions;
+  readonly exercises: readonly Exercise[];
+}) {
+  const selectedId =
+    state.tag === "loaded"
+      ? state.progress.exercise.id
+      : state.tag === "loading" || state.tag === "error"
+        ? state.exerciseId
+        : null;
+  return (
+    <>
+      <View style={[shared.section, styles.card]}>
+        <Text style={shared.sectionTitle}>PICK AN EXERCISE</Text>
+        {exercises.length === 0 ? (
+          <Text style={styles.detail}>
+            The exercise library is empty. Add exercises on the Library view.
+          </Text>
+        ) : (
+          <View style={shared.row}>
+            {exercises.map((exercise) => (
+              <Pressable
+                key={exercise.id}
+                accessibilityLabel={`Show progress for ${exercise.name}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedId === exercise.id }}
+                onPress={() => actions.openExercise(exercise.id)}
+                style={({ pressed }) => [
+                  styles.chip,
+                  selectedId === exercise.id && styles.chipSelected,
+                  pressed && shared.actionPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.chipLabel,
+                    selectedId === exercise.id && styles.chipLabelSelected,
+                  ]}
+                >
+                  {exercise.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+      {state.tag === "loading" ? (
+        <View style={shared.statusPanel}>
+          <ActivityIndicator color={colors.signal} />
+          <Text style={shared.statusText}>Loading progress</Text>
+        </View>
+      ) : null}
+      {state.tag === "idle" ? (
+        <View style={shared.statusPanel}>
+          <Text style={shared.statusText}>{state.message}</Text>
+        </View>
+      ) : null}
+      {state.tag === "error" ? (
+        <View style={shared.section}>
+          <Text accessibilityRole="alert" style={shared.error}>
+            {state.message}
+          </Text>
+          {selectedId !== null ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={actions.refresh}
+              style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
+            >
+              <Text style={shared.retry}>Try again</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {state.tag === "loaded" ? (
+        state.progress.data.length === 0 ? (
+          <View style={shared.statusPanel}>
+            <Text style={shared.statusText}>No logged sets for {state.progress.exercise.name} yet</Text>
+          </View>
+        ) : (
+          <>
+            <View style={shared.section}>
+              <Text style={styles.name}>{state.progress.exercise.name}</Text>
+            </View>
+            {state.progress.data.map((point) => (
+              <ProgressPointRow key={point.date} point={point} />
+            ))}
+          </>
+        )
+      ) : null}
+    </>
+  );
+}
+
+/** One date's aggregated progress as a text series row (v1 has no chart library). */
+function ProgressPointRow({ point }: { readonly point: ProgressPoint }) {
+  return (
+    <View style={shared.section}>
+      <View style={shared.sectionHeader}>
+        <Text style={styles.name}>{formatDate(point.date)}</Text>
+        <Text style={styles.detail}>{describePoint(point)}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Summarize one progress point's metrics, dropping the ones without data. */
+function describePoint(point: ProgressPoint): string {
+  const parts: string[] = [];
+  if (point.bestWeightKg !== null) {
+    parts.push(`Best ${point.bestWeightKg} kg`);
+  }
+  if (point.bestReps !== null) {
+    parts.push(`${point.bestReps} reps`);
+  }
+  if (point.totalVolumeKg !== null) {
+    parts.push(`Volume ${point.totalVolumeKg} kg`);
+  }
+  if (point.estimated1RmKg !== null) {
+    parts.push(`Est. 1RM ${point.estimated1RmKg} kg`);
+  }
+  if (point.bestRpe !== null) {
+    parts.push(`RPE ${point.bestRpe}`);
+  }
+  return parts.join(" · ") || "No set data";
+}
+
+type BodyWeightFormState = { readonly date: string; readonly weightKg: string };
+
+/** Render the body weight log: record today's weight, past entries, and the profile. */
+function BodyView({
+  state,
+  actions,
+}: {
+  readonly state: BodyState;
+  readonly actions: BodyActions;
+}) {
+  const [form, setForm] = useState<BodyWeightFormState>({ date: today(), weightKg: "" });
+  const [profileForm, setProfileForm] = useState({ heightCm: "", sex: "" });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const wasSaving = useRef(false);
+
+  // Clear the weight form once its submission has succeeded; a failed save
+  // keeps the fields so only the failing part has to change.
+  useEffect(() => {
+    if (wasSaving.current && !state.saving && state.saveError === null) {
+      setForm({ date: today(), weightKg: "" });
+      setFormError(null);
+    }
+    wasSaving.current = state.saving;
+  }, [state]);
+
+  function submitWeight(): void {
+    const parsed = parseBodyWeightInput(form.date, form.weightKg);
+    if (!parsed.ok) {
+      setFormError(parsed.error);
+      return;
+    }
+    setFormError(null);
+    actions.saveWeight(parsed.value);
+  }
+
+  function submitProfile(): void {
+    const parsed = parseProfileInput(profileForm.heightCm, profileForm.sex);
+    if (!parsed.ok) {
+      setProfileError(parsed.error);
+      return;
+    }
+    setProfileError(null);
+    actions.saveProfile(parsed.value);
+  }
+
+  return (
+    <>
+      <View style={[shared.section, styles.card]}>
+        <Text style={shared.sectionTitle}>RECORD WEIGHT</Text>
+        <View style={shared.row}>
+          <TextInput
+            accessibilityLabel="Entry date"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={(date) => setForm((current) => ({ ...current, date }))}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, styles.halfInput]}
+            value={form.date}
+          />
+          <TextInput
+            accessibilityLabel="Body weight in kg"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="decimal-pad"
+            onChangeText={(weightKg) => setForm((current) => ({ ...current, weightKg }))}
+            placeholder="Weight kg"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, styles.halfInput]}
+            value={form.weightKg}
+          />
+        </View>
+        <View style={shared.row}>
+          <ActionButton
+            label="Record weight"
+            sending={state.saving}
+            disabled={state.saving}
+            onPress={submitWeight}
+          />
+        </View>
+        {formError !== null ? (
+          <Text accessibilityRole="alert" style={shared.error}>
+            {formError}
+          </Text>
+        ) : null}
+        {state.saveError !== null ? (
+          <Text accessibilityRole="alert" style={shared.error}>
+            {state.saveError}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={[shared.section, styles.card]}>
+        <Text style={shared.sectionTitle}>PROFILE</Text>
+        {state.profile.tag === "loaded" &&
+        (state.profile.profile.heightCm !== null || state.profile.profile.sex !== null) ? (
+          <Text style={styles.detail}>
+            Current:{" "}
+            {[
+              state.profile.profile.heightCm !== null
+                ? `${state.profile.profile.heightCm} cm`
+                : null,
+              state.profile.profile.sex !== null ? state.profile.profile.sex : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </Text>
+        ) : null}
+        {state.profile.tag === "loading" ? (
+          <Text style={styles.detail}>Loading profile</Text>
+        ) : null}
+        {state.profile.tag === "error" ? (
+          <Text accessibilityRole="alert" style={shared.error}>
+            {state.profile.message}
+          </Text>
+        ) : null}
+        <View style={shared.row}>
+          <TextInput
+            accessibilityLabel="Height in cm"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="decimal-pad"
+            onChangeText={(heightCm) => setProfileForm((current) => ({ ...current, heightCm }))}
+            placeholder="Height cm"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, styles.halfInput]}
+            value={profileForm.heightCm}
+          />
+          <TextInput
+            accessibilityLabel="Sex"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={(sex) => setProfileForm((current) => ({ ...current, sex }))}
+            placeholder="Sex, e.g. male"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, styles.halfInput]}
+            value={profileForm.sex}
+          />
+        </View>
+        <View style={shared.row}>
+          <ActionButton
+            label="Save profile"
+            sending={state.saving}
+            disabled={state.saving}
+            onPress={submitProfile}
+          />
+        </View>
+        {profileError !== null ? (
+          <Text accessibilityRole="alert" style={shared.error}>
+            {profileError}
+          </Text>
+        ) : null}
+      </View>
+
+      {state.refreshing ? (
+        <View style={shared.statusPanel}>
+          <ActivityIndicator color={colors.signal} />
+          <Text style={shared.statusText}>Refreshing</Text>
+        </View>
+      ) : null}
+      {state.entries.length === 0 && !state.refreshing ? (
+        <View style={shared.statusPanel}>
+          <Text style={shared.statusText}>
+            {state.error === null ? "No body weight entries yet" : state.error}
+          </Text>
+        </View>
+      ) : null}
+      {state.entries.map((entry) => (
+        <View key={entry.id} style={shared.section}>
+          <View style={shared.sectionHeader}>
+            <Text style={styles.name}>{formatDate(entry.date)}</Text>
+            <Text style={styles.detail}>{entry.weightKg} kg</Text>
+          </View>
+        </View>
+      ))}
+      <Pressable
+        accessibilityRole="button"
+        onPress={actions.refresh}
+        style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
+      >
+        <Text style={shared.retry}>Refresh entries</Text>
+      </Pressable>
+    </>
+  );
+}

@@ -2,16 +2,28 @@ import type { AdguardStatus } from "../domain/adguard";
 import type { Configuration } from "../domain/configuration";
 import type { DockerContainer } from "../domain/docker";
 import {
+  BODY_WEIGHT_READ_ERROR,
   EXERCISE_LIST_READ_ERROR,
   EXERCISE_READ_ERROR,
+  PROFILE_READ_ERROR,
+  PROGRESS_READ_ERROR,
   WORKOUT_LIST_READ_ERROR,
   WORKOUT_READ_ERROR,
+  parseBodyWeightEntry,
+  parseBodyWeightList,
   parseExercise,
   parseExerciseList,
+  parseExerciseProgress,
+  parseProfile,
   parseWorkoutDetail,
   parseWorkoutSummaryList,
+  type BodyWeightEntry,
+  type BodyWeightInput,
   type Exercise,
   type ExerciseInput,
+  type ExerciseProgress,
+  type Profile,
+  type ProfileInput,
   type WorkoutDetail,
   type WorkoutInput,
   type WorkoutSummary,
@@ -63,7 +75,7 @@ export type RssApi = {
   readonly deleteFeed: (id: number) => Promise<Result<void>>;
 };
 
-/** Exercise library and workout logging operations used by the Fitness Tab. */
+/** Exercise library, workout logging, progress, body weight, and profile operations used by the Fitness Tab. */
 export type FitnessApi = {
   readonly listExercises: () => Promise<Result<readonly Exercise[]>>;
   readonly createExercise: (input: ExerciseInput) => Promise<Result<Exercise>>;
@@ -72,6 +84,11 @@ export type FitnessApi = {
   readonly createWorkout: (input: WorkoutInput) => Promise<Result<WorkoutDetail>>;
   readonly updateWorkout: (id: number, input: WorkoutInput) => Promise<Result<WorkoutDetail>>;
   readonly deleteWorkout: (id: number) => Promise<Result<void>>;
+  readonly getExerciseProgress: (id: number) => Promise<Result<ExerciseProgress>>;
+  readonly listBodyWeight: () => Promise<Result<readonly BodyWeightEntry[]>>;
+  readonly createBodyWeight: (input: BodyWeightInput) => Promise<Result<BodyWeightEntry>>;
+  readonly getProfile: () => Promise<Result<Profile>>;
+  readonly updateProfile: (input: ProfileInput) => Promise<Result<Profile>>;
 };
 
 /** Operations used by the OpenHome application layer. */
@@ -434,6 +451,86 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           },
         });
         return response.ok ? success(undefined) : response;
+      },
+
+      getExerciseProgress: async (id): Promise<Result<ExerciseProgress>> => {
+        const response = await request(`/api/exercises/${id}/progress`, {
+          defaultError: "Couldn't load the exercise progress.",
+          statusErrors: {
+            404: `Exercise ${id} not found.`,
+          },
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseExerciseProgress(JSON.parse(response.value.body));
+        } catch {
+          return failure(PROGRESS_READ_ERROR);
+        }
+      },
+
+      listBodyWeight: async (): Promise<Result<readonly BodyWeightEntry[]>> => {
+        const response = await request("/api/body_weight", {
+          defaultError: "Couldn't load the body weight entries.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseBodyWeightList(JSON.parse(response.value.body));
+        } catch {
+          return failure(BODY_WEIGHT_READ_ERROR);
+        }
+      },
+
+      createBodyWeight: async (input): Promise<Result<BodyWeightEntry>> => {
+        const response = await request("/api/body_weight", {
+          method: "POST",
+          body: { date: input.date, weight_kg: input.weightKg },
+          defaultError: "Couldn't save the body weight entry.",
+          statusErrors: {
+            409: "Body weight for that date is already recorded.",
+          },
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseBodyWeightEntry(JSON.parse(response.value.body));
+        } catch {
+          return failure(BODY_WEIGHT_READ_ERROR);
+        }
+      },
+
+      getProfile: async (): Promise<Result<Profile>> => {
+        const response = await request("/api/profile", {
+          defaultError: "Couldn't load the profile.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseProfile(JSON.parse(response.value.body));
+        } catch {
+          return failure(PROFILE_READ_ERROR);
+        }
+      },
+
+      updateProfile: async (input): Promise<Result<Profile>> => {
+        const response = await request("/api/profile", {
+          method: "PATCH",
+          body: { height_cm: input.heightCm, sex: input.sex },
+          defaultError: "Couldn't save the profile.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseProfile(JSON.parse(response.value.body));
+        } catch {
+          return failure(PROFILE_READ_ERROR);
+        }
       },
     },
   };

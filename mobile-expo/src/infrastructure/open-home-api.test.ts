@@ -860,3 +860,165 @@ describe("fitness workout adapter", () => {
     );
   });
 });
+
+describe("fitness progress, body weight, and profile adapter", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const configuration = { baseUrl: "http://openhome.test", apiKey: "secret" };
+  const progressError = "Couldn't read the exercise progress from the Axum API.";
+  const bodyWeightError = "Couldn't read the body weight entries from the Axum API.";
+  const profileError = "Couldn't read the profile from the Axum API.";
+
+  const progressPayload = {
+    exercise: { id: 1, name: "Bench Press", category: "gym", muscle_group: null, equipment: null },
+    data: [
+      {
+        date: "2026-09-12",
+        best_reps: 8,
+        best_weight_kg: 60,
+        total_volume_kg: 480,
+        best_rpe: 7,
+        estimated_1rm_kg: 76,
+      },
+    ],
+  };
+
+  function stubFetch(handler: (url: string, init?: RequestInit) => Promise<Response>): void {
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) =>
+      handler(String(url), init),
+    );
+  }
+
+  it("fetches exercise progress by id with a 404 override", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method });
+      return Promise.resolve(new Response(JSON.stringify(progressPayload), { status: 200 }));
+    });
+
+    expect(await createOpenHomeApi(configuration).fitness.getExerciseProgress(1)).toEqual({
+      ok: true,
+      value: {
+        exercise: { id: 1, name: "Bench Press", category: "gym", muscleGroup: null, equipment: null },
+        data: [
+          {
+            date: "2026-09-12",
+            bestReps: 8,
+            bestWeightKg: 60,
+            totalVolumeKg: 480,
+            bestRpe: 7,
+            estimated1RmKg: 76,
+          },
+        ],
+      },
+    });
+    expect(requests).toEqual([
+      { url: "http://openhome.test/api/exercises/1/progress", method: "GET" },
+    ]);
+
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Exercise with id 1 not found" }), { status: 404 }),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.getExerciseProgress(1)).toEqual(
+      failure("Exercise 1 not found."),
+    );
+
+    stubFetch(
+      async () => new Response(JSON.stringify({ exercise: null, data: [] }), { status: 200 }),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.getExerciseProgress(1)).toEqual(
+      failure(progressError),
+    );
+  });
+
+  it("lists body weight entries and rejects malformed payloads", async () => {
+    stubFetch(
+      async () =>
+        new Response(
+          JSON.stringify([{ id: 3, date: "2026-09-12", weight_kg: 72.5 }]),
+          { status: 200 },
+        ),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.listBodyWeight()).toEqual({
+      ok: true,
+      value: [{ id: 3, date: "2026-09-12", weightKg: 72.5 }],
+    });
+
+    stubFetch(async () => new Response(JSON.stringify([{ id: 3, date: "2026-09-12" }]), { status: 200 }));
+    expect(await createOpenHomeApi(configuration).fitness.listBodyWeight()).toEqual(
+      failure(bodyWeightError),
+    );
+  });
+
+  it("creates a body weight entry and maps a duplicate-date 409", async () => {
+    const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method, body: init?.body });
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: 3, date: "2026-09-12", weight_kg: 72.5 }), { status: 201 }),
+      );
+    });
+
+    expect(
+      await createOpenHomeApi(configuration).fitness.createBodyWeight({
+        date: "2026-09-12",
+        weightKg: 72.5,
+      }),
+    ).toEqual({ ok: true, value: { id: 3, date: "2026-09-12", weightKg: 72.5 } });
+    expect(requests).toEqual([
+      {
+        url: "http://openhome.test/api/body_weight",
+        method: "POST",
+        body: JSON.stringify({ date: "2026-09-12", weight_kg: 72.5 }),
+      },
+    ]);
+
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Body weight for date already recorded" }), {
+          status: 409,
+        }),
+    );
+    expect(
+      await createOpenHomeApi(configuration).fitness.createBodyWeight({
+        date: "2026-09-12",
+        weightKg: 72.5,
+      }),
+    ).toEqual(failure("Body weight for that date is already recorded."));
+  });
+
+  it("reads the profile and posts a partial patch", async () => {
+    const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method, body: init?.body });
+      return Promise.resolve(
+        new Response(JSON.stringify({ height_cm: 182.5, sex: "male" }), { status: 200 }),
+      );
+    });
+
+    expect(await createOpenHomeApi(configuration).fitness.getProfile()).toEqual({
+      ok: true,
+      value: { heightCm: 182.5, sex: "male" },
+    });
+
+    expect(
+      await createOpenHomeApi(configuration).fitness.updateProfile({
+        heightCm: 182.5,
+        sex: null,
+      }),
+    ).toEqual({ ok: true, value: { heightCm: 182.5, sex: "male" } });
+    expect(requests[1]).toEqual({
+      url: "http://openhome.test/api/profile",
+      method: "PATCH",
+      body: JSON.stringify({ height_cm: 182.5, sex: null }),
+    });
+
+    stubFetch(async () => new Response(JSON.stringify({ height_cm: "182" }), { status: 200 }));
+    expect(await createOpenHomeApi(configuration).fitness.getProfile()).toEqual(
+      failure(profileError),
+    );
+  });
+});

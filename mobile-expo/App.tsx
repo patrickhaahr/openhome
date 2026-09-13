@@ -4,11 +4,13 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
 import { useAdGuard } from "./src/application/use-adguard";
+import { useBody } from "./src/application/use-body";
 import { useDocker } from "./src/application/use-docker";
 import { useFeeds } from "./src/application/use-feeds";
 import { useFitness } from "./src/application/use-fitness";
 import { useHomeGeofence } from "./src/application/use-home-geofence";
 import { useOpenHome } from "./src/application/use-open-home";
+import { useProgress } from "./src/application/use-progress";
 import { useTimeline } from "./src/application/use-timeline";
 import { useWorkouts } from "./src/application/use-workouts";
 import { createSecureConfigurationStore } from "./src/infrastructure/configuration-store";
@@ -39,6 +41,8 @@ export default function App() {
   );
   const [fitness, fitnessActions] = useFitness(api === null ? null : api.fitness);
   const [workouts, workoutsActions] = useWorkouts(api === null ? null : api.fitness);
+  const [progress, progressActions] = useProgress(api === null ? null : api.fitness);
+  const [body, bodyActions] = useBody(api === null ? null : api.fitness);
 
   useEffect(() => {
     void homeGeofenceService.resume();
@@ -53,10 +57,12 @@ export default function App() {
         feedsActions.refresh();
         fitnessActions.refresh();
         workoutsActions.refresh();
+        progressActions.refresh();
+        bodyActions.refresh();
       }
     });
     return () => subscription.remove();
-  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions, feedsActions, fitnessActions, workoutsActions]);
+  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions, feedsActions, fitnessActions, workoutsActions, progressActions, bodyActions]);
 
   return (
     <SafeAreaProvider>
@@ -88,6 +94,10 @@ export default function App() {
             fitnessActions={fitnessActions}
             workouts={workouts}
             workoutsActions={workoutsActions}
+            progress={progress}
+            progressActions={progressActions}
+            body={body}
+            bodyActions={bodyActions}
             onOpenTimelineLink={(url) => {
               void Linking.openURL(url).catch(() => {});
             }}

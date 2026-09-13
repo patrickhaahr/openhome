@@ -18,6 +18,8 @@ import type { ClassificationCounts } from "../domain/docker";
 import type { DockerActions, DockerState } from "../application/use-docker";
 import type { FeedsActions, FeedsState } from "../application/use-feeds";
 import type { FitnessActions, FitnessState } from "../application/use-fitness";
+import type { ProgressActions, ProgressState } from "../application/use-progress";
+import type { BodyActions, BodyState } from "../application/use-body";
 import type { WorkoutsActions, WorkoutsState } from "../application/use-workouts";
 import type { TimelineActions, TimelineState } from "../application/use-timeline";
 import type {
@@ -55,6 +57,10 @@ type Props = {
   readonly fitnessActions: FitnessActions;
   readonly workouts: WorkoutsState;
   readonly workoutsActions: WorkoutsActions;
+  readonly progress: ProgressState;
+  readonly progressActions: ProgressActions;
+  readonly body: BodyState;
+  readonly bodyActions: BodyActions;
   readonly onOpenTimelineLink: (url: string) => void;
 };
 
@@ -113,6 +119,10 @@ export function OpenHomeScreen({
   fitnessActions,
   workouts,
   workoutsActions,
+  progress,
+  progressActions,
+  body,
+  bodyActions,
   onOpenTimelineLink,
 }: Props) {
   const pager = useRef<ScrollView>(null);
@@ -227,6 +237,10 @@ export function OpenHomeScreen({
             actions={fitnessActions}
             workouts={workouts}
             workoutsActions={workoutsActions}
+            progress={progress}
+            progressActions={progressActions}
+            body={body}
+            bodyActions={bodyActions}
           />
         </Page>
       </ScrollView>

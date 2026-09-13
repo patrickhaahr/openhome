@@ -26,12 +26,15 @@ export const EXERCISE_READ_ERROR = "Couldn't read the exercise from the Axum API
 export const EXERCISE_LIST_READ_ERROR = "Couldn't read the exercise library from the Axum API.";
 export const WORKOUT_READ_ERROR = "Couldn't read the workout from the Axum API.";
 export const WORKOUT_LIST_READ_ERROR = "Couldn't read the workouts from the Axum API.";
+export const PROGRESS_READ_ERROR = "Couldn't read the exercise progress from the Axum API.";
+export const BODY_WEIGHT_READ_ERROR = "Couldn't read the body weight entries from the Axum API.";
+export const PROFILE_READ_ERROR = "Couldn't read the profile from the Axum API.";
 
 /**
  * Parse an untrusted exercise payload. The Axum API serves exercises as
  * `{ id, name, category, muscle_group, equipment }` with optional fields null.
  */
-export function parseExercise(json: Json): Result<Exercise> {
+export function parseExercise(json: Json | undefined): Result<Exercise> {
   if (
     !isJsonObject(json) ||
     !isJsonNumber(json["id"]) ||
@@ -385,7 +388,184 @@ function isOptionalJsonNumber(value: Json | undefined): boolean {
   return value === undefined || value === null || isJsonNumber(value);
 }
 
+/** Decide whether a JSON value is absent, null, or a string. */
+function isOptionalJsonString(value: Json | undefined): boolean {
+  return value === undefined || value === null || isJsonString(value);
+}
+
 function trimmedOrNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/** One aggregated progress point, one per workout date the exercise appears on. */
+export type ProgressPoint = {
+  readonly date: string;
+  readonly bestReps: number | null;
+  readonly bestWeightKg: number | null;
+  readonly totalVolumeKg: number | null;
+  readonly bestRpe: number | null;
+  readonly estimated1RmKg: number | null;
+};
+
+/** One exercise's aggregated history as served by the progress endpoint. */
+export type ExerciseProgress = {
+  readonly exercise: Exercise;
+  readonly data: readonly ProgressPoint[];
+};
+
+/** One body weight log entry as served by the Axum API. */
+export type BodyWeightEntry = {
+  readonly id: number;
+  readonly date: string;
+  readonly weightKg: number;
+};
+
+/** A new body weight entry as entered in the log form, ready for the Axum API. */
+export type BodyWeightInput = {
+  readonly date: string;
+  readonly weightKg: number;
+};
+
+/** The single user profile row; fields are null until configured. */
+export type Profile = {
+  readonly heightCm: number | null;
+  readonly sex: string | null;
+};
+
+/**
+ * A profile update as entered in the profile form, ready for the Axum API.
+ * Absent fields are null so the API's partial update keeps the current values.
+ */
+export type ProfileInput = {
+  readonly heightCm: number | null;
+  readonly sex: string | null;
+};
+
+/**
+ * Parse an untrusted progress payload:
+ * `{ exercise, data: [{ date, best_reps, best_weight_kg, total_volume_kg, best_rpe, estimated_1rm_kg }] }`
+ * with the metrics optional (null when the exercise had no such sets that day).
+ */
+export function parseExerciseProgress(json: Json): Result<ExerciseProgress> {
+  if (!isJsonObject(json) || !isJsonArray(json["data"])) {
+    return failure(PROGRESS_READ_ERROR);
+  }
+  const exercise = parseExercise(json["exercise"]);
+  if (!exercise.ok) {
+    return failure(PROGRESS_READ_ERROR);
+  }
+  const data: ProgressPoint[] = [];
+  for (const raw of json["data"]) {
+    if (
+      !isJsonObject(raw) ||
+      !isJsonString(raw["date"]) ||
+      !isOptionalJsonNumber(raw["best_reps"]) ||
+      !isOptionalJsonNumber(raw["best_weight_kg"]) ||
+      !isOptionalJsonNumber(raw["total_volume_kg"]) ||
+      !isOptionalJsonNumber(raw["best_rpe"]) ||
+      !isOptionalJsonNumber(raw["estimated_1rm_kg"])
+    ) {
+      return failure(PROGRESS_READ_ERROR);
+    }
+    data.push({
+      date: raw["date"],
+      bestReps: optionalJsonNumber(raw["best_reps"]),
+      bestWeightKg: optionalJsonNumber(raw["best_weight_kg"]),
+      totalVolumeKg: optionalJsonNumber(raw["total_volume_kg"]),
+      bestRpe: optionalJsonNumber(raw["best_rpe"]),
+      estimated1RmKg: optionalJsonNumber(raw["estimated_1rm_kg"]),
+    });
+  }
+  return success({ exercise: exercise.value, data });
+}
+
+/**
+ * Parse an untrusted body weight payload as served by the Axum API:
+ * `{ id, date, weight_kg }` with every field present.
+ */
+export function parseBodyWeightEntry(json: Json): Result<BodyWeightEntry> {
+  if (
+    !isJsonObject(json) ||
+    !isJsonNumber(json["id"]) ||
+    !isJsonString(json["date"]) ||
+    !isJsonNumber(json["weight_kg"])
+  ) {
+    return failure(BODY_WEIGHT_READ_ERROR);
+  }
+  return success({
+    id: json["id"],
+    date: json["date"],
+    weightKg: json["weight_kg"],
+  });
+}
+
+/** Parse an untrusted body weight list response; any non-conforming entry rejects the payload. */
+export function parseBodyWeightList(json: Json): Result<readonly BodyWeightEntry[]> {
+  if (!isJsonArray(json)) {
+    return failure(BODY_WEIGHT_READ_ERROR);
+  }
+  const entries: BodyWeightEntry[] = [];
+  for (const raw of json) {
+    const entry = parseBodyWeightEntry(raw);
+    if (!entry.ok) {
+      return failure(BODY_WEIGHT_READ_ERROR);
+    }
+    entries.push(entry.value);
+  }
+  return success(entries);
+}
+
+/** Validate a body weight log form on the client before any request is sent. */
+export function parseBodyWeightInput(date: string, weightKg: string): Result<BodyWeightInput> {
+  const padded = padDate(date);
+  if (padded === null) {
+    return failure("Enter a valid date in YYYY-MM-DD format.");
+  }
+  const weight = weightKg.trim();
+  if (weight.length === 0) {
+    return failure("Enter a body weight in kg.");
+  }
+  const parsedWeight = Number(weight);
+  if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+    return failure("Enter a valid body weight in kg.");
+  }
+  return success({ date: padded, weightKg: parsedWeight });
+}
+
+/**
+ * Parse an untrusted profile payload as served by the Axum API:
+ * `{ height_cm, sex }`, both null when the profile is unconfigured.
+ */
+export function parseProfile(json: Json): Result<Profile> {
+  if (
+    !isJsonObject(json) ||
+    !isOptionalJsonNumber(json["height_cm"]) ||
+    !isOptionalJsonString(json["sex"])
+  ) {
+    return failure(PROFILE_READ_ERROR);
+  }
+  return success({
+    heightCm: optionalJsonNumber(json["height_cm"]),
+    sex: optionalJsonText(json["sex"]),
+  });
+}
+
+/**
+ * Validate the profile form on the client before any request is sent. Blank
+ * fields map to null so the API's partial update keeps the current values.
+ */
+export function parseProfileInput(heightCm: string, sex: string): Result<ProfileInput> {
+  const height = heightCm.trim();
+  let parsedHeight: number | null = null;
+  if (height.length > 0) {
+    parsedHeight = Number(height);
+    if (!Number.isFinite(parsedHeight) || parsedHeight <= 0) {
+      return failure("Enter a valid height in cm.");
+    }
+  }
+  return success({
+    heightCm: parsedHeight,
+    sex: trimmedOrNull(sex),
+  });
 }
