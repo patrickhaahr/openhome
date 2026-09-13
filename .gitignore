@@ -11,8 +11,6 @@ data
 package-lock.json
 !mobile-expo/package-lock.json
 .env
-.direnv/
-.envrc
 .pio
 .platformio/
 
