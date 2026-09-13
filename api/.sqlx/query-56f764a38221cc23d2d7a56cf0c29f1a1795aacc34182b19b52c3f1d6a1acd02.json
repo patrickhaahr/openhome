@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO profile (id, height_cm, sex)\n        VALUES (1, $1, $2)\n        ON CONFLICT(id) DO UPDATE SET\n            height_cm = CASE WHEN $3 THEN $1 ELSE height_cm END,\n            sex = CASE WHEN $4 THEN $2 ELSE sex END,\n            updated_at = CURRENT_TIMESTAMP\n        RETURNING height_cm, sex\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "height_cm",
+        "ordinal": 0,
+        "type_info": "Float"
+      },
+      {
+        "name": "sex",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "56f764a38221cc23d2d7a56cf0c29f1a1795aacc34182b19b52c3f1d6a1acd02"
+}

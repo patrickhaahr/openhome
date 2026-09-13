@@ -26,8 +26,56 @@ pub struct CreateExercise {
 pub struct UpdateExercise {
     name: Option<String>,
     category: Option<String>,
-    muscle_group: Option<String>,
-    equipment: Option<String>,
+    #[serde(default, with = "double_option")]
+    muscle_group: Option<Option<String>>,
+    #[serde(default, with = "double_option")]
+    equipment: Option<Option<String>>,
+}
+
+/// Deserializes `Option<Option<T>>` so absent and explicit `null` differ:
+/// absent -> `None` (keep), `null` -> `Some(None)` (clear), value -> `Some(Some(v))`.
+/// serde_json signals a present `null` through `visit_none` (`visit_unit` in
+/// other self-describing formats); an absent field never reaches the
+/// deserializer (`#[serde(default)]` supplies `None`).
+mod double_option {
+    use serde::{Deserialize, Deserializer, de};
+    use std::marker::PhantomData;
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        Option<T>: Deserialize<'de>,
+    {
+        struct Visitor<T>(PhantomData<T>);
+
+        impl<'de, T> de::Visitor<'de> for Visitor<T>
+        where
+            Option<T>: Deserialize<'de>,
+        {
+            type Value = Option<Option<T>>;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("an optional value")
+            }
+
+            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Some(None))
+            }
+
+            fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Some(None))
+            }
+
+            fn visit_some<D>(self, d: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                Option::<T>::deserialize(d).map(Some)
+            }
+        }
+
+        deserializer.deserialize_option(Visitor(PhantomData))
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -150,23 +198,30 @@ async fn update_exercise(
         validate_category(category)?;
     }
 
-    // COALESCE partial update: absent and null fields keep the current value
-    // (documented in api/AGENTS.md); rename conflicts surface as unique violations.
+    // Clearable partial update: absent field keeps the current value, explicit
+    // null sets NULL (documented in api/AGENTS.md); rename conflicts surface
+    // as unique violations. Single statement keeps concurrent PATCHes atomic.
+    let muscle_group_set = payload.muscle_group.is_some();
+    let muscle_group = payload.muscle_group.flatten();
+    let equipment_set = payload.equipment.is_some();
+    let equipment = payload.equipment.flatten();
     let exercise = sqlx::query_as!(
         Exercise,
         r#"
         UPDATE exercises
         SET name = COALESCE($1, name),
             category = COALESCE($2, category),
-            muscle_group = COALESCE($3, muscle_group),
-            equipment = COALESCE($4, equipment)
-        WHERE id = $5
+            muscle_group = CASE WHEN $3 THEN $4 ELSE muscle_group END,
+            equipment = CASE WHEN $5 THEN $6 ELSE equipment END
+        WHERE id = $7
         RETURNING id, name, category, muscle_group, equipment
         "#,
         payload.name,
         payload.category,
-        payload.muscle_group,
-        payload.equipment,
+        muscle_group_set,
+        muscle_group,
+        equipment_set,
+        equipment,
         id
     )
     .fetch_optional(&state.db)
@@ -245,9 +300,12 @@ pub struct CreateWorkout {
 #[derive(Debug, Deserialize)]
 pub struct UpdateWorkout {
     date: Option<String>,
-    name: Option<String>,
-    notes: Option<String>,
-    body_weight_kg: Option<f64>,
+    #[serde(default, with = "double_option")]
+    name: Option<Option<String>>,
+    #[serde(default, with = "double_option")]
+    notes: Option<Option<String>>,
+    #[serde(default, with = "double_option")]
+    body_weight_kg: Option<Option<f64>>,
     exercises: Option<Vec<WorkoutExerciseInput>>,
 }
 
@@ -586,23 +644,33 @@ async fn update_workout(
             AppError::Internal(anyhow::anyhow!("Failed to start transaction: {}", e))
         })?;
 
-    // COALESCE partial update: absent and null fields keep the current value.
-    // Exercises/sets: when 'exercises' is present, replace the whole nested list
-    // (delete children, re-insert). When absent, keep the current entries.
+    // Clearable partial update: absent field keeps the current value, explicit
+    // null sets NULL (nullable fields only; date is NOT NULL so null = keep).
+    // Exercises/sets: when 'exercises' is present, replace the whole nested
+    // list (delete children, re-insert). When absent, keep the current entries.
+    let name_set = payload.name.is_some();
+    let name = payload.name.flatten();
+    let notes_set = payload.notes.is_some();
+    let notes = payload.notes.flatten();
+    let body_weight_set = payload.body_weight_kg.is_some();
+    let body_weight_kg = payload.body_weight_kg.flatten();
     let result = sqlx::query!(
         r#"
         UPDATE workouts
         SET date = COALESCE($1, date),
-            name = COALESCE($2, name),
-            notes = COALESCE($3, notes),
-            body_weight_kg = COALESCE($4, body_weight_kg),
+            name = CASE WHEN $2 THEN $3 ELSE name END,
+            notes = CASE WHEN $4 THEN $5 ELSE notes END,
+            body_weight_kg = CASE WHEN $6 THEN $7 ELSE body_weight_kg END,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $5
+        WHERE id = $8
         "#,
         date,
-        payload.name,
-        payload.notes,
-        payload.body_weight_kg,
+        name_set,
+        name,
+        notes_set,
+        notes,
+        body_weight_set,
+        body_weight_kg,
         id
     )
     .execute(&mut *tx)
@@ -831,8 +899,10 @@ pub struct Profile {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfile {
-    height_cm: Option<f64>,
-    sex: Option<String>,
+    #[serde(default, with = "double_option")]
+    height_cm: Option<Option<f64>>,
+    #[serde(default, with = "double_option")]
+    sex: Option<Option<String>>,
 }
 
 async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profile>> {
@@ -859,7 +929,7 @@ async fn update_profile(
     State(state): State<crate::AppState>,
     Json(payload): Json<UpdateProfile>,
 ) -> Result<Json<Profile>> {
-    if let Some(height) = payload.height_cm
+    if let Some(Some(height)) = payload.height_cm
         && height <= 0.0
     {
         return Err(AppError::Validation(
@@ -867,24 +937,28 @@ async fn update_profile(
         ));
     }
 
-    // Upsert: creates the single row on first PATCH, then COALESCE partial
-    // update (absent and null fields keep the current value — optional fields
-    // cannot be unset via PATCH, documented in api/AGENTS.md).
+    // Clearable upsert: absent field keeps the current value (stays NULL on
+    // first create), explicit null sets NULL (documented in api/AGENTS.md).
+    // Single statement keeps concurrent first PATCHes atomic.
+    let height_set = payload.height_cm.is_some();
+    let height_cm = payload.height_cm.flatten();
+    let sex_set = payload.sex.is_some();
+    let sex = payload.sex.flatten();
     let profile = sqlx::query_as!(
         Profile,
         r#"
         INSERT INTO profile (id, height_cm, sex)
         VALUES (1, $1, $2)
         ON CONFLICT(id) DO UPDATE SET
-            height_cm = COALESCE($3, height_cm),
-            sex = COALESCE($4, sex),
+            height_cm = CASE WHEN $3 THEN $1 ELSE height_cm END,
+            sex = CASE WHEN $4 THEN $2 ELSE sex END,
             updated_at = CURRENT_TIMESTAMP
         RETURNING height_cm, sex
         "#,
-        payload.height_cm,
-        payload.sex,
-        payload.height_cm,
-        payload.sex
+        height_cm,
+        sex,
+        height_set,
+        sex_set
     )
     .fetch_one(&state.db)
     .await
@@ -900,4 +974,32 @@ pub fn metrics_router() -> Router<crate::AppState> {
             get(list_body_weight).post(create_body_weight),
         )
         .route("/api/profile", get(get_profile).patch(update_profile))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    struct PatchSubject {
+        name: Option<String>,
+        #[serde(default, with = "double_option")]
+        clearable: Option<Option<String>>,
+    }
+
+    #[test]
+    fn double_option_distinguishes_absent_and_null() {
+        // absent field: keep
+        let s: PatchSubject = serde_json::from_str(r#"{"name": "x"}"#).unwrap();
+        assert_eq!(s.clearable, None);
+        assert_eq!(s.name, Some("x".to_string()));
+
+        // explicit null: clear
+        let s: PatchSubject = serde_json::from_str(r#"{"name": "x", "clearable": null}"#).unwrap();
+        assert_eq!(s.clearable, Some(None));
+
+        // present value: set
+        let s: PatchSubject = serde_json::from_str(r#"{"name": "x", "clearable": "y"}"#).unwrap();
+        assert_eq!(s.clearable, Some(Some("y".to_string())));
+    }
 }

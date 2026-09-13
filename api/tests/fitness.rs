@@ -326,6 +326,53 @@ async fn test_patch_exercise_updates_fields() {
 }
 
 #[tokio::test]
+async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
+    let app = common::test_app().await;
+
+    let body = json!({
+        "name": "Clearable Move",
+        "category": "gym",
+        "muscle_group": "chest",
+        "equipment": "machine"
+    });
+    let (_status, created) = send_request_with_method(
+        app.clone(),
+        "/api/exercises",
+        Method::POST,
+        Some(body),
+        Some("test-api-key"),
+    )
+    .await;
+    let id = created["id"].as_i64().unwrap();
+
+    // explicit null clears; absent equipment keeps its value
+    let (status, response) = send_request_with_method(
+        app.clone(),
+        &format!("/api/exercises/{}", id),
+        Method::PATCH,
+        Some(json!({ "muscle_group": null })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response["muscle_group"], serde_json::Value::Null);
+    assert_eq!(response["equipment"], "machine");
+
+    // absent muscle_group keeps the cleared value
+    let (status, response) = send_request_with_method(
+        app,
+        &format!("/api/exercises/{}", id),
+        Method::PATCH,
+        Some(json!({ "name": "Clearable Move II" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response["name"], "Clearable Move II");
+    assert_eq!(response["muscle_group"], serde_json::Value::Null);
+}
+
+#[tokio::test]
 async fn test_patch_exercise_404_for_unknown_id() {
     let app = common::test_app().await;
 
@@ -685,6 +732,52 @@ async fn test_patch_workout_updates_fields_and_replaces_sets() {
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0]["reps"], 12);
     assert_eq!(sets[0]["weight_kg"], 2.5);
+}
+
+#[tokio::test]
+async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
+    let app = common::test_app().await;
+    let created = create_sample_workout(&app).await;
+    let id = created["id"].as_i64().unwrap();
+
+    // explicit null clears the name; absent notes/body_weight keep values
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        &format!("/api/workouts/{}", id),
+        Method::PATCH,
+        Some(json!({ "name": null })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["name"], serde_json::Value::Null);
+    assert_eq!(body["notes"], "Felt strong");
+    assert_eq!(body["body_weight_kg"], 74.5);
+
+    // absent name keeps the cleared value
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        &format!("/api/workouts/{}", id),
+        Method::PATCH,
+        Some(json!({ "notes": "updated" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["notes"], "updated");
+    assert_eq!(body["name"], serde_json::Value::Null);
+
+    // clearing persists
+    let (status, fetched) = send_request_with_method(
+        app,
+        &format!("/api/workouts/{}", id),
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched["name"], serde_json::Value::Null);
 }
 
 #[tokio::test]
@@ -1265,7 +1358,7 @@ async fn test_profile_get_not_configured_then_patch_sets_fields() {
 }
 
 #[tokio::test]
-async fn test_profile_patch_coalesce_keeps_absent_fields() {
+async fn test_profile_patch_keeps_absent_fields() {
     let app = common::test_app().await;
 
     let (status, _) = send_request_with_method(
@@ -1290,6 +1383,34 @@ async fn test_profile_patch_coalesce_keeps_absent_fields() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["height_cm"], 181.0);
     assert_eq!(body["sex"], "male", "absent field must keep current value");
+}
+
+#[tokio::test]
+async fn test_profile_patch_null_clears_fields() {
+    let app = common::test_app().await;
+
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "height_cm": 180.5, "sex": "male" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // explicit null clears sex; absent height_cm keeps its value
+    let (status, body) = send_request_with_method(
+        app,
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "sex": null })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["sex"], serde_json::Value::Null);
+    assert_eq!(body["height_cm"], 180.5);
 }
 
 #[tokio::test]

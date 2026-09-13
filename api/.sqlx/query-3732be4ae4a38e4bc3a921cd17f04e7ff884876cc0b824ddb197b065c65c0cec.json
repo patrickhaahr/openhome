@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE workouts\n        SET date = COALESCE($1, date),\n            name = CASE WHEN $2 THEN $3 ELSE name END,\n            notes = CASE WHEN $4 THEN $5 ELSE notes END,\n            body_weight_kg = CASE WHEN $6 THEN $7 ELSE body_weight_kg END,\n            updated_at = CURRENT_TIMESTAMP\n        WHERE id = $8\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "3732be4ae4a38e4bc3a921cd17f04e7ff884876cc0b824ddb197b065c65c0cec"
+}
