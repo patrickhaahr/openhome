@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { useEffect, useRef, useState } from "react";
 
+import { LineChart } from "react-native-gifted-charts";
+
 import type { BodyActions, BodyState } from "../application/use-body";
 import type { FitnessActions, FitnessState } from "../application/use-fitness";
 import type { ProgressActions, ProgressState } from "../application/use-progress";
@@ -1240,6 +1242,7 @@ function ProgressView({
             <View style={shared.section}>
               <Text style={styles.name}>{state.progress.exercise.name}</Text>
             </View>
+            <ProgressChart data={state.progress.data} />
             {state.progress.data.map((point) => (
               <ProgressPointRow key={point.date} point={point} />
             ))}
@@ -1250,7 +1253,58 @@ function ProgressView({
   );
 }
 
-/** One date's aggregated progress as a text series row (v1 has no chart library). */
+/** Estimated 1RM per workout date as a line chart; text rows below keep the exact numbers. */
+function ProgressChart({ data }: { readonly data: readonly ProgressPoint[] }) {
+  const chartData = data.flatMap((point) =>
+    point.estimated1RmKg === null
+      ? []
+      : [
+          {
+            value: point.estimated1RmKg,
+            label: point.date.slice(5),
+            dataPointText: point.estimated1RmKg.toFixed(1),
+          },
+        ],
+  );
+  return (
+    <View style={shared.section}>
+      <Text style={shared.sectionTitle}>ESTIMATED 1RM (KG)</Text>
+      {chartData.length === 0 ? (
+        <Text style={styles.detail}>No weighted sets yet — 1RM needs reps and weight.</Text>
+      ) : (
+        <LineChart
+          data={chartData}
+          curved
+          areaChart
+          color={colors.signal}
+          startFillColor={colors.signal}
+          endFillColor={colors.signalDark}
+          startOpacity={0.6}
+          endOpacity={0.1}
+          dataPointsColor={colors.signal}
+          textColor={colors.text}
+          textFontSize={11}
+          yAxisColor={colors.border}
+          xAxisColor={colors.border}
+          yAxisTextStyle={{ color: colors.muted, fontSize: 11 }}
+          xAxisLabelTextStyle={{ color: colors.muted, fontSize: 10 }}
+          noOfSections={4}
+          spacing={48}
+          rulesColor={colors.border}
+          pointerConfig={{
+            pointerStripColor: colors.border,
+            pointerStripWidth: 2,
+            pointerColor: colors.signal,
+            radius: 4,
+            activatePointersOnLongPress: true,
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+/** One date's aggregated progress as a text row with the exact numbers under the chart. */
 function ProgressPointRow({ point }: { readonly point: ProgressPoint }) {
   return (
     <View style={shared.section}>
