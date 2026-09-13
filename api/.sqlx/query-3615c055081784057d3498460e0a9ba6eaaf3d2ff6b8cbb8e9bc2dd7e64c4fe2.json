@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT CAST(id AS INTEGER) AS \"id!: i64\",\n               CAST(date AS TEXT)  AS \"date!: String\",\n               weight_kg\n        FROM body_weight\n        WHERE ($1 IS NULL OR date >= $1)\n          AND ($2 IS NULL OR date <= $2)\n        ORDER BY date, id\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "date!: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "weight_kg",
+        "ordinal": 2,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "3615c055081784057d3498460e0a9ba6eaaf3d2ff6b8cbb8e9bc2dd7e64c4fe2"
+}

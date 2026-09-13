@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT CAST(w.date AS TEXT) AS \"date!: String\",\n               CAST(MAX(s.reps) AS INTEGER) AS \"best_reps?: i64\",\n               CAST(MAX(s.weight_kg) AS REAL) AS \"best_weight_kg?: f64\",\n               CAST(SUM(COALESCE(s.reps, s.duration_seconds) * COALESCE(s.weight_kg, 0.0)) AS REAL) AS \"total_volume_kg?: f64\",\n               CAST(MAX(s.rpe) AS INTEGER) AS \"best_rpe?: i64\",\n               CAST(MAX(CASE WHEN s.reps IS NOT NULL AND s.weight_kg IS NOT NULL\n                             THEN s.weight_kg * (1.0 + s.reps / 30.0) END) AS REAL) AS \"estimated_1rm_kg?: f64\"\n        FROM sets s\n        JOIN workout_exercises we ON we.id = s.workout_exercise_id\n        JOIN workouts w ON w.id = we.workout_id\n        WHERE we.exercise_id = $1\n          AND ($2 IS NULL OR w.date >= $2)\n          AND ($3 IS NULL OR w.date <= $3)\n        GROUP BY w.date\n        ORDER BY w.date\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "date!: String",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "best_reps?: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      },
+      {
+        "name": "best_weight_kg?: f64",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "total_volume_kg?: f64",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "best_rpe?: i64",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "estimated_1rm_kg?: f64",
+        "ordinal": 5,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "08be72d15aaf355be7da1b93f48c7a23daf6daa601b2354c2129ef8fdf992366"
+}

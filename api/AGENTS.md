@@ -21,12 +21,16 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 - Timeline: `/api/timeline`, `/api/items/{id}/read`
 - Exercises (fitness): `/api/exercises`, `/api/exercises/{id}` — list supports `?category=` and `?muscle_group=` filters; POST with a duplicate name returns 409; PATCH treats absent and `null` fields identically (keeps the current value — optional fields cannot be unset via PATCH); DELETE returns 409 when the exercise is referenced by logged workouts
 - Workouts (fitness): `/api/workouts` (GET/POST), `/api/workouts/{id}` (GET/PATCH/DELETE) — POST/PATCH create or replace the nested exercise entries and sets in one transaction (a failure rolls back the whole write); history list supports `?from=`, `?to=`, `?limit=` and is newest-first; PATCH treats absent and `null` workout fields identically (keeps the current value — optional fields cannot be unset via PATCH); DELETE cascades to entries and sets
+- Progress (fitness): `/api/exercises/{id}/progress` — one row per workout date: `best_reps`, `best_weight_kg` (added weight), `total_volume_kg`, `best_rpe`, and `estimated_1rm_kg` (Epley: `weight * (1 + reps / 30)` from the best set of the day among sets with both reps and weight); observed data only, no interpolation; supports `?from=`, `?to=`, chronological order; unknown exercise is 404, a never-performed exercise returns an empty series
+- Body weight (fitness): `/api/body_weight` (GET/POST) — one row per date (`date` is unique); list supports `?from=`, `?to=`, `?limit=` and is chronological; POST with a duplicate date returns 409; POST returns 201
+- Profile (fitness): `/api/profile` (GET/PATCH) — the single profile row; GET returns null fields when not configured; PATCH upserts (creates the row on first PATCH) with COALESCE semantics — absent and `null` fields keep the current value and cannot be unset
 
 ## Workout logging conventions
 
 - `weight_kg` means *added* weight: a bodyweight pull-up stores `weight_kg` null, a 40 kg weighted pull-up stores 40.
 - A timed hold (Planche Hold, Handstand) stores `duration_seconds` with `reps` null; a set must have `reps` or `duration_seconds`, never neither.
 - RPE is an integer 1–10 (null allowed).
+- Volume for a set = `reps * weight_kg`, or `duration_seconds * weight_kg` when both are present; sets without added weight contribute zero.
 
 ## Project Structure
 

@@ -67,7 +67,9 @@ pub fn router() -> Router<crate::AppState> {
                 .patch(update_exercise)
                 .delete(delete_exercise),
         )
+        .route("/api/exercises/{id}/progress", get(exercise_progress))
         .merge(workout_router())
+        .merge(metrics_router())
 }
 
 async fn list_exercises(
@@ -649,4 +651,253 @@ async fn delete_workout(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// Progress (#8)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct ProgressQuery {
+    from: Option<String>,
+    to: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ProgressPoint {
+    date: String,
+    best_reps: Option<i64>,
+    best_weight_kg: Option<f64>,
+    total_volume_kg: Option<f64>,
+    best_rpe: Option<i64>,
+    estimated_1rm_kg: Option<f64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ExerciseProgress {
+    exercise: Exercise,
+    data: Vec<ProgressPoint>,
+}
+
+async fn exercise_progress(
+    State(state): State<crate::AppState>,
+    Path(id): Path<i64>,
+    Query(params): Query<ProgressQuery>,
+) -> Result<Json<ExerciseProgress>> {
+    let exercise = sqlx::query_as!(
+        Exercise,
+        r#"
+        SELECT id, name, category, muscle_group, equipment
+        FROM exercises
+        WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {}", e)))?
+    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {} not found", id)))?;
+
+    // One row per workout date. Volume = reps * weight_kg (added weight; null
+    // weight contributes zero), duration_seconds * weight_kg for holds.
+    // Epley 1RM comes from the best set of the day among sets with both
+    // reps and weight; observed data only, no interpolation.
+    let data = sqlx::query_as!(
+        ProgressPoint,
+        r#"
+        SELECT CAST(w.date AS TEXT) AS "date!: String",
+               CAST(MAX(s.reps) AS INTEGER) AS "best_reps?: i64",
+               CAST(MAX(s.weight_kg) AS REAL) AS "best_weight_kg?: f64",
+               CAST(SUM(COALESCE(s.reps, s.duration_seconds) * COALESCE(s.weight_kg, 0.0)) AS REAL) AS "total_volume_kg?: f64",
+               CAST(MAX(s.rpe) AS INTEGER) AS "best_rpe?: i64",
+               CAST(MAX(CASE WHEN s.reps IS NOT NULL AND s.weight_kg IS NOT NULL
+                             THEN s.weight_kg * (1.0 + s.reps / 30.0) END) AS REAL) AS "estimated_1rm_kg?: f64"
+        FROM sets s
+        JOIN workout_exercises we ON we.id = s.workout_exercise_id
+        JOIN workouts w ON w.id = we.workout_id
+        WHERE we.exercise_id = $1
+          AND ($2 IS NULL OR w.date >= $2)
+          AND ($3 IS NULL OR w.date <= $3)
+        GROUP BY w.date
+        ORDER BY w.date
+        "#,
+        id,
+        params.from,
+        params.to
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to compute progress: {}", e)))?;
+
+    Ok(Json(ExerciseProgress { exercise, data }))
+}
+
+// ---------------------------------------------------------------------------
+// Body weight (#8)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct ListBodyWeight {
+    from: Option<String>,
+    to: Option<String>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateBodyWeight {
+    date: String,
+    weight_kg: f64,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct BodyWeightEntry {
+    id: i64,
+    date: String,
+    weight_kg: f64,
+}
+
+async fn list_body_weight(
+    State(state): State<crate::AppState>,
+    Query(params): Query<ListBodyWeight>,
+) -> Result<Json<Vec<BodyWeightEntry>>> {
+    let limit = params.limit.unwrap_or(100).clamp(1, 500);
+    let entries = sqlx::query_as!(
+        BodyWeightEntry,
+        r#"
+        SELECT CAST(id AS INTEGER) AS "id!: i64",
+               CAST(date AS TEXT)  AS "date!: String",
+               weight_kg
+        FROM body_weight
+        WHERE ($1 IS NULL OR date >= $1)
+          AND ($2 IS NULL OR date <= $2)
+        ORDER BY date, id
+        LIMIT $3
+        "#,
+        params.from,
+        params.to,
+        limit
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list body weight: {}", e)))?;
+
+    Ok(Json(entries))
+}
+
+async fn create_body_weight(
+    State(state): State<crate::AppState>,
+    Json(payload): Json<CreateBodyWeight>,
+) -> Result<(StatusCode, Json<BodyWeightEntry>)> {
+    let date = validate_date(&payload.date)?;
+    if payload.weight_kg <= 0.0 {
+        return Err(AppError::Validation(
+            "weight_kg must be greater than zero".to_string(),
+        ));
+    }
+
+    let entry = sqlx::query_as!(
+        BodyWeightEntry,
+        r#"
+        INSERT INTO body_weight (date, weight_kg)
+        VALUES ($1, $2)
+        RETURNING CAST(id AS INTEGER) AS "id!: i64",
+                  CAST(date AS TEXT)  AS "date!: String",
+                  weight_kg
+        "#,
+        date,
+        payload.weight_kg
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
+            AppError::Conflict(format!("Body weight for date '{}' already recorded", date))
+        }
+        other => AppError::Internal(anyhow::anyhow!("Failed to record body weight: {}", other)),
+    })?;
+
+    Ok((StatusCode::CREATED, Json(entry)))
+}
+
+// ---------------------------------------------------------------------------
+// Profile (#8)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Serialize)]
+pub struct Profile {
+    height_cm: Option<f64>,
+    sex: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProfile {
+    height_cm: Option<f64>,
+    sex: Option<String>,
+}
+
+async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profile>> {
+    let row = sqlx::query_as!(
+        Profile,
+        r#"
+        SELECT height_cm, sex
+        FROM profile
+        WHERE id = 1
+        "#
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch profile: {}", e)))?;
+
+    // Not-configured response: the single row simply carries null fields.
+    Ok(Json(row.unwrap_or(Profile {
+        height_cm: None,
+        sex: None,
+    })))
+}
+
+async fn update_profile(
+    State(state): State<crate::AppState>,
+    Json(payload): Json<UpdateProfile>,
+) -> Result<Json<Profile>> {
+    if let Some(height) = payload.height_cm
+        && height <= 0.0
+    {
+        return Err(AppError::Validation(
+            "height_cm must be greater than zero".to_string(),
+        ));
+    }
+
+    // Upsert: creates the single row on first PATCH, then COALESCE partial
+    // update (absent and null fields keep the current value — optional fields
+    // cannot be unset via PATCH, documented in api/AGENTS.md).
+    let profile = sqlx::query_as!(
+        Profile,
+        r#"
+        INSERT INTO profile (id, height_cm, sex)
+        VALUES (1, $1, $2)
+        ON CONFLICT(id) DO UPDATE SET
+            height_cm = COALESCE($3, height_cm),
+            sex = COALESCE($4, sex),
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING height_cm, sex
+        "#,
+        payload.height_cm,
+        payload.sex,
+        payload.height_cm,
+        payload.sex
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update profile: {}", e)))?;
+
+    Ok(Json(profile))
+}
+
+pub fn metrics_router() -> Router<crate::AppState> {
+    Router::new()
+        .route(
+            "/api/body_weight",
+            get(list_body_weight).post(create_body_weight),
+        )
+        .route("/api/profile", get(get_profile).patch(update_profile))
 }

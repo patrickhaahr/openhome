@@ -887,3 +887,416 @@ async fn test_workouts_require_auth() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+// ---------------------------------------------------------------------------
+// Progress (#8)
+// ---------------------------------------------------------------------------
+
+/// Fixture: a dedicated exercise logged on two dates.
+/// Day A (2026-09-01): reps 10 @ 60 kg (rpe 7), reps 8 @ 65 kg (rpe 8).
+///   best_reps 10, best_weight 65, volume 600+520=1120, best_rpe 8,
+///   epley = max(60*1.333, 65*1.2667) = 82.333.
+/// Day B (2026-09-03): reps 12 bodyweight (rpe 9), timed hold 30 s @ 2.5 kg.
+///   best_reps 12, best_weight 2.5, volume 0+75=75, best_rpe 9, epley null
+///   (no set with both reps and weight).
+async fn create_progress_fixture(app: &Router) -> i64 {
+    let (status, exercise) = send_request_with_method(
+        (*app).clone(),
+        "/api/exercises",
+        Method::POST,
+        Some(json!({ "name": "Progress Bench", "category": "gym" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "exercise create: {}", exercise);
+    let id = exercise["id"].as_i64().unwrap();
+
+    let workouts = [
+        (
+            "2026-09-01",
+            json!([
+                { "set_number": 1, "reps": 10, "weight_kg": 60.0, "rpe": 7 },
+                { "set_number": 2, "reps": 8, "weight_kg": 65.0, "rpe": 8 }
+            ]),
+        ),
+        (
+            "2026-09-03",
+            json!([
+                { "set_number": 1, "reps": 12, "weight_kg": null, "rpe": 9 },
+                { "set_number": 1, "duration_seconds": 30, "weight_kg": 2.5 }
+            ]),
+        ),
+    ];
+    for (date, sets) in workouts {
+        let body = json!({
+            "date": date,
+            "exercises": [
+                { "exercise_id": id, "order_index": 0, "sets": sets }
+            ]
+        });
+        let (status, resp) = send_request_with_method(
+            (*app).clone(),
+            "/api/workouts",
+            Method::POST,
+            Some(body),
+            Some("test-api-key"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "workout {}: {}", date, resp);
+    }
+    id
+}
+
+fn approx(actual: serde_json::Value, expected: f64, what: &str) {
+    let value = actual
+        .as_f64()
+        .unwrap_or_else(|| panic!("{} not a number", what));
+    assert!(
+        (value - expected).abs() < 0.01,
+        "{}: expected ~{}, got {}",
+        what,
+        expected,
+        value
+    );
+}
+
+#[tokio::test]
+async fn test_progress_returns_per_date_aggregates_with_epley() {
+    let app = common::test_app().await;
+    let id = create_progress_fixture(&app).await;
+
+    let (status, body) = send_request_with_method(
+        app,
+        &format!("/api/exercises/{}/progress", id),
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["exercise"]["id"], id);
+    assert_eq!(body["exercise"]["name"], "Progress Bench");
+
+    let data = body["data"].as_array().unwrap();
+    assert_eq!(data.len(), 2);
+    // chronological order
+    assert_eq!(data[0]["date"], "2026-09-01");
+    assert_eq!(data[1]["date"], "2026-09-03");
+
+    // Day A: observed aggregates + Epley from the best set
+    assert_eq!(data[0]["best_reps"], 10);
+    approx(data[0]["best_weight_kg"].clone(), 65.0, "day A best_weight");
+    approx(data[0]["total_volume_kg"].clone(), 1120.0, "day A volume");
+    assert_eq!(data[0]["best_rpe"], 8);
+    approx(
+        data[0]["estimated_1rm_kg"].clone(),
+        65.0 * (1.0 + 8.0 / 30.0),
+        "day A epley",
+    );
+
+    // Day B: bodyweight set contributes zero volume; no set has reps AND weight
+    assert_eq!(data[1]["best_reps"], 12);
+    approx(data[1]["best_weight_kg"].clone(), 2.5, "day B best_weight");
+    approx(data[1]["total_volume_kg"].clone(), 75.0, "day B volume");
+    assert_eq!(data[1]["best_rpe"], 9);
+    assert_eq!(
+        data[1]["estimated_1rm_kg"],
+        serde_json::Value::Null,
+        "no set with both reps and weight -> no 1RM estimate"
+    );
+}
+
+#[tokio::test]
+async fn test_progress_from_to_filters_bound_series() {
+    let app = common::test_app().await;
+    let id = create_progress_fixture(&app).await;
+
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        &format!(
+            "/api/exercises/{}/progress?from=2026-09-02&to=2026-09-02",
+            id
+        ),
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let data = body["data"].as_array().unwrap();
+    assert!(data.is_empty(), "from/to must exclude out-of-range dates");
+
+    let (status, body) = send_request_with_method(
+        app,
+        &format!("/api/exercises/{}/progress?from=2026-09-02", id),
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let data = body["data"].as_array().unwrap();
+    assert_eq!(data.len(), 1);
+    assert_eq!(data[0]["date"], "2026-09-03");
+}
+
+#[tokio::test]
+async fn test_progress_empty_for_never_performed_exercise() {
+    let app = common::test_app().await;
+    let id = create_progress_fixture(&app).await;
+
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        "/api/exercises",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    let other = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "Pull-up")
+        .unwrap();
+    let other_id = other["id"].as_i64().unwrap();
+
+    let (status, response) = send_request_with_method(
+        app,
+        &format!("/api/exercises/{}/progress", other_id),
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response["data"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_progress_404_for_unknown_exercise() {
+    let app = common::test_app().await;
+
+    let (status, _) = send_request_with_method(
+        app,
+        "/api/exercises/99999/progress",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+// ---------------------------------------------------------------------------
+// Body weight (#8)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_body_weight_record_and_list_sorted_by_date() {
+    let app = common::test_app().await;
+
+    for (date, weight) in [
+        ("2026-09-05", 75.5),
+        ("2026-09-01", 76.0),
+        ("2026-09-03", 75.2),
+    ] {
+        let (status, body) = send_request_with_method(
+            app.clone(),
+            "/api/body_weight",
+            Method::POST,
+            Some(json!({ "date": date, "weight_kg": weight })),
+            Some("test-api-key"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "post {}: {}", date, body);
+        assert_eq!(body["date"], date);
+        assert_eq!(body["weight_kg"], weight);
+        assert!(body["id"].is_number());
+    }
+
+    let (status, list) = send_request_with_method(
+        app.clone(),
+        "/api/body_weight",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = list.as_array().unwrap();
+    assert_eq!(entries.len(), 3);
+    // chronological: one row per date, sorted by date
+    assert_eq!(entries[0]["date"], "2026-09-01");
+    assert_eq!(entries[1]["date"], "2026-09-03");
+    assert_eq!(entries[2]["date"], "2026-09-05");
+    assert_eq!(entries[0]["weight_kg"], 76.0);
+
+    let (status, filtered) = send_request_with_method(
+        app,
+        "/api/body_weight?from=2026-09-02&to=2026-09-04",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let entries = filtered.as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["date"], "2026-09-03");
+}
+
+#[tokio::test]
+async fn test_body_weight_ships_empty_and_conflicts_on_duplicate_date() {
+    let app = common::test_app().await;
+
+    let (status, list) = send_request_with_method(
+        app.clone(),
+        "/api/body_weight",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(list.as_array().unwrap().is_empty());
+
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        "/api/body_weight",
+        Method::POST,
+        Some(json!({ "date": "2026-09-05", "weight_kg": 75.5 })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, response) = send_request_with_method(
+        app,
+        "/api/body_weight",
+        Method::POST,
+        Some(json!({ "date": "2026-09-05", "weight_kg": 74.0 })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(response["error"].as_str().unwrap().contains("2026-09-05"));
+}
+
+#[tokio::test]
+async fn test_body_weight_rejects_bad_input() {
+    let app = common::test_app().await;
+
+    let (status, response) = send_request_with_method(
+        app.clone(),
+        "/api/body_weight",
+        Method::POST,
+        Some(json!({ "date": "09/05/2026", "weight_kg": 75.0 })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(response["error"].as_str().unwrap().contains("YYYY-MM-DD"));
+
+    let (status, _) = send_request_with_method(
+        app,
+        "/api/body_weight",
+        Method::POST,
+        Some(json!({ "date": "2026-09-05" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn test_body_weight_requires_auth() {
+    let app = common::test_app().await;
+
+    let (status, _) =
+        send_request_with_method(app, "/api/body_weight", Method::GET, None, None).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// ---------------------------------------------------------------------------
+// Profile (#8)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_profile_get_not_configured_then_patch_sets_fields() {
+    let app = common::test_app().await;
+
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["height_cm"], serde_json::Value::Null);
+    assert_eq!(body["sex"], serde_json::Value::Null);
+
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "height_cm": 180.5, "sex": "male" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["height_cm"], 180.5);
+    assert_eq!(body["sex"], "male");
+
+    let (status, fetched) =
+        send_request_with_method(app, "/api/profile", Method::GET, None, Some("test-api-key"))
+            .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched["height_cm"], 180.5);
+    assert_eq!(fetched["sex"], "male");
+}
+
+#[tokio::test]
+async fn test_profile_patch_coalesce_keeps_absent_fields() {
+    let app = common::test_app().await;
+
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "height_cm": 180.5, "sex": "male" })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = send_request_with_method(
+        app,
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "height_cm": 181.0 })),
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["height_cm"], 181.0);
+    assert_eq!(body["sex"], "male", "absent field must keep current value");
+}
+
+#[tokio::test]
+async fn test_profile_requires_auth() {
+    let app = common::test_app().await;
+
+    let (status, _) = send_request_with_method(app, "/api/profile", Method::GET, None, None).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}

@@ -138,6 +138,52 @@ _Avoid_: Channel, subscription URL list
 The compact view of Feed items served by the Axum API that the Mobile Client paginates through newest-first.
 _Avoid_: Article reader, full-content feed
 
+### Fitness
+
+**Exercise**:
+A named movement in the exercise library, with muscle group and equipment metadata, referenced by logged workout entries.
+_Avoid_: Movement item, activity
+
+**Exercise Category**:
+A library tag on an Exercise (`calisthenics` or `gym`) that organizes the exercise library; it is descriptive metadata, not a rule about where the exercise may appear.
+_Avoid_: Exercise type, workout type
+
+**Workout**:
+A logged training session on a specific date, containing ordered exercise entries with sets.
+_Avoid_: Training plan, session template
+
+**Mixed-Category Session**:
+A Workout that contains entries from both Exercise Categories (calisthenics and gym); nothing restricts a Workout to a single category.
+_Avoid_: Single-category workout, category-specific session
+
+**Set**:
+One performance of an Exercise within a Workout entry, with reps, optional added weight, or a hold duration.
+_Avoid_: Rep block, attempt
+
+**Added Weight**:
+The external weight in kg on a Set, on top of bodyweight: a bodyweight movement stores `weight_kg` null, not zero; a 40 kg weighted pull-up stores 40.
+_Avoid_: Total working weight, bodyweight-inclusive load
+
+**Timed Hold**:
+A duration-only Set that stores `duration_seconds` with `reps` null (e.g. Planche Hold); a Set must have reps or a duration, never neither.
+_Avoid_: Rep-based hold, timed rep set
+
+**Volume**:
+A Set's contribution computed as `reps * weight_kg`, or `duration_seconds * weight_kg` when both are present; Sets without Added Weight contribute zero.
+_Avoid_: Tonnage including bodyweight, rep count
+
+**Progress Series**:
+The per-date aggregate of one Exercise's logged Sets served by the Axum API: best reps, best added weight, total Volume, best RPE, and the Epley estimated 1RM from the best set of the day; observed data only, no interpolation.
+_Avoid_: Interpolated trend, forecast chart
+
+**Body Weight**:
+A user-recorded day weight in kg, one row per date, kept separately from workouts.
+_Avoid_: Workout body_weight, weight log entry
+
+**Profile**:
+The single user configuration row holding height and sex used to interpret fitness data.
+_Avoid_: User account, settings record
+
 ## Relationships
 
 - A **Mobile Client** calls the **Axum API** for every user-visible capability.
@@ -168,6 +214,13 @@ _Avoid_: Article reader, full-content feed
 - A **Protection Pause** leaves AdGuard Protection off only until its duration ends.
 - A **Container** is inspected (logs) and lifecycle-managed (start, stop, restart) through the Axum API from the **Docker Tab**.
 - Each **Feed** contributes items to the **Compact Timeline**.
+- A **Workout** references Exercises from the exercise library and records their Sets.
+- A **Mixed-Category Session** may combine calisthenics and gym entries in one Workout.
+- An **Added Weight** of null means bodyweight; Volume treats it as zero.
+- A **Timed Hold** replaces reps with a duration.
+- A **Progress Series** aggregates logged Sets per date and never invents data between dates.
+- **Body Weight** is recorded per date by the client, not derived from workouts.
+- The **Profile** is configured by the client and consulted to interpret fitness data.
 
 ## Example dialogue
 
