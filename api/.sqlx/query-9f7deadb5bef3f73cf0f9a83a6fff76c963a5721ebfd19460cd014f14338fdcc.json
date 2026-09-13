@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id AS \"id!\", set_number, reps, weight_kg, duration_seconds, rpe, notes\n            FROM sets\n            WHERE workout_exercise_id = $1\n            ORDER BY set_number, id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "set_number",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "reps",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "weight_kg",
+        "ordinal": 3,
+        "type_info": "Float"
+      },
+      {
+        "name": "duration_seconds",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "rpe",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "notes",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "9f7deadb5bef3f73cf0f9a83a6fff76c963a5721ebfd19460cd014f14338fdcc"
+}

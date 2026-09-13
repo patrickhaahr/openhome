@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO sets (workout_exercise_id, set_number, reps, weight_kg, duration_seconds, rpe, notes)\n                VALUES ($1, $2, $3, $4, $5, $6, $7)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "316a76063f3c8ae36f09ddccd8003156bd27deeb8cc52de6afc5886091c4bcdc"
+}

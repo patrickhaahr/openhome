@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT we.id                        AS \"entry_id!\",\n               we.order_index,\n               we.notes                     AS entry_notes,\n               e.id                         AS \"exercise_id_num!\",\n               e.name                       AS \"exercise_name!\",\n               e.category                   AS \"exercise_category!\"\n        FROM workout_exercises we\n        JOIN exercises e ON e.id = we.exercise_id\n        WHERE we.workout_id = $1\n        ORDER BY we.order_index, we.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "entry_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "order_index",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "entry_notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "exercise_id_num!",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "exercise_name!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "exercise_category!",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "9cd3c60e9bb056e0e158d7b62e093c9e38bcf3b137c09e9530bdb06f61e6c416"
+}

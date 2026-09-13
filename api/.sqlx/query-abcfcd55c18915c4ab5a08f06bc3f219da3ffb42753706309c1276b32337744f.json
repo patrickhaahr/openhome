@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT CAST(id AS INTEGER)  AS id,\n               CAST(date AS TEXT)   AS date,\n               name\n        FROM workouts\n        WHERE ($1 IS NULL OR date >= $1)\n          AND ($2 IS NULL OR date <= $2)\n        ORDER BY date DESC, id DESC\n        LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "date",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "abcfcd55c18915c4ab5a08f06bc3f219da3ffb42753706309c1276b32337744f"
+}

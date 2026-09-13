@@ -19,7 +19,14 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 - Health: `/api/health`
 - Feeds: `/api/feeds`, `/api/feeds/{id}`, `/api/feeds/refresh`
 - Timeline: `/api/timeline`, `/api/items/{id}/read`
-- Exercises (fitness): `/api/exercises`, `/api/exercises/{id}` — list supports `?category=` and `?muscle_group=` filters; POST with a duplicate name returns 409; PATCH treats absent and `null` fields identically (keeps the current value — optional fields cannot be unset via PATCH)
+- Exercises (fitness): `/api/exercises`, `/api/exercises/{id}` — list supports `?category=` and `?muscle_group=` filters; POST with a duplicate name returns 409; PATCH treats absent and `null` fields identically (keeps the current value — optional fields cannot be unset via PATCH); DELETE returns 409 when the exercise is referenced by logged workouts
+- Workouts (fitness): `/api/workouts` (GET/POST), `/api/workouts/{id}` (GET/PATCH/DELETE) — POST/PATCH create or replace the nested exercise entries and sets in one transaction (a failure rolls back the whole write); history list supports `?from=`, `?to=`, `?limit=` and is newest-first; PATCH treats absent and `null` workout fields identically (keeps the current value — optional fields cannot be unset via PATCH); DELETE cascades to entries and sets
+
+## Workout logging conventions
+
+- `weight_kg` means *added* weight: a bodyweight pull-up stores `weight_kg` null, a 40 kg weighted pull-up stores 40.
+- A timed hold (Planche Hold, Handstand) stores `duration_seconds` with `reps` null; a set must have `reps` or `duration_seconds`, never neither.
+- RPE is an integer 1–10 (null allowed).
 
 ## Project Structure
 
