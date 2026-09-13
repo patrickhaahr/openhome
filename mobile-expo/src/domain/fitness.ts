@@ -22,6 +22,20 @@ export type ExerciseInput = {
   readonly equipment: string | null;
 };
 
+/**
+ * An exercise edit as entered in the edit form, ready for the Axum API.
+ * Absent optional fields (undefined) are dropped from the PATCH body by
+ * JSON.stringify in the API adapter so the API keeps the current values;
+ * explicit null clears the field. Name and category are NOT NULL server-side
+ * and always sent.
+ */
+export type ExerciseUpdate = {
+  readonly name: string;
+  readonly category: ExerciseCategory;
+  readonly muscleGroup?: string | null;
+  readonly equipment?: string | null;
+};
+
 export const EXERCISE_READ_ERROR = "Couldn't read the exercise from the Axum API.";
 export const EXERCISE_LIST_READ_ERROR = "Couldn't read the exercise library from the Axum API.";
 export const WORKOUT_READ_ERROR = "Couldn't read the workout from the Axum API.";
@@ -87,6 +101,33 @@ export function parseExerciseInput(
     category: category as ExerciseCategory,
     muscleGroup: trimmedOrNull(muscleGroup),
     equipment: trimmedOrNull(equipment),
+  });
+}
+
+/**
+ * Validate an edit-exercise form on the client before any request is sent. An
+ * undefined optional field was left untouched and stays absent so the API's
+ * partial update keeps the current value; a blank touched field maps to
+ * explicit null so the API clears it.
+ */
+export function parseExerciseUpdate(
+  name: string,
+  category: string,
+  muscleGroup: string | undefined,
+  equipment: string | undefined,
+): Result<ExerciseUpdate> {
+  const trimmedName = name.trim();
+  if (trimmedName.length === 0) {
+    return failure("Enter a name for the exercise.");
+  }
+  if (!exerciseCategories.includes(category as ExerciseCategory)) {
+    return failure("Choose calisthenics or gym as the category.");
+  }
+  return success({
+    name: trimmedName,
+    category: category as ExerciseCategory,
+    muscleGroup: muscleGroup === undefined ? undefined : trimmedOrNull(muscleGroup),
+    equipment: equipment === undefined ? undefined : trimmedOrNull(equipment),
   });
 }
 

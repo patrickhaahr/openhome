@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 
-import type { Exercise, ExerciseInput } from "../domain/fitness";
+import type { Exercise, ExerciseInput, ExerciseUpdate } from "../domain/fitness";
+import type { Result } from "../domain/result";
 import type { FitnessApi } from "../infrastructure/open-home-api";
 
 /** The user-visible state of the Fitness Tab's exercise library. */
@@ -12,7 +13,7 @@ export type FitnessState =
       readonly exercises: readonly Exercise[];
       /** A list refresh is in flight; the previous list stays visible. */
       readonly refreshing: boolean;
-      /** A create is in flight. */
+      /** A create, update, or delete is in flight. */
       readonly busy: boolean;
       readonly error: string | null;
     };
@@ -22,21 +23,27 @@ export type FitnessActions = {
   readonly refresh: () => void;
   /** The input is validated on the client by the caller before this is invoked. */
   readonly create: (input: ExerciseInput) => void;
+  /** The input is validated on the client by the caller before this is invoked. */
+  readonly update: (id: number, input: ExerciseUpdate) => void;
+  readonly remove: (id: number) => void;
 };
 
 export type FitnessEvent =
   | { readonly type: "loadStarted" }
   | { readonly type: "loadSucceeded"; readonly exercises: readonly Exercise[] }
   | { readonly type: "loadFailed"; readonly message: string }
-  | { readonly type: "createStarted" }
-  | { readonly type: "createSucceeded" }
-  | { readonly type: "createFailed"; readonly message: string }
+  | { readonly type: "mutateStarted" }
+  | { readonly type: "mutateSucceeded" }
+  | { readonly type: "mutateFailed"; readonly message: string }
   /** A cancelled controller's in-flight mutation resolved; its flag must clear. */
   | { readonly type: "superseded"; readonly of: "mutation" };
 
 /** Drives the exercise library against the Axum API adapter, emitting events. */
 export function createFitnessController(deps: {
-  readonly api: Pick<FitnessApi, "listExercises" | "createExercise">;
+  readonly api: Pick<
+    FitnessApi,
+    "listExercises" | "createExercise" | "updateExercise" | "deleteExercise"
+  >;
   readonly emit: (event: FitnessEvent) => void;
 }) {
   let loadToken = 0;
@@ -57,7 +64,8 @@ export function createFitnessController(deps: {
     );
   }
 
-  async function create(input: ExerciseInput): Promise<void> {
+  /** Run one library mutation, reloading the list afterwards when it succeeded. */
+  async function mutate(run: () => Promise<Result<unknown>>): Promise<void> {
     if (busy) {
       return;
     }
@@ -65,8 +73,8 @@ export function createFitnessController(deps: {
     const current = ++mutateToken;
     // A load in flight since before this mutation carries a stale snapshot; drop it.
     loadToken += 1;
-    deps.emit({ type: "createStarted" });
-    const result = await deps.api.createExercise(input);
+    deps.emit({ type: "mutateStarted" });
+    const result = await run();
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded", of: "mutation" });
@@ -74,10 +82,10 @@ export function createFitnessController(deps: {
     }
     busy = false;
     if (!result.ok) {
-      deps.emit({ type: "createFailed", message: result.error });
+      deps.emit({ type: "mutateFailed", message: result.error });
       return;
     }
-    deps.emit({ type: "createSucceeded" });
+    deps.emit({ type: "mutateSucceeded" });
     void load();
   }
 
@@ -86,7 +94,13 @@ export function createFitnessController(deps: {
       void load();
     },
     create(input: ExerciseInput): void {
-      void create(input);
+      void mutate(() => deps.api.createExercise(input));
+    },
+    update(id: number, input: ExerciseUpdate): void {
+      void mutate(() => deps.api.updateExercise(id, input));
+    },
+    remove(id: number): void {
+      void mutate(() => deps.api.deleteExercise(id));
     },
     cancel(): void {
       loadToken += 1;
@@ -121,6 +135,8 @@ export function useFitness(api: FitnessApi | null): readonly [FitnessState, Fitn
       () => ({
         refresh: () => controller.current?.refresh(),
         create: (input) => controller.current?.create(input),
+        update: (id, input) => controller.current?.update(id, input),
+        remove: (id) => controller.current?.remove(id),
       }),
       [],
     ),
@@ -144,11 +160,11 @@ export function reduce(state: FitnessState, event: FitnessEvent): FitnessState {
       return state.tag === "ready"
         ? { ...state, refreshing: false, error: event.message }
         : { tag: "error", message: event.message };
-    case "createStarted":
+    case "mutateStarted":
       return state.tag === "ready" ? { ...state, busy: true, error: null } : state;
-    case "createSucceeded":
+    case "mutateSucceeded":
       return state.tag === "ready" ? { ...state, busy: false, error: null } : state;
-    case "createFailed":
+    case "mutateFailed":
       return state.tag === "ready" ? { ...state, busy: false, error: event.message } : state;
     case "superseded":
       return state.tag === "ready" ? { ...state, busy: false } : state;

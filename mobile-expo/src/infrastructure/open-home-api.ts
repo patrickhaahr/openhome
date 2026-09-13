@@ -22,6 +22,7 @@ import {
   type Exercise,
   type ExerciseInput,
   type ExerciseProgress,
+  type ExerciseUpdate,
   type Profile,
   type ProfileInput,
   type WorkoutDetail,
@@ -79,6 +80,8 @@ export type RssApi = {
 export type FitnessApi = {
   readonly listExercises: () => Promise<Result<readonly Exercise[]>>;
   readonly createExercise: (input: ExerciseInput) => Promise<Result<Exercise>>;
+  readonly updateExercise: (id: number, input: ExerciseUpdate) => Promise<Result<Exercise>>;
+  readonly deleteExercise: (id: number) => Promise<Result<void>>;
   readonly listWorkouts: () => Promise<Result<readonly WorkoutSummary[]>>;
   readonly getWorkout: (id: number) => Promise<Result<WorkoutDetail>>;
   readonly createWorkout: (input: WorkoutInput) => Promise<Result<WorkoutDetail>>;
@@ -374,6 +377,44 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         } catch {
           return failure(EXERCISE_READ_ERROR);
         }
+      },
+
+      updateExercise: async (id, input): Promise<Result<Exercise>> => {
+        const response = await request(`/api/exercises/${id}`, {
+          method: "PATCH",
+          // Untouched optional fields stay undefined so JSON.stringify drops
+          // them and the API keeps the current values; explicit null clears.
+          body: {
+            name: input.name,
+            category: input.category,
+            muscle_group: input.muscleGroup,
+            equipment: input.equipment,
+          },
+          defaultError: "Couldn't update the exercise.",
+          statusErrors: {
+            404: `Exercise ${id} not found.`,
+          },
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseExercise(JSON.parse(response.value.body));
+        } catch {
+          return failure(EXERCISE_READ_ERROR);
+        }
+      },
+
+      deleteExercise: async (id): Promise<Result<void>> => {
+        const response = await request(`/api/exercises/${id}`, {
+          method: "DELETE",
+          defaultError: "Couldn't delete the exercise.",
+          statusErrors: {
+            404: `Exercise ${id} not found.`,
+            409: "That exercise is used in logged workouts and can't be deleted.",
+          },
+        });
+        return response.ok ? success(undefined) : response;
       },
 
       listWorkouts: async (): Promise<Result<readonly WorkoutSummary[]>> => {

@@ -1043,3 +1043,113 @@ describe("fitness progress, body weight, and profile adapter", () => {
     );
   });
 });
+
+describe("exercise update and delete adapter", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const configuration = { baseUrl: "http://openhome.test", apiKey: "secret" };
+  const exercisePayload = {
+    id: 1,
+    name: "Incline Press",
+    category: "gym",
+    muscle_group: null,
+    equipment: "Barbell",
+  };
+
+  function stubFetch(handler: (url: string, init?: RequestInit) => Promise<Response>): void {
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) =>
+      handler(String(url), init),
+    );
+  }
+
+  it("patches an exercise, dropping untouched fields and keeping explicit nulls", async () => {
+    const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method, body: init?.body });
+      return Promise.resolve(new Response(JSON.stringify(exercisePayload), { status: 200 }));
+    });
+
+    expect(
+      await createOpenHomeApi(configuration).fitness.updateExercise(1, {
+        name: "Incline Press",
+        category: "gym",
+        muscleGroup: "Chest",
+        equipment: null,
+      }),
+    ).toEqual({
+      ok: true,
+      value: { id: 1, name: "Incline Press", category: "gym", muscleGroup: null, equipment: "Barbell" },
+    });
+    expect(requests[0]).toEqual({
+      url: "http://openhome.test/api/exercises/1",
+      method: "PATCH",
+      body: JSON.stringify({
+        name: "Incline Press",
+        category: "gym",
+        muscle_group: "Chest",
+        equipment: null,
+      }),
+    });
+
+    await createOpenHomeApi(configuration).fitness.updateExercise(1, {
+      name: "Incline Press",
+      category: "gym",
+    });
+    expect(requests[1]?.body).toBe(JSON.stringify({ name: "Incline Press", category: "gym" }));
+
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Exercise with id 1 not found" }), { status: 404 }),
+    );
+    expect(
+      await createOpenHomeApi(configuration).fitness.updateExercise(1, {
+        name: "Incline Press",
+        category: "gym",
+      }),
+    ).toEqual(failure("Exercise 1 not found."));
+  });
+
+  it("surfaces a duplicate-name 409 from the response body", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Exercise 'Incline Press' already exists" }), {
+          status: 409,
+        }),
+    );
+    expect(
+      await createOpenHomeApi(configuration).fitness.updateExercise(1, {
+        name: "Incline Press",
+        category: "gym",
+      }),
+    ).toEqual(failure("Exercise 'Incline Press' already exists"));
+  });
+
+  it("deletes an exercise and maps not-found and in-use conflicts", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    expect(await createOpenHomeApi(configuration).fitness.deleteExercise(1)).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(requests).toEqual([{ url: "http://openhome.test/api/exercises/1", method: "DELETE" }]);
+
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Exercise with id 1 not found" }), { status: 404 }),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.deleteExercise(1)).toEqual(
+      failure("Exercise 1 not found."),
+    );
+
+    stubFetch(async () => new Response(null, { status: 409 }));
+    expect(await createOpenHomeApi(configuration).fitness.deleteExercise(1)).toEqual(
+      failure("That exercise is used in logged workouts and can't be deleted."),
+    );
+  });
+});

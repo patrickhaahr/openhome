@@ -11,6 +11,7 @@ import {
   parseExercise,
   parseExerciseInput,
   parseExerciseList,
+  parseExerciseUpdate,
   parseExerciseProgress,
   parseProfile,
   parseProfileInput,
@@ -119,6 +120,39 @@ describe("parseExerciseList", () => {
     const error = "Couldn't read the exercise library from the Axum API.";
     expect(parseExerciseList({ exercises: [] })).toEqual(failure(error));
     expect(parseExerciseList([{ id: 1, name: "Push-up" }])).toEqual(failure(error));
+  });
+});
+
+describe("parseExerciseUpdate", () => {
+  it("trims the name and optional fields on a full update", () => {
+    expect(parseExerciseUpdate("  Pull-up  ", "calisthenics", " Back ", " Bar ")).toEqual({
+      ok: true,
+      value: { name: "Pull-up", category: "calisthenics", muscleGroup: "Back", equipment: "Bar" },
+    });
+  });
+
+  it("keeps untouched optional fields absent and maps cleared ones to null", () => {
+    expect(parseExerciseUpdate("Pull-up", "gym", undefined, undefined)).toEqual({
+      ok: true,
+      value: { name: "Pull-up", category: "gym" },
+    });
+    expect(parseExerciseUpdate("Pull-up", "gym", "", "   ")).toEqual({
+      ok: true,
+      value: { name: "Pull-up", category: "gym", muscleGroup: null, equipment: null },
+    });
+    expect(parseExerciseUpdate("Pull-up", "gym", " Back ", undefined)).toEqual({
+      ok: true,
+      value: { name: "Pull-up", category: "gym", muscleGroup: "Back" },
+    });
+  });
+
+  it("rejects a blank name or an unknown category before any request is sent", () => {
+    expect(parseExerciseUpdate("   ", "gym", undefined, undefined)).toEqual(
+      failure("Enter a name for the exercise."),
+    );
+    expect(parseExerciseUpdate("Bench Press", "cardio", undefined, undefined)).toEqual(
+      failure("Choose calisthenics or gym as the category."),
+    );
   });
 });
 

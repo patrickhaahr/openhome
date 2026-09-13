@@ -20,6 +20,7 @@ import {
   filterExercises,
   parseBodyWeightInput,
   parseExerciseInput,
+  parseExerciseUpdate,
   parseProfileInput,
   parseWorkoutInput,
   type Exercise,
@@ -40,11 +41,17 @@ type FitnessView = "library" | "workouts" | "progress" | "body";
 type FormState = {
   readonly name: string;
   readonly category: ExerciseCategory;
-  readonly muscleGroup: string;
-  readonly equipment: string;
+  /** Untouched optional fields stay undefined so the edit PATCH keeps their current values. */
+  readonly muscleGroup?: string;
+  readonly equipment?: string;
 };
 
-const emptyForm: FormState = { name: "", category: "calisthenics", muscleGroup: "", equipment: "" };
+const emptyForm: FormState = { name: "", category: "calisthenics" };
+
+/** Prefill the shared form from an exercise; untouched optionals stay absent. */
+function formFromExercise(exercise: Exercise): FormState {
+  return { name: exercise.name, category: exercise.category as ExerciseCategory };
+}
 
 const categoryFilters: ReadonlyArray<{ readonly key: LibraryCategory; readonly label: string }> = [
   { key: "all", label: "All" },
@@ -173,18 +180,35 @@ function LibraryView({
   const [muscleGroup, setMuscleGroup] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  // The exercise the shared form edits; null means the form creates.
+  const [editing, setEditing] = useState<Exercise | null>(null);
+  // The row whose delete button is armed; a second press confirms.
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const wasBusy = useRef(false);
+  const pending = useRef<
+    { readonly kind: "create" } | { readonly kind: "update" } | { readonly kind: "delete"; readonly id: number } | null
+  >(null);
 
-  // Clear the create form once its submission has succeeded; a failed create
-  // keeps the fields so only the failing part has to change.
+  // Resolve the form once its own submission has succeeded; a failed
+  // submission keeps the fields so only the failing part has to change.
   useEffect(() => {
     if (state.tag !== "ready") {
       return;
     }
-    if (wasBusy.current && !state.busy && state.error === null) {
-      setForm(emptyForm);
+    if (wasBusy.current && !state.busy && state.error === null && pending.current !== null) {
+      const submitted = pending.current;
+      pending.current = null;
       setFormError(null);
+      if (submitted.kind === "create") {
+        setForm(emptyForm);
+      } else if (submitted.kind === "update") {
+        setForm(emptyForm);
+        setEditing(null);
+      } else {
+        setConfirmingId(null);
+        setEditing((current) => (current?.id === submitted.id ? null : current));
+      }
     }
     wasBusy.current = state.busy;
   }, [state]);
@@ -193,13 +217,44 @@ function LibraryView({
   const visible = filterExercises(exercises, query, category, muscleGroup);
 
   function submit(): void {
-    const parsed = parseExerciseInput(form.name, form.category, form.muscleGroup, form.equipment);
+    if (editing !== null) {
+      const parsed = parseExerciseUpdate(form.name, form.category, form.muscleGroup, form.equipment);
+      if (!parsed.ok) {
+        setFormError(parsed.error);
+        return;
+      }
+      setFormError(null);
+      pending.current = { kind: "update" };
+      actions.update(editing.id, parsed.value);
+      return;
+    }
+    const parsed = parseExerciseInput(
+      form.name,
+      form.category,
+      form.muscleGroup ?? "",
+      form.equipment ?? "",
+    );
     if (!parsed.ok) {
       setFormError(parsed.error);
       return;
     }
     setFormError(null);
+    pending.current = { kind: "create" };
     actions.create(parsed.value);
+  }
+
+  function openEdit(target: Exercise): void {
+    setEditing(target);
+    setForm(formFromExercise(target));
+    setFormError(null);
+    setFormOpen(false);
+    setConfirmingId(null);
+  }
+
+  function cancelEdit(): void {
+    setEditing(null);
+    setForm(emptyForm);
+    setFormError(null);
   }
 
   return (
@@ -212,17 +267,21 @@ function LibraryView({
         />
 
         <View style={[shared.section, styles.card]}>
-          <Pressable
-            accessibilityLabel="Add an exercise"
-            accessibilityRole="button"
-            accessibilityState={{ expanded: formOpen }}
-            onPress={() => setFormOpen((value) => !value)}
-            style={({ pressed }) => [styles.formHeader, pressed && shared.iconPressed]}
-          >
-            <Text style={shared.sectionTitle}>ADD EXERCISE</Text>
-            <Text style={styles.formToggle}>{formOpen ? "Hide" : "Show"}</Text>
-          </Pressable>
-          {formOpen ? (
+          {editing === null ? (
+            <Pressable
+              accessibilityLabel="Add an exercise"
+              accessibilityRole="button"
+              accessibilityState={{ expanded: formOpen }}
+              onPress={() => setFormOpen((value) => !value)}
+              style={({ pressed }) => [styles.formHeader, pressed && shared.iconPressed]}
+            >
+              <Text style={shared.sectionTitle}>ADD EXERCISE</Text>
+              <Text style={styles.formToggle}>{formOpen ? "Hide" : "Show"}</Text>
+            </Pressable>
+          ) : (
+            <Text style={shared.sectionTitle}>EDIT EXERCISE</Text>
+          )}
+          {editing !== null || formOpen ? (
             <>
               <TextInput
                 accessibilityLabel="Exercise name"
@@ -264,7 +323,7 @@ function LibraryView({
                 placeholder="Muscle group (optional)"
                 placeholderTextColor={colors.muted}
                 style={styles.input}
-                value={form.muscleGroup}
+                value={form.muscleGroup ?? ""}
               />
               <TextInput
                 accessibilityLabel="Equipment"
@@ -274,15 +333,31 @@ function LibraryView({
                 placeholder="Equipment (optional)"
                 placeholderTextColor={colors.muted}
                 style={styles.input}
-                value={form.equipment}
+                value={form.equipment ?? ""}
               />
               <View style={shared.row}>
-                <ActionButton
-                  label="Add exercise"
-                  sending={state.tag === "ready" && state.busy}
-                  disabled={state.tag !== "ready" || state.busy}
-                  onPress={submit}
-                />
+                {editing === null ? (
+                  <ActionButton
+                    label="Add exercise"
+                    sending={state.tag === "ready" && state.busy}
+                    disabled={state.tag !== "ready" || state.busy}
+                    onPress={submit}
+                  />
+                ) : (
+                  <>
+                    <ActionButton
+                      label="Save changes"
+                      sending={state.tag === "ready" && state.busy}
+                      disabled={state.tag !== "ready" || state.busy}
+                      onPress={submit}
+                    />
+                    <SecondaryAction
+                      label="Cancel"
+                      disabled={state.tag !== "ready" || state.busy}
+                      onPress={cancelEdit}
+                    />
+                  </>
+                )}
               </View>
               {formError !== null ? (
                 <Text accessibilityRole="alert" style={shared.error}>
@@ -367,9 +442,25 @@ function LibraryView({
           </View>
         ) : null}
         {state.tag === "ready"
-          ? visible.map((exercise) => <ExerciseRow key={exercise.id} exercise={exercise} />)
+          ? visible.map((exercise) => (
+              <ExerciseRow
+                key={exercise.id}
+                exercise={exercise}
+                busy={state.busy}
+                confirming={confirmingId === exercise.id}
+                onEdit={() => openEdit(exercise)}
+                onDelete={() => {
+                  if (confirmingId === exercise.id) {
+                    pending.current = { kind: "delete", id: exercise.id };
+                    actions.remove(exercise.id);
+                  } else {
+                    setConfirmingId(exercise.id);
+                  }
+                }}
+              />
+            ))
           : null}
-        {state.tag === "ready" && state.error !== null && !formOpen ? (
+        {state.tag === "ready" && state.error !== null && !formOpen && editing === null ? (
           <Text accessibilityRole="alert" style={shared.error}>
             {state.error}
           </Text>
@@ -379,7 +470,19 @@ function LibraryView({
   );
 }
 
-function ExerciseRow({ exercise }: { readonly exercise: Exercise }) {
+function ExerciseRow({
+  exercise,
+  busy,
+  confirming,
+  onEdit,
+  onDelete,
+}: {
+  readonly exercise: Exercise;
+  readonly busy: boolean;
+  readonly confirming: boolean;
+  readonly onEdit: () => void;
+  readonly onDelete: () => void;
+}) {
   return (
     <View style={shared.section}>
       <View style={shared.sectionHeader}>
@@ -392,6 +495,32 @@ function ExerciseRow({ exercise }: { readonly exercise: Exercise }) {
       {exercise.equipment !== null ? (
         <Text style={styles.detail}>Equipment: {exercise.equipment}</Text>
       ) : null}
+      <View style={styles.rowActions}>
+        <Pressable
+          accessibilityLabel={`Edit ${exercise.name}`}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={onEdit}
+          style={({ pressed }) => [styles.rowAction, pressed && shared.iconPressed]}
+        >
+          <Text style={styles.rowActionLabel}>Edit</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={
+            confirming ? `Confirm deleting ${exercise.name}` : `Delete ${exercise.name}`
+          }
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={onDelete}
+          style={({ pressed }) => [styles.rowAction, pressed && shared.iconPressed]}
+        >
+          <Text style={[styles.rowActionLabel, confirming && styles.rowActionConfirm]}>
+            {confirming ? "Confirm delete?" : "Delete"}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -428,6 +557,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   name: { color: colors.text, fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
+  rowAction: { justifyContent: "center", minHeight: 32 },
+  rowActionConfirm: { color: colors.danger },
+  rowActionLabel: { color: colors.signal, fontSize: 13, fontWeight: "700" },
+  rowActions: { flexDirection: "row", gap: 18 },
 });
 
 /** Today's date as the log form's YYYY-MM-DD default. */
