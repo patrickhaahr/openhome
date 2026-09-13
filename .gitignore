@@ -15,3 +15,17 @@ package-lock.json
 .envrc
 .pio
 .platformio/
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# Android: machine-specific SDK paths (overriden by ANDROID_HOME in devenv)
+local.properties
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml

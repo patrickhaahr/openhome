@@ -196,13 +196,9 @@ fn parse_uptime_seconds(status: Option<&str>) -> Option<i64> {
 
     let rest = &status[3..];
 
-    let (value, unit) = if let Some(space_idx) = rest.find(' ') {
-        let value: i64 = rest[..space_idx].parse().ok()?;
-        let unit = &rest[space_idx + 1..];
-        (value, unit)
-    } else {
-        return None;
-    };
+    let space_idx = rest.find(' ')?;
+    let value: i64 = rest[..space_idx].parse().ok()?;
+    let unit = &rest[space_idx + 1..];
 
     let seconds = match unit {
         s if s.starts_with("second") => value,

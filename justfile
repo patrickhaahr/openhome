@@ -100,7 +100,6 @@ expo-start:
 expo-android:
     #!/usr/bin/env bash
     set -euo pipefail
-    export ANDROID_HOME="$(android info | sed -n 's/^sdk: //p')"
     bunx expo run:android --variant release --no-bundler
 
 # Typecheck the Expo client
