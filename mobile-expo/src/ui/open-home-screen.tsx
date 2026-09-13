@@ -17,6 +17,7 @@ import type { AdguardActions, AdguardState } from "../application/use-adguard";
 import type { ClassificationCounts } from "../domain/docker";
 import type { DockerActions, DockerState } from "../application/use-docker";
 import type { FeedsActions, FeedsState } from "../application/use-feeds";
+import type { FitnessActions, FitnessState } from "../application/use-fitness";
 import type { TimelineActions, TimelineState } from "../application/use-timeline";
 import type {
   CommandState,
@@ -28,6 +29,7 @@ import type {
 import { edifierRemoteRows, tvRemoteRows, type RemoteCommand } from "../domain/remotes";
 import { ServerPage } from "./server-screen";
 import { DockerPage } from "./docker-screen";
+import { FitnessPage } from "./fitness-screen";
 import { ControlButton } from "./control-button";
 import { ActionButton, PageHeading, SecondaryAction, styles as shared } from "./shared";
 import { colors } from "./theme";
@@ -48,10 +50,21 @@ type Props = {
   readonly timelineActions: TimelineActions;
   readonly feeds: FeedsState;
   readonly feedsActions: FeedsActions;
+  readonly fitness: FitnessState;
+  readonly fitnessActions: FitnessActions;
   readonly onOpenTimelineLink: (url: string) => void;
 };
 
-type IconName = "home" | "television" | "speaker" | "light" | "away" | "server" | "docker" | "settings";
+type IconName =
+  | "home"
+  | "television"
+  | "speaker"
+  | "light"
+  | "away"
+  | "server"
+  | "docker"
+  | "fitness"
+  | "settings";
 
 const tabs: ReadonlyArray<TopLevelTab> = [
   "home",
@@ -60,6 +73,7 @@ const tabs: ReadonlyArray<TopLevelTab> = [
   "away",
   "server",
   "docker",
+  "fitness",
 ];
 
 const homeEdifierRows: ReadonlyArray<ReadonlyArray<RemoteCommand>> = [
@@ -92,6 +106,8 @@ export function OpenHomeScreen({
   timelineActions,
   feeds,
   feedsActions,
+  fitness,
+  fitnessActions,
   onOpenTimelineLink,
 }: Props) {
   const pager = useRef<ScrollView>(null);
@@ -200,6 +216,9 @@ export function OpenHomeScreen({
         <Page width={pageWidth}>
           <DockerPage state={docker} actions={dockerActions} counts={dockerCounts} />
         </Page>
+        <Page width={pageWidth}>
+          <FitnessPage state={fitness} actions={fitnessActions} />
+        </Page>
       </ScrollView>
 
       <View accessibilityRole="tablist" style={styles.tabs}>
@@ -238,6 +257,12 @@ export function OpenHomeScreen({
           label="Docker"
           selected={state.selectedTab === "docker"}
           onPress={() => selectTab("docker")}
+        />
+        <Tab
+          icon="fitness"
+          label="Fitness"
+          selected={state.selectedTab === "fitness"}
+          onPress={() => selectTab("fitness")}
         />
       </View>
     </View>
@@ -821,6 +846,17 @@ function Icon({
         style={[styles.iconGlyph, { color, fontSize: size }]}
       >
         ▦
+      </Text>
+    );
+  }
+  if (name === "fitness") {
+    return (
+      <Text
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        style={[styles.iconGlyph, { color, fontSize: size }]}
+      >
+        ✱
       </Text>
     );
   }

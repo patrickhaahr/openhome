@@ -1,6 +1,14 @@
 import type { AdguardStatus } from "../domain/adguard";
 import type { Configuration } from "../domain/configuration";
 import type { DockerContainer } from "../domain/docker";
+import {
+  EXERCISE_LIST_READ_ERROR,
+  EXERCISE_READ_ERROR,
+  parseExercise,
+  parseExerciseList,
+  type Exercise,
+  type ExerciseInput,
+} from "../domain/fitness";
 import type { Feed, TimelineItem } from "../domain/rss";
 import {
   isJsonArray,
@@ -48,6 +56,12 @@ export type RssApi = {
   readonly deleteFeed: (id: number) => Promise<Result<void>>;
 };
 
+/** Exercise library operations used by the Fitness Tab. */
+export type FitnessApi = {
+  readonly listExercises: () => Promise<Result<readonly Exercise[]>>;
+  readonly createExercise: (input: ExerciseInput) => Promise<Result<Exercise>>;
+};
+
 /** Operations used by the OpenHome application layer. */
 export type OpenHomeApi = {
   readonly validateConfiguration: () => Promise<Result<void>>;
@@ -57,6 +71,7 @@ export type OpenHomeApi = {
   readonly adguard: AdguardApi;
   readonly docker: DockerApi;
   readonly rss: RssApi;
+  readonly fitness: FitnessApi;
 };
 
 type RequestOptions = {
@@ -293,6 +308,43 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           },
         });
         return response.ok ? success(undefined) : response;
+      },
+    },
+
+    fitness: {
+      listExercises: async (): Promise<Result<readonly Exercise[]>> => {
+        const response = await request("/api/exercises", {
+          defaultError: "Couldn't load the exercise library.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseExerciseList(JSON.parse(response.value.body));
+        } catch {
+          return failure(EXERCISE_LIST_READ_ERROR);
+        }
+      },
+
+      createExercise: async (input): Promise<Result<Exercise>> => {
+        const response = await request("/api/exercises", {
+          method: "POST",
+          body: {
+            name: input.name,
+            category: input.category,
+            muscle_group: input.muscleGroup,
+            equipment: input.equipment,
+          },
+          defaultError: "Couldn't add the exercise.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseExercise(JSON.parse(response.value.body));
+        } catch {
+          return failure(EXERCISE_READ_ERROR);
+        }
       },
     },
   };

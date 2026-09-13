@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useAdGuard } from "./src/application/use-adguard";
 import { useDocker } from "./src/application/use-docker";
 import { useFeeds } from "./src/application/use-feeds";
+import { useFitness } from "./src/application/use-fitness";
 import { useHomeGeofence } from "./src/application/use-home-geofence";
 import { useOpenHome } from "./src/application/use-open-home";
 import { useTimeline } from "./src/application/use-timeline";
@@ -35,6 +36,7 @@ export default function App() {
     api === null ? null : api.rss,
     timelineActions.refresh,
   );
+  const [fitness, fitnessActions] = useFitness(api === null ? null : api.fitness);
 
   useEffect(() => {
     void homeGeofenceService.resume();
@@ -47,10 +49,11 @@ export default function App() {
         dockerActions.refresh();
         timelineActions.refresh();
         feedsActions.refresh();
+        fitnessActions.refresh();
       }
     });
     return () => subscription.remove();
-  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions, feedsActions]);
+  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions, feedsActions, fitnessActions]);
 
   return (
     <SafeAreaProvider>
@@ -78,6 +81,8 @@ export default function App() {
             timelineActions={timelineActions}
             feeds={feeds}
             feedsActions={feedsActions}
+            fitness={fitness}
+            fitnessActions={fitnessActions}
             onOpenTimelineLink={(url) => {
               void Linking.openURL(url).catch(() => {});
             }}
