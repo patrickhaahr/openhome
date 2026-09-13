@@ -5,9 +5,8 @@ use openhome_api::AppState;
 use openhome_api::auth::{ApiKey, auth_middleware};
 use openhome_api::routes::{
     adguard::router as adguard_router, docker::router as docker_router,
-    facts::router as facts_router, feeds::router as feeds_router, health::router as health_router,
-    ir::router as ir_router, switchbot::router as switchbot_router,
-    timeline::router as timeline_router,
+    feeds::router as feeds_router, health::router as health_router, ir::router as ir_router,
+    switchbot::router as switchbot_router, timeline::router as timeline_router,
 };
 use openhome_api::services::adguard::AdguardService;
 use openhome_api::services::docker::DockerService;
@@ -101,7 +100,6 @@ pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Rou
 
     let app = health_router()
         .merge(adguard_router())
-        .merge(facts_router())
         .merge(feeds_router())
         .merge(ir_router())
         .merge(switchbot_router())
@@ -150,7 +148,6 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
     let app = health_router()
         .merge(adguard_router())
         .merge(docker_router())
-        .merge(facts_router())
         .merge(feeds_router())
         .merge(ir_router())
         .merge(switchbot_router())

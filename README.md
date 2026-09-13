@@ -51,7 +51,6 @@ The app can also register a home geofence and automatically ask the API to turn 
 - View and manage Docker containers on the homelab server.
 - Monitor and control AdGuard Home DNS protection.
 - Aggregate RSS and Atom feeds into a timeline with read state.
-- Retrieve random facts through the API.
 
 ## Architecture
 

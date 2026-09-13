@@ -1,6 +1,6 @@
 # AGENTS.md - Guidelines for AI Coding Agents
 
-Rust axum API for a homelab service that serves facts, RSS feeds, and a timeline, protected by an API key.
+Rust axum API for a homelab service that serves RSS feeds and a timeline, protected by an API key.
 
 ## Project Scope
 
@@ -17,7 +17,6 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 ## Routes
 
 - Health: `/api/health`
-- Facts: `/api/facts/random`
 - Feeds: `/api/feeds`, `/api/feeds/{id}`, `/api/feeds/refresh`
 - Timeline: `/api/timeline`, `/api/items/{id}/read`
 
@@ -32,7 +31,6 @@ api/
     ├── lib.rs               # AppState and module wiring
     ├── main.rs              # Server bootstrap and scheduler
     ├── routes/              # HTTP route handlers
-    │   ├── facts.rs
     │   ├── feeds.rs
     │   ├── health.rs
     │   ├── timeline.rs

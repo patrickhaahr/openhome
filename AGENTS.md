@@ -34,7 +34,7 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-expo/AGE
 - `devenv.nix` is the dev-shell setup: Rust comes from `languages.rust` (stable), Expo tooling from `bun`/`watchman`, and the API's native deps (`openssl`, `pkg-config`, `sqlx-cli`, `sqlite`) from `packages`.
 - The Android SDK is provided by the devenv `android` integration (not `~/Android/Sdk`): it exports `ANDROID_HOME`/`ANDROID_SDK_ROOT`/`JAVA_HOME` and puts `adb`/`sdkmanager` on PATH. Versions are pinned to match React Native 0.86 (platform 36, build-tools 36.0.0, NDK 27.1).
 - The dev shell exports `DATABASE_URL="sqlite:$repo_root/api/data/app.db"`. API commands and tests may rely on that instead of a manually exported path.
-- `devenv test` runs the full gate: git hooks (`just fmt` + `just lint`) and `enterTest` (`just test`). The facts test does a live HTTP call to `uselessfacts.jsph.pl` and fails when that third-party service is down — not a local environment issue.
+- `devenv test` runs the full gate: git hooks (`just fmt` + `just lint`) and `enterTest` (`just test`).
 - Java (JDK 17) is only needed for native Android builds (`expo run:android` / `just expo-android`, via Gradle). Typecheck, lint, and tests don't need it.
 
 ## Architecture Notes

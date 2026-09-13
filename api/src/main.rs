@@ -104,7 +104,6 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .merge(routes::health::router())
-        .merge(routes::facts::router())
         .merge(routes::feeds::router())
         .merge(routes::timeline::router())
         .merge(routes::adguard::router())
