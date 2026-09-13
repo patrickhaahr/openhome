@@ -1016,6 +1016,27 @@ describe("fitness progress, body weight, and profile adapter", () => {
       body: JSON.stringify({ height_cm: 182.5, sex: null }),
     });
 
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method, body: init?.body });
+      return Promise.resolve(
+        new Response(JSON.stringify({ height_cm: null, sex: null }), { status: 200 }),
+      );
+    });
+    await createOpenHomeApi(configuration).fitness.updateProfile({ sex: "female" });
+    expect(requests[2]).toEqual({
+      url: "http://openhome.test/api/profile",
+      method: "PATCH",
+      body: JSON.stringify({ sex: "female" }),
+    });
+    await createOpenHomeApi(configuration).fitness.updateProfile({ heightCm: null });
+    expect(requests[3]).toEqual({
+      url: "http://openhome.test/api/profile",
+      method: "PATCH",
+      body: JSON.stringify({ height_cm: null }),
+    });
+    await createOpenHomeApi(configuration).fitness.updateProfile({});
+    expect(requests[4]?.body).toBe(JSON.stringify({}));
+
     stubFetch(async () => new Response(JSON.stringify({ height_cm: "182" }), { status: 200 }));
     expect(await createOpenHomeApi(configuration).fitness.getProfile()).toEqual(
       failure(profileError),

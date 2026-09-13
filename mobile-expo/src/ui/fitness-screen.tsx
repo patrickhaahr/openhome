@@ -1348,7 +1348,9 @@ function BodyView({
   readonly actions: BodyActions;
 }) {
   const [form, setForm] = useState<BodyWeightFormState>({ date: today(), weightKg: "" });
-  const [profileForm, setProfileForm] = useState({ heightCm: "", sex: "" });
+  // Untouched profile fields stay undefined so the PATCH omits them and the
+  // API keeps the current values; a cleared field becomes "" and sends null.
+  const [profileForm, setProfileForm] = useState<{ heightCm?: string; sex?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const wasSaving = useRef(false);
@@ -1464,7 +1466,7 @@ function BodyView({
             placeholder="Height cm"
             placeholderTextColor={colors.muted}
             style={[styles.input, styles.halfInput]}
-            value={profileForm.heightCm}
+            value={profileForm.heightCm ?? ""}
           />
           <TextInput
             accessibilityLabel="Sex"
@@ -1474,7 +1476,7 @@ function BodyView({
             placeholder="Sex, e.g. male"
             placeholderTextColor={colors.muted}
             style={[styles.input, styles.halfInput]}
-            value={profileForm.sex}
+            value={profileForm.sex ?? ""}
           />
         </View>
         <View style={shared.row}>

@@ -555,10 +555,25 @@ describe("parseProfileInput", () => {
     });
   });
 
-  it("maps blank fields to null so the API keeps the current values", () => {
+  it("leaves untouched fields absent so the API keeps the current values", () => {
+    expect(parseProfileInput(undefined, undefined)).toEqual({
+      ok: true,
+      value: { heightCm: undefined, sex: undefined },
+    });
+    expect(parseProfileInput(undefined, " male ")).toEqual({
+      ok: true,
+      value: { heightCm: undefined, sex: "male" },
+    });
+  });
+
+  it("maps blank touched fields to explicit null so the API clears them", () => {
     expect(parseProfileInput("", "")).toEqual({
       ok: true,
       value: { heightCm: null, sex: null },
+    });
+    expect(parseProfileInput("182.5", "")).toEqual({
+      ok: true,
+      value: { heightCm: 182.5, sex: null },
     });
   });
 

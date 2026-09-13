@@ -435,11 +435,13 @@ export type Profile = {
 
 /**
  * A profile update as entered in the profile form, ready for the Axum API.
- * Absent fields are null so the API's partial update keeps the current values.
+ * Absent fields (undefined) are dropped from the PATCH body by JSON.stringify
+ * in the API adapter so the API keeps the current values; explicit null clears
+ * the field.
  */
 export type ProfileInput = {
-  readonly heightCm: number | null;
-  readonly sex: string | null;
+  readonly heightCm?: number | null;
+  readonly sex?: string | null;
 };
 
 /**
@@ -552,20 +554,29 @@ export function parseProfile(json: Json): Result<Profile> {
 }
 
 /**
- * Validate the profile form on the client before any request is sent. Blank
- * fields map to null so the API's partial update keeps the current values.
+ * Validate the profile form on the client before any request is sent. An
+ * undefined field was left untouched and stays absent so the API's partial
+ * update keeps the current value; a blank touched field maps to explicit null
+ * so the API clears it.
  */
-export function parseProfileInput(heightCm: string, sex: string): Result<ProfileInput> {
-  const height = heightCm.trim();
-  let parsedHeight: number | null = null;
-  if (height.length > 0) {
-    parsedHeight = Number(height);
-    if (!Number.isFinite(parsedHeight) || parsedHeight <= 0) {
-      return failure("Enter a valid height in cm.");
+export function parseProfileInput(
+  heightCm: string | undefined,
+  sex: string | undefined,
+): Result<ProfileInput> {
+  let height: number | null | undefined;
+  if (heightCm !== undefined) {
+    const trimmedHeight = heightCm.trim();
+    if (trimmedHeight.length === 0) {
+      height = null;
+    } else {
+      height = Number(trimmedHeight);
+      if (!Number.isFinite(height) || height <= 0) {
+        return failure("Enter a valid height in cm.");
+      }
     }
   }
   return success({
-    heightCm: parsedHeight,
-    sex: trimmedOrNull(sex),
+    heightCm: height,
+    sex: sex === undefined ? undefined : trimmedOrNull(sex),
   });
 }
