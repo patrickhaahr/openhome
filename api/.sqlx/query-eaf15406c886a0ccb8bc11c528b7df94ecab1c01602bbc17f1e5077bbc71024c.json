@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT id, name, category, muscle_group, equipment\n        FROM exercises\n        WHERE ($1 IS NULL OR category = $1)\n          AND ($2 IS NULL OR muscle_group = $2)\n        ORDER BY id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "muscle_group",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "equipment",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "eaf15406c886a0ccb8bc11c528b7df94ecab1c01602bbc17f1e5077bbc71024c"
+}

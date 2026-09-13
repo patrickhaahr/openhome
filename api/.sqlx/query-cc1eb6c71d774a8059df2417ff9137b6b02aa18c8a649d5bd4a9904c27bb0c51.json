@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE exercises\n        SET name = COALESCE($1, name),\n            category = COALESCE($2, category),\n            muscle_group = COALESCE($3, muscle_group),\n            equipment = COALESCE($4, equipment)\n        WHERE id = $5\n        RETURNING id, name, category, muscle_group, equipment\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "muscle_group",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "equipment",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "cc1eb6c71d774a8059df2417ff9137b6b02aa18c8a649d5bd4a9904c27bb0c51"
+}

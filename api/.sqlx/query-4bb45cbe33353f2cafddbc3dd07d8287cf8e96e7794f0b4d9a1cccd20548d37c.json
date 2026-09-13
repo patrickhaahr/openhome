@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO exercises (name, category, muscle_group, equipment)\n        VALUES ($1, $2, $3, $4)\n        RETURNING id, name, category, muscle_group, equipment\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "muscle_group",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "equipment",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "4bb45cbe33353f2cafddbc3dd07d8287cf8e96e7794f0b4d9a1cccd20548d37c"
+}

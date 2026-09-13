@@ -19,6 +19,7 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 - Health: `/api/health`
 - Feeds: `/api/feeds`, `/api/feeds/{id}`, `/api/feeds/refresh`
 - Timeline: `/api/timeline`, `/api/items/{id}/read`
+- Exercises (fitness): `/api/exercises`, `/api/exercises/{id}` — list supports `?category=` and `?muscle_group=` filters; POST with a duplicate name returns 409; PATCH treats absent and `null` fields identically (keeps the current value — optional fields cannot be unset via PATCH)
 
 ## Project Structure
 
@@ -32,6 +33,7 @@ api/
     ├── main.rs              # Server bootstrap and scheduler
     ├── routes/              # HTTP route handlers
     │   ├── feeds.rs
+    │   ├── fitness.rs
     │   ├── health.rs
     │   ├── timeline.rs
     │   └── mod.rs
