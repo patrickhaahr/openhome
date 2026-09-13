@@ -152,13 +152,10 @@ describe("docker adapter", () => {
   };
 
   function stubFetch(handler: (init?: RequestInit) => Promise<Response>): void {
-    vi.stubGlobal(
-      "fetch",
-      (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-        void url;
-        return handler(init);
-      },
-    );
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      void url;
+      return handler(init);
+    });
   }
 
   function okFetch(body: ListPayload): void {
@@ -249,7 +246,9 @@ describe("docker adapter", () => {
   });
 
   it("surfaces API error responses as failures", async () => {
-    stubFetch(async () => new Response(JSON.stringify({ error: "Docker unavailable" }), { status: 503 }));
+    stubFetch(
+      async () => new Response(JSON.stringify({ error: "Docker unavailable" }), { status: 503 }),
+    );
 
     const result = await listContainers();
 
@@ -277,7 +276,9 @@ describe("docker adapter", () => {
   it("renders other action failures using the API error text", async () => {
     stubFetch(
       async () =>
-        new Response(JSON.stringify({ error: "Docker daemon error", status: 500 }), { status: 500 }),
+        new Response(JSON.stringify({ error: "Docker daemon error", status: 500 }), {
+          status: 500,
+        }),
     );
 
     expect(await stopContainer("adguard")).toEqual(failure("Docker daemon error"));
@@ -419,12 +420,14 @@ describe("docker adapter", () => {
 
     it("maps not-found and unavailable logs failures to their class messages", async () => {
       stubFetch(
-        async () => new Response(JSON.stringify({ error: "Container not found: adguard" }), { status: 404 }),
+        async () =>
+          new Response(JSON.stringify({ error: "Container not found: adguard" }), { status: 404 }),
       );
       expect(await containerLogs("adguard")).toEqual(failure("Container adguard not found."));
 
       stubFetch(
-        async () => new Response(JSON.stringify({ error: "Docker service not available" }), { status: 503 }),
+        async () =>
+          new Response(JSON.stringify({ error: "Docker service not available" }), { status: 503 }),
       );
       expect(await containerLogs("adguard")).toEqual(failure("Docker unavailable."));
     });
@@ -483,20 +486,19 @@ describe("rss adapter", () => {
   type TimelinePayload = unknown;
 
   function stubFetch(handler: (init?: RequestInit) => Promise<Response>): void {
-    vi.stubGlobal(
-      "fetch",
-      (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-        void url;
-        return handler(init);
-      },
-    );
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      void url;
+      return handler(init);
+    });
   }
 
   function okFetch(body: TimelinePayload): void {
     stubFetch(async () => new Response(JSON.stringify(body), { status: 200 }));
   }
 
-  async function compactTimeline(beforeId: number | null): Promise<Result<readonly TimelineItem[]>> {
+  async function compactTimeline(
+    beforeId: number | null,
+  ): Promise<Result<readonly TimelineItem[]>> {
     return createOpenHomeApi(configuration).rss.compactTimeline(beforeId, 50);
   }
 
@@ -549,7 +551,9 @@ describe("rss adapter", () => {
   });
 
   it("surfaces API error responses as failures", async () => {
-    stubFetch(async () => new Response(JSON.stringify({ error: "Database locked" }), { status: 500 }));
+    stubFetch(
+      async () => new Response(JSON.stringify({ error: "Database locked" }), { status: 500 }),
+    );
 
     expect(await compactTimeline(null)).toEqual(failure("Database locked"));
   });
@@ -636,15 +640,22 @@ describe("rss adapter", () => {
     });
 
     okFetch({ id: 9, title: null });
-    expect(await createOpenHomeApi(configuration).rss.createFeed("https://blog.test/feed.xml"))
-      .toEqual(failure(feedsReadError));
+    expect(
+      await createOpenHomeApi(configuration).rss.createFeed("https://blog.test/feed.xml"),
+    ).toEqual(failure(feedsReadError));
   });
 
   it("surfaces feed API errors and deletes by id", async () => {
-    stubFetch(async () => new Response(JSON.stringify({ error: "Feed with this URL already exists" }), { status: 409 }));
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Feed with this URL already exists" }), {
+          status: 409,
+        }),
+    );
 
-    expect(await createOpenHomeApi(configuration).rss.createFeed("https://blog.test/feed.xml"))
-      .toEqual(failure("Feed with this URL already exists"));
+    expect(
+      await createOpenHomeApi(configuration).rss.createFeed("https://blog.test/feed.xml"),
+    ).toEqual(failure("Feed with this URL already exists"));
 
     const urls: string[] = [];
     const methods: string[] = [];
@@ -657,5 +668,195 @@ describe("rss adapter", () => {
     expect(await createOpenHomeApi(configuration).rss.deleteFeed(9)).toEqual(success(undefined));
     expect(urls).toEqual(["http://openhome.test/api/feeds/9"]);
     expect(methods).toEqual(["DELETE"]);
+  });
+});
+
+describe("fitness workout adapter", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const configuration = { baseUrl: "http://openhome.test", apiKey: "secret" };
+  const readError = "Couldn't read the workout from the Axum API.";
+
+  const detailPayload = {
+    id: 5,
+    date: "2026-09-12",
+    name: "Push A",
+    notes: null,
+    body_weight_kg: 72.5,
+    exercises: [
+      {
+        id: 11,
+        order_index: 0,
+        notes: null,
+        exercise: { id: 1, name: "Bench Press", category: "gym" },
+        sets: [
+          {
+            id: 21,
+            set_number: 1,
+            reps: 8,
+            weight_kg: 60,
+            duration_seconds: null,
+            rpe: 7,
+            notes: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  const input = {
+    date: "2026-09-12",
+    name: "Push A",
+    notes: null,
+    bodyWeightKg: 72.5,
+    exercises: [
+      {
+        exerciseId: 1,
+        notes: null,
+        sets: [{ setNumber: 1, reps: 8, weightKg: 60, durationSeconds: null, rpe: 7, notes: null }],
+      },
+    ],
+  };
+
+  function stubFetch(handler: (url: string, init?: RequestInit) => Promise<Response>): void {
+    vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) =>
+      handler(String(url), init),
+    );
+  }
+
+  it("lists workouts from the history endpoint", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify([{ id: 9, date: "2026-09-12", name: null }]), { status: 200 }),
+    );
+
+    expect(await createOpenHomeApi(configuration).fitness.listWorkouts()).toEqual({
+      ok: true,
+      value: [{ id: 9, date: "2026-09-12", name: null }],
+    });
+  });
+
+  it("creates a workout by posting the nested snake_case body", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, init });
+      return Promise.resolve(new Response(JSON.stringify(detailPayload), { status: 201 }));
+    });
+
+    const result = await createOpenHomeApi(configuration).fitness.createWorkout(input);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        id: 5,
+        date: "2026-09-12",
+        name: "Push A",
+        notes: null,
+        bodyWeightKg: 72.5,
+        exercises: [
+          {
+            id: 11,
+            orderIndex: 0,
+            notes: null,
+            exercise: { id: 1, name: "Bench Press", category: "gym" },
+            sets: [
+              {
+                id: 21,
+                setNumber: 1,
+                reps: 8,
+                weightKg: 60,
+                durationSeconds: null,
+                rpe: 7,
+                notes: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(requests).toEqual([
+      {
+        url: "http://openhome.test/api/workouts",
+        init: expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            date: "2026-09-12",
+            name: "Push A",
+            notes: null,
+            body_weight_kg: 72.5,
+            exercises: [
+              {
+                exercise_id: 1,
+                order_index: 0,
+                notes: null,
+                sets: [
+                  {
+                    set_number: 1,
+                    reps: 8,
+                    weight_kg: 60,
+                    duration_seconds: null,
+                    rpe: 7,
+                    notes: null,
+                  },
+                ],
+              },
+            ],
+          }),
+        }),
+      },
+    ]);
+  });
+
+  it("updates a workout with PATCH to the workout's id path", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method });
+      return Promise.resolve(new Response(JSON.stringify(detailPayload), { status: 200 }));
+    });
+
+    expect(await createOpenHomeApi(configuration).fitness.updateWorkout(5, input)).toEqual({
+      ok: true,
+      value: expect.objectContaining({ id: 5 }),
+    });
+    expect(requests).toEqual([{ url: "http://openhome.test/api/workouts/5", method: "PATCH" }]);
+  });
+
+  it("deletes a workout by id with DELETE", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+    stubFetch((url, init) => {
+      requests.push({ url, method: init?.method });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    expect(await createOpenHomeApi(configuration).fitness.deleteWorkout(5)).toEqual(
+      success(undefined),
+    );
+    expect(requests).toEqual([{ url: "http://openhome.test/api/workouts/5", method: "DELETE" }]);
+  });
+
+  it("surfaces API errors, 404s, and malformed detail payloads", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Set 1 must have 'reps'" }), { status: 422 }),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.createWorkout(input)).toEqual(
+      failure("Set 1 must have 'reps'"),
+    );
+
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Workout with id 5 not found" }), { status: 404 }),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.getWorkout(5)).toEqual(
+      failure("Workout 5 not found."),
+    );
+
+    stubFetch(
+      async () => new Response(JSON.stringify({ id: 5, date: "2026-09-12" }), { status: 200 }),
+    );
+    expect(await createOpenHomeApi(configuration).fitness.getWorkout(5)).toEqual(
+      failure(readError),
+    );
   });
 });

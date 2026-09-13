@@ -7,10 +7,21 @@ import {
   parseExercise,
   parseExerciseInput,
   parseExerciseList,
+  parseWorkoutDetail,
+  parseWorkoutInput,
+  parseWorkoutSummaryList,
+  WORKOUT_READ_ERROR,
   type Exercise,
+  type SetInput,
+  type WorkoutExerciseInput,
 } from "./fitness";
 
-function exercise(id: number, name: string, category = "gym", muscleGroup: string | null = "Chest"): Exercise {
+function exercise(
+  id: number,
+  name: string,
+  category = "gym",
+  muscleGroup: string | null = "Chest",
+): Exercise {
   return { id, name, category, muscleGroup, equipment: null };
 }
 
@@ -26,20 +37,44 @@ describe("parseExercise", () => {
       }),
     ).toEqual({
       ok: true,
-      value: { id: 1, name: "Bench Press", category: "gym", muscleGroup: "Chest", equipment: "Barbell" },
+      value: {
+        id: 1,
+        name: "Bench Press",
+        category: "gym",
+        muscleGroup: "Chest",
+        equipment: "Barbell",
+      },
     });
   });
 
   it("maps absent or blank optional fields to null", () => {
     expect(parseExercise({ id: 2, name: "Push-up", category: "calisthenics" })).toEqual({
       ok: true,
-      value: { id: 2, name: "Push-up", category: "calisthenics", muscleGroup: null, equipment: null },
+      value: {
+        id: 2,
+        name: "Push-up",
+        category: "calisthenics",
+        muscleGroup: null,
+        equipment: null,
+      },
     });
     expect(
-      parseExercise({ id: 3, name: "Pull-up", category: "calisthenics", muscle_group: "  ", equipment: null }),
+      parseExercise({
+        id: 3,
+        name: "Pull-up",
+        category: "calisthenics",
+        muscle_group: "  ",
+        equipment: null,
+      }),
     ).toEqual({
       ok: true,
-      value: { id: 3, name: "Pull-up", category: "calisthenics", muscleGroup: null, equipment: null },
+      value: {
+        id: 3,
+        name: "Pull-up",
+        category: "calisthenics",
+        muscleGroup: null,
+        equipment: null,
+      },
     });
   });
 
@@ -48,7 +83,9 @@ describe("parseExercise", () => {
     expect(parseExercise(null)).toEqual(failure(error));
     expect(parseExercise("exercise")).toEqual(failure(error));
     expect(parseExercise({ name: "Bench Press", category: "gym" })).toEqual(failure(error));
-    expect(parseExercise({ id: "1", name: "Bench Press", category: "gym" })).toEqual(failure(error));
+    expect(parseExercise({ id: "1", name: "Bench Press", category: "gym" })).toEqual(
+      failure(error),
+    );
     expect(parseExercise({ id: 1, name: 42, category: "gym" })).toEqual(failure(error));
     expect(parseExercise({ id: 1, name: "Bench Press" })).toEqual(failure(error));
   });
@@ -122,7 +159,9 @@ describe("filterExercises", () => {
   });
 
   it("filters by category", () => {
-    expect(filterExercises(library, "", "calisthenics", "").map((entry) => entry.id)).toEqual([1, 3, 4]);
+    expect(filterExercises(library, "", "calisthenics", "").map((entry) => entry.id)).toEqual([
+      1, 3, 4,
+    ]);
   });
 
   it("filters by muscle group case-insensitively and excludes unclassified exercises", () => {
@@ -133,5 +172,225 @@ describe("filterExercises", () => {
   it("combines search and filters", () => {
     expect(filterExercises(library, "press", "gym", "chest").map((entry) => entry.id)).toEqual([2]);
     expect(filterExercises(library, "press", "calisthenics", "chest")).toEqual([]);
+  });
+});
+
+function set(overrides: Partial<SetInput> = {}): SetInput {
+  return {
+    setNumber: 1,
+    reps: 8,
+    weightKg: null,
+    durationSeconds: null,
+    rpe: 7,
+    notes: null,
+    ...overrides,
+  };
+}
+
+function workoutExercise(overrides: Partial<WorkoutExerciseInput> = {}): WorkoutExerciseInput {
+  return { exerciseId: 1, notes: null, sets: [set()], ...overrides };
+}
+
+const workoutDetailPayload = {
+  id: 5,
+  date: "2026-09-12",
+  name: "Push A",
+  notes: "Felt strong",
+  body_weight_kg: 72.5,
+  exercises: [
+    {
+      id: 11,
+      order_index: 0,
+      notes: null,
+      exercise: { id: 1, name: "Bench Press", category: "gym" },
+      sets: [
+        {
+          id: 21,
+          set_number: 1,
+          reps: 8,
+          weight_kg: 60,
+          duration_seconds: null,
+          rpe: 7,
+          notes: null,
+        },
+      ],
+    },
+    {
+      id: 12,
+      order_index: 1,
+      notes: "Rings",
+      exercise: { id: 2, name: "Pull-up", category: "calisthenics" },
+      sets: [
+        {
+          id: 22,
+          set_number: 1,
+          reps: 10,
+          weight_kg: null,
+          duration_seconds: null,
+          rpe: 8,
+          notes: null,
+        },
+        {
+          id: 23,
+          set_number: 2,
+          reps: null,
+          weight_kg: null,
+          duration_seconds: 45,
+          rpe: null,
+          notes: "Hold",
+        },
+      ],
+    },
+  ],
+};
+
+describe("parseWorkoutSummaryList", () => {
+  it("accepts a newest-first list of workout summaries", () => {
+    expect(
+      parseWorkoutSummaryList([
+        { id: 9, date: "2026-09-12", name: "Push A" },
+        { id: 8, date: "2026-09-10", name: null },
+      ]),
+    ).toEqual({
+      ok: true,
+      value: [
+        { id: 9, date: "2026-09-12", name: "Push A" },
+        { id: 8, date: "2026-09-10", name: null },
+      ],
+    });
+  });
+
+  it("rejects a non-array or non-conforming payload", () => {
+    const error = "Couldn't read the workouts from the Axum API.";
+    expect(parseWorkoutSummaryList({ workouts: [] })).toEqual(failure(error));
+    expect(parseWorkoutSummaryList([{ id: 9, date: 20260912, name: null }])).toEqual(
+      failure(error),
+    );
+  });
+});
+
+describe("parseWorkoutDetail", () => {
+  it("parses the embedded exercises in order with snake_case sets", () => {
+    const result = parseWorkoutDetail(workoutDetailPayload);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.exercises.map((entry) => entry.exercise.name)).toEqual([
+        "Bench Press",
+        "Pull-up",
+      ]);
+      expect(result.value.exercises[1]?.sets[1]).toEqual({
+        id: 23,
+        setNumber: 2,
+        reps: null,
+        weightKg: null,
+        durationSeconds: 45,
+        rpe: null,
+        notes: "Hold",
+      });
+    }
+  });
+
+  it("rejects a payload with a non-conforming exercise or set", () => {
+    expect(parseWorkoutDetail({ id: 5, date: "2026-09-12", exercises: [{}] })).toEqual(
+      failure(WORKOUT_READ_ERROR),
+    );
+    expect(
+      parseWorkoutDetail({
+        ...workoutDetailPayload,
+        exercises: [
+          {
+            id: 11,
+            order_index: 0,
+            exercise: { id: 1, name: "Bench Press", category: "gym" },
+            sets: [
+              {
+                id: 21,
+                set_number: 1,
+                reps: "eight",
+                weight_kg: null,
+                duration_seconds: null,
+                rpe: null,
+                notes: null,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual(failure(WORKOUT_READ_ERROR));
+  });
+});
+
+describe("parseWorkoutInput", () => {
+  it("accepts a mixed workout with padded date, trimmed text, and parsed numbers", () => {
+    expect(
+      parseWorkoutInput("2026-9-2", "  Morning calisthenics  ", " Felt good ", "72.5", [
+        workoutExercise({ exerciseId: 1 }),
+        workoutExercise({ exerciseId: 2 }),
+      ]),
+    ).toEqual({
+      ok: true,
+      value: {
+        date: "2026-09-02",
+        name: "Morning calisthenics",
+        notes: "Felt good",
+        bodyWeightKg: 72.5,
+        exercises: [
+          { exerciseId: 1, notes: null, sets: [set()] },
+          { exerciseId: 2, notes: null, sets: [set()] },
+        ],
+      },
+    });
+  });
+
+  it("maps blank name, notes, and body weight to null", () => {
+    const result = parseWorkoutInput("2026-09-02", "  ", "", "", [workoutExercise()]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.name).toBeNull();
+      expect(result.value.notes).toBeNull();
+      expect(result.value.bodyWeightKg).toBeNull();
+    }
+  });
+
+  it("rejects an invalid date or body weight", () => {
+    expect(parseWorkoutInput("not-a-date", "", "", "", [workoutExercise()])).toEqual(
+      failure("Enter a valid date in YYYY-MM-DD format."),
+    );
+    expect(parseWorkoutInput("2026-09-02", "", "", "heavy", [workoutExercise()])).toEqual(
+      failure("Enter a valid body weight in kg."),
+    );
+  });
+
+  it("rejects a workout with no exercises", () => {
+    expect(parseWorkoutInput("2026-09-02", "", "", "", [])).toEqual(
+      failure("Add at least one exercise to the workout."),
+    );
+  });
+
+  it("rejects a set with neither reps nor duration", () => {
+    const result = parseWorkoutInput("2026-09-02", "", "", "", [
+      workoutExercise({ sets: [set({ reps: null, durationSeconds: null })] }),
+    ]);
+    expect(result).toEqual(failure("Set 1 needs reps or a duration in seconds."));
+  });
+
+  it("rejects RPE outside 1-10", () => {
+    const result = parseWorkoutInput("2026-09-02", "", "", "", [
+      workoutExercise({ sets: [set({ rpe: 11 })] }),
+    ]);
+    expect(result).toEqual(failure("Set 1 RPE must be between 1 and 10."));
+  });
+
+  it("rejects a negative weight or duration", () => {
+    expect(
+      parseWorkoutInput("2026-09-02", "", "", "", [
+        workoutExercise({ sets: [set({ weightKg: -1 })] }),
+      ]),
+    ).toEqual(failure("Set 1 added weight must be a positive number of kg."));
+    expect(
+      parseWorkoutInput("2026-09-02", "", "", "", [
+        workoutExercise({ sets: [set({ durationSeconds: 0 })] }),
+      ]),
+    ).toEqual(failure("Set 1 duration must be a positive number of seconds."));
   });
 });

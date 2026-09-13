@@ -4,10 +4,17 @@ import type { DockerContainer } from "../domain/docker";
 import {
   EXERCISE_LIST_READ_ERROR,
   EXERCISE_READ_ERROR,
+  WORKOUT_LIST_READ_ERROR,
+  WORKOUT_READ_ERROR,
   parseExercise,
   parseExerciseList,
+  parseWorkoutDetail,
+  parseWorkoutSummaryList,
   type Exercise,
   type ExerciseInput,
+  type WorkoutDetail,
+  type WorkoutInput,
+  type WorkoutSummary,
 } from "../domain/fitness";
 import type { Feed, TimelineItem } from "../domain/rss";
 import {
@@ -56,10 +63,15 @@ export type RssApi = {
   readonly deleteFeed: (id: number) => Promise<Result<void>>;
 };
 
-/** Exercise library operations used by the Fitness Tab. */
+/** Exercise library and workout logging operations used by the Fitness Tab. */
 export type FitnessApi = {
   readonly listExercises: () => Promise<Result<readonly Exercise[]>>;
   readonly createExercise: (input: ExerciseInput) => Promise<Result<Exercise>>;
+  readonly listWorkouts: () => Promise<Result<readonly WorkoutSummary[]>>;
+  readonly getWorkout: (id: number) => Promise<Result<WorkoutDetail>>;
+  readonly createWorkout: (input: WorkoutInput) => Promise<Result<WorkoutDetail>>;
+  readonly updateWorkout: (id: number, input: WorkoutInput) => Promise<Result<WorkoutDetail>>;
+  readonly deleteWorkout: (id: number) => Promise<Result<void>>;
 };
 
 /** Operations used by the OpenHome application layer. */
@@ -75,7 +87,7 @@ export type OpenHomeApi = {
 };
 
 type RequestOptions = {
-  readonly method?: "GET" | "POST" | "DELETE";
+  readonly method?: "GET" | "POST" | "PATCH" | "DELETE";
   readonly body?: object;
   readonly defaultError: string;
   /** Request timeout in ms; defaults to the short timeout shared by all callers. */
@@ -346,7 +358,128 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           return failure(EXERCISE_READ_ERROR);
         }
       },
+
+      listWorkouts: async (): Promise<Result<readonly WorkoutSummary[]>> => {
+        const response = await request("/api/workouts", {
+          defaultError: "Couldn't load the workouts.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseWorkoutSummaryList(JSON.parse(response.value.body));
+        } catch {
+          return failure(WORKOUT_LIST_READ_ERROR);
+        }
+      },
+
+      getWorkout: async (id): Promise<Result<WorkoutDetail>> => {
+        const response = await request(`/api/workouts/${id}`, {
+          defaultError: "Couldn't load the workout.",
+          statusErrors: {
+            404: `Workout ${id} not found.`,
+          },
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseWorkoutDetail(JSON.parse(response.value.body));
+        } catch {
+          return failure(WORKOUT_READ_ERROR);
+        }
+      },
+
+      createWorkout: async (input): Promise<Result<WorkoutDetail>> => {
+        const response = await request("/api/workouts", {
+          method: "POST",
+          body: workoutBody(input),
+          defaultError: "Couldn't save the workout.",
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseWorkoutDetail(JSON.parse(response.value.body));
+        } catch {
+          return failure(WORKOUT_READ_ERROR);
+        }
+      },
+
+      updateWorkout: async (id, input): Promise<Result<WorkoutDetail>> => {
+        const response = await request(`/api/workouts/${id}`, {
+          method: "PATCH",
+          body: workoutBody(input),
+          defaultError: "Couldn't update the workout.",
+          statusErrors: {
+            404: `Workout ${id} not found.`,
+          },
+        });
+        if (!response.ok) {
+          return response;
+        }
+        try {
+          return parseWorkoutDetail(JSON.parse(response.value.body));
+        } catch {
+          return failure(WORKOUT_READ_ERROR);
+        }
+      },
+
+      deleteWorkout: async (id): Promise<Result<void>> => {
+        const response = await request(`/api/workouts/${id}`, {
+          method: "DELETE",
+          defaultError: "Couldn't delete the workout.",
+          statusErrors: {
+            404: `Workout ${id} not found.`,
+          },
+        });
+        return response.ok ? success(undefined) : response;
+      },
     },
+  };
+}
+
+/** The Axum API's nested snake_case workout body, shared by create and update. */
+type WorkoutBody = {
+  date: string;
+  name: string | null;
+  notes: string | null;
+  body_weight_kg: number | null;
+  exercises: ReadonlyArray<{
+    exercise_id: number;
+    order_index: number;
+    notes: string | null;
+    sets: ReadonlyArray<{
+      set_number: number;
+      reps: number | null;
+      weight_kg: number | null;
+      duration_seconds: number | null;
+      rpe: number | null;
+      notes: string | null;
+    }>;
+  }>;
+};
+
+/** Serialize a workout input into the Axum API's nested snake_case body. */
+function workoutBody(input: WorkoutInput): WorkoutBody {
+  return {
+    date: input.date,
+    name: input.name,
+    notes: input.notes,
+    body_weight_kg: input.bodyWeightKg,
+    exercises: input.exercises.map((entry, orderIndex) => ({
+      exercise_id: entry.exerciseId,
+      order_index: orderIndex,
+      notes: entry.notes,
+      sets: entry.sets.map((set) => ({
+        set_number: set.setNumber,
+        reps: set.reps,
+        weight_kg: set.weightKg,
+        duration_seconds: set.durationSeconds,
+        rpe: set.rpe,
+        notes: set.notes,
+      })),
+    })),
   };
 }
 
