@@ -179,68 +179,6 @@ export function BodyView({
         ) : null}
       </View>
 
-      <View style={[shared.section, styles.card]}>
-        <Text style={shared.sectionTitle}>PROFILE</Text>
-        {state.profile.tag === "loaded" &&
-        (state.profile.profile.heightCm !== null || state.profile.profile.sex !== null) ? (
-          <Text style={styles.detail}>
-            Current:{" "}
-            {[
-              state.profile.profile.heightCm !== null
-                ? `${state.profile.profile.heightCm} cm`
-                : null,
-              state.profile.profile.sex !== null ? state.profile.profile.sex : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </Text>
-        ) : null}
-        {state.profile.tag === "loading" ? (
-          <Text style={styles.detail}>Loading profile</Text>
-        ) : null}
-        {state.profile.tag === "error" ? (
-          <Text accessibilityRole="alert" style={shared.error}>
-            {state.profile.message}
-          </Text>
-        ) : null}
-        <View style={shared.row}>
-          <TextInput
-            accessibilityLabel="Height in cm"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="decimal-pad"
-            onChangeText={(heightCm) => setProfileForm((current) => ({ ...current, heightCm }))}
-            placeholder="Height cm"
-            placeholderTextColor={colors.muted}
-            style={[styles.input, styles.halfInput]}
-            value={profileForm.heightCm ?? ""}
-          />
-          <TextInput
-            accessibilityLabel="Sex"
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={(sex) => setProfileForm((current) => ({ ...current, sex }))}
-            placeholder="Sex, e.g. male"
-            placeholderTextColor={colors.muted}
-            style={[styles.input, styles.halfInput]}
-            value={profileForm.sex ?? ""}
-          />
-        </View>
-        <View style={shared.row}>
-          <ActionButton
-            label="Save profile"
-            sending={state.saving}
-            disabled={state.saving}
-            onPress={submitProfile}
-          />
-        </View>
-        {profileError !== null ? (
-          <Text accessibilityRole="alert" style={shared.error}>
-            {profileError}
-          </Text>
-        ) : null}
-      </View>
-
       {state.refreshing ? (
         <View style={shared.statusPanel}>
           <ActivityIndicator color={colors.signal} />
