@@ -32,7 +32,7 @@ import type {
 import { edifierRemoteRows, tvRemoteRows, type RemoteCommand } from "../domain/remotes";
 import { ServerPage } from "./server-screen";
 import { DockerPage } from "./docker-screen";
-import { FitnessPage } from "./fitness-screen";
+import { FitnessPage } from "./fitness";
 import { ControlButton } from "./control-button";
 import { ActionButton, PageHeading, SecondaryAction, styles as shared } from "./shared";
 import { colors } from "./theme";
