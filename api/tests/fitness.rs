@@ -943,7 +943,7 @@ async fn test_delete_exercise_conflict_when_logged_in_workout() {
     create_sample_workout(&app).await;
 
     // Pull-up is referenced by workout_exercises
-    let (status, response) = send_request_with_method(
+    let (_, response) = send_request_with_method(
         app.clone(),
         "/api/exercises",
         Method::GET,
@@ -1139,9 +1139,9 @@ async fn test_progress_from_to_filters_bound_series() {
 #[tokio::test]
 async fn test_progress_empty_for_never_performed_exercise() {
     let app = common::test_app().await;
-    let id = create_progress_fixture(&app).await;
+    create_progress_fixture(&app).await;
 
-    let (status, body) = send_request_with_method(
+    let (_, body) = send_request_with_method(
         app.clone(),
         "/api/exercises",
         Method::GET,
