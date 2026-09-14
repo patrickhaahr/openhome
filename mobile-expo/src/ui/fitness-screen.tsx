@@ -48,9 +48,14 @@ type FormState = {
 
 const emptyForm: FormState = { name: "", category: "calisthenics" };
 
-/** Prefill the shared form from an exercise; untouched optionals stay absent. */
+/** Prefill the shared form from an exercise, including its optional fields. */
 function formFromExercise(exercise: Exercise): FormState {
-  return { name: exercise.name, category: exercise.category as ExerciseCategory };
+  return {
+    name: exercise.name,
+    category: exercise.category as ExerciseCategory,
+    muscleGroup: exercise.muscleGroup ?? "",
+    equipment: exercise.equipment ?? "",
+  };
 }
 
 const categoryFilters: ReadonlyArray<{ readonly key: LibraryCategory; readonly label: string }> = [
@@ -65,8 +70,8 @@ const categoryLabels: ReadonlyArray<{ readonly key: ExerciseCategory; readonly l
 ];
 
 const viewLabels: ReadonlyArray<{ readonly key: FitnessView; readonly label: string }> = [
-  { key: "library", label: "Library" },
   { key: "workouts", label: "Workouts" },
+  { key: "library", label: "Library" },
   { key: "progress", label: "Progress" },
   { key: "body", label: "Body" },
 ];
@@ -107,7 +112,7 @@ export function FitnessPage({
   readonly body: BodyState;
   readonly bodyActions: BodyActions;
 }) {
-  const [view, setView] = useState<FitnessView>("library");
+  const [view, setView] = useState<FitnessView>("workouts");
 
   return (
     <ScrollView
@@ -177,11 +182,13 @@ function LibraryView({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<LibraryCategory>("all");
-  const [muscleGroup, setMuscleGroup] = useState("");
+  const [muscleGroup, setMuscleGroup] = useState<string>("all");
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   // The exercise the shared form edits; null means the form creates.
   const [editing, setEditing] = useState<Exercise | null>(null);
+  // The row whose edit/delete actions are revealed; null means collapsed.
+  const [openId, setOpenId] = useState<number | null>(null);
   // The row whose delete button is armed; a second press confirms.
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -214,7 +221,20 @@ function LibraryView({
   }, [state]);
 
   const exercises = state.tag === "ready" ? state.exercises : [];
-  const visible = filterExercises(exercises, query, category, muscleGroup);
+  // Distinct muscle groups across the library, for the filter chips.
+  const muscleGroups = [
+    ...new Set(
+      exercises
+        .map((exercise) => exercise.muscleGroup?.trim())
+        .filter((group): group is string => group !== undefined && group.length > 0),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const visible = filterExercises(
+    exercises,
+    query,
+    category,
+    muscleGroup === "all" ? "" : muscleGroup,
+  );
 
   function submit(): void {
     if (editing !== null) {
@@ -249,6 +269,7 @@ function LibraryView({
     setFormError(null);
     setFormOpen(false);
     setConfirmingId(null);
+    setOpenId(null);
   }
 
   function cancelEdit(): void {
@@ -260,12 +281,6 @@ function LibraryView({
   return (
     <>
       <View style={shared.stack}>
-        <PageHeading
-          eyebrow="FITNESS"
-          title="Exercise library"
-          description="Every exercise you can log, searchable and filterable."
-        />
-
         <View style={[shared.section, styles.card]}>
           {editing === null ? (
             <Pressable
@@ -403,16 +418,30 @@ function LibraryView({
             </Pressable>
           ))}
         </View>
-        <TextInput
-          accessibilityLabel="Filter exercises by muscle group"
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setMuscleGroup}
-          placeholder="Filter by muscle group"
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={muscleGroup}
-        />
+        {muscleGroups.length > 0 ? (
+          <View style={styles.chipWrap}>
+            {[{ key: "all", label: "All" }, ...muscleGroups.map((group) => ({ key: group, label: group }))].map(
+              ({ key, label }) => (
+                <Pressable
+                  key={key}
+                  accessibilityLabel={`${label} muscle group filter`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: muscleGroup === key }}
+                  onPress={() => setMuscleGroup(key)}
+                  style={({ pressed }) => [
+                    styles.pickChip,
+                    muscleGroup === key && styles.chipSelected,
+                    pressed && shared.actionPressed,
+                  ]}
+                >
+                  <Text style={[styles.chipLabel, muscleGroup === key && styles.chipLabelSelected]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ),
+            )}
+          </View>
+        ) : null}
 
         {state.tag === "loading" ? (
           <View style={shared.statusPanel}>
@@ -442,22 +471,31 @@ function LibraryView({
           </View>
         ) : null}
         {state.tag === "ready"
-          ? visible.map((exercise) => (
-              <ExerciseRow
-                key={exercise.id}
-                exercise={exercise}
-                busy={state.busy}
-                confirming={confirmingId === exercise.id}
-                onEdit={() => openEdit(exercise)}
-                onDelete={() => {
-                  if (confirmingId === exercise.id) {
-                    pending.current = { kind: "delete", id: exercise.id };
-                    actions.remove(exercise.id);
-                  } else {
-                    setConfirmingId(exercise.id);
-                  }
-                }}
-              />
+          ? groupByMuscleGroup(visible).map(([group, groupExercises]) => (
+              <View key={group} style={shared.stack}>
+                <Text style={styles.groupLabel}>{group.toUpperCase()}</Text>
+                {groupExercises.map((exercise) => (
+                  <ExerciseRow
+                    key={exercise.id}
+                    exercise={exercise}
+                    busy={state.busy}
+                    open={openId === exercise.id}
+                    confirming={confirmingId === exercise.id}
+                    onToggle={() =>
+                      setOpenId((current) => (current === exercise.id ? null : exercise.id))
+                    }
+                    onEdit={() => openEdit(exercise)}
+                    onDelete={() => {
+                      if (confirmingId === exercise.id) {
+                        pending.current = { kind: "delete", id: exercise.id };
+                        actions.remove(exercise.id);
+                      } else {
+                        setConfirmingId(exercise.id);
+                      }
+                    }}
+                  />
+                ))}
+              </View>
             ))
           : null}
         {state.tag === "ready" && state.error !== null && !formOpen && editing === null ? (
@@ -473,54 +511,60 @@ function LibraryView({
 function ExerciseRow({
   exercise,
   busy,
+  open,
   confirming,
+  onToggle,
   onEdit,
   onDelete,
 }: {
   readonly exercise: Exercise;
   readonly busy: boolean;
+  readonly open: boolean;
   readonly confirming: boolean;
+  readonly onToggle: () => void;
   readonly onEdit: () => void;
   readonly onDelete: () => void;
 }) {
   return (
     <View style={shared.section}>
-      <View style={shared.sectionHeader}>
+      <Pressable
+        accessibilityLabel={`${open ? "Hide actions for" : "Show actions for"} ${exercise.name}`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.rowHeader, pressed && shared.iconPressed]}
+      >
         <Text style={styles.name}>{exercise.name}</Text>
-        <Text style={shared.sectionDetail}>{exercise.category}</Text>
-      </View>
-      {exercise.muscleGroup !== null ? (
-        <Text style={styles.detail}>Muscle group: {exercise.muscleGroup}</Text>
+        <Text style={styles.rowChevron}>{open ? "Hide" : "Edit"}</Text>
+      </Pressable>
+      {open ? (
+        <View style={styles.rowActions}>
+          <Pressable
+            accessibilityLabel={`Edit ${exercise.name}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            onPress={onEdit}
+            style={({ pressed }) => [styles.rowAction, pressed && shared.iconPressed]}
+          >
+            <Text style={styles.rowActionLabel}>Edit</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel={
+              confirming ? `Confirm deleting ${exercise.name}` : `Delete ${exercise.name}`
+            }
+            accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            onPress={onDelete}
+            style={({ pressed }) => [styles.rowAction, pressed && shared.iconPressed]}
+          >
+            <Text style={[styles.rowActionLabel, confirming && styles.rowActionConfirm]}>
+              {confirming ? "Confirm delete?" : "Delete"}
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
-      {exercise.equipment !== null ? (
-        <Text style={styles.detail}>Equipment: {exercise.equipment}</Text>
-      ) : null}
-      <View style={styles.rowActions}>
-        <Pressable
-          accessibilityLabel={`Edit ${exercise.name}`}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={onEdit}
-          style={({ pressed }) => [styles.rowAction, pressed && shared.iconPressed]}
-        >
-          <Text style={styles.rowActionLabel}>Edit</Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel={
-            confirming ? `Confirm deleting ${exercise.name}` : `Delete ${exercise.name}`
-          }
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={onDelete}
-          style={({ pressed }) => [styles.rowAction, pressed && shared.iconPressed]}
-        >
-          <Text style={[styles.rowActionLabel, confirming && styles.rowActionConfirm]}>
-            {confirming ? "Confirm delete?" : "Delete"}
-          </Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -541,9 +585,21 @@ const styles = StyleSheet.create({
   chipLabel: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   chipLabelSelected: { color: colors.signal },
   chipSelected: { backgroundColor: colors.signalDark, borderColor: colors.signal },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pickChip: {
+    alignItems: "center",
+    backgroundColor: colors.panelRaised,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 16,
+  },
   detail: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   formHeader: { minHeight: 24, flexDirection: "row", justifyContent: "space-between" },
   formToggle: { color: colors.signal, fontSize: 12, fontWeight: "800" },
+  groupLabel: { color: colors.signal, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
   halfInput: { flex: 1 },
   input: {
     backgroundColor: colors.background,
@@ -561,6 +617,13 @@ const styles = StyleSheet.create({
   rowActionConfirm: { color: colors.danger },
   rowActionLabel: { color: colors.signal, fontSize: 13, fontWeight: "700" },
   rowActions: { flexDirection: "row", gap: 18 },
+  rowChevron: { color: colors.signal, fontSize: 12, fontWeight: "800" },
+  rowHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    minHeight: 24,
+  },
 });
 
 /** Today's date as the log form's YYYY-MM-DD default. */
@@ -807,7 +870,7 @@ function HistoryList({
   return (
     <>
       <View style={shared.row}>
-        <ActionButton label="Log workout" sending={false} disabled={false} onPress={onCreate} />
+        <ActionButton label="Start workout" sending={false} disabled={false} onPress={onCreate} />
       </View>
       {state.refreshing ? (
         <View style={shared.statusPanel}>
@@ -943,10 +1006,10 @@ function WorkoutForm({
         onPress={onClose}
         style={({ pressed }) => [shared.retryButton, pressed && shared.actionPressed]}
       >
-        <Text style={shared.retry}>‹ {editing ? "Back to workout" : "Back to history"}</Text>
+        <Text style={shared.retry}>‹ {editing ? "Back to workout" : "Discard workout"}</Text>
       </Pressable>
       <View style={[shared.section, styles.card]}>
-        <Text style={shared.sectionTitle}>{editing ? "EDIT WORKOUT" : "LOG WORKOUT"}</Text>
+        <Text style={shared.sectionTitle}>{editing ? "EDIT WORKOUT" : "WORKOUT IN PROGRESS"}</Text>
         <TextInput
           accessibilityLabel="Workout date"
           autoCapitalize="none"
@@ -988,6 +1051,23 @@ function WorkoutForm({
           placeholderTextColor={colors.muted}
           style={styles.input}
           value={form.notes}
+        />
+        <ExercisePicker
+          onPick={(exercise) =>
+            setForm((current) => ({
+              ...current,
+              entries: [
+                ...current.entries,
+                {
+                  exerciseId: exercise.id,
+                  exerciseName: exercise.name,
+                  notes: "",
+                  sets: [{ ...emptySetRow }],
+                },
+              ],
+            }))
+          }
+          exercises={exercises}
         />
         {form.entries.map((entry, entryIndex) => (
           <View key={`${entry.exerciseId}-${entryIndex}`} style={workoutStyles.entryCard}>
@@ -1185,7 +1265,7 @@ function WorkoutForm({
         ))}
         <View style={shared.row}>
           <ActionButton
-            label={editing ? "Save changes" : "Save workout"}
+            label={editing ? "Save changes" : "End workout"}
             sending={saving}
             disabled={saving}
             onPress={onSubmit}
@@ -1197,28 +1277,26 @@ function WorkoutForm({
           </Text>
         ) : null}
       </View>
-      <ExercisePicker
-        onPick={(exercise) =>
-          setForm((current) => ({
-            ...current,
-            entries: [
-              ...current.entries,
-              {
-                exerciseId: exercise.id,
-                exerciseName: exercise.name,
-                notes: "",
-                sets: [{ ...emptySetRow }],
-              },
-            ],
-          }))
-        }
-        exercises={exercises}
-      />
     </>
   );
 }
 
-/** A compact library picker so the log form can add exercises in order. */
+/** Group exercises by muscle group for pickers; blank groups land in "Other". */
+function groupByMuscleGroup(exercises: readonly Exercise[]): ReadonlyArray<[string, Exercise[]]> {
+  const groups = new Map<string, Exercise[]>();
+  for (const exercise of exercises) {
+    const key = exercise.muscleGroup?.trim() || "Other";
+    const existing = groups.get(key);
+    if (existing === undefined) {
+      groups.set(key, [exercise]);
+    } else {
+      existing.push(exercise);
+    }
+  }
+  return [...groups.entries()];
+}
+
+/** An inline library list grouped by muscle group so the workout form can add exercises in order. */
 function ExercisePicker({
   exercises,
   onPick,
@@ -1227,26 +1305,31 @@ function ExercisePicker({
   readonly onPick: (exercise: Exercise) => void;
 }) {
   return (
-    <View style={[shared.section, styles.card]}>
-      <Text style={shared.sectionTitle}>ADD FROM LIBRARY</Text>
+    <View style={shared.stack}>
+      <Text style={shared.sectionTitle}>ADD EXERCISE</Text>
       {exercises.length === 0 ? (
         <Text style={styles.detail}>
           The exercise library is empty. Add exercises on the Library view.
         </Text>
       ) : (
-        <View style={shared.row}>
-          {exercises.map((exercise) => (
-            <Pressable
-              key={exercise.id}
-              accessibilityLabel={`Add ${exercise.name} to the workout`}
-              accessibilityRole="button"
-              onPress={() => onPick(exercise)}
-              style={({ pressed }) => [styles.chip, pressed && shared.actionPressed]}
-            >
-              <Text style={styles.chipLabel}>{exercise.name}</Text>
-            </Pressable>
-          ))}
-        </View>
+        groupByMuscleGroup(exercises).map(([group, groupExercises]) => (
+          <View key={group} style={shared.stack}>
+            <Text style={styles.groupLabel}>{group.toUpperCase()}</Text>
+            <View style={styles.chipWrap}>
+              {groupExercises.map((exercise) => (
+                <Pressable
+                  key={exercise.id}
+                  accessibilityLabel={`Add ${exercise.name} to the workout`}
+                  accessibilityRole="button"
+                  onPress={() => onPick(exercise)}
+                  style={({ pressed }) => [styles.pickChip, pressed && shared.actionPressed]}
+                >
+                  <Text style={styles.chipLabel}>{exercise.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))
       )}
     </View>
   );
@@ -1311,31 +1394,36 @@ function ProgressView({
             The exercise library is empty. Add exercises on the Library view.
           </Text>
         ) : (
-          <View style={shared.row}>
-            {exercises.map((exercise) => (
-              <Pressable
-                key={exercise.id}
-                accessibilityLabel={`Show progress for ${exercise.name}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: selectedId === exercise.id }}
-                onPress={() => actions.openExercise(exercise.id)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  selectedId === exercise.id && styles.chipSelected,
-                  pressed && shared.actionPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    selectedId === exercise.id && styles.chipLabelSelected,
-                  ]}
-                >
-                  {exercise.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          groupByMuscleGroup(exercises).map(([group, groupExercises]) => (
+            <View key={group} style={shared.stack}>
+              <Text style={styles.groupLabel}>{group.toUpperCase()}</Text>
+              <View style={styles.chipWrap}>
+                {groupExercises.map((exercise) => (
+                  <Pressable
+                    key={exercise.id}
+                    accessibilityLabel={`Show progress for ${exercise.name}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: selectedId === exercise.id }}
+                    onPress={() => actions.openExercise(exercise.id)}
+                    style={({ pressed }) => [
+                      styles.pickChip,
+                      selectedId === exercise.id && styles.chipSelected,
+                      pressed && shared.actionPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipLabel,
+                        selectedId === exercise.id && styles.chipLabelSelected,
+                      ]}
+                    >
+                      {exercise.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ))
         )}
       </View>
       {state.tag === "loading" ? (
@@ -1441,10 +1529,8 @@ function ProgressChart({ data }: { readonly data: readonly ProgressPoint[] }) {
 function ProgressPointRow({ point }: { readonly point: ProgressPoint }) {
   return (
     <View style={shared.section}>
-      <View style={shared.sectionHeader}>
-        <Text style={styles.name}>{formatDate(point.date)}</Text>
-        <Text style={styles.detail}>{describePoint(point)}</Text>
-      </View>
+      <Text style={styles.name}>{formatDate(point.date)}</Text>
+      <Text style={styles.detail}>{describePoint(point)}</Text>
     </View>
   );
 }
@@ -1484,6 +1570,7 @@ function BodyView({
   // Untouched profile fields stay undefined so the PATCH omits them and the
   // API keeps the current values; a cleared field becomes "" and sends null.
   const [profileForm, setProfileForm] = useState<{ heightCm?: string; sex?: string }>({});
+  const [profileOpen, setProfileOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const wasSaving = useRef(false);
@@ -1492,7 +1579,8 @@ function BodyView({
   // keeps the fields so only the failing part has to change.
   useEffect(() => {
     if (wasSaving.current && !state.saving && state.saveError === null) {
-      setForm({ date: today(), weightKg: "" });
+      const latest = state.entries[0]?.weightKg;
+      setForm({ date: today(), weightKg: latest === undefined ? "" : String(latest) });
       setFormError(null);
     }
     wasSaving.current = state.saving;
@@ -1518,8 +1606,83 @@ function BodyView({
     actions.saveProfile(parsed.value);
   }
 
+  const latestWeight = state.entries[0]?.weightKg;
+
   return (
     <>
+      <View style={[shared.section, styles.card]}>
+        <Pressable
+          accessibilityLabel="Edit profile"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: profileOpen }}
+          onPress={() => setProfileOpen((value) => !value)}
+          style={({ pressed }) => [styles.rowHeader, pressed && shared.iconPressed]}
+        >
+          <Text style={shared.sectionTitle}>PROFILE</Text>
+          <Text style={styles.formToggle}>{profileOpen ? "Hide" : "Edit"}</Text>
+        </Pressable>
+        {state.profile.tag === "loaded" ? (
+          <Text style={styles.detail}>
+            {[
+              state.profile.profile.heightCm !== null
+                ? `${state.profile.profile.heightCm} cm`
+                : null,
+              state.profile.profile.sex !== null ? state.profile.profile.sex : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "Not configured"}
+          </Text>
+        ) : null}
+        {state.profile.tag === "loading" ? (
+          <Text style={styles.detail}>Loading profile</Text>
+        ) : null}
+        {state.profile.tag === "error" ? (
+          <Text accessibilityRole="alert" style={shared.error}>
+            {state.profile.message}
+          </Text>
+        ) : null}
+        {profileOpen ? (
+          <>
+            <View style={shared.row}>
+              <TextInput
+                accessibilityLabel="Height in cm"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="decimal-pad"
+                onChangeText={(heightCm) => setProfileForm((current) => ({ ...current, heightCm }))}
+                placeholder="Height cm"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, styles.halfInput]}
+                value={profileForm.heightCm ?? ""}
+              />
+              <TextInput
+                accessibilityLabel="Sex"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={(sex) => setProfileForm((current) => ({ ...current, sex }))}
+                placeholder="Sex, e.g. male"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, styles.halfInput]}
+                value={profileForm.sex ?? ""}
+              />
+            </View>
+            <View style={shared.row}>
+              <ActionButton
+                label="Save profile"
+                sending={state.saving}
+                disabled={state.saving}
+                onPress={submitProfile}
+              />
+            </View>
+            {profileError !== null ? (
+              <Text accessibilityRole="alert" style={shared.error}>
+                {profileError}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </View>
+
       <View style={[shared.section, styles.card]}>
         <Text style={shared.sectionTitle}>RECORD WEIGHT</Text>
         <View style={shared.row}>
@@ -1539,7 +1702,7 @@ function BodyView({
             autoCorrect={false}
             keyboardType="decimal-pad"
             onChangeText={(weightKg) => setForm((current) => ({ ...current, weightKg }))}
-            placeholder="Weight kg"
+            placeholder={latestWeight === undefined ? "Weight kg" : `Last: ${latestWeight} kg`}
             placeholderTextColor={colors.muted}
             style={[styles.input, styles.halfInput]}
             value={form.weightKg}
