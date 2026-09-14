@@ -82,6 +82,18 @@ go:
     cargo fmt
     cargo clippy
 
+# Build the API image for amd64 + arm64 (Raspberry Pi) locally
+[group('api')]
+[working-directory: 'api']
+docker-build version:
+    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest .
+
+# Build the API image for amd64 + arm64 and push it to Docker Hub
+[group('api')]
+[working-directory: 'api']
+docker-push version:
+    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest --push .
+
 # Install Expo client dependencies
 [group('expo')]
 [working-directory: 'mobile-expo']
