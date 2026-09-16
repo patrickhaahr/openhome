@@ -43,6 +43,11 @@
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
     export DATABASE_URL="sqlite:$repo_root/api/data/app.db"
     export ANDROID_SDK_ROOT="$ANDROID_HOME"
+    # Emulator needs its bundled libs on LD_LIBRARY_PATH (otherwise it dies on a
+    # libc++ symbol error), and AVDs live in ~/.android/avd, not devenv's
+    # default repo-local .android/avd directory.
+    export LD_LIBRARY_PATH="$ANDROID_HOME/emulator/lib64:$LD_LIBRARY_PATH"
+    export ANDROID_AVD_HOME="$HOME/.android/avd"
     echo "OpenHome development shell (devenv)"
     echo "Run 'just' from the repo root to list available commands"
   '';
