@@ -36,7 +36,7 @@
       version = [ "27.1.12297006" ];
     };
     # Flip this on when you want a headless emulator (large download)
-    # emulator.enable = true;
+    emulator.enable = true;
   };
 
   enterShell = ''
