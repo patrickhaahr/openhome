@@ -66,7 +66,6 @@ test-integration name:
 [working-directory: 'api']
 fmt:
     cargo fmt
-    cargo clippy
 
 # Lint the API (clippy denies warnings)
 [group('api')]
@@ -77,10 +76,7 @@ lint:
 # Test, format, and lint the API in one pass
 [group('api')]
 [working-directory: 'api']
-go:
-    cargo test
-    cargo fmt
-    cargo clippy
+check: test fmt lint
 
 # Build the API image for amd64 + arm64 (Raspberry Pi) locally
 [group('api')]
