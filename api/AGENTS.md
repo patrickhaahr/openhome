@@ -12,6 +12,8 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 - SQLite database is configured via `DATABASE_URL`.
 - Migrations live in `migrations/` and are applied on startup.
 - API auth expects `Authorization: Bearer <API_KEY>`.
+- NOOP push data lives in a separate SQLite file (`noop.db`, defaulting to the sibling of `DATABASE_URL`, overridable via `NOOP_DB_URL`) with its own pool and its own migrations in `noop_migrations/`. The split gives writer-lock isolation from `app.db`, lets the push store be backed up on its own (it is the only copy of received health data outside the phone), and gives it an independent rotation/lifecycle. Create push migrations with `just noop-migration-add <name>` (`sqlx migrate add -r --source noop_migrations`) and apply them with `just noop-migrate` (`sqlx migrate run` against `NOOP_DB_URL`); they are also applied on startup. Push-DB queries use runtime `sqlx::query` because the compile-time macros only check against `DATABASE_URL`.
+- The push route authenticates with `Authorization: Bearer <NOOP_PUSH_TOKEN>` (required; must differ from `API_KEY`), and is merged outside the API-key middleware.
 - Feed refresh runs on startup and every 24 hours in the background.
 
 ## Routes
@@ -23,6 +25,7 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 - Workouts (fitness): `/api/workouts` (GET/POST), `/api/workouts/{id}` (GET/PATCH/DELETE) — POST/PATCH create or replace the nested exercise entries and sets in one transaction (a failure rolls back the whole write); history list supports `?from=`, `?to=`, `?limit=` and is newest-first; PATCH: absent fields keep the current value, explicit `null` clears the field (`name`, `notes`, `body_weight_kg`); `date` is NOT NULL and cannot be cleared; DELETE cascades to entries and sets
 - Progress (fitness): `/api/exercises/{id}/progress` — one row per workout date: `best_reps`, `best_weight_kg` (added weight), `total_volume_kg`, `best_rpe`, and `estimated_1rm_kg` (Epley: `weight * (1 + reps / 30)` from the best set of the day among sets with both reps and weight); observed data only, no interpolation; supports `?from=`, `?to=`, chronological order; unknown exercise is 404, a never-performed exercise returns an empty series
 - Body weight (fitness): `/api/body_weight` (GET/POST) — one row per date (`date` is unique); list supports `?from=`, `?to=`, `?limit=` and is chronological; POST with a duplicate date returns 409; POST returns 201
+- NOOP push (fixed route, not configurable): `/api/noop/push` — GET returns the capabilities document `{"type":"capabilities","protocolVersion","receiverStateId","streams"}` per `.noop/PUSH_PROTOCOL.md`; `NOOP-Push-Accept-Version` is checked first (no common version → 406), then the push token (→ 401); `receiverStateId` is persisted in `noop.db` (`receiver_state` table) and read per request, so an operator rotation takes effect immediately; unknown `/api/noop/*` paths → 404; errors use `{"type":"error","protocolVersion","code"}`
 - Profile (fitness): `/api/profile` (GET/PATCH) — the single profile row; GET returns null fields when not configured; PATCH upserts (creates the row on first PATCH): absent fields keep the current value, explicit `null` clears the field (`height_cm`, `sex`)
 
 ## Workout logging conventions
@@ -36,9 +39,11 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
 
 ```
 api/
-├── migrations/              # SQLx migrations
+├── migrations/              # SQLx migrations (app.db)
+├── noop_migrations/         # SQLx migrations for the NOOP push store (noop.db)
 └── src/
     ├── auth.rs              # API key auth middleware
+    ├── db.rs                # Shared SQLite pool setup (app.db and noop.db)
     ├── error.rs             # AppError and JSON error response
     ├── lib.rs               # AppState and module wiring
     ├── main.rs              # Server bootstrap and scheduler
@@ -46,10 +51,12 @@ api/
     │   ├── feeds.rs
     │   ├── fitness.rs
     │   ├── health.rs
+    │   ├── noop_push.rs     # NOOP push endpoint (own bearer token)
     │   ├── timeline.rs
     │   └── mod.rs
     └── services/            # Domain services
         ├── feed.rs
+        ├── noop_push.rs     # push protocol constants, config, receiver state
         └── mod.rs
 ```
 

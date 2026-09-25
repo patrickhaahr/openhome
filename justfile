@@ -78,6 +78,47 @@ lint:
 [working-directory: 'api']
 check: test fmt lint
 
+# Create a reversible NOOP push migration (just noop-migration-add receiver_state)
+[group('api')]
+[working-directory: 'api']
+noop-migration-add name:
+    sqlx migrate add -r --source noop_migrations {{name}}
+
+# Apply NOOP push migrations to NOOP_DB_URL (default: noop.db next to DATABASE_URL)
+[group('api')]
+[working-directory: 'api']
+noop-migrate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Mirrors noop_push::resolve_db_url in src/services/noop_push.rs; keep the two in sync.
+    url="${NOOP_DB_URL:-}"
+    url="${url#"${url%%[![:space:]]*}"}"
+    url="${url%"${url##*[![:space:]]}"}"
+    if [ -z "$url" ]; then
+        db="${DATABASE_URL:?DATABASE_URL must be set}"
+        location="${db%%\?*}"
+        query=""
+        if [ "$location" != "$db" ]; then query="?${db#*\?}"; fi
+        if [[ "$location" != sqlite:* ]]; then
+            echo "cannot derive the NOOP push database location from DATABASE_URL; set NOOP_DB_URL explicitly" >&2
+            exit 1
+        fi
+        path="${location#sqlite:}"
+        dir=""
+        file="$path"
+        if [[ "$path" == */* ]]; then dir="${path%/*}/"; file="${path##*/}"; fi
+        case "$file" in
+            "" | ":memory:" | "noop.db")
+                echo "cannot derive the NOOP push database location from DATABASE_URL; set NOOP_DB_URL explicitly" >&2
+                exit 1
+                ;;
+        esac
+        url="sqlite:${dir}noop.db${query}"
+    fi
+    echo "NOOP push database: $url"
+    sqlx database create --database-url "$url"
+    sqlx migrate run --source noop_migrations --database-url "$url"
+
 # Build the API image for amd64 + arm64 (Raspberry Pi) locally
 [group('api')]
 [working-directory: 'api']
