@@ -1,6 +1,4 @@
 use axum::Router;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -9,7 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use openhome_api::auth;
 use openhome_api::routes;
-use openhome_api::services::{adguard, docker, feed, ir, switchbot};
+use openhome_api::services::{adguard, docker, feed, ir, noop_push, switchbot};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,16 +22,13 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable must be set");
-    let options = SqliteConnectOptions::from_str(&database_url)?
-        .create_if_missing(true)
-        .foreign_keys(true)
-        .busy_timeout(Duration::from_secs(5));
-    let db = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(options)
-        .await?;
+    let db = openhome_api::db::connect_sqlite(&database_url).await?;
 
     sqlx::migrate!("./migrations").run(&db).await?;
+
+    let noop_db_url =
+        noop_push::resolve_db_url(&database_url, std::env::var("NOOP_DB_URL").ok().as_deref())?;
+    let noop_db = noop_push::connect(&noop_db_url).await?;
 
     let adguard_host = std::env::var("ADGUARD_HOST").unwrap_or_default();
     let adguard_username = std::env::var("ADGUARD_USERNAME").unwrap_or_default();
@@ -102,6 +97,21 @@ async fn main() -> anyhow::Result<()> {
     );
     let api_key_clone = api_key.clone();
 
+    let push_token = noop_push::PushToken::new(
+        std::env::var("NOOP_PUSH_TOKEN").expect("NOOP_PUSH_TOKEN environment variable must be set"),
+    )?;
+    if push_token.matches(api_key.as_str()) {
+        anyhow::bail!("NOOP_PUSH_TOKEN must differ from API_KEY");
+    }
+    let push_state = routes::noop_push::PushState {
+        db: noop_db,
+        token: push_token,
+    };
+    tracing::info!(
+        path = routes::noop_push::PUSH_PATH,
+        "NOOP push endpoint enabled"
+    );
+
     let app = Router::new()
         .merge(routes::health::router())
         .merge(routes::feeds::router())
@@ -115,6 +125,8 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())
         }))
+        // Merged after the API-key layer: the push route authenticates with NOOP_PUSH_TOKEN.
+        .merge(routes::noop_push::router(push_state))
         .layer(TraceLayer::new_for_http());
 
     let scheduler_state = state.clone();
