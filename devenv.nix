@@ -39,6 +39,11 @@
     emulator.enable = true;
   };
 
+  # devenv runs `prek run -a` on every shell entry (fmt + clippy ~3min).
+  # Hooks are already enforced at commit time, so make the shell-entry run a
+  # no-op; remove this if you want lint re-checked on each `cd`.
+  tasks."devenv:git-hooks:run".exec = lib.mkForce ":";
+
   enterShell = ''
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
     export DATABASE_URL="sqlite:$repo_root/api/data/app.db"
