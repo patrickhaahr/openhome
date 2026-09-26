@@ -8,10 +8,10 @@
 
 **Reference (read in this order):** `.noop/PUSH_PROTOCOL.md` — the wire contract; the whole doc is the spec for this ticket (framing, cursors, ack, idempotency, error codes). Then `.noop/PushModels.kt` for exact field names/types. Only open `.noop/PushProtocol.kt`, `PushDao.kt`, `PushCoordinator.kt`, or `.noop/tests/` to resolve a specific ambiguity (e.g. how cursors or byte-identity are computed). `.noop/DATA_MODEL.md` is optional context; `.noop/SCOPE.md` skip it.
 
-- [ ] Valid append batch for each of the 8 streams is stored columnar (one typed table per stream) and acknowledged with an exact-match ack
-- [ ] Byte-identical retry of a batch replays the stored ack without re-applying rows, across gzip and identity encodings
-- [ ] Reused `batchId` with different decoded bytes → 409, no data change
-- [ ] Malformed NDJSON → 400; unsupported stream/protocol or invalid record → 422; decoded body over 4 MiB → 413; all with bounded error codes
-- [ ] Upsert with the same scoped PK updates rather than duplicates; two `sourceId`s never overwrite each other
-- [ ] Append batches with 0 records rejected; cursors validated per the contract inequality
-- [ ] `keySha256` values are accepted and echoed verbatim, never interpreted
+- [x] Valid append batch for each of the 8 streams is stored columnar (one typed table per stream) and acknowledged with an exact-match ack
+- [x] Byte-identical retry of a batch replays the stored ack without re-applying rows, across gzip and identity encodings
+- [x] Reused `batchId` with different decoded bytes → 409, no data change
+- [x] Malformed NDJSON → 400; unsupported stream/protocol or invalid record → 422; decoded body over 4 MiB → 413; all with bounded error codes
+- [x] Upsert with the same scoped PK updates rather than duplicates; two `sourceId`s never overwrite each other
+- [x] Append batches with 0 records rejected; cursors validated per the contract inequality
+- [x] `keySha256` values are accepted and echoed verbatim, never interpreted

@@ -1,0 +1,9 @@
+DROP TABLE gravity_sample;
+DROP TABLE resp_sample;
+DROP TABLE skin_temp_sample;
+DROP TABLE spo2_sample;
+DROP TABLE battery;
+DROP TABLE event;
+DROP TABLE rr_interval;
+DROP TABLE hr_sample;
+DROP TABLE batch_ledger;
