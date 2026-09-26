@@ -15,7 +15,7 @@ A noninteractive command-line program that consumes the Axum API and does not co
 _Avoid_: Device script, API wrapper
 
 **Agent**:
-An automated operator that invokes a CLI Client to fulfill a user request.
+An automated operator that invokes a CLI Client or read-only training tools to fulfill a user request.
 _Avoid_: Integration Service, direct device agent
 
 **Axum API**:
@@ -152,6 +152,22 @@ _Avoid_: Exercise type, workout type
 A logged training session on a specific date, containing ordered exercise entries with sets.
 _Avoid_: Training plan, session template
 
+**NOOP Workout**:
+An activity record in NOOP with start and end timestamps and a recorded source, distinct from a Workout logged in OpenHome.
+_Avoid_: Automatically matched Workout, detected-only Workout
+
+**NOOP Source**:
+A logical origin of NOOP observations. A strap source and its on-device computed sibling can have different identifiers while representing one physical strap.
+_Avoid_: Second strap, second person
+
+**Training Day**:
+A calendar day used to compare logged training with NOOP observations. NOOP daily results keep their recorded day; timestamped observations are grouped in the user's home time zone (Europe/Copenhagen).
+_Avoid_: UTC day, rolling 24-hour period
+
+**Sleep Night**:
+A calendar night identified by the local day on which sleep ends. A Sleep Night remains present in a recent-night series when no sleep result is available.
+_Avoid_: Last available sleep record, sleep start date
+
 **Mixed-Category Session**:
 A Workout that contains entries from both Exercise Categories (calisthenics and gym); nothing restricts a Workout to a single category.
 _Avoid_: Single-category workout, category-specific session
@@ -177,7 +193,7 @@ The per-date aggregate of one Exercise's logged Sets served by the Axum API: bes
 _Avoid_: Interpolated trend, forecast chart
 
 **Body Weight**:
-A user-recorded day weight in kg, one row per date, kept separately from workouts.
+A user-recorded day weight in kg, one row per date and kept only in the daily body-weight record, separately from Workouts.
 _Avoid_: Workout body_weight, weight log entry
 
 **Profile**:
@@ -188,7 +204,7 @@ _Avoid_: User account, settings record
 
 - A **Mobile Client** calls the **Axum API** for every user-visible capability.
 - A **CLI Client** calls the **Axum API** for all device and service access.
-- An **Agent** invokes a **CLI Client** to fulfill a user request.
+- An **Agent** invokes a **CLI Client** or read-only training tools to fulfill a user request.
 - The **Axum API** delegates device-specific work to one or more **Integration Services**.
 - A **Mobile Client** uses a configured **Base URL** to reach the **Axum API**.
 - A **Mobile Client** authorizes requests to the **Axum API** with an **API Key**.
@@ -215,11 +231,15 @@ _Avoid_: User account, settings record
 - A **Container** is inspected (logs) and lifecycle-managed (start, stop, restart) through the Axum API from the **Docker Tab**.
 - Each **Feed** contributes items to the **Compact Timeline**.
 - A **Workout** references Exercises from the exercise library and records their Sets.
+- A **NOOP Workout** remains distinct from a logged **Workout**.
+- A strap **NOOP Source** and its computed sibling may contribute observations for the same person and day.
+- A **Training Day** aligns logged training and NOOP observations without changing a NOOP daily result's recorded day.
+- A **Sleep Night** is indexed by wake day, including nights without a result.
 - A **Mixed-Category Session** may combine calisthenics and gym entries in one Workout.
 - An **Added Weight** of null means bodyweight; Volume treats it as zero.
 - A **Timed Hold** replaces reps with a duration.
 - A **Progress Series** aggregates logged Sets per date and never invents data between dates.
-- **Body Weight** is recorded per date by the client, not derived from workouts.
+- **Body Weight** is recorded per date by the client and is not stored on a Workout.
 - The **Profile** is configured by the client and consulted to interpret fitness data.
 
 ## Example dialogue

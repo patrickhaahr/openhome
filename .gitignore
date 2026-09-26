@@ -13,6 +13,7 @@ package-lock.json
 .env
 .pio
 .platformio/
+openhome-data-reference.md
 
 # Devenv
 .devenv*
