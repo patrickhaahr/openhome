@@ -272,6 +272,109 @@ async fn receiver_state_id_persists_across_reconnects() {
     }
 }
 
+#[tokio::test]
+async fn baseline_retry_converges_after_restart_and_database_backup() {
+    let path = std::env::temp_dir().join(format!("noop-restart-{}.db", uuid::Uuid::new_v4()));
+    let backup = path.with_extension("backup.db");
+    let url = format!("sqlite:{}", path.display());
+    let append = hr_batch(BATCH_1, &[hr(1, 70)]);
+    let replacement_id = id(100);
+    let part_1 = replace_part(
+        "dailyMetric",
+        &id(1),
+        day_window(&replacement_id, 1, 4, 1, 2),
+        &[daily(1, 50.0)],
+    );
+    let part_2 = replace_part(
+        "dailyMetric",
+        &id(2),
+        day_window(&replacement_id, 1, 4, 2, 2),
+        &[daily(2, 60.0)],
+    );
+
+    let db = noop_push::connect(&url).await.unwrap();
+    let state_id = noop_push::receiver_state_id(&db).await.unwrap();
+    let append_ack = post(&db, &append, true).await;
+    let staged_ack = post(&db, &part_1, true).await;
+    assert_eq!(append_ack.status, StatusCode::OK);
+    assert_eq!(staged_ack.status, StatusCode::OK);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM hr_sample").await, 1);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM daily_metric").await, 0);
+    db.close().await;
+
+    // Startup runs migrations again against the same file. The sender lost both acks.
+    let db = noop_push::connect(&url).await.unwrap();
+    assert_eq!(noop_push::receiver_state_id(&db).await.unwrap(), state_id);
+    assert_eq!(post(&db, &append, false).await.raw, append_ack.raw);
+    assert_eq!(post(&db, &part_1, false).await.raw, staged_ack.raw);
+    assert_error(
+        &post(&db, &hr_batch(BATCH_1, &[hr(1, 71)]), false).await,
+        StatusCode::CONFLICT,
+        "batch_conflict",
+    );
+    assert_error(
+        &post(
+            &db,
+            &replace_part(
+                "dailyMetric",
+                &id(1),
+                day_window(&replacement_id, 1, 4, 1, 2),
+                &[daily(1, 51.0)],
+            ),
+            false,
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "batch_conflict",
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM hr_sample").await, 1);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 2);
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM replacement_part WHERE entity IS NOT NULL"
+        )
+        .await,
+        1,
+    );
+    assert_eq!(post(&db, &part_2, true).await.status, StatusCode::OK);
+    assert_eq!(
+        daily_recoveries(&db).await,
+        recovery_rows(&[(1, 50.0), (2, 60.0)]),
+    );
+    db.close().await;
+
+    // A closed SQLite file is a consistent backup containing both data and protocol state.
+    std::fs::copy(&path, &backup).unwrap();
+    let backup_db = noop_push::connect(&format!("sqlite:{}", backup.display()))
+        .await
+        .unwrap();
+    assert_eq!(
+        noop_push::receiver_state_id(&backup_db).await.unwrap(),
+        state_id
+    );
+    assert_eq!(count(&backup_db, "SELECT COUNT(*) FROM hr_sample").await, 1);
+    assert_eq!(
+        count(&backup_db, "SELECT COUNT(*) FROM batch_ledger").await,
+        3
+    );
+    assert_eq!(
+        daily_recoveries(&backup_db).await,
+        recovery_rows(&[(1, 50.0), (2, 60.0)]),
+    );
+    assert_eq!(
+        post(&backup_db, &part_2, false).await.status,
+        StatusCode::OK
+    );
+    backup_db.close().await;
+
+    for file in [&path, &backup] {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", file.display()));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // POST: append batch ingest
 // ---------------------------------------------------------------------------------------------
