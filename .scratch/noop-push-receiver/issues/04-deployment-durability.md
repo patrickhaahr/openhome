@@ -8,7 +8,7 @@
 
 **Reference:** none required — this ticket is infrastructure work against the repo's own deployment patterns. `.noop/` exists only if a durability claim needs cross-checking.
 
-- [ ] A receiver restart preserves: stored records, batch ledger (replay + 409 semantics), staged replacements, and `receiverStateId`
-- [ ] Push migrations for `NOOP_DB_URL` run via `sqlx migrate run` (sqlx-cli); migrations verified idempotent across restarts
-- [ ] Env config documented in `api/AGENTS.md` runtime notes: required `NOOP_PUSH_TOKEN`, fixed push route, `NOOP_DB_URL` default derived from `DATABASE_URL`
-- [ ] A manual smoke check: restart the server mid-baseline and confirm the client retry converges without duplicates
+- [x] A receiver restart preserves: stored records, batch ledger (replay + 409 semantics), staged replacements, and `receiverStateId`
+- [x] Push migrations for `NOOP_DB_URL` run via `sqlx migrate run` (sqlx-cli); migrations verified idempotent across restarts
+- [x] Env config documented in `api/AGENTS.md` runtime notes: required `NOOP_PUSH_TOKEN`, fixed push route, `NOOP_DB_URL` default derived from `DATABASE_URL`
+- [x] A manual smoke check: restart the server mid-baseline and confirm the client retry converges without duplicates
