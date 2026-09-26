@@ -191,7 +191,6 @@ export type WorkoutDetail = {
   readonly date: string;
   readonly name: string | null;
   readonly notes: string | null;
-  readonly bodyWeightKg: number | null;
   readonly exercises: readonly WorkoutExerciseEntry[];
 };
 
@@ -224,7 +223,6 @@ export type WorkoutInput = {
   readonly date: string;
   readonly name: string | null;
   readonly notes: string | null;
-  readonly bodyWeightKg: number | null;
   readonly exercises: readonly WorkoutExerciseInput[];
 };
 
@@ -291,12 +289,7 @@ export function parseWorkoutExerciseEntry(json: Json): Result<WorkoutExerciseEnt
 
 /** Parse an untrusted workout detail payload with embedded exercises and sets. */
 export function parseWorkoutDetail(json: Json): Result<WorkoutDetail> {
-  if (
-    !isJsonObject(json) ||
-    !isJsonNumber(json["id"]) ||
-    !isJsonString(json["date"]) ||
-    !isOptionalJsonNumber(json["body_weight_kg"])
-  ) {
+  if (!isJsonObject(json) || !isJsonNumber(json["id"]) || !isJsonString(json["date"])) {
     return failure(WORKOUT_READ_ERROR);
   }
   if (!isJsonArray(json["exercises"])) {
@@ -315,7 +308,6 @@ export function parseWorkoutDetail(json: Json): Result<WorkoutDetail> {
     date: json["date"],
     name: optionalJsonText(json["name"]),
     notes: optionalJsonText(json["notes"]),
-    bodyWeightKg: optionalJsonNumber(json["body_weight_kg"]),
     exercises,
   });
 }
@@ -348,20 +340,11 @@ export function parseWorkoutInput(
   date: string,
   name: string,
   notes: string,
-  bodyWeightKg: string,
   exercises: readonly WorkoutExerciseInput[],
 ): Result<WorkoutInput> {
   const padded = padDate(date);
   if (padded === null) {
     return failure("Enter a valid date in YYYY-MM-DD format.");
-  }
-  const weight = bodyWeightKg.trim();
-  let parsedWeight: number | null = null;
-  if (weight.length > 0) {
-    parsedWeight = Number(weight);
-    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
-      return failure("Enter a valid body weight in kg.");
-    }
   }
   if (exercises.length === 0) {
     return failure("Add at least one exercise to the workout.");
@@ -396,7 +379,6 @@ export function parseWorkoutInput(
     date: padded,
     name: trimmedOrNull(name),
     notes: trimmedOrNull(notes),
-    bodyWeightKg: parsedWeight,
     exercises,
   });
 }

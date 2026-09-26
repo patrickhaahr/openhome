@@ -11,11 +11,11 @@ import {
 } from "./use-workouts";
 
 function workoutDetail(id: number, date: string): WorkoutDetail {
-  return { id, date, name: null, notes: null, bodyWeightKg: null, exercises: [] };
+  return { id, date, name: null, notes: null, exercises: [] };
 }
 
 function workoutInput(date: string): WorkoutInput {
-  return { date, name: null, notes: null, bodyWeightKg: null, exercises: [] };
+  return { date, name: null, notes: null, exercises: [] };
 }
 
 /** A scripted fake of the workout adapter surface with manually resolved responses. */

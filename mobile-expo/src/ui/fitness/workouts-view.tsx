@@ -35,7 +35,6 @@ type WorkoutFormState = {
   readonly date: string;
   readonly name: string;
   readonly notes: string;
-  readonly bodyWeightKg: string;
   readonly entries: ReadonlyArray<{
     readonly exerciseId: number;
     readonly exerciseName: string;
@@ -57,7 +56,6 @@ function formFromDetail(workout: WorkoutDetail): WorkoutFormState {
     date: workout.date,
     name: workout.name ?? "",
     notes: workout.notes ?? "",
-    bodyWeightKg: workout.bodyWeightKg === null ? "" : String(workout.bodyWeightKg),
     entries: workout.exercises.map((entry) => ({
       exerciseId: entry.exercise.id,
       exerciseName: entry.exercise.name,
@@ -119,7 +117,7 @@ export function WorkoutsView({
 
   function openCreate(): void {
     setEditingId(null);
-    setForm({ date: today(), name: "", notes: "", bodyWeightKg: "", entries: [] });
+    setForm({ date: today(), name: "", notes: "", entries: [] });
     setFormError(null);
   }
 
@@ -139,13 +137,7 @@ export function WorkoutsView({
     if (form === null) {
       return;
     }
-    const parsed = parseWorkoutInput(
-      form.date,
-      form.name,
-      form.notes,
-      form.bodyWeightKg,
-      collectEntries(form),
-    );
+    const parsed = parseWorkoutInput(form.date, form.name, form.notes, collectEntries(form));
     if (!parsed.ok) {
       setFormError(parsed.error);
       return;
@@ -311,9 +303,6 @@ function WorkoutDetailView({
         {workout.name !== null ? (
           <Text style={workoutStyles.workoutName}>{workout.name}</Text>
         ) : null}
-        {workout.bodyWeightKg !== null ? (
-          <Text style={styles.detail}>Body weight: {workout.bodyWeightKg} kg</Text>
-        ) : null}
         {workout.notes !== null ? <Text style={styles.detail}>{workout.notes}</Text> : null}
         <View style={shared.row}>
           <ActionButton label="Edit" sending={false} disabled={busy} onPress={onEdit} />
@@ -395,17 +384,6 @@ function WorkoutForm({
           placeholderTextColor={colors.muted}
           style={styles.input}
           value={form.name}
-        />
-        <TextInput
-          accessibilityLabel="Body weight in kg"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="decimal-pad"
-          onChangeText={(bodyWeightKg) => setForm((current) => ({ ...current, bodyWeightKg }))}
-          placeholder="Body weight kg (optional)"
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={form.bodyWeightKg}
         />
         <TextInput
           accessibilityLabel="Workout notes"

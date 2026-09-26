@@ -582,7 +582,6 @@ type WorkoutBody = {
   date: string;
   name: string | null;
   notes: string | null;
-  body_weight_kg: number | null;
   exercises: ReadonlyArray<{
     exercise_id: number;
     order_index: number;
@@ -604,7 +603,6 @@ function workoutBody(input: WorkoutInput): WorkoutBody {
     date: input.date,
     name: input.name,
     notes: input.notes,
-    body_weight_kg: input.bodyWeightKg,
     exercises: input.exercises.map((entry, orderIndex) => ({
       exercise_id: entry.exerciseId,
       order_index: orderIndex,

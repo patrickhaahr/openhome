@@ -76,11 +76,14 @@ pub fn create_mock_state_with_switchbot(service: SwitchbotService) -> AppState {
 }
 
 pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Router, AppState) {
-    let api_key = ApiKey::new("test-api-key".to_string());
-    let api_key_clone = api_key.clone();
-
     let db = SqlitePool::connect(":memory:").await.unwrap();
     sqlx::migrate!("./migrations").run(&db).await.unwrap();
+    test_app_with_pool(db, adguard_enabled)
+}
+
+pub fn test_app_with_pool(db: SqlitePool, adguard_enabled: Option<bool>) -> (Router, AppState) {
+    let api_key = ApiKey::new("test-api-key".to_string());
+    let api_key_clone = api_key.clone();
 
     let adguard_service = if adguard_enabled.unwrap_or(false) {
         Some(AdguardService::new("http://localhost:9999", "test", "test", false).unwrap())

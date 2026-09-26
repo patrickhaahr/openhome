@@ -239,7 +239,6 @@ const workoutDetailPayload = {
   date: "2026-09-12",
   name: "Push A",
   notes: "Felt strong",
-  body_weight_kg: 72.5,
   exercises: [
     {
       id: 11,
@@ -366,7 +365,7 @@ describe("parseWorkoutDetail", () => {
 describe("parseWorkoutInput", () => {
   it("accepts a mixed workout with padded date, trimmed text, and parsed numbers", () => {
     expect(
-      parseWorkoutInput("2026-9-2", "  Morning calisthenics  ", " Felt good ", "72.5", [
+      parseWorkoutInput("2026-9-2", "  Morning calisthenics  ", " Felt good ", [
         workoutExercise({ exerciseId: 1 }),
         workoutExercise({ exerciseId: 2 }),
       ]),
@@ -376,7 +375,6 @@ describe("parseWorkoutInput", () => {
         date: "2026-09-02",
         name: "Morning calisthenics",
         notes: "Felt good",
-        bodyWeightKg: 72.5,
         exercises: [
           { exerciseId: 1, notes: null, sets: [set()] },
           { exerciseId: 2, notes: null, sets: [set()] },
@@ -385,40 +383,36 @@ describe("parseWorkoutInput", () => {
     });
   });
 
-  it("maps blank name, notes, and body weight to null", () => {
-    const result = parseWorkoutInput("2026-09-02", "  ", "", "", [workoutExercise()]);
+  it("maps blank name and notes to null", () => {
+    const result = parseWorkoutInput("2026-09-02", "  ", "", [workoutExercise()]);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.name).toBeNull();
       expect(result.value.notes).toBeNull();
-      expect(result.value.bodyWeightKg).toBeNull();
     }
   });
 
-  it("rejects an invalid date or body weight", () => {
-    expect(parseWorkoutInput("not-a-date", "", "", "", [workoutExercise()])).toEqual(
+  it("rejects an invalid date", () => {
+    expect(parseWorkoutInput("not-a-date", "", "", [workoutExercise()])).toEqual(
       failure("Enter a valid date in YYYY-MM-DD format."),
-    );
-    expect(parseWorkoutInput("2026-09-02", "", "", "heavy", [workoutExercise()])).toEqual(
-      failure("Enter a valid body weight in kg."),
     );
   });
 
   it("rejects a workout with no exercises", () => {
-    expect(parseWorkoutInput("2026-09-02", "", "", "", [])).toEqual(
+    expect(parseWorkoutInput("2026-09-02", "", "", [])).toEqual(
       failure("Add at least one exercise to the workout."),
     );
   });
 
   it("rejects a set with neither reps nor duration", () => {
-    const result = parseWorkoutInput("2026-09-02", "", "", "", [
+    const result = parseWorkoutInput("2026-09-02", "", "", [
       workoutExercise({ sets: [set({ reps: null, durationSeconds: null })] }),
     ]);
     expect(result).toEqual(failure("Set 1 needs reps or a duration in seconds."));
   });
 
   it("rejects RPE outside 1-10", () => {
-    const result = parseWorkoutInput("2026-09-02", "", "", "", [
+    const result = parseWorkoutInput("2026-09-02", "", "", [
       workoutExercise({ sets: [set({ rpe: 11 })] }),
     ]);
     expect(result).toEqual(failure("Set 1 RPE must be between 1 and 10."));
@@ -426,12 +420,10 @@ describe("parseWorkoutInput", () => {
 
   it("rejects a negative weight or duration", () => {
     expect(
-      parseWorkoutInput("2026-09-02", "", "", "", [
-        workoutExercise({ sets: [set({ weightKg: -1 })] }),
-      ]),
+      parseWorkoutInput("2026-09-02", "", "", [workoutExercise({ sets: [set({ weightKg: -1 })] })]),
     ).toEqual(failure("Set 1 added weight must be a positive number of kg."));
     expect(
-      parseWorkoutInput("2026-09-02", "", "", "", [
+      parseWorkoutInput("2026-09-02", "", "", [
         workoutExercise({ sets: [set({ durationSeconds: 0 })] }),
       ]),
     ).toEqual(failure("Set 1 duration must be a positive number of seconds."));
