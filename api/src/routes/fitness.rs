@@ -293,7 +293,6 @@ pub struct CreateWorkout {
     date: String,
     name: Option<String>,
     notes: Option<String>,
-    body_weight_kg: Option<f64>,
     exercises: Vec<WorkoutExerciseInput>,
 }
 
@@ -304,8 +303,6 @@ pub struct UpdateWorkout {
     name: Option<Option<String>>,
     #[serde(default, with = "double_option")]
     notes: Option<Option<String>>,
-    #[serde(default, with = "double_option")]
-    body_weight_kg: Option<Option<f64>>,
     exercises: Option<Vec<WorkoutExerciseInput>>,
 }
 
@@ -349,7 +346,6 @@ pub struct WorkoutDetail {
     date: String,
     name: Option<String>,
     notes: Option<String>,
-    body_weight_kg: Option<f64>,
     exercises: Vec<WorkoutExercise>,
 }
 
@@ -519,8 +515,7 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
         SELECT CAST(id AS INTEGER)  AS id,
                CAST(date AS TEXT)   AS date,
                name,
-               notes,
-               body_weight_kg
+               notes
         FROM workouts
         WHERE id = $1
         "#,
@@ -541,7 +536,6 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
         date: workout.date,
         name: workout.name,
         notes: workout.notes,
-        body_weight_kg: workout.body_weight_kg,
         exercises,
     })
 }
@@ -607,13 +601,12 @@ async fn create_workout(
 
     let workout_id = sqlx::query!(
         r#"
-        INSERT INTO workouts (date, name, notes, body_weight_kg)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO workouts (date, name, notes)
+        VALUES ($1, $2, $3)
         "#,
         date,
         payload.name,
-        payload.notes,
-        payload.body_weight_kg
+        payload.notes
     )
     .execute(&mut *tx)
     .await
@@ -652,25 +645,20 @@ async fn update_workout(
     let name = payload.name.flatten();
     let notes_set = payload.notes.is_some();
     let notes = payload.notes.flatten();
-    let body_weight_set = payload.body_weight_kg.is_some();
-    let body_weight_kg = payload.body_weight_kg.flatten();
     let result = sqlx::query!(
         r#"
         UPDATE workouts
         SET date = COALESCE($1, date),
             name = CASE WHEN $2 THEN $3 ELSE name END,
             notes = CASE WHEN $4 THEN $5 ELSE notes END,
-            body_weight_kg = CASE WHEN $6 THEN $7 ELSE body_weight_kg END,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $8
+        WHERE id = $6
         "#,
         date,
         name_set,
         name,
         notes_set,
         notes,
-        body_weight_set,
-        body_weight_kg,
         id
     )
     .execute(&mut *tx)

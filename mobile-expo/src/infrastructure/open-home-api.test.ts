@@ -684,7 +684,6 @@ describe("fitness workout adapter", () => {
     date: "2026-09-12",
     name: "Push A",
     notes: null,
-    body_weight_kg: 72.5,
     exercises: [
       {
         id: 11,
@@ -710,7 +709,6 @@ describe("fitness workout adapter", () => {
     date: "2026-09-12",
     name: "Push A",
     notes: null,
-    bodyWeightKg: 72.5,
     exercises: [
       {
         exerciseId: 1,
@@ -753,7 +751,6 @@ describe("fitness workout adapter", () => {
         date: "2026-09-12",
         name: "Push A",
         notes: null,
-        bodyWeightKg: 72.5,
         exercises: [
           {
             id: 11,
@@ -784,7 +781,6 @@ describe("fitness workout adapter", () => {
             date: "2026-09-12",
             name: "Push A",
             notes: null,
-            body_weight_kg: 72.5,
             exercises: [
               {
                 exercise_id: 1,
@@ -901,7 +897,13 @@ describe("fitness progress, body weight, and profile adapter", () => {
     expect(await createOpenHomeApi(configuration).fitness.getExerciseProgress(1)).toEqual({
       ok: true,
       value: {
-        exercise: { id: 1, name: "Bench Press", category: "gym", muscleGroup: null, equipment: null },
+        exercise: {
+          id: 1,
+          name: "Bench Press",
+          category: "gym",
+          muscleGroup: null,
+          equipment: null,
+        },
         data: [
           {
             date: "2026-09-12",
@@ -937,17 +939,18 @@ describe("fitness progress, body weight, and profile adapter", () => {
   it("lists body weight entries and rejects malformed payloads", async () => {
     stubFetch(
       async () =>
-        new Response(
-          JSON.stringify([{ id: 3, date: "2026-09-12", weight_kg: 72.5 }]),
-          { status: 200 },
-        ),
+        new Response(JSON.stringify([{ id: 3, date: "2026-09-12", weight_kg: 72.5 }]), {
+          status: 200,
+        }),
     );
     expect(await createOpenHomeApi(configuration).fitness.listBodyWeight()).toEqual({
       ok: true,
       value: [{ id: 3, date: "2026-09-12", weightKg: 72.5 }],
     });
 
-    stubFetch(async () => new Response(JSON.stringify([{ id: 3, date: "2026-09-12" }]), { status: 200 }));
+    stubFetch(
+      async () => new Response(JSON.stringify([{ id: 3, date: "2026-09-12" }]), { status: 200 }),
+    );
     expect(await createOpenHomeApi(configuration).fitness.listBodyWeight()).toEqual(
       failure(bodyWeightError),
     );
@@ -958,7 +961,9 @@ describe("fitness progress, body weight, and profile adapter", () => {
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
       return Promise.resolve(
-        new Response(JSON.stringify({ id: 3, date: "2026-09-12", weight_kg: 72.5 }), { status: 201 }),
+        new Response(JSON.stringify({ id: 3, date: "2026-09-12", weight_kg: 72.5 }), {
+          status: 201,
+        }),
       );
     });
 
@@ -1080,7 +1085,13 @@ describe("exercise update and delete adapter", () => {
       }),
     ).toEqual({
       ok: true,
-      value: { id: 1, name: "Incline Press", category: "gym", muscleGroup: null, equipment: "Barbell" },
+      value: {
+        id: 1,
+        name: "Incline Press",
+        category: "gym",
+        muscleGroup: null,
+        equipment: "Barbell",
+      },
     });
     expect(requests[0]).toEqual({
       url: "http://openhome.test/api/exercises/1",

@@ -6,6 +6,61 @@ use http::{Method, StatusCode};
 use serde_json::json;
 
 #[tokio::test]
+async fn test_workout_weight_migration_preserves_logged_workouts() {
+    let db = sqlx::SqlitePool::connect(":memory:").await.unwrap();
+    sqlx::raw_sql(include_str!("../migrations/0003_fitness.up.sql"))
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO workouts (id, date, name, body_weight_kg) VALUES (1, '2026-09-01', 'Legacy', 74.5)")
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO workout_exercises (workout_id, exercise_id, order_index) VALUES (1, 11, 0)",
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    sqlx::raw_sql(include_str!(
+        "../migrations/0004_remove_workout_body_weight.up.sql"
+    ))
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (name, exercise_count): (String, i64) = sqlx::query_as(
+        "SELECT w.name, COUNT(we.id) FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id WHERE w.id = 1",
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(name, "Legacy");
+    assert_eq!(exercise_count, 1);
+    let columns: Vec<(i64, String, String, i64, Option<String>, i64)> =
+        sqlx::query_as("PRAGMA table_info(workouts)")
+            .fetch_all(&db)
+            .await
+            .unwrap();
+    assert!(!columns.iter().any(|column| column.1 == "body_weight_kg"));
+
+    let (app, _) = common::test_app_with_pool(db, None);
+    let (status, body) = send_request_with_method(
+        app,
+        "/api/workouts/1",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["name"], "Legacy");
+    assert_eq!(body["exercises"][0]["exercise"]["name"], "Pull-up");
+    assert!(body.get("body_weight_kg").is_none());
+}
+
+#[tokio::test]
 async fn test_list_exercises_returns_seeded_catalog() {
     let app = common::test_app().await;
 
@@ -494,7 +549,6 @@ fn sample_workout_body() -> serde_json::Value {
         "date": "2026-08-23",
         "name": "Pull day",
         "notes": "Felt strong",
-        "body_weight_kg": 74.5,
         "exercises": [
             {
                 "exercise_id": 11,
@@ -572,7 +626,7 @@ async fn test_get_workout_embeds_exercises_and_sets_in_order() {
     assert_eq!(body["date"], "2026-08-23");
     assert_eq!(body["name"], "Pull day");
     assert_eq!(body["notes"], "Felt strong");
-    assert_eq!(body["body_weight_kg"], 74.5);
+    assert!(body.get("body_weight_kg").is_none());
 
     let exercises = body["exercises"].as_array().unwrap();
     assert_eq!(exercises.len(), 2);
@@ -693,7 +747,6 @@ async fn test_patch_workout_updates_fields_and_replaces_sets() {
     let patch = json!({
         "name": "Pull day (revised)",
         "notes": " shortened rest ",
-        "body_weight_kg": 75.0,
         "exercises": [
             {
                 "exercise_id": 11,
@@ -715,7 +768,7 @@ async fn test_patch_workout_updates_fields_and_replaces_sets() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["name"], "Pull day (revised)");
-    assert_eq!(body["body_weight_kg"], 75.0);
+    assert!(body.get("body_weight_kg").is_none());
 
     let (status, fetched) = send_request_with_method(
         app,
@@ -740,7 +793,7 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     let created = create_sample_workout(&app).await;
     let id = created["id"].as_i64().unwrap();
 
-    // explicit null clears the name; absent notes/body_weight keep values
+    // explicit null clears the name; absent notes keep their value
     let (status, body) = send_request_with_method(
         app.clone(),
         &format!("/api/workouts/{}", id),
@@ -752,7 +805,7 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["name"], serde_json::Value::Null);
     assert_eq!(body["notes"], "Felt strong");
-    assert_eq!(body["body_weight_kg"], 74.5);
+    assert!(body.get("body_weight_kg").is_none());
 
     // absent name keeps the cleared value
     let (status, body) = send_request_with_method(
