@@ -182,6 +182,18 @@ async fn push_batch(State(state): State<PushState>, headers: HeaderMap, body: Bo
                 "storage_unavailable",
             )
         }
+        Err(IngestError::Internal(reason)) => {
+            tracing::error!(
+                route = PUSH_PATH,
+                reason,
+                "NOOP push batch: internal failure"
+            );
+            push_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                CURRENT_VERSION,
+                "internal_error",
+            )
+        }
         Err(error) => rejected(status_for(&error), error.code()),
     }
 }
@@ -191,8 +203,8 @@ fn status_for(error: &IngestError) -> StatusCode {
         IngestError::Malformed(_) => StatusCode::BAD_REQUEST,
         IngestError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         IngestError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
-        IngestError::Conflict => StatusCode::CONFLICT,
-        IngestError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        IngestError::Conflict(_) => StatusCode::CONFLICT,
+        IngestError::Storage(_) | IngestError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

@@ -8,10 +8,10 @@
 
 **Reference (read in this order):** `.noop/PUSH_PROTOCOL.md` — "Authoritative rolling-window delivery" + "Version 1 stream registry" (mutable tables) + "Acceptance, errors" are the spec for this ticket. Then `.noop/PushModels.kt` and the `window` member section of `PushProtocol.kt` for exact field shapes. Only open `.noop/PushCoordinator.kt` or `.noop/tests/` to resolve a specific ambiguity (e.g. generation supersede or empty-window semantics).
 
-- [ ] A complete replacement for each mutable stream upserts records and deletes absent keys in the window; rows outside the window survive
-- [ ] An empty window deletes all rows for that scope and window
-- [ ] Parts arrive out of order; ack for the final part is returned only after the atomic apply commits
-- [ ] Conflicting reuse of `replacementId`, part number, or `batchId` → 409, no data change
-- [ ] A first part of a new generation supersedes an older incomplete one; late parts of the superseded generation → 409
-- [ ] Byte-identical part retries replay their ack; window bounds validated as half-open, day format and Unix-second bounds enforced
-- [ ] Capabilities now list all 12 streams; required fields (`endTs`, `source`, `userEdited`, `answeredYes`) enforced per registry
+- [x] A complete replacement for each mutable stream upserts records and deletes absent keys in the window; rows outside the window survive
+- [x] An empty window deletes all rows for that scope and window
+- [x] Parts arrive out of order; ack for the final part is returned only after the atomic apply commits
+- [x] Conflicting reuse of `replacementId`, part number, or `batchId` → 409, no data change
+- [x] A first part of a new generation supersedes an older incomplete one; late parts of the superseded generation → 409
+- [x] Byte-identical part retries replay their ack; window bounds validated as half-open, day format and Unix-second bounds enforced
+- [x] Capabilities now list all 12 streams; required fields (`endTs`, `source`, `userEdited`, `answeredYes`) enforced per registry

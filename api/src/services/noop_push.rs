@@ -9,6 +9,7 @@
 
 pub mod ingest;
 pub mod registry;
+mod replace_window;
 
 use std::fmt;
 
