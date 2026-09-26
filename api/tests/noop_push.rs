@@ -822,9 +822,9 @@ async fn unsupported_or_invalid_batches_are_422() {
             "unsupported_stream",
         ),
         (
-            "mutable stream",
+            "mutable stream with append delivery",
             with(&|h| h["stream"] = json!("dailyMetric")),
-            "unsupported_stream",
+            "invalid_header",
         ),
         (
             "not a batch header",
@@ -1310,4 +1310,1333 @@ async fn concurrent_identical_posts_apply_once_and_return_the_same_ack() {
     for suffix in ["", "-wal", "-shm", "-journal"] {
         let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// POST: replace-window delivery for the mutable streams
+// ---------------------------------------------------------------------------------------------
+
+/// A distinct canonical UUID per `n` (batch and replacement IDs).
+fn id(n: u64) -> String {
+    format!("00000000-0000-4000-8000-{n:012x}")
+}
+
+fn day(index: i64) -> String {
+    format!("2026-08-{index:02}")
+}
+
+/// Local-midnight-like Unix seconds for day `index` (UTC here; the receiver never interprets it).
+fn ts(index: i64) -> i64 {
+    1_754_006_400 + index * 86_400
+}
+
+fn day_window(replacement: &str, start: i64, end: i64, part: u32, parts: u32) -> Value {
+    json!({
+        "replacementId": replacement,
+        "selector": "day",
+        "startInclusive": day(start),
+        "endExclusive": day(end),
+        "part": part,
+        "parts": parts,
+    })
+}
+
+fn ts_window(replacement: &str, start: i64, end: i64, part: u32, parts: u32) -> Value {
+    json!({
+        "replacementId": replacement,
+        "selector": "startTs",
+        "startInclusive": ts(start),
+        "endExclusive": ts(end),
+        "part": part,
+        "parts": parts,
+    })
+}
+
+fn replace_header(stream: &str, batch_id: &str, count: usize, window: Value) -> Value {
+    json!({
+        "type": "batch",
+        "protocolVersion": "1.0",
+        "batchId": batch_id,
+        "sourceId": SOURCE_A,
+        "deviceId": DEVICE,
+        "stream": stream,
+        "delivery": "replace_window",
+        "recordCount": count,
+        "startCursor": null,
+        "endCursor": null,
+        "window": window,
+    })
+}
+
+fn replace_part(stream: &str, batch_id: &str, window: Value, records: &[Value]) -> Vec<u8> {
+    ndjson(
+        &replace_header(stream, batch_id, records.len(), window),
+        records,
+    )
+}
+
+fn replace_ack(stream: &str, batch_id: &str, rows: usize) -> Value {
+    expected_ack(stream, batch_id, Value::Null, rows)
+}
+
+#[track_caller]
+fn assert_ok(reply: &Reply, expected: Value) {
+    assert_eq!(
+        reply.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&reply.raw)
+    );
+    assert_eq!(reply.json, expected);
+}
+
+fn daily(index: i64, recovery: f64) -> Value {
+    record(
+        json!({"day": day(index)}),
+        json!({
+            "totalSleepMin": null, "efficiency": null, "deepMin": null, "remMin": null,
+            "lightMin": null, "disturbances": null, "restingHr": null, "avgHrv": null,
+            "recovery": recovery, "strain": null, "exerciseCount": null, "spo2Pct": null,
+            "skinTempDevC": null, "respRateBpm": null, "steps": null, "activeKcalEst": null,
+            "spo2Red": null, "spo2Ir": null,
+        }),
+    )
+}
+
+fn sleep(index: i64, end_offset: i64) -> Value {
+    record(
+        json!({"startTs": ts(index)}),
+        json!({
+            "endTs": ts(index) + end_offset, "efficiency": null, "restingHr": null,
+            "avgHrv": null, "stagesJSON": null, "userEdited": false, "startTsAdjusted": null,
+            "motionJSON": null, "sleepStateJSON": null, "stagingSparse": null,
+        }),
+    )
+}
+
+fn workout(index: i64, sport: &str, end_offset: i64) -> Value {
+    record(
+        json!({"startTs": ts(index), "sport": sport}),
+        json!({
+            "endTs": ts(index) + end_offset, "source": "noop", "durationS": null,
+            "energyKcal": null, "avgHr": null, "maxHr": null, "strain": null, "distanceM": null,
+            "zonesJSON": null, "notes": null, "routePolyline": null, "steps": null,
+        }),
+    )
+}
+
+fn journal(index: i64, question: &str, answered_yes: bool) -> Value {
+    record(
+        json!({"day": day(index), "question": question}),
+        json!({"answeredYes": answered_yes, "notes": null, "numericValue": null}),
+    )
+}
+
+async fn daily_recoveries(db: &SqlitePool) -> Vec<Value> {
+    rows(
+        db,
+        "SELECT json_object('day', day, 'recovery', recovery) FROM daily_metric \
+         WHERE source_id = '3a3486dd-5030-4e17-a00d-a781399890f9' \
+         AND device_id = 'strap-local-id' ORDER BY day",
+    )
+    .await
+}
+
+fn recovery_rows(expected: &[(i64, f64)]) -> Vec<Value> {
+    expected
+        .iter()
+        .map(|(index, recovery)| json!({"day": day(*index), "recovery": recovery}))
+        .collect()
+}
+
+/// Row counts of every replace-window table, to prove a rejected part changed nothing.
+async fn replace_state(db: &SqlitePool) -> Vec<i64> {
+    let mut counts = Vec::new();
+    for table in [
+        "daily_metric",
+        "sleep_session",
+        "workout",
+        "journal",
+        "batch_ledger",
+        "replacement",
+        "replacement_scope",
+        "replacement_part",
+    ] {
+        counts.push(count(db, &format!("SELECT COUNT(*) FROM {table}")).await);
+    }
+    counts.push(
+        count(
+            db,
+            "SELECT COUNT(*) FROM replacement_part WHERE entity IS NOT NULL",
+        )
+        .await,
+    );
+    counts.push(
+        count(
+            db,
+            "SELECT COUNT(*) FROM replacement WHERE state = 'applied'",
+        )
+        .await,
+    );
+    counts
+}
+
+#[tokio::test]
+async fn stores_every_mutable_stream_columnar_and_acks_with_null_end_cursor() {
+    let cases = [
+        (
+            "dailyMetric",
+            day_window(&id(1000), 1, 15, 1, 1),
+            record(
+                json!({"day": "2026-08-05"}),
+                json!({
+                    "totalSleepMin": 420.5, "efficiency": 0.91, "deepMin": 80.0, "remMin": 95.5,
+                    "lightMin": 245.0, "disturbances": 3, "restingHr": 52, "avgHrv": 61.2,
+                    "recovery": 77.0, "strain": 12.4, "exerciseCount": 1, "spo2Pct": 96.5,
+                    "skinTempDevC": -0.3, "respRateBpm": 14.8, "steps": 9001,
+                    "activeKcalEst": 512.5, "spo2Red": 1200.5, "spo2Ir": 1300,
+                }),
+            ),
+            "SELECT json_object('source_id', source_id, 'device_id', device_id, 'day', day, \
+             'total_sleep_min', total_sleep_min, 'efficiency', efficiency, 'deep_min', deep_min, \
+             'rem_min', rem_min, 'light_min', light_min, 'disturbances', disturbances, \
+             'resting_hr', resting_hr, 'avg_hrv', avg_hrv, 'recovery', recovery, \
+             'strain', strain, 'exercise_count', exercise_count, 'spo2_pct', spo2_pct, \
+             'skin_temp_dev_c', skin_temp_dev_c, 'resp_rate_bpm', resp_rate_bpm, \
+             'steps', steps, 'active_kcal_est', active_kcal_est, 'spo2_red', spo2_red, \
+             'spo2_ir', spo2_ir) FROM daily_metric",
+            json!({
+                "source_id": SOURCE_A, "device_id": DEVICE, "day": "2026-08-05",
+                "total_sleep_min": 420.5, "efficiency": 0.91, "deep_min": 80.0,
+                "rem_min": 95.5, "light_min": 245.0, "disturbances": 3, "resting_hr": 52.0,
+                "avg_hrv": 61.2, "recovery": 77.0, "strain": 12.4, "exercise_count": 1,
+                "spo2_pct": 96.5, "skin_temp_dev_c": -0.3, "resp_rate_bpm": 14.8,
+                "steps": 9001, "active_kcal_est": 512.5, "spo2_red": 1200.5, "spo2_ir": 1300.0,
+            }),
+        ),
+        (
+            "sleepSession",
+            ts_window(&id(1001), 1, 15, 1, 1),
+            record(
+                json!({"startTs": ts(5)}),
+                json!({
+                    "endTs": ts(5) + 28_800, "efficiency": 0.88, "restingHr": 50.5,
+                    "avgHrv": 70, "stagesJSON": "[{\"stage\":\"deep\"}]", "userEdited": true,
+                    "startTsAdjusted": ts(5) - 60, "motionJSON": "{\"m\":1}",
+                    "sleepStateJSON": "[]", "stagingSparse": false,
+                }),
+            ),
+            "SELECT json_object('source_id', source_id, 'device_id', device_id, \
+             'start_ts', start_ts, 'end_ts', end_ts, 'efficiency', efficiency, \
+             'resting_hr', resting_hr, 'avg_hrv', avg_hrv, 'stages_json', stages_json, \
+             'user_edited', user_edited, 'start_ts_adjusted', start_ts_adjusted, \
+             'motion_json', motion_json, 'sleep_state_json', sleep_state_json, \
+             'staging_sparse', staging_sparse) FROM sleep_session",
+            json!({
+                "source_id": SOURCE_A, "device_id": DEVICE, "start_ts": ts(5),
+                "end_ts": ts(5) + 28_800, "efficiency": 0.88, "resting_hr": 50.5,
+                "avg_hrv": 70.0, "stages_json": "[{\"stage\":\"deep\"}]", "user_edited": 1,
+                "start_ts_adjusted": ts(5) - 60, "motion_json": "{\"m\":1}",
+                "sleep_state_json": "[]", "staging_sparse": 0,
+            }),
+        ),
+        (
+            "workout",
+            ts_window(&id(1002), 1, 15, 1, 1),
+            record(
+                json!({"startTs": ts(5), "sport": "running"}),
+                json!({
+                    "endTs": ts(5) + 3600, "source": "healthConnect", "durationS": 3600,
+                    "energyKcal": 640.5, "avgHr": 151, "maxHr": 182.5, "strain": 14.1,
+                    "distanceM": 10012.5, "zonesJSON": "{\"z2\":0.4}", "notes": "tempo",
+                    "routePolyline": "_p~iF~ps|U", "steps": 9500,
+                }),
+            ),
+            "SELECT json_object('source_id', source_id, 'device_id', device_id, \
+             'start_ts', start_ts, 'sport', sport, 'end_ts', end_ts, 'source', source, \
+             'duration_s', duration_s, 'energy_kcal', energy_kcal, 'avg_hr', avg_hr, \
+             'max_hr', max_hr, 'strain', strain, 'distance_m', distance_m, \
+             'zones_json', zones_json, 'notes', notes, 'route_polyline', route_polyline, \
+             'steps', steps) FROM workout",
+            json!({
+                "source_id": SOURCE_A, "device_id": DEVICE, "start_ts": ts(5),
+                "sport": "running", "end_ts": ts(5) + 3600, "source": "healthConnect",
+                "duration_s": 3600.0, "energy_kcal": 640.5, "avg_hr": 151.0, "max_hr": 182.5,
+                "strain": 14.1, "distance_m": 10012.5, "zones_json": "{\"z2\":0.4}",
+                "notes": "tempo", "route_polyline": "_p~iF~ps|U", "steps": 9500,
+            }),
+        ),
+        (
+            "journal",
+            day_window(&id(1003), 1, 15, 1, 1),
+            record(
+                json!({"day": "2026-08-05", "question": "Caffeine after 2pm?"}),
+                json!({"answeredYes": true, "notes": "one espresso", "numericValue": 1.5}),
+            ),
+            "SELECT json_object('source_id', source_id, 'device_id', device_id, 'day', day, \
+             'question', question, 'answered_yes', answered_yes, 'notes', notes, \
+             'numeric_value', numeric_value) FROM journal",
+            json!({
+                "source_id": SOURCE_A, "device_id": DEVICE, "day": "2026-08-05",
+                "question": "Caffeine after 2pm?", "answered_yes": 1, "notes": "one espresso",
+                "numeric_value": 1.5,
+            }),
+        ),
+    ];
+
+    for (stream, window, row, select, expected) in cases {
+        let db = memory_push_db().await;
+        let reply = post(&db, &replace_part(stream, BATCH_1, window, &[row]), true).await;
+
+        assert_ok(&reply, replace_ack(stream, BATCH_1, 1));
+        assert_eq!(
+            reply.headers[header::CONTENT_TYPE],
+            "application/json",
+            "{stream}"
+        );
+        assert_eq!(rows(&db, select).await, vec![expected], "{stream}");
+    }
+}
+
+#[tokio::test]
+async fn each_mutable_stream_replaces_its_window_and_leaves_rows_outside_untouched() {
+    type Build = fn(i64, i64) -> Value;
+    type Window = fn(&str, i64, i64, u32, u32) -> Value;
+    let cases: [(&str, Window, Build, &str); 4] = [
+        (
+            "dailyMetric",
+            day_window,
+            |index, variant| daily(index, variant as f64),
+            "SELECT json_object('k', day, 'v', recovery) FROM daily_metric ORDER BY day",
+        ),
+        (
+            "sleepSession",
+            ts_window,
+            |index, variant| sleep(index, variant),
+            "SELECT json_object('k', start_ts, 'v', end_ts - start_ts) FROM sleep_session \
+             ORDER BY start_ts",
+        ),
+        (
+            "workout",
+            ts_window,
+            |index, variant| workout(index, "run", variant),
+            "SELECT json_object('k', start_ts, 'v', end_ts - start_ts) FROM workout \
+             ORDER BY start_ts",
+        ),
+        (
+            "journal",
+            day_window,
+            |index, variant| journal(index, "coffee", variant == 2),
+            "SELECT json_object('k', day, 'v', answered_yes + 1) FROM journal ORDER BY day",
+        ),
+    ];
+
+    for (stream, window, build, select) in cases {
+        let db = memory_push_db().await;
+        let key = |index: i64| match stream {
+            "dailyMetric" | "journal" => json!(day(index)),
+            _ => json!(ts(index)),
+        };
+        let seed: Vec<Value> = [1, 3, 5, 8].map(|index| build(index, 1)).to_vec();
+        let reply = post(
+            &db,
+            &replace_part(stream, &id(1), window(&id(100), 1, 10, 1, 1), &seed),
+            true,
+        )
+        .await;
+        assert_ok(&reply, replace_ack(stream, &id(1), 4));
+
+        // Window [3, 6): 3 is updated, 4 is new, 5 is absent and deleted; 1 and 8 are outside.
+        let replacement = [build(3, 2), build(4, 2)];
+        let reply = post(
+            &db,
+            &replace_part(stream, &id(2), window(&id(101), 3, 6, 1, 1), &replacement),
+            false,
+        )
+        .await;
+        assert_ok(&reply, replace_ack(stream, &id(2), 2));
+
+        let expected: Vec<Value> = [(1, 1), (3, 2), (4, 2), (8, 1)]
+            .iter()
+            .map(|(index, variant)| {
+                let v = if stream == "dailyMetric" {
+                    json!(*variant as f64)
+                } else {
+                    json!(variant)
+                };
+                json!({"k": key(*index), "v": v})
+            })
+            .collect();
+        assert_eq!(rows(&db, select).await, expected, "{stream}");
+    }
+}
+
+#[tokio::test]
+async fn absent_keys_are_deleted_per_full_composite_key() {
+    let db = memory_push_db().await;
+    let seed = [
+        workout(3, "run", 60),
+        workout(3, "swim", 60),
+        workout(4, "row", 60),
+    ];
+    let reply = post(
+        &db,
+        &replace_part("workout", &id(1), ts_window(&id(100), 1, 10, 1, 1), &seed),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let seed = [journal(3, "coffee", true), journal(3, "alcohol", false)];
+    let reply = post(
+        &db,
+        &replace_part("journal", &id(2), day_window(&id(101), 1, 10, 1, 1), &seed),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+
+    let reply = post(
+        &db,
+        &replace_part(
+            "workout",
+            &id(3),
+            ts_window(&id(102), 1, 10, 1, 1),
+            &[workout(3, "swim", 90), workout(4, "row", 60)],
+        ),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let reply = post(
+        &db,
+        &replace_part(
+            "journal",
+            &id(4),
+            day_window(&id(103), 1, 10, 1, 1),
+            &[journal(3, "alcohol", true)],
+        ),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+
+    assert_eq!(
+        rows(
+            &db,
+            "SELECT json_object('sport', sport, 'len', end_ts - start_ts) FROM workout \
+             ORDER BY start_ts, sport"
+        )
+        .await,
+        vec![
+            json!({"sport": "swim", "len": 90}),
+            json!({"sport": "row", "len": 60}),
+        ]
+    );
+    assert_eq!(
+        rows(
+            &db,
+            "SELECT json_object('question', question, 'yes', answered_yes) FROM journal"
+        )
+        .await,
+        vec![json!({"question": "alcohol", "yes": 1})]
+    );
+}
+
+#[tokio::test]
+async fn empty_window_deletes_every_row_in_scope_and_window_only() {
+    let db = memory_push_db().await;
+    let seed: Vec<Value> = (1..=5).map(|index| daily(index, 50.0)).collect();
+    for (n, (source, device)) in [
+        (SOURCE_A, DEVICE),
+        (SOURCE_B, DEVICE),
+        (SOURCE_A, "other-strap"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut part_header = replace_header(
+            "dailyMetric",
+            &id(n as u64 + 1),
+            seed.len(),
+            day_window(&id(100 + n as u64), 1, 6, 1, 1),
+        );
+        part_header["sourceId"] = json!(source);
+        part_header["deviceId"] = json!(device);
+        let reply = post(&db, &ndjson(&part_header, &seed), true).await;
+        assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.json);
+    }
+
+    let empty = replace_part(
+        "dailyMetric",
+        BATCH_1,
+        day_window(&id(200), 2, 5, 1, 1),
+        &[],
+    );
+    let reply = post(&db, &empty, true).await;
+
+    assert_ok(&reply, replace_ack("dailyMetric", BATCH_1, 0));
+    assert_eq!(
+        daily_recoveries(&db).await,
+        recovery_rows(&[(1, 50.0), (5, 50.0)])
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM daily_metric").await, 12);
+}
+
+#[tokio::test]
+async fn out_of_order_parts_apply_atomically_once_the_last_part_arrives() {
+    let db = memory_push_db().await;
+    let seed: Vec<Value> = (1..=9).map(|index| daily(index, 10.0)).collect();
+    let reply = post(
+        &db,
+        &replace_part(
+            "dailyMetric",
+            &id(1),
+            day_window(&id(100), 1, 10, 1, 1),
+            &seed,
+        ),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+
+    // Replacement over [2, 9): day 5 is absent from every part and must be deleted.
+    let replacement = id(101);
+    let part = |n: u32, records: &[Value]| {
+        replace_part(
+            "dailyMetric",
+            &id(10 + u64::from(n)),
+            day_window(&replacement, 2, 9, n, 3),
+            records,
+        )
+    };
+    let part_1 = part(1, &[daily(2, 20.0), daily(3, 20.0)]);
+    let part_2 = part(2, &[daily(4, 20.0), daily(6, 20.0)]);
+    let part_3 = part(3, &[daily(7, 20.0), daily(8, 20.0)]);
+    let untouched = recovery_rows(&(1..=9).map(|index| (index, 10.0)).collect::<Vec<_>>());
+
+    let reply = post(&db, &part_3, true).await;
+    assert_ok(&reply, replace_ack("dailyMetric", &id(13), 2));
+    assert_eq!(daily_recoveries(&db).await, untouched, "part 3 only staged");
+    let reply = post(&db, &part_1, false).await;
+    assert_ok(&reply, replace_ack("dailyMetric", &id(11), 2));
+    assert_eq!(
+        daily_recoveries(&db).await,
+        untouched,
+        "parts 1 and 3 staged"
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM replacement_part WHERE entity IS NOT NULL"
+        )
+        .await,
+        2
+    );
+
+    let reply = post(&db, &part_2, true).await;
+
+    assert_ok(&reply, replace_ack("dailyMetric", &id(12), 2));
+    assert_eq!(
+        daily_recoveries(&db).await,
+        recovery_rows(&[
+            (1, 10.0),
+            (2, 20.0),
+            (3, 20.0),
+            (4, 20.0),
+            (6, 20.0),
+            (7, 20.0),
+            (8, 20.0),
+            (9, 10.0),
+        ])
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM replacement_part WHERE entity IS NOT NULL"
+        )
+        .await,
+        0,
+        "staged entities are dropped once applied"
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 4);
+
+    // Retrying any part after the apply replays its ack and changes nothing.
+    sqlx::query("UPDATE daily_metric SET recovery = 99.0 WHERE day = '2026-08-02'")
+        .execute(&db)
+        .await
+        .unwrap();
+    let reply = post(&db, &part_1, true).await;
+    assert_ok(&reply, replace_ack("dailyMetric", &id(11), 2));
+    assert_eq!(
+        count(
+            &db,
+            "SELECT CAST(recovery AS INTEGER) FROM daily_metric WHERE day = '2026-08-02'"
+        )
+        .await,
+        99
+    );
+}
+
+#[tokio::test]
+async fn replacement_accepts_more_than_64_parts() {
+    let db = memory_push_db().await;
+    for part in (1..=65).rev() {
+        let batch_id = id(u64::from(part));
+        let entity = replace_part(
+            "journal",
+            &batch_id,
+            day_window(&id(100), 1, 2, part, 65),
+            &[journal(1, &format!("question-{part}"), true)],
+        );
+        assert_ok(
+            &post(&db, &entity, true).await,
+            replace_ack("journal", &batch_id, 1),
+        );
+        assert_eq!(
+            count(&db, "SELECT COUNT(*) FROM journal").await,
+            if part == 1 { 65 } else { 0 },
+        );
+    }
+}
+
+#[tokio::test]
+async fn staged_parts_survive_reconnect_and_failed_apply_remains_retryable() {
+    let path = std::env::temp_dir().join(format!("noop-replacement-{}.db", uuid::Uuid::new_v4()));
+    let url = format!("sqlite:{}", path.display());
+    let db = noop_push::connect(&url).await.unwrap();
+    let seed = replace_part(
+        "dailyMetric",
+        &id(1),
+        day_window(&id(100), 1, 10, 1, 1),
+        &[daily(2, 10.0), daily(5, 10.0)],
+    );
+    assert_eq!(post(&db, &seed, true).await.status, StatusCode::OK);
+    let first = replace_part(
+        "dailyMetric",
+        &id(2),
+        day_window(&id(101), 1, 10, 2, 2),
+        &[daily(4, 20.0)],
+    );
+    let accepted = post(&db, &first, true).await;
+    assert_ok(&accepted, replace_ack("dailyMetric", &id(2), 1));
+    db.close().await;
+
+    let db = noop_push::connect(&url).await.unwrap();
+    assert_eq!(post(&db, &first, false).await.raw, accepted.raw);
+    sqlx::query(
+        "CREATE TRIGGER fail_replacement_delete BEFORE DELETE ON daily_metric \
+         BEGIN SELECT RAISE(ABORT, 'simulated storage failure'); END",
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let completing = replace_part(
+        "dailyMetric",
+        &id(3),
+        day_window(&id(101), 1, 10, 1, 2),
+        &[daily(2, 20.0)],
+    );
+    let reply = post(&db, &completing, true).await;
+    assert_error(
+        &reply,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "storage_unavailable",
+    );
+    assert_eq!(
+        daily_recoveries(&db).await,
+        recovery_rows(&[(2, 10.0), (5, 10.0)])
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 2);
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM replacement_part WHERE entity IS NOT NULL"
+        )
+        .await,
+        1,
+    );
+
+    sqlx::query("DROP TRIGGER fail_replacement_delete")
+        .execute(&db)
+        .await
+        .unwrap();
+    assert_ok(
+        &post(&db, &completing, true).await,
+        replace_ack("dailyMetric", &id(3), 1),
+    );
+    assert_eq!(
+        daily_recoveries(&db).await,
+        recovery_rows(&[(2, 20.0), (4, 20.0)])
+    );
+    db.close().await;
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+}
+
+#[tokio::test]
+async fn byte_identical_part_retries_replay_the_ack_across_encodings() {
+    let db = memory_push_db().await;
+    let single = replace_part(
+        "sleepSession",
+        BATCH_1,
+        ts_window(&id(100), 1, 10, 1, 1),
+        &[sleep(2, 100)],
+    );
+    let first = post(&db, &single, true).await;
+    assert_ok(&first, replace_ack("sleepSession", BATCH_1, 1));
+    sqlx::query("UPDATE sleep_session SET end_ts = 0")
+        .execute(&db)
+        .await
+        .unwrap();
+
+    let retry = post(&db, &single, false).await;
+
+    assert_eq!(retry.status, StatusCode::OK);
+    assert_eq!(retry.raw, first.raw);
+    assert_eq!(
+        count(&db, "SELECT end_ts FROM sleep_session").await,
+        0,
+        "replay does not re-apply"
+    );
+
+    // A retried part of a still-incomplete replacement replays too and stays staged.
+    let staged = replace_part(
+        "sleepSession",
+        BATCH_2,
+        ts_window(&id(101), 1, 10, 1, 2),
+        &[sleep(3, 100)],
+    );
+    let first = post(&db, &staged, true).await;
+    assert_ok(&first, replace_ack("sleepSession", BATCH_2, 1));
+    let before = replace_state(&db).await;
+    let retry = post(&db, &staged, false).await;
+    assert_eq!(retry.raw, first.raw);
+    assert_eq!(replace_state(&db).await, before);
+}
+
+#[tokio::test]
+async fn conflicting_reuse_is_409_without_data_change() {
+    let db = memory_push_db().await;
+    let replacement = id(100);
+    let window = |part: u32, parts: u32| day_window(&replacement, 1, 10, part, parts);
+    let reply = post(
+        &db,
+        &replace_part(
+            "journal",
+            &id(1),
+            window(1, 2),
+            &[journal(2, "coffee", true)],
+        ),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let applied = replace_part(
+        "dailyMetric",
+        &id(2),
+        day_window(&id(101), 1, 10, 1, 1),
+        &[daily(2, 30.0)],
+    );
+    assert_eq!(post(&db, &applied, true).await.status, StatusCode::OK);
+    let before = replace_state(&db).await;
+
+    let cases: Vec<(&str, Vec<u8>, &str)> = vec![
+        (
+            "batchId reused with different bytes",
+            replace_part(
+                "journal",
+                &id(1),
+                window(1, 2),
+                &[journal(3, "coffee", true)],
+            ),
+            "batch_conflict",
+        ),
+        (
+            "batchId of an applied part reused with different bytes",
+            replace_part(
+                "dailyMetric",
+                &id(2),
+                day_window(&id(101), 1, 10, 1, 1),
+                &[daily(2, 31.0)],
+            ),
+            "batch_conflict",
+        ),
+        (
+            "replacementId reused with a different window",
+            replace_part(
+                "journal",
+                &id(3),
+                day_window(&replacement, 1, 9, 2, 2),
+                &[journal(4, "coffee", true)],
+            ),
+            "replacement_conflict",
+        ),
+        (
+            "replacementId reused with a different part count",
+            replace_part(
+                "journal",
+                &id(3),
+                window(2, 3),
+                &[journal(4, "coffee", true)],
+            ),
+            "replacement_conflict",
+        ),
+        (
+            "replacementId reused for another stream",
+            replace_part(
+                "dailyMetric",
+                &id(3),
+                day_window(&replacement, 1, 10, 2, 2),
+                &[daily(4, 1.0)],
+            ),
+            "replacement_conflict",
+        ),
+        (
+            "part number reused with a different batch",
+            replace_part(
+                "journal",
+                &id(3),
+                window(1, 2),
+                &[journal(3, "coffee", true)],
+            ),
+            "replacement_conflict",
+        ),
+        (
+            "part number of an applied replacement reused",
+            replace_part(
+                "dailyMetric",
+                &id(3),
+                day_window(&id(101), 1, 10, 1, 1),
+                &[daily(2, 31.0)],
+            ),
+            "replacement_conflict",
+        ),
+    ];
+
+    for (name, entity, code) in cases {
+        let reply = post(&db, &entity, true).await;
+        assert_eq!(reply.json["code"], code, "{name}");
+        assert_error(&reply, StatusCode::CONFLICT, code);
+        assert_eq!(replace_state(&db).await, before, "{name}");
+    }
+    assert_eq!(daily_recoveries(&db).await, recovery_rows(&[(2, 30.0)]));
+}
+
+#[tokio::test]
+async fn a_new_generation_supersedes_an_incomplete_one_and_late_parts_are_409() {
+    let db = memory_push_db().await;
+    let old_part_1 = replace_part(
+        "dailyMetric",
+        &id(1),
+        day_window(&id(100), 1, 10, 1, 2),
+        &[daily(2, 10.0)],
+    );
+    let old_part_2 = replace_part(
+        "dailyMetric",
+        &id(2),
+        day_window(&id(100), 1, 10, 2, 2),
+        &[daily(3, 10.0)],
+    );
+    assert_eq!(post(&db, &old_part_1, true).await.status, StatusCode::OK);
+
+    // A different generation (with different bounds) supersedes the incomplete one.
+    let new = replace_part(
+        "dailyMetric",
+        &id(3),
+        day_window(&id(101), 2, 8, 1, 1),
+        &[daily(4, 20.0)],
+    );
+    assert_ok(
+        &post(&db, &new, true).await,
+        replace_ack("dailyMetric", &id(3), 1),
+    );
+
+    for (name, entity) in [("late part", &old_part_2), ("retried part", &old_part_1)] {
+        let reply = post(&db, entity, true).await;
+        assert_error(&reply, StatusCode::CONFLICT, "replacement_superseded");
+        assert_eq!(
+            daily_recoveries(&db).await,
+            recovery_rows(&[(4, 20.0)]),
+            "{name}"
+        );
+    }
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM replacement_part WHERE entity IS NOT NULL"
+        )
+        .await,
+        0,
+        "superseded staging is discarded"
+    );
+
+    // Other streams and scopes have independent generations.
+    let journal_part = replace_part(
+        "journal",
+        &id(4),
+        day_window(&id(102), 1, 10, 1, 2),
+        &[journal(2, "coffee", true)],
+    );
+    assert_eq!(post(&db, &journal_part, true).await.status, StatusCode::OK);
+    let mut other_device = replace_header("journal", &id(5), 1, day_window(&id(103), 1, 10, 1, 2));
+    other_device["deviceId"] = json!("other-strap");
+    let reply = post(
+        &db,
+        &ndjson(&other_device, &[journal(2, "tea", true)]),
+        true,
+    )
+    .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let journal_part_2 = replace_part(
+        "journal",
+        &id(6),
+        day_window(&id(102), 1, 10, 2, 2),
+        &[journal(3, "coffee", true)],
+    );
+    assert_eq!(
+        post(&db, &journal_part_2, true).await.status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM journal WHERE device_id = 'strap-local-id'"
+        )
+        .await,
+        2
+    );
+}
+
+#[tokio::test]
+async fn retrying_an_earlier_applied_replacement_preserves_newer_generations() {
+    let db = memory_push_db().await;
+    let populated = replace_part(
+        "workout",
+        &id(1),
+        ts_window(&id(100), 3, 4, 1, 1),
+        &[workout(3, "run", 60)],
+    );
+    let emptied = replace_part("workout", &id(2), ts_window(&id(101), 3, 4, 1, 1), &[]);
+    let workouts = || count(&db, "SELECT COUNT(*) FROM workout");
+
+    let first_ack = post(&db, &populated, true).await;
+    assert_eq!(workouts().await, 1);
+    let first_empty_ack = post(&db, &emptied, true).await;
+    assert_eq!(workouts().await, 0);
+
+    let again = post(&db, &populated, true).await;
+    assert_eq!(again.raw, first_ack.raw);
+    assert_eq!(
+        workouts().await,
+        0,
+        "late retry must not restore deleted rows"
+    );
+    let again = post(&db, &emptied, false).await;
+    assert_eq!(again.raw, first_empty_ack.raw);
+    assert_eq!(workouts().await, 0, "emptied again");
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 2);
+
+    let pending = replace_part(
+        "workout",
+        &id(3),
+        ts_window(&id(102), 3, 4, 2, 2),
+        &[workout(3, "walk", 120)],
+    );
+    assert_eq!(post(&db, &pending, true).await.status, StatusCode::OK);
+    let again = post(&db, &populated, false).await;
+    assert_eq!(again.raw, first_ack.raw);
+    assert_eq!(
+        workouts().await,
+        0,
+        "retry must not supersede pending parts"
+    );
+    let completing = replace_part(
+        "workout",
+        &id(4),
+        ts_window(&id(102), 3, 4, 1, 2),
+        &[workout(3, "run", 180)],
+    );
+    assert_ok(
+        &post(&db, &completing, true).await,
+        replace_ack("workout", &id(4), 1),
+    );
+    assert_eq!(workouts().await, 2);
+}
+
+#[tokio::test]
+async fn invalid_replace_window_parts_are_422() {
+    let daily_part = |edit: &dyn Fn(&mut Value)| {
+        let mut part_header =
+            replace_header("dailyMetric", BATCH_1, 1, day_window(&id(100), 1, 10, 1, 1));
+        edit(&mut part_header);
+        ndjson(&part_header, &[daily(2, 1.0)])
+    };
+    let sleep_part = |edit: &dyn Fn(&mut Value)| {
+        let mut part_header =
+            replace_header("sleepSession", BATCH_1, 1, ts_window(&id(100), 1, 10, 1, 1));
+        edit(&mut part_header);
+        ndjson(&part_header, &[sleep(2, 60)])
+    };
+    let one =
+        |stream: &str, window: Value, row: Value| replace_part(stream, BATCH_1, window, &[row]);
+    let sleep_with = |member: &str, value: Value| {
+        let mut row = sleep(2, 60);
+        row["data"][member] = value;
+        one("sleepSession", ts_window(&id(100), 1, 10, 1, 1), row)
+    };
+    let workout_with = |member: &str, value: Value| {
+        let mut row = workout(2, "run", 60);
+        row["data"][member] = value;
+        one("workout", ts_window(&id(100), 1, 10, 1, 1), row)
+    };
+    let journal_with = |member: &str, value: Option<Value>| {
+        let mut row = journal(2, "coffee", true);
+        match value {
+            Some(value) => row["data"][member] = value,
+            None => {
+                row["data"].as_object_mut().unwrap().remove(member);
+            }
+        }
+        one("journal", day_window(&id(100), 1, 10, 1, 1), row)
+    };
+
+    let cases: Vec<(&str, Vec<u8>, &str)> = vec![
+        (
+            "append delivery for a mutable stream",
+            daily_part(&|h| h["delivery"] = json!("append")),
+            "invalid_header",
+        ),
+        (
+            "missing window",
+            daily_part(&|h| {
+                h.as_object_mut().unwrap().remove("window");
+            }),
+            "invalid_window",
+        ),
+        (
+            "null window",
+            daily_part(&|h| h["window"] = Value::Null),
+            "invalid_window",
+        ),
+        (
+            "wrong selector",
+            daily_part(&|h| h["window"]["selector"] = json!("startTs")),
+            "invalid_window",
+        ),
+        (
+            "unpadded day bound",
+            daily_part(&|h| h["window"]["startInclusive"] = json!("2026-8-1")),
+            "invalid_window",
+        ),
+        (
+            "impossible day bound",
+            daily_part(&|h| h["window"]["endExclusive"] = json!("2026-02-30")),
+            "invalid_window",
+        ),
+        (
+            "timestamp bound on a day selector",
+            daily_part(&|h| h["window"]["startInclusive"] = json!(1)),
+            "invalid_window",
+        ),
+        (
+            "empty day window",
+            daily_part(&|h| h["window"]["endExclusive"] = json!(day(1))),
+            "invalid_window",
+        ),
+        (
+            "reversed day window",
+            daily_part(&|h| h["window"]["startInclusive"] = json!(day(11))),
+            "invalid_window",
+        ),
+        (
+            "string timestamp bound",
+            sleep_part(&|h| h["window"]["startInclusive"] = json!(ts(1).to_string())),
+            "invalid_window",
+        ),
+        (
+            "fractional timestamp bound",
+            sleep_part(&|h| h["window"]["endExclusive"] = json!(ts(10) as f64 + 0.5)),
+            "invalid_window",
+        ),
+        (
+            "empty timestamp window",
+            sleep_part(&|h| h["window"]["endExclusive"] = json!(ts(1))),
+            "invalid_window",
+        ),
+        (
+            "part zero",
+            daily_part(&|h| h["window"]["part"] = json!(0)),
+            "invalid_window",
+        ),
+        (
+            "part beyond parts",
+            daily_part(&|h| h["window"]["part"] = json!(2)),
+            "invalid_window",
+        ),
+        (
+            "zero parts",
+            daily_part(&|h| h["window"]["parts"] = json!(0)),
+            "invalid_window",
+        ),
+        (
+            "uppercase replacementId",
+            daily_part(&|h| {
+                h["window"]["replacementId"] = json!("BF8B735E-F157-4B35-BEB2-9B086D10D5BD")
+            }),
+            "invalid_window",
+        ),
+        (
+            "missing part",
+            daily_part(&|h| {
+                h["window"].as_object_mut().unwrap().remove("part");
+            }),
+            "invalid_window",
+        ),
+        (
+            "non-null startCursor",
+            daily_part(&|h| h["startCursor"] = cursor(1, START_SHA)),
+            "invalid_cursor",
+        ),
+        (
+            "non-null endCursor",
+            daily_part(&|h| h["endCursor"] = cursor(1, END_SHA)),
+            "invalid_cursor",
+        ),
+        (
+            "missing endCursor",
+            daily_part(&|h| {
+                h.as_object_mut().unwrap().remove("endCursor");
+            }),
+            "invalid_header",
+        ),
+        (
+            "empty part of a multi-part replacement",
+            replace_part(
+                "dailyMetric",
+                BATCH_1,
+                day_window(&id(100), 1, 10, 1, 2),
+                &[],
+            ),
+            "empty_batch",
+        ),
+        (
+            "day key at the exclusive end",
+            one(
+                "dailyMetric",
+                day_window(&id(100), 1, 10, 1, 1),
+                daily(10, 1.0),
+            ),
+            "record_outside_window",
+        ),
+        (
+            "timestamp key before the window",
+            one(
+                "sleepSession",
+                ts_window(&id(100), 2, 10, 1, 1),
+                sleep(1, 60),
+            ),
+            "record_outside_window",
+        ),
+        (
+            "malformed day key",
+            one(
+                "journal",
+                day_window(&id(100), 1, 10, 1, 1),
+                record(
+                    json!({"day": "2026-08-3", "question": "q"}),
+                    json!({"answeredYes": true, "notes": null, "numericValue": null}),
+                ),
+            ),
+            "invalid_record",
+        ),
+        (
+            "null sleepSession.endTs",
+            sleep_with("endTs", Value::Null),
+            "invalid_record",
+        ),
+        (
+            "null sleepSession.userEdited",
+            sleep_with("userEdited", Value::Null),
+            "invalid_record",
+        ),
+        (
+            "integer sleepSession.userEdited",
+            sleep_with("userEdited", json!(0)),
+            "invalid_record",
+        ),
+        (
+            "fractional sleepSession.endTs",
+            sleep_with("endTs", json!(1.5)),
+            "invalid_record",
+        ),
+        (
+            "null workout.endTs",
+            workout_with("endTs", Value::Null),
+            "invalid_record",
+        ),
+        (
+            "null workout.source",
+            workout_with("source", Value::Null),
+            "invalid_record",
+        ),
+        (
+            "missing journal.answeredYes",
+            journal_with("answeredYes", None),
+            "invalid_record",
+        ),
+        (
+            "null journal.answeredYes",
+            journal_with("answeredYes", Some(Value::Null)),
+            "invalid_record",
+        ),
+        (
+            "duplicate key within a part",
+            replace_part(
+                "dailyMetric",
+                BATCH_1,
+                day_window(&id(100), 1, 10, 1, 1),
+                &[daily(2, 1.0), daily(2, 2.0)],
+            ),
+            "duplicate_key",
+        ),
+    ];
+
+    for (name, entity, code) in cases {
+        let db = memory_push_db().await;
+        let before = replace_state(&db).await;
+        let reply = post(&db, &entity, true).await;
+        assert_eq!(reply.json["code"], code, "{name}");
+        assert_error(&reply, StatusCode::UNPROCESSABLE_ENTITY, code);
+        assert_eq!(replace_state(&db).await, before, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn duplicate_key_across_parts_is_422_and_leaves_the_replacement_incomplete() {
+    let db = memory_push_db().await;
+    let part = |n: u32| {
+        replace_part(
+            "dailyMetric",
+            &id(u64::from(n)),
+            day_window(&id(100), 1, 10, n, 2),
+            &[daily(2, f64::from(n))],
+        )
+    };
+    assert_eq!(post(&db, &part(1), true).await.status, StatusCode::OK);
+    let before = replace_state(&db).await;
+
+    let reply = post(&db, &part(2), true).await;
+
+    assert_error(&reply, StatusCode::UNPROCESSABLE_ENTITY, "duplicate_key");
+    assert_eq!(replace_state(&db).await, before);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM daily_metric").await, 0);
+}
+
+#[tokio::test]
+async fn rotating_receiver_state_id_discards_staging_and_generation_fences() {
+    let db = memory_push_db().await;
+    let seed = replace_part(
+        "journal",
+        &id(4),
+        day_window(&id(102), 1, 15, 1, 1),
+        &[journal(12, "coffee", true)],
+    );
+    assert_eq!(post(&db, &seed, true).await.status, StatusCode::OK);
+    assert_eq!(
+        post(&db, &hr_batch(BATCH_1, &[hr(1, 61)]), true)
+            .await
+            .status,
+        StatusCode::OK
+    );
+    let old_part_1 = replace_part(
+        "journal",
+        &id(1),
+        day_window(&id(100), 1, 10, 1, 2),
+        &[journal(2, "coffee", true)],
+    );
+    let old_part_2 = replace_part(
+        "journal",
+        &id(2),
+        day_window(&id(100), 1, 10, 2, 2),
+        &[journal(3, "coffee", true)],
+    );
+    assert_eq!(post(&db, &old_part_1, true).await.status, StatusCode::OK);
+    let newer = replace_part("journal", &id(3), day_window(&id(101), 1, 10, 1, 1), &[]);
+    assert_eq!(post(&db, &newer, true).await.status, StatusCode::OK);
+    assert_eq!(
+        post(&db, &old_part_2, true).await.status,
+        StatusCode::CONFLICT
+    );
+
+    let pending = replace_part(
+        "journal",
+        &id(5),
+        day_window(&id(103), 1, 10, 1, 2),
+        &[journal(4, "coffee", true)],
+    );
+    assert_eq!(post(&db, &pending, true).await.status, StatusCode::OK);
+    let before_rotation = replace_state(&db).await;
+    sqlx::query("UPDATE receiver_state SET receiver_state_id = receiver_state_id WHERE id = 1")
+        .execute(&db)
+        .await
+        .unwrap();
+    assert_eq!(
+        replace_state(&db).await,
+        before_rotation,
+        "unchanged ID preserves state"
+    );
+
+    let mut tx = db.begin().await.unwrap();
+    sqlx::query("UPDATE receiver_state SET receiver_state_id = ? WHERE id = 1")
+        .bind(uuid::Uuid::new_v4().hyphenated().to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let metadata_counts = [
+        "SELECT COUNT(*) FROM batch_ledger",
+        "SELECT COUNT(*) FROM replacement",
+        "SELECT COUNT(*) FROM replacement_scope",
+        "SELECT COUNT(*) FROM replacement_part",
+    ];
+    for sql in metadata_counts {
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>(sql)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap(),
+            0,
+            "{sql}"
+        );
+    }
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        replace_state(&db).await,
+        before_rotation,
+        "rotation rollback preserves metadata"
+    );
+
+    sqlx::query("UPDATE receiver_state SET receiver_state_id = ? WHERE id = 1")
+        .bind(uuid::Uuid::new_v4().hyphenated().to_string())
+        .execute(&db)
+        .await
+        .unwrap();
+    for sql in metadata_counts {
+        assert_eq!(count(&db, sql).await, 0, "{sql}");
+    }
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM journal").await,
+        1,
+        "health rows survive rotation"
+    );
+    assert_eq!(
+        count(&db, "SELECT bpm FROM hr_sample WHERE ts = 1").await,
+        61
+    );
+
+    // The new generation has no fence and no staging: the old parts form a fresh replacement.
+    assert_eq!(post(&db, &old_part_2, true).await.status, StatusCode::OK);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM journal").await, 1);
+    assert_eq!(post(&db, &old_part_1, true).await.status, StatusCode::OK);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM journal").await, 3);
 }

@@ -1,25 +1,30 @@
-//! Append-batch ingest for NOOP push (`.noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append
-//! delivery and cursors", "Acceptance, errors, and retry idempotency").
+//! Batch ingest for NOOP push (`.noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append delivery and
+//! cursors", "Authoritative rolling-window delivery", "Acceptance, errors, and retry
+//! idempotency").
 //!
 //! Pipeline: decode the content coding within the 4 MiB decoded bound, frame the NDJSON (header
 //! line plus exactly `recordCount` record lines), validate the header and every record against
-//! the v1 registry, then, in one write transaction, consult the batch ledger and either replay
-//! the stored ack, reject a conflicting `batchId`, or upsert the records and record the ack.
+//! the v1 registry, then, in one write transaction, consult the batch ledger and reject a
+//! conflicting `batchId`. An append batch then either replays the stored ack or upserts its
+//! records; a replace-window part goes through [`replace_window::accept`](super::replace_window),
+//! which stages it and applies the replacement once every part is present.
 
 use std::collections::HashSet;
 use std::io::Read;
 
+use chrono::NaiveDate;
 use flate2::read::MultiGzDecoder;
 use serde::de::{self, IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
+use sqlx::{SqliteConnection, SqlitePool};
 use thiserror::Error;
 use uuid::Uuid;
 
 use super::SUPPORTED_VERSIONS;
-use super::registry::{self, AppendStream, Column, ColumnType};
+use super::registry::{self, Column, ColumnType, Selector, Stream};
+use super::replace_window::{self, PartOutcome};
 
 /// Maximum record lines in one batch.
 pub const MAX_RECORDS: u32 = 5_000;
@@ -40,20 +45,24 @@ pub enum IngestError {
     /// Well-formed JSON that violates the protocol or registry (HTTP 422).
     #[error("unprocessable batch ({0})")]
     Unprocessable(&'static str),
-    /// `batchId` was already accepted with different decoded bytes (HTTP 409).
-    #[error("batchId reused with different decoded bytes")]
-    Conflict,
+    /// Conflicting reuse of a `batchId`, `replacementId` or part number, or a late part of a
+    /// superseded replacement generation (HTTP 409).
+    #[error("conflicting batch ({0})")]
+    Conflict(&'static str),
     #[error(transparent)]
     Storage(#[from] sqlx::Error),
+    /// Receiver-side invariant violation, e.g. a staged part that no longer parses (HTTP 500).
+    #[error("internal ingest failure ({0})")]
+    Internal(&'static str),
 }
 
 impl IngestError {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Malformed(code) | Self::Unprocessable(code) => code,
+            Self::Malformed(code) | Self::Unprocessable(code) | Self::Conflict(code) => code,
             Self::TooLarge => "payload_too_large",
-            Self::Conflict => "batch_conflict",
             Self::Storage(_) => "storage_unavailable",
+            Self::Internal(_) => "internal_error",
         }
     }
 }
@@ -63,6 +72,9 @@ const RECORD_COUNT_MISMATCH: IngestError = IngestError::Malformed("record_count_
 const INVALID_HEADER: IngestError = IngestError::Unprocessable("invalid_header");
 const INVALID_CURSOR: IngestError = IngestError::Unprocessable("invalid_cursor");
 const INVALID_RECORD: IngestError = IngestError::Unprocessable("invalid_record");
+const INVALID_WINDOW: IngestError = IngestError::Unprocessable("invalid_window");
+pub(super) const DUPLICATE_KEY: IngestError = IngestError::Unprocessable("duplicate_key");
+const EMPTY_BATCH: IngestError = IngestError::Unprocessable("empty_batch");
 
 /// Content coding of the request entity. Batch identity is the decoded bytes, never the coding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,10 +127,12 @@ pub struct Accepted {
     pub replayed: bool,
 }
 
-/// A decoded, validated batch and the SHA-256 of its decoded entity, ready to apply.
+/// A decoded, validated batch, its decoded entity (staged for replace-window parts) and the
+/// entity's SHA-256, ready to apply.
 #[derive(Debug)]
 pub struct PreparedBatch {
-    batch: AppendBatch,
+    batch: Batch,
+    entity: Vec<u8>,
     body_sha256: Vec<u8>,
 }
 
@@ -126,25 +140,30 @@ pub struct PreparedBatch {
 /// caller can run it off the async workers.
 pub fn prepare(coding: ContentCoding, wire: Vec<u8>) -> Result<PreparedBatch, IngestError> {
     let entity = decode_entity(coding, wire)?;
-    let batch = parse_append_batch(&entity)?;
+    let batch = parse_batch(&entity)?;
+    let body_sha256 = Sha256::digest(&entity).to_vec();
     Ok(PreparedBatch {
         batch,
-        body_sha256: Sha256::digest(&entity).to_vec(),
+        entity,
+        body_sha256,
     })
 }
 
-/// Applies a prepared batch idempotently: replays the ledger ack for a byte-identical retry,
-/// rejects a conflicting `batchId`, or upserts the records and records the ack.
+/// Applies a prepared batch idempotently. A `batchId` already in the ledger with different bytes
+/// is a conflict. An append batch replays the ledger ack for a byte-identical retry or upserts
+/// its records; a replace-window part is staged and the replacement applied once complete.
 pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepted, IngestError> {
-    let PreparedBatch { batch, body_sha256 } = prepared;
+    let PreparedBatch {
+        batch,
+        entity,
+        body_sha256,
+    } = prepared;
 
     // IMMEDIATE takes the write lock up front, so concurrent retries of one batch serialize on
     // the ledger instead of both applying it.
     let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
-    // The ledger is scoped to the current receiverStateId: rotating it starts a new idempotency
-    // generation in which earlier acks are no longer replayed. Rows from older generations are
-    // ignored, not discarded; whatever rotates the ID must delete them (the protocol requires
-    // rotation to discard old acks).
+    // Rotation clears the ledger and replacement metadata in the same transaction as the ID
+    // update (receiver_state_rotation trigger), starting a fresh idempotency generation.
     let receiver_state_id: String =
         sqlx::query_scalar("SELECT receiver_state_id FROM receiver_state WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -160,47 +179,56 @@ pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepte
     .bind(&batch.batch_id)
     .fetch_optional(&mut *tx)
     .await?;
-    if let Some((stored_sha256, ack)) = prior {
-        // Dropping the transaction rolls it back; nothing was written.
-        return if stored_sha256 == body_sha256.as_slice() {
-            Ok(Accepted {
-                ack,
-                stream: batch.stream.name,
-                records: batch.records.len(),
-                replayed: true,
-            })
-        } else {
-            Err(IngestError::Conflict)
-        };
-    }
+    // Dropping the transaction on an early return rolls it back; nothing was written.
+    let stored_ack = match prior {
+        Some((stored_sha256, _)) if stored_sha256 != body_sha256.as_slice() => {
+            return Err(IngestError::Conflict("batch_conflict"));
+        }
+        Some((_, ack)) => Some(ack),
+        None => None,
+    };
+    let replay = |ack: String| Accepted {
+        ack,
+        stream: batch.stream.name,
+        records: batch.records.len(),
+        replayed: true,
+    };
 
-    for record in &batch.records {
-        let mut query = sqlx::query(batch.stream.upsert_sql)
-            .bind(&batch.source_id)
-            .bind(&batch.device_id);
-        for value in &record.key {
-            query = match value {
-                KeyValue::Integer(value) => query.bind(*value),
-                KeyValue::Text(value) => query.bind(value.as_str()),
-            };
+    match &batch.delivery {
+        BatchDelivery::Append { .. } => {
+            if let Some(ack) = stored_ack {
+                return Ok(replay(ack));
+            }
+            upsert(
+                &mut tx,
+                batch.stream,
+                &batch.source_id,
+                &batch.device_id,
+                &batch.records,
+            )
+            .await?;
         }
-        for value in &record.data {
-            query = match value {
-                DataValue::Null => query.bind(None::<i64>),
-                DataValue::Integer(value) => query.bind(*value),
-                DataValue::Real(value) => query.bind(*value),
-                DataValue::Text(value) => query.bind(value.as_str()),
-                DataValue::Boolean(value) => query.bind(*value),
-            };
+        BatchDelivery::ReplaceWindow(window) => {
+            let outcome = replace_window::accept(
+                &mut tx,
+                &receiver_state_id,
+                &batch,
+                window,
+                &entity,
+                stored_ack.is_some(),
+            )
+            .await?;
+            if let (PartOutcome::Retry, Some(ack)) = (outcome, &stored_ack) {
+                return Ok(replay(ack.clone()));
+            }
         }
-        query.execute(&mut *tx).await?;
     }
 
     let ack = batch.ack();
     sqlx::query(
         "INSERT INTO batch_ledger \
-         (receiver_state_id, source_id, device_id, batch_id, stream, body_sha256, ack) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+             (receiver_state_id, source_id, device_id, batch_id, stream, body_sha256, ack) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&receiver_state_id)
     .bind(&batch.source_id)
@@ -221,36 +249,133 @@ pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepte
     })
 }
 
-/// A fully validated append batch.
-#[derive(Debug)]
-pub struct AppendBatch {
-    protocol_version: String,
-    batch_id: String,
-    source_id: String,
-    device_id: String,
-    stream: &'static AppendStream,
-    end_cursor: Cursor,
-    records: Vec<Record>,
+/// Upserts records into the stream's typed table by `(source_id, device_id, natural key)`.
+pub(super) async fn upsert(
+    conn: &mut SqliteConnection,
+    stream: &Stream,
+    source_id: &str,
+    device_id: &str,
+    records: &[Record],
+) -> Result<(), sqlx::Error> {
+    for record in records {
+        let mut query = sqlx::query(stream.upsert_sql)
+            .bind(source_id)
+            .bind(device_id);
+        for value in &record.key {
+            query = value.bind(query);
+        }
+        for value in &record.data {
+            query = match value {
+                DataValue::Null => query.bind(None::<i64>),
+                DataValue::Integer(value) => query.bind(*value),
+                DataValue::Real(value) => query.bind(*value),
+                DataValue::Text(value) => query.bind(value.as_str()),
+                DataValue::Boolean(value) => query.bind(*value),
+            };
+        }
+        query.execute(&mut *conn).await?;
+    }
+    Ok(())
 }
 
-impl AppendBatch {
-    /// The acknowledgement: every member echoes the request, `keySha256` verbatim.
+/// A fully validated batch of either delivery mode.
+#[derive(Debug)]
+pub struct Batch {
+    protocol_version: String,
+    pub(super) batch_id: String,
+    pub(super) source_id: String,
+    pub(super) device_id: String,
+    pub(super) stream: &'static Stream,
+    delivery: BatchDelivery,
+    pub(super) records: Vec<Record>,
+}
+
+#[derive(Debug)]
+enum BatchDelivery {
+    Append { end_cursor: Cursor },
+    ReplaceWindow(Window),
+}
+
+impl Batch {
+    /// The acknowledgement: every member echoes the request, `keySha256` verbatim, and
+    /// `endCursor` is `null` for a replace-window part.
     fn ack(&self) -> String {
+        let end_cursor = match &self.delivery {
+            BatchDelivery::Append { end_cursor } => serde_json::json!({
+                "rowId": end_cursor.row_id,
+                "keySha256": end_cursor.key_sha256,
+            }),
+            BatchDelivery::ReplaceWindow(_) => Value::Null,
+        };
         serde_json::json!({
             "protocolVersion": self.protocol_version,
             "batchId": self.batch_id,
             "stream": self.stream.name,
             "deviceId": self.device_id,
-            "endCursor": {
-                "rowId": self.end_cursor.row_id,
-                "keySha256": self.end_cursor.key_sha256,
-            },
+            "endCursor": end_cursor,
             "acceptedRows": self.records.len(),
             "status": "accepted",
         })
         .to_string()
     }
 }
+
+/// The `window` header member of a replace-window part.
+#[derive(Debug)]
+pub(super) struct Window {
+    pub(super) replacement_id: String,
+    pub(super) bounds: Bounds,
+    pub(super) part: u32,
+    pub(super) parts: u32,
+}
+
+/// Half-open window bounds: `startInclusive <= selector < endExclusive`.
+#[derive(Debug)]
+pub(super) enum Bounds {
+    /// Canonical `YYYY-MM-DD` days; they compare correctly as strings.
+    Day { start: String, end: String },
+    /// Unix seconds.
+    StartTs { start: i64, end: i64 },
+}
+
+impl Bounds {
+    pub(super) fn selector(&self) -> Selector {
+        match self {
+            Self::Day { .. } => Selector::Day,
+            Self::StartTs { .. } => Selector::StartTs,
+        }
+    }
+
+    /// Canonical text of the bounds, as stored with the replacement to detect conflicting reuse.
+    pub(super) fn canonical(&self) -> (String, String) {
+        match self {
+            Self::Day { start, end } => (start.clone(), end.clone()),
+            Self::StartTs { start, end } => (start.to_string(), end.to_string()),
+        }
+    }
+
+    /// Binds `startInclusive` then `endExclusive`.
+    pub(super) fn bind<'q>(&'q self, query: SqliteQuery<'q>) -> SqliteQuery<'q> {
+        match self {
+            Self::Day { start, end } => query.bind(start.as_str()).bind(end.as_str()),
+            Self::StartTs { start, end } => query.bind(*start).bind(*end),
+        }
+    }
+
+    /// Whether a record's selector value (its first key column) lies inside the window.
+    fn contains(&self, selector_value: &KeyValue) -> bool {
+        match (self, selector_value) {
+            (Self::Day { start, end }, KeyValue::Text(day)) => {
+                start.as_str() <= day.as_str() && day.as_str() < end.as_str()
+            }
+            (Self::StartTs { start, end }, KeyValue::Integer(ts)) => start <= ts && ts < end,
+            _ => false,
+        }
+    }
+}
+
+pub(super) type SqliteQuery<'q> =
+    sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -260,15 +385,24 @@ struct Cursor {
 }
 
 #[derive(Debug)]
-struct Record {
-    key: Vec<KeyValue>,
+pub(super) struct Record {
+    pub(super) key: Vec<KeyValue>,
     data: Vec<DataValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum KeyValue {
+pub(super) enum KeyValue {
     Integer(i64),
     Text(String),
+}
+
+impl KeyValue {
+    pub(super) fn bind<'q>(&'q self, query: SqliteQuery<'q>) -> SqliteQuery<'q> {
+        match self {
+            Self::Integer(value) => query.bind(*value),
+            Self::Text(value) => query.bind(value.as_str()),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -280,13 +414,17 @@ enum DataValue {
     Boolean(bool),
 }
 
-/// Frames and validates a decoded NDJSON entity as an append batch.
-pub fn parse_append_batch(entity: &[u8]) -> Result<AppendBatch, IngestError> {
+/// Frames and validates a decoded NDJSON entity as a batch of either delivery mode.
+pub fn parse_batch(entity: &[u8]) -> Result<Batch, IngestError> {
     // Every line, including the last, ends with LF; there is no trailing material.
     let content = entity.strip_suffix(b"\n").ok_or(MALFORMED_NDJSON)?;
     let mut lines = content.split(|byte| *byte == b'\n');
     let header_line = object_line(lines.next().unwrap_or_default())?;
     let header = parse_header(header_line)?;
+    let window = match &header.delivery {
+        BatchDelivery::Append { .. } => None,
+        BatchDelivery::ReplaceWindow(window) => Some(window),
+    };
 
     let expected = header.record_count as usize;
     let mut records = Vec::with_capacity(expected);
@@ -297,8 +435,20 @@ pub fn parse_append_batch(entity: &[u8]) -> Result<AppendBatch, IngestError> {
             return Err(RECORD_COUNT_MISMATCH);
         }
         let record = parse_record(header.stream, line)?;
+        if let Some(window) = window {
+            // The selector is the first key column (registry invariant). Day keys must be real
+            // `YYYY-MM-DD` dates; a record outside the declared window would escape its
+            // absence-means-delete scope.
+            let selector_value = &record.key[0];
+            if matches!(selector_value, KeyValue::Text(day) if !is_day(day)) {
+                return Err(INVALID_RECORD);
+            }
+            if !window.bounds.contains(selector_value) {
+                return Err(IngestError::Unprocessable("record_outside_window"));
+            }
+        }
         if !keys.insert(record.key.clone()) {
-            return Err(IngestError::Unprocessable("duplicate_key"));
+            return Err(DUPLICATE_KEY);
         }
         records.push(record);
     }
@@ -306,13 +456,13 @@ pub fn parse_append_batch(entity: &[u8]) -> Result<AppendBatch, IngestError> {
         return Err(RECORD_COUNT_MISMATCH);
     }
 
-    Ok(AppendBatch {
+    Ok(Batch {
         protocol_version: header.protocol_version,
         batch_id: header.batch_id,
         source_id: header.source_id,
         device_id: header.device_id,
         stream: header.stream,
-        end_cursor: header.end_cursor,
+        delivery: header.delivery,
         records,
     })
 }
@@ -364,7 +514,18 @@ struct RawHeader {
     #[serde(deserialize_with = "required_nullable")]
     end_cursor: Option<Cursor>,
     #[serde(default, deserialize_with = "presence")]
-    window: Option<IgnoredAny>,
+    window: Option<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawWindow {
+    replacement_id: String,
+    selector: String,
+    start_inclusive: Value,
+    end_exclusive: Value,
+    part: u32,
+    parts: u32,
 }
 
 /// A member that must be present but may be `null` (plain `Option` members may be omitted).
@@ -377,8 +538,8 @@ where
 }
 
 /// Records that a member was present with any value, including `null`.
-fn presence<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<IgnoredAny>, D::Error> {
-    IgnoredAny::deserialize(deserializer).map(Some)
+fn presence<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 struct Header {
@@ -386,9 +547,9 @@ struct Header {
     batch_id: String,
     source_id: String,
     device_id: String,
-    stream: &'static AppendStream,
+    stream: &'static Stream,
     record_count: u32,
-    end_cursor: Cursor,
+    delivery: BatchDelivery,
 }
 
 fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
@@ -406,31 +567,52 @@ fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
     if header.kind != "batch" {
         return Err(INVALID_HEADER);
     }
-    let stream = registry::append_stream(&header.stream)
-        .ok_or(IngestError::Unprocessable("unsupported_stream"))?;
-    if header.delivery != "append" || header.window.is_some() {
-        return Err(INVALID_HEADER);
-    }
+    let stream =
+        registry::stream(&header.stream).ok_or(IngestError::Unprocessable("unsupported_stream"))?;
+    // The registry fixes each stream's delivery mode; `window` belongs to replace_window only.
+    let selector = match (stream.replace_window(), header.delivery.as_str()) {
+        (None, "append") if header.window.is_none() => None,
+        (Some(spec), "replace_window") => Some(spec.selector),
+        _ => return Err(INVALID_HEADER),
+    };
     if !is_canonical_uuid(&header.batch_id)
         || !is_canonical_uuid(&header.source_id)
         || header.device_id.is_empty()
     {
         return Err(INVALID_HEADER);
     }
-    if header.record_count == 0 {
-        return Err(IngestError::Unprocessable("empty_batch"));
-    }
     if header.record_count > MAX_RECORDS {
         return Err(INVALID_HEADER);
     }
-    let end_cursor = header.end_cursor.ok_or(INVALID_CURSOR)?;
-    if !cursors_are_valid(
-        header.start_cursor.as_ref(),
-        &end_cursor,
-        header.record_count,
-    ) {
-        return Err(INVALID_CURSOR);
-    }
+
+    let delivery = match selector {
+        None => {
+            if header.record_count == 0 {
+                return Err(EMPTY_BATCH);
+            }
+            let end_cursor = header.end_cursor.ok_or(INVALID_CURSOR)?;
+            if !cursors_are_valid(
+                header.start_cursor.as_ref(),
+                &end_cursor,
+                header.record_count,
+            ) {
+                return Err(INVALID_CURSOR);
+            }
+            BatchDelivery::Append { end_cursor }
+        }
+        Some(selector) => {
+            if header.start_cursor.is_some() || header.end_cursor.is_some() {
+                return Err(INVALID_CURSOR);
+            }
+            let window = parse_window(selector, header.window)?;
+            // An empty window is one zero-record part; a multi-part replacement never has an
+            // empty part.
+            if header.record_count == 0 && window.parts != 1 {
+                return Err(EMPTY_BATCH);
+            }
+            BatchDelivery::ReplaceWindow(window)
+        }
+    };
 
     Ok(Header {
         protocol_version: header.protocol_version,
@@ -439,8 +621,49 @@ fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
         device_id: header.device_id,
         stream,
         record_count: header.record_count,
-        end_cursor,
+        delivery,
     })
+}
+
+/// Validates the `window` member: canonical `replacementId`, the stream's selector, non-empty
+/// half-open bounds of the selector's type, and `1 <= part <= parts`.
+fn parse_window(selector: Selector, window: Option<Value>) -> Result<Window, IngestError> {
+    let raw: RawWindow = window
+        .and_then(|window| serde_json::from_value(window).ok())
+        .ok_or(INVALID_WINDOW)?;
+    if !is_canonical_uuid(&raw.replacement_id) || raw.selector != selector.wire_name() {
+        return Err(INVALID_WINDOW);
+    }
+    if !(1..=raw.parts).contains(&raw.part) {
+        return Err(INVALID_WINDOW);
+    }
+    let bounds = match (selector, raw.start_inclusive, raw.end_exclusive) {
+        (Selector::Day, Value::String(start), Value::String(end))
+            if is_day(&start) && is_day(&end) && start < end =>
+        {
+            Bounds::Day { start, end }
+        }
+        (Selector::StartTs, Value::Number(start), Value::Number(end)) => {
+            match (start.as_i64(), end.as_i64()) {
+                (Some(start), Some(end)) if start < end => Bounds::StartTs { start, end },
+                _ => return Err(INVALID_WINDOW),
+            }
+        }
+        _ => return Err(INVALID_WINDOW),
+    };
+    Ok(Window {
+        replacement_id: raw.replacement_id,
+        bounds,
+        part: raw.part,
+        parts: raw.parts,
+    })
+}
+
+/// A canonical `YYYY-MM-DD` calendar date.
+fn is_day(value: &str) -> bool {
+    value.len() == 10
+        && NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .is_ok_and(|date| date.format("%Y-%m-%d").to_string() == value)
 }
 
 fn is_canonical_uuid(value: &str) -> bool {
@@ -510,7 +733,7 @@ impl<'de> Deserialize<'de> for Members {
     }
 }
 
-fn parse_record(stream: &AppendStream, line: &[u8]) -> Result<Record, IngestError> {
+fn parse_record(stream: &Stream, line: &[u8]) -> Result<Record, IngestError> {
     let raw: RawRecord = parse_line(line, INVALID_RECORD)?;
     if raw.kind != "record" {
         return Err(INVALID_RECORD);
