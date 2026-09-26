@@ -7,6 +7,9 @@
 //!   backed up on its own schedule;
 //! - independent lifecycle: the push store can be rotated or reset without touching `app.db`.
 
+pub mod ingest;
+pub mod registry;
+
 use std::fmt;
 
 use sqlx::SqlitePool;
