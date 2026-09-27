@@ -19,6 +19,8 @@ pub mod services;
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
+    /// The NOOP push mirror (`noop.db`); training reads only ever query it.
+    pub noop_db: SqlitePool,
     pub adguard_service: Option<AdguardService>,
     pub docker_service: Option<DockerService>,
     pub ir_service: Option<IrService>,

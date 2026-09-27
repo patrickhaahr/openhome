@@ -9,6 +9,7 @@ axum = { version = "0.8.8", features = ["macros"] }
 base64 = "0.22"
 bollard = { version = "0.20.0", features = ["chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
 dotenvy = "0.15.7"
 http = "1.4.0"
 reqwest = { version = "0.13.1", features = ["form", "json"] }

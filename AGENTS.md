@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-expo/AGENTS.md` before changing those areas.
+Start here for repo-wide guidance. Then read `api/AGENTS.md`, `mcp/AGENTS.md` or `mobile-expo/AGENTS.md` before changing those areas.
 
 ## Current Repo Reality
 
@@ -20,6 +20,11 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-expo/AGE
   - `just fmt`
   - `just lint`
   - `just go`
+- MCP adapter:
+  - `just mcp-run` (needs `OPENHOME_API_URL` and `API_KEY`)
+  - `just mcp-test`
+  - `just mcp-format`
+  - `just mcp-lint`
 - Expo (`just groups` lists everything grouped by area):
   - `just expo-install`
   - `just expo-start`
@@ -41,6 +46,7 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md` or `mobile-expo/AGE
 ## Architecture Notes
 
 - `api/` is a standalone Rust Axum service. `api/migrations/` is live SQLx migration state.
+- `mcp/` is the Hermes MCP adapter: a standalone Rust crate that turns read-only API training endpoints into MCP tools. It must not read the databases or interpret data; see `docs/training-context.md` and ADR 0002.
 - `mobile-expo/` is a standalone Expo app. Keep domain rules, application state, infrastructure adapters, and UI components separated under `src/`.
 - Use the domain language in `CONTEXT.md` when changing product behavior.
 - Mobile clients talk only to the Axum API. Do not add direct device, bridge, or LAN integration code to `mobile-expo/`.

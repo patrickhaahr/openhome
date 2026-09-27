@@ -168,6 +168,10 @@ _Avoid_: UTC day, rolling 24-hour period
 A calendar night identified by the local day on which sleep ends. A Sleep Night remains present in a recent-night series when no sleep result is available.
 _Avoid_: Last available sleep record, sleep start date
 
+**Recovery Day**:
+One Training Day's sleep and recovery read from NOOP: the Sleep Night that wakes on that day, plus resting heart rate, HRV, and NOOP's derived recovery and strain scores. Each value carries its unit and the NOOP Source it was selected from. The Recovery Day also states the sync freshness and coverage, so a day that has not synced yet is not mistaken for a recorded absence.
+_Avoid_: Recovery score, readiness, last night's data
+
 **Mixed-Category Session**:
 A Workout that contains entries from both Exercise Categories (calisthenics and gym); nothing restricts a Workout to a single category.
 _Avoid_: Single-category workout, category-specific session
@@ -235,6 +239,7 @@ _Avoid_: User account, settings record
 - A strap **NOOP Source** and its computed sibling may contribute observations for the same person and day.
 - A **Training Day** aligns logged training and NOOP observations without changing a NOOP daily result's recorded day.
 - A **Sleep Night** is indexed by wake day, including nights without a result.
+- A **Recovery Day** reports the **Sleep Night** that wakes on it and resolves each value from a strap **NOOP Source** first, falling back to its computed sibling.
 - A **Mixed-Category Session** may combine calisthenics and gym entries in one Workout.
 - An **Added Weight** of null means bodyweight; Volume treats it as zero.
 - A **Timed Hold** replaces reps with a duration.

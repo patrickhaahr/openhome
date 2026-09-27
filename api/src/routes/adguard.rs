@@ -98,6 +98,7 @@ mod tests {
     fn create_mock_state(service: Option<AdguardService>) -> crate::AppState {
         crate::AppState {
             db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+            noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
             adguard_service: service,
             docker_service: None,
             ir_service: None,

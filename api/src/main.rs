@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = openhome_api::AppState {
         db,
+        noop_db: noop_db.clone(),
         adguard_service,
         docker_service,
         ir_service,
@@ -121,6 +122,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::docker::router())
         .merge(routes::ir::router())
         .merge(routes::switchbot::router())
+        .merge(routes::training::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())

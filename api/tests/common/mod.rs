@@ -8,12 +8,15 @@ use openhome_api::routes::{
     feeds::router as feeds_router, fitness::router as fitness_router,
     health::router as health_router, ir::router as ir_router,
     switchbot::router as switchbot_router, timeline::router as timeline_router,
+    training::router as training_router,
 };
 use openhome_api::services::adguard::AdguardService;
 use openhome_api::services::docker::DockerService;
 use openhome_api::services::ir::IrService;
+use openhome_api::services::noop_push;
 use openhome_api::services::switchbot::SwitchbotService;
 use sqlx::SqlitePool;
+use sqlx::sqlite::SqlitePoolOptions;
 use tower::ServiceExt;
 
 #[allow(dead_code)]
@@ -35,6 +38,7 @@ pub fn create_mock_state_with_adguard(service: AdguardService) -> AppState {
     let db = SqlitePool::connect_lazy("sqlite::memory:").unwrap();
     AppState {
         db,
+        noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
         adguard_service: Some(service),
         docker_service: None,
         ir_service: None,
@@ -50,6 +54,7 @@ pub fn create_mock_state_with_ir(service: IrService) -> AppState {
     let db = SqlitePool::connect_lazy("sqlite::memory:").unwrap();
     AppState {
         db,
+        noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
         adguard_service: None,
         docker_service: None,
         ir_service: Some(service),
@@ -65,6 +70,7 @@ pub fn create_mock_state_with_switchbot(service: SwitchbotService) -> AppState {
     let db = SqlitePool::connect_lazy("sqlite::memory:").unwrap();
     AppState {
         db,
+        noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
         adguard_service: None,
         docker_service: None,
         ir_service: None,
@@ -75,13 +81,44 @@ pub fn create_mock_state_with_switchbot(service: SwitchbotService) -> AppState {
     }
 }
 
+/// An in-memory NOOP push mirror. One connection, because every in-memory connection is its own
+/// database.
+#[allow(dead_code)]
+pub async fn memory_noop_db() -> SqlitePool {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .unwrap();
+    noop_push::initialize(&pool).await.unwrap();
+    pool
+}
+
 pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Router, AppState) {
     let db = SqlitePool::connect(":memory:").await.unwrap();
     sqlx::migrate!("./migrations").run(&db).await.unwrap();
-    test_app_with_pool(db, adguard_enabled)
+    test_app_with_pools(db, memory_noop_db().await, adguard_enabled)
 }
 
+/// The authenticated API over the given NOOP push mirror, for training reads.
+#[allow(dead_code)]
+pub async fn test_app_with_noop_db(noop_db: SqlitePool) -> Router {
+    let db = SqlitePool::connect(":memory:").await.unwrap();
+    sqlx::migrate!("./migrations").run(&db).await.unwrap();
+    test_app_with_pools(db, noop_db, None).0
+}
+
+#[allow(dead_code)]
 pub fn test_app_with_pool(db: SqlitePool, adguard_enabled: Option<bool>) -> (Router, AppState) {
+    let noop_db = SqlitePool::connect_lazy("sqlite::memory:").unwrap();
+    test_app_with_pools(db, noop_db, adguard_enabled)
+}
+
+fn test_app_with_pools(
+    db: SqlitePool,
+    noop_db: SqlitePool,
+    adguard_enabled: Option<bool>,
+) -> (Router, AppState) {
     let api_key = ApiKey::new("test-api-key".to_string());
     let api_key_clone = api_key.clone();
 
@@ -93,6 +130,7 @@ pub fn test_app_with_pool(db: SqlitePool, adguard_enabled: Option<bool>) -> (Rou
 
     let state = AppState {
         db: db.clone(),
+        noop_db,
         adguard_service,
         docker_service: None,
         ir_service: None,
@@ -109,6 +147,7 @@ pub fn test_app_with_pool(db: SqlitePool, adguard_enabled: Option<bool>) -> (Rou
         .merge(ir_router())
         .merge(switchbot_router())
         .merge(timeline_router())
+        .merge(training_router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             auth_middleware(req, next, api_key_clone.clone())
@@ -141,6 +180,7 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
 
     let state = AppState {
         db: db.clone(),
+        noop_db: memory_noop_db().await,
         adguard_service,
         docker_service,
         ir_service: None,
@@ -158,6 +198,7 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
         .merge(ir_router())
         .merge(switchbot_router())
         .merge(timeline_router())
+        .merge(training_router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             auth_middleware(req, next, api_key_clone.clone())
