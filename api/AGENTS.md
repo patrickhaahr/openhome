@@ -30,6 +30,11 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
   - Replace-window parts for the 4 mutable streams (`daily_metric`, `sleep_session`, `workout`, `journal` tables; `services/noop_push/replace_window.rs`): `window` is required, both cursors must be `null`, `recordCount` may be 0 only for a one-part (empty, still authoritative) window, and part numbering must satisfy `1 <= part <= parts`. Bounds are half-open and non-empty: canonical `YYYY-MM-DD` strings for the `day` selector (`dailyMetric`, `journal`), integer Unix seconds for `startTs` (`sleepSession`, `workout`); every record's selector key must lie inside the window (→ 422 `record_outside_window`). Parts are staged in `replacement_part` (decoded entity, cleared once applied or superseded); the part that completes the set applies the replacement in the same transaction (upsert all records, then delete rows in `(source_id, device_id)` and the window whose keys are absent; rows outside the window are untouched) and its ack (`endCursor: null`) is only returned after that commits. A duplicate key across parts → 422 `duplicate_key` on the completing part, which stays unstaged. `replacement` pins each `replacementId`'s stream, window and `parts` (reuse with different metadata, or a part number reused with another `batchId` → 409 `replacement_conflict`); `replacement_scope` tracks the latest generation per `(source, device, stream)`. A part of any other replacement supersedes a still-staging current one, whose parts then → 409 `replacement_superseded`. A byte-identical retry of an accepted part replays its ack without changing rows or the current generation, including parts of earlier completed replacements; retries of superseded incomplete replacements remain 409
   - Status codes: 400 broken framing/JSON or body (`malformed_ndjson`, `record_count_mismatch`, `invalid_content_encoding`, `unreadable_body`); 413 `payload_too_large`; 415 `unsupported_media_type`, `unsupported_content_encoding`; 422 valid JSON that violates the contract (`unsupported_protocol_version`, `unsupported_stream`, `invalid_header`, `invalid_cursor`, `invalid_window`, `empty_batch`, `invalid_record`, `record_outside_window`, `duplicate_key`); 409 `batch_conflict`, `replacement_conflict`, `replacement_superseded`; 500 `storage_unavailable`, `internal_error`. Unknown header/record/data members are ignored; key objects must contain exactly the registry columns. Records carry no rowids, so the cursor check is `endCursor.rowId - (startCursor.rowId or 0) >= recordCount` with positive rowids; `keySha256` must be 64 lowercase hex and is echoed verbatim, never recomputed
   - `batch_ledger` stores the SHA-256 of the decoded entity and the ack per `(receiver_state_id, source_id, device_id, batch_id)`. A byte-identical retry (gzip or identity) replays the stored ack without touching rows; different bytes → 409. Updating `receiver_state.receiver_state_id` to a different value fires the `receiver_state_rotation` trigger, atomically deleting all rows from `batch_ledger`, `replacement`, `replacement_scope`, and `replacement_part` while retaining health records. Writing the same ID preserves protocol state; rolling back the rotation also rolls back metadata deletion. Decode/parse/hash runs on `spawn_blocking`. Each batch is applied in one `BEGIN IMMEDIATE` transaction
+- Training context (read-only, NOOP mirror): `/api/training/days/{day}/recovery` returns the Recovery Day for one Europe/Copenhagen calendar day (`YYYY-MM-DD`, else 400).
+  - Contents: the Sleep Night waking on that day, resting HR, HRV, and NOOP's derived scores, each with its unit and source namespace. It also returns a `noop` block with the installation, `last_push_at`, freshness and coverage.
+  - A night with more than 24 session rows gets 422 rather than being truncated.
+  - The contract, source-resolution rules and inspection SQL are in `docs/training-context.md`. The Hermes MCP adapter (`mcp/`) exposes it as `recovery_on_day`.
+  - Rules live in `services/training/`. Keep all interpretation there, not in the adapter (ADR 0002).
 - Profile (fitness): `/api/profile` (GET/PATCH) — the single profile row; GET returns null fields when not configured; PATCH upserts (creates the row on first PATCH): absent fields keep the current value, explicit `null` clears the field (`height_cm`, `sex`)
 
 ## Workout logging conventions
@@ -57,6 +62,7 @@ api/
     │   ├── health.rs
     │   ├── noop_push.rs     # NOOP push endpoint (own bearer token)
     │   ├── timeline.rs
+    │   ├── training.rs      # Training context reads (Recovery Day)
     │   └── mod.rs
     └── services/            # Domain services
         ├── feed.rs
@@ -65,6 +71,12 @@ api/
         │   ├── ingest.rs    # batch decoding, NDJSON framing/validation, ledger + upserts
         │   ├── registry.rs  # v1 stream registry (delivery, columns, types, upsert/delete SQL)
         │   └── replace_window.rs # replace-window staging, generations, atomic apply
+        ├── training.rs      # training read model over the NOOP mirror
+        ├── training/
+        │   ├── calendar.rs  # Europe/Copenhagen calendar days, DST-aware bounds, ISO rendering
+        │   ├── noop_source.rs # active installation, freshness, coverage from push bookkeeping
+        │   ├── noop_merge.rs  # NOOP's imported-first / computed-fallback precedence rules
+        │   └── recovery.rs  # Recovery Day contract and assembly
         └── mod.rs
 ```
 

@@ -1,0 +1,31 @@
+[package]
+name = "openhome-mcp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+axum = "0.8.8"
+reqwest = { version = "0.13.1", default-features = false, features = ["json", "rustls"] }
+rmcp = { version = "3.4.1", features = ["server", "macros", "transport-streamable-http-server"] }
+serde = { version = "1.0.228", features = ["derive"] }
+# float_roundtrip: API numbers are re-serialized exactly instead of drifting by one ulp.
+serde_json = { version = "1.0.149", features = ["float_roundtrip"] }
+subtle = "2.6.1"
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+url = "2.5"
+
+[dev-dependencies]
+openhome-api = { path = "../api" }
+pretty_assertions = "1"
+rmcp = { version = "3.4.1", features = ["client", "transport-streamable-http-client-reqwest"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

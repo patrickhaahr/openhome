@@ -37,6 +37,36 @@ cli-format:
 cli-lint:
     cargo clippy -- -D warnings
 
+# Build the Hermes MCP adapter
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-build:
+    cargo build
+
+# Run the MCP adapter (needs OPENHOME_API_URL and API_KEY; see mcp/AGENTS.md)
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-run:
+    cargo run
+
+# Test the MCP adapter against the real API training routes
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-test:
+    cargo test
+
+# Format the MCP adapter
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-format:
+    cargo fmt
+
+# Lint the MCP adapter (clippy denies warnings)
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-lint:
+    cargo clippy --all-targets -- -D warnings
+
 # Run the Axum API server
 [group('api')]
 [working-directory: 'api']

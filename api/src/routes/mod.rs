@@ -7,3 +7,4 @@ pub mod ir;
 pub mod noop_push;
 pub mod switchbot;
 pub mod timeline;
+pub mod training;
