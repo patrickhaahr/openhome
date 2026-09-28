@@ -238,6 +238,7 @@ _Avoid_: User account, settings record
 - A **NOOP Workout** remains distinct from a logged **Workout**.
 - A strap **NOOP Source** and its computed sibling may contribute observations for the same person and day.
 - A **Training Day** aligns logged training and NOOP observations without changing a NOOP daily result's recorded day.
+- A **Training Day** shows its logged **Workouts** beside the **NOOP Workouts** that start on it locally; a NOOP Workout on the same day is context, never an asserted match.
 - A **Sleep Night** is indexed by wake day, including nights without a result.
 - A **Recovery Day** reports the **Sleep Night** that wakes on it and resolves each value from a strap **NOOP Source** first, falling back to its computed sibling.
 - A **Mixed-Category Session** may combine calisthenics and gym entries in one Workout.

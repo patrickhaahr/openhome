@@ -15,7 +15,7 @@ use super::noop_merge::{
     self, DailyRow, Namespace, ResolvedDaily, SessionRow, Sourced, StageMinutes,
 };
 use super::noop_source::{
-    self, COMPUTED_DEVICE_ID, Coverage, Freshness, IMPORTED_DEVICE_ID, Installation,
+    self, COMPUTED_DEVICE_ID, Coverage, IMPORTED_DEVICE_ID, Installation, NoopSync, Rows, Stream,
 };
 
 /// Sessions one Sleep Night may hold. A larger night is rejected rather than truncated.
@@ -34,7 +34,7 @@ pub struct RecoveryDay {
     /// Nightly heart-rate variability as RMSSD.
     pub hrv_rmssd: Measurement<f64>,
     pub derived_scores: DerivedScores,
-    pub noop: NoopSync,
+    pub noop: NoopSync<NoopCoverage>,
 }
 
 /// A value with its unit and the NOOP device namespace it was selected from (`null` with it).
@@ -91,16 +91,6 @@ pub struct DerivedScores {
 }
 
 #[derive(Debug, Serialize)]
-pub struct NoopSync {
-    pub installation_id: Option<String>,
-    pub imported_device_id: &'static str,
-    pub computed_device_id: &'static str,
-    pub last_push_at: Option<String>,
-    pub freshness: Freshness,
-    pub coverage: NoopCoverage,
-}
-
-#[derive(Debug, Serialize)]
 pub struct NoopCoverage {
     pub daily_metrics: Coverage,
     pub sleep_sessions: Coverage,
@@ -113,19 +103,15 @@ const BEATS_PER_MINUTE: &str = "beats/min";
 const MILLISECONDS: &str = "ms";
 const SCORE: &str = "score_0_100";
 
+/// The streams a Recovery Day reads; their watermark is the Recovery Day's `last_push_at`.
+const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
+
 pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<RecoveryDay> {
     let Some(installation) = noop_source::active_installation(pool).await? else {
-        let unsynced = NoopSync {
-            installation_id: None,
-            imported_device_id: IMPORTED_DEVICE_ID,
-            computed_device_id: COMPUTED_DEVICE_ID,
-            last_push_at: None,
-            freshness: Freshness::Unknown,
-            coverage: NoopCoverage {
-                daily_metrics: Coverage::Unknown,
-                sleep_sessions: Coverage::Unknown,
-            },
-        };
+        let unsynced = NoopSync::unsynced(NoopCoverage {
+            daily_metrics: Coverage::Unknown,
+            sleep_sessions: Coverage::Unknown,
+        });
         return Ok(assemble(
             day,
             noop_merge::merge_daily(None, None, false),
@@ -134,12 +120,13 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         ));
     };
 
-    let last_push_at = noop_source::last_push_at(pool, &installation).await?;
+    let rows = [Rows::DailyMetrics(day), Rows::SleepSessions(day)];
+    let last_push_at = noop_source::last_push_at(pool, &installation, &RECOVERY_STREAMS).await?;
     let coverage = NoopCoverage {
-        daily_metrics: noop_source::daily_metric_coverage(pool, &installation, day, None).await?,
-        sleep_sessions: noop_source::sleep_session_coverage(pool, &installation, day, None).await?,
+        daily_metrics: noop_source::coverage(pool, &installation, rows[0], None).await?,
+        sleep_sessions: noop_source::coverage(pool, &installation, rows[1], None).await?,
     };
-    let freshness = noop_source::freshness(pool, &installation, last_push_at, day).await?;
+    let freshness = noop_source::freshness(pool, &installation, last_push_at, day, &rows).await?;
     let sessions = sleep_sessions(pool, &installation, day).await?;
     let sleep_edited = sessions
         .iter()
@@ -149,14 +136,7 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         .iter()
         .map(sleep_session)
         .collect::<Result<_>>()?;
-    let sync = NoopSync {
-        installation_id: Some(installation.source_id),
-        imported_device_id: IMPORTED_DEVICE_ID,
-        computed_device_id: COMPUTED_DEVICE_ID,
-        last_push_at: last_push_at.map(calendar::iso),
-        freshness,
-        coverage,
-    };
+    let sync = NoopSync::synced(installation, last_push_at, freshness, coverage);
     Ok(assemble(day, daily, sessions, sync))
 }
 
@@ -164,7 +144,7 @@ fn assemble(
     day: CalendarDay,
     daily: ResolvedDaily,
     sessions: Vec<SleepSession>,
-    noop: NoopSync,
+    noop: NoopSync<NoopCoverage>,
 ) -> RecoveryDay {
     RecoveryDay {
         day: day.to_string(),
@@ -292,9 +272,9 @@ async fn sleep_sessions(
 fn sleep_session(session: &SessionRow) -> Result<SleepSession> {
     let start = session.effective_start_ts();
     Ok(SleepSession {
-        start: iso_from_unix(start)?,
-        end: iso_from_unix(session.end_ts)?,
-        detected_start: iso_from_unix(session.start_ts)?,
+        start: calendar::iso_from_unix(start)?,
+        end: calendar::iso_from_unix(session.end_ts)?,
+        detected_start: calendar::iso_from_unix(session.start_ts)?,
         duration_min: (session.end_ts - start) as f64 / 60.0,
         stage_min: session
             .stages_json
@@ -307,12 +287,4 @@ fn sleep_session(session: &SessionRow) -> Result<SleepSession> {
         staging_sparse: session.staging_sparse,
         source: session.namespace.device_id(),
     })
-}
-
-fn iso_from_unix(seconds: i64) -> Result<String> {
-    calendar::from_unix(seconds)
-        .map(calendar::iso)
-        .ok_or_else(|| {
-            AppError::Internal(anyhow::anyhow!("NOOP timestamp {seconds} is out of range"))
-        })
 }

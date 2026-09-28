@@ -33,19 +33,26 @@ async fn serve(app: Router) -> SocketAddr {
     address
 }
 
-/// The API's training routes behind its API-key layer, over a NOOP mirror where both strap
-/// namespaces pushed 2026-09-14 (the real rows: imported strain 3.1, computed strain 0.0).
-async fn start_api() -> String {
-    let noop_db = SqlitePoolOptions::new()
+/// An in-memory database. One connection, because every in-memory connection is its own database.
+async fn memory_db() -> SqlitePool {
+    SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")
         .await
-        .unwrap();
+        .unwrap()
+}
+
+/// The API's training routes behind its API-key layer, over a NOOP mirror where both strap
+/// namespaces pushed 2026-09-14 (the real rows: imported strain 3.1, computed strain 0.0, and an
+/// evening NOOP Workout) and a training log with one Workout that day.
+async fn start_api() -> String {
+    let noop_db = memory_db().await;
     noop_push::initialize(&noop_db).await.unwrap();
     for (device, strain) in [("my-whoop", 3.1), ("my-whoop-noop", 0.0)] {
         for (stream, selector, start, end) in [
             ("dailyMetric", "day", "2026-09-13", "2026-09-27"),
             ("sleepSession", "startTs", "1789250400", "1790460000"),
+            ("workout", "startTs", "1789250400", "1790460000"),
         ] {
             sqlx::query(
                 "INSERT INTO batch_ledger (receiver_state_id, source_id, device_id, batch_id, \
@@ -100,8 +107,38 @@ async fn start_api() -> String {
         .unwrap();
     }
 
+    // 18:00-19:15 local time on 2026-09-14.
+    sqlx::query(
+        "INSERT INTO workout (source_id, device_id, start_ts, sport, end_ts, source, duration_s, \
+             avg_hr, max_hr) \
+         VALUES (?, 'my-whoop', 1789401600, 'Calisthenics', 1789406100, 'manual', 4500.0, 88.0, \
+             141.0)",
+    )
+    .bind(SOURCE)
+    .execute(&noop_db)
+    .await
+    .unwrap();
+
+    let db = memory_db().await;
+    for migration in [
+        include_str!("../../api/migrations/0003_fitness.up.sql"),
+        include_str!("../../api/migrations/0004_remove_workout_body_weight.up.sql"),
+    ] {
+        sqlx::raw_sql(migration).execute(&db).await.unwrap();
+    }
+    sqlx::raw_sql(
+        "INSERT INTO workouts (id, date, name) VALUES (1, '2026-09-14', 'Pull'); \
+         INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index) \
+             VALUES (1, 1, 11, 0); \
+         INSERT INTO sets (workout_exercise_id, set_number, reps, weight_kg, rpe, notes) \
+             VALUES (1, 1, 5, 12.5, 10, '+2 partials');",
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
     let state = AppState {
-        db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        db,
         noop_db,
         adguard_service: None,
         docker_service: None,
@@ -147,20 +184,32 @@ async fn connect(
         .map_err(|err| anyhow::anyhow!("MCP client failed to start: {err:?}"))
 }
 
-async fn recovery_on_day(
+async fn call_day_tool(
     client: &RunningService<RoleClient, ClientConfig>,
+    tool: &'static str,
     day: &str,
 ) -> CallToolResult {
     let arguments = json!({"day": day}).as_object().unwrap().clone();
     client
-        .call_tool(CallToolRequestParams::new("recovery_on_day").with_arguments(arguments))
+        .call_tool(CallToolRequestParams::new(tool).with_arguments(arguments))
         .await
         .unwrap()
 }
 
+async fn recovery_on_day(
+    client: &RunningService<RoleClient, ClientConfig>,
+    day: &str,
+) -> CallToolResult {
+    call_day_tool(client, "recovery_on_day", day).await
+}
+
 async fn api_get(api_url: &str, day: &str) -> Value {
+    api_get_read(api_url, day, "recovery").await
+}
+
+async fn api_get_read(api_url: &str, day: &str, read: &str) -> Value {
     reqwest::Client::new()
-        .get(format!("{api_url}/api/training/days/{day}/recovery"))
+        .get(format!("{api_url}/api/training/days/{day}/{read}"))
         .bearer_auth(API_KEY)
         .send()
         .await
@@ -171,7 +220,7 @@ async fn api_get(api_url: &str, day: &str) -> Value {
 }
 
 #[tokio::test]
-async fn discovers_the_read_only_recovery_tool() {
+async fn discovers_the_read_only_training_tools() {
     let mcp = start_mcp(&start_api().await, API_KEY).await;
     let client = connect(&mcp, API_KEY).await.unwrap();
 
@@ -182,18 +231,21 @@ async fn discovers_the_read_only_recovery_tool() {
 
     let tools = client.list_all_tools().await.unwrap();
     let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
-    assert_eq!(names, ["recovery_on_day"]);
-    let tool = &tools[0];
-    assert_eq!(
-        tool.annotations
-            .as_ref()
-            .and_then(|annotations| annotations.read_only_hint),
-        Some(true)
-    );
-    assert_eq!(tool.input_schema.get("required"), Some(&json!(["day"])));
-    assert!(tool.description.as_deref().is_some_and(|description| {
-        description.contains("Europe/Copenhagen") && !description.contains('\n')
-    }));
+    assert_eq!(names, ["recovery_on_day", "workouts_on_day"]);
+    for tool in &tools {
+        assert_eq!(
+            tool.annotations
+                .as_ref()
+                .and_then(|annotations| annotations.read_only_hint),
+            Some(true),
+            "{}",
+            tool.name
+        );
+        assert_eq!(tool.input_schema.get("required"), Some(&json!(["day"])));
+        assert!(tool.description.as_deref().is_some_and(|description| {
+            description.contains("Europe/Copenhagen") && !description.contains('\n')
+        }));
+    }
 
     client.cancel().await.unwrap();
 }
@@ -215,6 +267,40 @@ async fn returns_the_api_recovery_day_unchanged() {
         json!({"value": 3.1, "unit": "score_0_100", "source": "my-whoop"})
     );
     assert_eq!(direct["noop"]["freshness"], "confirmed");
+
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn returns_the_api_workouts_on_a_day_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+
+    let result = call_day_tool(&client, "workouts_on_day", "2026-09-14").await;
+    let direct = api_get_read(&api, "2026-09-14", "workouts").await;
+
+    assert_eq!(result.is_error, Some(false));
+    assert_eq!(result.structured_content, Some(direct.clone()));
+    assert_eq!(
+        direct["workouts"][0]["exercises"][0]["sets"],
+        json!([{"set_number": 1, "reps": 5, "added_weight_kg": 12.5, "hold_duration_s": null,
+                "rpe": 10, "notes": "+2 partials"}])
+    );
+    assert_eq!(
+        direct["noop_workouts"][0]["start"],
+        "2026-09-14T18:00:00+02:00"
+    );
+    assert_eq!(direct["noop"]["coverage"], json!({"workouts": "covered"}));
+
+    let invalid = call_day_tool(&client, "workouts_on_day", "2026-02-30").await;
+    assert_eq!(invalid.is_error, Some(true));
+    assert_eq!(
+        invalid.structured_content,
+        Some(api_get_read(&api, "2026-02-30", "workouts").await)
+    );
+    assert_eq!(invalid.structured_content.unwrap()["status"], 400);
 
     client.cancel().await.unwrap();
 }

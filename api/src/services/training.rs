@@ -6,16 +6,20 @@
 //!   ([`calendar`]);
 //! - NOOP values are resolved across the strap's imported and on-device computed namespaces with
 //!   NOOP's own precedence rules, and every selected value names the namespace it came from;
+//!   workouts also include the active installation's other imported sources;
 //! - freshness and coverage are derived from the receiver's push bookkeeping so a missing sync is
 //!   never presented as a recorded absence.
 //!
-//! NOOP queries use runtime-checked `sqlx::query` because the compile-time macros only verify
+//! Training-log queries against `app.db` use the compile-time checked macros; NOOP queries use
+//! runtime-checked `sqlx::query` because the compile-time macros only verify
 //! against `app.db`.
 
 pub mod calendar;
 mod noop_merge;
 mod noop_source;
 pub mod recovery;
+pub mod workouts;
 
 pub use calendar::CalendarDay;
 pub use recovery::{RecoveryDay, recovery_day};
+pub use workouts::{WorkoutsOnDay, workouts_on_day};

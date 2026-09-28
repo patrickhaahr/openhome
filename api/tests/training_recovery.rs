@@ -3,17 +3,12 @@
 
 mod common;
 
-use axum::body::Body;
-use axum::http::{Method, Request, StatusCode};
-use openhome_api::routes::noop_push::{PUSH_PATH, PushState, router as push_router};
-use openhome_api::services::noop_push::PushToken;
+use axum::http::StatusCode;
+use common::mirror::{Mirror, Window};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use sqlx::SqlitePool;
-use tower::ServiceExt;
 
 const API_KEY: &str = "test-api-key";
-const PUSH_TOKEN: &str = "test-push-token";
 
 /// The production installation and NOOP's strap namespaces.
 const SOURCE: &str = "81906e30-187d-4546-8f8a-9949b82d62fa";
@@ -31,114 +26,7 @@ const REAL_STARTS: Window = Window::Starts(1_789_250_400, 1_790_460_000);
 /// Local midnight at the start of 2026-09-20 (CEST).
 const SEP_20: i64 = 1_789_855_200;
 
-#[derive(Clone, Copy)]
-enum Window {
-    /// A `dailyMetric` window of `YYYY-MM-DD` days.
-    Days(&'static str, &'static str),
-    /// A `sleepSession` window of Unix seconds.
-    Starts(i64, i64),
-}
-
-/// A NOOP push mirror that fixtures are pushed into through the push endpoint.
-struct Mirror {
-    db: SqlitePool,
-    ids: u64,
-}
-
 impl Mirror {
-    async fn empty() -> Self {
-        Self {
-            db: common::memory_noop_db().await,
-            ids: 0,
-        }
-    }
-
-    fn next_id(&mut self) -> String {
-        self.ids += 1;
-        format!("00000000-0000-4000-8000-{:012x}", self.ids)
-    }
-
-    /// Pushes one complete replacement window, recorded as accepted at `accepted_at`.
-    async fn push(
-        &mut self,
-        source: &str,
-        device: &str,
-        window: Window,
-        records: &[Value],
-        accepted_at: &str,
-    ) {
-        self.push_first_part(source, device, window, records, 1, accepted_at)
-            .await;
-    }
-
-    /// Pushes part 1 of a `parts`-part replacement; with more than one part it stays staged.
-    async fn push_first_part(
-        &mut self,
-        source: &str,
-        device: &str,
-        window: Window,
-        records: &[Value],
-        parts: u32,
-        accepted_at: &str,
-    ) {
-        let (stream, selector, start, end) = match window {
-            Window::Days(start, end) => ("dailyMetric", "day", json!(start), json!(end)),
-            Window::Starts(start, end) => ("sleepSession", "startTs", json!(start), json!(end)),
-        };
-        let batch_id = self.next_id();
-        let header = json!({
-            "type": "batch",
-            "protocolVersion": "1.0",
-            "batchId": batch_id,
-            "sourceId": source,
-            "deviceId": device,
-            "stream": stream,
-            "delivery": "replace_window",
-            "recordCount": records.len(),
-            "startCursor": null,
-            "endCursor": null,
-            "window": {
-                "replacementId": self.next_id(),
-                "selector": selector,
-                "startInclusive": start,
-                "endExclusive": end,
-                "part": 1,
-                "parts": parts,
-            },
-        });
-        let mut entity = String::new();
-        for line in std::iter::once(&header).chain(records) {
-            entity.push_str(&line.to_string());
-            entity.push('\n');
-        }
-
-        let app = push_router(PushState {
-            db: self.db.clone(),
-            token: PushToken::new(PUSH_TOKEN.to_string()).unwrap(),
-        });
-        let request = Request::builder()
-            .method(Method::POST)
-            .uri(PUSH_PATH)
-            .header("authorization", format!("Bearer {PUSH_TOKEN}"))
-            .header("content-type", "application/x-ndjson; charset=utf-8")
-            .header("accept", "application/json")
-            .body(Body::from(entity))
-            .unwrap();
-        let response = app.oneshot(request).await.unwrap();
-        let status = response.status();
-        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-            .await
-            .unwrap();
-        assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
-
-        sqlx::query("UPDATE batch_ledger SET accepted_at = ? WHERE batch_id = ?")
-            .bind(accepted_at)
-            .bind(&batch_id)
-            .execute(&self.db)
-            .await
-            .unwrap();
-    }
-
     async fn recovery(&self, day: &str, api_key: Option<&str>) -> (StatusCode, Value) {
         let app = common::test_app_with_noop_db(self.db.clone()).await;
         common::send_request(app, &format!("/api/training/days/{day}/recovery"), api_key).await

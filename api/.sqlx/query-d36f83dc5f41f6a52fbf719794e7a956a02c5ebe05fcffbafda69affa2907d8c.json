@@ -1,0 +1,104 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT w.id                AS \"workout_id!: i64\",\n               w.name              AS workout_name,\n               w.notes             AS workout_notes,\n               we.id               AS \"entry_id?: i64\",\n               we.notes            AS entry_notes,\n               e.id                AS \"exercise_id?: i64\",\n               e.name              AS \"exercise_name?: String\",\n               e.category          AS \"exercise_category?: String\",\n               s.id                AS \"set_id?: i64\",\n               s.set_number        AS \"set_number?: i64\",\n               s.reps,\n               s.weight_kg,\n               s.duration_seconds,\n               s.rpe,\n               s.notes             AS set_notes\n        FROM workouts w\n        LEFT JOIN workout_exercises we ON we.workout_id = w.id\n        LEFT JOIN exercises e ON e.id = we.exercise_id\n        LEFT JOIN sets s ON s.workout_exercise_id = we.id\n        WHERE w.date = $1\n        ORDER BY w.id, we.order_index, we.id, s.set_number, s.id\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "workout_id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "workout_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "workout_notes",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "entry_id?: i64",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "entry_notes",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "exercise_id?: i64",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "exercise_name?: String",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "exercise_category?: String",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "set_id?: i64",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "set_number?: i64",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "reps",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "weight_kg",
+        "ordinal": 11,
+        "type_info": "Float"
+      },
+      {
+        "name": "duration_seconds",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "rpe",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "set_notes",
+        "ordinal": 14,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d36f83dc5f41f6a52fbf719794e7a956a02c5ebe05fcffbafda69affa2907d8c"
+}

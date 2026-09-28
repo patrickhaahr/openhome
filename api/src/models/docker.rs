@@ -103,7 +103,7 @@ mod tests {
         let json = r#"{"success": true, "message": "Container started"}"#;
         let response: StartResponse = serde_json::from_str(json).unwrap();
 
-        assert_eq!(response.success, true);
+        assert!(response.success);
         assert_eq!(response.message, "Container started");
     }
 
@@ -126,9 +126,9 @@ mod tests {
         let json = r#"{"success": true, "message": "Container stopped", "stopped": true}"#;
         let response: StopResponse = serde_json::from_str(json).unwrap();
 
-        assert_eq!(response.success, true);
+        assert!(response.success);
         assert_eq!(response.message, "Container stopped");
-        assert_eq!(response.stopped, true);
+        assert!(response.stopped);
     }
 
     #[test]
@@ -136,8 +136,8 @@ mod tests {
         let json = r#"{"success": true, "message": "Container was not running", "stopped": false}"#;
         let response: StopResponse = serde_json::from_str(json).unwrap();
 
-        assert_eq!(response.success, true);
-        assert_eq!(response.stopped, false);
+        assert!(response.success);
+        assert!(!response.stopped);
     }
 
     #[test]

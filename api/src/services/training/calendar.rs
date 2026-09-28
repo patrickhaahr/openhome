@@ -85,6 +85,13 @@ pub fn from_unix(seconds: i64) -> Option<DateTime<Utc>> {
     DateTime::from_timestamp(seconds, 0)
 }
 
+/// Renders NOOP's Unix seconds with [`iso`]; an error outside chrono's range.
+pub fn iso_from_unix(seconds: i64) -> anyhow::Result<String> {
+    from_unix(seconds)
+        .map(iso)
+        .ok_or_else(|| anyhow::anyhow!("NOOP timestamp {seconds} is out of range"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

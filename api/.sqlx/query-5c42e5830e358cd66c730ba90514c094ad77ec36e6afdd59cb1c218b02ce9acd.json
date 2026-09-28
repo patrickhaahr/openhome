@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO feed_items (feed_id, title, description, link, guid, pub_date)\n        VALUES ($1, 'Unread Item', 'Desc', 'https://example.com/unread', 'guid-unread', datetime('now'))\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5c42e5830e358cd66c730ba90514c094ad77ec36e6afdd59cb1c218b02ce9acd"
+}

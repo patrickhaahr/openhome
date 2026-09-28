@@ -23,10 +23,13 @@ The tool contracts are documented in `docs/training-context.md`.
 - `recovery_on_day(day)` → `GET /api/training/days/{day}/recovery`
   - `day` is a Europe/Copenhagen calendar date, `YYYY-MM-DD`.
   - Returns the Recovery Day: sleep, resting HR, HRV, NOOP's derived scores, and `noop` freshness and coverage.
+- `workouts_on_day(day)` → `GET /api/training/days/{day}/workouts`
+  - `day` is a Europe/Copenhagen calendar date, `YYYY-MM-DD`.
+  - Returns the Workouts logged in OpenHome that day with their Exercises and Sets, the separate NOOP Workouts starting that day, and `noop` freshness and coverage.
 
 Errors:
 - Literal `.` or `..` arguments become a 400 tool error before any HTTP request. This is a URL transport constraint; date validation stays in the API.
-- A non-2xx API answer with a JSON `{"error", "status"}` body becomes a tool error (`isError: true`) carrying that body. For example, 400 for an invalid day, or 422 when the session cap is exceeded.
+- A non-2xx API answer with a JSON `{"error", "status"}` body becomes a tool error (`isError: true`) carrying that body. For example, 400 for an invalid day, or 422 when a session, Set or workout cap is exceeded.
 - An unreachable API becomes `{"error": "The OpenHome API could not be reached", "status": null}`.
 - A non-JSON answer becomes `{"error": "The OpenHome API answered <status> without a JSON …", "status": <code>}`.
 - API requests time out after 15 s.

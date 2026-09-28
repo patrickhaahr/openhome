@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO feed_items (feed_id, title, description, link, guid, pub_date)\n            VALUES ($1, $2, 'Desc', $3, $4, datetime('now', '-' || $5 || ' minutes'))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "c80db80730bc1a60ec00bb7e0528945ada2bfa7921a22395daf4e69363add6b1"
+}

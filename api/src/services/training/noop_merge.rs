@@ -6,8 +6,11 @@
 //!   sleep total that a scored computed night can replace.
 //! - Sleep sessions (`mergeSleepRichness`): per wake day, all imported sessions are kept unless the
 //!   computed sessions carry richer staging, in which case all computed sessions are kept.
+//! - Workouts (`WorkoutEditing.dedupCrossSource`): all namespaces' rows form one list. A detected
+//!   bout that shadows a real session is dropped, and two rows of the same sport that overlap by
+//!   more than half of the shorter one collapse to the richer row. Distinct sessions stay distinct.
 //!
-//! Everything here is pure; callers pass rows for a single wake day.
+//! Everything here is pure; callers pass rows for a single wake day or Training Day.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -282,6 +285,155 @@ pub fn stage_minutes(stages_json: &str) -> Option<StageMinutes> {
     (in_bed > 0.0).then_some(totals)
 }
 
+/// Where NOOP says a workout row came from, classified from its stored `source` like NOOP's
+/// `WorkoutEditing.classify`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkoutOrigin {
+    /// Logged in NOOP by the user, live or afterwards.
+    Manual,
+    /// A bout NOOP's detector derived from strap heart rate.
+    Detected,
+    /// Imported from a WHOOP export.
+    Whoop,
+    /// Imported from Apple Health or Health Connect; NOOP's fallback for unrecognised sources.
+    HealthImport,
+    /// Imported strength session (Hevy, Liftosaur).
+    Lifting,
+    /// Imported GPX, TCX or FIT file.
+    ActivityFile,
+}
+
+impl WorkoutOrigin {
+    pub fn classify(source: &str) -> Self {
+        let source = source.to_lowercase();
+        // The detector writes the computed device id, which also contains "whoop".
+        if source.ends_with("-noop") {
+            Self::Detected
+        } else if source == "manual" {
+            Self::Manual
+        } else if source == "lifting" {
+            Self::Lifting
+        } else if source == "activity-file" {
+            Self::ActivityFile
+        } else if source.contains("whoop") {
+            Self::Whoop
+        } else {
+            Self::HealthImport
+        }
+    }
+}
+
+/// The `workout` fields a Training Day reads; zones are only checked for presence and routes are
+/// never selected.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkoutRow {
+    pub device_id: String,
+    pub start_ts: i64,
+    pub end_ts: i64,
+    pub sport: String,
+    pub origin: WorkoutOrigin,
+    pub duration_s: Option<f64>,
+    pub energy_kcal: Option<f64>,
+    pub avg_hr: Option<f64>,
+    pub max_hr: Option<f64>,
+    pub strain: Option<f64>,
+    pub distance_m: Option<f64>,
+    pub steps: Option<i64>,
+    pub notes: Option<String>,
+    pub has_zones: bool,
+}
+
+impl WorkoutRow {
+    /// Captured signals, NOOP's tiebreak between two rows of one activity.
+    fn richness(&self) -> u8 {
+        [
+            self.avg_hr.is_some(),
+            self.max_hr.is_some(),
+            self.strain.is_some(),
+            self.has_zones,
+            self.distance_m.is_some_and(|distance| distance > 0.0),
+            self.energy_kcal.is_some_and(|energy| energy > 0.0),
+        ]
+        .into_iter()
+        .filter(|&signal| signal)
+        .count() as u8
+    }
+
+    /// Case- and space-insensitive sport, so `TraditionalStrengthTraining` matches `Traditional
+    /// Strength Training` and `detected` matches `Activity`.
+    fn sport_key(&self) -> String {
+        let sport = if self.sport == "detected" {
+            "Activity"
+        } else {
+            &self.sport
+        };
+        sport
+            .to_lowercase()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect()
+    }
+
+    /// The windows overlap by more than half of the shorter session.
+    fn mostly_overlaps(&self, other: &Self) -> bool {
+        let overlap = self.end_ts.min(other.end_ts) - self.start_ts.max(other.start_ts);
+        let shorter = (self.end_ts - self.start_ts)
+            .min(other.end_ts - other.start_ts)
+            .max(1);
+        overlap > 0 && overlap as f64 > 0.5 * shorter as f64
+    }
+}
+
+/// Selects the distinct NOOP Workouts among all namespaces' rows. The caller passes the imported
+/// strap first, then computed strap, then other namespaces, each by start. Returns by start.
+pub fn merge_workouts(rows: Vec<WorkoutRow>) -> Vec<WorkoutRow> {
+    // A detected bout that mostly overlaps a real session is its shadow, whatever the sport.
+    let is_detected = |row: &WorkoutRow| row.origin == WorkoutOrigin::Detected;
+    let shadows: Vec<bool> = rows
+        .iter()
+        .map(|row| {
+            is_detected(row)
+                && rows
+                    .iter()
+                    .any(|real| !is_detected(real) && row.mostly_overlaps(real))
+        })
+        .collect();
+
+    // The same activity recorded twice keeps the richer row; on a tie a strap-native row beats a
+    // health import, then the longer session, then the earlier row.
+    let mut kept: Vec<WorkoutRow> = Vec::new();
+    'rows: for (row, shadow) in rows.into_iter().zip(shadows) {
+        if shadow {
+            continue;
+        }
+        for kept_row in &mut kept {
+            if kept_row.sport_key() == row.sport_key() && kept_row.mostly_overlaps(&row) {
+                if preferred(&row, kept_row) {
+                    *kept_row = row;
+                }
+                continue 'rows;
+            }
+        }
+        kept.push(row);
+    }
+    kept.sort_by_key(|row| (row.start_ts, row.end_ts));
+    kept
+}
+
+/// Whether `candidate` replaces `kept`, NOOP's `preferred(kept, candidate)`.
+fn preferred(candidate: &WorkoutRow, kept: &WorkoutRow) -> bool {
+    let (candidate_richness, kept_richness) = (candidate.richness(), kept.richness());
+    if candidate_richness != kept_richness {
+        return candidate_richness > kept_richness;
+    }
+    let is_import = |row: &WorkoutRow| row.origin == WorkoutOrigin::HealthImport;
+    if is_import(candidate) != is_import(kept) {
+        return is_import(kept);
+    }
+    candidate.end_ts - candidate.start_ts > kept.end_ts - kept.start_ts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -476,5 +628,154 @@ mod tests {
         );
         assert_eq!(stage_minutes("[]"), None);
         assert_eq!(stage_minutes("not json"), None);
+    }
+
+    fn workout(
+        namespace: Namespace,
+        start_ts: i64,
+        end_ts: i64,
+        sport: &str,
+        source: &str,
+    ) -> WorkoutRow {
+        WorkoutRow {
+            device_id: namespace.device_id().to_owned(),
+            start_ts,
+            end_ts,
+            sport: sport.to_owned(),
+            origin: WorkoutOrigin::classify(source),
+            duration_s: Some((end_ts - start_ts) as f64),
+            energy_kcal: None,
+            avg_hr: None,
+            max_hr: None,
+            strain: None,
+            distance_m: None,
+            steps: None,
+            notes: None,
+            has_zones: false,
+        }
+    }
+
+    #[test]
+    fn workout_origin_follows_noop_classification() {
+        for (source, origin) in [
+            ("my-whoop-noop", WorkoutOrigin::Detected),
+            ("manual", WorkoutOrigin::Manual),
+            ("whoop", WorkoutOrigin::Whoop),
+            ("lifting", WorkoutOrigin::Lifting),
+            ("activity-file", WorkoutOrigin::ActivityFile),
+            ("apple_health", WorkoutOrigin::HealthImport),
+            ("health-connect", WorkoutOrigin::HealthImport),
+        ] {
+            assert_eq!(WorkoutOrigin::classify(source), origin, "{source}");
+        }
+    }
+
+    #[test]
+    fn distinct_workouts_stay_distinct() {
+        let rows = vec![
+            workout(Namespace::Imported, 1_000, 2_000, "Calisthenics", "manual"),
+            // Back to back, and a different sport over the same window.
+            workout(Namespace::Imported, 2_000, 3_000, "Calisthenics", "manual"),
+            workout(Namespace::Imported, 1_000, 2_000, "Running", "manual"),
+            // Overlapping by exactly half of the shorter session.
+            workout(Namespace::Imported, 2_500, 3_500, "Calisthenics", "manual"),
+        ];
+        assert_eq!(merge_workouts(rows.clone()).len(), 4);
+    }
+
+    #[test]
+    fn one_activity_recorded_twice_keeps_the_richer_row() {
+        let thin = workout(
+            Namespace::Imported,
+            1_000,
+            5_000,
+            "Traditional Strength Training",
+            "health-connect",
+        );
+        let rich = WorkoutRow {
+            avg_hr: Some(81.0),
+            max_hr: Some(134.0),
+            ..workout(
+                Namespace::Imported,
+                1_100,
+                4_900,
+                "TraditionalStrengthTraining",
+                "manual",
+            )
+        };
+        assert_eq!(
+            merge_workouts(vec![thin.clone(), rich.clone()]),
+            std::slice::from_ref(&rich)
+        );
+        assert_eq!(merge_workouts(vec![rich.clone(), thin.clone()]), [rich]);
+
+        // On a richness tie the strap-native row beats the import, then the longer session wins.
+        let manual = workout(
+            Namespace::Imported,
+            1_100,
+            4_900,
+            "Traditional Strength Training",
+            "manual",
+        );
+        assert_eq!(
+            merge_workouts(vec![thin.clone(), manual.clone()]),
+            std::slice::from_ref(&manual)
+        );
+        let longer = workout(
+            Namespace::Computed,
+            1_000,
+            5_000,
+            "Traditional Strength Training",
+            "manual",
+        );
+        assert_eq!(
+            merge_workouts(vec![manual.clone(), longer.clone()]),
+            [longer]
+        );
+        // An identical copy in the other namespace collapses to the first row.
+        let copy = WorkoutRow {
+            device_id: COMPUTED_DEVICE_ID.to_owned(),
+            ..manual.clone()
+        };
+        assert_eq!(merge_workouts(vec![manual.clone(), copy]), [manual]);
+    }
+
+    #[test]
+    fn a_detected_bout_shadowing_a_real_session_is_dropped() {
+        let real = workout(Namespace::Imported, 1_000, 4_000, "Calisthenics", "manual");
+        let shadow = WorkoutRow {
+            avg_hr: Some(120.0),
+            strain: Some(9.0),
+            ..workout(Namespace::Computed, 800, 4_200, "detected", "my-whoop-noop")
+        };
+        let separate = workout(
+            Namespace::Computed,
+            10_000,
+            11_000,
+            "detected",
+            "my-whoop-noop",
+        );
+        assert_eq!(
+            merge_workouts(vec![real.clone(), shadow.clone(), separate.clone()]),
+            [real, separate.clone()]
+        );
+        // Without a real session a detected bout is kept.
+        assert_eq!(merge_workouts(vec![shadow.clone()]), [shadow]);
+    }
+
+    #[test]
+    fn workouts_are_ordered_by_start() {
+        let late = workout(Namespace::Imported, 5_000, 6_000, "Running", "manual");
+        let early = workout(
+            Namespace::Computed,
+            1_000,
+            2_000,
+            "detected",
+            "my-whoop-noop",
+        );
+        assert_eq!(
+            merge_workouts(vec![late.clone(), early.clone()]),
+            [early, late]
+        );
     }
 }

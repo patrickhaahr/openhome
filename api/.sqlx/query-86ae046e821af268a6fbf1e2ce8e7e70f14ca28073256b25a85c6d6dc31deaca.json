@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT CAST(read_at AS TEXT) as read_at FROM feed_items WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "read_at",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "86ae046e821af268a6fbf1e2ce8e7e70f14ca28073256b25a85c6d6dc31deaca"
+}

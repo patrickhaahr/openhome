@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO feeds (url, title) VALUES ('https://example.com/feed.xml', 'Unread Feed')\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "adbbd6e824e0a39eca5ccd62e8ca811411a8bfbda52f0c937eed3fd38dc0d7af"
+}

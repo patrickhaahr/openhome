@@ -52,6 +52,18 @@ as real, check `noop.freshness` (`unconfirmed`: complete recovery coverage for t
 arrived yet) and `noop.coverage` (`covered`: an empty result is a recorded absence; `unknown`: rows may be \
 missing).";
 
+const WORKOUTS_ON_DAY: &str = "Workouts on one Europe/Copenhagen Training Day. `workouts` are the \
+Workouts logged in OpenHome with that date: ordered Exercises with their exact Sets (reps, \
+added_weight_kg (null for bodyweight), hold_duration_s for Timed Holds, RPE 1-10). \
+`noop_workouts` are the separate NOOP Workouts whose start falls on that local day, with start and \
+end timestamps, NOOP's recorded duration in minutes, stored average and max heart rate in \
+beats/min, NOOP's derived 0-100 strain score, energy in kcal and origin (manual, detected, ...). \
+The two lists are never paired: a NOOP Workout on the same day is context, not proof it is the \
+same session. Null means no value. A missing NOOP Workout never means the user did not train; \
+check `noop.freshness` (`unconfirmed`: complete workout coverage for this day has not arrived yet) \
+and `noop.coverage.workouts` (`covered`: NOOP recorded no other workout that day; `unknown`: \
+rows may be missing).";
+
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
 /// printed.
 #[derive(Clone)]
@@ -223,6 +235,12 @@ pub struct RecoveryOnDayRequest {
     pub day: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct WorkoutsOnDayRequest {
+    /// The Europe/Copenhagen Training Day, written YYYY-MM-DD.
+    pub day: String,
+}
+
 /// The read-only training tools.
 #[derive(Clone)]
 pub struct TrainingTools {
@@ -255,6 +273,23 @@ impl TrainingTools {
     ) -> CallToolResult {
         self.api
             .get(&["api", "training", "days", &day, "recovery"])
+            .await
+    }
+
+    #[tool(
+        description = WORKOUTS_ON_DAY,
+        annotations(
+            title = "Workouts on a day",
+            read_only_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn workouts_on_day(
+        &self,
+        Parameters(WorkoutsOnDayRequest { day }): Parameters<WorkoutsOnDayRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&["api", "training", "days", &day, "workouts"])
             .await
     }
 }
