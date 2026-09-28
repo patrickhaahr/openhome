@@ -2,8 +2,46 @@
 
 The Axum API owns the training read model: calendar days, units, NOOP source resolution, freshness and coverage ([ADR 0002](adr/0002-training-context-api-and-mcp.md)). The Hermes MCP adapter (`mcp/`, see `mcp/AGENTS.md`) sends each tool call to one API endpoint and returns the API's JSON unchanged. It never reads a database and has no rules of its own.
 
-Reads today: the **Recovery Day**, **Workouts on a Training Day**, and **Exercise Set history**. The first two share the NOOP
+Reads today: the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, and **Exercise Set history**. The first three share the NOOP
 [source resolution](#source-resolution) and [freshness and coverage](#freshness-and-coverage) rules.
+
+## Recent Sleep Nights
+
+`GET /api/training/sleep/recent/{count}` with `Authorization: Bearer <API_KEY>`. MCP tool: `sleep_recent(n)`.
+
+`count` and `n` are integers from 1 through 14. The API starts at today's Europe/Copenhagen wake day and returns exactly that many consecutive wake days, newest first. A day with no sleep data still has an entry. Counts outside the range return 400; missing or wrong credentials return 401. If any night exceeds the 24-row sleep-session cap, the whole request returns 422.
+
+```json
+{
+  "time_zone": "Europe/Copenhagen",
+  "nights": [
+    {
+      "wake_day": "2026-09-29",
+      "wake_day_start": "2026-09-29T00:00:00+02:00",
+      "wake_day_end": "2026-09-30T00:00:00+02:00",
+      "sleep": {
+        "total": { "value": null, "unit": "min", "source": null },
+        "deep": { "value": null, "unit": "min", "source": null },
+        "rem": { "value": null, "unit": "min", "source": null },
+        "light": { "value": null, "unit": "min", "source": null },
+        "efficiency": { "value": null, "unit": "fraction", "source": null },
+        "disturbances": { "value": null, "unit": "count", "source": null },
+        "sessions": []
+      },
+      "noop": {
+        "installation_id": null,
+        "imported_device_id": "my-whoop",
+        "computed_device_id": "my-whoop-noop",
+        "last_push_at": null,
+        "freshness": "unknown",
+        "coverage": { "daily_metrics": "unknown", "sleep_sessions": "unknown" }
+      }
+    }
+  ]
+}
+```
+
+Each entry uses the [Recovery Day](#recovery-day) `sleep` and `noop` fields, including the same edited-sleep precedence, source labels, units, session timestamps, coverage, and freshness. `wake_day_start` and `wake_day_end` are local midnight bounds with explicit offsets; they can span 23 or 25 hours at a daylight-saving change. The example shows one entry for brevity; a request for `n` returns exactly `n` entries.
 
 ## Recovery Day
 

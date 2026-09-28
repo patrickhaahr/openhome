@@ -23,6 +23,8 @@ The tool contracts are documented in `docs/training-context.md`.
 - `recovery_on_day(day)` → `GET /api/training/days/{day}/recovery`
   - `day` is a Europe/Copenhagen calendar date, `YYYY-MM-DD`.
   - Returns the Recovery Day: sleep, resting HR, HRV, NOOP's derived scores, and `noop` freshness and coverage.
+- `sleep_recent(n)` → `GET /api/training/sleep/recent/{n}`
+  - `n` is 1–14 consecutive Copenhagen wake days, newest first. Missing nights remain explicit entries with `noop` freshness and coverage.
 - `workouts_on_day(day)` → `GET /api/training/days/{day}/workouts`
   - `day` is a Europe/Copenhagen calendar date, `YYYY-MM-DD`.
   - Returns the Workouts logged in OpenHome that day with their Exercises and Sets, the separate NOOP Workouts starting that day, and `noop` freshness and coverage.

@@ -8,16 +8,38 @@ use axum::{
 };
 
 use crate::error::{AppError, Result};
-use crate::services::training::{self, CalendarDay, ExerciseHistory, RecoveryDay, WorkoutsOnDay};
+use crate::services::training::{
+    self, CalendarDay, ExerciseHistory, RecentSleepNights, RecoveryDay, WorkoutsOnDay,
+};
 
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/api/training/days/{day}/recovery", get(recovery_day))
         .route("/api/training/days/{day}/workouts", get(workouts_on_day))
         .route(
+            "/api/training/sleep/recent/{count}",
+            get(recent_sleep_nights),
+        )
+        .route(
             "/api/training/exercises/{exercise_name}/history/{from_day}/{to_day}",
             get(exercise_history),
         )
+}
+
+async fn recent_sleep_nights(
+    State(state): State<crate::AppState>,
+    Path(count): Path<String>,
+) -> Result<Json<RecentSleepNights>> {
+    let count = count
+        .parse::<u8>()
+        .ok()
+        .filter(|count| (1..=14).contains(count))
+        .ok_or_else(|| {
+            AppError::Validation("Sleep Night count must be from 1 through 14".to_owned())
+        })?;
+    Ok(Json(
+        training::recent_sleep_nights(&state.noop_db, count).await?,
+    ))
 }
 
 async fn recovery_day(
