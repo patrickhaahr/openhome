@@ -21,7 +21,7 @@ devenv.local.nix
 devenv.local.yaml
 
 # Android: machine-specific SDK paths (overriden by ANDROID_HOME in devenv)
-local.properties
+*/local.properties
 
 # direnv
 .direnv
