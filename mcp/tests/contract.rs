@@ -227,6 +227,31 @@ async fn api_get_read(api_url: &str, day: &str, read: &str) -> Value {
         .unwrap()
 }
 
+async fn api_get_sleep_recent(api_url: &str, n: u8) -> Value {
+    reqwest::Client::new()
+        .get(format!("{api_url}/api/training/sleep/recent/{n}"))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
+}
+
+async fn call_sleep_recent(
+    client: &RunningService<RoleClient, ClientConfig>,
+    n: u8,
+) -> CallToolResult {
+    client
+        .call_tool(
+            CallToolRequestParams::new("sleep_recent")
+                .with_arguments(json!({"n": n}).as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap()
+}
+
 #[tokio::test]
 async fn discovers_the_read_only_training_tools() {
     let mcp = start_mcp(&start_api().await, API_KEY).await;
@@ -241,7 +266,12 @@ async fn discovers_the_read_only_training_tools() {
     let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
     assert_eq!(
         names,
-        ["exercise_history", "recovery_on_day", "workouts_on_day"]
+        [
+            "exercise_history",
+            "recovery_on_day",
+            "sleep_recent",
+            "workouts_on_day"
+        ]
     );
     for tool in &tools {
         assert_eq!(
@@ -252,16 +282,39 @@ async fn discovers_the_read_only_training_tools() {
             "{}",
             tool.name
         );
-        let required = if tool.name == "exercise_history" {
-            json!(["exercise_name", "from_day", "to_day"])
-        } else {
-            json!(["day"])
+        let required = match tool.name.as_ref() {
+            "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
+            "sleep_recent" => json!(["n"]),
+            _ => json!(["day"]),
         };
         assert_eq!(tool.input_schema.get("required"), Some(&required));
         assert!(tool.description.as_deref().is_some_and(|description| {
             description.contains("Europe/Copenhagen") && !description.contains('\n')
         }));
     }
+
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn sleep_recent_passes_through_nights_and_api_bounds() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+
+    let result = call_sleep_recent(&client, 1).await;
+    assert_eq!(result.is_error, Some(false));
+    assert_eq!(
+        result.structured_content,
+        Some(api_get_sleep_recent(&api, 1).await)
+    );
+    let invalid = call_sleep_recent(&client, 15).await;
+    assert_eq!(invalid.is_error, Some(true));
+    assert_eq!(
+        invalid.structured_content,
+        Some(api_get_sleep_recent(&api, 15).await)
+    );
 
     client.cancel().await.unwrap();
 }

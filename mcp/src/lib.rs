@@ -52,6 +52,12 @@ as real, check `noop.freshness` (`unconfirmed`: complete recovery coverage for t
 arrived yet) and `noop.coverage` (`covered`: an empty result is a recorded absence; `unknown`: rows may be \
 missing).";
 
+const SLEEP_RECENT: &str = "The most recent 1-14 Europe/Copenhagen Sleep Nights, newest wake day \
+first. Each entry includes NOOP sleep duration and stages in minutes, efficiency as a 0-1 \
+fraction, session start and end timestamps with offsets, per-value source, and freshness and \
+coverage. Missing nights remain in the list with null values; check `noop.coverage` to distinguish \
+recorded gaps from unsynced data.";
+
 const WORKOUTS_ON_DAY: &str = "Workouts on one Europe/Copenhagen Training Day. `workouts` are the \
 Workouts logged in OpenHome with that date: ordered Exercises with their exact Sets (reps, \
 added_weight_kg (null for bodyweight), hold_duration_s for Timed Holds, RPE 1-10). \
@@ -243,6 +249,12 @@ pub struct RecoveryOnDayRequest {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SleepRecentRequest {
+    /// Number of Copenhagen wake days to read, from 1 through 14.
+    pub n: u8,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct WorkoutsOnDayRequest {
     /// The Europe/Copenhagen Training Day, written YYYY-MM-DD.
     pub day: String,
@@ -277,6 +289,23 @@ impl TrainingTools {
 
 #[tool_router]
 impl TrainingTools {
+    #[tool(
+        description = SLEEP_RECENT,
+        annotations(
+            title = "Recent Sleep Nights",
+            read_only_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn sleep_recent(
+        &self,
+        Parameters(SleepRecentRequest { n }): Parameters<SleepRecentRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&["api", "training", "sleep", "recent", &n.to_string()])
+            .await
+    }
+
     #[tool(
         description = EXERCISE_HISTORY,
         annotations(

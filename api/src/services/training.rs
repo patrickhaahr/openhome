@@ -19,9 +19,11 @@ pub mod exercise_history;
 mod noop_merge;
 mod noop_source;
 pub mod recovery;
+pub mod sleep_recent;
 pub mod workouts;
 
 pub use calendar::CalendarDay;
 pub use exercise_history::{ExerciseHistory, exercise_history};
 pub use recovery::{RecoveryDay, recovery_day};
+pub use sleep_recent::{RecentSleepNights, recent_sleep_nights};
 pub use workouts::{WorkoutsOnDay, workouts_on_day};
