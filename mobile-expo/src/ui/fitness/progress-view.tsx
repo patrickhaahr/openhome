@@ -24,6 +24,7 @@ export function ProgressView({
       : state.tag === "loading" || state.tag === "error"
         ? state.exerciseId
         : null;
+
   return (
     <>
       <View style={[shared.section, styles.card]}>
@@ -128,6 +129,7 @@ function ProgressChart({ data }: { readonly data: readonly ProgressPoint[] }) {
           },
         ],
   );
+
   return (
     <View style={shared.section}>
       <Text style={shared.sectionTitle}>ESTIMATED 1RM (KG)</Text>
@@ -179,20 +181,26 @@ function ProgressPointRow({ point }: { readonly point: ProgressPoint }) {
 /** Summarize one progress point's metrics, dropping the ones without data. */
 function describePoint(point: ProgressPoint): string {
   const parts: string[] = [];
+
   if (point.bestWeightKg !== null) {
     parts.push(`Best ${point.bestWeightKg} kg`);
   }
+
   if (point.bestReps !== null) {
     parts.push(`${point.bestReps} reps`);
   }
+
   if (point.totalVolumeKg !== null) {
     parts.push(`Volume ${point.totalVolumeKg} kg`);
   }
+
   if (point.estimated1RmKg !== null) {
     parts.push(`Est. 1RM ${point.estimated1RmKg} kg`);
   }
+
   if (point.bestRpe !== null) {
     parts.push(`RPE ${point.bestRpe}`);
   }
+
   return parts.join(" · ") || "No set data";
 }

@@ -82,10 +82,13 @@ export function createDockerController(deps: {
     const current = ++token;
     deps.emit({ type: "loadStarted" });
     const result = await deps.api.listContainers();
+
     if (token !== current) {
       deps.emit({ type: "superseded", of: "refresh" });
+
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "loadSucceeded", containers: result.value }
@@ -97,10 +100,13 @@ export function createDockerController(deps: {
     const current = ++logsToken;
     deps.emit({ type: "logsStarted" });
     const result = await deps.api.containerLogs(name);
+
     if (logsToken !== current) {
       deps.emit({ type: "superseded", of: "logs" });
+
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "logsLoaded", lines: result.value }
@@ -112,16 +118,21 @@ export function createDockerController(deps: {
     if (acting) {
       return;
     }
+
     acting = true;
     const current = ++token;
     deps.emit({ type: "actionStarted", name, action });
     const result = await deps.api[`${action}Container`](name);
     acting = false;
+
     if (token !== current) {
       deps.emit({ type: "superseded", of: "action" });
+
       return;
     }
+
     deps.emit({ type: "actionFinished", error: result.ok ? null : result.error });
+
     if (result.ok) {
       void fetchContainers();
     }
@@ -176,12 +187,15 @@ export function useDocker(
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     dispatch({ type: "logsClosed" });
     const current = createDockerController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
   }, [api]);
 
@@ -262,6 +276,7 @@ export function reduce(state: DockerState, event: DockerEvent): DockerState {
           logs.tag === "ready" ? { ...logs, refreshing: false } : logs,
         );
       }
+
       return state.tag === "ready"
         ? event.of === "refresh"
           ? { ...state, refreshing: false }

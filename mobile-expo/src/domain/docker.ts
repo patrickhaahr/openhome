@@ -30,15 +30,18 @@ export function classifyContainer(container: DockerContainer): ContainerClassifi
   if (container.state.toLowerCase() !== "running") {
     return "stopped";
   }
+
   return container.health?.toLowerCase() === "unhealthy" ? "unhealthy" : "healthy";
 }
 
 /** Count containers per health classification. */
 export function classificationCounts(containers: readonly DockerContainer[]): ClassificationCounts {
   const counts = { all: containers.length, healthy: 0, unhealthy: 0, stopped: 0 };
+
   for (const container of containers) {
     counts[classifyContainer(container)] += 1;
   }
+
   return counts;
 }
 
@@ -47,9 +50,11 @@ export function dockerHealthSummary(
   containers: readonly DockerContainer[],
 ): DockerSummaryClassification {
   const counts = classificationCounts(containers);
+
   if (counts.healthy + counts.unhealthy === 0) {
     return "idle";
   }
+
   return counts.unhealthy > 0 ? "unhealthy" : "healthy";
 }
 
@@ -58,18 +63,25 @@ export function formatUptime(seconds: number | null): string {
   if (seconds === null) {
     return "Unknown uptime";
   }
+
   if (seconds < 60) {
     return `${seconds}s`;
   }
+
   const minutes = Math.floor(seconds / 60);
+
   if (minutes < 60) {
     return `${minutes}m`;
   }
+
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) {
     return `${hours}h ${minutes % 60}m`;
   }
+
   const days = Math.floor(hours / 24);
+
   return `${days}d ${hours % 24}h`;
 }
 

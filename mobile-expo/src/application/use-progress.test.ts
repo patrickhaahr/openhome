@@ -28,19 +28,24 @@ const PROGRESS: ExerciseProgress = {
 function harness() {
   const calls: Array<{ readonly kind: "getExerciseProgress"; readonly id: number }> = [];
   const pending: Array<(result: Result<ExerciseProgress>) => void> = [];
+
   const api = {
     getExerciseProgress: (id: number) => {
       calls.push({ kind: "getExerciseProgress", id });
+
       return new Promise<Result<ExerciseProgress>>((resolve) => {
         pending.push(resolve);
       });
     },
   };
+
   const events: ProgressEvent[] = [];
+
   const controller = createProgressController({
     api,
     emit: (event) => events.push(event),
   });
+
   return { api, calls, pending, controller, events };
 }
 
@@ -61,9 +66,11 @@ describe("progress state machine", () => {
 
     const state = replay(h.events);
     expect(state.tag).toBe("loaded");
+
     if (state.tag === "loaded") {
       expect(state.progress).toEqual(PROGRESS);
     }
+
     expect(h.calls).toEqual([{ kind: "getExerciseProgress", id: 1 }]);
   });
 

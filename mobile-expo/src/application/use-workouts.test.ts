@@ -27,52 +27,62 @@ function fakeApi() {
     | { readonly kind: "updateWorkout"; readonly id: number; readonly input: WorkoutInput }
     | { readonly kind: "deleteWorkout"; readonly id: number }
   > = [];
+
   const listPending: Array<(result: Result<readonly WorkoutSummary[]>) => void> = [];
   const getPending: Array<(result: Result<WorkoutDetail>) => void> = [];
   const savePending: Array<(result: Result<WorkoutDetail>) => void> = [];
   const deletePending: Array<(result: Result<void>) => void> = [];
+
   const api = {
     listWorkouts: () => {
       calls.push({ kind: "listWorkouts" });
+
       return new Promise<Result<readonly WorkoutSummary[]>>((resolve) => {
         listPending.push(resolve);
       });
     },
     getWorkout: (id: number) => {
       calls.push({ kind: "getWorkout", id });
+
       return new Promise<Result<WorkoutDetail>>((resolve) => {
         getPending.push(resolve);
       });
     },
     createWorkout: (input: WorkoutInput) => {
       calls.push({ kind: "createWorkout", input });
+
       return new Promise<Result<WorkoutDetail>>((resolve) => {
         savePending.push(resolve);
       });
     },
     updateWorkout: (id: number, input: WorkoutInput) => {
       calls.push({ kind: "updateWorkout", id, input });
+
       return new Promise<Result<WorkoutDetail>>((resolve) => {
         savePending.push(resolve);
       });
     },
     deleteWorkout: (id: number) => {
       calls.push({ kind: "deleteWorkout", id });
+
       return new Promise<Result<void>>((resolve) => {
         deletePending.push(resolve);
       });
     },
   };
+
   return { api, calls, listPending, getPending, savePending, deletePending };
 }
 
 function harness() {
   const fake = fakeApi();
   const events: WorkoutsEvent[] = [];
+
   const controller = createWorkoutsController({
     api: fake.api,
     emit: (event) => events.push(event),
   });
+
   return { ...fake, controller, events };
 }
 

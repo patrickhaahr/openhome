@@ -53,6 +53,7 @@ export function useHomeGeofence(
         );
       }
     });
+
     return () => {
       active = false;
     };
@@ -60,14 +61,19 @@ export function useHomeGeofence(
 
   async function setHome(provider: HomeGeofenceProvider): Promise<void> {
     const current = stateRef.current;
+
     if (current.tag !== "ready" || current.saving) {
       return;
     }
+
     const radius = parseRadiusMeters(current.radiusInput);
+
     if (!radius.ok) {
       dispatch({ type: "failed", message: radius.error });
+
       return;
     }
+
     dispatch({ type: "saving" });
     const result = await service.setAtCurrentLocation(radius.value, provider);
     dispatch(
@@ -77,9 +83,11 @@ export function useHomeGeofence(
 
   async function disable(): Promise<void> {
     const current = stateRef.current;
+
     if (current.tag !== "ready" || current.saving || current.home === null) {
       return;
     }
+
     dispatch({ type: "saving" });
     const result = await service.disable();
     dispatch(result.ok ? { type: "disabled" } : { type: "failed", message: result.error });
@@ -116,6 +124,7 @@ function reduce(state: HomeGeofenceState, event: Event): HomeGeofenceState {
       if (state.tag === "loading") {
         return { ...state, radiusInput: event.value };
       }
+
       return { ...state, radiusInput: event.value, error: null };
     case "saving":
       return state.tag === "ready" ? { ...state, saving: true, error: null } : state;

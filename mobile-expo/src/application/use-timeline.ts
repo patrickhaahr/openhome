@@ -55,14 +55,19 @@ export function createTimelineController(deps: {
     moreToken += 1;
     deps.emit({ type: "loadStarted" });
     const result = await deps.api.compactTimeline(null, TIMELINE_PAGE_SIZE);
+
     if (refreshToken !== current) {
       deps.emit({ type: "superseded", of: "refresh" });
+
       return;
     }
+
     if (!result.ok) {
       deps.emit({ type: "loadFailed", message: result.error });
+
       return;
     }
+
     cursor = lastId(result.value);
     hasMore = result.value.length >= TIMELINE_PAGE_SIZE;
     deps.emit({ type: "loadSucceeded", items: result.value });
@@ -72,22 +77,29 @@ export function createTimelineController(deps: {
     if (loadingMore || cursor === null || !hasMore) {
       return;
     }
+
     loadingMore = true;
     const current = ++moreToken;
     deps.emit({ type: "moreStarted" });
     const result = await deps.api.compactTimeline(cursor, TIMELINE_PAGE_SIZE);
     loadingMore = false;
+
     if (moreToken !== current) {
       deps.emit({ type: "superseded", of: "more" });
+
       return;
     }
+
     if (!result.ok) {
       deps.emit({ type: "moreFailed", message: result.error });
+
       return;
     }
+
     if (result.value.length > 0) {
       cursor = lastId(result.value);
     }
+
     hasMore = result.value.length >= TIMELINE_PAGE_SIZE;
     deps.emit({ type: "moreSucceeded", page: result.value });
   }
@@ -114,11 +126,14 @@ export function useTimeline(api: RssApi | null): readonly [TimelineState, Timeli
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createTimelineController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
   }, [api]);
 
@@ -178,6 +193,7 @@ export function reduce(state: TimelineState, event: TimelineEvent): TimelineStat
       if (state.tag !== "ready") {
         return state;
       }
+
       return event.of === "refresh"
         ? { ...state, refreshing: false }
         : { ...state, loadingMore: false };
@@ -190,11 +206,13 @@ function appendNew(
   page: readonly TimelineItem[],
 ): readonly TimelineItem[] {
   const seen = new Set(items.map((item) => item.id));
+
   return [...items, ...page.filter((item) => !seen.has(item.id))];
 }
 
 /** The id pagination resumes after, or null when the page is empty. */
 function lastId(items: readonly TimelineItem[]): number | null {
   const last = items[items.length - 1];
+
   return last === undefined ? null : last.id;
 }

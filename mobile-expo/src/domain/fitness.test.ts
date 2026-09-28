@@ -22,6 +22,7 @@ import {
   PROGRESS_READ_ERROR,
   WORKOUT_READ_ERROR,
   type Exercise,
+  type ExerciseCategory,
   type SetInput,
   type WorkoutExerciseInput,
 } from "./fitness";
@@ -29,7 +30,7 @@ import {
 function exercise(
   id: number,
   name: string,
-  category = "gym",
+  category: ExerciseCategory = "gym",
   muscleGroup: string | null = "Chest",
 ): Exercise {
   return { id, name, category, muscleGroup, equipment: null };
@@ -98,6 +99,9 @@ describe("parseExercise", () => {
     );
     expect(parseExercise({ id: 1, name: 42, category: "gym" })).toEqual(failure(error));
     expect(parseExercise({ id: 1, name: "Bench Press" })).toEqual(failure(error));
+    expect(parseExercise({ id: 1, name: "Bench Press", category: "cardio" })).toEqual(
+      failure(error),
+    );
   });
 });
 
@@ -107,6 +111,7 @@ describe("parseExerciseList", () => {
       { id: 1, name: "Push-up", category: "calisthenics", muscle_group: "Chest", equipment: null },
       { id: 2, name: "Squat", category: "gym", muscle_group: null, equipment: "Rack" },
     ];
+
     expect(parseExerciseList(payload)).toEqual({
       ok: true,
       value: [
@@ -315,6 +320,7 @@ describe("parseWorkoutDetail", () => {
   it("parses the embedded exercises in order with snake_case sets", () => {
     const result = parseWorkoutDetail(workoutDetailPayload);
     expect(result.ok).toBe(true);
+
     if (result.ok) {
       expect(result.value.exercises.map((entry) => entry.exercise.name)).toEqual([
         "Bench Press",
@@ -386,6 +392,7 @@ describe("parseWorkoutInput", () => {
   it("maps blank name and notes to null", () => {
     const result = parseWorkoutInput("2026-09-02", "  ", "", [workoutExercise()]);
     expect(result.ok).toBe(true);
+
     if (result.ok) {
       expect(result.value.name).toBeNull();
       expect(result.value.notes).toBeNull();
@@ -408,6 +415,7 @@ describe("parseWorkoutInput", () => {
     const result = parseWorkoutInput("2026-09-02", "", "", [
       workoutExercise({ sets: [set({ reps: null, durationSeconds: null })] }),
     ]);
+
     expect(result).toEqual(failure("Set 1 needs reps or a duration in seconds."));
   });
 
@@ -415,6 +423,7 @@ describe("parseWorkoutInput", () => {
     const result = parseWorkoutInput("2026-09-02", "", "", [
       workoutExercise({ sets: [set({ rpe: 11 })] }),
     ]);
+
     expect(result).toEqual(failure("Set 1 RPE must be between 1 and 10."));
   });
 

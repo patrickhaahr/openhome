@@ -32,10 +32,10 @@ export const noConditionalEmptyObjectSpreadRule = defineRule({
     },
     messages: {
       avoid:
-        "Do not use conditional empty-object spreads. Prefer a direct property or build the object in separate statements.",
+        "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
     },
   },
-  create(context) {
+  createOnce(context) {
     return {
       SpreadElement(node) {
         if (node.parent.type !== "ObjectExpression") return;

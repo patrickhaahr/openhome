@@ -15,38 +15,46 @@ function fakeApi() {
     | { readonly kind: "create"; readonly url: string }
     | { readonly kind: "delete"; readonly id: number }
   > = [];
+
   const listPending: Array<(result: Result<readonly Feed[]>) => void> = [];
+
   const createPending: Array<{
     readonly url: string;
     resolve: (result: Result<Feed>) => void;
   }> = [];
+
   const deletePending: Array<{
     readonly id: number;
     resolve: (result: Result<void>) => void;
   }> = [];
+
   const api = {
     compactTimeline: () => {
       throw new Error("timeline not used by the feeds machine");
     },
     listFeeds: () => {
       calls.push({ kind: "list" });
+
       return new Promise<Result<readonly Feed[]>>((resolve) => {
         listPending.push(resolve);
       });
     },
     createFeed: (url: string) => {
       calls.push({ kind: "create", url });
+
       return new Promise<Result<Feed>>((resolve) => {
         createPending.push({ url, resolve });
       });
     },
     deleteFeed: (id: number) => {
       calls.push({ kind: "delete", id });
+
       return new Promise<Result<void>>((resolve) => {
         deletePending.push({ id, resolve });
       });
     },
   };
+
   return { api, calls, listPending, createPending, deletePending };
 }
 
@@ -59,6 +67,7 @@ function harness(
   const { api, calls, listPending, createPending, deletePending } = fakeApi();
   const events: FeedsEvent[] = [];
   let timelineRefreshes = 0;
+
   const controller = createFeedsController({
     api,
     emit: (event) => events.push(event),
@@ -67,6 +76,7 @@ function harness(
     },
     initial: initialMirrors,
   });
+
   return {
     controller,
     calls,
@@ -441,6 +451,7 @@ describe("feeds state machine", () => {
       input: carried.tag === "ready" ? carried.input : "",
       undoable: carried.tag === "ready" ? carried.undoable : [],
     });
+
     next.controller.undo();
     await settle();
     expect(next.calls[0]).toEqual({ kind: "create", url: "https://a.test/feed.xml" });

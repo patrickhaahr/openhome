@@ -16,7 +16,9 @@ type HomeGeofenceTaskData = {
 };
 
 const configurationStore = createSecureConfigurationStore();
+
 const homeStore = createHomeGeofenceStore();
+
 const dependencies = {
   loadConfiguration: configurationStore.load,
   loadHome: homeStore.load,
@@ -31,6 +33,7 @@ for (const taskName of [homeGeofenceTaskName, nativeHomeGeofenceTaskName]) {
     TaskManager.defineTask<HomeGeofenceTaskData>(taskName, async ({ data, error }) => {
       if (error !== null) {
         console.error(`Home geofence failed: ${error.message}`);
+
         return;
       }
 
@@ -42,6 +45,7 @@ for (const taskName of [homeGeofenceTaskName, nativeHomeGeofenceTaskName]) {
         },
         dependencies,
       );
+
       if (!result.ok) {
         console.error(`Home exit could not turn off the lights: ${result.error}`);
       }
@@ -52,6 +56,7 @@ for (const taskName of [homeGeofenceTaskName, nativeHomeGeofenceTaskName]) {
 /** Retry a light-off command persisted by a failed background geofence event. */
 export async function retryPendingHomeExitCommand(): Promise<void> {
   const result = await retryPendingHomeExit(dependencies);
+
   if (!result.ok) {
     console.error(`Pending home exit could not turn off the lights: ${result.error}`);
   }
@@ -61,8 +66,10 @@ function geofenceRegionState(state: LocationRegion["state"]): "inside" | "outsid
   if (state === GeofencingRegionState.Inside) {
     return "inside";
   }
+
   if (state === GeofencingRegionState.Outside) {
     return "outside";
   }
+
   return "unknown";
 }

@@ -29,11 +29,13 @@ function backend(provider: HomeGeofenceProvider, calls: Array<string>): HomeGeof
 
 function store(initial: HomeGeofence | null, saved: Array<HomeGeofence | null>): HomeGeofenceStore {
   let home = initial;
+
   return {
     load: async () => success(home),
     save: async (value) => {
       home = value;
       saved.push(value);
+
       return success(undefined);
     },
     loadPending: async () => success(null),
@@ -54,6 +56,7 @@ describe("createHomeGeofenceService", () => {
   it("sets and persists home with the explicitly selected native provider", async () => {
     const calls: Array<string> = [];
     const saved: Array<HomeGeofence | null> = [];
+
     const service = createHomeGeofenceService(store(null, saved), {
       expo: backend("expo", calls),
       native: backend("native", calls),
@@ -69,6 +72,7 @@ describe("createHomeGeofenceService", () => {
 
   it("stops the previous provider after switching providers", async () => {
     const calls: Array<string> = [];
+
     const service = createHomeGeofenceService(store(previous, []), {
       expo: backend("expo", calls),
       native: backend("native", calls),
@@ -85,9 +89,11 @@ describe("createHomeGeofenceService", () => {
     const calls: Array<string> = [];
     let saves = 0;
     const expo = backend("expo", calls);
+
     const service = createHomeGeofenceService(
       homeStore(previous, async () => {
         saves += 1;
+
         return saves === 1 ? success(undefined) : failure("save failed");
       }),
       {
@@ -112,6 +118,7 @@ describe("createHomeGeofenceService", () => {
   it("does not report disabled when monitoring could not be stopped", async () => {
     const saved: Array<HomeGeofence | null> = [];
     const expo = backend("expo", []);
+
     const service = createHomeGeofenceService(store(previous, saved), {
       expo: {
         ...expo,
@@ -130,6 +137,7 @@ describe("createHomeGeofenceService", () => {
 
   it("restores monitoring when persisting disabled state fails", async () => {
     const calls: Array<string> = [];
+
     const service = createHomeGeofenceService(
       homeStore(previous, async () => failure("save failed")),
       {
@@ -146,6 +154,7 @@ describe("createHomeGeofenceService", () => {
 
   it("resumes monitoring the persisted provider when the app becomes active", async () => {
     const calls: Array<string> = [];
+
     const service = createHomeGeofenceService(store({ ...previous, provider: "native" }, []), {
       expo: backend("expo", calls),
       native: backend("native", calls),

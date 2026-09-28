@@ -23,6 +23,7 @@ type Props = {
 /** Render first-run setup and safe configuration replacement. */
 export function ConfigurationScreen({ state, actions }: Props) {
   const isReconfigure = state.mode === "reconfigure";
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}

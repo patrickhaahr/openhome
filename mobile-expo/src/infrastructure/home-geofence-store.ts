@@ -4,7 +4,9 @@ import { parseHomeGeofence, type HomeGeofence } from "../domain/home-geofence";
 import { failure, success, type Result } from "../domain/result";
 
 const homeGeofenceKey = "openhome.home-geofence";
+
 const pendingHomeExitKey = "openhome.pending-home-exit";
+
 const secureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 
 /** Persistent storage for the active home geofence. */
@@ -21,9 +23,11 @@ export function createHomeGeofenceStore(): HomeGeofenceStore {
     async load(): Promise<Result<HomeGeofence | null>> {
       try {
         const stored = await SecureStore.getItemAsync(homeGeofenceKey, secureStoreOptions);
+
         if (stored === null) {
           return success(null);
         }
+
         return parseHomeGeofence(JSON.parse(stored));
       } catch {
         return failure("The saved home location could not be read. Set it again.");
@@ -37,6 +41,7 @@ export function createHomeGeofenceStore(): HomeGeofenceStore {
         } else {
           await SecureStore.setItemAsync(homeGeofenceKey, JSON.stringify(home), secureStoreOptions);
         }
+
         return success(undefined);
       } catch {
         return failure("Couldn't persist the home location.");
@@ -58,6 +63,7 @@ export function createHomeGeofenceStore(): HomeGeofenceStore {
         } else {
           await SecureStore.deleteItemAsync(pendingHomeExitKey, secureStoreOptions);
         }
+
         return success(undefined);
       } catch {
         return failure("Couldn't persist the pending home-exit command.");

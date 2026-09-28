@@ -34,25 +34,32 @@ export function BodyView({
       setForm({ date: today(), weightKg: latest === undefined ? "" : String(latest) });
       setFormError(null);
     }
+
     wasSaving.current = state.saving;
   }, [state]);
 
   function submitWeight(): void {
     const parsed = parseBodyWeightInput(form.date, form.weightKg);
+
     if (!parsed.ok) {
       setFormError(parsed.error);
+
       return;
     }
+
     setFormError(null);
     actions.saveWeight(parsed.value);
   }
 
   function submitProfile(): void {
     const parsed = parseProfileInput(profileForm.heightCm, profileForm.sex);
+
     if (!parsed.ok) {
       setProfileError(parsed.error);
+
       return;
     }
+
     setProfileError(null);
     actions.saveProfile(parsed.value);
   }

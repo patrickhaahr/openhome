@@ -34,9 +34,11 @@ export function createProgressController(deps: {
     currentId = id;
     deps.emit({ type: "started", exerciseId: id });
     const result = await deps.api.getExerciseProgress(id);
+
     if (token !== current) {
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "succeeded", progress: result.value }
@@ -68,10 +70,13 @@ export function useProgress(api: FitnessApi | null): readonly [ProgressState, Pr
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createProgressController({ api, emit: dispatch });
     controller.current = current;
+
     return () => current.cancel();
   }, [api]);
 

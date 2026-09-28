@@ -11,8 +11,11 @@ import {
 } from "./use-body";
 
 const ENTRY: BodyWeightEntry = { id: 3, date: "2026-09-12", weightKg: 72.5 };
+
 const PROFILE: Profile = { heightCm: 182.5, sex: "male" };
+
 const WEIGHT_INPUT: BodyWeightInput = { date: "2026-09-12", weightKg: 72.5 };
+
 const PROFILE_INPUT: ProfileInput = { heightCm: 182.5, sex: "male" };
 
 /** A scripted fake of the body weight and profile adapter surface with manually resolved responses. */
@@ -23,45 +26,54 @@ function fakeApi() {
     | { readonly kind: "getProfile" }
     | { readonly kind: "updateProfile"; readonly input: ProfileInput }
   > = [];
+
   const listPending: Array<(result: Result<readonly BodyWeightEntry[]>) => void> = [];
   const savePending: Array<(result: Result<BodyWeightEntry>) => void> = [];
   const profilePending: Array<(result: Result<Profile>) => void> = [];
+
   const api = {
     listBodyWeight: () => {
       calls.push({ kind: "listBodyWeight" });
+
       return new Promise<Result<readonly BodyWeightEntry[]>>((resolve) => {
         listPending.push(resolve);
       });
     },
     createBodyWeight: (input: BodyWeightInput) => {
       calls.push({ kind: "createBodyWeight", input });
+
       return new Promise<Result<BodyWeightEntry>>((resolve) => {
         savePending.push(resolve);
       });
     },
     getProfile: () => {
       calls.push({ kind: "getProfile" });
+
       return new Promise<Result<Profile>>((resolve) => {
         profilePending.push(resolve);
       });
     },
     updateProfile: (input: ProfileInput) => {
       calls.push({ kind: "updateProfile", input });
+
       return new Promise<Result<Profile>>((resolve) => {
         profilePending.push(resolve);
       });
     },
   };
+
   return { api, calls, listPending, savePending, profilePending };
 }
 
 function harness() {
   const fake = fakeApi();
   const events: BodyEvent[] = [];
+
   const controller = createBodyController({
     api: fake.api,
     emit: (event) => events.push(event),
   });
+
   return { ...fake, controller, events };
 }
 

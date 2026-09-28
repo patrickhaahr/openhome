@@ -18,24 +18,29 @@ function item(id: number): TimelineItem {
 function fakeApi() {
   const requests: Array<{ beforeId: number | null; limit: number }> = [];
   const pending: Array<{ resolve: (result: Result<readonly TimelineItem[]>) => void }> = [];
+
   const api = {
     compactTimeline: (beforeId: number | null, limit: number) => {
       requests.push({ beforeId, limit });
+
       return new Promise<Result<readonly TimelineItem[]>>((resolve) => {
         pending.push({ resolve });
       });
     },
   };
+
   return { api, requests, pending };
 }
 
 function harness() {
   const { api, requests, pending } = fakeApi();
   const events: TimelineEvent[] = [];
+
   const controller = createTimelineController({
     api,
     emit: (event) => events.push(event),
   });
+
   return { controller, requests, pending, events };
 }
 

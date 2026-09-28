@@ -221,6 +221,12 @@ expo-typecheck:
 expo-lint:
     bun run lint
 
+# Apply supported Expo lint fixes
+[group('expo')]
+[working-directory: 'mobile-expo']
+expo-lint-fix:
+    bun run lint --fix
+
 # Format the Expo client with oxfmt
 [group('expo')]
 [working-directory: 'mobile-expo']

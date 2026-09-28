@@ -23,38 +23,47 @@ function fakeApi() {
   const pending: Array<{ resolve: (result: Result<readonly DockerContainer[]>) => void }> = [];
   const actionPending: Array<{ resolve: (result: Result<void>) => void }> = [];
   const logPending: Array<{ resolve: (result: Result<readonly string[]>) => void }> = [];
+
   const api: DockerApi = {
     listContainers: () => {
       calls.push("list");
+
       return new Promise((resolve) => pending.push({ resolve }));
     },
     startContainer: (name) => {
       calls.push(`start ${name}`);
+
       return new Promise((resolve) => actionPending.push({ resolve }));
     },
     stopContainer: (name) => {
       calls.push(`stop ${name}`);
+
       return new Promise((resolve) => actionPending.push({ resolve }));
     },
     restartContainer: (name) => {
       calls.push(`restart ${name}`);
+
       return new Promise((resolve) => actionPending.push({ resolve }));
     },
     containerLogs: (name) => {
       calls.push(`logs ${name}`);
+
       return new Promise((resolve) => logPending.push({ resolve }));
     },
   };
+
   return { api, calls, pending, actionPending, logPending };
 }
 
 function harness() {
   const { api, calls, pending, actionPending, logPending } = fakeApi();
   const events: DockerEvent[] = [];
+
   const controller = createDockerController({
     api,
     emit: (event) => events.push(event),
   });
+
   return { controller, calls, pending, actionPending, logPending, events };
 }
 
@@ -171,6 +180,7 @@ describe("docker state machine", () => {
         restartCount: 2,
       },
     ];
+
     h.pending[1]?.resolve(success(restarted));
     await settle();
 
@@ -276,6 +286,7 @@ describe("docker container logs machine", () => {
     const h = harness();
     h.controller.openLogs("adguard");
     h.logPending[0]?.resolve(success(lines));
+
     return h;
   }
 

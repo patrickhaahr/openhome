@@ -66,9 +66,11 @@ export function createWorkoutsController(deps: {
     const current = ++listToken;
     deps.emit({ type: "started" });
     const result = await deps.api.listWorkouts();
+
     if (listToken !== current) {
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "succeeded", workouts: result.value }
@@ -80,9 +82,11 @@ export function createWorkoutsController(deps: {
     const current = ++detailToken;
     deps.emit({ type: "detailStarted" });
     const result = await deps.api.getWorkout(id);
+
     if (detailToken !== current) {
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "detailSucceeded", workout: result.value }
@@ -95,6 +99,7 @@ export function createWorkoutsController(deps: {
     if (busy) {
       return;
     }
+
     busy = true;
     const current = ++mutateToken;
     // A list refresh in flight since before this mutation carries a stale
@@ -102,16 +107,22 @@ export function createWorkoutsController(deps: {
     listToken += 1;
     deps.emit({ type: "saveStarted" });
     const result = await run();
+
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded" });
+
       return;
     }
+
     busy = false;
+
     if (!result.ok) {
       deps.emit({ type: "saveFailed", message: result.error });
+
       return;
     }
+
     deps.emit({ type: "saveSucceeded" });
     void load();
   }
@@ -140,6 +151,7 @@ export function createWorkoutsController(deps: {
       listToken += 1;
       detailToken += 1;
       mutateToken += 1;
+
       if (busy) {
         busy = false;
         deps.emit({ type: "superseded" });
@@ -156,11 +168,14 @@ export function useWorkouts(api: FitnessApi | null): readonly [WorkoutsState, Wo
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createWorkoutsController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
   }, [api]);
 

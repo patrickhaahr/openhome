@@ -61,6 +61,7 @@ export function ServerPage({
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>): void {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 400;
+
     if (nearBottom) {
       timelineActions.loadMore();
     }
@@ -118,15 +119,19 @@ function AdGuardCard({
     if (state.tag !== "ready" || state.status.pauseEndsAtMs === null) {
       return;
     }
+
     const endsAt = state.status.pauseEndsAtMs;
+
     const timer = setInterval(() => {
       const now = Date.now();
       setNowMs(now);
+
       if (endsAt <= now) {
         clearInterval(timer);
         actions.refresh();
       }
     }, 1000);
+
     return () => clearInterval(timer);
   }, [state, actions]);
 
@@ -140,6 +145,7 @@ function AdGuardCard({
       </View>
     );
   }
+
   if (state.tag === "error") {
     return (
       <View style={[shared.section, styles.card]}>
@@ -162,6 +168,7 @@ function AdGuardCard({
 
   const phase = protectionPhase(state.status, nowMs);
   const acting = state.acting;
+
   return (
     <View style={[shared.section, styles.card]}>
       <View style={shared.sectionHeader}>
@@ -308,12 +315,14 @@ function DockerSummaryCard({
   }
 
   const classification = state.tag === "error" ? "offline" : dockerHealthSummary(state.containers);
+
   const detail =
     state.tag === "error"
       ? state.message
       : classification === "idle"
         ? "No containers running."
         : `${counts.healthy + counts.unhealthy} of ${counts.all} running.`;
+
   const presentation = summaryPresentation[classification];
 
   return (
@@ -381,6 +390,7 @@ function FeedManagerBody({
       </View>
     );
   }
+
   if (state.tag === "error") {
     return (
       <>
@@ -496,6 +506,7 @@ function TimelineCard({
       </View>
     );
   }
+
   if (state.tag === "error") {
     return (
       <View style={[shared.section, styles.card]}>

@@ -61,10 +61,12 @@ export function createBodyController(deps: {
     const profileCurrent = ++profileToken;
     deps.emit({ type: "listStarted" });
     deps.emit({ type: "profileStarted" });
+
     const [listResult, profileResult] = await Promise.all([
       deps.api.listBodyWeight(),
       deps.api.getProfile(),
     ]);
+
     if (listToken === listCurrent) {
       deps.emit(
         listResult.ok
@@ -72,6 +74,7 @@ export function createBodyController(deps: {
           : { type: "listFailed", message: listResult.error },
       );
     }
+
     if (profileToken === profileCurrent) {
       deps.emit(
         profileResult.ok
@@ -86,23 +89,30 @@ export function createBodyController(deps: {
     if (busy) {
       return;
     }
+
     busy = true;
     const current = ++mutateToken;
     deps.emit({ type: "saveStarted" });
     const result = await run();
+
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded" });
+
       return;
     }
+
     busy = false;
+
     if (!result.ok) {
       // A failed mutation changed nothing, so any refresh still in flight is
       // not stale; let it resolve instead of dropping it and sticking the
       // refreshing flag on.
       deps.emit({ type: "saveFailed", message: result.error });
+
       return;
     }
+
     // A refresh in flight since before this successful mutation carries a
     // stale snapshot; drop it so the post-mutation reload is authoritative.
     listToken += 1;
@@ -125,6 +135,7 @@ export function createBodyController(deps: {
       listToken += 1;
       profileToken += 1;
       mutateToken += 1;
+
       if (busy) {
         busy = false;
         deps.emit({ type: "superseded" });
@@ -141,11 +152,14 @@ export function useBody(api: FitnessApi | null): readonly [BodyState, BodyAction
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createBodyController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
   }, [api]);
 

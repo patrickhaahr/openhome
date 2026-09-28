@@ -47,9 +47,11 @@ export function createHomeGeofenceService(
   ): Promise<void> {
     await attemptedBackend.stop();
     const restored = await store.save(previous);
+
     if (!restored.ok) {
       throw new Error(restored.error);
     }
+
     if (previous !== null) {
       await backends[previous.provider].start(previous);
     }
@@ -60,11 +62,14 @@ export function createHomeGeofenceService(
 
     async resume(): Promise<Result<void>> {
       const home = await store.load();
+
       if (!home.ok || home.value === null) {
         return home.ok ? success(undefined) : home;
       }
+
       try {
         await backends[home.value.provider].start(home.value);
+
         return success(undefined);
       } catch {
         return failure("Couldn't resume monitoring the home location.");
@@ -74,14 +79,19 @@ export function createHomeGeofenceService(
     async setAtCurrentLocation(radiusMeters, provider): Promise<Result<HomeGeofence>> {
       const backend = backends[provider];
       const availability = await backend.checkAvailability();
+
       if (!availability.ok) {
         return availability;
       }
+
       const position = await backend.getCurrentPosition();
+
       if (!position.ok) {
         return position;
       }
+
       const { latitude, longitude, accuracyMeters } = position.value;
+
       if (accuracyMeters === null || accuracyMeters > radiusMeters) {
         return failure(
           `Location accuracy must be within the ${radiusMeters} meter radius. Move near a window and try again.`,
@@ -89,9 +99,11 @@ export function createHomeGeofenceService(
       }
 
       const previous = await store.load();
+
       if (!previous.ok) {
         return previous;
       }
+
       const home: HomeGeofence = {
         identifier: `home-${Date.now()}`,
         latitude,
@@ -99,16 +111,20 @@ export function createHomeGeofenceService(
         radiusMeters,
         provider,
       };
+
       const saved = await store.save(home);
+
       if (!saved.ok) {
         return saved;
       }
 
       try {
         await backend.start(home);
+
         if (previous.value !== null && previous.value.provider !== provider) {
           await backends[previous.value.provider].stop();
         }
+
         return success(home);
       } catch {
         try {
@@ -118,15 +134,18 @@ export function createHomeGeofenceService(
             "Couldn't start monitoring or restore the previous home location. Disable home automation and try again.",
           );
         }
+
         return failure("Couldn't start monitoring the home location.");
       }
     },
 
     async disable(): Promise<Result<void>> {
       const previous = await store.load();
+
       if (!previous.ok) {
         return previous;
       }
+
       if (previous.value !== null) {
         try {
           await backends[previous.value.provider].stop();
@@ -134,7 +153,9 @@ export function createHomeGeofenceService(
           return failure("Couldn't stop monitoring the home location.");
         }
       }
+
       const removed = await store.save(null);
+
       if (!removed.ok) {
         if (previous.value !== null) {
           try {
@@ -145,8 +166,10 @@ export function createHomeGeofenceService(
             );
           }
         }
+
         return removed;
       }
+
       return success(undefined);
     },
   };

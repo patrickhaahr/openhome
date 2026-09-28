@@ -141,23 +141,29 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       const headers: RequestHeaders = {
         Authorization: `Bearer ${configuration.apiKey}`,
       };
+
       const init: RequestInit = {
         method: options.method ?? "GET",
         headers,
         redirect: "manual",
         signal: controller.signal,
       };
+
       if (options.body !== undefined) {
         headers["Content-Type"] = "application/json";
         init.body = JSON.stringify(options.body);
       }
+
       const response = await fetch(`${configuration.baseUrl}${path}`, init);
 
       const body = await response.text();
+
       if (!response.ok) {
         const statusError = options.statusErrors?.[response.status];
+
         return failure(statusError ?? readError(body, options.defaultError));
       }
+
       return success({ body });
     } catch {
       return failure("Couldn't reach the Axum API. Check the Base URL and try again.");
@@ -184,6 +190,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         503: "Docker unavailable.",
       },
     });
+
     return response.ok ? success(undefined) : response;
   }
 
@@ -192,6 +199,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       const response = await request("/api/health", {
         defaultError: "OpenHome rejected that Base URL or API Key.",
       });
+
       return response.ok ? success(undefined) : response;
     },
 
@@ -199,6 +207,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       const response = await request("/api/ir", {
         defaultError: "Couldn't load IR status from the Axum API.",
       });
+
       if (!response.ok) {
         return response;
       }
@@ -216,6 +225,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         body: { command },
         defaultError: "Couldn't send that IR command to the Axum API.",
       });
+
       return response.ok ? success(undefined) : response;
     },
 
@@ -224,6 +234,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         method: "POST",
         defaultError: "Couldn't switch the light.",
       });
+
       return response.ok ? success(undefined) : response;
     },
 
@@ -253,9 +264,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           defaultError: "Couldn't load Docker containers from the Axum API.",
           timeoutMs: DOCKER_TIMEOUT_MS,
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseContainerList(JSON.parse(response.value.body));
         } catch {
@@ -279,9 +292,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             },
           },
         );
+
         if (!response.ok) {
           return response;
         }
+
         return success(parseLogLines(response.value.body));
       },
     },
@@ -289,12 +304,15 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
     rss: {
       compactTimeline: async (beforeId, limit): Promise<Result<readonly TimelineItem[]>> => {
         const cursor = beforeId === null ? "" : `&before_id=${beforeId}`;
+
         const response = await request(`/api/timeline?view=compact&limit=${limit}${cursor}`, {
           defaultError: "Couldn't load the timeline.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseCompactTimeline(JSON.parse(response.value.body));
         } catch {
@@ -306,9 +324,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         const response = await request("/api/feeds", {
           defaultError: "Couldn't load the feeds.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseFeedList(JSON.parse(response.value.body));
         } catch {
@@ -322,9 +342,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           body: { url },
           defaultError: "Couldn't add the feed.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseFeed(JSON.parse(response.value.body));
         } catch {
@@ -340,6 +362,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             404: `Feed ${id} not found.`,
           },
         });
+
         return response.ok ? success(undefined) : response;
       },
     },
@@ -349,9 +372,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         const response = await request("/api/exercises", {
           defaultError: "Couldn't load the exercise library.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseExerciseList(JSON.parse(response.value.body));
         } catch {
@@ -370,9 +395,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           },
           defaultError: "Couldn't add the exercise.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseExercise(JSON.parse(response.value.body));
         } catch {
@@ -396,9 +423,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             404: `Exercise ${id} not found.`,
           },
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseExercise(JSON.parse(response.value.body));
         } catch {
@@ -415,6 +444,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             409: "That exercise is used in logged workouts and can't be deleted.",
           },
         });
+
         return response.ok ? success(undefined) : response;
       },
 
@@ -422,9 +452,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         const response = await request("/api/workouts", {
           defaultError: "Couldn't load the workouts.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseWorkoutSummaryList(JSON.parse(response.value.body));
         } catch {
@@ -439,9 +471,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             404: `Workout ${id} not found.`,
           },
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseWorkoutDetail(JSON.parse(response.value.body));
         } catch {
@@ -455,9 +489,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           body: workoutBody(input),
           defaultError: "Couldn't save the workout.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseWorkoutDetail(JSON.parse(response.value.body));
         } catch {
@@ -474,9 +510,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             404: `Workout ${id} not found.`,
           },
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseWorkoutDetail(JSON.parse(response.value.body));
         } catch {
@@ -492,6 +530,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             404: `Workout ${id} not found.`,
           },
         });
+
         return response.ok ? success(undefined) : response;
       },
 
@@ -502,9 +541,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             404: `Exercise ${id} not found.`,
           },
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseExerciseProgress(JSON.parse(response.value.body));
         } catch {
@@ -516,9 +557,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         const response = await request("/api/body_weight", {
           defaultError: "Couldn't load the body weight entries.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseBodyWeightList(JSON.parse(response.value.body));
         } catch {
@@ -535,9 +578,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
             409: "Body weight for that date is already recorded.",
           },
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseBodyWeightEntry(JSON.parse(response.value.body));
         } catch {
@@ -549,9 +594,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
         const response = await request("/api/profile", {
           defaultError: "Couldn't load the profile.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseProfile(JSON.parse(response.value.body));
         } catch {
@@ -565,9 +612,11 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
           body: { height_cm: input.heightCm, sex: input.sex },
           defaultError: "Couldn't save the profile.",
         });
+
         if (!response.ok) {
           return response;
         }
+
         try {
           return parseProfile(JSON.parse(response.value.body));
         } catch {
@@ -625,18 +674,23 @@ export function parseIrStatus(json: Json): Result<IrStatus> {
   if (!isJsonObject(json)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
+
   const remotes = json["remotes"];
+
   if (!isJsonObject(remotes)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
+
   const edifier = remotes["edifier"];
   const lgTv = remotes["lgtv"];
+
   if (!isCommandList(edifier) || !isCommandList(lgTv)) {
     return failure("Couldn't read IR status from the Axum API.");
   }
 
   const message = json["message"];
   const trimmedMessage = isJsonString(message) ? message.trim() : "";
+
   return success({
     message: trimmedMessage.length > 0 ? trimmedMessage : "IR remote ready",
     edifierCommands: new Set(edifier.map((command) => command.trim()).filter(Boolean)),
@@ -655,9 +709,11 @@ export function parseAdguardStatus(json: Json, nowMs: number): Result<AdguardSta
   if (!isJsonObject(json)) {
     return failure(ADGUARD_READ_ERROR);
   }
+
   const version = json["version"];
   const running = json["running"];
   const protectionEnabled = json["protection_enabled"];
+
   if (!isJsonString(version) || !isJsonBoolean(running) || !isJsonBoolean(protectionEnabled)) {
     return failure(ADGUARD_READ_ERROR);
   }
@@ -666,11 +722,13 @@ export function parseAdguardStatus(json: Json, nowMs: number): Result<AdguardSta
   const until = json["protection_disabled_until"];
   const durationMs = isJsonNumber(duration) && duration > 0 ? duration : 0;
   const untilMs = isJsonString(until) ? Date.parse(until) : Number.NaN;
+
   const pauseEndsAtMs = Number.isFinite(untilMs)
     ? untilMs
     : durationMs > 0
       ? nowMs + durationMs
       : null;
+
   return success({ version, running, protectionEnabled, pauseEndsAtMs });
 }
 
@@ -679,6 +737,7 @@ function parseAdguardResponse(response: Result<{ readonly body: string }>): Resu
   if (!response.ok) {
     return response;
   }
+
   try {
     return parseAdguardStatus(JSON.parse(response.value.body), Date.now());
   } catch {
@@ -703,7 +762,9 @@ export function parseFeed(json: Json): Result<Feed> {
   if (!isJsonObject(json) || !isJsonNumber(json["id"]) || !isJsonString(json["url"])) {
     return failure(FEEDS_READ_ERROR);
   }
+
   const title = json["title"];
+
   return success({
     id: json["id"],
     url: json["url"],
@@ -716,14 +777,19 @@ export function parseFeedList(json: Json): Result<readonly Feed[]> {
   if (!isJsonArray(json)) {
     return failure(FEEDS_READ_ERROR);
   }
+
   const feeds: Feed[] = [];
+
   for (const raw of json) {
     const feed = parseFeed(raw);
+
     if (!feed.ok) {
       return failure(FEEDS_READ_ERROR);
     }
+
     feeds.push(feed.value);
   }
+
   return success(feeds);
 }
 
@@ -735,17 +801,22 @@ export function parseCompactTimeline(json: Json): Result<readonly TimelineItem[]
   if (!isJsonArray(json)) {
     return failure(TIMELINE_READ_ERROR);
   }
+
   const items: TimelineItem[] = [];
+
   for (const raw of json) {
     if (!isJsonObject(raw)) {
       return failure(TIMELINE_READ_ERROR);
     }
+
     const id = raw["id"];
     const title = raw["title"];
     const link = raw["link"];
+
     if (!isJsonNumber(id) || !isJsonString(title) || !isJsonString(link)) {
       return failure(TIMELINE_READ_ERROR);
     }
+
     const description = raw["description"];
     items.push({
       id,
@@ -754,6 +825,7 @@ export function parseCompactTimeline(json: Json): Result<readonly TimelineItem[]
       link,
     });
   }
+
   return success(items);
 }
 
@@ -766,17 +838,22 @@ export function parseContainerList(json: Json): Result<readonly DockerContainer[
   if (!isJsonObject(json) || !isJsonArray(json["containers"])) {
     return failure(DOCKER_READ_ERROR);
   }
+
   const containers: DockerContainer[] = [];
+
   for (const raw of json["containers"]) {
     if (!isJsonObject(raw)) {
       return failure(DOCKER_READ_ERROR);
     }
+
     const name = raw["name"];
     const state = raw["state"];
     const image = raw["image"];
+
     if (!isJsonString(name) || !isJsonString(state) || !isJsonString(image)) {
       return failure(DOCKER_READ_ERROR);
     }
+
     const health = raw["HealthStatus"] ?? raw["health_status"];
     const ports = raw["ports"];
     const restartCount = raw["restart_count"];
@@ -790,6 +867,7 @@ export function parseContainerList(json: Json): Result<readonly DockerContainer[
       restartCount: isJsonNumber(restartCount) ? restartCount : 0,
     });
   }
+
   return success(containers);
 }
 
@@ -798,33 +876,42 @@ function normalizeUptime(value: Json | undefined): number | null {
   if (isJsonNumber(value)) {
     return value;
   }
+
   if (isJsonString(value)) {
     const parsed = Number.parseFloat(value);
+
     return Number.isFinite(parsed) ? parsed : null;
   }
+
   return null;
 }
 
 /** Split a plain-text logs body into lines, dropping the final newline. */
 function parseLogLines(body: string): readonly string[] {
   const lines = body.split("\n");
+
   if (lines.length > 0 && lines[lines.length - 1] === "") {
     lines.pop();
   }
+
   return lines;
 }
 
 function readError(body: string, fallback: string): string {
   let json: Json;
+
   try {
     json = JSON.parse(body);
   } catch {
     return fallback;
   }
+
   if (!isJsonObject(json)) {
     return fallback;
   }
+
   const error = json["error"];
   const trimmedError = isJsonString(error) ? error.trim() : "";
+
   return trimmedError.length > 0 ? trimmedError : fallback;
 }

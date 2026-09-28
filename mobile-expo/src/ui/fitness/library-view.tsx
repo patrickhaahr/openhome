@@ -29,7 +29,7 @@ const emptyForm: FormState = { name: "", category: "calisthenics" };
 function formFromExercise(exercise: Exercise): FormState {
   return {
     name: exercise.name,
-    category: exercise.category as ExerciseCategory,
+    category: exercise.category,
     muscleGroup: exercise.muscleGroup ?? "",
     equipment: exercise.equipment ?? "",
   };
@@ -66,6 +66,7 @@ export function LibraryView({
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const wasBusy = useRef(false);
+
   const pending = useRef<
     | { readonly kind: "create" }
     | { readonly kind: "update" }
@@ -79,10 +80,12 @@ export function LibraryView({
     if (state.tag !== "ready") {
       return;
     }
+
     if (wasBusy.current && !state.busy && state.error === null && pending.current !== null) {
       const submitted = pending.current;
       pending.current = null;
       setFormError(null);
+
       if (submitted.kind === "create") {
         setForm(emptyForm);
       } else if (submitted.kind === "update") {
@@ -93,10 +96,12 @@ export function LibraryView({
         setEditing((current) => (current?.id === submitted.id ? null : current));
       }
     }
+
     wasBusy.current = state.busy;
   }, [state]);
 
   const exercises = state.tag === "ready" ? state.exercises : [];
+
   // Distinct muscle groups across the library, for the filter chips.
   const muscleGroups = [
     ...new Set(
@@ -105,6 +110,7 @@ export function LibraryView({
         .filter((group): group is string => group !== undefined && group.length > 0),
     ),
   ].sort((a, b) => a.localeCompare(b));
+
   const visible = filterExercises(
     exercises,
     query,
@@ -120,25 +126,33 @@ export function LibraryView({
         form.muscleGroup,
         form.equipment,
       );
+
       if (!parsed.ok) {
         setFormError(parsed.error);
+
         return;
       }
+
       setFormError(null);
       pending.current = { kind: "update" };
       actions.update(editing.id, parsed.value);
+
       return;
     }
+
     const parsed = parseExerciseInput(
       form.name,
       form.category,
       form.muscleGroup ?? "",
       form.equipment ?? "",
     );
+
     if (!parsed.ok) {
       setFormError(parsed.error);
+
       return;
     }
+
     setFormError(null);
     pending.current = { kind: "create" };
     actions.create(parsed.value);

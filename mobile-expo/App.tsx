@@ -24,6 +24,7 @@ import { ConfigurationScreen } from "./src/ui/configuration-screen";
 import { colors } from "./src/ui/theme";
 
 const configurationStore = createSecureConfigurationStore();
+
 const homeGeofenceService = createHomeGeofenceService(createHomeGeofenceStore(), {
   expo: createExpoHomeGeofenceBackend(),
   native: createNativeHomeGeofenceBackend(),
@@ -44,6 +45,7 @@ export default function App() {
   useEffect(() => {
     void homeGeofenceService.resume();
     void retryPendingHomeExitCommand();
+
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
         void homeGeofenceService.resume();
@@ -58,6 +60,7 @@ export default function App() {
         bodyActions.refresh();
       }
     });
+
     return () => subscription.remove();
   }, [
     homeGeofenceService,

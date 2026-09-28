@@ -16,18 +16,23 @@ import { formatDate, groupByMuscleGroup, styles, today } from "./shared";
 
 function describeSet(set: SetInput): string {
   const parts: string[] = [];
+
   if (set.reps !== null) {
     parts.push(`${set.reps} reps`);
   }
+
   if (set.durationSeconds !== null) {
     parts.push(`${set.durationSeconds}s hold`);
   }
+
   if (set.weightKg !== null) {
     parts.push(`+${set.weightKg} kg`);
   }
+
   if (set.rpe !== null) {
     parts.push(`RPE ${set.rpe}`);
   }
+
   return parts.join(" · ");
 }
 
@@ -112,6 +117,7 @@ export function WorkoutsView({
       setEditingId(null);
       setFormError(null);
     }
+
     wasSaving.current = state.saving;
   }, [state]);
 
@@ -137,12 +143,17 @@ export function WorkoutsView({
     if (form === null) {
       return;
     }
+
     const parsed = parseWorkoutInput(form.date, form.name, form.notes, collectEntries(form));
+
     if (!parsed.ok) {
       setFormError(parsed.error);
+
       return;
     }
+
     setFormError(null);
+
     if (editingId === null) {
       actions.saveWorkout({ tag: "create", input: parsed.value });
     } else {
@@ -203,6 +214,7 @@ export function WorkoutsView({
   }
 
   const workout = state.detail.workout;
+
   return (
     <WorkoutDetailView
       workout={workout}

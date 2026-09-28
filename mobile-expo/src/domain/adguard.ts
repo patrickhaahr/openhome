@@ -15,6 +15,7 @@ export function protectionPhase(status: AdguardStatus, nowMs: number): Protectio
   if (status.protectionEnabled) {
     return "protected";
   }
+
   return status.pauseEndsAtMs !== null && status.pauseEndsAtMs > nowMs ? "paused" : "unprotected";
 }
 
@@ -24,9 +25,11 @@ export function formatPauseRemaining(remainingMs: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }
+
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 

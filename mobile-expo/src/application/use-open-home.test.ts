@@ -10,6 +10,7 @@ describe("OpenHome state transitions", () => {
       { tag: "loading" },
       { type: "configurationLoaded", configuration, error: null },
     );
+
     const ready = reduce(loaded, {
       type: "irLoaded",
       status: {
@@ -18,12 +19,14 @@ describe("OpenHome state transitions", () => {
         lgTvCommands: new Set(["power"]),
       },
     });
+
     const television = reduce(ready, { type: "tabSelected", tab: "television" });
     const editing = reduce(television, { type: "reconfigurationOpened" });
     const changed = reduce(editing, { type: "baseUrlChanged", value: "http://replacement.local" });
     const cancelled = reduce(changed, { type: "reconfigurationCancelled" });
 
     expect(cancelled.tag).toBe("ready");
+
     if (cancelled.tag === "ready") {
       expect(cancelled.configuration).toEqual(configuration);
       expect(cancelled.selectedTab).toBe("television");
@@ -36,7 +39,9 @@ describe("OpenHome state transitions", () => {
       { tag: "loading" },
       { type: "configurationLoaded", configuration, error: null },
     );
+
     const first = reduce(ready, { type: "commandStarted", target: "edifier", command: "power" });
+
     const second = reduce(first, {
       type: "commandStarted",
       target: "television",
@@ -52,6 +57,7 @@ describe("OpenHome state transitions", () => {
       { tag: "loading" },
       { type: "configurationLoaded", configuration, error: null },
     );
+
     const sending = reduce(
       reduce(ready, { type: "commandStarted", target: "edifier", command: "power" }),
       {
@@ -60,12 +66,14 @@ describe("OpenHome state transitions", () => {
         command: "mute",
       },
     );
+
     const failed = reduce(sending, {
       type: "commandFinished",
       target: "edifier",
       command: "power",
       error: "Bridge offline",
     });
+
     const succeeded = reduce(failed, {
       type: "commandFinished",
       target: "edifier",

@@ -1,4 +1,5 @@
 import { defineRule } from "@oxlint/plugins";
+
 import type { ESTree } from "@oxlint/plugins";
 
 type RuntimeFunction = ESTree.ArrowFunctionExpression | ESTree.Function;
@@ -20,6 +21,15 @@ function isInsideTypeGuard(node: ESTree.Node): boolean {
     current = current.parent;
   }
   return false;
+}
+
+/** Return whether typeof safely probes for the existence of a possibly absent binding. */
+function isExistenceProbe(node: ESTree.UnaryExpression): boolean {
+  const parent = node.parent;
+  if (parent.type !== "BinaryExpression") return false;
+  if (!["===", "!==", "==", "!="].includes(parent.operator)) return false;
+  const other = parent.left === node ? parent.right : parent.left;
+  return other.type === "Literal" && other.value === "undefined";
 }
 
 /** Disallow runtime typeof checks that narrow unparsed values instead of decoding them. */
@@ -45,17 +55,20 @@ export const noRuntimeTypeofRule = defineRule({
     ],
     defaultOptions: [{ allowInTypeGuards: false }],
   },
-  create(context) {
-    const option = context.options?.[0];
-    const allowInTypeGuards =
-      typeof option === "object" &&
-      option !== null &&
-      !Array.isArray(option) &&
-      option["allowInTypeGuards"] === true;
-
+  createOnce(context) {
     return {
       UnaryExpression(node) {
-        if (node.operator === "typeof" && (!allowInTypeGuards || !isInsideTypeGuard(node))) {
+        const option = context.options?.[0];
+        const allowInTypeGuards =
+          typeof option === "object" &&
+          option !== null &&
+          !Array.isArray(option) &&
+          option.allowInTypeGuards === true;
+        if (
+          node.operator === "typeof" &&
+          !isExistenceProbe(node) &&
+          (!allowInTypeGuards || !isInsideTypeGuard(node))
+        ) {
           context.report({ node, messageId: "runtimeTypeof" });
         }
       },

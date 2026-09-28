@@ -51,10 +51,13 @@ export function createAdguardController(deps: {
     const current = ++token;
     deps.emit({ type: "loadStarted" });
     const result = await deps.api.getStatus();
+
     if (token !== current) {
       deps.emit({ type: "superseded", of: "refresh" });
+
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "loadSucceeded", status: result.value }
@@ -68,15 +71,19 @@ export function createAdguardController(deps: {
     if (acting) {
       return;
     }
+
     acting = true;
     const current = ++token;
     deps.emit({ type: "actionStarted" });
     const result = await operation(deps.api);
     acting = false;
+
     if (token !== current) {
       deps.emit({ type: "superseded", of: "action" });
+
       return;
     }
+
     deps.emit({
       type: "actionFinished",
       status: result.ok ? result.value : null,
@@ -112,11 +119,14 @@ export function useAdGuard(api: AdguardApi | null): readonly [AdguardState, Adgu
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createAdguardController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
   }, [api]);
 

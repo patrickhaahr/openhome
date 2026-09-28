@@ -17,11 +17,13 @@ export function parseConfiguration(
   if (baseUrl.length === 0) {
     return failure("Enter a Base URL.");
   }
+
   if (apiKey.length === 0) {
     return failure("Enter an API Key.");
   }
 
   let url: URL;
+
   try {
     url = new URL(baseUrl);
   } catch {
@@ -31,9 +33,11 @@ export function parseConfiguration(
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return failure("Base URL must use http or https.");
   }
+
   if (url.hostname.length === 0) {
     return failure("Base URL must include a host.");
   }
+
   if (url.search.length > 0 || url.hash.length > 0) {
     return failure("Base URL must not include a query or fragment.");
   }
@@ -43,8 +47,10 @@ export function parseConfiguration(
 
 function normalizeSetupInput(value: string): string {
   const trimmed = value.trim();
+
   if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
     return trimmed.slice(1, -1).trim();
   }
+
   return trimmed;
 }

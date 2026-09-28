@@ -19,6 +19,7 @@ const input: ExerciseInput = {
   muscleGroup: "Chest",
   equipment: "Barbell",
 };
+
 const update: ExerciseUpdate = { name: "Incline Press", category: "gym", muscleGroup: null };
 
 /** A scripted fake of the fitness adapter surface with manually resolved responses. */
@@ -29,46 +30,55 @@ function fakeApi() {
     | { readonly kind: "update"; readonly id: number; readonly input: ExerciseUpdate }
     | { readonly kind: "delete"; readonly id: number }
   > = [];
+
   const listPending: Array<(result: Result<readonly Exercise[]>) => void> = [];
   const createPending: Array<(result: Result<Exercise>) => void> = [];
   const updatePending: Array<(result: Result<Exercise>) => void> = [];
   const deletePending: Array<(result: Result<void>) => void> = [];
+
   const api = {
     listExercises: () => {
       calls.push({ kind: "list" });
+
       return new Promise<Result<readonly Exercise[]>>((resolve) => {
         listPending.push(resolve);
       });
     },
     createExercise: (submitted: ExerciseInput) => {
       calls.push({ kind: "create", input: submitted });
+
       return new Promise<Result<Exercise>>((resolve) => {
         createPending.push(resolve);
       });
     },
     updateExercise: (id: number, submitted: ExerciseUpdate) => {
       calls.push({ kind: "update", id, input: submitted });
+
       return new Promise<Result<Exercise>>((resolve) => {
         updatePending.push(resolve);
       });
     },
     deleteExercise: (id: number) => {
       calls.push({ kind: "delete", id });
+
       return new Promise<Result<void>>((resolve) => {
         deletePending.push(resolve);
       });
     },
   };
+
   return { api, calls, listPending, createPending, updatePending, deletePending };
 }
 
 function harness() {
   const fake = fakeApi();
   const events: FitnessEvent[] = [];
+
   const controller = createFitnessController({
     api: fake.api,
     emit: (event) => events.push(event),
   });
+
   return { ...fake, controller, events };
 }
 
@@ -81,7 +91,10 @@ function replay(events: ReadonlyArray<FitnessEvent>, initial: FitnessState): Fit
 }
 
 const initial: FitnessState = { tag: "loading" };
-const LIBRARY = [exercise(1, "Push-up"), exercise(2, "Squat")];
+
+const squat = exercise(2, "Squat");
+
+const LIBRARY = [exercise(1, "Push-up"), squat];
 
 describe("fitness state machine", () => {
   it("loads the exercise library into a ready list", async () => {
@@ -169,7 +182,7 @@ describe("fitness state machine", () => {
       { kind: "list" },
     ]);
 
-    h.listPending[1]?.(success([exercise(1, "Incline Press"), LIBRARY[1] as Exercise]));
+    h.listPending[1]?.(success([exercise(1, "Incline Press"), squat]));
     await settle();
 
     const state = replay(h.events, initial);
@@ -206,7 +219,7 @@ describe("fitness state machine", () => {
     await settle();
     expect(h.calls).toEqual([{ kind: "list" }, { kind: "delete", id: 1 }, { kind: "list" }]);
 
-    h.listPending[1]?.(success([LIBRARY[1] as Exercise]));
+    h.listPending[1]?.(success([squat]));
     await settle();
 
     const state = replay(h.events, initial);

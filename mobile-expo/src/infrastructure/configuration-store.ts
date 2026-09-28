@@ -5,6 +5,7 @@ import { isJsonObject, isJsonString, type Json } from "../domain/json";
 import { failure, success, type Result } from "../domain/result";
 
 const configurationKey = "openhome.configuration";
+
 const secureStoreOptions = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 
 /** Persistent storage required by the setup flow. */
@@ -19,9 +20,11 @@ export function createSecureConfigurationStore(): ConfigurationStore {
     async load(): Promise<Result<Configuration | null>> {
       try {
         const stored = await SecureStore.getItemAsync(configurationKey, secureStoreOptions);
+
         if (stored === null) {
           return success(null);
         }
+
         return decodeStoredConfiguration(stored);
       } catch {
         return failure("The saved configuration could not be read. Enter it again.");
@@ -35,6 +38,7 @@ export function createSecureConfigurationStore(): ConfigurationStore {
           JSON.stringify(configuration),
           secureStoreOptions,
         );
+
         return success(undefined);
       } catch {
         return failure("Couldn't persist configuration.");
@@ -45,18 +49,23 @@ export function createSecureConfigurationStore(): ConfigurationStore {
 
 function decodeStoredConfiguration(stored: string): Result<Configuration | null> {
   let json: Json;
+
   try {
     json = JSON.parse(stored);
   } catch {
     return failure("The saved configuration could not be read. Enter it again.");
   }
+
   if (!isJsonObject(json)) {
     return failure("The saved configuration could not be read. Enter it again.");
   }
+
   const baseUrl = json["baseUrl"];
   const apiKey = json["apiKey"];
+
   if (!isJsonString(baseUrl) || !isJsonString(apiKey)) {
     return failure("The saved configuration could not be read. Enter it again.");
   }
+
   return parseConfiguration(baseUrl, apiKey);
 }

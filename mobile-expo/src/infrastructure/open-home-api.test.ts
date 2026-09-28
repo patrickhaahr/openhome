@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DockerContainer } from "../domain/docker";
+import type { Json } from "../domain/json";
 import type { TimelineItem } from "../domain/rss";
 import { failure, success, type Result } from "../domain/result";
 import { createOpenHomeApi, parseAdguardStatus, parseIrStatus } from "./open-home-api";
@@ -16,6 +17,7 @@ describe("parseIrStatus", () => {
     });
 
     expect(result.ok).toBe(true);
+
     if (result.ok) {
       expect(result.value.message).toBe("IR ready");
       expect([...result.value.edifierCommands]).toEqual(["bluetooth", "optical"]);
@@ -154,6 +156,7 @@ describe("docker adapter", () => {
   function stubFetch(handler: (init?: RequestInit) => Promise<Response>): void {
     vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       void url;
+
       return handler(init);
     });
   }
@@ -300,6 +303,7 @@ describe("docker adapter", () => {
     const requests: Array<{ url: string; init?: RequestInit | undefined }> = [];
     vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) => {
       requests.push({ url: String(url), init });
+
       return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
     });
 
@@ -328,9 +332,11 @@ describe("docker adapter", () => {
     );
 
     let result: Result<readonly DockerContainer[]> | null = null;
+
     const pending = listContainers().then((value) => {
       result = value;
     });
+
     await vi.advanceTimersByTimeAsync(5_000);
     expect(result).toBeNull();
 
@@ -349,9 +355,11 @@ describe("docker adapter", () => {
     );
 
     let result: Result<void> | null = null;
+
     const pending = startContainer("adguard").then((value) => {
       result = value;
     });
+
     await vi.advanceTimersByTimeAsync(5_000);
     expect(result).toBeNull();
 
@@ -370,11 +378,13 @@ describe("docker adapter", () => {
     );
 
     let result: Result<void> | null = null;
+
     const pending = createOpenHomeApi(configuration)
       .validateConfiguration()
       .then((value) => {
         result = value;
       });
+
     await vi.advanceTimersByTimeAsync(5_000);
     await pending;
     expect(result).toEqual(failure(reachError));
@@ -389,6 +399,7 @@ describe("docker adapter", () => {
       const requests: string[] = [];
       vi.stubGlobal("fetch", (url: RequestInfo | URL) => {
         requests.push(String(url));
+
         return Promise.resolve(
           new Response("2026-08-29T12:00:00.000000000Z starting adguard\nready\n", {
             status: 200,
@@ -452,9 +463,11 @@ describe("docker adapter", () => {
       );
 
       let result: Result<readonly string[]> | null = null;
+
       const pending = containerLogs("adguard").then((value) => {
         result = value;
       });
+
       await vi.advanceTimersByTimeAsync(5_000);
       expect(result).toBeNull();
 
@@ -482,17 +495,15 @@ describe("rss adapter", () => {
     { id: 5, title: "No description", link: "https://blog.test/0" },
   ];
 
-  /** Deliberately loose so tests can also send malformed payloads. */
-  type TimelinePayload = unknown;
-
   function stubFetch(handler: (init?: RequestInit) => Promise<Response>): void {
     vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       void url;
+
       return handler(init);
     });
   }
 
-  function okFetch(body: TimelinePayload): void {
+  function okFetch(body: Json | undefined): void {
     stubFetch(async () => new Response(JSON.stringify(body), { status: 200 }));
   }
 
@@ -506,6 +517,7 @@ describe("rss adapter", () => {
     const requests: string[] = [];
     vi.stubGlobal("fetch", (url: RequestInfo | URL) => {
       requests.push(String(url));
+
       return Promise.resolve(new Response(JSON.stringify(compactPayload), { status: 200 }));
     });
 
@@ -582,9 +594,11 @@ describe("rss adapter", () => {
     );
 
     let result: Result<readonly TimelineItem[]> | null = null;
+
     const pending = compactTimeline(null).then((value) => {
       result = value;
     });
+
     await vi.advanceTimersByTimeAsync(4_000);
     expect(result).toBeNull();
 
@@ -622,6 +636,7 @@ describe("rss adapter", () => {
     const bodies: unknown[] = [];
     vi.stubGlobal("fetch", (_url: RequestInfo | URL, init?: RequestInit) => {
       bodies.push(JSON.parse(String(init?.body)));
+
       return Promise.resolve(
         new Response(JSON.stringify({ id: 9, url: "https://blog.test/feed.xml", title: null }), {
           status: 201,
@@ -662,6 +677,7 @@ describe("rss adapter", () => {
     vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) => {
       urls.push(String(url));
       methods.push(String(init?.method));
+
       return Promise.resolve(new Response(null, { status: 204 }));
     });
 
@@ -740,6 +756,7 @@ describe("fitness workout adapter", () => {
     const requests: Array<{ url: string; init?: RequestInit | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, init });
+
       return Promise.resolve(new Response(JSON.stringify(detailPayload), { status: 201 }));
     });
 
@@ -808,6 +825,7 @@ describe("fitness workout adapter", () => {
     const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
+
       return Promise.resolve(new Response(JSON.stringify(detailPayload), { status: 200 }));
     });
 
@@ -822,6 +840,7 @@ describe("fitness workout adapter", () => {
     const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
+
       return Promise.resolve(new Response(null, { status: 204 }));
     });
 
@@ -891,6 +910,7 @@ describe("fitness progress, body weight, and profile adapter", () => {
     const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
+
       return Promise.resolve(new Response(JSON.stringify(progressPayload), { status: 200 }));
     });
 
@@ -962,8 +982,10 @@ describe("fitness progress, body weight, and profile adapter", () => {
       method?: string | undefined;
       body?: BodyInit | null | undefined;
     }> = [];
+
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
+
       return Promise.resolve(
         new Response(JSON.stringify({ id: 3, date: "2026-09-12", weight_kg: 72.5 }), {
           status: 201,
@@ -1005,8 +1027,10 @@ describe("fitness progress, body weight, and profile adapter", () => {
       method?: string | undefined;
       body?: BodyInit | null | undefined;
     }> = [];
+
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
+
       return Promise.resolve(
         new Response(JSON.stringify({ height_cm: 182.5, sex: "male" }), { status: 200 }),
       );
@@ -1031,6 +1055,7 @@ describe("fitness progress, body weight, and profile adapter", () => {
 
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
+
       return Promise.resolve(
         new Response(JSON.stringify({ height_cm: null, sex: null }), { status: 200 }),
       );
@@ -1063,6 +1088,7 @@ describe("exercise update and delete adapter", () => {
   });
 
   const configuration = { baseUrl: "http://openhome.test", apiKey: "secret" };
+
   const exercisePayload = {
     id: 1,
     name: "Incline Press",
@@ -1083,8 +1109,10 @@ describe("exercise update and delete adapter", () => {
       method?: string | undefined;
       body?: BodyInit | null | undefined;
     }> = [];
+
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
+
       return Promise.resolve(new Response(JSON.stringify(exercisePayload), { status: 200 }));
     });
 
@@ -1153,6 +1181,7 @@ describe("exercise update and delete adapter", () => {
     const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
+
       return Promise.resolve(new Response(null, { status: 204 }));
     });
 

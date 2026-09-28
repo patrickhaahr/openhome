@@ -69,9 +69,11 @@ export function createFeedsController(deps: {
     const current = ++loadToken;
     deps.emit({ type: "loadStarted" });
     const result = await deps.api.listFeeds();
+
     if (loadToken !== current) {
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "loadSucceeded", feeds: result.value }
@@ -83,11 +85,15 @@ export function createFeedsController(deps: {
     if (busy) {
       return;
     }
+
     const validation = parseFeedUrl(input);
+
     if (!validation.ok) {
       deps.emit({ type: "inputRejected", message: validation.error });
+
       return;
     }
+
     busy = true;
     const current = ++mutateToken;
     // A load in flight since before this mutation carries a stale snapshot;
@@ -95,16 +101,22 @@ export function createFeedsController(deps: {
     loadToken += 1;
     deps.emit({ type: "createStarted" });
     const result = await deps.api.createFeed(validation.value);
+
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded", of: "mutation" });
+
       return;
     }
+
     busy = false;
+
     if (!result.ok) {
       deps.emit({ type: "createFailed", message: result.error });
+
       return;
     }
+
     input = "";
     undoable = [];
     deps.emit({ type: "createSucceeded" });
@@ -116,23 +128,30 @@ export function createFeedsController(deps: {
     if (busy) {
       return;
     }
+
     busy = true;
     const current = ++mutateToken;
     loadToken += 1;
     undoable = [...undoable, feed];
     deps.emit({ type: "deleteStarted", feed });
     const result = await deps.api.deleteFeed(feed.id);
+
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded", of: "mutation" });
+
       return;
     }
+
     busy = false;
+
     if (!result.ok) {
       undoable = undoable.filter((entry) => entry.id !== feed.id);
       deps.emit({ type: "deleteFailed", feed, message: result.error });
+
       return;
     }
+
     deps.emit({ type: "deleteSucceeded", id: feed.id });
     deps.refreshTimeline();
   }
@@ -141,22 +160,27 @@ export function createFeedsController(deps: {
     if (busy || undoable.length === 0) {
       return;
     }
+
     busy = true;
     const current = ++mutateToken;
     loadToken += 1;
     const batch = undoable;
     deps.emit({ type: "undoStarted" });
     const results = await Promise.all(batch.map((feed) => deps.api.createFeed(feed.url)));
+
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded", of: "mutation" });
+
       return;
     }
+
     busy = false;
     const failed: Feed[] = [];
     let error: string | null = null;
     results.forEach((result, index) => {
       const feed = batch[index];
+
       if (feed !== undefined && !result.ok) {
         failed.push(feed);
         error ??= result.error;
@@ -164,9 +188,11 @@ export function createFeedsController(deps: {
     });
     undoable = failed;
     deps.emit({ type: "undoFinished", undoable: failed, error });
+
     if (failed.length < batch.length) {
       deps.refreshTimeline();
     }
+
     // Always reconcile against the server: a "failed" re-add may have committed
     // with its response lost, and the next load drops it from the batch.
     void load();
@@ -192,6 +218,7 @@ export function createFeedsController(deps: {
     cancel(): void {
       loadToken += 1;
       mutateToken += 1;
+
       if (busy) {
         busy = false;
         deps.emit({ type: "superseded", of: "mutation" });
@@ -211,8 +238,10 @@ export function useFeeds(
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createFeedsController({
       api,
       emit: dispatch,
@@ -222,8 +251,10 @@ export function useFeeds(
         undoable: state.tag === "ready" ? state.undoable : [],
       },
     });
+
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
     // state is read only when the controller is (re)created; recreating on every
     // state change would restart in-flight operations.
@@ -253,6 +284,7 @@ export function reduce(state: FeedsState, event: FeedsEvent): FeedsState {
     case "loadSucceeded": {
       const ready = state.tag === "ready" ? state : null;
       const merged = mergeLoaded(ready?.undoable ?? [], event.feeds, ready?.busy ?? false);
+
       return {
         tag: "ready",
         feeds: merged.feeds,
@@ -262,6 +294,7 @@ export function reduce(state: FeedsState, event: FeedsEvent): FeedsState {
         input: ready?.input ?? "",
       };
     }
+
     case "loadFailed":
       return state.tag === "ready"
         ? { ...state, error: event.message }
@@ -322,6 +355,7 @@ function mergeLoaded(undoable: readonly Feed[], loaded: readonly Feed[], busy: b
   const nextUndoable = busy
     ? undoable
     : undoable.filter((entry) => !loaded.some((feed) => feed.url === entry.url));
+
   return {
     feeds: loaded.filter((feed) => !nextUndoable.some((entry) => entry.url === feed.url)),
     undoable: nextUndoable,

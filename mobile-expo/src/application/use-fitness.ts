@@ -54,9 +54,11 @@ export function createFitnessController(deps: {
     const current = ++loadToken;
     deps.emit({ type: "loadStarted" });
     const result = await deps.api.listExercises();
+
     if (loadToken !== current) {
       return;
     }
+
     deps.emit(
       result.ok
         ? { type: "loadSucceeded", exercises: result.value }
@@ -69,22 +71,29 @@ export function createFitnessController(deps: {
     if (busy) {
       return;
     }
+
     busy = true;
     const current = ++mutateToken;
     // A load in flight since before this mutation carries a stale snapshot; drop it.
     loadToken += 1;
     deps.emit({ type: "mutateStarted" });
     const result = await run();
+
     if (mutateToken !== current) {
       busy = false;
       deps.emit({ type: "superseded", of: "mutation" });
+
       return;
     }
+
     busy = false;
+
     if (!result.ok) {
       deps.emit({ type: "mutateFailed", message: result.error });
+
       return;
     }
+
     deps.emit({ type: "mutateSucceeded" });
     void load();
   }
@@ -105,6 +114,7 @@ export function createFitnessController(deps: {
     cancel(): void {
       loadToken += 1;
       mutateToken += 1;
+
       if (busy) {
         busy = false;
         deps.emit({ type: "superseded", of: "mutation" });
@@ -121,11 +131,14 @@ export function useFitness(api: FitnessApi | null): readonly [FitnessState, Fitn
   useEffect(() => {
     if (api === null) {
       controller.current = null;
+
       return;
     }
+
     const current = createFitnessController({ api, emit: dispatch });
     controller.current = current;
     current.refresh();
+
     return () => current.cancel();
   }, [api]);
 

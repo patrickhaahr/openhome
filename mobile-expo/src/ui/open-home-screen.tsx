@@ -147,11 +147,14 @@ export function OpenHomeScreen({
     if (pageWidth === 0) {
       return;
     }
+
     const page = Math.max(
       0,
       Math.min(tabs.length - 1, Math.round(event.nativeEvent.contentOffset.x / pageWidth)),
     );
+
     const tab = tabs[page];
+
     if (tab !== undefined && tab !== state.selectedTab) {
       actions.selectTab(tab);
     }
@@ -425,6 +428,7 @@ function AwayPage({
   readonly actions: HomeGeofenceActions;
 }) {
   const enabled = state.tag === "ready" && state.home !== null;
+
   return (
     <View style={shared.stack}>
       <PageHeading
@@ -521,6 +525,7 @@ function AutomationToggle({
     if (state.tag !== "ready" || state.saving) {
       return;
     }
+
     if (state.home === null) {
       actions.setHome(state.provider);
     } else {
@@ -648,6 +653,7 @@ function IrSummary({ state, onRetry }: { readonly state: IrState; readonly onRet
       </View>
     );
   }
+
   if (state.tag === "error") {
     return (
       <View style={shared.statusPanel}>
@@ -664,6 +670,7 @@ function IrSummary({ state, onRetry }: { readonly state: IrState; readonly onRet
       </View>
     );
   }
+
   return null;
 }
 
@@ -748,9 +755,11 @@ function CommandError({
   if (state.error === null) {
     return null;
   }
+
   const label =
     commands.find((command) => command.command === state.error?.command)?.label ??
     state.error.command;
+
   return (
     <Text accessibilityRole="alert" style={shared.error}>
       Unable to send {label}. {state.error.message}
@@ -804,6 +813,7 @@ function Icon({
       </Text>
     );
   }
+
   if (name === "television") {
     return (
       <View
@@ -815,6 +825,7 @@ function Icon({
       </View>
     );
   }
+
   if (name === "speaker") {
     return (
       <View
@@ -827,6 +838,7 @@ function Icon({
       </View>
     );
   }
+
   if (name === "light") {
     return (
       <View
@@ -840,6 +852,7 @@ function Icon({
       </View>
     );
   }
+
   if (name === "away") {
     return (
       <Text
@@ -851,6 +864,7 @@ function Icon({
       </Text>
     );
   }
+
   if (name === "server") {
     return (
       <Text
@@ -862,6 +876,7 @@ function Icon({
       </Text>
     );
   }
+
   if (name === "docker") {
     return (
       <Text
@@ -873,6 +888,7 @@ function Icon({
       </Text>
     );
   }
+
   if (name === "fitness") {
     return (
       <Text
@@ -884,6 +900,7 @@ function Icon({
       </Text>
     );
   }
+
   return (
     <Text
       accessibilityElementsHidden
@@ -899,9 +916,11 @@ function connectionLabel(state: IrState): string {
   if (state.tag === "loading") {
     return "Connecting";
   }
+
   if (state.tag === "error") {
     return "Connection issue";
   }
+
   return "Online";
 }
 
@@ -913,9 +932,11 @@ function automationToggleDescription(state: HomeGeofenceState): string {
   if (state.tag === "loading") {
     return "Checking automation";
   }
+
   if (state.home !== null) {
     return `On with ${providerLabel(state.home.provider)}`;
   }
+
   return `Turn off lights when you leave with ${providerLabel(state.provider)}`;
 }
 

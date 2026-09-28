@@ -27,10 +27,12 @@ const pausedStatus: AdguardStatus = {
 /** A scripted fake of the Axum API adapter interface with manually resolved responses. */
 function fakeApi() {
   const calls: string[] = [];
+
   const pending: Array<{
     method: string;
     resolve: (result: Result<AdguardStatus>) => void;
   }> = [];
+
   const api: AdguardApi = {
     getStatus: () => record("status"),
     enableProtection: () => record("enable"),
@@ -40,6 +42,7 @@ function fakeApi() {
 
   function record(method: string): Promise<Result<AdguardStatus>> {
     calls.push(method);
+
     return new Promise((resolve) => pending.push({ method, resolve }));
   }
 
@@ -49,10 +52,12 @@ function fakeApi() {
 function harness() {
   const { api, calls, pending } = fakeApi();
   const events: AdguardEvent[] = [];
+
   const controller = createAdguardController({
     api,
     emit: (event) => events.push(event),
   });
+
   return { controller, calls, pending, events };
 }
 

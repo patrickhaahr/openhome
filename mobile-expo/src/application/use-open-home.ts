@@ -109,6 +109,7 @@ export function useOpenHome(
   const refreshGeneration = useRef(0);
   stateRef.current = state;
   const configuration = state.tag === "ready" ? state.configuration : null;
+
   const api = useMemo(
     () => (configuration === null ? null : createOpenHomeApi(configuration)),
     [configuration],
@@ -120,15 +121,20 @@ export function useOpenHome(
       if (!active) {
         return;
       }
+
       if (!result.ok) {
         dispatch({ type: "configurationLoaded", configuration: null, error: result.error });
+
         return;
       }
+
       dispatch({ type: "configurationLoaded", configuration: result.value, error: null });
+
       if (result.value !== null) {
         void refreshIr(createOpenHomeApi(result.value));
       }
     });
+
     return () => {
       active = false;
     };
@@ -139,9 +145,11 @@ export function useOpenHome(
     refreshGeneration.current = refresh;
     dispatch({ type: "irLoading" });
     const result = await api.getIrStatus();
+
     if (refreshGeneration.current !== refresh) {
       return;
     }
+
     dispatch(
       result.ok
         ? { type: "irLoaded", status: result.value }
@@ -151,27 +159,34 @@ export function useOpenHome(
 
   async function saveConfiguration(): Promise<void> {
     const current = stateRef.current;
+
     if (current.tag !== "configuration" || current.isSaving) {
       return;
     }
 
     const parsed = parseConfiguration(current.baseUrl, current.apiKey);
+
     if (!parsed.ok) {
       dispatch({ type: "configurationFailed", message: parsed.error });
+
       return;
     }
 
     dispatch({ type: "configurationSaving" });
     const api = createOpenHomeApi(parsed.value);
     const validation = await api.validateConfiguration();
+
     if (!validation.ok) {
       dispatch({ type: "configurationFailed", message: validation.error });
+
       return;
     }
 
     const saved = await store.save(parsed.value);
+
     if (!saved.ok) {
       dispatch({ type: "configurationFailed", message: saved.error });
+
       return;
     }
 
@@ -182,9 +197,11 @@ export function useOpenHome(
 
   function retryIr(): void {
     const current = stateRef.current;
+
     if (current.tag !== "ready" || current.ir.tag === "loading") {
       return;
     }
+
     void refreshIr(createOpenHomeApi(current.configuration));
   }
 
@@ -194,14 +211,18 @@ export function useOpenHome(
     command: string,
   ): void {
     const current = stateRef.current;
+
     if (current.tag !== "ready" || current.ir.tag !== "loaded") {
       return;
     }
+
     const available =
       remote === "edifier" ? current.ir.status.edifierCommands : current.ir.status.lgTvCommands;
+
     if (!available.has(command) || current[target].sending.has(command)) {
       return;
     }
+
     void runCommand(
       target,
       command,
@@ -211,9 +232,11 @@ export function useOpenHome(
 
   function sendLight(command: "on" | "off"): void {
     const current = stateRef.current;
+
     if (current.tag !== "ready" || current.light.sending.size > 0) {
       return;
     }
+
     void runCommand(
       "light",
       command,
@@ -229,9 +252,11 @@ export function useOpenHome(
     const operationGeneration = generation.current;
     dispatch({ type: "commandStarted", target, command });
     const result = await operation;
+
     if (generation.current !== operationGeneration) {
       return;
     }
+
     dispatch({ type: "commandFinished", target, command, error: result.ok ? null : result.error });
   }
 
@@ -255,6 +280,7 @@ export function useOpenHome(
     },
     selectTab(tab) {
       dispatch({ type: "tabSelected", tab });
+
       if (
         (tab === "television" || tab === "speaker") &&
         stateRef.current.tag === "ready" &&

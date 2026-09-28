@@ -14,24 +14,31 @@ export function createExpoHomeGeofenceBackend(): HomeGeofenceBackend {
             "Background location is unavailable in this build. Use an Android or iOS development build.",
           );
         }
+
         const foreground = await Location.requestForegroundPermissionsAsync();
+
         if (!foreground.granted) {
           return failure("Allow location access to set your home location.");
         }
+
         if (foreground.android?.accuracy !== undefined && foreground.android.accuracy !== "fine") {
           return failure(
             "Allow precise location so OpenHome can monitor your home radius reliably.",
           );
         }
+
         if (foreground.ios?.accuracy === "reduced") {
           return failure(
             "Enable Precise Location so OpenHome can monitor your home radius reliably.",
           );
         }
+
         const background = await Location.requestBackgroundPermissionsAsync();
+
         if (!background.granted) {
           return failure("Allow background location so OpenHome can detect when you leave home.");
         }
+
         return success(undefined);
       } catch {
         return failure("Couldn't request location access. Check location settings and try again.");
@@ -43,6 +50,7 @@ export function createExpoHomeGeofenceBackend(): HomeGeofenceBackend {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
+
         return success({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,

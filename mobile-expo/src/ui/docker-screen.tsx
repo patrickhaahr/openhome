@@ -62,6 +62,7 @@ export function DockerPage({ state, actions, counts }: Props) {
   }
 
   const containers = state.tag === "ready" ? state.containers : [];
+
   const visible =
     filter === "all"
       ? containers
@@ -171,6 +172,7 @@ function ContainerRow({
   readonly onShowLogs: () => void;
 }) {
   const classification = classifyContainer(container);
+
   return (
     <Pressable
       accessibilityLabel={`Show logs for ${container.name}`}
