@@ -50,10 +50,7 @@ function replay(events: ReadonlyArray<TimelineEvent>, initial: TimelineState): T
 const initial: TimelineState = { tag: "loading" };
 
 /** Resolve the load started by refresh() with `count` fresh items. */
-async function loadInitial(
-  h: ReturnType<typeof harness>,
-  count: number,
-): Promise<void> {
+async function loadInitial(h: ReturnType<typeof harness>, count: number): Promise<void> {
   const ids = Array.from({ length: count }, (_, index) => index + 1);
   h.pending[0]?.resolve(success(ids.map(item)));
   await settle();
@@ -117,9 +114,11 @@ describe("timeline state machine", () => {
 
     const state = replay(h.events, initial);
     expect(state.tag === "ready" && state.items).toHaveLength(TIMELINE_PAGE_SIZE + 3);
-    expect(
-      state.tag === "ready" && state.items.map((entry) => entry.id).slice(-3),
-    ).toEqual([TIMELINE_PAGE_SIZE + 1, TIMELINE_PAGE_SIZE + 2, TIMELINE_PAGE_SIZE + 3]);
+    expect(state.tag === "ready" && state.items.map((entry) => entry.id).slice(-3)).toEqual([
+      TIMELINE_PAGE_SIZE + 1,
+      TIMELINE_PAGE_SIZE + 2,
+      TIMELINE_PAGE_SIZE + 3,
+    ]);
   });
 
   it("does not re-request a page while one is in flight or after the list ends", async () => {
@@ -149,9 +148,7 @@ describe("timeline state machine", () => {
 
     const state = replay(h.events, initial);
     const ids = state.tag === "ready" && state.items.map((entry) => entry.id);
-    expect(ids).toEqual(
-      Array.from({ length: TIMELINE_PAGE_SIZE + 1 }, (_, index) => index + 1),
-    );
+    expect(ids).toEqual(Array.from({ length: TIMELINE_PAGE_SIZE + 1 }, (_, index) => index + 1));
   });
 
   it("stops pagination once a page comes back short", async () => {

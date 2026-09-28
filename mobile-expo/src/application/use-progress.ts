@@ -87,7 +87,10 @@ export function useProgress(api: FitnessApi | null): readonly [ProgressState, Pr
   ];
 }
 
-export const initialState: ProgressState = { tag: "idle", message: "Pick an exercise to see its progress." };
+export const initialState: ProgressState = {
+  tag: "idle",
+  message: "Pick an exercise to see its progress.",
+};
 
 /** Apply a machine event to progress view state. */
 export function reduce(state: ProgressState, event: ProgressEvent): ProgressState {

@@ -13,7 +13,12 @@ function exercise(id: number, name: string): Exercise {
   return { id, name, category: "gym", muscleGroup: null, equipment: null };
 }
 
-const input: ExerciseInput = { name: "Bench Press", category: "gym", muscleGroup: "Chest", equipment: "Barbell" };
+const input: ExerciseInput = {
+  name: "Bench Press",
+  category: "gym",
+  muscleGroup: "Chest",
+  equipment: "Barbell",
+};
 const update: ExerciseUpdate = { name: "Incline Press", category: "gym", muscleGroup: null };
 
 /** A scripted fake of the fitness adapter surface with manually resolved responses. */
@@ -60,7 +65,10 @@ function fakeApi() {
 function harness() {
   const fake = fakeApi();
   const events: FitnessEvent[] = [];
-  const controller = createFitnessController({ api: fake.api, emit: (event) => events.push(event) });
+  const controller = createFitnessController({
+    api: fake.api,
+    emit: (event) => events.push(event),
+  });
   return { ...fake, controller, events };
 }
 
@@ -118,11 +126,7 @@ describe("fitness state machine", () => {
     const created = exercise(3, "Bench Press");
     h.createPending[0]?.(success(created));
     await settle();
-    expect(h.calls).toEqual([
-      { kind: "list" },
-      { kind: "create", input },
-      { kind: "list" },
-    ]);
+    expect(h.calls).toEqual([{ kind: "list" }, { kind: "create", input }, { kind: "list" }]);
 
     h.listPending[1]?.(success([...LIBRARY, created]));
     await settle();

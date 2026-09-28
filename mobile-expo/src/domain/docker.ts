@@ -34,9 +34,7 @@ export function classifyContainer(container: DockerContainer): ContainerClassifi
 }
 
 /** Count containers per health classification. */
-export function classificationCounts(
-  containers: readonly DockerContainer[],
-): ClassificationCounts {
+export function classificationCounts(containers: readonly DockerContainer[]): ClassificationCounts {
   const counts = { all: containers.length, healthy: 0, unhealthy: 0, stopped: 0 };
   for (const container of containers) {
     counts[classifyContainer(container)] += 1;

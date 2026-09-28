@@ -35,10 +35,7 @@ export default function App() {
   const [adguard, adguardActions] = useAdGuard(api === null ? null : api.adguard);
   const [docker, dockerActions, dockerCounts] = useDocker(api === null ? null : api.docker);
   const [timeline, timelineActions] = useTimeline(api === null ? null : api.rss);
-  const [feeds, feedsActions] = useFeeds(
-    api === null ? null : api.rss,
-    timelineActions.refresh,
-  );
+  const [feeds, feedsActions] = useFeeds(api === null ? null : api.rss, timelineActions.refresh);
   const [fitness, fitnessActions] = useFitness(api === null ? null : api.fitness);
   const [workouts, workoutsActions] = useWorkouts(api === null ? null : api.fitness);
   const [progress, progressActions] = useProgress(api === null ? null : api.fitness);
@@ -62,7 +59,17 @@ export default function App() {
       }
     });
     return () => subscription.remove();
-  }, [homeGeofenceService, adguardActions, dockerActions, timelineActions, feedsActions, fitnessActions, workoutsActions, progressActions, bodyActions]);
+  }, [
+    homeGeofenceService,
+    adguardActions,
+    dockerActions,
+    timelineActions,
+    feedsActions,
+    fitnessActions,
+    workoutsActions,
+    progressActions,
+    bodyActions,
+  ]);
 
   return (
     <SafeAreaProvider>

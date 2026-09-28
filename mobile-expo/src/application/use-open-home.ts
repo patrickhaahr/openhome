@@ -10,7 +10,14 @@ import {
 } from "../infrastructure/open-home-api";
 
 /** A top-level destination in the configured app. */
-export type TopLevelTab = "home" | "television" | "speaker" | "away" | "server" | "docker" | "fitness";
+export type TopLevelTab =
+  | "home"
+  | "television"
+  | "speaker"
+  | "away"
+  | "server"
+  | "docker"
+  | "fitness";
 
 /** The state of IR status loading. */
 export type IrState =

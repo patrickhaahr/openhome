@@ -434,7 +434,13 @@ describe("parseExerciseProgress", () => {
   it("accepts a progress payload with the embedded exercise and points", () => {
     expect(
       parseExerciseProgress({
-        exercise: { id: 1, name: "Bench Press", category: "gym", muscle_group: "Chest", equipment: null },
+        exercise: {
+          id: 1,
+          name: "Bench Press",
+          category: "gym",
+          muscle_group: "Chest",
+          equipment: null,
+        },
         data: [
           {
             date: "2026-09-12",

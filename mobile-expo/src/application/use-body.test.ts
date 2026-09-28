@@ -183,9 +183,7 @@ describe("body state machine", () => {
     await settle();
 
     h.controller.saveProfile(PROFILE_INPUT);
-    h.profilePending[1]?.(
-      success({ heightCm: 182.5, sex: "male" }),
-    );
+    h.profilePending[1]?.(success({ heightCm: 182.5, sex: "male" }));
     await settle();
 
     const state = replay(h.events);

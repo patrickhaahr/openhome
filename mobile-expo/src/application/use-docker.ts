@@ -258,7 +258,9 @@ export function reduce(state: DockerState, event: DockerEvent): DockerState {
       return state.tag === "ready" ? { ...state, view: { tag: "list" } } : state;
     case "superseded":
       if (event.of === "logs") {
-        return updateLogs(state, (logs) => (logs.tag === "ready" ? { ...logs, refreshing: false } : logs));
+        return updateLogs(state, (logs) =>
+          logs.tag === "ready" ? { ...logs, refreshing: false } : logs,
+        );
       }
       return state.tag === "ready"
         ? event.of === "refresh"

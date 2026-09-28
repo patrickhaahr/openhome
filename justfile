@@ -75,72 +75,57 @@ mcp-lint:
 [working-directory: 'mcp']
 mcp-check: mcp-format mcp-lint mcp-test
 
-# Format, typecheck, lint, and test the Expo client in one pass
-[group('expo')]
-[working-directory: 'mobile-expo']
-mobile-check: expo-format expo-lint expo-check
-
-# Compile both firmware targets in one pass
-[group('firmware')]
-firmware-check: ir-build switchbot-build
-
-# Format, lint, and test the OpenHome CLI in one pass
-[group('cli')]
-[working-directory: 'cli']
-cli-check: cli-format cli-lint cli-test
-
-check-api: fmt lint test
-check-mcp: mcp-check
-check-mobile: mobile-check
-check-firmware: firmware-check
-check-cli: cli-check
-
-# Run the Axum API server
+# Format the Axum API server
 [group('api')]
 [working-directory: 'api']
-run:
-    cargo run
+api-fmt:
+    cargo fmt
+
+# Lint the Axum API (clippy denies warnings)
+[group('api')]
+[working-directory: 'api']
+api-lint:
+    cargo clippy --all-targets --all-features --locked -- -D warnings
 
 # Run the full API test suite
 [group('api')]
 [working-directory: 'api']
-test:
+api-test:
     cargo test
 
-# Run one API test by exact name (just test-one my_test)
+# Run one API test by exact name (just api-test-one my_test)
 [group('api')]
 [working-directory: 'api']
-test-one name:
+api-test-one name:
     cargo test {{name}} -- --exact
 
-# Run one API integration test file (just test-integration my_integration)
+# Run one API integration test file (just api-test-integration my_integration)
 [group('api')]
 [working-directory: 'api']
-test-integration name:
+api-test-integration name:
     cargo test --test {{name}}
 
-# Format then check the API
+# Run the Axum API server
 [group('api')]
 [working-directory: 'api']
-fmt:
-    cargo fmt
+api-run:
+    cargo run
 
-# Lint the API (clippy denies warnings)
+# Format, lint, and test the API in one pass
 [group('api')]
 [working-directory: 'api']
-lint:
-    cargo clippy --all-targets --all-features --locked -- -D warnings
+api-check: api-fmt api-lint api-test
 
-# Create a reversible NOOP push migration (just noop-migration-add receiver_state)
+# Create a reversible NOOP push migration (just api-noop-migration-add receiver_state)
 [group('api')]
 [working-directory: 'api']
-noop-migration-add name:
+api-noop-migration-add name:
     sqlx migrate add -r --source noop_migrations {{name}}
 
 # Apply NOOP push migrations to NOOP_DB_URL (default: noop.db next to DATABASE_URL)
 [group('api')]
 [working-directory: 'api']
-noop-migrate:
+api-noop-migrate:
     #!/usr/bin/env bash
     set -euo pipefail
     # Mirrors noop_push::resolve_db_url in src/services/noop_push.rs; keep the two in sync.
@@ -175,14 +160,34 @@ noop-migrate:
 # Build the API image for amd64 + arm64 (Raspberry Pi) locally
 [group('api')]
 [working-directory: 'api']
-docker-build version:
+api-docker-build version:
     docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest .
 
 # Build the API image for amd64 + arm64 and push it to Docker Hub
 [group('api')]
 [working-directory: 'api']
-docker-push version:
+api-docker-push version:
     docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest --push .
+
+# Format, typecheck, lint, and test the Expo client in one pass
+[group('expo')]
+[working-directory: 'mobile-expo']
+mobile-check: expo-format expo-lint expo-check
+
+# Compile both firmware targets in one pass
+[group('firmware')]
+firmware-check: ir-build switchbot-build
+
+# Format, lint, and test the OpenHome CLI in one pass
+[group('cli')]
+[working-directory: 'cli']
+cli-check: cli-format cli-lint cli-test
+
+check-api: api-fmt api-lint api-test
+check-mcp: mcp-check
+check-mobile: mobile-check
+check-firmware: firmware-check
+check-cli: cli-check
 
 # Install Expo client dependencies
 [group('expo')]

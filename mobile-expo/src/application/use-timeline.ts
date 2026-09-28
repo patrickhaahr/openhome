@@ -173,9 +173,7 @@ export function reduce(state: TimelineState, event: TimelineEvent): TimelineStat
           }
         : state;
     case "moreFailed":
-      return state.tag === "ready"
-        ? { ...state, loadingMore: false, error: event.message }
-        : state;
+      return state.tag === "ready" ? { ...state, loadingMore: false, error: event.message } : state;
     case "superseded":
       if (state.tag !== "ready") {
         return state;

@@ -67,7 +67,10 @@ export function LibraryView({
   const [formError, setFormError] = useState<string | null>(null);
   const wasBusy = useRef(false);
   const pending = useRef<
-    { readonly kind: "create" } | { readonly kind: "update" } | { readonly kind: "delete"; readonly id: number } | null
+    | { readonly kind: "create" }
+    | { readonly kind: "update" }
+    | { readonly kind: "delete"; readonly id: number }
+    | null
   >(null);
 
   // Resolve the form once its own submission has succeeded; a failed
@@ -111,7 +114,12 @@ export function LibraryView({
 
   function submit(): void {
     if (editing !== null) {
-      const parsed = parseExerciseUpdate(form.name, form.category, form.muscleGroup, form.equipment);
+      const parsed = parseExerciseUpdate(
+        form.name,
+        form.category,
+        form.muscleGroup,
+        form.equipment,
+      );
       if (!parsed.ok) {
         setFormError(parsed.error);
         return;
@@ -293,26 +301,27 @@ export function LibraryView({
         </View>
         {muscleGroups.length > 0 ? (
           <View style={styles.chipWrap}>
-            {[{ key: "all", label: "All" }, ...muscleGroups.map((group) => ({ key: group, label: group }))].map(
-              ({ key, label }) => (
-                <Pressable
-                  key={key}
-                  accessibilityLabel={`${label} muscle group filter`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: muscleGroup === key }}
-                  onPress={() => setMuscleGroup(key)}
-                  style={({ pressed }) => [
-                    styles.pickChip,
-                    muscleGroup === key && styles.chipSelected,
-                    pressed && shared.actionPressed,
-                  ]}
-                >
-                  <Text style={[styles.chipLabel, muscleGroup === key && styles.chipLabelSelected]}>
-                    {label}
-                  </Text>
-                </Pressable>
-              ),
-            )}
+            {[
+              { key: "all", label: "All" },
+              ...muscleGroups.map((group) => ({ key: group, label: group })),
+            ].map(({ key, label }) => (
+              <Pressable
+                key={key}
+                accessibilityLabel={`${label} muscle group filter`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: muscleGroup === key }}
+                onPress={() => setMuscleGroup(key)}
+                style={({ pressed }) => [
+                  styles.pickChip,
+                  muscleGroup === key && styles.chipSelected,
+                  pressed && shared.actionPressed,
+                ]}
+              >
+                <Text style={[styles.chipLabel, muscleGroup === key && styles.chipLabelSelected]}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         ) : null}
 

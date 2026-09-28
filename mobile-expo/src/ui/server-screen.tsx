@@ -96,17 +96,9 @@ export function ServerPage({
           description="Ad blocking, server health, and your feed timeline."
         />
         <AdGuardCard state={adguard} actions={actions} />
-        <DockerSummaryCard
-          state={docker}
-          counts={dockerCounts}
-          onPress={onOpenDocker}
-        />
+        <DockerSummaryCard state={docker} counts={dockerCounts} onPress={onOpenDocker} />
         <FeedManagerCard state={feeds} actions={feedsActions} />
-        <TimelineCard
-          state={timeline}
-          actions={timelineActions}
-          onOpenLink={onOpenTimelineLink}
-        />
+        <TimelineCard state={timeline} actions={timelineActions} onOpenLink={onOpenTimelineLink} />
       </View>
     </ScrollView>
   );
@@ -315,8 +307,7 @@ function DockerSummaryCard({
     );
   }
 
-  const classification =
-    state.tag === "error" ? "offline" : dockerHealthSummary(state.containers);
+  const classification = state.tag === "error" ? "offline" : dockerHealthSummary(state.containers);
   const detail =
     state.tag === "error"
       ? state.message
@@ -469,7 +460,12 @@ function FeedManagerBody({
         value={state.input}
       />
       <View style={shared.row}>
-        <ActionButton label="Add feed" sending={state.busy} disabled={state.busy} onPress={actions.create} />
+        <ActionButton
+          label="Add feed"
+          sending={state.busy}
+          disabled={state.busy}
+          onPress={actions.create}
+        />
       </View>
       {state.error !== null ? (
         <Text accessibilityRole="alert" style={shared.error}>

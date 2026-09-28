@@ -9,7 +9,12 @@ import {
 } from "react-native";
 import { useState } from "react";
 
-import type { ContainerAction, ContainerLogsState, DockerActions, DockerState } from "../application/use-docker";
+import type {
+  ContainerAction,
+  ContainerLogsState,
+  DockerActions,
+  DockerState,
+} from "../application/use-docker";
 import {
   classifyContainer,
   formatPorts,
@@ -53,13 +58,7 @@ export function DockerPage({ state, actions, counts }: Props) {
   const [filter, setFilter] = useState<DockerFilter>("all");
 
   if (state.tag === "ready" && state.view.tag === "logs") {
-    return (
-      <ContainerLogsPage
-        name={state.view.name}
-        logs={state.view.logs}
-        actions={actions}
-      />
-    );
+    return <ContainerLogsPage name={state.view.name} logs={state.view.logs} actions={actions} />;
   }
 
   const containers = state.tag === "ready" ? state.containers : [];
@@ -337,7 +336,12 @@ function capitalize(state: string): string {
 }
 
 const styles = StyleSheet.create({
-  backButton: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingRight: 12 },
+  backButton: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    justifyContent: "center",
+    paddingRight: 12,
+  },
   backLabel: { color: colors.muted, fontSize: 15, fontWeight: "700" },
   chip: {
     alignItems: "center",

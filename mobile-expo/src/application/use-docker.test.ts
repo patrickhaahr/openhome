@@ -2,12 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DockerContainer } from "../domain/docker";
 import { failure, success, type Result } from "../domain/result";
-import {
-  createDockerController,
-  reduce,
-  type DockerEvent,
-  type DockerState,
-} from "./use-docker";
+import { createDockerController, reduce, type DockerEvent, type DockerState } from "./use-docker";
 import type { DockerApi } from "../infrastructure/open-home-api";
 
 const containers: readonly DockerContainer[] = [
@@ -269,10 +264,7 @@ describe("docker container logs machine", () => {
 
   /** Logs can only be opened from a loaded list, so replay from a ready base. */
   const readyInitial = replay(
-    [
-      { type: "loadStarted" },
-      { type: "loadSucceeded", containers },
-    ],
+    [{ type: "loadStarted" }, { type: "loadSucceeded", containers }],
     initial,
   );
 
@@ -362,28 +354,28 @@ describe("docker container logs machine", () => {
     ).toEqual({ lines, refreshing: false, error: "Docker unavailable." });
   });
 
-  it.each([
-    "Container adguard not found.",
-    "Couldn't load the container logs.",
-  ])("surfaces a failed first load as a retryable inline error: %s", async (message) => {
-    const h = harness();
-    h.controller.openLogs("adguard");
-    h.logPending[0]?.resolve(failure(message));
-    await settle();
+  it.each(["Container adguard not found.", "Couldn't load the container logs."])(
+    "surfaces a failed first load as a retryable inline error: %s",
+    async (message) => {
+      const h = harness();
+      h.controller.openLogs("adguard");
+      h.logPending[0]?.resolve(failure(message));
+      await settle();
 
-    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
-      tag: "logs",
-      name: "adguard",
-      logs: { tag: "error", message },
-    });
+      expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+        tag: "logs",
+        name: "adguard",
+        logs: { tag: "error", message },
+      });
 
-    h.controller.refresh();
-    expect(replayLogs(replay(h.events, readyInitial))).toEqual({
-      tag: "logs",
-      name: "adguard",
-      logs: { tag: "loading" },
-    });
-  });
+      h.controller.refresh();
+      expect(replayLogs(replay(h.events, readyInitial))).toEqual({
+        tag: "logs",
+        name: "adguard",
+        logs: { tag: "loading" },
+      });
+    },
+  );
 
   it("back returns to the unfiltered list and drops a stale in-flight response", async () => {
     const h = harness();

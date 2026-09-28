@@ -45,7 +45,10 @@ export type BodyEvent =
 
 /** Drives the body weight log and profile against the Axum API adapter, emitting events. */
 export function createBodyController(deps: {
-  readonly api: Pick<FitnessApi, "listBodyWeight" | "createBodyWeight" | "getProfile" | "updateProfile">;
+  readonly api: Pick<
+    FitnessApi,
+    "listBodyWeight" | "createBodyWeight" | "getProfile" | "updateProfile"
+  >;
   readonly emit: (event: BodyEvent) => void;
 }) {
   let listToken = 0;
@@ -188,9 +191,7 @@ export function reduce(state: BodyState, event: BodyEvent): BodyState {
       return {
         ...state,
         profile:
-          state.profile.tag === "loaded"
-            ? state.profile
-            : { tag: "error", message: event.message },
+          state.profile.tag === "loaded" ? state.profile : { tag: "error", message: event.message },
       };
     case "saveStarted":
       return { ...state, saving: true, saveError: null };

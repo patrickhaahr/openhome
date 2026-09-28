@@ -2,12 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Feed } from "../domain/rss";
 import { failure, success, type Result } from "../domain/result";
-import {
-  createFeedsController,
-  reduce,
-  type FeedsEvent,
-  type FeedsState,
-} from "./use-feeds";
+import { createFeedsController, reduce, type FeedsEvent, type FeedsState } from "./use-feeds";
 
 function feed(id: number, url: string): Feed {
   return { id, url, title: `Feed ${id}` };
@@ -72,7 +67,15 @@ function harness(
     },
     initial: initialMirrors,
   });
-  return { controller, calls, listPending, createPending, deletePending, events, refreshed: () => timelineRefreshes };
+  return {
+    controller,
+    calls,
+    listPending,
+    createPending,
+    deletePending,
+    events,
+    refreshed: () => timelineRefreshes,
+  };
 }
 
 async function settle(): Promise<void> {

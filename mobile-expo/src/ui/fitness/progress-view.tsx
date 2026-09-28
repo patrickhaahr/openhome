@@ -95,7 +95,9 @@ export function ProgressView({
       {state.tag === "loaded" ? (
         state.progress.data.length === 0 ? (
           <View style={shared.statusPanel}>
-            <Text style={shared.statusText}>No logged sets for {state.progress.exercise.name} yet</Text>
+            <Text style={shared.statusText}>
+              No logged sets for {state.progress.exercise.name} yet
+            </Text>
           </View>
         ) : (
           <>

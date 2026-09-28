@@ -108,7 +108,7 @@ export type OpenHomeApi = {
 
 type RequestOptions = {
   readonly method?: "GET" | "POST" | "PATCH" | "DELETE";
-  readonly body?: object;
+  readonly body?: object | undefined;
   readonly defaultError: string;
   /** Request timeout in ms; defaults to the short timeout shared by all callers. */
   readonly timeoutMs?: number;
@@ -141,16 +141,17 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       const headers: RequestHeaders = {
         Authorization: `Bearer ${configuration.apiKey}`,
       };
-      if (options.body !== undefined) {
-        headers["Content-Type"] = "application/json";
-      }
-      const response = await fetch(`${configuration.baseUrl}${path}`, {
+      const init: RequestInit = {
         method: options.method ?? "GET",
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
         redirect: "manual",
         signal: controller.signal,
-      });
+      };
+      if (options.body !== undefined) {
+        headers["Content-Type"] = "application/json";
+        init.body = JSON.stringify(options.body);
+      }
+      const response = await fetch(`${configuration.baseUrl}${path}`, init);
 
       const body = await response.text();
       if (!response.ok) {

@@ -19,6 +19,9 @@
     bun
     watchman
 
+    # Firmware / PlatformIO (`pio`)
+    platformio
+
     # Repo tooling
     just
     git
@@ -59,24 +62,17 @@
 
   # https://devenv.sh/tests/
   enterTest = ''
-    just test
+    just api-test
   '';
 
   # https://devenv.sh/git-hooks/
-  # Hooks run through devenv shell so they work even when git commit is
-  # invoked outside the devenv environment (plain PATH lacks cargo/just).
-  git-hooks.hooks.just-fmt = {
+  # Runs through devenv shell so it works even when git commit is invoked
+  # outside the devenv environment (plain PATH lacks cargo/just).
+  git-hooks.hooks.just-check = {
     enable = true;
-    name = "just fmt (format check)";
+    name = "just check";
     entry = "${pkgs.devenv}/bin/devenv";
-    args = [ "shell" "--" "just" "fmt" ];
-    pass_filenames = false;
-  };
-  git-hooks.hooks.just-lint = {
-    enable = true;
-    name = "just lint (clippy)";
-    entry = "${pkgs.devenv}/bin/devenv";
-    args = [ "shell" "--" "just" "lint" ];
+    args = [ "shell" "--" "just" "check" ];
     pass_filenames = false;
   };
 }

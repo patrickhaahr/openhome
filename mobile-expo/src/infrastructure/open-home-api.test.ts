@@ -297,7 +297,7 @@ describe("docker adapter", () => {
   });
 
   it("sends lifecycle actions to the container's action path", async () => {
-    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const requests: Array<{ url: string; init?: RequestInit | undefined }> = [];
     vi.stubGlobal("fetch", (url: RequestInfo | URL, init?: RequestInit) => {
       requests.push({ url: String(url), init });
       return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
@@ -737,7 +737,7 @@ describe("fitness workout adapter", () => {
   });
 
   it("creates a workout by posting the nested snake_case body", async () => {
-    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const requests: Array<{ url: string; init?: RequestInit | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, init });
       return Promise.resolve(new Response(JSON.stringify(detailPayload), { status: 201 }));
@@ -805,7 +805,7 @@ describe("fitness workout adapter", () => {
   });
 
   it("updates a workout with PATCH to the workout's id path", async () => {
-    const requests: Array<{ url: string; method?: string }> = [];
+    const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
       return Promise.resolve(new Response(JSON.stringify(detailPayload), { status: 200 }));
@@ -819,7 +819,7 @@ describe("fitness workout adapter", () => {
   });
 
   it("deletes a workout by id with DELETE", async () => {
-    const requests: Array<{ url: string; method?: string }> = [];
+    const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
       return Promise.resolve(new Response(null, { status: 204 }));
@@ -888,7 +888,7 @@ describe("fitness progress, body weight, and profile adapter", () => {
   }
 
   it("fetches exercise progress by id with a 404 override", async () => {
-    const requests: Array<{ url: string; method?: string }> = [];
+    const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
       return Promise.resolve(new Response(JSON.stringify(progressPayload), { status: 200 }));
@@ -957,7 +957,11 @@ describe("fitness progress, body weight, and profile adapter", () => {
   });
 
   it("creates a body weight entry and maps a duplicate-date 409", async () => {
-    const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+    const requests: Array<{
+      url: string;
+      method?: string | undefined;
+      body?: BodyInit | null | undefined;
+    }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
       return Promise.resolve(
@@ -996,7 +1000,11 @@ describe("fitness progress, body weight, and profile adapter", () => {
   });
 
   it("reads the profile and posts a partial patch", async () => {
-    const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+    const requests: Array<{
+      url: string;
+      method?: string | undefined;
+      body?: BodyInit | null | undefined;
+    }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
       return Promise.resolve(
@@ -1070,7 +1078,11 @@ describe("exercise update and delete adapter", () => {
   }
 
   it("patches an exercise, dropping untouched fields and keeping explicit nulls", async () => {
-    const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+    const requests: Array<{
+      url: string;
+      method?: string | undefined;
+      body?: BodyInit | null | undefined;
+    }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method, body: init?.body });
       return Promise.resolve(new Response(JSON.stringify(exercisePayload), { status: 200 }));
@@ -1138,7 +1150,7 @@ describe("exercise update and delete adapter", () => {
   });
 
   it("deletes an exercise and maps not-found and in-use conflicts", async () => {
-    const requests: Array<{ url: string; method?: string }> = [];
+    const requests: Array<{ url: string; method?: string | undefined }> = [];
     stubFetch((url, init) => {
       requests.push({ url, method: init?.method });
       return Promise.resolve(new Response(null, { status: 204 }));
