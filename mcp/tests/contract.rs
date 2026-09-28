@@ -239,7 +239,10 @@ async fn discovers_the_read_only_training_tools() {
 
     let tools = client.list_all_tools().await.unwrap();
     let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
-    assert_eq!(names, ["recovery_on_day", "workouts_on_day"]);
+    assert_eq!(
+        names,
+        ["exercise_history", "recovery_on_day", "workouts_on_day"]
+    );
     for tool in &tools {
         assert_eq!(
             tool.annotations
@@ -249,12 +252,54 @@ async fn discovers_the_read_only_training_tools() {
             "{}",
             tool.name
         );
-        assert_eq!(tool.input_schema.get("required"), Some(&json!(["day"])));
+        let required = if tool.name == "exercise_history" {
+            json!(["exercise_name", "from_day", "to_day"])
+        } else {
+            json!(["day"])
+        };
+        assert_eq!(tool.input_schema.get("required"), Some(&required));
         assert!(tool.description.as_deref().is_some_and(|description| {
             description.contains("Europe/Copenhagen") && !description.contains('\n')
         }));
     }
 
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn returns_the_api_exercise_history_and_errors_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let call = |name: &str| {
+        CallToolRequestParams::new("exercise_history").with_arguments(
+            json!({"exercise_name": name, "from_day": "2026-09-14", "to_day": "2026-09-14"})
+                .as_object()
+                .unwrap()
+                .clone(),
+        )
+    };
+
+    let result = client.call_tool(call("Pull-up")).await.unwrap();
+    let direct: Value = reqwest::Client::new()
+        .get(format!(
+            "{api}/api/training/exercises/Pull-up/history/2026-09-14/2026-09-14"
+        ))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(result.is_error, Some(false));
+    assert_eq!(result.structured_content, Some(direct.clone()));
+    assert_eq!(direct["workouts"][0]["entries"][0]["sets"][0]["reps"], 5);
+
+    let missing = client.call_tool(call("Unknown")).await.unwrap();
+    assert_eq!(missing.is_error, Some(true));
+    assert_eq!(missing.structured_content.unwrap()["status"], 404);
     client.cancel().await.unwrap();
 }
 

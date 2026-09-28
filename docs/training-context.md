@@ -2,7 +2,7 @@
 
 The Axum API owns the training read model: calendar days, units, NOOP source resolution, freshness and coverage ([ADR 0002](adr/0002-training-context-api-and-mcp.md)). The Hermes MCP adapter (`mcp/`, see `mcp/AGENTS.md`) sends each tool call to one API endpoint and returns the API's JSON unchanged. It never reads a database and has no rules of its own.
 
-Reads today: the **Recovery Day** and **Workouts on a Training Day**. Both share the NOOP
+Reads today: the **Recovery Day**, **Workouts on a Training Day**, and **Exercise Set history**. The first two share the NOOP
 [source resolution](#source-resolution) and [freshness and coverage](#freshness-and-coverage) rules.
 
 ## Recovery Day
@@ -194,9 +194,46 @@ This example is 2026-09-26: the user logged a Workout that day and timed a sessi
   - HR zones, routes and raw streams are never returned.
 - **An empty `noop_workouts` never means the user did not train.** With `coverage.workouts: covered`, NOOP recorded no workout starting that day. With `unknown`, rows may not have been pushed yet.
 
+## Exercise Set history
+
+`GET /api/training/exercises/{exercise_name}/history/{from_day}/{to_day}` with `Authorization: Bearer <API_KEY>`. MCP tool: `exercise_history(exercise_name, from_day, to_day)`.
+
+Both dates are inclusive, canonical `YYYY-MM-DD` Europe/Copenhagen calendar days. The interval must contain 1–90 days. The Exercise name is resolved case-insensitively against the Exercise library. If two names differ only by case, either spelling is ambiguous. The result reads only the OpenHome training log, so it has no NOOP freshness or coverage block.
+
+| Status | Meaning |
+| --- | --- |
+| 200 | Exact dated Workouts and Sets. A known Exercise with no history returns `"workouts": []`. |
+| 400 | Invalid date, reversed range, or more than 90 days. |
+| 401 | Missing or wrong API key. |
+| 404 | No Exercise matches the name. |
+| 409 | More than one Exercise matches the name case-insensitively. |
+| 422 | More than 500 joined Set rows, counting an Exercise entry without Sets as one. The result is rejected, never truncated. |
+
+```json
+{
+  "exercise": {"id": 11, "name": "Pull-up", "category": "calisthenics"},
+  "from_day": "2026-09-01",
+  "to_day": "2026-09-26",
+  "time_zone": "Europe/Copenhagen",
+  "workouts": [
+    {
+      "id": 6, "date": "2026-09-26", "name": "Pull", "notes": null,
+      "entries": [
+        {"notes": "wide grip", "sets": [
+          {"set_number": 1, "reps": 5, "added_weight_kg": 12.5,
+           "hold_duration_s": null, "rpe": 10, "notes": "+2 partials"}
+        ]}
+      ]
+    }
+  ]
+}
+```
+
+Workouts are ordered by date, then creation id. Repeated entries of the Exercise within one Workout remain separate and retain their logged order; an entry without Sets has `"sets": []`. Sets are ordered by `set_number`, then id. `added_weight_kg` is weight added to the body, null for a bodyweight Set. `hold_duration_s` is a Timed Hold. Optional values remain null. The API owns this grouping and validation; MCP returns its JSON unchanged.
+
 ## Freshness and coverage
 
-Every read's `noop` block tells how far the receiver's copy of the day can be trusted. A missing sync is never reported as a recorded null.
+The Recovery Day and Workouts on a Training Day reads have a `noop` block that tells how far the receiver's copy of the day can be trusted. A missing sync is never reported as a recorded null.
 
 - **`last_push_at`**: the oldest of the latest completed replacements of the read's streams in every relevant namespace. For a Recovery Day that is `dailyMetric` and `sleepSession` in the two strap namespaces (four stream/namespace pairs). For Workouts on a Training Day it is `workout` in both strap namespaces and every other workout namespace known for the active installation, from retained rows or replacement windows. A replacement's completion time is the latest acceptance time of its parts. It is `null` until every pair has completed a replacement under the current receiver state. Staged parts, raw streams and other streams never advance it.
 - **`freshness`** uses completed windows covering this particular day's rows (the Recovery Day's day and Sleep Night, or the Training Day's workout starts). A recent historical backfill cannot confirm a later day:

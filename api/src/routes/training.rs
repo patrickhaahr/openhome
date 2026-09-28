@@ -8,12 +8,16 @@ use axum::{
 };
 
 use crate::error::{AppError, Result};
-use crate::services::training::{self, CalendarDay, RecoveryDay, WorkoutsOnDay};
+use crate::services::training::{self, CalendarDay, ExerciseHistory, RecoveryDay, WorkoutsOnDay};
 
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/api/training/days/{day}/recovery", get(recovery_day))
         .route("/api/training/days/{day}/workouts", get(workouts_on_day))
+        .route(
+            "/api/training/exercises/{exercise_name}/history/{from_day}/{to_day}",
+            get(exercise_history),
+        )
 }
 
 async fn recovery_day(
@@ -31,6 +35,24 @@ async fn workouts_on_day(
     let day = parse_day(&day)?;
     Ok(Json(
         training::workouts_on_day(&state.db, &state.noop_db, day).await?,
+    ))
+}
+
+async fn exercise_history(
+    State(state): State<crate::AppState>,
+    Path((exercise_name, from_day, to_day)): Path<(String, String, String)>,
+) -> Result<Json<ExerciseHistory>> {
+    let from_day = parse_day(&from_day)?;
+    let to_day = parse_day(&to_day)?;
+    let days = from_day.days_until(to_day);
+    if !(0..90).contains(&days) {
+        return Err(AppError::Validation(
+            "Exercise history must cover 1 to 90 calendar days, with from_day <= to_day"
+                .to_string(),
+        ));
+    }
+    Ok(Json(
+        training::exercise_history(&state.db, &exercise_name, from_day, to_day).await?,
     ))
 }
 

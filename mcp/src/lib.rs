@@ -64,6 +64,13 @@ check `noop.freshness` (`unconfirmed`: complete workout coverage for this day ha
 and `noop.coverage.workouts` (`covered`: NOOP recorded no other workout that day; `unknown`: \
 rows may be missing).";
 
+const EXERCISE_HISTORY: &str = "Exact Set history for one Exercise over 1-90 inclusive \
+Europe/Copenhagen calendar days. Resolves exercise_name case-insensitively; an unknown name or \
+ambiguous match is an error. Returns dated Workouts in chronological order, repeated Exercise \
+entries in logged order, and Sets by set_number. Each Set includes reps, added_weight_kg (null \
+for bodyweight), hold_duration_s for Timed Holds, RPE 1-10, and notes; missing values are null. \
+An Exercise with no performances has workouts: []. Both from_day and to_day are included.";
+
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
 /// printed.
 #[derive(Clone)]
@@ -241,6 +248,16 @@ pub struct WorkoutsOnDayRequest {
     pub day: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ExerciseHistoryRequest {
+    /// Exercise name, resolved case-insensitively; ambiguous names are an error.
+    pub exercise_name: String,
+    /// First Europe/Copenhagen calendar day, YYYY-MM-DD, included.
+    pub from_day: String,
+    /// Last Europe/Copenhagen calendar day, YYYY-MM-DD, included (at most 90 days total).
+    pub to_day: String,
+}
+
 /// The read-only training tools.
 #[derive(Clone)]
 pub struct TrainingTools {
@@ -260,6 +277,35 @@ impl TrainingTools {
 
 #[tool_router]
 impl TrainingTools {
+    #[tool(
+        description = EXERCISE_HISTORY,
+        annotations(
+            title = "Exercise Set history",
+            read_only_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn exercise_history(
+        &self,
+        Parameters(ExerciseHistoryRequest {
+            exercise_name,
+            from_day,
+            to_day,
+        }): Parameters<ExerciseHistoryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&[
+                "api",
+                "training",
+                "exercises",
+                &exercise_name,
+                "history",
+                &from_day,
+                &to_day,
+            ])
+            .await
+    }
+
     #[tool(
         description = RECOVERY_ON_DAY,
         annotations(

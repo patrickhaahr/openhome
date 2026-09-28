@@ -15,11 +15,13 @@
 //! against `app.db`.
 
 pub mod calendar;
+pub mod exercise_history;
 mod noop_merge;
 mod noop_source;
 pub mod recovery;
 pub mod workouts;
 
 pub use calendar::CalendarDay;
+pub use exercise_history::{ExerciseHistory, exercise_history};
 pub use recovery::{RecoveryDay, recovery_day};
 pub use workouts::{WorkoutsOnDay, workouts_on_day};

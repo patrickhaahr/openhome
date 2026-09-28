@@ -48,6 +48,12 @@ impl CalendarDay {
         )
     }
 
+    /// Number of local calendar days from this day to `other`.
+    #[must_use]
+    pub fn days_until(self, other: Self) -> i64 {
+        other.0.signed_duration_since(self.0).num_days()
+    }
+
     /// Local midnight at the start of the day.
     #[must_use]
     pub fn start(self) -> DateTime<Utc> {
