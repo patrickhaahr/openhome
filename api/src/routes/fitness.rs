@@ -34,7 +34,7 @@ pub struct UpdateExercise {
 
 /// Deserializes `Option<Option<T>>` so absent and explicit `null` differ:
 /// absent -> `None` (keep), `null` -> `Some(None)` (clear), value -> `Some(Some(v))`.
-/// serde_json signals a present `null` through `visit_none` (`visit_unit` in
+/// `serde_json` signals a present `null` through `visit_none` (`visit_unit` in
 /// other self-describing formats); an absent field never reaches the
 /// deserializer (`#[serde(default)]` supplies `None`).
 mod double_option {
@@ -90,8 +90,7 @@ pub struct Exercise {
 fn validate_category(category: &str) -> Result<()> {
     if category != "calisthenics" && category != "gym" {
         return Err(AppError::Validation(format!(
-            "Invalid category '{}': must be 'calisthenics' or 'gym'",
-            category
+            "Invalid category '{category}': must be 'calisthenics' or 'gym'"
         )));
     }
     Ok(())
@@ -100,9 +99,9 @@ fn validate_category(category: &str) -> Result<()> {
 fn map_db_error(e: sqlx::Error, name: &str) -> AppError {
     match e {
         sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
-            AppError::Conflict(format!("Exercise '{}' already exists", name))
+            AppError::Conflict(format!("Exercise '{name}' already exists"))
         }
-        other => AppError::Internal(anyhow::anyhow!("Database error: {}", other)),
+        other => AppError::Internal(anyhow::anyhow!("Database error: {other}")),
     }
 }
 
@@ -138,7 +137,7 @@ async fn list_exercises(
     )
     .fetch_all(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list exercises: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list exercises: {e}")))?;
 
     Ok(Json(exercises))
 }
@@ -158,8 +157,8 @@ async fn get_exercise(
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {}", e)))?
-    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {} not found", id)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {e}")))?
+    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))?;
 
     Ok(Json(exercise))
 }
@@ -227,7 +226,7 @@ async fn update_exercise(
     .fetch_optional(&state.db)
     .await
     .map_err(|e| map_db_error(e, payload.name.as_deref().unwrap_or("existing exercise")))?
-    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {} not found", id)))?;
+    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))?;
 
     Ok(Json(exercise))
 }
@@ -242,17 +241,15 @@ async fn delete_exercise(
         .map_err(|e| match e {
             sqlx::Error::Database(db_err) if db_err.is_foreign_key_violation() => {
                 AppError::Conflict(format!(
-                    "Exercise with id {} is used by logged workouts and cannot be deleted",
-                    id
+                    "Exercise with id {id} is used by logged workouts and cannot be deleted"
                 ))
             }
-            other => AppError::Internal(anyhow::anyhow!("Failed to delete exercise: {}", other)),
+            other => AppError::Internal(anyhow::anyhow!("Failed to delete exercise: {other}")),
         })?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!(
-            "Exercise with id {} not found",
-            id
+            "Exercise with id {id} not found"
         )));
     }
 
@@ -352,14 +349,13 @@ pub struct WorkoutDetail {
 /// Validates and normalizes to a padded `YYYY-MM-DD` string, since list
 /// ordering and `?from=`/`?to=` filtering rely on lexicographic comparison.
 fn validate_date(date: &str) -> Result<String> {
-    let parsed = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| {
-        AppError::Validation(format!("Invalid date '{}': must be YYYY-MM-DD", date))
-    })?;
+    let parsed = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_err(|_| AppError::Validation(format!("Invalid date '{date}': must be YYYY-MM-DD")))?;
     Ok(parsed.format("%Y-%m-%d").to_string())
 }
 
 /// A set must have reps or duration (timed hold), never both null. RPE is 1-10.
-/// weight_kg is *added* weight: null for bodyweight, not zero.
+/// `weight_kg` is *added* weight: null for bodyweight, not zero.
 fn validate_set(set: &SetInput) -> Result<()> {
     if set.reps.is_none() && set.duration_seconds.is_none() {
         return Err(AppError::Validation(format!(
@@ -409,10 +405,9 @@ async fn insert_exercises(
             sqlx::Error::Database(db_err) if db_err.is_foreign_key_violation() => {
                 AppError::Unprocessable(format!("Exercise with id {} not found", entry.exercise_id))
             }
-            other => AppError::Internal(anyhow::anyhow!(
-                "Failed to insert exercise entry: {}",
-                other
-            )),
+            other => {
+                AppError::Internal(anyhow::anyhow!("Failed to insert exercise entry: {other}"))
+            }
         })?;
         let workout_exercise_id = exercise_row.last_insert_rowid();
 
@@ -432,7 +427,7 @@ async fn insert_exercises(
             )
             .execute(&mut *tx)
             .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to insert set: {}", e)))?;
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to insert set: {e}")))?;
         }
     }
     Ok(())
@@ -460,7 +455,7 @@ async fn fetch_exercise_summaries(
     )
     .fetch_all(&mut *db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch workout exercises: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch workout exercises: {e}")))?;
 
     let mut result = Vec::with_capacity(entries.len());
     for entry in entries {
@@ -476,7 +471,7 @@ async fn fetch_exercise_summaries(
         )
         .fetch_all(&mut *db)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch sets: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch sets: {e}")))?;
 
         result.push(WorkoutExercise {
             id: entry.entry_id,
@@ -505,10 +500,11 @@ struct EntryRow {
 }
 
 async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutDetail> {
-    let mut tx =
-        state.db.begin().await.map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("Failed to start transaction: {}", e))
-        })?;
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
 
     let workout = sqlx::query!(
         r#"
@@ -523,13 +519,13 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
     )
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch workout: {}", e)))?
-    .ok_or_else(|| AppError::NotFound(format!("Workout with id {} not found", id)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch workout: {e}")))?
+    .ok_or_else(|| AppError::NotFound(format!("Workout with id {id} not found")))?;
 
     let exercises = fetch_exercise_summaries(&mut tx, id).await?;
     tx.commit()
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {e}")))?;
 
     Ok(WorkoutDetail {
         id: workout.id,
@@ -574,7 +570,7 @@ async fn list_workouts(
     )
     .fetch_all(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list workouts: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list workouts: {e}")))?;
 
     Ok(Json(workouts))
 }
@@ -594,10 +590,11 @@ async fn create_workout(
     let date = validate_date(&payload.date)?;
     validate_workout_exercises(&payload.exercises)?;
 
-    let mut tx =
-        state.db.begin().await.map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("Failed to start transaction: {}", e))
-        })?;
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
 
     let workout_id = sqlx::query!(
         r#"
@@ -610,13 +607,13 @@ async fn create_workout(
     )
     .execute(&mut *tx)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to create workout: {}", e)))?
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to create workout: {e}")))?
     .last_insert_rowid();
 
     insert_exercises(&mut tx, workout_id, payload.exercises).await?;
     tx.commit()
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {e}")))?;
 
     let workout = get_workout_detail(&state, workout_id).await?;
     Ok((StatusCode::CREATED, Json(workout)))
@@ -632,10 +629,11 @@ async fn update_workout(
         validate_workout_exercises(exercises)?;
     }
 
-    let mut tx =
-        state.db.begin().await.map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("Failed to start transaction: {}", e))
-        })?;
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
 
     // Clearable partial update: absent field keeps the current value, explicit
     // null sets NULL (nullable fields only; date is NOT NULL so null = keep).
@@ -663,12 +661,11 @@ async fn update_workout(
     )
     .execute(&mut *tx)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update workout: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update workout: {e}")))?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!(
-            "Workout with id {} not found",
-            id
+            "Workout with id {id} not found"
         )));
     }
 
@@ -676,15 +673,13 @@ async fn update_workout(
         sqlx::query!("DELETE FROM workout_exercises WHERE workout_id = $1", id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| {
-                AppError::Internal(anyhow::anyhow!("Failed to replace exercises: {}", e))
-            })?;
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to replace exercises: {e}")))?;
         insert_exercises(&mut tx, id, exercises).await?;
     }
 
     tx.commit()
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {e}")))?;
 
     let workout = get_workout_detail(&state, id).await?;
     Ok(Json(workout))
@@ -697,12 +692,11 @@ async fn delete_workout(
     let result = sqlx::query!("DELETE FROM workouts WHERE id = $1", id)
         .execute(&state.db)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to delete workout: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to delete workout: {e}")))?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!(
-            "Workout with id {} not found",
-            id
+            "Workout with id {id} not found"
         )));
     }
 
@@ -751,8 +745,8 @@ async fn exercise_progress(
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {}", e)))?
-    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {} not found", id)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {e}")))?
+    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))?;
 
     // One row per workout date. Volume = reps * weight_kg (added weight; null
     // weight contributes zero), duration_seconds * weight_kg for holds.
@@ -783,7 +777,7 @@ async fn exercise_progress(
     )
     .fetch_all(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to compute progress: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to compute progress: {e}")))?;
 
     Ok(Json(ExerciseProgress { exercise, data }))
 }
@@ -835,7 +829,7 @@ async fn list_body_weight(
     )
     .fetch_all(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list body weight: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to list body weight: {e}")))?;
 
     Ok(Json(entries))
 }
@@ -867,9 +861,9 @@ async fn create_body_weight(
     .await
     .map_err(|e| match e {
         sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
-            AppError::Conflict(format!("Body weight for date '{}' already recorded", date))
+            AppError::Conflict(format!("Body weight for date '{date}' already recorded"))
         }
-        other => AppError::Internal(anyhow::anyhow!("Failed to record body weight: {}", other)),
+        other => AppError::Internal(anyhow::anyhow!("Failed to record body weight: {other}")),
     })?;
 
     Ok((StatusCode::CREATED, Json(entry)))
@@ -904,7 +898,7 @@ async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profil
     )
     .fetch_optional(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch profile: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch profile: {e}")))?;
 
     // Not-configured response: the single row simply carries null fields.
     Ok(Json(row.unwrap_or(Profile {
@@ -950,7 +944,7 @@ async fn update_profile(
     )
     .fetch_one(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update profile: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update profile: {e}")))?;
 
     Ok(Json(profile))
 }

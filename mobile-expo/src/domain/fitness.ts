@@ -32,8 +32,8 @@ export type ExerciseInput = {
 export type ExerciseUpdate = {
   readonly name: string;
   readonly category: ExerciseCategory;
-  readonly muscleGroup?: string | null;
-  readonly equipment?: string | null;
+  readonly muscleGroup?: string | null | undefined;
+  readonly equipment?: string | null | undefined;
 };
 
 export const EXERCISE_READ_ERROR = "Couldn't read the exercise from the Axum API.";
@@ -463,8 +463,8 @@ export type Profile = {
  * the field.
  */
 export type ProfileInput = {
-  readonly heightCm?: number | null;
-  readonly sex?: string | null;
+  readonly heightCm?: number | null | undefined;
+  readonly sex?: string | null | undefined;
 };
 
 /**

@@ -73,6 +73,7 @@ impl PushToken {
     }
 
     /// Constant-time comparison against a presented token.
+    #[must_use]
     pub fn matches(&self, presented: &str) -> bool {
         presented.as_bytes().ct_eq(self.0.as_bytes()).into()
     }

@@ -19,6 +19,7 @@ pub struct CalendarDay(NaiveDate);
 impl CalendarDay {
     /// Parses a canonical `YYYY-MM-DD` day. Returns `None` for any other spelling and for the
     /// extreme dates whose neighbours cannot be represented.
+    #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let date = NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()?;
         // chrono accepts unpadded fields; only the canonical form is part of the contract.
@@ -29,7 +30,8 @@ impl CalendarDay {
         Some(Self(date))
     }
 
-    pub fn previous(self) -> Self {
+    #[must_use]
+    pub const fn previous(self) -> Self {
         Self(
             self.0
                 .pred_opt()
@@ -37,7 +39,8 @@ impl CalendarDay {
         )
     }
 
-    pub fn next(self) -> Self {
+    #[must_use]
+    pub const fn next(self) -> Self {
         Self(
             self.0
                 .succ_opt()
@@ -46,6 +49,7 @@ impl CalendarDay {
     }
 
     /// Local midnight at the start of the day.
+    #[must_use]
     pub fn start(self) -> DateTime<Utc> {
         let midnight = self.0.and_time(NaiveTime::MIN);
         TIME_ZONE
@@ -57,11 +61,13 @@ impl CalendarDay {
     }
 
     /// Local midnight at the end of the day (exclusive), i.e. the start of the next day.
+    #[must_use]
     pub fn end(self) -> DateTime<Utc> {
         self.next().start()
     }
 
     /// The local calendar day an instant falls on.
+    #[must_use]
     pub fn of(instant: DateTime<Utc>) -> Self {
         Self(instant.with_timezone(&TIME_ZONE).date_naive())
     }
@@ -74,6 +80,7 @@ impl fmt::Display for CalendarDay {
 }
 
 /// Renders an instant as ISO 8601 in Copenhagen time with an explicit offset.
+#[must_use]
 pub fn iso(instant: DateTime<Utc>) -> String {
     instant
         .with_timezone(&TIME_ZONE)
@@ -81,7 +88,8 @@ pub fn iso(instant: DateTime<Utc>) -> String {
 }
 
 /// Converts NOOP's Unix seconds to an instant; `None` outside chrono's range.
-pub fn from_unix(seconds: i64) -> Option<DateTime<Utc>> {
+#[must_use]
+pub const fn from_unix(seconds: i64) -> Option<DateTime<Utc>> {
     DateTime::from_timestamp(seconds, 0)
 }
 

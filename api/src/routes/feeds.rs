@@ -24,7 +24,7 @@ struct CreateFeed {
 }
 
 fn validate_url(raw: &str) -> Result<Url> {
-    let url = Url::parse(raw).map_err(|e| AppError::Validation(format!("Invalid URL: {}", e)))?;
+    let url = Url::parse(raw).map_err(|e| AppError::Validation(format!("Invalid URL: {e}")))?;
 
     if url.scheme() != "https" {
         return Err(AppError::Validation(
@@ -43,10 +43,8 @@ fn validate_url(raw: &str) -> Result<Url> {
     };
 
     let host_lower = host.to_lowercase();
-    if host_lower == "localhost"
-        || host_lower.ends_with(".localhost")
-        || host_lower.ends_with(".local")
-    {
+    // The top-level label covers `localhost`, `*.localhost` and `*.local`.
+    if matches!(host_lower.rsplit('.').next(), Some("localhost" | "local")) {
         return Err(AppError::Validation(
             "URL host is not allowed (localhost or .local)".to_string(),
         ));
@@ -96,7 +94,7 @@ async fn get_feeds(State(state): State<crate::AppState>) -> Result<Json<Vec<Feed
     )
     .fetch_all(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch feeds: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch feeds: {e}")))?;
 
     Ok(Json(feeds))
 }
@@ -126,7 +124,7 @@ async fn create_feed(
         sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
             AppError::Conflict("Feed with this URL already exists".to_string())
         }
-        other => AppError::Internal(anyhow::anyhow!("Failed to create feed: {}", other)),
+        other => AppError::Internal(anyhow::anyhow!("Failed to create feed: {other}")),
     })?;
 
     Ok((StatusCode::CREATED, Json(feed)))
@@ -145,10 +143,10 @@ async fn delete_feed(
     )
     .execute(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to delete feed: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to delete feed: {e}")))?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound(format!("Feed with id {} not found", id)));
+        return Err(AppError::NotFound(format!("Feed with id {id} not found")));
     }
 
     Ok(StatusCode::NO_CONTENT)

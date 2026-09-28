@@ -12,7 +12,7 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test && expo export --platform android"
+    "check": "bun run typecheck && bun run test && expo export --platform android"
   },
   "dependencies": {
     "expo": "~57.0.11",

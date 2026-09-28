@@ -399,6 +399,10 @@ fn cursor(row_id: i64, key_sha256: &str) -> Value {
     json!({"rowId": row_id, "keySha256": key_sha256})
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "JSON builders take `json!` literals by value, as `json!` itself does"
+)]
 fn record(key: Value, data: Value) -> Value {
     json!({"type": "record", "key": key, "data": data})
 }
@@ -484,6 +488,10 @@ async fn post(db: &SqlitePool, entity: &[u8], gzipped: bool) -> Reply {
     send(push_app(db.clone()), &headers, body).await
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "JSON builders take `json!` literals by value, as `json!` itself does"
+)]
 fn expected_ack(stream: &str, batch_id: &str, end_cursor: Value, rows: usize) -> Value {
     json!({
         "protocolVersion": "1.0",
@@ -1429,7 +1437,7 @@ fn day(index: i64) -> String {
 }
 
 /// Local-midnight-like Unix seconds for day `index` (UTC here; the receiver never interprets it).
-fn ts(index: i64) -> i64 {
+const fn ts(index: i64) -> i64 {
     1_754_006_400 + index * 86_400
 }
 
@@ -1455,6 +1463,10 @@ fn ts_window(replacement: &str, start: i64, end: i64, part: u32, parts: u32) -> 
     })
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "JSON builders take `json!` literals by value, as `json!` itself does"
+)]
 fn replace_header(stream: &str, batch_id: &str, count: usize, window: Value) -> Value {
     json!({
         "type": "batch",
@@ -1483,14 +1495,14 @@ fn replace_ack(stream: &str, batch_id: &str, rows: usize) -> Value {
 }
 
 #[track_caller]
-fn assert_ok(reply: &Reply, expected: Value) {
+fn assert_ok(reply: &Reply, expected: &Value) {
     assert_eq!(
         reply.status,
         StatusCode::OK,
         "{}",
         String::from_utf8_lossy(&reply.raw)
     );
-    assert_eq!(reply.json, expected);
+    assert_eq!(&reply.json, expected);
 }
 
 fn daily(index: i64, recovery: f64) -> Value {
@@ -1691,7 +1703,7 @@ async fn stores_every_mutable_stream_columnar_and_acks_with_null_end_cursor() {
         let db = memory_push_db().await;
         let reply = post(&db, &replace_part(stream, BATCH_1, window, &[row]), true).await;
 
-        assert_ok(&reply, replace_ack(stream, BATCH_1, 1));
+        assert_ok(&reply, &replace_ack(stream, BATCH_1, 1));
         assert_eq!(
             reply.headers[header::CONTENT_TYPE],
             "application/json",
@@ -1747,7 +1759,7 @@ async fn each_mutable_stream_replaces_its_window_and_leaves_rows_outside_untouch
             true,
         )
         .await;
-        assert_ok(&reply, replace_ack(stream, &id(1), 4));
+        assert_ok(&reply, &replace_ack(stream, &id(1), 4));
 
         // Window [3, 6): 3 is updated, 4 is new, 5 is absent and deleted; 1 and 8 are outside.
         let replacement = [build(3, 2), build(4, 2)];
@@ -1757,13 +1769,13 @@ async fn each_mutable_stream_replaces_its_window_and_leaves_rows_outside_untouch
             false,
         )
         .await;
-        assert_ok(&reply, replace_ack(stream, &id(2), 2));
+        assert_ok(&reply, &replace_ack(stream, &id(2), 2));
 
         let expected: Vec<Value> = [(1, 1), (3, 2), (4, 2), (8, 1)]
             .iter()
             .map(|(index, variant)| {
                 let v = if stream == "dailyMetric" {
-                    json!(*variant as f64)
+                    json!(f64::from(*variant))
                 } else {
                     json!(variant)
                 };
@@ -1877,7 +1889,7 @@ async fn empty_window_deletes_every_row_in_scope_and_window_only() {
     );
     let reply = post(&db, &empty, true).await;
 
-    assert_ok(&reply, replace_ack("dailyMetric", BATCH_1, 0));
+    assert_ok(&reply, &replace_ack("dailyMetric", BATCH_1, 0));
     assert_eq!(
         daily_recoveries(&db).await,
         recovery_rows(&[(1, 50.0), (5, 50.0)])
@@ -1918,10 +1930,10 @@ async fn out_of_order_parts_apply_atomically_once_the_last_part_arrives() {
     let untouched = recovery_rows(&(1..=9).map(|index| (index, 10.0)).collect::<Vec<_>>());
 
     let reply = post(&db, &part_3, true).await;
-    assert_ok(&reply, replace_ack("dailyMetric", &id(13), 2));
+    assert_ok(&reply, &replace_ack("dailyMetric", &id(13), 2));
     assert_eq!(daily_recoveries(&db).await, untouched, "part 3 only staged");
     let reply = post(&db, &part_1, false).await;
-    assert_ok(&reply, replace_ack("dailyMetric", &id(11), 2));
+    assert_ok(&reply, &replace_ack("dailyMetric", &id(11), 2));
     assert_eq!(
         daily_recoveries(&db).await,
         untouched,
@@ -1938,7 +1950,7 @@ async fn out_of_order_parts_apply_atomically_once_the_last_part_arrives() {
 
     let reply = post(&db, &part_2, true).await;
 
-    assert_ok(&reply, replace_ack("dailyMetric", &id(12), 2));
+    assert_ok(&reply, &replace_ack("dailyMetric", &id(12), 2));
     assert_eq!(
         daily_recoveries(&db).await,
         recovery_rows(&[
@@ -1969,7 +1981,7 @@ async fn out_of_order_parts_apply_atomically_once_the_last_part_arrives() {
         .await
         .unwrap();
     let reply = post(&db, &part_1, true).await;
-    assert_ok(&reply, replace_ack("dailyMetric", &id(11), 2));
+    assert_ok(&reply, &replace_ack("dailyMetric", &id(11), 2));
     assert_eq!(
         count(
             &db,
@@ -1993,7 +2005,7 @@ async fn replacement_accepts_more_than_64_parts() {
         );
         assert_ok(
             &post(&db, &entity, true).await,
-            replace_ack("journal", &batch_id, 1),
+            &replace_ack("journal", &batch_id, 1),
         );
         assert_eq!(
             count(&db, "SELECT COUNT(*) FROM journal").await,
@@ -2021,7 +2033,7 @@ async fn staged_parts_survive_reconnect_and_failed_apply_remains_retryable() {
         &[daily(4, 20.0)],
     );
     let accepted = post(&db, &first, true).await;
-    assert_ok(&accepted, replace_ack("dailyMetric", &id(2), 1));
+    assert_ok(&accepted, &replace_ack("dailyMetric", &id(2), 1));
     db.close().await;
 
     let db = noop_push::connect(&url).await.unwrap();
@@ -2065,7 +2077,7 @@ async fn staged_parts_survive_reconnect_and_failed_apply_remains_retryable() {
         .unwrap();
     assert_ok(
         &post(&db, &completing, true).await,
-        replace_ack("dailyMetric", &id(3), 1),
+        &replace_ack("dailyMetric", &id(3), 1),
     );
     assert_eq!(
         daily_recoveries(&db).await,
@@ -2087,7 +2099,7 @@ async fn byte_identical_part_retries_replay_the_ack_across_encodings() {
         &[sleep(2, 100)],
     );
     let first = post(&db, &single, true).await;
-    assert_ok(&first, replace_ack("sleepSession", BATCH_1, 1));
+    assert_ok(&first, &replace_ack("sleepSession", BATCH_1, 1));
     sqlx::query("UPDATE sleep_session SET end_ts = 0")
         .execute(&db)
         .await
@@ -2111,7 +2123,7 @@ async fn byte_identical_part_retries_replay_the_ack_across_encodings() {
         &[sleep(3, 100)],
     );
     let first = post(&db, &staged, true).await;
-    assert_ok(&first, replace_ack("sleepSession", BATCH_2, 1));
+    assert_ok(&first, &replace_ack("sleepSession", BATCH_2, 1));
     let before = replace_state(&db).await;
     let retry = post(&db, &staged, false).await;
     assert_eq!(retry.raw, first.raw);
@@ -2252,7 +2264,7 @@ async fn a_new_generation_supersedes_an_incomplete_one_and_late_parts_are_409() 
     );
     assert_ok(
         &post(&db, &new, true).await,
-        replace_ack("dailyMetric", &id(3), 1),
+        &replace_ack("dailyMetric", &id(3), 1),
     );
 
     for (name, entity) in [("late part", &old_part_2), ("retried part", &old_part_1)] {
@@ -2362,7 +2374,7 @@ async fn retrying_an_earlier_applied_replacement_preserves_newer_generations() {
     );
     assert_ok(
         &post(&db, &completing, true).await,
-        replace_ack("workout", &id(4), 1),
+        &replace_ack("workout", &id(4), 1),
     );
     assert_eq!(workouts().await, 2);
 }
@@ -2485,7 +2497,7 @@ async fn invalid_replace_window_parts_are_422() {
         (
             "uppercase replacementId",
             daily_part(&|h| {
-                h["window"]["replacementId"] = json!("BF8B735E-F157-4B35-BEB2-9B086D10D5BD")
+                h["window"]["replacementId"] = json!("BF8B735E-F157-4B35-BEB2-9B086D10D5BD");
             }),
             "invalid_window",
         ),

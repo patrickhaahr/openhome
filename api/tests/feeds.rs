@@ -123,7 +123,7 @@ async fn test_should_delete_feed_and_cascade_feed_items() {
 
     let (status, _) = send_request_with_method(
         app,
-        &format!("/api/feeds/{}", feed_id),
+        &format!("/api/feeds/{feed_id}"),
         Method::DELETE,
         None,
         Some("test-api-key"),

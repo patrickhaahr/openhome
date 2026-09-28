@@ -25,7 +25,8 @@ impl DockerService {
         let containers = self.client.list_containers(options).await?;
         let mut statuses = Vec::with_capacity(containers.len());
         for container in containers {
-            let display_status = map_display_status(container.state.as_ref().map(|s| s.as_ref()));
+            let display_status =
+                map_display_status(container.state.as_ref().map(std::convert::AsRef::as_ref));
             let state = container
                 .state
                 .as_ref()
@@ -48,9 +49,9 @@ impl DockerService {
                 state,
                 health_status,
                 uptime_seconds,
-                image: container.image.as_ref().cloned().unwrap_or_default(),
+                image: container.image.clone().unwrap_or_default(),
                 ports: parse_ports(container.ports.as_ref()),
-                labels: container.labels.as_ref().cloned().unwrap_or_default(),
+                labels: container.labels.clone().unwrap_or_default(),
                 created_at: container
                     .created
                     .and_then(|c| Utc.timestamp_opt(c, 0).single())
@@ -69,8 +70,11 @@ impl DockerService {
         let status = state
             .and_then(|s| s.status.as_ref())
             .map(|s| s.as_ref().to_string());
-        let display_status =
-            map_display_status(state.and_then(|s| s.status.as_ref()).map(|s| s.as_ref()));
+        let display_status = map_display_status(
+            state
+                .and_then(|s| s.status.as_ref())
+                .map(std::convert::AsRef::as_ref),
+        );
         let health_status = state
             .and_then(|s| s.health.as_ref())
             .and_then(|h| h.status.as_ref())
@@ -128,7 +132,7 @@ impl DockerService {
             .try_into()
             .map_err(|_| Error::DockerResponseServerError {
                 status_code: 400,
-                message: format!("Timeout exceeds maximum allowed value: {}", timeout),
+                message: format!("Timeout exceeds maximum allowed value: {timeout}"),
             })?;
         let options = Some(RestartContainerOptionsBuilder::new().t(timeout_i32).build());
         self.client.restart_container(name, options).await?;
@@ -150,7 +154,7 @@ impl DockerService {
             .try_into()
             .map_err(|_| Error::DockerResponseServerError {
                 status_code: 400,
-                message: format!("Timeout exceeds maximum allowed value: {}", timeout),
+                message: format!("Timeout exceeds maximum allowed value: {timeout}"),
             })?;
         let options = Some(StopContainerOptionsBuilder::new().t(timeout_i32).build());
         self.client.stop_container(name, options).await?;
@@ -160,14 +164,12 @@ impl DockerService {
     pub async fn get_container_logs(
         &self,
         name: &str,
-        tail: Option<usize>,
+        tail: usize,
         since: Option<DateTime<Utc>>,
         timestamps: bool,
     ) -> Result<String, Error> {
-        let tail_str = tail
-            .map(|t| t.to_string())
-            .unwrap_or_else(|| "100".to_string());
-        let since_timestamp = since.map(|s| s.timestamp() as i32).unwrap_or(0);
+        let tail_str = tail.to_string();
+        let since_timestamp = since.map_or(0, |s| s.timestamp() as i32);
         let options = Some(
             LogsOptionsBuilder::new()
                 .follow(false)
@@ -181,9 +183,8 @@ impl DockerService {
         let log_outputs: Vec<LogOutput> = self.client.logs(name, options).try_collect().await?;
         let logs = log_outputs
             .iter()
-            .map(|l| l.to_string())
-            .collect::<Vec<_>>()
-            .join("");
+            .map(std::string::ToString::to_string)
+            .collect::<String>();
         Ok(logs)
     }
 }
@@ -214,7 +215,7 @@ fn parse_uptime_seconds(status: Option<&str>) -> Option<i64> {
 fn map_display_status(state: Option<&str>) -> String {
     match state {
         Some("running") => "running".to_string(),
-        Some("exited") | Some("dead") => "stopped".to_string(),
+        Some("exited" | "dead") => "stopped".to_string(),
         Some("restarting") => "restarting".to_string(),
         Some(s) => s.to_string(),
         None => "unknown".to_string(),
@@ -234,7 +235,7 @@ fn parse_ports(ports: Option<&Vec<PortSummary>>) -> Vec<String> {
                         .as_ref()
                         .map(|t| t.as_ref().to_string())
                         .unwrap_or_default();
-                    format!("{}:{}->{}/{}", ip, public_port, private_port, type_)
+                    format!("{ip}:{public_port}->{private_port}/{type_}")
                 })
                 .filter(|s| !s.starts_with(":0->"))
                 .collect()
@@ -251,7 +252,7 @@ fn parse_container_ports(host_config: Option<&HostConfig>) -> Vec<String> {
                     for binding in binding_vec {
                         let host_ip = binding.host_ip.as_deref().unwrap_or("0.0.0.0");
                         let host_port = binding.host_port.as_deref().unwrap_or("");
-                        ports.push(format!("{}:{}->{}/tcp", host_ip, host_port, container_port));
+                        ports.push(format!("{host_ip}:{host_port}->{container_port}/tcp"));
                     }
                 }
             }
@@ -264,7 +265,7 @@ fn parse_container_ports(host_config: Option<&HostConfig>) -> Vec<String> {
 
 fn parse_binds(host_config: Option<&HostConfig>) -> Vec<String> {
     if let Some(hc) = host_config {
-        hc.binds.as_ref().map(|b| b.to_vec()).unwrap_or_default()
+        hc.binds.clone().unwrap_or_default()
     } else {
         Vec::new()
     }

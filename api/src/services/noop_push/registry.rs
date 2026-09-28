@@ -62,7 +62,8 @@ pub enum Selector {
 }
 
 impl Selector {
-    pub fn wire_name(self) -> &'static str {
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
         match self {
             Self::Day => "day",
             Self::StartTs => "startTs",
@@ -92,7 +93,8 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn replace_window(&self) -> Option<&ReplaceWindow> {
+    #[must_use]
+    pub const fn replace_window(&self) -> Option<&ReplaceWindow> {
         match &self.delivery {
             Delivery::Append => None,
             Delivery::ReplaceWindow(window) => Some(window),
@@ -349,6 +351,7 @@ pub const STREAMS: [Stream; 12] = [
 ];
 
 /// Looks up a stream by its wire name.
+#[must_use]
 pub fn stream(name: &str) -> Option<&'static Stream> {
     STREAMS.iter().find(|stream| stream.name == name)
 }

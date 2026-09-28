@@ -57,7 +57,8 @@ pub enum IngestError {
 }
 
 impl IngestError {
-    pub fn code(&self) -> &'static str {
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
         match self {
             Self::Malformed(code) | Self::Unprocessable(code) | Self::Conflict(code) => code,
             Self::TooLarge => "payload_too_large",
@@ -86,6 +87,7 @@ pub enum ContentCoding {
 impl ContentCoding {
     /// Parses a single `Content-Encoding` value (absent means identity). Returns `None` for any
     /// other coding, including stacked codings.
+    #[must_use]
     pub fn parse(value: Option<&str>) -> Option<Self> {
         let value = value.map(|value| value.trim().to_ascii_lowercase());
         match value.as_deref() {
@@ -339,7 +341,7 @@ pub(super) enum Bounds {
 }
 
 impl Bounds {
-    pub(super) fn selector(&self) -> Selector {
+    pub(super) const fn selector(&self) -> Selector {
         match self {
             Self::Day { .. } => Selector::Day,
             Self::StartTs { .. } => Selector::StartTs,
@@ -713,7 +715,7 @@ impl<'de> Deserialize<'de> for Members {
         impl<'de> Visitor<'de> for MembersVisitor {
             type Value = Members;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 formatter.write_str("a JSON object")
             }
 

@@ -17,7 +17,7 @@ async fn check_dns_is_global(host: &str, port: u16) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn is_global_ip(ip: IpAddr) -> bool {
+const fn is_global_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(addr) => {
             !addr.is_private()
@@ -57,7 +57,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     let parsed_url = match Url::parse(url) {
         Ok(parsed) => parsed,
         Err(e) => {
-            result.error = Some(format!("Invalid URL: {}", e));
+            result.error = Some(format!("Invalid URL: {e}"));
             return result;
         }
     };
@@ -88,7 +88,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         .timeout(Duration::from_secs(30))
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map_err(|e| anyhow::anyhow!("HTTP client error: {}", e))
+        .map_err(|e| anyhow::anyhow!("HTTP client error: {e}"))
         .ok();
 
     let Some(client) = client else {
@@ -128,7 +128,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     let response = match response {
         Ok(r) => r,
         Err(e) => {
-            result.error = Some(format!("Request failed: {}", e));
+            result.error = Some(format!("Request failed: {e}"));
             return result;
         }
     };
@@ -151,7 +151,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     }
 
     if !status.is_success() {
-        let error_msg = format!("HTTP error: {}", status);
+        let error_msg = format!("HTTP error: {status}");
         result.error = Some(error_msg.clone());
         let error_for_sql = result.error.as_deref();
         if let Err(e) = sqlx::query!(
@@ -173,17 +173,17 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         .headers()
         .get("etag")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let last_modified = response
         .headers()
         .get("last-modified")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let bytes = match response.bytes().await {
         Ok(b) => b,
         Err(e) => {
-            result.error = Some(format!("Failed to read body: {}", e));
+            result.error = Some(format!("Failed to read body: {e}"));
             return result;
         }
     };
@@ -204,7 +204,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     let feed = match feed {
         Ok(f) => f,
         Err(e) => {
-            let error_msg = format!("Failed to parse RSS: {}", e);
+            let error_msg = format!("Failed to parse RSS: {e}");
             result.error = Some(error_msg.clone());
             let error_for_sql = result.error.as_deref();
             if let Err(e) = sqlx::query!(
@@ -229,11 +229,8 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     let mut skipped = 0;
 
     for entry in feed.entries {
-        let link = match entry.links.first().map(|l| l.href.clone()) {
-            Some(l) => l,
-            None => {
-                continue;
-            }
+        let Some(link) = entry.links.first().map(|l| l.href.clone()) else {
+            continue;
         };
 
         let guid = if entry.id.is_empty() {
@@ -313,7 +310,7 @@ pub async fn refresh_all_feeds(pool: &SqlitePool) -> anyhow::Result<Vec<FeedResu
     let feeds = sqlx::query_as!(FeedRow, r#"SELECT id as "id!", url FROM feeds"#)
         .fetch_all(pool)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to load feeds: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to load feeds: {e}"))?;
 
     let mut results = Vec::with_capacity(feeds.len());
 

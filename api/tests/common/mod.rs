@@ -122,7 +122,7 @@ fn test_app_with_pools(
     adguard_enabled: Option<bool>,
 ) -> (Router, AppState) {
     let api_key = ApiKey::new("test-api-key".to_string());
-    let api_key_clone = api_key.clone();
+    let api_key_clone = api_key;
 
     let adguard_service = if adguard_enabled.unwrap_or(false) {
         Some(AdguardService::new("http://localhost:9999", "test", "test", false).unwrap())
@@ -131,7 +131,7 @@ fn test_app_with_pools(
     };
 
     let state = AppState {
-        db: db.clone(),
+        db,
         noop_db,
         adguard_service,
         docker_service: None,
@@ -254,10 +254,10 @@ pub async fn send_request_with_method(
     let body = axum::body::to_bytes(response.into_body(), 1024 * 100)
         .await
         .unwrap();
-    let json: serde_json::Value = if !body.is_empty() {
-        serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null)
-    } else {
+    let json: serde_json::Value = if body.is_empty() {
         serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null)
     };
 
     (status, json)

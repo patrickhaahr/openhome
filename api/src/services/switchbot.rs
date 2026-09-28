@@ -17,7 +17,7 @@ pub enum LightCommand {
 }
 
 impl LightCommand {
-    fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::On => "on",
             Self::Off => "off",

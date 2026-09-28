@@ -107,7 +107,7 @@ async fn test_list_exercises_returns_seeded_catalog() {
         "Glute Bridge Machine",
     ];
     for name in expected {
-        assert!(names.contains(name), "missing seed: {}", name);
+        assert!(names.contains(name), "missing seed: {name}");
     }
 
     let planche = exercises
@@ -122,8 +122,7 @@ async fn test_list_exercises_returns_seeded_catalog() {
         let group = e["muscle_group"].as_str().unwrap();
         assert!(
             ["chest", "shoulders", "biceps", "triceps", "back", "glutes"].contains(&group),
-            "unexpected muscle_group {} for gym seed",
-            group
+            "unexpected muscle_group {group} for gym seed"
         );
     }
 }
@@ -207,7 +206,7 @@ async fn test_get_exercise_by_id() {
 
     let (status, response) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -357,7 +356,7 @@ async fn test_patch_exercise_updates_fields() {
     });
     let (status, response) = send_request_with_method(
         app.clone(),
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::PATCH,
         Some(patch),
         Some("test-api-key"),
@@ -371,7 +370,7 @@ async fn test_patch_exercise_updates_fields() {
 
     let (_status, fetched) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -403,7 +402,7 @@ async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
     // explicit null clears; absent equipment keeps its value
     let (status, response) = send_request_with_method(
         app.clone(),
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::PATCH,
         Some(json!({ "muscle_group": null })),
         Some("test-api-key"),
@@ -416,7 +415,7 @@ async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
     // absent muscle_group keeps the cleared value
     let (status, response) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::PATCH,
         Some(json!({ "name": "Clearable Move II" })),
         Some("test-api-key"),
@@ -465,7 +464,7 @@ async fn test_patch_exercise_conflict_on_duplicate_name() {
     let patch = json!({ "name": "Pull-up" });
     let (status, _) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::PATCH,
         Some(patch),
         Some("test-api-key"),
@@ -495,7 +494,7 @@ async fn test_delete_exercise() {
 
     let (status, _) = send_request_with_method(
         app.clone(),
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::DELETE,
         None,
         Some("test-api-key"),
@@ -505,7 +504,7 @@ async fn test_delete_exercise() {
 
     let (status, _) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -579,7 +578,7 @@ async fn create_sample_workout(app: &Router) -> serde_json::Value {
         Some("test-api-key"),
     )
     .await;
-    assert_eq!(status, StatusCode::CREATED, "create failed: {}", body);
+    assert_eq!(status, StatusCode::CREATED, "create failed: {body}");
     body
 }
 
@@ -614,7 +613,7 @@ async fn test_get_workout_embeds_exercises_and_sets_in_order() {
 
     let (status, body) = send_request_with_method(
         app,
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -759,7 +758,7 @@ async fn test_patch_workout_updates_fields_and_replaces_sets() {
     });
     let (status, body) = send_request_with_method(
         app.clone(),
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::PATCH,
         Some(patch),
         Some("test-api-key"),
@@ -772,7 +771,7 @@ async fn test_patch_workout_updates_fields_and_replaces_sets() {
 
     let (status, fetched) = send_request_with_method(
         app,
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -796,7 +795,7 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     // explicit null clears the name; absent notes keep their value
     let (status, body) = send_request_with_method(
         app.clone(),
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::PATCH,
         Some(json!({ "name": null })),
         Some("test-api-key"),
@@ -810,7 +809,7 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     // absent name keeps the cleared value
     let (status, body) = send_request_with_method(
         app.clone(),
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::PATCH,
         Some(json!({ "notes": "updated" })),
         Some("test-api-key"),
@@ -823,7 +822,7 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     // clearing persists
     let (status, fetched) = send_request_with_method(
         app,
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -841,7 +840,7 @@ async fn test_delete_workout_removes_children() {
 
     let (status, _) = send_request_with_method(
         app.clone(),
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::DELETE,
         None,
         Some("test-api-key"),
@@ -851,7 +850,7 @@ async fn test_delete_workout_removes_children() {
 
     let (status, _) = send_request_with_method(
         app,
-        &format!("/api/workouts/{}", id),
+        &format!("/api/workouts/{id}"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -927,7 +926,7 @@ async fn test_create_workout_rejects_rpe_out_of_range() {
             Some("test-api-key"),
         )
         .await;
-        assert_eq!(status, StatusCode::BAD_REQUEST, "rpe {}", rpe);
+        assert_eq!(status, StatusCode::BAD_REQUEST, "rpe {rpe}");
     }
 }
 
@@ -1014,7 +1013,7 @@ async fn test_delete_exercise_conflict_when_logged_in_workout() {
 
     let (status, body) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}", id),
+        &format!("/api/exercises/{id}"),
         Method::DELETE,
         None,
         Some("test-api-key"),
@@ -1040,10 +1039,10 @@ async fn test_workouts_require_auth() {
 
 /// Fixture: a dedicated exercise logged on two dates.
 /// Day A (2026-09-01): reps 10 @ 60 kg (rpe 7), reps 8 @ 65 kg (rpe 8).
-///   best_reps 10, best_weight 65, volume 600+520=1120, best_rpe 8,
+///   `best_reps` 10, `best_weight` 65, volume 600+520=1120, `best_rpe` 8,
 ///   epley = max(60*1.333, 65*1.2667) = 82.333.
 /// Day B (2026-09-03): reps 12 bodyweight (rpe 9), timed hold 30 s @ 2.5 kg.
-///   best_reps 12, best_weight 2.5, volume 0+75=75, best_rpe 9, epley null
+///   `best_reps` 12, `best_weight` 2.5, volume 0+75=75, `best_rpe` 9, epley null
 ///   (no set with both reps and weight).
 async fn create_progress_fixture(app: &Router) -> i64 {
     let (status, exercise) = send_request_with_method(
@@ -1054,7 +1053,7 @@ async fn create_progress_fixture(app: &Router) -> i64 {
         Some("test-api-key"),
     )
     .await;
-    assert_eq!(status, StatusCode::CREATED, "exercise create: {}", exercise);
+    assert_eq!(status, StatusCode::CREATED, "exercise create: {exercise}");
     let id = exercise["id"].as_i64().unwrap();
 
     let workouts = [
@@ -1088,21 +1087,18 @@ async fn create_progress_fixture(app: &Router) -> i64 {
             Some("test-api-key"),
         )
         .await;
-        assert_eq!(status, StatusCode::CREATED, "workout {}: {}", date, resp);
+        assert_eq!(status, StatusCode::CREATED, "workout {date}: {resp}");
     }
     id
 }
 
-fn approx(actual: serde_json::Value, expected: f64, what: &str) {
+fn approx(actual: &serde_json::Value, expected: f64, what: &str) {
     let value = actual
         .as_f64()
-        .unwrap_or_else(|| panic!("{} not a number", what));
+        .unwrap_or_else(|| panic!("{what} not a number"));
     assert!(
         (value - expected).abs() < 0.01,
-        "{}: expected ~{}, got {}",
-        what,
-        expected,
-        value
+        "{what}: expected ~{expected}, got {value}"
     );
 }
 
@@ -1113,7 +1109,7 @@ async fn test_progress_returns_per_date_aggregates_with_epley() {
 
     let (status, body) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}/progress", id),
+        &format!("/api/exercises/{id}/progress"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -1132,19 +1128,19 @@ async fn test_progress_returns_per_date_aggregates_with_epley() {
 
     // Day A: observed aggregates + Epley from the best set
     assert_eq!(data[0]["best_reps"], 10);
-    approx(data[0]["best_weight_kg"].clone(), 65.0, "day A best_weight");
-    approx(data[0]["total_volume_kg"].clone(), 1120.0, "day A volume");
+    approx(&data[0]["best_weight_kg"], 65.0, "day A best_weight");
+    approx(&data[0]["total_volume_kg"], 1120.0, "day A volume");
     assert_eq!(data[0]["best_rpe"], 8);
     approx(
-        data[0]["estimated_1rm_kg"].clone(),
+        &data[0]["estimated_1rm_kg"],
         65.0 * (1.0 + 8.0 / 30.0),
         "day A epley",
     );
 
     // Day B: bodyweight set contributes zero volume; no set has reps AND weight
     assert_eq!(data[1]["best_reps"], 12);
-    approx(data[1]["best_weight_kg"].clone(), 2.5, "day B best_weight");
-    approx(data[1]["total_volume_kg"].clone(), 75.0, "day B volume");
+    approx(&data[1]["best_weight_kg"], 2.5, "day B best_weight");
+    approx(&data[1]["total_volume_kg"], 75.0, "day B volume");
     assert_eq!(data[1]["best_rpe"], 9);
     assert_eq!(
         data[1]["estimated_1rm_kg"],
@@ -1160,10 +1156,7 @@ async fn test_progress_from_to_filters_bound_series() {
 
     let (status, body) = send_request_with_method(
         app.clone(),
-        &format!(
-            "/api/exercises/{}/progress?from=2026-09-02&to=2026-09-02",
-            id
-        ),
+        &format!("/api/exercises/{id}/progress?from=2026-09-02&to=2026-09-02"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -1176,7 +1169,7 @@ async fn test_progress_from_to_filters_bound_series() {
 
     let (status, body) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}/progress?from=2026-09-02", id),
+        &format!("/api/exercises/{id}/progress?from=2026-09-02"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -1212,7 +1205,7 @@ async fn test_progress_empty_for_never_performed_exercise() {
 
     let (status, response) = send_request_with_method(
         app,
-        &format!("/api/exercises/{}/progress", other_id),
+        &format!("/api/exercises/{other_id}/progress"),
         Method::GET,
         None,
         Some("test-api-key"),
@@ -1260,7 +1253,7 @@ async fn test_body_weight_record_and_list_sorted_by_date() {
             Some("test-api-key"),
         )
         .await;
-        assert_eq!(status, StatusCode::CREATED, "post {}: {}", date, body);
+        assert_eq!(status, StatusCode::CREATED, "post {date}: {body}");
         assert_eq!(body["date"], date);
         assert_eq!(body["weight_kg"], weight);
         assert!(body["id"].is_number());

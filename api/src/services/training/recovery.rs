@@ -114,7 +114,7 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         });
         return Ok(assemble(
             day,
-            noop_merge::merge_daily(None, None, false),
+            &noop_merge::merge_daily(None, None, false),
             Vec::new(),
             unsynced,
         ));
@@ -137,12 +137,12 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         .map(sleep_session)
         .collect::<Result<_>>()?;
     let sync = NoopSync::synced(installation, last_push_at, freshness, coverage);
-    Ok(assemble(day, daily, sessions, sync))
+    Ok(assemble(day, &daily, sessions, sync))
 }
 
 fn assemble(
     day: CalendarDay,
-    daily: ResolvedDaily,
+    daily: &ResolvedDaily,
     sessions: Vec<SleepSession>,
     noop: NoopSync<NoopCoverage>,
 ) -> RecoveryDay {

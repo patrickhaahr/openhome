@@ -30,7 +30,7 @@ pub enum Stream {
 }
 
 impl Stream {
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
             Self::DailyMetric => "dailyMetric",
             Self::SleepSession => "sleepSession",
@@ -212,7 +212,7 @@ pub struct NoopSync<C> {
 
 impl<C> NoopSync<C> {
     /// No strap push has arrived under the current receiver state.
-    pub fn unsynced(coverage: C) -> Self {
+    pub const fn unsynced(coverage: C) -> Self {
         Self {
             installation_id: None,
             imported_device_id: IMPORTED_DEVICE_ID,

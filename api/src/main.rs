@@ -55,30 +55,30 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    let adguard_service = if !adguard_host.is_empty() {
+    let adguard_service = if adguard_host.is_empty() {
+        tracing::warn!("ADGUARD_HOST not set, AdGuard integration disabled");
+        None
+    } else {
         Some(adguard::AdguardService::new(
             &adguard_host,
             &adguard_username,
             &adguard_password,
             adguard_insecure_tls,
         )?)
-    } else {
-        tracing::warn!("ADGUARD_HOST not set, AdGuard integration disabled");
-        None
     };
 
-    let ir_service = if !ir_base_url.is_empty() {
-        Some(ir::IrService::new(&ir_base_url)?)
-    } else {
+    let ir_service = if ir_base_url.is_empty() {
         tracing::warn!("IR_BASE_URL not set, IR integration disabled");
         None
+    } else {
+        Some(ir::IrService::new(&ir_base_url)?)
     };
 
-    let switchbot_service = if !switchbot_base_url.is_empty() {
-        Some(switchbot::SwitchbotService::new(&switchbot_base_url)?)
-    } else {
+    let switchbot_service = if switchbot_base_url.is_empty() {
         tracing::warn!("SWITCHBOT_BASE_URL not set, SwitchBot integration disabled");
         None
+    } else {
+        Some(switchbot::SwitchbotService::new(&switchbot_base_url)?)
     };
 
     let state = openhome_api::AppState {
@@ -138,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!(error = %e, "Initial RSS feed refresh failed");
         }
         loop {
-            tokio::time::sleep(Duration::from_secs(24 * 60 * 60)).await;
+            tokio::time::sleep(Duration::from_hours(24)).await;
             tracing::info!("Running scheduled RSS feed refresh");
             if let Err(e) = feed::refresh_all_feeds(&scheduler_state.db).await {
                 tracing::warn!(error = %e, "Scheduled RSS feed refresh failed");
@@ -176,10 +176,10 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => {
+        () = ctrl_c => {
             tracing::info!("Received Ctrl+C, starting graceful shutdown");
         }
-        _ = terminate => {
+        () = terminate => {
             tracing::info!("Received SIGTERM, starting graceful shutdown");
         }
     }

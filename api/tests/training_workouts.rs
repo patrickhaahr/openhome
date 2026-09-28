@@ -47,9 +47,12 @@ fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, fields: V
         "maxHr": null, "strain": null, "distanceM": null, "zonesJSON": null, "notes": null,
         "routePolyline": null, "steps": null,
     });
-    for (name, value) in fields.as_object().unwrap() {
-        assert!(data.get(name).is_some(), "unknown field {name}");
-        data[name] = value.clone();
+    let Value::Object(fields) = fields else {
+        panic!("fields must be a JSON object");
+    };
+    for (name, value) in fields {
+        assert!(data.get(&name).is_some(), "unknown field {name}");
+        data[&name] = value;
     }
     json!({"type": "record", "key": {"startTs": start_ts, "sport": sport}, "data": data})
 }
@@ -68,9 +71,12 @@ fn reported(
         "avg_hr_bpm": null, "max_hr_bpm": null, "strain_score": null, "energy_kcal": null,
         "distance_m": null, "steps": null, "notes": null, "source": source,
     });
-    for (name, value) in fields.as_object().unwrap() {
-        assert!(workout.get(name).is_some(), "unknown field {name}");
-        workout[name] = value.clone();
+    let Value::Object(fields) = fields else {
+        panic!("fields must be a JSON object");
+    };
+    for (name, value) in fields {
+        assert!(workout.get(&name).is_some(), "unknown field {name}");
+        workout[&name] = value;
     }
     workout
 }
@@ -121,9 +127,9 @@ async fn workouts_on(app: &Router, day: &str) -> Value {
     body
 }
 
-/// `expected` after the JSON text round trip the response body takes: serde_json's default float
+/// `expected` after the JSON text round trip the response body takes: `serde_json`'s default float
 /// parser may land one ulp away from the exact quotient the test computes.
-fn as_parsed(expected: Value) -> Value {
+fn as_parsed(expected: &Value) -> Value {
     serde_json::from_str(&expected.to_string()).unwrap()
 }
 
@@ -191,7 +197,7 @@ async fn shows_the_overnight_noop_workout_on_its_local_start_day() {
     let body = workouts_on(&app, "2026-09-26").await;
     assert_eq!(
         body,
-        as_parsed(json!({
+        as_parsed(&json!({
             "day": "2026-09-26",
             "time_zone": "Europe/Copenhagen",
             "day_start": "2026-09-26T00:00:00+02:00",

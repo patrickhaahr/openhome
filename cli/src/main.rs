@@ -24,7 +24,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Verify access to the OpenHome API.
+    /// Verify access to the `OpenHome` API.
     Health,
     /// Switch the lights on or off.
     Lights {
@@ -36,7 +36,7 @@ enum Command {
         #[command(subcommand)]
         action: Ir,
     },
-    /// Inspect and control AdGuard Protection.
+    /// Inspect and control `AdGuard` Protection.
     Adguard {
         #[command(subcommand)]
         action: Adguard,
@@ -68,13 +68,13 @@ enum Ir {
 
 #[derive(Debug, Subcommand)]
 enum Adguard {
-    /// Show whether AdGuard Protection is filtering.
+    /// Show whether `AdGuard` Protection is filtering.
     Status,
-    /// Enable AdGuard Protection.
+    /// Enable `AdGuard` Protection.
     Enable,
-    /// Disable AdGuard Protection.
+    /// Disable `AdGuard` Protection.
     Disable,
-    /// Pause AdGuard Protection for a number of minutes.
+    /// Pause `AdGuard` Protection for a number of minutes.
     Pause {
         /// Minutes before protection resumes automatically.
         minutes: u64,
@@ -197,7 +197,7 @@ fn api_key() -> Result<String> {
         read_key(Path::new(&path))?
     } else {
         match std::env::var("OPENHOME_API_KEY") {
-            Ok(key) => return validate_key(key),
+            Ok(key) => return validate_key(&key),
             Err(std::env::VarError::NotUnicode(_)) => {
                 bail!("OPENHOME_API_KEY is not valid UTF-8")
             }
@@ -217,10 +217,10 @@ fn api_key() -> Result<String> {
         }
     };
 
-    validate_key(key)
+    validate_key(&key)
 }
 
-fn validate_key(key: String) -> Result<String> {
+fn validate_key(key: &str) -> Result<String> {
     let key = key.trim();
     if key.is_empty() {
         bail!("API Key is empty");

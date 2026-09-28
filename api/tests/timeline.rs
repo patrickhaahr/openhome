@@ -208,10 +208,7 @@ async fn test_should_paginate_timeline_compact_with_before_id() {
     let second_item_id = first_items[1]["id"].as_i64().unwrap();
     let (status, second_page) = send_request_with_method(
         app.clone(),
-        &format!(
-            "/api/timeline?view=compact&limit=2&before_id={}",
-            second_item_id
-        ),
+        &format!("/api/timeline?view=compact&limit=2&before_id={second_item_id}"),
         Method::GET,
         None,
         Some("test-api-key"),

@@ -46,6 +46,26 @@ async fn memory_db() -> SqlitePool {
 /// namespaces pushed 2026-09-14 (the real rows: imported strain 3.1, computed strain 0.0, and an
 /// evening NOOP Workout) and a training log with one Workout that day.
 async fn start_api() -> String {
+    let state = AppState {
+        db: training_log().await,
+        noop_db: noop_mirror().await,
+        adguard_service: None,
+        docker_service: None,
+        ir_service: None,
+        switchbot_service: None,
+        docker_cache: Arc::new(tokio::sync::Mutex::new(DockerCache::default())),
+    };
+    let api_key = auth::ApiKey::new(API_KEY.to_string());
+    let app = routes::training::router()
+        .with_state(state)
+        .layer(axum::middleware::from_fn(move |request, next| {
+            auth::auth_middleware(request, next, api_key.clone())
+        }));
+    format!("http://{}", serve(app).await)
+}
+
+/// The NOOP mirror: both strap namespaces' 2026-09-14 rows and replacement coverage.
+async fn noop_mirror() -> SqlitePool {
     let noop_db = memory_db().await;
     noop_push::initialize(&noop_db).await.unwrap();
     for (device, strain) in [("my-whoop", 3.1), ("my-whoop-noop", 0.0)] {
@@ -118,7 +138,11 @@ async fn start_api() -> String {
     .execute(&noop_db)
     .await
     .unwrap();
+    noop_db
+}
 
+/// The training log: one Pull Workout on 2026-09-14.
+async fn training_log() -> SqlitePool {
     let db = memory_db().await;
     for migration in [
         include_str!("../../api/migrations/0003_fitness.up.sql"),
@@ -136,23 +160,7 @@ async fn start_api() -> String {
     .execute(&db)
     .await
     .unwrap();
-
-    let state = AppState {
-        db,
-        noop_db,
-        adguard_service: None,
-        docker_service: None,
-        ir_service: None,
-        switchbot_service: None,
-        docker_cache: Arc::new(tokio::sync::Mutex::new(DockerCache::default())),
-    };
-    let api_key = auth::ApiKey::new(API_KEY.to_string());
-    let app = routes::training::router()
-        .with_state(state)
-        .layer(axum::middleware::from_fn(move |request, next| {
-            auth::auth_middleware(request, next, api_key.clone())
-        }));
-    format!("http://{}", serve(app).await)
+    db
 }
 
 /// The adapter, answering clients that present `API_KEY` and calling `api_url` with

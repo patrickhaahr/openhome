@@ -12,19 +12,23 @@ const BEARER_PREFIX: &str = "Bearer ";
 pub struct ApiKey(Arc<String>);
 
 impl ApiKey {
+    #[must_use]
     pub fn new(key: String) -> Self {
         Self(Arc::new(key))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -44,30 +48,27 @@ pub async fn auth_middleware(
         .filter(|v| v.starts_with(BEARER_PREFIX))
         .map(|v| &v[BEARER_PREFIX.len()..]);
 
-    match key {
-        Some(k) => {
-            if k.as_bytes().ct_eq(api_key.as_str().as_bytes()).into() {
-                Ok(next.run(req).await)
-            } else {
-                warn!(
-                    provided_length = k.len(),
-                    expected_length = api_key.len(),
-                    "Auth failed: invalid key"
-                );
-                Err(AppError::Unauthorized(
-                    "Missing or invalid API key".to_string(),
-                ))
-            }
-        }
-        None => {
+    if let Some(k) = key {
+        if k.as_bytes().ct_eq(api_key.as_str().as_bytes()).into() {
+            Ok(next.run(req).await)
+        } else {
             warn!(
-                provided_length = 0,
+                provided_length = k.len(),
                 expected_length = api_key.len(),
-                "Auth failed: no authorization header"
+                "Auth failed: invalid key"
             );
             Err(AppError::Unauthorized(
                 "Missing or invalid API key".to_string(),
             ))
         }
+    } else {
+        warn!(
+            provided_length = 0,
+            expected_length = api_key.len(),
+            "Auth failed: no authorization header"
+        );
+        Err(AppError::Unauthorized(
+            "Missing or invalid API key".to_string(),
+        ))
     }
 }

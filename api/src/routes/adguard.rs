@@ -29,7 +29,7 @@ async fn get_status(State(state): State<crate::AppState>) -> Result<Json<Adguard
     let status = service
         .get_status()
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to get AdGuard status: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to get AdGuard status: {e}")))?;
     Ok(Json(status))
 }
 
@@ -43,7 +43,7 @@ async fn enable_protection(
     let status = service
         .set_protection(true, None)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to enable protection: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to enable protection: {e}")))?;
     Ok(Json(status))
 }
 
@@ -57,7 +57,7 @@ async fn disable_protection(
     let status = service
         .set_protection(false, None)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to disable protection: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to disable protection: {e}")))?;
     Ok(Json(status))
 }
 
@@ -82,7 +82,7 @@ async fn pause_protection(
     let status = service
         .set_protection(false, Some(duration_ms))
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to pause protection: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to pause protection: {e}")))?;
     Ok(Json(status))
 }
 
@@ -116,7 +116,7 @@ mod tests {
         let result = get_status(State(state)).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(format!("{}", err), "Service unavailable");
+        assert_eq!(format!("{err}"), "Service unavailable");
     }
 
     #[tokio::test]
@@ -126,7 +126,7 @@ mod tests {
         let result = enable_protection(State(state)).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(format!("{}", err), "Service unavailable");
+        assert_eq!(format!("{err}"), "Service unavailable");
     }
 
     #[tokio::test]
@@ -136,7 +136,7 @@ mod tests {
         let result = disable_protection(State(state)).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(format!("{}", err), "Service unavailable");
+        assert_eq!(format!("{err}"), "Service unavailable");
     }
 
     #[tokio::test]
@@ -147,7 +147,7 @@ mod tests {
         let result = pause_protection(State(state), Json(payload)).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(format!("{}", err), "Service unavailable");
+        assert_eq!(format!("{err}"), "Service unavailable");
     }
 
     #[tokio::test]

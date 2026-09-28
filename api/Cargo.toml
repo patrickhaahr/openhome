@@ -46,3 +46,33 @@ lto = true           # Link-Time Optimization for smaller binary
 codegen-units = 1    # Better optimization at cost of compile time
 panic = "abort"      # Smaller binary, no unwinding
 strip = true         # Strip debug symbols
+
+[lints.rust]
+unsafe_code = "deny"
+future_incompatible = { level = "warn", priority = -1 }
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+# Groups sit below individual lints so the per-lint levels below win.
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Hand-picked nursery/restriction lints worth having without the whole group
+redundant_clone = "deny"
+needless_collect = "warn"
+dbg_macro = "warn"
+todo = "warn"
+# serde/sqlx tri-state: absent vs explicit null vs value is the PATCH contract
+option_option = "allow"
+# long SQL assemblies and integration-test scenarios stay one unit
+too_many_lines = "allow"
+# domain names end in _id; test fixtures carry full-precision floats
+struct_field_names = "allow"
+unreadable_literal = "allow"
+# errors are typed and thiserror-driven; doc sections would restate signatures
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_long_first_doc_paragraph = "allow"
+# deliberate conversions between timestamps/counts and f64/limits
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+cast_possible_truncation = "allow"

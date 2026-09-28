@@ -58,7 +58,7 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => tracing::info!("Received Ctrl+C, shutting down"),
-        _ = terminate => tracing::info!("Received SIGTERM, shutting down"),
+        () = ctrl_c => tracing::info!("Received Ctrl+C, shutting down"),
+        () = terminate => tracing::info!("Received SIGTERM, shutting down"),
     }
 }

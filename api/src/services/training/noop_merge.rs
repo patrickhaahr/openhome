@@ -33,7 +33,7 @@ impl Namespace {
         }
     }
 
-    pub fn device_id(self) -> &'static str {
+    pub const fn device_id(self) -> &'static str {
         match self {
             Self::Imported => IMPORTED_DEVICE_ID,
             Self::Computed => COMPUTED_DEVICE_ID,
@@ -42,7 +42,7 @@ impl Namespace {
 }
 
 /// A resolved value and the namespace it came from; a null value has no source.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sourced<T> {
     pub value: Option<T>,
     pub source: Option<Namespace>,
@@ -75,7 +75,7 @@ pub struct DailyRow {
 impl DailyRow {
     /// A sleep total without efficiency or stages: the shape of a strap-imported night that NOOP
     /// has not scored.
-    fn is_bare_sleep_aggregate(&self) -> bool {
+    const fn is_bare_sleep_aggregate(&self) -> bool {
         self.total_sleep_min.is_some()
             && self.efficiency.is_none()
             && self.deep_min.is_none()
@@ -548,6 +548,8 @@ mod tests {
 
     #[test]
     fn richer_computed_sessions_replace_imported_ones() {
+        use Namespace::{Computed, Imported};
+
         let full = r#"[{"start":0,"end":100,"stage":"deep"}]"#;
         let partial = r#"[{"start":0,"end":50,"stage":"deep"}]"#;
         let pick = |sessions| {
@@ -556,7 +558,6 @@ mod tests {
                 .map(|session| session.namespace)
                 .collect::<Vec<_>>()
         };
-        use Namespace::{Computed, Imported};
 
         assert_eq!(
             pick(vec![
@@ -680,7 +681,7 @@ mod tests {
             // Overlapping by exactly half of the shorter session.
             workout(Namespace::Imported, 2_500, 3_500, "Calisthenics", "manual"),
         ];
-        assert_eq!(merge_workouts(rows.clone()).len(), 4);
+        assert_eq!(merge_workouts(rows).len(), 4);
     }
 
     #[test]
@@ -718,7 +719,7 @@ mod tests {
             "manual",
         );
         assert_eq!(
-            merge_workouts(vec![thin.clone(), manual.clone()]),
+            merge_workouts(vec![thin, manual.clone()]),
             std::slice::from_ref(&manual)
         );
         let longer = workout(
@@ -757,7 +758,7 @@ mod tests {
         );
         assert_eq!(
             merge_workouts(vec![real.clone(), shadow.clone(), separate.clone()]),
-            [real, separate.clone()]
+            [real, separate]
         );
         // Without a real session a detected bout is kept.
         assert_eq!(merge_workouts(vec![shadow.clone()]), [shadow]);

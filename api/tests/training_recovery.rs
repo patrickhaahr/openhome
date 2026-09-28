@@ -64,13 +64,20 @@ fn sleep(start_ts: i64, end_ts: i64, fields: Value) -> Value {
 }
 
 fn overlay(data: &mut Value, fields: Value) {
-    for (name, value) in fields.as_object().unwrap() {
-        assert!(data.get(name).is_some(), "unknown field {name}");
-        data[name] = value.clone();
+    let Value::Object(fields) = fields else {
+        panic!("fields must be a JSON object");
+    };
+    for (name, value) in fields {
+        assert!(data.get(&name).is_some(), "unknown field {name}");
+        data[&name] = value;
     }
 }
 
 /// A measurement as the API reports it.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "JSON builders take `json!` literals by value, as `json!` itself does"
+)]
 fn measured(value: Value, unit: &str, source: &str) -> Value {
     json!({"value": value, "unit": unit, "source": source})
 }
@@ -79,9 +86,9 @@ fn absent(unit: &str) -> Value {
     json!({"value": null, "unit": unit, "source": null})
 }
 
-/// `expected` after the JSON text round trip the response body takes: serde_json's default float
+/// `expected` after the JSON text round trip the response body takes: `serde_json`'s default float
 /// parser may land one ulp away from the exact quotient the test computes.
-fn as_parsed(expected: Value) -> Value {
+fn as_parsed(expected: &Value) -> Value {
     serde_json::from_str(&expected.to_string()).unwrap()
 }
 
@@ -275,7 +282,7 @@ async fn returns_the_real_edited_sleep_night() {
 
     assert_eq!(
         body,
-        as_parsed(json!({
+        as_parsed(&json!({
             "day": "2026-09-15",
             "time_zone": "Europe/Copenhagen",
             "day_start": "2026-09-15T00:00:00+02:00",

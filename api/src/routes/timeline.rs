@@ -44,17 +44,17 @@ struct TimelineQuery {
     view: Option<String>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum TimelineView {
     Full,
     Compact,
 }
 
 impl TimelineView {
-    fn from_query(view: &Option<String>) -> Self {
-        match view.as_deref() {
-            Some("compact") => TimelineView::Compact,
-            _ => TimelineView::Full,
+    fn from_query(view: Option<&str>) -> Self {
+        match view {
+            Some("compact") => Self::Compact,
+            _ => Self::Full,
         }
     }
 }
@@ -84,7 +84,7 @@ pub fn router() -> Router<crate::AppState> {
 fn build_timeline_query(view: TimelineView, with_unread_filter: bool, with_cursor: bool) -> String {
     let select_clause = match view {
         TimelineView::Full => {
-            r#"
+            r"
             SELECT
                 fi.id,
                 fi.feed_id,
@@ -94,43 +94,43 @@ fn build_timeline_query(view: TimelineView, with_unread_filter: bool, with_curso
                 fi.link,
                 CAST(fi.pub_date AS TEXT) as pub_date,
                 CAST(fi.read_at AS TEXT) as read_at
-        "#
+        "
         }
         TimelineView::Compact => {
-            r#"
+            r"
             SELECT
                 fi.id,
                 fi.title,
                 fi.description,
                 fi.link
-        "#
+        "
         }
     };
 
     let from_clause = match view {
         TimelineView::Full => {
-            r#"
+            r"
         FROM feed_items fi
         JOIN feeds f ON f.id = fi.feed_id
-        "#
+        "
         }
         TimelineView::Compact => {
-            r#"
+            r"
         FROM feed_items fi
-        "#
+        "
         }
     };
 
     let base_query = format!(
-        r#"
+        r"
         {select_clause}
         {from_clause}
-        "#
+        "
     );
 
     if with_cursor {
         format!(
-            r#"
+            r"
             WITH cursor AS (
                 SELECT pub_date FROM feed_items WHERE id = ?1
             )
@@ -139,9 +139,9 @@ fn build_timeline_query(view: TimelineView, with_unread_filter: bool, with_curso
                 {where_clause}
             ORDER BY (fi.pub_date IS NULL) ASC, fi.pub_date DESC, fi.id DESC
             LIMIT ?2
-            "#,
+            ",
             where_clause = if with_unread_filter {
-                r#"
+                r"
                 fi.read_at IS NULL
                 AND (
                     (cursor.pub_date IS NULL AND fi.pub_date IS NULL AND fi.id < ?1)
@@ -151,9 +151,9 @@ fn build_timeline_query(view: TimelineView, with_unread_filter: bool, with_curso
                         OR fi.pub_date IS NULL
                     ))
                 )
-                "#
+                "
             } else {
-                r#"
+                r"
                 (
                     (cursor.pub_date IS NULL AND fi.pub_date IS NULL AND fi.id < ?1)
                     OR (cursor.pub_date IS NOT NULL AND (
@@ -162,18 +162,18 @@ fn build_timeline_query(view: TimelineView, with_unread_filter: bool, with_curso
                         OR fi.pub_date IS NULL
                     ))
                 )
-                "#
+                "
             }
         )
     } else {
         format!(
-            r#"
+            r"
             {base_query}
             WHERE
                 {where_clause}
             ORDER BY (fi.pub_date IS NULL) ASC, fi.pub_date DESC, fi.id DESC
             LIMIT ?
-            "#,
+            ",
             where_clause = if with_unread_filter {
                 "fi.read_at IS NULL"
             } else {
@@ -187,8 +187,8 @@ async fn get_timeline(
     State(state): State<crate::AppState>,
     Query(query): Query<TimelineQuery>,
 ) -> Result<Json<TimelineResponse>> {
-    let limit = query.limit.map(|limit| limit.clamp(1, 200)).unwrap_or(50);
-    let view = TimelineView::from_query(&query.view);
+    let limit = query.limit.map_or(50, |limit| limit.clamp(1, 200));
+    let view = TimelineView::from_query(query.view.as_deref());
 
     let items = if let Some(before_id) = query.before_id {
         let before_id_exists = sqlx::query_scalar!(
@@ -197,13 +197,12 @@ async fn get_timeline(
         )
         .fetch_optional(&state.db)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to validate before_id: {}", e)))?
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to validate before_id: {e}")))?
         .is_some();
 
         if !before_id_exists {
             return Err(AppError::Unprocessable(format!(
-                "before_id {} does not exist",
-                before_id
+                "before_id {before_id} does not exist"
             )));
         }
 
@@ -216,7 +215,7 @@ async fn get_timeline(
                 .fetch_all(&state.db)
                 .await
                 .map_err(|e| {
-                    AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {}", e))
+                    AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {e}"))
                 })?;
             TimelineResponse::Compact(compact_items)
         } else {
@@ -239,9 +238,7 @@ async fn get_timeline(
                 .bind(limit)
                 .fetch_all(&state.db)
                 .await
-                .map_err(|e| {
-                    AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {}", e))
-                })?
+                .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {e}")))?
                 .into_iter()
                 .map(|row| FeedItemResponse {
                     id: row.id,
@@ -263,7 +260,7 @@ async fn get_timeline(
             .bind(limit)
             .fetch_all(&state.db)
             .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {}", e)))?;
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {e}")))?;
         TimelineResponse::Compact(compact_items)
     } else {
         #[derive(Debug, FromRow)]
@@ -283,7 +280,7 @@ async fn get_timeline(
             .bind(limit)
             .fetch_all(&state.db)
             .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {}", e)))?
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch timeline: {e}")))?
             .into_iter()
             .map(|row| FeedItemResponse {
                 id: row.id,
@@ -315,12 +312,11 @@ async fn mark_read(
     )
     .execute(&state.db)
     .await
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to mark read: {}", e)))?;
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to mark read: {e}")))?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!(
-            "Item with id {} not found or already read",
-            id
+            "Item with id {id} not found or already read"
         )));
     }
 
@@ -330,7 +326,7 @@ async fn mark_read(
 async fn refresh_feeds(State(state): State<crate::AppState>) -> Result<Json<RefreshSummary>> {
     let results = feed::refresh_all_feeds(&state.db)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to refresh feeds: {}", e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to refresh feeds: {e}")))?;
 
     let mut summary = RefreshSummary {
         feeds_processed: results.len(),

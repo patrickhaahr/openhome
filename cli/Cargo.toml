@@ -7,6 +7,21 @@ edition = "2024"
 name = "openhome"
 path = "src/main.rs"
 
+[lints.rust]
+unsafe_code = "deny"
+future_incompatible = { level = "warn", priority = -1 }
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+# Groups sit below individual lints so the per-lint levels below win.
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Hand-picked nursery/restriction lints worth having without the whole group
+redundant_clone = "deny"
+needless_collect = "warn"
+dbg_macro = "warn"
+todo = "warn"
+
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["derive", "env"] }

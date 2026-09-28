@@ -1,6 +1,9 @@
 default:
     @just --list
 
+# Full gate across repos
+check: check-api check-mcp check-mobile check-firmware check-cli
+
 # Show this help grouped by area
 groups:
     @just --list --list-heading '' --justfile '{{justfile()}}'
@@ -35,7 +38,7 @@ cli-format:
 [group('cli')]
 [working-directory: 'cli']
 cli-lint:
-    cargo clippy -- -D warnings
+    cargo clippy --all-targets --all-features --locked -- -D warnings
 
 # Build the Hermes MCP adapter
 [group('mcp')]
@@ -65,7 +68,32 @@ mcp-format:
 [group('mcp')]
 [working-directory: 'mcp']
 mcp-lint:
-    cargo clippy --all-targets -- -D warnings
+    cargo clippy --all-targets --all-features --locked -- -D warnings
+
+# Test, format, and lint the MCP adapter in one pass
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-check: mcp-format mcp-lint mcp-test
+
+# Format, typecheck, lint, and test the Expo client in one pass
+[group('expo')]
+[working-directory: 'mobile-expo']
+mobile-check: expo-format expo-lint expo-check
+
+# Compile both firmware targets in one pass
+[group('firmware')]
+firmware-check: ir-build switchbot-build
+
+# Format, lint, and test the OpenHome CLI in one pass
+[group('cli')]
+[working-directory: 'cli']
+cli-check: cli-format cli-lint cli-test
+
+check-api: fmt lint test
+check-mcp: mcp-check
+check-mobile: mobile-check
+check-firmware: firmware-check
+check-cli: cli-check
 
 # Run the Axum API server
 [group('api')]
@@ -101,12 +129,7 @@ fmt:
 [group('api')]
 [working-directory: 'api']
 lint:
-    cargo clippy -- -D warnings
-
-# Test, format, and lint the API in one pass
-[group('api')]
-[working-directory: 'api']
-check: test fmt lint
+    cargo clippy --all-targets --all-features --locked -- -D warnings
 
 # Create a reversible NOOP push migration (just noop-migration-add receiver_state)
 [group('api')]

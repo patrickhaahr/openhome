@@ -45,8 +45,7 @@ async fn list_containers(State(state): State<AppState>) -> Result<Json<Container
             containers: cache.containers.clone(),
             timestamp: cache
                 .last_updated
-                .map(|t| t.to_rfc3339())
-                .unwrap_or_else(|| Utc::now().to_rfc3339()),
+                .map_or_else(|| Utc::now().to_rfc3339(), |t| t.to_rfc3339()),
         }));
     }
     drop(cache);
@@ -61,7 +60,7 @@ async fn list_containers(State(state): State<AppState>) -> Result<Json<Container
         .map_err(|e| anyhow::anyhow!("Failed to list containers: {e}"))?;
 
     let mut cache = state.docker_cache.lock().await;
-    cache.containers = containers.clone();
+    cache.containers.clone_from(&containers);
     cache.last_updated = Some(Utc::now());
     Ok(Json(ContainerListResponse {
         containers,
@@ -112,7 +111,7 @@ async fn restart_container(
     }
     Ok(Json(RestartResponse {
         success: true,
-        message: format!("Container {} restart initiated", name),
+        message: format!("Container {name} restart initiated"),
     }))
 }
 
@@ -134,7 +133,7 @@ async fn start_container(
     if detail.state == "running" {
         return Ok(Json(StartResponse {
             success: true,
-            message: format!("Container {} is already running", name),
+            message: format!("Container {name} is already running"),
         }));
     }
 
@@ -153,7 +152,7 @@ async fn start_container(
 
     Ok(Json(StartResponse {
         success: true,
-        message: format!("Container {} started", name),
+        message: format!("Container {name} started"),
     }))
 }
 
@@ -184,9 +183,9 @@ async fn stop_container(
     Ok(Json(StopResponse {
         success: true,
         message: if stopped {
-            format!("Container {} stopped", name)
+            format!("Container {name} stopped")
         } else {
-            format!("Container {} was not running", name)
+            format!("Container {name} was not running")
         },
         stopped,
     }))
@@ -233,7 +232,6 @@ fn map_docker_error(error: Error, container_name: &str) -> AppError {
     }
 }
 
-fn clamp_log_tail(tail: Option<usize>) -> Option<usize> {
-    let value = tail.unwrap_or(LOGS_DEFAULT_TAIL);
-    Some(value.clamp(1, LOGS_MAX_TAIL))
+fn clamp_log_tail(tail: Option<usize>) -> usize {
+    tail.unwrap_or(LOGS_DEFAULT_TAIL).clamp(1, LOGS_MAX_TAIL)
 }

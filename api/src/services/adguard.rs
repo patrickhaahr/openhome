@@ -20,7 +20,7 @@ impl AdguardService {
     ) -> Result<Self, anyhow::Error> {
         let auth_header = format!(
             "Basic {}",
-            base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", username, password))
+            base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
         );
 
         let mut headers = HeaderMap::new();
@@ -81,9 +81,7 @@ impl AdguardService {
         if !status.is_success() {
             let response_body = response.text().await?;
             return Err(anyhow::anyhow!(
-                "AdGuard returned status {}: {}",
-                status,
-                response_body
+                "AdGuard returned status {status}: {response_body}"
             ));
         }
 

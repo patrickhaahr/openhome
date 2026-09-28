@@ -1,7 +1,7 @@
-//! Workouts on a Training Day: the Workouts logged in OpenHome for one Copenhagen date beside the
+//! Workouts on a Training Day: the Workouts logged in `OpenHome` for one Copenhagen date beside the
 //! NOOP Workouts that started on it.
 //!
-//! The two stay separate lists. OpenHome Workouts are date-only and NOOP Workouts are timed, so
+//! The two stay separate lists. `OpenHome` Workouts are date-only and NOOP Workouts are timed, so
 //! nothing pairs a NOOP Workout with a logged one. The `noop` block says whether an empty or short
 //! NOOP list is a recorded absence or a sync that has not arrived; even a covered empty list only
 //! means NOOP recorded no workout, not that the user did not train.
@@ -31,7 +31,7 @@ pub struct WorkoutsOnDay {
     pub day_start: String,
     /// Local midnight at the end of the day (exclusive).
     pub day_end: String,
-    /// Workouts logged in OpenHome with this date, in the order they were created.
+    /// Workouts logged in `OpenHome` with this date, in the order they were created.
     pub workouts: Vec<LoggedWorkout>,
     /// NOOP Workouts whose start falls inside the day, by start.
     pub noop_workouts: Vec<NoopWorkout>,

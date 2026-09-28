@@ -35,31 +35,31 @@ struct ErrorResponse {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match &self {
-            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
-            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
-            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
-            AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            AppError::Unprocessable(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg.clone()),
-            AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
-            AppError::Internal(err) => {
+            Self::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
+            Self::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
+            Self::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
+            Self::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            Self::Unprocessable(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg.clone()),
+            Self::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
+            Self::Internal(err) => {
                 tracing::error!(error = ?err, "Internal server error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "An internal error occurred".to_string(),
                 )
             }
-            AppError::DockerError(msg) => {
+            Self::DockerError(msg) => {
                 tracing::error!(error = %msg, "Docker error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Docker daemon error".to_string(),
                 )
             }
-            AppError::ContainerNotFound(name) => {
+            Self::ContainerNotFound(name) => {
                 tracing::warn!(container = %name, "Container not found");
                 (
                     StatusCode::NOT_FOUND,
-                    format!("Container '{}' not found", name),
+                    format!("Container '{name}' not found"),
                 )
             }
         };

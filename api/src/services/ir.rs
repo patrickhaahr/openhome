@@ -10,14 +10,14 @@ pub struct IrService {
     base_url: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct IrStatusResponse {
     #[serde(default = "default_ready_message")]
     pub message: String,
     pub remotes: IrRemotesResponse,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct IrRemotesResponse {
     pub edifier: Vec<String>,
     pub lgtv: Vec<String>,
@@ -30,7 +30,7 @@ pub enum IrRemote {
 }
 
 impl IrRemote {
-    fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Edifier => "edifier",
             Self::LgTv => "lgtv",

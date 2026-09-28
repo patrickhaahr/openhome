@@ -198,7 +198,7 @@ async fn push_batch(State(state): State<PushState>, headers: HeaderMap, body: Bo
     }
 }
 
-fn status_for(error: &IngestError) -> StatusCode {
+const fn status_for(error: &IngestError) -> StatusCode {
     match error {
         IngestError::Malformed(_) => StatusCode::BAD_REQUEST,
         IngestError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,

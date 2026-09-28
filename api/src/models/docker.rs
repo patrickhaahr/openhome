@@ -59,7 +59,7 @@ pub struct RestartRequest {
     pub timeout_seconds: u64,
 }
 
-fn default_timeout() -> u64 {
+const fn default_timeout() -> u64 {
     10
 }
 
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_stop_request_default_timeout() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let request: StopRequest = serde_json::from_str(json).unwrap();
 
         assert_eq!(request.timeout_seconds, 10); // default_timeout() returns 10
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_stop_request_deserialization_without_timeout_field() {
-        let json = r#""#;
+        let json = r"";
         let result = serde_json::from_str::<StopRequest>(json);
         assert!(result.is_err());
     }

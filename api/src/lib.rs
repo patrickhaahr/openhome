@@ -35,6 +35,7 @@ pub struct DockerCache {
 }
 
 impl DockerCache {
+    #[must_use]
     pub fn is_stale(&self, max_age: chrono::Duration) -> bool {
         match self.last_updated {
             Some(last) => Utc::now() - last > max_age,
