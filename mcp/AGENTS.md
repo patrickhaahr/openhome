@@ -20,6 +20,9 @@ A Streamable HTTP MCP server that gives Hermes read-only training tools. Each re
 
 The tool contracts are documented in `docs/training-context.md`.
 
+- `metric_trend(metric, from_day, to_day)` → `GET /api/training/trends/{metric}/{from_day}/{to_day}`
+  - Exactly four metrics: daily Body Weight, sleep duration, resting heart rate, and HRV, over 1–90 inclusive Copenhagen days. The API returns daily values and ISO-week summaries with observation counts; the adapter passes them through.
+
 - `recovery_on_day(day)` → `GET /api/training/days/{day}/recovery`
   - `day` is a Europe/Copenhagen calendar date, `YYYY-MM-DD`.
   - Returns the Recovery Day: sleep, resting HR, HRV, NOOP's derived scores, and `noop` freshness and coverage.

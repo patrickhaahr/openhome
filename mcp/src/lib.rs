@@ -77,6 +77,12 @@ entries in logged order, and Sets by set_number. Each Set includes reps, added_w
 for bodyweight), hold_duration_s for Timed Holds, RPE 1-10, and notes; missing values are null. \
 An Exercise with no performances has workouts: []. Both from_day and to_day are included.";
 
+const METRIC_TREND: &str = "Daily Body Weight, sleep duration, resting heart rate, or HRV over \
+1-90 inclusive Europe/Copenhagen calendar days. metric is exactly body_weight, sleep_duration, \
+resting_heart_rate, or hrv. Each day has a value or null, unit, source, and relevant NOOP \
+freshness and coverage. Weekly summaries use Monday-Sunday ISO weeks, showing the mean of \
+observed days and counts; a missing day is never zero.";
+
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
 /// printed.
 #[derive(Clone)]
@@ -270,6 +276,36 @@ pub struct ExerciseHistoryRequest {
     pub to_day: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TrendMetric {
+    BodyWeight,
+    SleepDuration,
+    RestingHeartRate,
+    Hrv,
+}
+
+impl TrendMetric {
+    const fn as_str(&self) -> &'static str {
+        match self {
+            Self::BodyWeight => "body_weight",
+            Self::SleepDuration => "sleep_duration",
+            Self::RestingHeartRate => "resting_heart_rate",
+            Self::Hrv => "hrv",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct MetricTrendRequest {
+    /// One of `body_weight`, `sleep_duration`, `resting_heart_rate`, or `hrv`.
+    pub metric: TrendMetric,
+    /// First Europe/Copenhagen calendar day, YYYY-MM-DD, included.
+    pub from_day: String,
+    /// Last Europe/Copenhagen calendar day, YYYY-MM-DD, included (at most 90 days total).
+    pub to_day: String,
+}
+
 /// The read-only training tools.
 #[derive(Clone)]
 pub struct TrainingTools {
@@ -289,6 +325,34 @@ impl TrainingTools {
 
 #[tool_router]
 impl TrainingTools {
+    #[tool(
+        description = METRIC_TREND,
+        annotations(
+            title = "Metric trend",
+            read_only_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn metric_trend(
+        &self,
+        Parameters(MetricTrendRequest {
+            metric,
+            from_day,
+            to_day,
+        }): Parameters<MetricTrendRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&[
+                "api",
+                "training",
+                "trends",
+                metric.as_str(),
+                &from_day,
+                &to_day,
+            ])
+            .await
+    }
+
     #[tool(
         description = SLEEP_RECENT,
         annotations(

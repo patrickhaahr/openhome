@@ -128,9 +128,7 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
     };
     let freshness = noop_source::freshness(pool, &installation, last_push_at, day, &rows).await?;
     let sessions = sleep_sessions(pool, &installation, day).await?;
-    let sleep_edited = sessions
-        .iter()
-        .any(|session| session.namespace == Namespace::Computed && session.user_edited);
+    let sleep_edited = sleep_edited(pool, &installation, day).await?;
     let daily = daily_metrics(pool, &installation, day, sleep_edited).await?;
     let sessions = noop_merge::merge_sleep_sessions(sessions)
         .iter()
@@ -170,7 +168,28 @@ fn assemble(
     }
 }
 
-async fn daily_metrics(
+/// Whether a computed session waking on this Copenhagen day was edited in NOOP. Shared with
+/// trends so the whole computed sleep block wins under the same condition in both reads.
+pub(super) async fn sleep_edited(
+    pool: &SqlitePool,
+    installation: &Installation,
+    day: CalendarDay,
+) -> Result<bool> {
+    let edited: i64 = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM sleep_session WHERE source_id = ? AND device_id = ? \
+         AND end_ts >= ? AND end_ts < ? AND user_edited = 1)",
+    )
+    .bind(&installation.source_id)
+    .bind(COMPUTED_DEVICE_ID)
+    .bind(day.start().timestamp())
+    .bind(day.end().timestamp())
+    .fetch_one(pool)
+    .await
+    .map_err(anyhow::Error::from)?;
+    Ok(edited != 0)
+}
+
+pub(super) async fn daily_metrics(
     pool: &SqlitePool,
     installation: &Installation,
     day: CalendarDay,
