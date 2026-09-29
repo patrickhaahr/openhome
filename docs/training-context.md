@@ -2,8 +2,22 @@
 
 The Axum API owns the training read model: calendar days, units, NOOP source resolution, freshness and coverage ([ADR 0002](adr/0002-training-context-api-and-mcp.md)). The Hermes MCP adapter (`mcp/`, see `mcp/AGENTS.md`) sends each tool call to one API endpoint and returns the API's JSON unchanged. It never reads a database and has no rules of its own.
 
-Reads today: the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, and **Exercise Set history**. The first three share the NOOP
+Reads today: the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, **Exercise Set history**, and **metric trends**. NOOP trends share the
 [source resolution](#source-resolution) and [freshness and coverage](#freshness-and-coverage) rules.
+
+## Metric trends
+
+`GET /api/training/trends/{metric}/{from_day}/{to_day}` with `Authorization: Bearer <API_KEY>`. MCP tool: `metric_trend(metric, from_day, to_day)`.
+
+`metric` is exactly one of `body_weight`, `sleep_duration`, `resting_heart_rate`, or `hrv`. Dates are inclusive, canonical `YYYY-MM-DD` Copenhagen calendar days. The range must contain 1–90 days. Invalid metrics, dates, reversed ranges, and longer ranges return 400; missing or wrong credentials return 401. There are at most 90 daily points and 14 weekly summaries, so no measurement stream is returned or silently truncated.
+
+The response has `metric`, `from_day`, `to_day`, `time_zone`, `unit`, `installation_id`, `last_push_at`, `daily_points`, and `weekly_summaries`. `installation_id` and `last_push_at` are null for Body Weight or before a NOOP push. A daily point is `{day, value, unit, source, freshness, coverage}`. Body Weight is read **only** from the daily Body Weight log; its source is `body_weight` when observed and its freshness and coverage are null because it is entered directly. NOOP metrics use the same imported-first, computed-fallback daily values as a Recovery Day. An edited Sleep Night can select the computed sleep block. The source identifies the selected device namespace; it is null for a missing value. Sleep duration is minutes, resting heart rate is beats/min, HRV is nightly RMSSD in milliseconds, and Body Weight is kg.
+
+For NOOP points, `coverage` is `covered` only when applied windows cover all required rows in both strap namespaces; otherwise it is `unknown`. Sleep duration requires daily metrics and Sleep Night sessions; resting heart rate and HRV require daily metrics. `freshness` is `confirmed`, `partial`, `unconfirmed`, or `unknown` for those same required rows. A null with unknown coverage may mean the phone has not pushed that day; neither null nor unknown is converted to zero.
+
+Each weekly summary has `week_start` (Monday), `week_end` (Sunday), `range_start`, `range_end`, `calendar_days`, `observed_days`, `mean`, and `unit`. Weeks use ISO Monday–Sunday boundaries in Europe/Copenhagen. `range_start` and `range_end` show where the requested range cuts a week. The arithmetic mean includes only days with a value; it is null when `observed_days` is zero. Counts expose sparse weeks and the response always includes the partial first and last weeks.
+
+For example, a request for September 29 through October 2 with Body Weight logged on September 29 (80 kg) and October 1 (79 kg) has four daily points, two null values, and one weekly summary: `week_start: "2026-09-28"`, `week_end: "2026-10-04"`, `calendar_days: 4`, `observed_days: 2`, `mean: 79.5`.
 
 ## Recent Sleep Nights
 

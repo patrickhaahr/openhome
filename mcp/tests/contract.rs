@@ -268,6 +268,7 @@ async fn discovers_the_read_only_training_tools() {
         names,
         [
             "exercise_history",
+            "metric_trend",
             "recovery_on_day",
             "sleep_recent",
             "workouts_on_day"
@@ -284,15 +285,80 @@ async fn discovers_the_read_only_training_tools() {
         );
         let required = match tool.name.as_ref() {
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
+            "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "sleep_recent" => json!(["n"]),
             _ => json!(["day"]),
         };
         assert_eq!(tool.input_schema.get("required"), Some(&required));
+        if tool.name == "metric_trend" {
+            assert_eq!(
+                tool.input_schema["properties"]["metric"]["$ref"],
+                "#/$defs/TrendMetric"
+            );
+            assert_eq!(
+                tool.input_schema["$defs"]["TrendMetric"]["enum"],
+                json!(["body_weight", "sleep_duration", "resting_heart_rate", "hrv"])
+            );
+        }
         assert!(tool.description.as_deref().is_some_and(|description| {
             description.contains("Europe/Copenhagen") && !description.contains('\n')
         }));
     }
 
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn metric_trend_passes_through_daily_points_and_api_errors() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let call = |metric: &str, to_day: &str| {
+        CallToolRequestParams::new("metric_trend").with_arguments(
+            json!({"metric": metric, "from_day": "2026-09-14", "to_day": to_day})
+                .as_object()
+                .unwrap()
+                .clone(),
+        )
+    };
+    let direct = |metric: &str, to_day: &str| {
+        format!("{api}/api/training/trends/{metric}/2026-09-14/{to_day}")
+    };
+    let http = reqwest::Client::new();
+    let result = client
+        .call_tool(call("body_weight", "2026-09-15"))
+        .await
+        .unwrap();
+    let api_result: Value = http
+        .get(direct("body_weight", "2026-09-15"))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(result.is_error, Some(false));
+    assert_eq!(result.structured_content, Some(api_result.clone()));
+    assert_eq!(api_result["daily_points"][0]["value"], Value::Null);
+    assert_eq!(api_result["weekly_summaries"][0]["observed_days"], 0);
+
+    let invalid = client
+        .call_tool(call("body_weight", "2026-12-15"))
+        .await
+        .unwrap();
+    let api_error: Value = http
+        .get(direct("body_weight", "2026-12-15"))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(invalid.is_error, Some(true));
+    assert_eq!(invalid.structured_content, Some(api_error));
     client.cancel().await.unwrap();
 }
 

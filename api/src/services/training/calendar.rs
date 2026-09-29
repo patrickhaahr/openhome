@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use chrono::{DateTime, NaiveDate, NaiveTime, SecondsFormat, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Days, NaiveDate, NaiveTime, SecondsFormat, TimeZone, Utc};
 use chrono_tz::Tz;
 
 pub const TIME_ZONE: Tz = chrono_tz::Europe::Copenhagen;
@@ -18,7 +18,7 @@ pub struct CalendarDay(NaiveDate);
 
 impl CalendarDay {
     /// Parses a canonical `YYYY-MM-DD` day. Returns `None` for any other spelling and for the
-    /// extreme dates whose neighbours cannot be represented.
+    /// extreme dates whose adjacent ISO weeks cannot be represented.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let date = NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()?;
@@ -26,7 +26,8 @@ impl CalendarDay {
         if date.format("%Y-%m-%d").to_string() != text {
             return None;
         }
-        date.pred_opt()?.succ_opt()?.succ_opt()?;
+        date.checked_sub_days(Days::new(6))?;
+        date.checked_add_days(Days::new(7))?;
         Some(Self(date))
     }
 
@@ -52,6 +53,16 @@ impl CalendarDay {
     #[must_use]
     pub fn days_until(self, other: Self) -> i64 {
         other.0.signed_duration_since(self.0).num_days()
+    }
+
+    /// Monday and Sunday of the ISO week containing this day, if both are representable.
+    #[must_use]
+    pub fn iso_week_bounds(self) -> Option<(Self, Self)> {
+        let monday = Self(self.0.checked_sub_days(Days::new(u64::from(
+            self.0.weekday().num_days_from_monday(),
+        )))?);
+        let sunday = Self(monday.0.checked_add_days(Days::new(6))?);
+        Some((monday, sunday))
     }
 
     /// Local midnight at the start of the day.

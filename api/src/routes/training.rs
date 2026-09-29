@@ -9,7 +9,8 @@ use axum::{
 
 use crate::error::{AppError, Result};
 use crate::services::training::{
-    self, CalendarDay, ExerciseHistory, RecentSleepNights, RecoveryDay, WorkoutsOnDay,
+    self, CalendarDay, ExerciseHistory, Metric, MetricTrend, RecentSleepNights, RecoveryDay,
+    WorkoutsOnDay,
 };
 
 pub fn router() -> Router<crate::AppState> {
@@ -24,6 +25,31 @@ pub fn router() -> Router<crate::AppState> {
             "/api/training/exercises/{exercise_name}/history/{from_day}/{to_day}",
             get(exercise_history),
         )
+        .route(
+            "/api/training/trends/{metric}/{from_day}/{to_day}",
+            get(metric_trend),
+        )
+}
+
+async fn metric_trend(
+    State(state): State<crate::AppState>,
+    Path((metric, from_day, to_day)): Path<(String, String, String)>,
+) -> Result<Json<MetricTrend>> {
+    let metric = Metric::parse(&metric).ok_or_else(|| {
+        AppError::Validation(format!(
+            "Unknown trend metric '{metric}'; expected body_weight, sleep_duration, resting_heart_rate or hrv"
+        ))
+    })?;
+    let from_day = parse_day(&from_day)?;
+    let to_day = parse_day(&to_day)?;
+    if !(0..90).contains(&from_day.days_until(to_day)) {
+        return Err(AppError::Validation(
+            "Metric trend must cover 1 to 90 calendar days, with from_day <= to_day".to_owned(),
+        ));
+    }
+    Ok(Json(
+        training::metric_trend(&state.db, &state.noop_db, metric, from_day, to_day).await?,
+    ))
 }
 
 async fn recent_sleep_nights(
