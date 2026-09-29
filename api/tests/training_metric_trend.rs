@@ -252,6 +252,42 @@ async fn late_push_turns_unknown_coverage_into_a_confirmed_measurement() {
 }
 
 #[tokio::test]
+async fn sleep_trend_returns_all_ninety_days_and_sparse_week_counts() {
+    let mut mirror = Mirror::empty().await;
+    let pushed = "2026-08-31T02:00:00.000Z";
+    let days = Window::Days("2026-06-01", "2026-08-30");
+    let starts = Window::Starts(
+        CalendarDay::parse("2026-05-31")
+            .unwrap()
+            .start()
+            .timestamp(),
+        CalendarDay::parse("2026-08-30")
+            .unwrap()
+            .start()
+            .timestamp(),
+    );
+    for device in [IMPORTED, COMPUTED] {
+        mirror.push(SOURCE, device, days, &[], pushed).await;
+        mirror.push(SOURCE, device, starts, &[], pushed).await;
+    }
+    let app = common::test_app_with_noop_db(mirror.db).await;
+    let (status, body) = trend(app, "sleep_duration", "2026-06-01", "2026-08-29", Some(KEY)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let points = body["daily_points"].as_array().unwrap();
+    assert_eq!(points.len(), 90);
+    assert_eq!(points[0]["day"], "2026-06-01");
+    assert_eq!(points[89]["day"], "2026-08-29");
+    assert!(points.iter().all(|point| point["value"].is_null()
+        && point["coverage"] == "covered"
+        && point["freshness"] == "confirmed"));
+    let weeks = body["weekly_summaries"].as_array().unwrap();
+    assert_eq!(weeks.len(), 13);
+    assert_eq!(weeks[12]["calendar_days"], 6);
+    assert_eq!(weeks[12]["observed_days"], 0);
+    assert_eq!(weeks[12]["mean"], Value::Null);
+}
+
+#[tokio::test]
 async fn rejects_unknown_metrics_invalid_ranges_and_missing_auth() {
     let app = common::test_app().await;
     for metric in ["weight", "strain", "resting_hr"] {

@@ -128,7 +128,9 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
     };
     let freshness = noop_source::freshness(pool, &installation, last_push_at, day, &rows).await?;
     let sessions = sleep_sessions(pool, &installation, day).await?;
-    let sleep_edited = sleep_edited(pool, &installation, day).await?;
+    let sleep_edited = sessions
+        .iter()
+        .any(|session| session.namespace == Namespace::Computed && session.user_edited);
     let daily = daily_metrics(pool, &installation, day, sleep_edited).await?;
     let sessions = noop_merge::merge_sleep_sessions(sessions)
         .iter()
@@ -168,8 +170,8 @@ fn assemble(
     }
 }
 
-/// Whether a computed session waking on this Copenhagen day was edited in NOOP. Shared with
-/// trends so the whole computed sleep block wins under the same condition in both reads.
+/// Whether a computed session waking on this Copenhagen day was edited in NOOP. Trends use this
+/// bounded lookup because they do not fetch the full sessions that a Recovery Day already has.
 pub(super) async fn sleep_edited(
     pool: &SqlitePool,
     installation: &Installation,
