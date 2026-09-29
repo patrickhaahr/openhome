@@ -1,21 +1,14 @@
 //! Bounded daily measurements and ISO-week means. Missing days stay null and do not enter means.
 
-use std::collections::HashMap;
-
 use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::error::{AppError, Result};
 
-use super::calendar::{self, CalendarDay, TIME_ZONE_NAME, days};
+use super::calendar::{self, CalendarDay, TIME_ZONE_NAME};
 use super::noop_merge::{Namespace, ResolvedDaily, Sourced};
 use super::noop_source::{self, Coverage, Freshness, Rows, Stream};
-use super::recovery::{self, BEATS_PER_MINUTE, MILLISECONDS, MINUTES};
-
-/// Body Weight's unit; the daily Body Weight log stores kilograms.
-pub(super) const KILOGRAMS: &str = "kg";
-/// The source of a Body Weight value: the daily Body Weight log, its only source.
-pub(super) const BODY_WEIGHT_SOURCE: &str = "body_weight";
+use super::recovery;
 
 /// The four metrics agreed for the initial trend contract.
 #[derive(Debug, Clone, Copy)]
@@ -54,7 +47,7 @@ impl Metric {
 
     const fn unit(self) -> &'static str {
         match self {
-            Self::BodyWeight => KILOGRAMS,
+            Self::BodyWeight => "kg",
             Self::Noop(metric) => metric.unit(),
         }
     }
@@ -63,9 +56,9 @@ impl Metric {
 impl NoopMetric {
     const fn unit(self) -> &'static str {
         match self {
-            Self::SleepDuration => MINUTES,
-            Self::RestingHeartRate => BEATS_PER_MINUTE,
-            Self::Hrv => MILLISECONDS,
+            Self::SleepDuration => "min",
+            Self::RestingHeartRate => "beats/min",
+            Self::Hrv => "ms",
         }
     }
 
@@ -181,15 +174,29 @@ pub async fn metric_trend(
 
     match metric {
         Metric::BodyWeight => {
-            let mut weights = body_weights(db, from_day, to_day).await?;
+            let from = from_day.to_string();
+            let to = to_day.to_string();
+            let weights = sqlx::query!(
+                r#"SELECT CAST(date AS TEXT) AS "day!: String", weight_kg
+               FROM body_weight WHERE date BETWEEN $1 AND $2 ORDER BY date"#,
+                from,
+                to,
+            )
+            .fetch_all(db)
+            .await
+            .map_err(anyhow::Error::from)?;
+            let mut weights = weights.iter().peekable();
             for day in days(from_day, to_day) {
-                let day = day.to_string();
-                let value = weights.remove(&day);
+                let value = if weights.peek().is_some_and(|row| row.day == day.to_string()) {
+                    weights.next().map(|row| row.weight_kg)
+                } else {
+                    None
+                };
                 daily_points.push(DailyPoint {
-                    day,
+                    day: day.to_string(),
                     value,
                     unit,
-                    source: value.map(|_| BODY_WEIGHT_SOURCE),
+                    source: value.map(|_| "body_weight"),
                     freshness: None,
                     coverage: None,
                 });
@@ -291,25 +298,6 @@ pub async fn metric_trend(
     })
 }
 
-/// Daily Body Weight records from `from_day` through `to_day`, keyed by day.
-pub(super) async fn body_weights(
-    db: &SqlitePool,
-    from_day: CalendarDay,
-    to_day: CalendarDay,
-) -> Result<HashMap<String, f64>> {
-    let from = from_day.to_string();
-    let to = to_day.to_string();
-    let rows = sqlx::query!(
-        r#"SELECT CAST(date AS TEXT) AS "day!: String", weight_kg
-           FROM body_weight WHERE date BETWEEN $1 AND $2"#,
-        from,
-        to,
-    )
-    .fetch_all(db)
-    .await
-    .map_err(anyhow::Error::from)?;
-    Ok(rows
-        .into_iter()
-        .map(|row| (row.day, row.weight_kg))
-        .collect())
+fn days(from: CalendarDay, to: CalendarDay) -> impl Iterator<Item = CalendarDay> {
+    std::iter::successors(Some(from), move |day| (*day < to).then(|| day.next()))
 }

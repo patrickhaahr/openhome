@@ -15,7 +15,6 @@
 //! against `app.db`.
 
 pub mod calendar;
-pub mod context;
 pub mod exercise_history;
 mod noop_merge;
 mod noop_source;
@@ -25,7 +24,6 @@ pub mod trend;
 pub mod workouts;
 
 pub use calendar::CalendarDay;
-pub use context::{TrainingContext, training_context};
 pub use exercise_history::{ExerciseHistory, exercise_history};
 pub use recovery::{RecoveryDay, recovery_day};
 pub use sleep_recent::{RecentSleepNights, recent_sleep_nights};

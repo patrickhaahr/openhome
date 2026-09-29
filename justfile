@@ -111,12 +111,6 @@ api-test-integration name:
 api-run:
     cargo run
 
-# Regenerate the offline SQLx query cache (api/.sqlx) used by the SQLX_OFFLINE Docker build
-[group('api')]
-[working-directory: 'api']
-api-sqlx-prepare:
-    cargo sqlx prepare -- --all-targets
-
 # Format, lint, and test the API in one pass
 [group('api')]
 [working-directory: 'api']

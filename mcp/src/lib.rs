@@ -83,17 +83,6 @@ resting_heart_rate, or hrv. Each day has a value or null, unit, source, and rele
 freshness and coverage. Weekly summaries use Monday-Sunday ISO weeks, showing the mean of \
 observed days and counts; a missing day is never zero.";
 
-const TRAINING_CONTEXT: &str = "Compact view of a training block over 1-90 inclusive \
-Europe/Copenhagen calendar days, one entry per day, oldest first, including days with nothing \
-logged. Each day summarizes the Workouts logged in OpenHome that date (per Exercise entry: Set \
-count, best reps, best added_weight_kg (null for bodyweight), best hold_duration_s, best RPE, \
-volume as reps (or hold seconds) times added weight) beside the separate NOOP Workouts starting that local day, which are never paired \
-with a logged Workout. It also has daily Body Weight in kg and the Recovery Day's sleep duration \
-in minutes, resting heart rate in beats/min, and HRV as RMSSD in ms, each with its source. Null \
-means no value; before treating a gap as real, check the day's `noop.recovery` (for sleep, resting \
-heart rate and HRV) or `noop.workouts` (for NOOP Workouts) freshness and coverage. Use exercise_history or workouts_on_day for exact Sets and recovery_on_day for sleep \
-sessions.";
-
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
 /// printed.
 #[derive(Clone)]
@@ -317,14 +306,6 @@ pub struct MetricTrendRequest {
     pub to_day: String,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct TrainingContextRequest {
-    /// First Europe/Copenhagen calendar day, YYYY-MM-DD, included.
-    pub from_day: String,
-    /// Last Europe/Copenhagen calendar day, YYYY-MM-DD, included (at most 90 days total).
-    pub to_day: String,
-}
-
 /// The read-only training tools.
 #[derive(Clone)]
 pub struct TrainingTools {
@@ -344,23 +325,6 @@ impl TrainingTools {
 
 #[tool_router]
 impl TrainingTools {
-    #[tool(
-        description = TRAINING_CONTEXT,
-        annotations(
-            title = "Training Context",
-            read_only_hint = true,
-            open_world_hint = false
-        )
-    )]
-    async fn training_context(
-        &self,
-        Parameters(TrainingContextRequest { from_day, to_day }): Parameters<TrainingContextRequest>,
-    ) -> CallToolResult {
-        self.api
-            .get(&["api", "training", "context", &from_day, &to_day])
-            .await
-    }
-
     #[tool(
         description = METRIC_TREND,
         annotations(

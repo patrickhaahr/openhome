@@ -198,14 +198,6 @@ pub enum Coverage {
     Unknown,
 }
 
-/// Freshness and coverage of one read's rows on one day. `C` names the coverage of each stream the
-/// read uses.
-#[derive(Debug, Serialize)]
-pub struct DaySync<C> {
-    pub freshness: Freshness,
-    pub coverage: C,
-}
-
 /// How far the receiver's copy of a read's rows can be trusted. `C` names the coverage of each
 /// stream the read uses.
 #[derive(Debug, Serialize)]
@@ -234,10 +226,8 @@ impl<C> NoopSync<C> {
     pub fn synced(
         installation: Installation,
         last_push_at: Option<DateTime<Utc>>,
-        DaySync {
-            freshness,
-            coverage,
-        }: DaySync<C>,
+        freshness: Freshness,
+        coverage: C,
     ) -> Self {
         Self {
             installation_id: Some(installation.source_id),
