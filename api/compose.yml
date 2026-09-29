@@ -32,7 +32,7 @@ services:
       API_KEY: ${API_KEY:?Set API_KEY in .env}
       MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-openhome.haahr.me}
     healthcheck:
-      test: ["CMD-SHELL", "code=$$(curl -s -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer $$API_KEY\" http://localhost:8001/mcp); [ \"$$code\" != 000 ] && [ \"$$code\" != 401 ]"]
+      test: ["CMD-SHELL", "[ \"$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/mcp)\" = 401 ]"]
       interval: 30s
       timeout: 10s
       retries: 3
