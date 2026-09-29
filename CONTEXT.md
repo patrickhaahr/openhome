@@ -172,6 +172,10 @@ _Avoid_: Last available sleep record, sleep start date
 One Training Day's sleep and recovery read from NOOP: the Sleep Night that wakes on that day, plus resting heart rate, HRV, and NOOP's derived recovery and strain scores. Each value carries its unit and the NOOP Source it was selected from. The Recovery Day also states the sync freshness and coverage, so a day that has not synced yet is not mistaken for a recorded absence.
 _Avoid_: Recovery score, readiness, last night's data
 
+**Training Context**:
+A compact, date-aligned view of up to 90 Training Days for a programming discussion. Each day summarizes its logged Workouts per Exercise entry, the NOOP Workouts that start on it, Body Weight, and the Recovery Day's sleep duration, resting heart rate, and HRV. Freshness and coverage are given per NOOP read. Exact Sets and sleep sessions stay in the focused reads.
+_Avoid_: Training log dump, dashboard, combined workout
+
 **Mixed-Category Session**:
 A Workout that contains entries from both Exercise Categories (calisthenics and gym); nothing restricts a Workout to a single category.
 _Avoid_: Single-category workout, category-specific session
@@ -240,6 +244,7 @@ _Avoid_: User account, settings record
 - A **Training Day** aligns logged training and NOOP observations without changing a NOOP daily result's recorded day.
 - A **Training Day** shows its logged **Workouts** beside the **NOOP Workouts** that start on it locally; a NOOP Workout on the same day is context, never an asserted match.
 - A **Sleep Night** is indexed by wake day, including nights without a result.
+- A **Training Context** keeps one entry per **Training Day**, including days with nothing logged or synced, and never pairs a logged **Workout** with a **NOOP Workout**.
 - A **Recovery Day** reports the **Sleep Night** that wakes on it and resolves each value from a strap **NOOP Source** first, falling back to its computed sibling.
 - A **Mixed-Category Session** may combine calisthenics and gym entries in one Workout.
 - An **Added Weight** of null means bodyweight; Volume treats it as zero.

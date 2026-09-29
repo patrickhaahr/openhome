@@ -36,7 +36,8 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
   - `/api/training/days/{day}/workouts` returns the Workouts logged in `app.db` with that date (ordered Exercises and Sets) beside the NOOP Workouts starting that local day, never paired. More than 500 logged Set rows or 24 NOOP workout rows gets 422.
   - `/api/training/exercises/{exercise_name}/history/{from_day}/{to_day}` returns exact logged Sets for one case-insensitively resolved Exercise over 1–90 inclusive calendar days. Unknown names are 404, ambiguous names 409; more than 500 joined Set rows is 422. It does not read NOOP.
   - `/api/training/trends/{metric}/{from_day}/{to_day}` returns 1–90 inclusive daily points and Monday–Sunday summaries for `body_weight`, `sleep_duration`, `resting_heart_rate`, or `hrv`. Missing values remain null and weekly means count only observed days. Body Weight comes only from the daily log; NOOP points name their source, freshness, and coverage.
-  - The contracts, source-resolution rules and inspection SQL are in `docs/training-context.md`. The Hermes MCP adapter (`mcp/`) exposes `recovery_on_day`, `sleep_recent`, `workouts_on_day`, `exercise_history`, and `metric_trend`.
+  - `/api/training/context/{from_day}/{to_day}` returns the Training Context: one entry per day over 1–90 inclusive days with per-entry summaries of logged Workouts, the separate NOOP Workouts starting that day, daily Body Weight, and the Recovery Day's sleep duration, resting HR and HRV, plus per-day recovery and workout freshness and coverage. More than 1,000 logged Exercise entries, more than 24 NOOP workout rows on one day, or a response over 512 KiB of JSON gets 422.
+  - The contracts, source-resolution rules and inspection SQL are in `docs/training-context.md`. The Hermes MCP adapter (`mcp/`) exposes `training_context`, `recovery_on_day`, `sleep_recent`, `workouts_on_day`, `exercise_history`, and `metric_trend`.
   - Rules live in `services/training/`. Keep all interpretation there, not in the adapter (ADR 0002).
 - Profile (fitness): `/api/profile` (GET/PATCH) — the single profile row; GET returns null fields when not configured; PATCH upserts (creates the row on first PATCH): absent fields keep the current value, explicit `null` clears the field (`height_cm`, `sex`)
 
@@ -77,6 +78,7 @@ api/
         ├── training.rs      # training read model over the training log and the NOOP mirror
         ├── training/
         │   ├── calendar.rs  # Europe/Copenhagen calendar days, DST-aware bounds, ISO rendering
+        │   ├── context.rs   # Training Context: compact per-day view of a 1-90 day block
         │   ├── noop_source.rs # active installation, freshness, coverage from push bookkeeping
         │   ├── noop_merge.rs  # NOOP's precedence rules (daily values, sleep sessions, workouts)
     │   ├── recovery.rs  # Recovery Day contract and assembly

@@ -6,6 +6,7 @@
 //! NOOP list is a recorded absence or a sync that has not arrived; even a covered empty list only
 //! means NOOP recorded no workout, not that the user did not train.
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::SqlitePool;
 
@@ -14,7 +15,8 @@ use crate::error::{AppError, Result};
 use super::calendar::{self, CalendarDay, TIME_ZONE_NAME};
 use super::noop_merge::{self, WorkoutOrigin, WorkoutRow};
 use super::noop_source::{
-    self, COMPUTED_DEVICE_ID, Coverage, IMPORTED_DEVICE_ID, Installation, NoopSync, Rows, Stream,
+    self, COMPUTED_DEVICE_ID, Coverage, DaySync, IMPORTED_DEVICE_ID, Installation, NoopSync, Rows,
+    Stream,
 };
 
 /// Logged Set rows one Training Day may hold (an Exercise without Sets, or a Workout without
@@ -22,6 +24,9 @@ use super::noop_source::{
 pub const MAX_LOGGED_ROWS: usize = 500;
 /// NOOP workout rows, across all namespaces, one Training Day may hold.
 pub const MAX_NOOP_WORKOUTS: usize = 24;
+
+/// The stream NOOP Workouts are read from; its watermark is the read's `last_push_at`.
+pub(super) const WORKOUT_STREAMS: [Stream; 1] = [Stream::Workout];
 
 #[derive(Debug, Serialize)]
 pub struct WorkoutsOnDay {
@@ -109,20 +114,15 @@ pub async fn workouts_on_day(
             }),
         ),
         Some(installation) => {
-            let rows = [Rows::Workouts(day)];
             let last_push_at =
-                noop_source::last_push_at(noop_db, &installation, &[Stream::Workout]).await?;
-            let coverage = WorkoutCoverage {
-                workouts: noop_source::coverage(noop_db, &installation, rows[0], None).await?,
-            };
-            let freshness =
-                noop_source::freshness(noop_db, &installation, last_push_at, day, &rows).await?;
+                noop_source::last_push_at(noop_db, &installation, &WORKOUT_STREAMS).await?;
+            let day_sync = day_sync(noop_db, &installation, last_push_at, day).await?;
             let noop_workouts =
                 noop_merge::merge_workouts(noop_workout_rows(noop_db, &installation, day).await?)
                     .iter()
                     .map(noop_workout)
                     .collect::<Result<_>>()?;
-            let sync = NoopSync::synced(installation, last_push_at, freshness, coverage);
+            let sync = NoopSync::synced(installation, last_push_at, day_sync);
             (noop_workouts, sync)
         }
     };
@@ -134,6 +134,23 @@ pub async fn workouts_on_day(
         workouts,
         noop_workouts,
         noop,
+    })
+}
+
+/// Freshness and coverage of the NOOP workout rows starting on `day`. `last_push_at` is the
+/// watermark of [`WORKOUT_STREAMS`].
+pub(super) async fn day_sync(
+    pool: &SqlitePool,
+    installation: &Installation,
+    last_push_at: Option<DateTime<Utc>>,
+    day: CalendarDay,
+) -> Result<DaySync<WorkoutCoverage>> {
+    let rows = [Rows::Workouts(day)];
+    Ok(DaySync {
+        freshness: noop_source::freshness(pool, installation, last_push_at, day, &rows).await?,
+        coverage: WorkoutCoverage {
+            workouts: noop_source::coverage(pool, installation, rows[0], None).await?,
+        },
     })
 }
 
@@ -233,7 +250,7 @@ async fn logged_workouts(db: &SqlitePool, day: CalendarDay) -> Result<Vec<Logged
 }
 
 /// The installation's workouts that start on `day`, strap namespaces first, before selection.
-async fn noop_workout_rows(
+pub(super) async fn noop_workout_rows(
     pool: &SqlitePool,
     installation: &Installation,
     day: CalendarDay,
