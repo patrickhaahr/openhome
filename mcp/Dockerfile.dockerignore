@@ -1,0 +1,6 @@
+*
+!api/Cargo.toml
+!api/src
+!mcp/Cargo.toml
+!mcp/Cargo.lock
+!mcp/src

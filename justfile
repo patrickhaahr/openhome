@@ -70,6 +70,16 @@ mcp-format:
 mcp-lint:
     cargo clippy --all-targets --all-features --locked -- -D warnings
 
+# Build the MCP image for amd64 + arm64 (Raspberry Pi) locally
+[group('mcp')]
+mcp-docker-build version:
+    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f mcp/Dockerfile -t patrickhaahr/openhome-mcp:{{version}} -t patrickhaahr/openhome-mcp:latest .
+
+# Build the MCP image for amd64 + arm64 and push it to Docker Hub
+[group('mcp')]
+mcp-docker-push version:
+    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f mcp/Dockerfile -t patrickhaahr/openhome-mcp:{{version}} -t patrickhaahr/openhome-mcp:latest --push .
+
 # Test, format, and lint the MCP adapter in one pass
 [group('mcp')]
 [working-directory: 'mcp']
