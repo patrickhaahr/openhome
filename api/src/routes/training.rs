@@ -10,7 +10,7 @@ use axum::{
 use crate::error::{AppError, Result};
 use crate::services::training::{
     self, CalendarDay, ExerciseHistory, Metric, MetricTrend, RecentSleepNights, RecoveryDay,
-    WorkoutsOnDay,
+    TrainingContext, WorkoutsOnDay,
 };
 
 pub fn router() -> Router<crate::AppState> {
@@ -29,6 +29,20 @@ pub fn router() -> Router<crate::AppState> {
             "/api/training/trends/{metric}/{from_day}/{to_day}",
             get(metric_trend),
         )
+        .route(
+            "/api/training/context/{from_day}/{to_day}",
+            get(training_context),
+        )
+}
+
+async fn training_context(
+    State(state): State<crate::AppState>,
+    Path((from_day, to_day)): Path<(String, String)>,
+) -> Result<Json<TrainingContext>> {
+    let (from_day, to_day) = parse_range("Training Context", &from_day, &to_day)?;
+    Ok(Json(
+        training::training_context(&state.db, &state.noop_db, from_day, to_day).await?,
+    ))
 }
 
 async fn metric_trend(
@@ -40,13 +54,7 @@ async fn metric_trend(
             "Unknown trend metric '{metric}'; expected body_weight, sleep_duration, resting_heart_rate or hrv"
         ))
     })?;
-    let from_day = parse_day(&from_day)?;
-    let to_day = parse_day(&to_day)?;
-    if !(0..90).contains(&from_day.days_until(to_day)) {
-        return Err(AppError::Validation(
-            "Metric trend must cover 1 to 90 calendar days, with from_day <= to_day".to_owned(),
-        ));
-    }
+    let (from_day, to_day) = parse_range("Metric trend", &from_day, &to_day)?;
     Ok(Json(
         training::metric_trend(&state.db, &state.noop_db, metric, from_day, to_day).await?,
     ))
@@ -90,15 +98,7 @@ async fn exercise_history(
     State(state): State<crate::AppState>,
     Path((exercise_name, from_day, to_day)): Path<(String, String, String)>,
 ) -> Result<Json<ExerciseHistory>> {
-    let from_day = parse_day(&from_day)?;
-    let to_day = parse_day(&to_day)?;
-    let days = from_day.days_until(to_day);
-    if !(0..90).contains(&days) {
-        return Err(AppError::Validation(
-            "Exercise history must cover 1 to 90 calendar days, with from_day <= to_day"
-                .to_string(),
-        ));
-    }
+    let (from_day, to_day) = parse_range("Exercise history", &from_day, &to_day)?;
     Ok(Json(
         training::exercise_history(&state.db, &exercise_name, from_day, to_day).await?,
     ))
@@ -110,4 +110,16 @@ fn parse_day(day: &str) -> Result<CalendarDay> {
             "Invalid day '{day}': must be a Europe/Copenhagen calendar date written YYYY-MM-DD"
         ))
     })
+}
+
+/// An inclusive range of 1 through 90 calendar days, `read` naming the read in the error.
+fn parse_range(read: &str, from_day: &str, to_day: &str) -> Result<(CalendarDay, CalendarDay)> {
+    let from_day = parse_day(from_day)?;
+    let to_day = parse_day(to_day)?;
+    if !(0..90).contains(&from_day.days_until(to_day)) {
+        return Err(AppError::Validation(format!(
+            "{read} must cover 1 to 90 calendar days, with from_day <= to_day"
+        )));
+    }
+    Ok((from_day, to_day))
 }

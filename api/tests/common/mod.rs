@@ -251,7 +251,7 @@ pub async fn send_request_with_method(
     let response = app.oneshot(request).await.unwrap();
 
     let status = response.status();
-    let body = axum::body::to_bytes(response.into_body(), 1024 * 100)
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
     let json: serde_json::Value = if body.is_empty() {

@@ -5,6 +5,7 @@
 //! and the namespace it was selected from, and the `noop` block says how far the receiver's copy
 //! can be trusted, so a missing sync is never mistaken for a recorded null.
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::SqlitePool;
 
@@ -15,7 +16,8 @@ use super::noop_merge::{
     self, DailyRow, Namespace, ResolvedDaily, SessionRow, Sourced, StageMinutes,
 };
 use super::noop_source::{
-    self, COMPUTED_DEVICE_ID, Coverage, IMPORTED_DEVICE_ID, Installation, NoopSync, Rows, Stream,
+    self, COMPUTED_DEVICE_ID, Coverage, DaySync, IMPORTED_DEVICE_ID, Installation, NoopSync, Rows,
+    Stream,
 };
 
 /// Sessions one Sleep Night may hold. A larger night is rejected rather than truncated.
@@ -46,7 +48,7 @@ pub struct Measurement<T> {
 }
 
 impl<T> Measurement<T> {
-    fn new(sourced: Sourced<T>, unit: &'static str) -> Self {
+    pub(super) fn new(sourced: Sourced<T>, unit: &'static str) -> Self {
         Self {
             value: sourced.value,
             unit,
@@ -96,15 +98,15 @@ pub struct NoopCoverage {
     pub sleep_sessions: Coverage,
 }
 
-const MINUTES: &str = "min";
+pub(super) const MINUTES: &str = "min";
 const FRACTION: &str = "fraction";
 const COUNT: &str = "count";
-const BEATS_PER_MINUTE: &str = "beats/min";
-const MILLISECONDS: &str = "ms";
+pub(super) const BEATS_PER_MINUTE: &str = "beats/min";
+pub(super) const MILLISECONDS: &str = "ms";
 const SCORE: &str = "score_0_100";
 
 /// The streams a Recovery Day reads; their watermark is the Recovery Day's `last_push_at`.
-const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
+pub(super) const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
 
 pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<RecoveryDay> {
     let Some(installation) = noop_source::active_installation(pool).await? else {
@@ -120,13 +122,8 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         ));
     };
 
-    let rows = [Rows::DailyMetrics(day), Rows::SleepSessions(day)];
     let last_push_at = noop_source::last_push_at(pool, &installation, &RECOVERY_STREAMS).await?;
-    let coverage = NoopCoverage {
-        daily_metrics: noop_source::coverage(pool, &installation, rows[0], None).await?,
-        sleep_sessions: noop_source::coverage(pool, &installation, rows[1], None).await?,
-    };
-    let freshness = noop_source::freshness(pool, &installation, last_push_at, day, &rows).await?;
+    let day_sync = day_sync(pool, &installation, last_push_at, day).await?;
     let sessions = sleep_sessions(pool, &installation, day).await?;
     let sleep_edited = sessions
         .iter()
@@ -136,8 +133,26 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         .iter()
         .map(sleep_session)
         .collect::<Result<_>>()?;
-    let sync = NoopSync::synced(installation, last_push_at, freshness, coverage);
+    let sync = NoopSync::synced(installation, last_push_at, day_sync);
     Ok(assemble(day, &daily, sessions, sync))
+}
+
+/// Freshness and coverage of the rows a Recovery Day of `day` reads. `last_push_at` is the
+/// watermark of [`RECOVERY_STREAMS`].
+pub(super) async fn day_sync(
+    pool: &SqlitePool,
+    installation: &Installation,
+    last_push_at: Option<DateTime<Utc>>,
+    day: CalendarDay,
+) -> Result<DaySync<NoopCoverage>> {
+    let rows = [Rows::DailyMetrics(day), Rows::SleepSessions(day)];
+    Ok(DaySync {
+        freshness: noop_source::freshness(pool, installation, last_push_at, day, &rows).await?,
+        coverage: NoopCoverage {
+            daily_metrics: noop_source::coverage(pool, installation, rows[0], None).await?,
+            sleep_sessions: noop_source::coverage(pool, installation, rows[1], None).await?,
+        },
+    })
 }
 
 fn assemble(

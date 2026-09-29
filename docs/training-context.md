@@ -2,8 +2,74 @@
 
 The Axum API owns the training read model: calendar days, units, NOOP source resolution, freshness and coverage ([ADR 0002](adr/0002-training-context-api-and-mcp.md)). The Hermes MCP adapter (`mcp/`, see `mcp/AGENTS.md`) sends each tool call to one API endpoint and returns the API's JSON unchanged. It never reads a database and has no rules of its own.
 
-Reads today: the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, **Exercise Set history**, and **metric trends**. NOOP trends share the
+Reads today: the **Training Context**, the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, **Exercise Set history**, and **metric trends**. The Training Context and NOOP trends share the
 [source resolution](#source-resolution) and [freshness and coverage](#freshness-and-coverage) rules.
+
+## Training Context
+
+`GET /api/training/context/{from_day}/{to_day}` with `Authorization: Bearer <API_KEY>`. MCP tool: `training_context(from_day, to_day)`.
+
+A compact view of a training block for a programming discussion. Dates are inclusive, canonical `YYYY-MM-DD` Copenhagen calendar days, and the range must contain 1–90 days. It reads the training log (`app.db`) and the NOOP mirror (`noop.db`).
+
+| Status | Meaning |
+| --- | --- |
+| 200 | One entry per calendar day, oldest first. A day with nothing logged or synced still has an entry. |
+| 400 | Invalid date, reversed range, or more than 90 days. |
+| 401 | Missing or wrong API key. |
+| 422 | More than 1,000 logged Exercise entries in the range (a Workout without Exercises counts as one), more than 24 NOOP workout rows starting on one day, or a JSON response larger than 512 KiB (524,288 bytes). The block is rejected, never truncated. |
+
+```json
+{
+  "from_day": "2026-09-28",
+  "to_day": "2026-09-30",
+  "time_zone": "Europe/Copenhagen",
+  "noop": {
+    "installation_id": "81906e30-187d-4546-8f8a-9949b82d62fa",
+    "imported_device_id": "my-whoop",
+    "computed_device_id": "my-whoop-noop",
+    "last_push_at": { "recovery": "2026-10-02T04:00:00+02:00", "workouts": "2026-10-02T04:00:00+02:00" }
+  },
+  "days": [
+    {
+      "day": "2026-09-28",
+      "workouts": [
+        {
+          "id": 6,
+          "name": "Pull",
+          "exercises": [
+            { "exercise": "Pull-up", "sets": 2, "best_reps": 5, "best_added_weight_kg": 12.5,
+              "best_hold_duration_s": null, "best_rpe": 10, "volume_kg": 112.5 },
+            { "exercise": "Planche Hold", "sets": 2, "best_reps": null, "best_added_weight_kg": null,
+              "best_hold_duration_s": 15, "best_rpe": 9, "volume_kg": 0.0 }
+          ]
+        }
+      ],
+      "noop_workouts": [],
+      "body_weight": { "value": 80.0, "unit": "kg", "source": "body_weight" },
+      "sleep_duration": { "value": 420.0, "unit": "min", "source": "my-whoop" },
+      "resting_hr": { "value": 50.0, "unit": "beats/min", "source": "my-whoop" },
+      "hrv_rmssd": { "value": 62.0, "unit": "ms", "source": "my-whoop-noop" },
+      "noop": {
+        "recovery": {
+          "freshness": "confirmed",
+          "coverage": { "daily_metrics": "covered", "sleep_sessions": "covered" }
+        },
+        "workouts": { "freshness": "confirmed", "coverage": { "workouts": "covered" } }
+      }
+    }
+  ]
+}
+```
+
+The example shows one day for brevity; the response has an entry for each day in the range.
+
+- **Two lists, never paired.** `workouts` and `noop_workouts` follow the [Workouts on a Training Day](#workouts-on-a-training-day) rules: logged Workouts carry their date, and NOOP Workouts belong to the local day their start falls on, after NOOP's cross-source deduplication. Nothing asserts that a NOOP Workout is a particular logged Workout.
+- **`workouts`**: in creation order, with Exercise entries in logged order; repeated entries of one Exercise stay separate. Each entry reduces its Sets to counts and bests: `sets` (count), `best_reps`, `best_added_weight_kg` (null when every Set was bodyweight), `best_hold_duration_s` (longest Timed Hold), `best_rpe`, and `volume_kg`. `volume_kg` follows the Volume rule in `CONTEXT.md`: reps times Added Weight, bodyweight Sets add zero, and it is null for an entry without Sets. For a weighted Timed Hold it is hold seconds times kg, as in the Progress Series. Exact Sets come from `exercise_history` or `workouts_on_day`.
+- **`noop_workouts`**: by start, with `start`, `end`, `sport`, `origin`, `duration_min`, `avg_hr_bpm`, `strain_score` and `source`. Other stored metrics, HR zones and routes are left to `workouts_on_day`.
+- **`body_weight`**: only the daily Body Weight log. Its `source` is `body_weight` when a record exists; it has no freshness because it is entered directly.
+- **`sleep_duration`, `resting_hr`, `hrv_rmssd`**: the [Recovery Day](#recovery-day) values for the Sleep Night waking on the day, with the same precedence, including edited sleep. Sleep sessions are left to `recovery_on_day`.
+- **`noop`**: each day has one block per NOOP read. `noop.recovery` is the Recovery Day's `freshness` and `coverage` for that day, and applies to `sleep_duration`, `resting_hr` and `hrv_rmssd`. `noop.workouts` is Workouts on a Training Day's, and applies to `noop_workouts`. The top-level `last_push_at.recovery` and `last_push_at.workouts` are those reads' watermarks. Before any strap push, every NOOP value is null or empty, and freshness and coverage are `unknown`.
+- **Bounds**: at most 90 entries and 512 KiB of JSON, with no raw streams, sleep sessions, stage segments or sync bookkeeping. The byte limit covers what the row caps cannot: free-text Workout, Exercise and NOOP sport names. A shorter range reads a block that exceeds it.
 
 ## Metric trends
 

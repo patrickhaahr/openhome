@@ -271,6 +271,7 @@ async fn discovers_the_read_only_training_tools() {
             "metric_trend",
             "recovery_on_day",
             "sleep_recent",
+            "training_context",
             "workouts_on_day"
         ]
     );
@@ -287,6 +288,7 @@ async fn discovers_the_read_only_training_tools() {
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "sleep_recent" => json!(["n"]),
+            "training_context" => json!(["from_day", "to_day"]),
             _ => json!(["day"]),
         };
         assert_eq!(tool.input_schema.get("required"), Some(&required));
@@ -359,6 +361,67 @@ async fn metric_trend_passes_through_daily_points_and_api_errors() {
         .unwrap();
     assert_eq!(invalid.is_error, Some(true));
     assert_eq!(invalid.structured_content, Some(api_error));
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn training_context_passes_through_days_and_api_errors() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let call = |to_day: &str| {
+        CallToolRequestParams::new("training_context").with_arguments(
+            json!({"from_day": "2026-09-13", "to_day": to_day})
+                .as_object()
+                .unwrap()
+                .clone(),
+        )
+    };
+    let direct = |to_day: &str| {
+        let url = format!("{api}/api/training/context/2026-09-13/{to_day}");
+        async move {
+            reqwest::Client::new()
+                .get(url)
+                .bearer_auth(API_KEY)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+
+    let result = client.call_tool(call("2026-09-14")).await.unwrap();
+    let api_result = direct("2026-09-14").await;
+    assert_eq!(result.is_error, Some(false));
+    assert_eq!(result.structured_content, Some(api_result.clone()));
+    assert_eq!(api_result["days"][0]["workouts"], json!([]));
+    assert_eq!(
+        api_result["days"][1]["workouts"][0]["exercises"][0]["best_added_weight_kg"],
+        12.5
+    );
+    assert_eq!(
+        api_result["days"][1]["noop_workouts"][0]["start"],
+        "2026-09-14T18:00:00+02:00"
+    );
+    assert_eq!(
+        api_result["days"][1]["noop"]["recovery"]["freshness"],
+        "confirmed"
+    );
+    assert_eq!(
+        api_result["days"][1]["noop"]["workouts"],
+        json!({"freshness": "confirmed", "coverage": {"workouts": "covered"}})
+    );
+
+    let too_long = client.call_tool(call("2026-12-31")).await.unwrap();
+    assert_eq!(too_long.is_error, Some(true));
+    assert_eq!(
+        too_long.structured_content,
+        Some(direct("2026-12-31").await)
+    );
+    assert_eq!(too_long.structured_content.unwrap()["status"], 400);
     client.cancel().await.unwrap();
 }
 

@@ -96,6 +96,11 @@ impl fmt::Display for CalendarDay {
     }
 }
 
+/// The calendar days from `from` through `to`, both included.
+pub fn days(from: CalendarDay, to: CalendarDay) -> impl Iterator<Item = CalendarDay> {
+    std::iter::successors(Some(from), move |day| (*day < to).then(|| day.next()))
+}
+
 /// Renders an instant as ISO 8601 in Copenhagen time with an explicit offset.
 #[must_use]
 pub fn iso(instant: DateTime<Utc>) -> String {

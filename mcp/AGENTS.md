@@ -20,6 +20,8 @@ A Streamable HTTP MCP server that gives Hermes read-only training tools. Each re
 
 The tool contracts are documented in `docs/training-context.md`.
 
+- `training_context(from_day, to_day)` → `GET /api/training/context/{from_day}/{to_day}`
+  - 1–90 inclusive Copenhagen days, one entry per day. Summaries of logged Workouts per Exercise entry, the separate NOOP Workouts, daily Body Weight, sleep duration, resting HR and HRV, each day with recovery and workout freshness and coverage. Exact Sets and sleep sessions stay in the focused tools.
 - `metric_trend(metric, from_day, to_day)` → `GET /api/training/trends/{metric}/{from_day}/{to_day}`
   - Exactly four metrics: daily Body Weight, sleep duration, resting heart rate, and HRV, over 1–90 inclusive Copenhagen days. The API returns daily values and ISO-week summaries with observation counts; the adapter passes them through.
 
