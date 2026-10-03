@@ -86,6 +86,8 @@ pub struct DailyRow {
     pub avg_hrv: Option<f64>,
     pub recovery: Option<f64>,
     pub strain: Option<f64>,
+    pub skin_temp_dev_c: Option<f64>,
+    pub resp_rate_bpm: Option<f64>,
 }
 
 impl DailyRow {
@@ -112,6 +114,8 @@ pub struct ResolvedDaily {
     pub avg_hrv: Sourced<f64>,
     pub recovery: Sourced<f64>,
     pub strain: Sourced<f64>,
+    pub skin_temp_dev_c: Sourced<f64>,
+    pub resp_rate_bpm: Sourced<f64>,
 }
 
 /// Resolves one day's imported and computed rows. `sleep_edited` is whether a computed session
@@ -143,6 +147,8 @@ pub fn merge_daily(
         avg_hrv: pick(imported, computed, |row| row.avg_hrv),
         recovery: pick(imported, computed, |row| row.recovery),
         strain: pick(imported, computed, |row| row.strain),
+        skin_temp_dev_c: pick(imported, computed, |row| row.skin_temp_dev_c),
+        resp_rate_bpm: pick(imported, computed, |row| row.resp_rate_bpm),
     };
 
     if let (Some(imported), Some(computed)) = (imported, computed) {

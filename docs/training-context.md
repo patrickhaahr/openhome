@@ -188,6 +188,8 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
   },
   "resting_hr": { "value": null, "unit": "beats/min", "source": null },
   "hrv_rmssd": { "value": null, "unit": "ms", "source": null },
+  "skin_temp_deviation": { "value": null, "unit": "degC", "source": null },
+  "respiratory_rate": { "value": null, "unit": "breaths/min", "source": null },
   "derived_scores": {
     "recovery": { "value": null, "unit": "score_0_100", "source": null },
     "strain": { "value": 25.92, "unit": "score_0_100", "source": "my-whoop-noop" }
@@ -219,6 +221,8 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
   - `duration_min` is measured from `start`.
   - `stage_min` is null when the session has no staging.
 - **`hrv_rmssd`**: NOOP's nightly RMSSD.
+- **`skin_temp_deviation`**: the night's skin temperature as a deviation from the user's baseline, in °C. It is not an absolute temperature.
+- **`respiratory_rate`**: the night's respiratory rate, in breaths per minute.
 - **`derived_scores`**: NOOP's own model outputs, not measurements.
 - **`journal`**: the Journal Entries the user logged in NOOP against `day` (felt recovered, alcohol, illness, stress, supplements, ...), sorted by `question`.
   - Each entry is `{question, answered_yes, numeric_value, notes, source}`. `source` is the namespace the entry was read from.

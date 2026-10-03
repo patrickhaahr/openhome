@@ -270,6 +270,8 @@ async fn reports_unknown_state_before_any_push() {
             },
             "resting_hr": absent("beats/min"),
             "hrv_rmssd": absent("ms"),
+            "skin_temp_deviation": absent("degC"),
+            "respiratory_rate": absent("breaths/min"),
             "derived_scores": {
                 "recovery": absent("score_0_100"),
                 "strain": absent("score_0_100"),
@@ -347,6 +349,8 @@ async fn returns_the_real_edited_sleep_night() {
             },
             "resting_hr": absent("beats/min"),
             "hrv_rmssd": absent("ms"),
+            "skin_temp_deviation": absent("degC"),
+            "respiratory_rate": absent("breaths/min"),
             "derived_scores": {
                 "recovery": absent("score_0_100"),
                 "strain": measured(json!(25.92), "score_0_100", COMPUTED),
@@ -407,6 +411,83 @@ async fn imported_values_win_field_by_field_and_computed_values_fill_nulls() {
             // A computed zero is a value, not a gap.
             "strain": measured(json!(0.0), "score_0_100", COMPUTED),
         })
+    );
+}
+
+#[tokio::test]
+async fn skin_temperature_deviation_and_respiratory_rate_follow_imported_first_precedence() {
+    let mirror = covered_mirror(
+        &[
+            daily(
+                "2026-09-20",
+                json!({"skinTempDevC": -0.3, "respRateBpm": null}),
+            ),
+            daily("2026-09-21", json!({"skinTempDevC": 0.0})),
+            daily(
+                "2026-09-24",
+                json!({"skinTempDevC": null, "respRateBpm": 16.2}),
+            ),
+        ],
+        &[
+            daily(
+                "2026-09-20",
+                json!({"skinTempDevC": 0.4, "respRateBpm": 14.8}),
+            ),
+            daily(
+                "2026-09-22",
+                json!({"skinTempDevC": 0.0, "respRateBpm": 15.2}),
+            ),
+            daily("2026-09-23", json!({})),
+            daily(
+                "2026-09-24",
+                json!({"skinTempDevC": 0.2, "respRateBpm": 14.0}),
+            ),
+        ],
+        &[],
+        &[],
+    )
+    .await;
+
+    let both = mirror.recovery_day("2026-09-20").await;
+    assert_eq!(
+        both["skin_temp_deviation"],
+        measured(json!(-0.3), "degC", IMPORTED)
+    );
+    assert_eq!(
+        both["respiratory_rate"],
+        measured(json!(14.8), "breaths/min", COMPUTED)
+    );
+
+    let imported_only = mirror.recovery_day("2026-09-21").await;
+    assert_eq!(
+        imported_only["skin_temp_deviation"],
+        measured(json!(0.0), "degC", IMPORTED)
+    );
+    assert_eq!(imported_only["respiratory_rate"], absent("breaths/min"));
+
+    // A computed zero is a value, not a gap.
+    let computed_only = mirror.recovery_day("2026-09-22").await;
+    assert_eq!(
+        computed_only["skin_temp_deviation"],
+        measured(json!(0.0), "degC", COMPUTED)
+    );
+    assert_eq!(
+        computed_only["respiratory_rate"],
+        measured(json!(15.2), "breaths/min", COMPUTED)
+    );
+
+    let neither = mirror.recovery_day("2026-09-23").await;
+    assert_eq!(neither["skin_temp_deviation"], absent("degC"));
+    assert_eq!(neither["respiratory_rate"], absent("breaths/min"));
+
+    let opposite_sources = mirror.recovery_day("2026-09-24").await;
+    assert_eq!(
+        opposite_sources["skin_temp_deviation"],
+        measured(json!(0.2), "degC", COMPUTED)
+    );
+    assert_eq!(
+        opposite_sources["respiratory_rate"],
+        measured(json!(16.2), "breaths/min", IMPORTED)
     );
 }
 

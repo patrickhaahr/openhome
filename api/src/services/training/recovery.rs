@@ -38,6 +38,9 @@ pub struct RecoveryDay {
     pub resting_hr: Measurement<f64>,
     /// Nightly heart-rate variability as RMSSD.
     pub hrv_rmssd: Measurement<f64>,
+    /// Nightly skin temperature as a deviation from the user's baseline, not an absolute temperature.
+    pub skin_temp_deviation: Measurement<f64>,
+    pub respiratory_rate: Measurement<f64>,
     pub derived_scores: DerivedScores,
     /// The Journal Entries logged against the day, by question.
     pub journal: Vec<JournalEntry>,
@@ -139,6 +142,8 @@ const COUNT: &str = "count";
 pub(super) const BEATS_PER_MINUTE: &str = "beats/min";
 pub(super) const MILLISECONDS: &str = "ms";
 const SCORE: &str = "score_0_100";
+const DEGREES_CELSIUS: &str = "degC";
+const BREATHS_PER_MINUTE: &str = "breaths/min";
 
 /// The streams a Recovery Day reads; their watermark is the Recovery Day's `last_push_at`.
 pub(super) const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
@@ -165,6 +170,8 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         sleep,
         resting_hr: Measurement::new(daily.resting_hr, BEATS_PER_MINUTE),
         hrv_rmssd: Measurement::new(daily.avg_hrv, MILLISECONDS),
+        skin_temp_deviation: Measurement::new(daily.skin_temp_dev_c, DEGREES_CELSIUS),
+        respiratory_rate: Measurement::new(daily.resp_rate_bpm, BREATHS_PER_MINUTE),
         derived_scores: DerivedScores {
             recovery: Measurement::new(daily.recovery, SCORE),
             strain: Measurement::new(daily.strain, SCORE),
@@ -278,7 +285,8 @@ pub(super) async fn daily_metrics(
 
     let records: Vec<Record> = sqlx::query_as(
         "SELECT device_id, total_sleep_min, efficiency, deep_min, rem_min, light_min, \
-                disturbances, resting_hr, avg_hrv, recovery, strain \
+                disturbances, resting_hr, avg_hrv, recovery, strain, skin_temp_dev_c, \
+                resp_rate_bpm \
          FROM daily_metric WHERE source_id = ? AND device_id IN (?, ?) AND day = ?",
     )
     .bind(&installation.source_id)
