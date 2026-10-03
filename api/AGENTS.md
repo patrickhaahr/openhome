@@ -40,7 +40,7 @@ This file applies to the `api/` crate only. See root `AGENTS.md` for repo-wide g
   - `/api/training/context/{from_day}/{to_day}` returns the Training Context: one entry per day over 1–90 inclusive days with per-entry summaries of logged Workouts, the separate NOOP Workouts starting that day, daily Body Weight, and the Recovery Day's sleep duration, resting HR and HRV, plus per-day recovery and workout freshness and coverage. More than 1,000 logged Exercise entries, more than 24 NOOP workout rows on one day, or a response over 512 KiB of JSON gets 422.
   - The contracts, source-resolution rules and inspection SQL are in `docs/training-context.md`. The Hermes MCP adapter (`mcp/`) exposes `training_context`, `recovery_on_day`, `sleep_recent`, `workouts_on_day`, `noop_workout_detail`, `exercise_history`, and `metric_trend`.
   - Rules live in `services/training/`. Keep all interpretation there, not in the adapter (ADR 0002).
-- Profile (fitness): `/api/profile` (GET/PATCH) — the single profile row; GET returns null fields when not configured; PATCH upserts (creates the row on first PATCH): absent fields keep the current value, explicit `null` clears the field (`height_cm`, `sex`)
+- Profile (fitness): `/api/profile` (GET/PATCH) — the single profile row; GET returns null fields when not configured; PATCH upserts (creates the row on first PATCH): absent fields keep the current value, explicit `null` clears the field (`height_cm`, `sex`, `hr_max_bpm`); `hr_max_bpm` is the user-set Max Heart Rate, an integer 100–240 inclusive (else 400), never inferred
 
 ## Workout logging conventions
 

@@ -516,7 +516,14 @@ export type BodyWeightInput = {
 export type Profile = {
   readonly heightCm: number | null;
   readonly sex: string | null;
+  readonly hrMaxBpm: number | null;
 };
+
+export const HR_MAX_BPM_MIN = 100;
+
+export const HR_MAX_BPM_MAX = 240;
+
+export const HR_MAX_BPM_ERROR = `Enter a whole number of bpm from ${HR_MAX_BPM_MIN} to ${HR_MAX_BPM_MAX}.`;
 
 /**
  * A profile update as entered in the profile form, ready for the Axum API.
@@ -527,6 +534,7 @@ export type Profile = {
 export type ProfileInput = {
   readonly heightCm?: number | null | undefined;
   readonly sex?: string | null | undefined;
+  readonly hrMaxBpm?: number | null | undefined;
 };
 
 /**
@@ -640,13 +648,14 @@ export function parseBodyWeightInput(date: string, weightKg: string): Result<Bod
 
 /**
  * Parse an untrusted profile payload as served by the Axum API:
- * `{ height_cm, sex }`, both null when the profile is unconfigured.
+ * `{ height_cm, sex, hr_max_bpm }`, all null when the profile is unconfigured.
  */
 export function parseProfile(json: Json): Result<Profile> {
   if (
     !isJsonObject(json) ||
     !isOptionalJsonNumber(json["height_cm"]) ||
-    !isOptionalJsonString(json["sex"])
+    !isOptionalJsonString(json["sex"]) ||
+    !isOptionalJsonNumber(json["hr_max_bpm"])
   ) {
     return failure(PROFILE_READ_ERROR);
   }
@@ -654,6 +663,7 @@ export function parseProfile(json: Json): Result<Profile> {
   return success({
     heightCm: optionalJsonNumber(json["height_cm"]),
     sex: optionalJsonText(json["sex"]),
+    hrMaxBpm: optionalJsonNumber(json["hr_max_bpm"]),
   });
 }
 
@@ -666,7 +676,24 @@ export function parseProfile(json: Json): Result<Profile> {
 export function parseProfileInput(
   heightCm: string | undefined,
   sex: string | undefined,
+  hrMaxBpm?: string,
 ): Result<ProfileInput> {
+  let hrMax: number | null | undefined;
+
+  if (hrMaxBpm !== undefined) {
+    const trimmedHrMax = hrMaxBpm.trim();
+
+    if (trimmedHrMax.length === 0) {
+      hrMax = null;
+    } else {
+      hrMax = Number(trimmedHrMax);
+
+      if (!Number.isInteger(hrMax) || hrMax < HR_MAX_BPM_MIN || hrMax > HR_MAX_BPM_MAX) {
+        return failure(HR_MAX_BPM_ERROR);
+      }
+    }
+  }
+
   let height: number | null | undefined;
 
   if (heightCm !== undefined) {
@@ -686,5 +713,6 @@ export function parseProfileInput(
   return success({
     heightCm: height,
     sex: sex === undefined ? undefined : trimmedOrNull(sex),
+    hrMaxBpm: hrMax,
   });
 }

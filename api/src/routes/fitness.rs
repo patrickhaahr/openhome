@@ -877,7 +877,10 @@ async fn create_body_weight(
 pub struct Profile {
     height_cm: Option<f64>,
     sex: Option<String>,
+    hr_max_bpm: Option<i64>,
 }
+
+const HR_MAX_BPM_RANGE: std::ops::RangeInclusive<i64> = 100..=240;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfile {
@@ -885,13 +888,15 @@ pub struct UpdateProfile {
     height_cm: Option<Option<f64>>,
     #[serde(default, with = "double_option")]
     sex: Option<Option<String>>,
+    #[serde(default, with = "double_option")]
+    hr_max_bpm: Option<Option<i64>>,
 }
 
 async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profile>> {
     let row = sqlx::query_as!(
         Profile,
         r#"
-        SELECT height_cm, sex
+        SELECT height_cm, sex, hr_max_bpm
         FROM profile
         WHERE id = 1
         "#
@@ -904,6 +909,7 @@ async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profil
     Ok(Json(row.unwrap_or(Profile {
         height_cm: None,
         sex: None,
+        hr_max_bpm: None,
     })))
 }
 
@@ -919,6 +925,14 @@ async fn update_profile(
         ));
     }
 
+    if let Some(Some(hr_max)) = payload.hr_max_bpm
+        && !HR_MAX_BPM_RANGE.contains(&hr_max)
+    {
+        return Err(AppError::Validation(
+            "hr_max_bpm must be between 100 and 240".to_string(),
+        ));
+    }
+
     // Clearable upsert: absent field keeps the current value (stays NULL on
     // first create), explicit null sets NULL (documented in api/AGENTS.md).
     // Single statement keeps concurrent first PATCHes atomic.
@@ -926,21 +940,26 @@ async fn update_profile(
     let height_cm = payload.height_cm.flatten();
     let sex_set = payload.sex.is_some();
     let sex = payload.sex.flatten();
+    let hr_max_set = payload.hr_max_bpm.is_some();
+    let hr_max_bpm = payload.hr_max_bpm.flatten();
     let profile = sqlx::query_as!(
         Profile,
         r#"
-        INSERT INTO profile (id, height_cm, sex)
-        VALUES (1, $1, $2)
+        INSERT INTO profile (id, height_cm, sex, hr_max_bpm)
+        VALUES (1, $1, $2, $5)
         ON CONFLICT(id) DO UPDATE SET
             height_cm = CASE WHEN $3 THEN $1 ELSE height_cm END,
             sex = CASE WHEN $4 THEN $2 ELSE sex END,
+            hr_max_bpm = CASE WHEN $6 THEN $5 ELSE hr_max_bpm END,
             updated_at = CURRENT_TIMESTAMP
-        RETURNING height_cm, sex
+        RETURNING height_cm, sex, hr_max_bpm
         "#,
         height_cm,
         sex,
         height_set,
-        sex_set
+        sex_set,
+        hr_max_bpm,
+        hr_max_set
     )
     .fetch_one(&state.db)
     .await
