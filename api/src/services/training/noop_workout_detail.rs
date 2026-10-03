@@ -27,6 +27,8 @@ pub const MAX_DURATION_S: i64 = 24 * 60 * 60;
 /// Seconds the strap sample read extends past the workout's end: the 5-minute Heart Rate Recovery
 /// mark and its ±15 s window.
 const SAMPLES_AFTER_END_S: i64 = 315;
+const BASE_BUCKET_S: i64 = 15;
+const MAX_SERIES_POINTS: i64 = 300;
 
 #[derive(Debug, Serialize)]
 pub struct NoopWorkoutDetail {
@@ -45,6 +47,8 @@ pub struct NoopWorkoutDetail {
     /// Recorded duration over distance; null without a positive distance.
     pub avg_pace_s_per_km: Option<f64>,
     pub hr: HeartRate,
+    /// Downsampled strap heart rate over `[start, end)`; null without strap samples.
+    pub hr_series: Option<HeartRateSeries>,
     /// Why a null block of the detail is null, keyed by the block's name. A key is present only
     /// for a block that is null.
     pub unavailable: Unavailable,
@@ -62,6 +66,21 @@ pub struct HeartRate {
     pub max_bpm: Option<f64>,
 }
 
+/// Mean heart rate in workout-relative buckets; empty buckets are omitted.
+#[derive(Debug, Serialize)]
+pub struct HeartRateSeries {
+    /// Smallest multiple of 15 seconds that keeps the workout at at most 300 buckets.
+    pub bucket_s: i64,
+    pub points: Vec<HeartRatePoint>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HeartRatePoint {
+    /// Bucket start's offset in seconds from the workout start.
+    pub t_s: i64,
+    pub bpm: f64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HrBasis {
@@ -71,9 +90,18 @@ pub enum HrBasis {
     WorkoutRow,
 }
 
-/// Reasons for null blocks. Every block of this read is present so far, so it is always empty.
+/// Reasons for null blocks, omitted when the block is available.
 #[derive(Debug, Serialize)]
-pub struct Unavailable {}
+pub struct Unavailable {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hr_series: Option<UnavailableReason>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnavailableReason {
+    NoStrapSamples,
+}
 
 /// The detail of the merged NOOP Workout whose namespace is `source`, which starts at the instant
 /// `start` and, when given, whose sport is `sport` in any case. NOOP keeps workouts of different
@@ -144,12 +172,19 @@ pub async fn noop_workout_detail(
 
     let last_push_at = noop_source::last_push_at(pool, &installation, &WORKOUT_STREAMS).await?;
     let day_sync = workouts::day_sync(pool, &installation, last_push_at, day).await?;
+    let hr_series = heart_rate_series(&workout, in_workout);
+    let unavailable = Unavailable {
+        hr_series: hr_series
+            .is_none()
+            .then_some(UnavailableReason::NoStrapSamples),
+    };
     Ok(NoopWorkoutDetail {
         start: calendar::iso_from_unix(workout.start_ts)?,
         end: calendar::iso_from_unix(workout.end_ts)?,
         avg_pace_s_per_km: avg_pace(&workout),
         hr: heart_rate(&workout, in_workout),
-        unavailable: Unavailable {},
+        hr_series,
+        unavailable,
         noop: NoopSync::synced(installation, last_push_at, day_sync),
         sport: workout.sport,
         origin: workout.origin,
@@ -186,4 +221,23 @@ fn heart_rate(workout: &WorkoutRow, samples: &[HrSample]) -> HeartRate {
         min_bpm: bpm().min().map(|bpm| bpm as f64),
         max_bpm: bpm().max().map(|bpm| bpm as f64),
     }
+}
+
+/// Samples are sorted by timestamp and restricted to `[start, end)` by the caller.
+fn heart_rate_series(workout: &WorkoutRow, samples: &[HrSample]) -> Option<HeartRateSeries> {
+    if samples.is_empty() {
+        return None;
+    }
+    let duration_s = workout.end_ts - workout.start_ts;
+    let base_span_s = BASE_BUCKET_S * MAX_SERIES_POINTS;
+    let bucket_s = BASE_BUCKET_S * ((duration_s + base_span_s - 1) / base_span_s).max(1);
+    let bucket = |sample: &HrSample| (sample.ts - workout.start_ts) / bucket_s;
+    let points = samples
+        .chunk_by(|a, b| bucket(a) == bucket(b))
+        .map(|samples| HeartRatePoint {
+            t_s: bucket(&samples[0]) * bucket_s,
+            bpm: samples.iter().map(|sample| sample.bpm).sum::<i64>() as f64 / samples.len() as f64,
+        })
+        .collect();
+    Some(HeartRateSeries { bucket_s, points })
 }
