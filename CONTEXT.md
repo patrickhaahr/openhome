@@ -160,6 +160,14 @@ _Avoid_: Automatically matched Workout, detected-only Workout
 A logical origin of NOOP observations. A strap source and its on-device computed sibling can have different identifiers while representing one physical strap.
 _Avoid_: Second strap, second person
 
+**NOOP Workout Detail**:
+One NOOP Workout's strap heart rate series, time in each Heart Rate Zone, Heart Rate Recovery and average pace.
+_Avoid_: Workout details, full workout dump
+
+**Heart Rate Recovery**:
+The drop from the highest heart rate in a NOOP Workout's final 30 seconds to the heart rate 1, 2 and 5 minutes after it ends, computed as the NOOP app does.
+_Avoid_: HRR peak, recovery score
+
 **Training Day**:
 A calendar day used to compare logged training with NOOP observations. NOOP daily results keep their recorded day; timestamped observations are grouped in the user's home time zone (Europe/Copenhagen).
 _Avoid_: UTC day, rolling 24-hour period
@@ -169,7 +177,7 @@ A calendar night identified by the local day on which sleep ends. A Sleep Night 
 _Avoid_: Last available sleep record, sleep start date
 
 **Recovery Day**:
-One Training Day's sleep and recovery read from NOOP: the Sleep Night that wakes on that day, plus resting heart rate, HRV, and NOOP's derived recovery and strain scores. Each value carries its unit and the NOOP Source it was selected from. The Recovery Day also states the sync freshness and coverage, so a day that has not synced yet is not mistaken for a recorded absence.
+One Training Day's sleep and recovery read from NOOP: the Sleep Night that wakes on that day, plus resting heart rate, HRV, skin temperature deviation, respiratory rate, the day's Journal Entries, and NOOP's derived recovery and strain scores. Each value carries its unit and the NOOP Source it was selected from. The Recovery Day also states the sync freshness and coverage, so a day that has not synced yet is not mistaken for a recorded absence.
 _Avoid_: Recovery score, readiness, last night's data
 
 **Training Context**:
@@ -205,8 +213,20 @@ A user-recorded day weight in kg, one row per date and kept only in the daily bo
 _Avoid_: Workout body_weight, weight log entry
 
 **Profile**:
-The single user configuration row holding height and sex used to interpret fitness data.
+The single user configuration row holding height, sex and Max Heart Rate used to interpret fitness data.
 _Avoid_: User account, settings record
+
+**Max Heart Rate**:
+The user-set heart rate ceiling on the Profile that defines Heart Rate Zones; it is never inferred from recorded data.
+_Avoid_: HRmax ever, observed max, age-predicted max
+
+**Heart Rate Zone**:
+One of five bands at 50, 60, 70, 80 and 90–100 % of Max Heart Rate, matching the NOOP app's default zones; time below 50 % is outside every zone.
+_Avoid_: Custom zone, heart-rate-reserve zone
+
+**Journal Entry**:
+A user's answer to one NOOP journal question for the day it was logged against in NOOP.
+_Avoid_: Survey, habit log
 
 ## Relationships
 
@@ -252,6 +272,9 @@ _Avoid_: User account, settings record
 - A **Progress Series** aggregates logged Sets per date and never invents data between dates.
 - **Body Weight** is recorded per date by the client and is not stored on a Workout.
 - The **Profile** is configured by the client and consulted to interpret fitness data.
+- A **Heart Rate Zone** is always relative to the current **Max Heart Rate**; changing it re-zones all past heart rate data.
+- Heart rate for any **NOOP Workout** comes from the strap **NOOP Source**, whatever source recorded the NOOP Workout.
+- A **Journal Entry** keeps the day it was logged against; it is never shifted to the night or day it describes, and it appears on the Recovery Day for that same day.
 
 ## Example dialogue
 
