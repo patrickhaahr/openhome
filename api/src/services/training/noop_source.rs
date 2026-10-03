@@ -27,6 +27,7 @@ pub enum Stream {
     DailyMetric,
     SleepSession,
     Workout,
+    Journal,
 }
 
 impl Stream {
@@ -35,6 +36,7 @@ impl Stream {
             Self::DailyMetric => "dailyMetric",
             Self::SleepSession => "sleepSession",
             Self::Workout => "workout",
+            Self::Journal => "journal",
         }
     }
 }
@@ -49,6 +51,8 @@ pub enum Rows {
     SleepSessions(CalendarDay),
     /// `workout` rows starting on the day.
     Workouts(CalendarDay),
+    /// `journal` rows recorded against the day.
+    Journal(CalendarDay),
 }
 
 /// The installation whose pushes are current: the sender of the latest strap batch accepted under
@@ -107,31 +111,42 @@ pub async fn strap_hr_samples(
 
 /// Namespaces that must be accounted for before declaring a stream complete. Workout imports can
 /// have their own device IDs; retained rows and even staged windows establish that such a source
-/// exists, while only applied windows can establish its coverage.
+/// exists, while only applied windows can establish its coverage. Journal Entries come only from
+/// the namespaces discovered that way, so before any journal push there is none.
 async fn stream_devices(
     pool: &SqlitePool,
     installation: &Installation,
     stream: Stream,
 ) -> anyhow::Result<Vec<String>> {
-    if stream != Stream::Workout {
-        return Ok(vec![
+    match stream {
+        Stream::DailyMetric | Stream::SleepSession => Ok(vec![
             IMPORTED_DEVICE_ID.to_owned(),
             COMPUTED_DEVICE_ID.to_owned(),
-        ]);
+        ]),
+        Stream::Workout => Ok(sqlx::query_scalar(
+            "SELECT ? AS device_id UNION SELECT ? \
+             UNION SELECT device_id FROM workout WHERE source_id = ? \
+             UNION SELECT device_id FROM replacement \
+             WHERE receiver_state_id = ? AND source_id = ? AND stream = 'workout'",
+        )
+        .bind(IMPORTED_DEVICE_ID)
+        .bind(COMPUTED_DEVICE_ID)
+        .bind(&installation.source_id)
+        .bind(&installation.receiver_state_id)
+        .bind(&installation.source_id)
+        .fetch_all(pool)
+        .await?),
+        Stream::Journal => Ok(sqlx::query_scalar(
+            "SELECT device_id FROM journal WHERE source_id = ? \
+             UNION SELECT device_id FROM replacement \
+             WHERE receiver_state_id = ? AND source_id = ? AND stream = 'journal'",
+        )
+        .bind(&installation.source_id)
+        .bind(&installation.receiver_state_id)
+        .bind(&installation.source_id)
+        .fetch_all(pool)
+        .await?),
     }
-    Ok(sqlx::query_scalar(
-        "SELECT ? AS device_id UNION SELECT ? \
-         UNION SELECT device_id FROM workout WHERE source_id = ? \
-         UNION SELECT device_id FROM replacement \
-         WHERE receiver_state_id = ? AND source_id = ? AND stream = 'workout'",
-    )
-    .bind(IMPORTED_DEVICE_ID)
-    .bind(COMPUTED_DEVICE_ID)
-    .bind(&installation.source_id)
-    .bind(&installation.receiver_state_id)
-    .bind(&installation.source_id)
-    .fetch_all(pool)
-    .await?)
 }
 
 /// The oldest of the latest completed replacements of `streams` in their namespaces. A replacement
@@ -277,6 +292,17 @@ impl<C> NoopSync<C> {
             coverage,
         }
     }
+    /// The same sync state with `coverage` extended or reshaped by `f`.
+    pub fn map_coverage<D>(self, f: impl FnOnce(C) -> D) -> NoopSync<D> {
+        NoopSync {
+            installation_id: self.installation_id,
+            imported_device_id: self.imported_device_id,
+            computed_device_id: self.computed_device_id,
+            last_push_at: self.last_push_at,
+            freshness: self.freshness,
+            coverage: f(self.coverage),
+        }
+    }
 }
 
 /// Whether applied windows establish `rows` in every relevant namespace. With `since`, only windows
@@ -301,11 +327,13 @@ pub async fn coverage(
             let to = day.end().timestamp();
             start_coverage(pool, installation, Stream::Workout, from, to, since).await
         }
+        Rows::Journal(day) => day_coverage(pool, installation, Stream::Journal, day, since).await,
     }
 }
 
-/// Day-keyed rows: covered when, in both namespaces, some applied window contains the day. Day
-/// windows use canonical `YYYY-MM-DD` text, so text comparison orders them.
+/// Day-keyed rows: covered when, in every namespace, some applied window contains the day. A
+/// stream without namespaces is not covered. Day windows use canonical `YYYY-MM-DD` text, so text
+/// comparison orders them.
 async fn day_coverage(
     pool: &SqlitePool,
     installation: &Installation,
@@ -313,26 +341,26 @@ async fn day_coverage(
     day: CalendarDay,
     since: Option<DateTime<Utc>>,
 ) -> anyhow::Result<Coverage> {
+    let devices = stream_devices(pool, installation, stream).await?;
     let day = day.to_string();
-    let covering: i64 = sqlx::query_scalar(
-        "SELECT COUNT(DISTINCT r.device_id) FROM replacement r \
+    let covering: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT r.device_id FROM replacement r \
          JOIN replacement_part p USING (receiver_state_id, source_id, device_id, replacement_id) \
          JOIN batch_ledger l USING (receiver_state_id, source_id, device_id, batch_id) \
-         WHERE r.receiver_state_id = ? AND r.source_id = ? AND r.device_id IN (?, ?) \
+         WHERE r.receiver_state_id = ? AND r.source_id = ? \
            AND r.stream = ? AND r.selector = 'day' AND r.state = 'applied' \
            AND r.start_inclusive <= ? AND r.end_exclusive > ? AND l.accepted_at >= ?",
     )
     .bind(&installation.receiver_state_id)
     .bind(&installation.source_id)
-    .bind(IMPORTED_DEVICE_ID)
-    .bind(COMPUTED_DEVICE_ID)
     .bind(stream.name())
     .bind(&day)
     .bind(&day)
     .bind(accepted_since(since))
-    .fetch_one(pool)
+    .fetch_all(pool)
     .await?;
-    Ok(if covering == 2 {
+    let covered = !devices.is_empty() && devices.iter().all(|device| covering.contains(device));
+    Ok(if covered {
         Coverage::Covered
     } else {
         Coverage::Unknown

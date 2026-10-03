@@ -19,6 +19,8 @@ pub enum Window {
     Starts(i64, i64),
     /// A `workout` window of Unix seconds.
     WorkoutStarts(i64, i64),
+    /// A `journal` window of `YYYY-MM-DD` days.
+    JournalDays(&'static str, &'static str),
 }
 
 /// Records one append batch may carry under the push protocol.
@@ -90,6 +92,7 @@ impl Mirror {
             Window::Days(start, end) => ("dailyMetric", "day", json!(start), json!(end)),
             Window::Starts(start, end) => ("sleepSession", "startTs", json!(start), json!(end)),
             Window::WorkoutStarts(start, end) => ("workout", "startTs", json!(start), json!(end)),
+            Window::JournalDays(start, end) => ("journal", "day", json!(start), json!(end)),
         };
         let header = json!({
             "type": "batch",

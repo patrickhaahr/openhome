@@ -22,6 +22,9 @@ use super::noop_source::{
 
 /// Sessions one Sleep Night may hold. A larger night is rejected rather than truncated.
 pub const MAX_SLEEP_SESSIONS: usize = 24;
+/// Journal rows one day may hold across namespaces, before one entry per question is kept. A
+/// larger journal is rejected rather than truncated.
+pub const MAX_JOURNAL_ROWS: usize = 64;
 
 #[derive(Debug, Serialize)]
 pub struct RecoveryDay {
@@ -36,7 +39,9 @@ pub struct RecoveryDay {
     /// Nightly heart-rate variability as RMSSD.
     pub hrv_rmssd: Measurement<f64>,
     pub derived_scores: DerivedScores,
-    pub noop: NoopSync<NoopCoverage>,
+    /// The Journal Entries logged against the day, by question.
+    pub journal: Vec<JournalEntry>,
+    pub noop: NoopSync<RecoveryCoverage>,
 }
 
 /// A value with its unit and the NOOP device namespace it was selected from (`null` with it).
@@ -92,10 +97,40 @@ pub struct DerivedScores {
     pub strain: Measurement<f64>,
 }
 
+/// One answer the user logged in NOOP against the day; never shifted to another day.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct JournalEntry {
+    pub question: String,
+    pub answered_yes: bool,
+    pub numeric_value: Option<f64>,
+    pub notes: Option<String>,
+    /// The NOOP device namespace the entry was read from.
+    #[sqlx(rename = "device_id")]
+    pub source: String,
+}
+
+/// Coverage of the streams behind a Sleep Night and its daily values.
 #[derive(Debug, Serialize)]
 pub struct NoopCoverage {
     pub daily_metrics: Coverage,
     pub sleep_sessions: Coverage,
+}
+
+/// Coverage of every stream a Recovery Day reads.
+#[derive(Debug, Serialize)]
+pub struct RecoveryCoverage {
+    #[serde(flatten)]
+    pub night: NoopCoverage,
+    pub journal: Coverage,
+}
+
+/// A Recovery Day without its Journal Entries: the Sleep Night waking on the day, the day's
+/// resolved daily values, and the sync state of both.
+pub(super) struct Night {
+    pub sleep: Sleep,
+    pub daily: ResolvedDaily,
+    pub noop: NoopSync<NoopCoverage>,
+    pub installation: Option<Installation>,
 }
 
 pub(super) const MINUTES: &str = "min";
@@ -109,17 +144,53 @@ const SCORE: &str = "score_0_100";
 pub(super) const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
 
 pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<RecoveryDay> {
+    let Night {
+        sleep,
+        daily,
+        noop,
+        installation,
+    } = night(pool, day).await?;
+    let (journal, journal_coverage) = match &installation {
+        Some(installation) => (
+            journal_entries(pool, installation, day).await?,
+            noop_source::coverage(pool, installation, Rows::Journal(day), None).await?,
+        ),
+        None => (Vec::new(), Coverage::Unknown),
+    };
+    Ok(RecoveryDay {
+        day: day.to_string(),
+        time_zone: TIME_ZONE_NAME,
+        day_start: calendar::iso(day.start()),
+        day_end: calendar::iso(day.end()),
+        sleep,
+        resting_hr: Measurement::new(daily.resting_hr, BEATS_PER_MINUTE),
+        hrv_rmssd: Measurement::new(daily.avg_hrv, MILLISECONDS),
+        derived_scores: DerivedScores {
+            recovery: Measurement::new(daily.recovery, SCORE),
+            strain: Measurement::new(daily.strain, SCORE),
+        },
+        journal,
+        noop: noop.map_coverage(|night| RecoveryCoverage {
+            night,
+            journal: journal_coverage,
+        }),
+    })
+}
+
+/// The Sleep Night waking on `day` with the day's daily values. Journal Entries are not read, so
+/// their pushes and bounds cannot affect it.
+pub(super) async fn night(pool: &SqlitePool, day: CalendarDay) -> Result<Night> {
     let Some(installation) = noop_source::active_installation(pool).await? else {
-        let unsynced = NoopSync::unsynced(NoopCoverage {
-            daily_metrics: Coverage::Unknown,
-            sleep_sessions: Coverage::Unknown,
+        let daily = noop_merge::merge_daily(None, None, false);
+        return Ok(Night {
+            sleep: sleep(&daily, Vec::new()),
+            daily,
+            noop: NoopSync::unsynced(NoopCoverage {
+                daily_metrics: Coverage::Unknown,
+                sleep_sessions: Coverage::Unknown,
+            }),
+            installation: None,
         });
-        return Ok(assemble(
-            day,
-            &noop_merge::merge_daily(None, None, false),
-            Vec::new(),
-            unsynced,
-        ));
     };
 
     let last_push_at = noop_source::last_push_at(pool, &installation, &RECOVERY_STREAMS).await?;
@@ -133,8 +204,12 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         .iter()
         .map(sleep_session)
         .collect::<Result<_>>()?;
-    let sync = NoopSync::synced(installation, last_push_at, day_sync);
-    Ok(assemble(day, &daily, sessions, sync))
+    Ok(Night {
+        sleep: sleep(&daily, sessions),
+        daily,
+        noop: NoopSync::synced(installation.clone(), last_push_at, day_sync),
+        installation: Some(installation),
+    })
 }
 
 /// Freshness and coverage of the rows a Recovery Day of `day` reads. `last_push_at` is the
@@ -155,33 +230,15 @@ pub(super) async fn day_sync(
     })
 }
 
-fn assemble(
-    day: CalendarDay,
-    daily: &ResolvedDaily,
-    sessions: Vec<SleepSession>,
-    noop: NoopSync<NoopCoverage>,
-) -> RecoveryDay {
-    RecoveryDay {
-        day: day.to_string(),
-        time_zone: TIME_ZONE_NAME,
-        day_start: calendar::iso(day.start()),
-        day_end: calendar::iso(day.end()),
-        sleep: Sleep {
-            total: Measurement::new(daily.total_sleep_min, MINUTES),
-            deep: Measurement::new(daily.deep_min, MINUTES),
-            rem: Measurement::new(daily.rem_min, MINUTES),
-            light: Measurement::new(daily.light_min, MINUTES),
-            efficiency: Measurement::new(daily.efficiency, FRACTION),
-            disturbances: Measurement::new(daily.disturbances, COUNT),
-            sessions,
-        },
-        resting_hr: Measurement::new(daily.resting_hr, BEATS_PER_MINUTE),
-        hrv_rmssd: Measurement::new(daily.avg_hrv, MILLISECONDS),
-        derived_scores: DerivedScores {
-            recovery: Measurement::new(daily.recovery, SCORE),
-            strain: Measurement::new(daily.strain, SCORE),
-        },
-        noop,
+fn sleep(daily: &ResolvedDaily, sessions: Vec<SleepSession>) -> Sleep {
+    Sleep {
+        total: Measurement::new(daily.total_sleep_min, MINUTES),
+        deep: Measurement::new(daily.deep_min, MINUTES),
+        rem: Measurement::new(daily.rem_min, MINUTES),
+        light: Measurement::new(daily.light_min, MINUTES),
+        efficiency: Measurement::new(daily.efficiency, FRACTION),
+        disturbances: Measurement::new(daily.disturbances, COUNT),
+        sessions,
     }
 }
 
@@ -303,6 +360,38 @@ async fn sleep_sessions(
             })
         })
         .collect())
+}
+
+/// The Journal Entries recorded against `day`, one per question across namespaces.
+async fn journal_entries(
+    pool: &SqlitePool,
+    installation: &Installation,
+    day: CalendarDay,
+) -> Result<Vec<JournalEntry>> {
+    let mut entries: Vec<JournalEntry> = sqlx::query_as(
+        "SELECT question, answered_yes, numeric_value, notes, device_id FROM journal \
+         WHERE source_id = ? AND day = ? LIMIT ?",
+    )
+    .bind(&installation.source_id)
+    .bind(day.to_string())
+    .bind(MAX_JOURNAL_ROWS as i64 + 1)
+    .fetch_all(pool)
+    .await
+    .map_err(anyhow::Error::from)?;
+    if entries.len() > MAX_JOURNAL_ROWS {
+        return Err(AppError::Unprocessable(format!(
+            "More than {MAX_JOURNAL_ROWS} Journal Entry rows are logged against {day}; \
+             refusing to return a truncated journal"
+        )));
+    }
+    entries.sort_by(|a, b| {
+        a.question.cmp(&b.question).then_with(|| {
+            noop_merge::journal_precedence(&a.source)
+                .cmp(&noop_merge::journal_precedence(&b.source))
+        })
+    });
+    entries.dedup_by(|later, kept| later.question == kept.question);
+    Ok(entries)
 }
 
 fn sleep_session(session: &SessionRow) -> Result<SleepSession> {

@@ -9,6 +9,8 @@
 //! - Workouts (`WorkoutEditing.dedupCrossSource`): all namespaces' rows form one list. A detected
 //!   bout that shadows a real session is dropped, and two rows of the same sport that overlap by
 //!   more than half of the shorter one collapse to the richer row. Distinct sessions stay distinct.
+//! - Journal Entries: one entry per question and day. The journal's own namespace wins, then the
+//!   strap's imported and computed namespaces, then any other namespace alphabetically.
 //!
 //! Everything here is pure; callers pass rows for a single wake day or Training Day.
 
@@ -39,6 +41,20 @@ impl Namespace {
             Self::Computed => COMPUTED_DEVICE_ID,
         }
     }
+}
+
+/// NOOP's namespace for answers logged in its journal.
+pub const JOURNAL_DEVICE_ID: &str = "noop-journal";
+
+/// Orders the namespaces answering one journal question: the least key wins.
+pub fn journal_precedence(device_id: &str) -> (u8, &str) {
+    let rank = match device_id {
+        JOURNAL_DEVICE_ID => 0,
+        IMPORTED_DEVICE_ID => 1,
+        COMPUTED_DEVICE_ID => 2,
+        _ => 3,
+    };
+    (rank, device_id)
 }
 
 /// A resolved value and the namespace it came from; a null value has no source.

@@ -6,7 +6,7 @@ use sqlx::SqlitePool;
 
 use crate::error::Result;
 
-use super::calendar::{CalendarDay, TIME_ZONE_NAME};
+use super::calendar::{self, CalendarDay, TIME_ZONE_NAME};
 use super::noop_source::NoopSync;
 use super::recovery::{self, NoopCoverage, Sleep};
 
@@ -31,13 +31,13 @@ pub async fn recent_sleep_nights(pool: &SqlitePool, count: u8) -> Result<RecentS
     let mut day = CalendarDay::of(Utc::now());
     let mut nights = Vec::with_capacity(count as usize);
     for _ in 0..count {
-        let recovery = recovery::recovery_day(pool, day).await?;
+        let night = recovery::night(pool, day).await?;
         nights.push(SleepNight {
-            wake_day: recovery.day,
-            wake_day_start: recovery.day_start,
-            wake_day_end: recovery.day_end,
-            sleep: recovery.sleep,
-            noop: recovery.noop,
+            wake_day: day.to_string(),
+            wake_day_start: calendar::iso(day.start()),
+            wake_day_end: calendar::iso(day.end()),
+            sleep: night.sleep,
+            noop: night.noop,
         });
         day = day.previous();
     }
