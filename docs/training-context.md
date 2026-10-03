@@ -121,7 +121,7 @@ For example, a request for September 29 through October 2 with Body Weight logge
 }
 ```
 
-Each entry uses the [Recovery Day](#recovery-day) `sleep` and `noop` fields, including the same edited-sleep precedence, source labels, units, session timestamps, coverage, and freshness. `wake_day_start` and `wake_day_end` are local midnight bounds with explicit offsets; they can span 23 or 25 hours at a daylight-saving change. The example shows one entry for brevity; a request for `n` returns exactly `n` entries.
+Each entry uses the [Recovery Day](#recovery-day) `sleep` fields and sleep/daily-metric `noop` status, including the same edited-sleep precedence, source labels, units, session timestamps, coverage, and freshness. Journal Entries and `coverage.journal` are exclusive to Recovery Day; journal rows do not affect this endpoint or its bounds. `wake_day_start` and `wake_day_end` are local midnight bounds with explicit offsets; they can span 23 or 25 hours at a daylight-saving change. The example shows one entry for brevity; a request for `n` returns exactly `n` entries.
 
 ## Recovery Day
 
@@ -134,7 +134,7 @@ Each entry uses the [Recovery Day](#recovery-day) `sleep` and `noop` fields, inc
 | 200 | The Recovery Day below. Days with no data are still 200, with null values. |
 | 400 | `{day}` is not a canonical calendar date. |
 | 401 | Missing or wrong API key. |
-| 422 | The night has more than 24 session rows across both namespaces. The night is rejected, never truncated. |
+| 422 | The night has more than 24 session rows across both namespaces, or the day has more than 64 journal rows across all namespaces. The day is rejected, never truncated. |
 | 500 | Storage error. |
 
 Errors use the API's `{"error": "...", "status": <code>}` body. The MCP tool returns that same body as a tool error (`isError: true`).
@@ -192,13 +192,17 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
     "recovery": { "value": null, "unit": "score_0_100", "source": null },
     "strain": { "value": 25.92, "unit": "score_0_100", "source": "my-whoop-noop" }
   },
+  "journal": [
+    { "question": "Alcohol", "answered_yes": true, "numeric_value": 2.0, "notes": null, "source": "noop-journal" },
+    { "question": "Felt recovered", "answered_yes": false, "numeric_value": null, "notes": "Late night", "source": "noop-journal" }
+  ],
   "noop": {
     "installation_id": "81906e30-187d-4546-8f8a-9949b82d62fa",
     "imported_device_id": "my-whoop",
     "computed_device_id": "my-whoop-noop",
     "last_push_at": "2026-09-26T03:51:38+02:00",
     "freshness": "confirmed",
-    "coverage": { "daily_metrics": "covered", "sleep_sessions": "covered" }
+    "coverage": { "daily_metrics": "covered", "sleep_sessions": "covered", "journal": "covered" }
   }
 }
 ```
@@ -216,6 +220,11 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
   - `stage_min` is null when the session has no staging.
 - **`hrv_rmssd`**: NOOP's nightly RMSSD.
 - **`derived_scores`**: NOOP's own model outputs, not measurements.
+- **`journal`**: the Journal Entries the user logged in NOOP against `day` (felt recovered, alcohol, illness, stress, supplements, ...), sorted by `question`.
+  - Each entry is `{question, answered_yes, numeric_value, notes, source}`. `source` is the namespace the entry was read from.
+  - An entry keeps the day it was logged against and is never shifted. Entries logged against `day` often explain the Sleep Night that wakes on the next day, so read that day's Recovery Day beside them.
+  - Entries are read from every namespace of the active installation with journal rows or journal replacement windows (today `my-whoop`, `my-whoop-noop`, `noop-app` and `noop-journal`). One entry is kept per question: `noop-journal` first, then `my-whoop`, then `my-whoop-noop`, then other namespaces alphabetically.
+  - Check `noop.coverage.journal` before reading an empty list as "nothing logged". Journal pushes never change `last_push_at` or `freshness`.
 - **Excluded data**: raw streams, motion data, stage segments and sync bookkeeping are never returned.
 
 ## Workouts on a Training Day
@@ -423,6 +432,7 @@ The Recovery Day, Workouts on a Training Day and NOOP Workout Detail reads have 
   - `unknown`: the receiver cannot establish any of the above.
 - **`coverage.daily_metrics`** is `covered` when, in both namespaces, an applied `dailyMetric` replacement window contains `day`.
 - **`coverage.sleep_sessions`** is `covered` when, in both namespaces, applied `sleepSession` windows jointly span session starts from the previous local midnight to `day_end`. This assumes no session lasts longer than a day.
+- **`coverage.journal`** (Recovery Day only) is `covered` when every journal namespace of the active installation (one with journal rows or journal replacement windows) has an applied `journal` replacement window containing `day`. With no journal namespace it is `unknown`. Recent Sleep Nights and the Training Context have no `coverage.journal`.
 - **`coverage.workouts`** is `covered` when, in every relevant workout namespace, applied `workout` windows jointly span workout starts from `day_start` to `day_end`. A discovered import with only partial or staged coverage keeps the result unknown, even when the strap windows are complete.
 - **What `covered` means**:
   - With `covered`, a missing row is a recorded absence.
@@ -470,7 +480,7 @@ ORDER BY latest DESC;
 SELECT device_id, stream, start_inclusive, end_exclusive, parts, state
 FROM replacement
 WHERE source_id = :source
-  AND stream IN ('dailyMetric', 'sleepSession', 'workout')
+  AND stream IN ('dailyMetric', 'sleepSession', 'workout', 'journal')
 ORDER BY stream, device_id, start_inclusive;
 
 -- Completion times behind freshness: the last accepted part of each applied replacement.
@@ -482,6 +492,12 @@ JOIN batch_ledger l USING (receiver_state_id, source_id, device_id, batch_id)
 WHERE r.source_id = :source
   AND r.stream IN ('dailyMetric', 'sleepSession', 'workout') AND r.state = 'applied'
 GROUP BY r.device_id, r.stream, r.replacement_id;
+
+-- All namespaces' Journal Entries for the day, before one is kept per question.
+SELECT device_id, question, answered_yes, numeric_value, notes
+FROM journal
+WHERE source_id = :source AND day = :day
+ORDER BY question, device_id;
 
 -- Both namespaces' daily rows for the day.
 SELECT device_id, total_sleep_min, efficiency, deep_min, rem_min, light_min, disturbances,

@@ -189,6 +189,65 @@ async fn late_sync_changes_an_unknown_gap_to_a_recorded_night() {
 }
 
 #[tokio::test]
+async fn journal_changes_do_not_affect_recent_sleep_or_training_context() {
+    let today = CalendarDay::of(Utc::now());
+    let mut mirror = Mirror::empty().await;
+    let first = Box::leak(today.previous().to_string().into_boxed_str());
+    let last = Box::leak(today.next().to_string().into_boxed_str());
+    let accepted = iso(Utc::now());
+    mirror
+        .push(
+            SOURCE,
+            IMPORTED,
+            Window::Days(first, last),
+            &[daily(&today.to_string(), 420.0)],
+            &accepted,
+        )
+        .await;
+    let app = common::test_app_with_noop_db(mirror.db.clone()).await;
+    let paths = [
+        "/api/training/sleep/recent/1".to_owned(),
+        format!("/api/training/context/{today}/{today}"),
+    ];
+    let mut before = Vec::new();
+    for path in &paths {
+        let response = common::send_request(app.clone(), path, Some("test-api-key")).await;
+        assert_eq!(response.0, StatusCode::OK, "{}", response.1);
+        before.push(response);
+    }
+
+    let entries: Vec<Value> = (0..65)
+        .map(|index| {
+            json!({
+                "type": "record", "key": {"day": today.to_string(), "question": format!("Q{index:02}")},
+                "data": {"answeredYes": true, "numericValue": null, "notes": null}
+            })
+        })
+        .collect();
+    mirror
+        .push(
+            SOURCE,
+            "noop-journal",
+            Window::JournalDays(first, last),
+            &entries,
+            &accepted,
+        )
+        .await;
+
+    let recovery = common::send_request(
+        app.clone(),
+        &format!("/api/training/days/{today}/recovery"),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(recovery.0, StatusCode::UNPROCESSABLE_ENTITY);
+    for (path, expected) in paths.iter().zip(before) {
+        let after = common::send_request(app.clone(), path, Some("test-api-key")).await;
+        assert_eq!(after, expected, "{path}");
+    }
+}
+
+#[tokio::test]
 async fn rejects_invalid_counts_and_requires_authentication() {
     let mirror = Mirror::empty().await;
     for count in ["0", "15", "-1", "abc"] {

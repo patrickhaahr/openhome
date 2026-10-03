@@ -47,10 +47,13 @@ the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's da
 sessions ending that day. Every value has a unit (sleep in minutes, efficiency as a 0-1 fraction, \
 resting heart rate in beats/min, HRV as RMSSD in ms) and names the NOOP namespace it was selected \
 from. `derived_scores` are NOOP's own 0-100 recovery and strain scores: model outputs, not \
-measurements or diagnoses. Null means no value. Before treating a null or a night without sessions \
-as real, check `noop.freshness` (`unconfirmed`: complete recovery coverage for this day has not \
-arrived yet) and `noop.coverage` (`covered`: an empty result is a recorded absence; `unknown`: rows may be \
-missing).";
+measurements or diagnoses. `journal` lists the Journal Entries the user logged in NOOP against \
+`day` (felt recovered, alcohol, illness, stress, supplements, ...), one per question with its yes/no \
+answer, numeric value, notes and source; entries logged on `day` often explain the Sleep Night waking \
+the next day. Null means no value. Before treating a null, a night without sessions or an empty \
+journal as real, check `noop.freshness` (`unconfirmed`: complete recovery coverage for this day has \
+not arrived yet) and `noop.coverage` (`covered`: an empty result is a recorded absence; `unknown`: \
+rows may be missing; `coverage.journal` is the journal's).";
 
 const SLEEP_RECENT: &str = "The most recent 1-14 Europe/Copenhagen Sleep Nights, newest wake day \
 first. Each entry includes NOOP sleep duration and stages in minutes, efficiency as a 0-1 \
