@@ -2,7 +2,7 @@
 
 The Axum API owns the training read model: calendar days, units, NOOP source resolution, freshness and coverage ([ADR 0002](adr/0002-training-context-api-and-mcp.md)). The Hermes MCP adapter (`mcp/`, see `mcp/AGENTS.md`) sends each tool call to one API endpoint and returns the API's JSON unchanged. It never reads a database and has no rules of its own.
 
-Reads today: the **Training Context**, the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, **Exercise Set history**, and **metric trends**. The Training Context and NOOP trends share the
+Reads today: the **Training Context**, the **Recovery Day**, **recent Sleep Nights**, **Workouts on a Training Day**, the **NOOP Workout Detail**, **Exercise Set history**, and **metric trends**. The Training Context and NOOP trends share the
 [source resolution](#source-resolution) and [freshness and coverage](#freshness-and-coverage) rules.
 
 ## Training Context
@@ -309,8 +309,70 @@ This example is 2026-09-26: the user logged a Workout that day and timed a sessi
   - `strain_score` is NOOP's derived 0–100 workout strain: a model output, not a measurement.
   - `origin` is NOOP's classification of the row's `source`: `manual` (logged in NOOP), `detected` (a bout NOOP's detector derived from heart rate), `whoop` (WHOOP export), `health_import` (Apple Health or Health Connect, and NOOP's fallback for unknown sources), `lifting` (Hevy or Liftosaur) or `activity_file` (GPX, TCX or FIT).
   - `source` is the device namespace of the stored row.
-  - HR zones, routes and raw streams are never returned.
+  - A NOOP Workout's `source`, `start` and `sport` open its [NOOP Workout Detail](#noop-workout-detail), with heart rate from the strap's samples and the average pace.
+  - Stored HR zones, routes and raw streams are never returned.
 - **An empty `noop_workouts` never means the user did not train.** With `coverage.workouts: covered`, NOOP recorded no workout starting that day. With `unknown`, rows may not have been pushed yet.
+
+## NOOP Workout Detail
+
+`GET /api/training/noop-workouts/{source}/{start}/{sport}`, or `GET /api/training/noop-workouts/{source}/{start}`, with `Authorization: Bearer <API_KEY>`. MCP tool: `noop_workout_detail(source, start, sport?)`.
+
+One NOOP Workout from [Workouts on a Training Day](#workouts-on-a-training-day), opened by its `source`, `start` and `sport` exactly as that read lists them. There is no separate identifier. The endpoint is read-only and draws only on the NOOP mirror (`noop.db`).
+
+- **`source`** is the NOOP Workout's device namespace, for example `my-whoop` or `apple-health`.
+- **`start`** is its RFC 3339 start. It is matched as an instant, to the second, so `2026-09-27T16:33:52+02:00` and `2026-09-27T14:33:52Z` open the same workout.
+- **`sport`** is its sport as listed, matched case-insensitively (`running` opens a `Running` workout). NOOP keeps workouts of different sports that share a namespace and start, for example a Running and a Cycling row at the same instant, so `source` and `start` alone do not always name one workout. Without `sport`, the single matching workout is returned; when several match, the read is a 409 that names their sports, and nothing is guessed. NOOP merges overlapping rows whose sports differ only in case, so a case-insensitive `sport` names one workout; for non-overlapping rows that differ only in case, the exact spelling wins.
+- **Selection** runs against the merged NOOP Workout list of the Training Day that `start` falls on, in the active installation, after NOOP's [cross-source deduplication](#source-resolution). A row that NOOP folds into another one, or drops as a detected shadow, cannot be opened.
+
+| Status | Meaning |
+| --- | --- |
+| 200 | The detail below. |
+| 400 | `start` is not RFC 3339, or `source` or `sport` is empty or contains control characters. |
+| 401 | Missing or wrong API key. |
+| 404 | No merged NOOP Workout with that `source`, `start` and (when given) `sport` in the active installation, including before any strap push. |
+| 409 | `sport` was left out and more than one merged NOOP Workout has that `source` and `start`. The error names their sports. |
+| 422 | The workout lasts more than 24 hours, or more than 24 NOOP workout rows start on its Training Day. The read is rejected, never truncated. |
+| 500 | Storage error. |
+
+### Response
+
+This example is the reference run of 2026-09-27. It was started manually in NOOP, and its stored row says 160 / 183 beats/min. The strap's samples, as the NOOP app shows them, say 166 / 185.
+
+```json
+{
+  "start": "2026-09-27T16:33:52+02:00",
+  "end": "2026-09-27T17:19:32+02:00",
+  "sport": "Running",
+  "origin": "manual",
+  "source": "my-whoop",
+  "duration_min": 45.6597,
+  "distance_m": 7169.41850045851,
+  "energy_kcal": 817.170682229156,
+  "strain_score": 58.45,
+  "avg_pace_s_per_km": 382.12053039235946,
+  "hr": { "basis": "strap_samples", "avg_bpm": 166.07591240875914, "min_bpm": 84.0, "max_bpm": 185.0 },
+  "unavailable": {},
+  "noop": {
+    "installation_id": "81906e30-187d-4546-8f8a-9949b82d62fa",
+    "imported_device_id": "my-whoop",
+    "computed_device_id": "my-whoop-noop",
+    "last_push_at": "2026-09-28T06:00:00+02:00",
+    "freshness": "confirmed",
+    "coverage": { "workouts": "covered" }
+  }
+}
+```
+
+- **Summary**: `start`, `end`, `sport`, `origin`, `source`, `duration_min`, `distance_m`, `energy_kcal` and `strain_score` have the same values and meanings as in `noop_workouts`.
+- **`avg_pace_s_per_km`**: NOOP's recorded duration in seconds divided by the distance in km. It is null when the distance is null, zero or negative, or the duration is null.
+- **`hr`**: heart rate in beats/min over the workout window `[start, end)`.
+  - Heart rate always comes from the strap: samples in the strap's imported namespace `my-whoop` of the active installation. This holds whatever namespace recorded the NOOP Workout, because the strap is the user's only heart rate sensor.
+  - `basis: "strap_samples"`: the window holds at least one strap sample. `avg_bpm`, `min_bpm` and `max_bpm` are computed over those samples, as the NOOP app does.
+  - `basis: "workout_row"`: the window has no strap samples. `avg_bpm` and `max_bpm` are the stored row's values, which NOOP may not have reconciled with the strap. `min_bpm` is null.
+  - `basis: null`: neither exists, and every value is null.
+- **`unavailable`**: names why a null block of the detail is null, keyed by the block. A key is present only for a null block. The current blocks are never null, so it is `{}`.
+- **`noop`**: the same block as Workouts on the Training Day the workout starts on. The strap's heart rate stream is append-only and has no replacement windows, so the protocol gives no coverage signal for samples. Sample sufficiency shows in `hr.basis` instead.
+- **Excluded data**: the route, raw samples, RR intervals and coordinates are never returned or logged.
 
 ## Exercise Set history
 
@@ -351,7 +413,7 @@ Workouts are ordered by date, then creation id. Repeated entries of the Exercise
 
 ## Freshness and coverage
 
-The Recovery Day and Workouts on a Training Day reads have a `noop` block that tells how far the receiver's copy of the day can be trusted. A missing sync is never reported as a recorded null.
+The Recovery Day, Workouts on a Training Day and NOOP Workout Detail reads have a `noop` block that tells how far the receiver's copy of the day can be trusted. A missing sync is never reported as a recorded null.
 
 - **`last_push_at`**: the oldest of the latest completed replacements of the read's streams in every relevant namespace. For a Recovery Day that is `dailyMetric` and `sleepSession` in the two strap namespaces (four stream/namespace pairs). For Workouts on a Training Day it is `workout` in both strap namespaces and every other workout namespace known for the active installation, from retained rows or replacement windows. A replacement's completion time is the latest acceptance time of its parts. It is `null` until every pair has completed a replacement under the current receiver state. Staged parts, raw streams and other streams never advance it.
 - **`freshness`** uses completed windows covering this particular day's rows (the Recovery Day's day and Sleep Night, or the Training Day's workout starts). A recent historical backfill cannot confirm a later day:
@@ -435,6 +497,14 @@ FROM workout
 WHERE source_id = :source
   AND start_ts >= unixepoch(:day_start) AND start_ts < unixepoch(:day_end)
 ORDER BY device_id, start_ts;
+
+-- The strap's heart rate samples of a NOOP Workout, its window and 315 s after it. Take :start
+-- and :end from the NOOP Workout Detail.
+SELECT datetime(ts, 'unixepoch') AS at_utc, bpm
+FROM hr_sample
+WHERE source_id = :source AND device_id = 'my-whoop'
+  AND ts >= unixepoch(:start) AND ts <= unixepoch(:end) + 315
+ORDER BY ts;
 
 -- Both namespaces' sessions of the Sleep Night, before selection.
 SELECT device_id, datetime(start_ts, 'unixepoch') AS start_utc,

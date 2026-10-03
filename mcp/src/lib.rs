@@ -68,7 +68,22 @@ The two lists are never paired: a NOOP Workout on the same day is context, not p
 same session. Null means no value. A missing NOOP Workout never means the user did not train; \
 check `noop.freshness` (`unconfirmed`: complete workout coverage for this day has not arrived yet) \
 and `noop.coverage.workouts` (`covered`: NOOP recorded no other workout that day; `unknown`: \
-rows may be missing).";
+rows may be missing). For one NOOP Workout's heart rate from the strap samples and its average \
+pace, call noop_workout_detail with its `source`, `start` and `sport` as listed here.";
+
+const NOOP_WORKOUT_DETAIL: &str = "One NOOP Workout in detail. Pass its `source`, `start` and \
+`sport` exactly as workouts_on_day lists them; `start` is matched as an instant, so any UTC \
+offset names the same workout. `sport` may be left out when no other workout from that source \
+starts at the same instant; otherwise leaving it out is a 409 error naming the sports. Returns the workout's start and end, sport, origin, source, NOOP's recorded \
+duration in minutes, distance in m, energy in kcal and NOOP's derived 0-100 strain score, plus \
+the average pace in seconds per km (null without a positive distance). `hr` is the average, min \
+and max heart rate in beats/min, always from the strap's samples whatever source recorded the \
+workout: `hr.basis` is `strap_samples`, or `workout_row` when the strap has no samples in the \
+workout and the values are NOOP's stored average and max (min is then null), or null when \
+neither exists. `unavailable` names why any null block is null. `noop` holds the freshness and \
+coverage of the workouts on the Europe/Copenhagen Training Day the workout starts on. A \
+workout that workouts_on_day does not list, including a row NOOP merged into another, is a 404 \
+error.";
 
 const EXERCISE_HISTORY: &str = "Exact Set history for one Exercise over 1-90 inclusive \
 Europe/Copenhagen calendar days. Resolves exercise_name case-insensitively; an unknown name or \
@@ -278,6 +293,17 @@ pub struct WorkoutsOnDayRequest {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct NoopWorkoutDetailRequest {
+    /// The NOOP Workout's `source` device namespace, exactly as `workouts_on_day` lists it.
+    pub source: String,
+    /// The NOOP Workout's RFC 3339 `start`, as `workouts_on_day` lists it.
+    pub start: String,
+    /// The NOOP Workout's `sport` as `workouts_on_day` lists it, in any case. Needed only when
+    /// another workout from the same source starts at the same instant.
+    pub sport: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ExerciseHistoryRequest {
     /// Exercise name, resolved case-insensitively; ambiguous names are an error.
     pub exercise_name: String,
@@ -467,6 +493,27 @@ impl TrainingTools {
         self.api
             .get(&["api", "training", "days", &day, "workouts"])
             .await
+    }
+
+    #[tool(
+        description = NOOP_WORKOUT_DETAIL,
+        annotations(
+            title = "NOOP Workout detail",
+            read_only_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn noop_workout_detail(
+        &self,
+        Parameters(NoopWorkoutDetailRequest {
+            source,
+            start,
+            sport,
+        }): Parameters<NoopWorkoutDetailRequest>,
+    ) -> CallToolResult {
+        let mut segments = vec!["api", "training", "noop-workouts", &source, &start];
+        segments.extend(sport.as_deref());
+        self.api.get(&segments).await
     }
 }
 

@@ -6,17 +6,26 @@ use axum::{
     extract::{Path, State},
     routing::get,
 };
+use chrono::{DateTime, Utc};
 
 use crate::error::{AppError, Result};
 use crate::services::training::{
-    self, CalendarDay, ExerciseHistory, Metric, MetricTrend, RecentSleepNights, RecoveryDay,
-    TrainingContext, WorkoutsOnDay,
+    self, CalendarDay, ExerciseHistory, Metric, MetricTrend, NoopWorkoutDetail, RecentSleepNights,
+    RecoveryDay, TrainingContext, WorkoutsOnDay,
 };
 
 pub fn router() -> Router<crate::AppState> {
     Router::new()
         .route("/api/training/days/{day}/recovery", get(recovery_day))
         .route("/api/training/days/{day}/workouts", get(workouts_on_day))
+        .route(
+            "/api/training/noop-workouts/{source}/{start}",
+            get(noop_workout_detail),
+        )
+        .route(
+            "/api/training/noop-workouts/{source}/{start}/{sport}",
+            get(noop_workout_detail_of_sport),
+        )
         .route(
             "/api/training/sleep/recent/{count}",
             get(recent_sleep_nights),
@@ -91,6 +100,51 @@ async fn workouts_on_day(
     let day = parse_day(&day)?;
     Ok(Json(
         training::workouts_on_day(&state.db, &state.noop_db, day).await?,
+    ))
+}
+
+async fn noop_workout_detail(
+    State(state): State<crate::AppState>,
+    Path((source, start)): Path<(String, String)>,
+) -> Result<Json<NoopWorkoutDetail>> {
+    read_noop_workout_detail(&state, &source, &start, None).await
+}
+
+async fn noop_workout_detail_of_sport(
+    State(state): State<crate::AppState>,
+    Path((source, start, sport)): Path<(String, String, String)>,
+) -> Result<Json<NoopWorkoutDetail>> {
+    read_noop_workout_detail(&state, &source, &start, Some(&sport)).await
+}
+
+/// Validates the NOOP Workout's listed `source`, `start` and optional `sport`, then reads it.
+async fn read_noop_workout_detail(
+    state: &crate::AppState,
+    source: &str,
+    start: &str,
+    sport: Option<&str>,
+) -> Result<Json<NoopWorkoutDetail>> {
+    let malformed = |value: &str| value.is_empty() || value.chars().any(char::is_control);
+    if malformed(source) {
+        return Err(AppError::Validation(format!(
+            "Invalid source {source:?}: must be a NOOP device namespace as workouts_on_day lists it"
+        )));
+    }
+    if let Some(sport) = sport.filter(|sport| malformed(sport)) {
+        return Err(AppError::Validation(format!(
+            "Invalid sport {sport:?}: must be a NOOP Workout sport as workouts_on_day lists it"
+        )));
+    }
+    let start = DateTime::parse_from_rfc3339(start)
+        .map_err(|_| {
+            AppError::Validation(format!(
+                "Invalid start '{start}': must be an RFC 3339 timestamp with an offset, as \
+                 workouts_on_day lists it"
+            ))
+        })?
+        .with_timezone(&Utc);
+    Ok(Json(
+        training::noop_workout_detail(&state.noop_db, source, start, sport).await?,
     ))
 }
 

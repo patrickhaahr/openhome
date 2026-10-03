@@ -33,6 +33,9 @@ The tool contracts are documented in `docs/training-context.md`.
 - `workouts_on_day(day)` → `GET /api/training/days/{day}/workouts`
   - `day` is a Europe/Copenhagen calendar date, `YYYY-MM-DD`.
   - Returns the Workouts logged in OpenHome that day with their Exercises and Sets, the separate NOOP Workouts starting that day, and `noop` freshness and coverage.
+- `noop_workout_detail(source, start, sport?)` → `GET /api/training/noop-workouts/{source}/{start}[/{sport}]`
+  - `source`, `start` and `sport` are one NOOP Workout's values exactly as `workouts_on_day` lists them; `start` is RFC 3339 and matched as an instant. The optional `sport` becomes a third path segment only when given; without it, workouts sharing `source` and `start` are the API's 409.
+  - Returns the NOOP Workout Detail: summary values, average pace, heart rate from the strap samples (`hr.basis`), `unavailable`, and the Training Day's `noop` freshness and coverage.
 - `exercise_history(exercise_name, from_day, to_day)` → `GET /api/training/exercises/{exercise_name}/history/{from_day}/{to_day}`
   - Dates are inclusive Europe/Copenhagen calendar days, up to 90 days. Returns dated Workouts and exact ordered Sets for one resolved Exercise; an Exercise without performances has an empty `workouts` list.
 
