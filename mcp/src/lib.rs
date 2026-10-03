@@ -45,7 +45,8 @@ synced; check each result's freshness and coverage before treating a gap as real
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
 sessions ending that day. Every value has a unit (sleep in minutes, efficiency as a 0-1 fraction, \
-resting heart rate in beats/min, HRV as RMSSD in ms) and names the NOOP namespace it was selected \
+resting heart rate in beats/min, HRV as RMSSD in ms, skin temperature as a deviation in degC from the user's baseline rather than an \
+absolute temperature, respiratory rate in breaths/min) and names the NOOP namespace it was selected \
 from. `derived_scores` are NOOP's own 0-100 recovery and strain scores: model outputs, not \
 measurements or diagnoses. `journal` lists the Journal Entries the user logged in NOOP against \
 `day` (felt recovered, alcohol, illness, stress, supplements, ...), one per question with its yes/no \
