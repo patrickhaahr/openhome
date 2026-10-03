@@ -147,6 +147,7 @@ async fn training_log() -> SqlitePool {
     for migration in [
         include_str!("../../api/migrations/0003_fitness.up.sql"),
         include_str!("../../api/migrations/0004_remove_workout_body_weight.up.sql"),
+        include_str!("../../api/migrations/0005_profile_hr_max.up.sql"),
     ] {
         sqlx::raw_sql(migration).execute(&db).await.unwrap();
     }

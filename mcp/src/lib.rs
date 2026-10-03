@@ -72,8 +72,8 @@ The two lists are never paired: a NOOP Workout on the same day is context, not p
 same session. Null means no value. A missing NOOP Workout never means the user did not train; \
 check `noop.freshness` (`unconfirmed`: complete workout coverage for this day has not arrived yet) \
 and `noop.coverage.workouts` (`covered`: NOOP recorded no other workout that day; `unknown`: \
-rows may be missing). For one NOOP Workout's heart rate from the strap samples and its average \
-pace, call noop_workout_detail with its `source`, `start` and `sport` as listed here.";
+rows may be missing). For one NOOP Workout's heart rate from the strap samples, its time in \
+Heart Rate Zones, its heart rate series and its average pace, call noop_workout_detail with its `source`, `start` and `sport` as listed here.";
 
 const NOOP_WORKOUT_DETAIL: &str = "One NOOP Workout in detail. Pass its `source`, `start` and \
 `sport` exactly as workouts_on_day lists them; `start` is matched as an instant, so any UTC \
@@ -84,7 +84,15 @@ the average pace in seconds per km (null without a positive distance). `hr` is t
 and max heart rate in beats/min, always from the strap's samples whatever source recorded the \
 workout: `hr.basis` is `strap_samples`, or `workout_row` when the strap has no samples in the \
 workout and the values are NOOP's stored average and max (min is then null), or null when \
-neither exists. `unavailable` names why any null block is null. `noop` holds the freshness and \
+neither exists. `hr_series` is the shape of the session: `points` of mean strap heart rate \
+per `bucket_s` bucket (15 s, widened to keep at most 300 points), each `t_s` seconds from the \
+start; empty buckets are omitted, so a gap in the data stays a gap. `hr_series` is null without \
+strap samples (`no_strap_samples`). `hr_zones` is the time in Heart Rate Zones 1-5, computed as the NOOP app does: \
+inclusive lower edges at 50/60/70/80/90 % of the Profile's Max Heart Rate (echoed as \
+`hrmax_used`, each zone with lower_bpm and upper_bpm), minutes and percent per zone (unrounded), \
+and time below Zone 1 in `below_zone_min`, left out of the percentages. `hr_zones` is null when \
+the Profile has no Max Heart Rate (`hr_max_not_configured`) or the strap has no samples in the \
+workout (`no_strap_samples`). `unavailable` names why any null block is null. `noop` holds the freshness and \
 coverage of the workouts on the Europe/Copenhagen Training Day the workout starts on. A \
 workout that workouts_on_day does not list, including a row NOOP merged into another, is a 404 \
 error.";
