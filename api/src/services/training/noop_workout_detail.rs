@@ -1,12 +1,15 @@
 //! NOOP Workout Detail: one NOOP Workout, opened by the `source` and `start` that Workouts on a
-//! Training Day lists for it, with heart rate taken from the strap's samples and split into Heart
-//! Rate Zones relative to the Profile's current Max Heart Rate.
+//! Training Day lists for it, with heart rate taken from the strap's samples, split into Heart Rate
+//! Zones relative to the Profile's current Max Heart Rate, and its Heart Rate Recovery.
 //!
 //! Selection runs against the merged NOOP Workout list of the workout's Training Day, so a row
 //! that NOOP folds into another one, or drops as a detected shadow, cannot be opened. Heart rate
 //! always comes from the strap's imported namespace, whatever namespace recorded the workout: it is
 //! the user's only heart rate sensor. The stored row's average and max are only a labelled fallback
 //! when the strap has no samples for the workout.
+//!
+//! Heart Rate Recovery ports the NOOP app's `HeartRateRecovery` so the API reports the drops the
+//! app shows. It needs the Profile's Max Heart Rate, which is never inferred.
 //!
 //! The route, raw samples and RR intervals never leave the API; only values computed from the
 //! samples are returned.
@@ -29,6 +32,21 @@ pub const MAX_DURATION_S: i64 = 24 * 60 * 60;
 /// mark and its ±15 s window.
 const SAMPLES_AFTER_END_S: i64 = 315;
 const BASE_BUCKET_S: i64 = 15;
+/// Heart rate outside this range is ignored for Heart Rate Recovery.
+const RECOVERY_BPM_RANGE: std::ops::RangeInclusive<i64> = 30..=250;
+/// Recovery is meaningful only after hard effort that lasts until the end: within the last
+/// 300 s, 120 s continuously at or above 70 % of Max Heart Rate, where consecutive samples at
+/// most 10 s apart are continuous.
+const ELIGIBILITY_LOOKBACK_S: i64 = 300;
+const ELIGIBILITY_FRACTION_OF_HR_MAX: f64 = 0.70;
+const MIN_SUSTAINED_S: i64 = 120;
+const MAX_CONTINUOUS_GAP_S: i64 = 10;
+/// End HR is the highest heart rate in the workout's final 30 s.
+const END_WINDOW_S: i64 = 30;
+/// A mark is the median heart rate within 15 s of it.
+const MARK_TOLERANCE_S: i64 = 15;
+/// Samples an end HR or a mark needs.
+const MIN_READING_SAMPLES: usize = 3;
 const MAX_SERIES_POINTS: i64 = 300;
 /// Inclusive lower edges of Heart Rate Zones 1-5 as fractions of Max Heart Rate; Zone 5 is
 /// open-ended.
@@ -58,6 +76,9 @@ pub struct NoopWorkoutDetail {
     /// Time in each Heart Rate Zone over `[start, end)`; null without a Max Heart Rate or strap
     /// samples.
     pub hr_zones: Option<HeartRateZones>,
+    /// The heart rate drop after the workout ends; null when no Max Heart Rate is set, without
+    /// strap samples, or when the end of the workout was not hard enough to measure it.
+    pub hr_recovery: Option<HeartRateRecovery>,
     /// Why a null block of the detail is null, keyed by the block's name. A key is present only
     /// for a block that is null.
     pub unavailable: Unavailable,
@@ -114,6 +135,25 @@ pub struct HeartRateZone {
     pub percent: f64,
 }
 
+/// The highest heart rate in the workout's final 30 s, and how far it dropped 1, 2 and 5 minutes
+/// after the end.
+#[derive(Debug, Serialize)]
+pub struct HeartRateRecovery {
+    pub end_hr_bpm: i64,
+    pub at_1_min: Option<RecoveryMark>,
+    pub at_2_min: Option<RecoveryMark>,
+    pub at_5_min: Option<RecoveryMark>,
+}
+
+/// The median heart rate within 15 s of a mark; a mark with fewer than 3 samples is null rather
+/// than interpolated.
+#[derive(Debug, Serialize)]
+pub struct RecoveryMark {
+    pub hr_bpm: i64,
+    /// End HR minus `hr_bpm`.
+    pub drop_bpm: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HrBasis {
@@ -130,6 +170,8 @@ pub struct Unavailable {
     pub hr_series: Option<UnavailableReason>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hr_zones: Option<UnavailableReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hr_recovery: Option<UnavailableReason>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -138,12 +180,16 @@ pub enum UnavailableReason {
     /// The Profile has no Max Heart Rate, and none is ever guessed.
     HrMaxNotConfigured,
     NoStrapSamples,
+    /// The last 300 s of the workout lack 120 s of continuous effort at 70 % of Max Heart Rate.
+    NotSustained,
+    /// Fewer than 3 samples in the workout's final 30 s.
+    NoEndSamples,
 }
 
 /// The detail of the merged NOOP Workout whose namespace is `source`, which starts at the instant
 /// `start` and, when given, whose sport is `sport` in any case. NOOP keeps workouts of different
 /// sports that share a namespace and start apart, so without `sport` such a collision is a
-/// conflict rather than a guess. Heart Rate Zones use the Profile's Max Heart Rate in `db` at the
+/// conflict rather than a guess. Heart Rate Zones and Heart Rate Recovery use the Profile's Max Heart Rate in `db` at the
 /// time of the read.
 pub async fn noop_workout_detail(
     db: &SqlitePool,
@@ -218,11 +264,17 @@ pub async fn noop_workout_detail(
         Some(_) => Err(UnavailableReason::NoStrapSamples),
         None => Err(UnavailableReason::HrMaxNotConfigured),
     };
+    let hr_recovery = match hr_max {
+        None => Err(UnavailableReason::HrMaxNotConfigured),
+        Some(_) if in_workout.is_empty() => Err(UnavailableReason::NoStrapSamples),
+        Some(hr_max) => heart_rate_recovery(&workout, &samples, hr_max),
+    };
     let unavailable = Unavailable {
         hr_series: hr_series
             .is_none()
             .then_some(UnavailableReason::NoStrapSamples),
         hr_zones: hr_zones.as_ref().err().copied(),
+        hr_recovery: hr_recovery.as_ref().err().copied(),
     };
     Ok(NoopWorkoutDetail {
         start: calendar::iso_from_unix(workout.start_ts)?,
@@ -231,6 +283,7 @@ pub async fn noop_workout_detail(
         hr: heart_rate(&workout, in_workout),
         hr_series,
         hr_zones: hr_zones.ok(),
+        hr_recovery: hr_recovery.ok(),
         unavailable,
         noop: NoopSync::synced(installation, last_push_at, day_sync),
         sport: workout.sport,
@@ -353,4 +406,81 @@ fn median_interval_s(samples: &[HrSample]) -> f64 {
     gaps.sort_unstable();
     gaps.get(gaps.len() / 2)
         .map_or(1.0, |&gap| gap.max(1) as f64)
+}
+
+/// Heart Rate Recovery as the NOOP app computes it. `samples` are sorted by timestamp and span
+/// `[start, end + 315 s]`.
+fn heart_rate_recovery(
+    workout: &WorkoutRow,
+    samples: &[HrSample],
+    hr_max_bpm: i64,
+) -> std::result::Result<HeartRateRecovery, UnavailableReason> {
+    let end = workout.end_ts;
+    let lookback_start = workout.start_ts.max(end - ELIGIBILITY_LOOKBACK_S);
+    let samples: Vec<&HrSample> = samples
+        .iter()
+        .filter(|sample| sample.ts >= lookback_start && RECOVERY_BPM_RANGE.contains(&sample.bpm))
+        .collect();
+    let until_end = &samples[..samples.partition_point(|sample| sample.ts <= end)];
+
+    let threshold = hr_max_bpm as f64 * ELIGIBILITY_FRACTION_OF_HR_MAX;
+    if sustained_s(until_end, threshold) < MIN_SUSTAINED_S {
+        return Err(UnavailableReason::NotSustained);
+    }
+    let end_window = until_end
+        .iter()
+        .filter(|sample| sample.ts >= end - END_WINDOW_S);
+    if end_window.clone().count() < MIN_READING_SAMPLES {
+        return Err(UnavailableReason::NoEndSamples);
+    }
+    let end_hr_bpm = end_window
+        .map(|sample| sample.bpm)
+        .max()
+        .unwrap_or_default();
+
+    let mark = |minutes: i64| {
+        let at = end + minutes * 60;
+        let mut bpm: Vec<i64> = samples
+            .iter()
+            .filter(|sample| (sample.ts - at).abs() <= MARK_TOLERANCE_S)
+            .map(|sample| sample.bpm)
+            .collect();
+        if bpm.len() < MIN_READING_SAMPLES {
+            return None;
+        }
+        bpm.sort_unstable();
+        let middle = bpm.len() / 2;
+        let hr_bpm = if bpm.len().is_multiple_of(2) {
+            ((bpm[middle - 1] + bpm[middle]) as f64 / 2.0).round() as i64
+        } else {
+            bpm[middle]
+        };
+        Some(RecoveryMark {
+            hr_bpm,
+            drop_bpm: end_hr_bpm - hr_bpm,
+        })
+    };
+    Ok(HeartRateRecovery {
+        end_hr_bpm,
+        at_1_min: mark(1),
+        at_2_min: mark(2),
+        at_5_min: mark(5),
+    })
+}
+
+/// The longest run of seconds at or above `threshold`, where each sample at or above it is
+/// credited with the time to the next one when that is at most 10 s away.
+fn sustained_s(samples: &[&HrSample], threshold: f64) -> i64 {
+    let mut current = 0;
+    let mut longest = 0;
+    for pair in samples.windows(2) {
+        let gap = pair[1].ts - pair[0].ts;
+        if gap > MAX_CONTINUOUS_GAP_S || (pair[0].bpm as f64) < threshold {
+            current = 0;
+        } else {
+            current += gap;
+            longest = longest.max(current);
+        }
+    }
+    longest
 }

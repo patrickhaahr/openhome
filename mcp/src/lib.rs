@@ -73,7 +73,8 @@ same session. Null means no value. A missing NOOP Workout never means the user d
 check `noop.freshness` (`unconfirmed`: complete workout coverage for this day has not arrived yet) \
 and `noop.coverage.workouts` (`covered`: NOOP recorded no other workout that day; `unknown`: \
 rows may be missing). For one NOOP Workout's heart rate from the strap samples, its time in \
-Heart Rate Zones, its heart rate series and its average pace, call noop_workout_detail with its `source`, `start` and `sport` as listed here.";
+Heart Rate Zones, its Heart Rate Recovery, its heart rate series and its average pace, call \
+noop_workout_detail with its `source`, `start` and `sport` as listed here.";
 
 const NOOP_WORKOUT_DETAIL: &str = "One NOOP Workout in detail. Pass its `source`, `start` and \
 `sport` exactly as workouts_on_day lists them; `start` is matched as an instant, so any UTC \
@@ -92,7 +93,13 @@ inclusive lower edges at 50/60/70/80/90 % of the Profile's Max Heart Rate (echoe
 `hrmax_used`, each zone with lower_bpm and upper_bpm), minutes and percent per zone (unrounded), \
 and time below Zone 1 in `below_zone_min`, left out of the percentages. `hr_zones` is null when \
 the Profile has no Max Heart Rate (`hr_max_not_configured`) or the strap has no samples in the \
-workout (`no_strap_samples`). `unavailable` names why any null block is null. `noop` holds the freshness and \
+workout (`no_strap_samples`). `hr_recovery` is Heart \
+Rate Recovery as the NOOP app computes it: `end_hr_bpm`, the highest heart rate in the final 30 \
+s, and `at_1_min`, `at_2_min` and `at_5_min`, each the median heart rate within 15 s of that \
+time after the end with `drop_bpm` from `end_hr_bpm`, or null without 3 samples there. It is \
+null when the profile has no Max Heart Rate, without strap samples, when the last 5 minutes \
+lacked 2 minutes of continuous effort at 70% of Max Heart Rate, or with under 3 samples in the \
+final 30 s. `unavailable` names why any null block is null. `noop` holds the freshness and \
 coverage of the workouts on the Europe/Copenhagen Training Day the workout starts on. A \
 workout that workouts_on_day does not list, including a row NOOP merged into another, is a 404 \
 error.";
