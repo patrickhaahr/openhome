@@ -144,7 +144,7 @@ async fn read_noop_workout_detail(
         })?
         .with_timezone(&Utc);
     Ok(Json(
-        training::noop_workout_detail(&state.noop_db, source, start, sport).await?,
+        training::noop_workout_detail(&state.db, &state.noop_db, source, start, sport).await?,
     ))
 }
 

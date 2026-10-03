@@ -322,7 +322,7 @@ This example is 2026-09-26: the user logged a Workout that day and timed a sessi
   - `strain_score` is NOOP's derived 0–100 workout strain: a model output, not a measurement.
   - `origin` is NOOP's classification of the row's `source`: `manual` (logged in NOOP), `detected` (a bout NOOP's detector derived from heart rate), `whoop` (WHOOP export), `health_import` (Apple Health or Health Connect, and NOOP's fallback for unknown sources), `lifting` (Hevy or Liftosaur) or `activity_file` (GPX, TCX or FIT).
   - `source` is the device namespace of the stored row.
-  - A NOOP Workout's `source`, `start` and `sport` open its [NOOP Workout Detail](#noop-workout-detail), with heart rate from the strap's samples and the average pace.
+  - A NOOP Workout's `source`, `start` and `sport` open its [NOOP Workout Detail](#noop-workout-detail), with heart rate from the strap's samples, Heart Rate Zones and the average pace.
   - Stored HR zones, routes and raw streams are never returned.
 - **An empty `noop_workouts` never means the user did not train.** With `coverage.workouts: covered`, NOOP recorded no workout starting that day. With `unknown`, rows may not have been pushed yet.
 
@@ -349,7 +349,7 @@ One NOOP Workout from [Workouts on a Training Day](#workouts-on-a-training-day),
 
 ### Response
 
-This example is the reference run of 2026-09-27. It was started manually in NOOP, and its stored row says 160 / 183 beats/min. The strap's samples, as the NOOP app shows them, say 166 / 185. The series is abbreviated to its first two points here; the response includes all 183 non-empty buckets.
+This example is the reference run of 2026-09-27. It was started manually in NOOP, and its stored row says 160 / 183 beats/min. The strap's samples, as the NOOP app shows them, say 166 / 185. The Profile's Max Heart Rate is 193. The series is abbreviated to its first two points here; the response includes all 183 non-empty buckets.
 
 ```json
 {
@@ -365,6 +365,17 @@ This example is the reference run of 2026-09-27. It was started manually in NOOP
   "avg_pace_s_per_km": 382.12053039235946,
   "hr": { "basis": "strap_samples", "avg_bpm": 166.07591240875914, "min_bpm": 84.0, "max_bpm": 185.0 },
   "hr_series": { "bucket_s": 15, "points": [{ "t_s": 0, "bpm": 86.6 }, { "t_s": 15, "bpm": 85.4 }] },
+  "hr_zones": {
+    "hrmax_used": 193,
+    "below_zone_min": 1.5666666666666667,
+    "zones": [
+      { "zone": 1, "lower_bpm": 97, "upper_bpm": 115, "minutes": 0.6166666666666667, "percent": 1.3983371126228268 },
+      { "zone": 2, "lower_bpm": 116, "upper_bpm": 135, "minutes": 1.55, "percent": 3.5147392290249435 },
+      { "zone": 3, "lower_bpm": 136, "upper_bpm": 154, "minutes": 2.783333333333333, "percent": 6.311413454270596 },
+      { "zone": 4, "lower_bpm": 155, "upper_bpm": 173, "minutes": 17.2, "percent": 39.002267573696145 },
+      { "zone": 5, "lower_bpm": 174, "upper_bpm": 193, "minutes": 21.95, "percent": 49.77324263038549 }
+    ]
+  },
   "unavailable": {},
   "noop": {
     "installation_id": "81906e30-187d-4546-8f8a-9949b82d62fa",
@@ -389,7 +400,13 @@ This example is the reference run of 2026-09-27. It was started manually in NOOP
   - Each point is `{t_s, bpm}`: `t_s` is the bucket start's offset in seconds from the workout's `start`, and `bpm` is the arithmetic mean of the strap samples in that bucket. Buckets are half-open and anchored to the workout start, not wall-clock boundaries; the final bucket can be partial.
   - Empty buckets are omitted, never zero-filled or interpolated. There are at most 300 points. Only this series is downsampled; other detail values still use full-resolution samples.
   - When `hr.basis` is `workout_row` or null, `hr_series` is null and `unavailable.hr_series` is `"no_strap_samples"`. Stored average/max heart rate cannot substitute for a measured series.
-- **`unavailable`**: names why a null block of the detail is null, keyed by the block. A key is present only for a null block: `{}` when strap samples provide the series, or `{"hr_series": "no_strap_samples"}` when they do not.
+- **`hr_zones`**: time in each Heart Rate Zone over the same `[start, end)` window, computed with the NOOP app's algorithm (`HRZones`), so the split is identical to the app's for the same run and the same Max Heart Rate.
+  - `hrmax_used` is the Profile's current Max Heart Rate (`hr_max_bpm`, set with `PATCH /api/profile`). It must equal the NOOP app's manual override for the zones to match. It is never inferred, and there is no history: a changed value re-zones every workout on the next read, as the app re-zones its history.
+  - Zones 1–5 have inclusive lower edges at 50 / 60 / 70 / 80 / 90 % of `hrmax_used`; Zone 5 is open-ended. A sample's zone is decided against the unrounded thresholds: at 193, 135 bpm is below the 135.1 bpm edge of Zone 3. `lower_bpm` is `ceil(pct × hrmax_used)`, the lowest whole bpm in the zone. `upper_bpm` is the next zone's `lower_bpm` − 1, and `hrmax_used` for Zone 5, which still counts higher samples.
+  - **Time credit**: each sample is credited with the time until the next sample in the window, capped at the window's median sample interval, so a gap in the data never inflates one zone. The last sample is credited with the median interval. The median is the upper median of the gaps shorter than 300 s, at least 1 s, and 1 s when there is no such gap.
+  - Time below 50 % goes to `below_zone_min` and is left out of the percentages. `percent` is the zone's share of the time in Zones 1–5, so the five sum to 100 (± float rounding), or are all 0 when no time is in a zone. Minutes and percentages are unrounded; the NOOP app shows them rounded (percentages) and floored (minutes).
+  - Null when the Profile has no Max Heart Rate (`unavailable.hr_zones: "hr_max_not_configured"`, whether or not there are samples) or when the window has no strap samples (`"no_strap_samples"`). Stored zones on the workout row are never used.
+- **`unavailable`**: names why a null block of the detail is null, keyed by the block. A key is present only for a null block: `{}` when strap samples and a Max Heart Rate provide everything, `{"hr_zones": "hr_max_not_configured"}` without a Max Heart Rate, or `{"hr_series": "no_strap_samples", "hr_zones": "no_strap_samples"}` without strap samples.
 - **`noop`**: the same block as Workouts on the Training Day the workout starts on. The strap's heart rate stream is append-only and has no replacement windows, so the protocol gives no coverage signal for samples. Sample sufficiency shows in `hr.basis` instead.
 - **Excluded data**: the route, raw samples, RR intervals and coordinates are never returned or logged.
 
