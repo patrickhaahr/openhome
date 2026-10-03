@@ -73,6 +73,8 @@ async fn the_reference_run_reports_heart_rate_from_the_strap_samples() {
     assert_close(&body["avg_pace_s_per_km"], 382.12053039235946);
     body["hr"]["avg_bpm"] = Value::Null;
     body["avg_pace_s_per_km"] = Value::Null;
+    // Bucket behavior is covered by the short/gapped and long-session HTTP cases.
+    body["hr_series"] = Value::Null;
     assert_eq!(
         body,
         json!({
@@ -87,6 +89,7 @@ async fn the_reference_run_reports_heart_rate_from_the_strap_samples() {
             "strain_score": 58.45,
             "avg_pace_s_per_km": null,
             "hr": {"basis": "strap_samples", "avg_bpm": null, "min_bpm": 84.0, "max_bpm": 185.0},
+            "hr_series": null,
             "unavailable": {},
             "noop": {
                 "installation_id": SOURCE,
@@ -340,7 +343,7 @@ async fn rejects_oversized_workouts_and_days_instead_of_truncating() {
 
 #[tokio::test]
 async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout() {
-    // 07:00-07:01 on the 26th, imported from Apple Health with its own average and max.
+    // 07:00:01-07:01:01 on the 26th, off Unix bucket boundaries, imported from Apple Health.
     let mut mirror = mirror_with(&[]).await;
     mirror
         .push(
@@ -348,8 +351,8 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
             "apple-health",
             WORKOUT_WINDOW,
             &[noop_workout(
-                1_790_398_800,
-                1_790_398_860,
+                1_790_398_801,
+                1_790_398_861,
                 "Running",
                 "apple-health",
                 json!({"avgHr": 150.0, "maxHr": 170.0}),
@@ -359,11 +362,12 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
         .await;
     let strap = [
         // Just before the start, inside [start, end), then at the end.
-        (1_790_398_799, 200),
-        (1_790_398_800, 120),
-        (1_790_398_830, 141),
-        (1_790_398_859, 130),
-        (1_790_398_860, 40),
+        (1_790_398_800, 200),
+        (1_790_398_801, 120),
+        (1_790_398_815, 123),
+        (1_790_398_831, 141),
+        (1_790_398_860, 130),
+        (1_790_398_861, 40),
     ];
     mirror
         .push_hr_samples(SOURCE, IMPORTED, &strap, PUSHED_AT)
@@ -387,16 +391,71 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
     let body = detail_of(
         &app(&mirror).await,
         "apple-health",
-        "2026-09-26T07:00:00+02:00",
+        "2026-09-26T07:00:01+02:00",
     )
     .await;
     assert_eq!(body["origin"], "health_import");
     assert_eq!(body["source"], "apple-health");
+    // Buckets start at the workout, not at Unix-aligned multiples of 15. The empty
+    // [15, 30) bucket is omitted; boundary and post-workout samples never leak in.
+    assert_eq!(
+        body["hr_series"],
+        json!({"bucket_s": 15, "points": [
+            {"t_s": 0, "bpm": 121.5},
+            {"t_s": 30, "bpm": 141.0},
+            {"t_s": 45, "bpm": 130.0},
+        ]})
+    );
     assert_eq!(
         body["hr"],
-        json!({"basis": "strap_samples", "avg_bpm": 130.33333333333334, "min_bpm": 120.0,
+        json!({"basis": "strap_samples", "avg_bpm": 128.5, "min_bpm": 120.0,
                "max_bpm": 141.0})
     );
+}
+
+#[tokio::test]
+async fn heart_rate_series_widens_only_as_needed_to_keep_at_most_300_buckets() {
+    // Exact thresholds, one second beyond them, and the longest accepted workout.
+    for (duration_s, bucket_s, count, last_t_s) in [
+        (4_500, 15, 300, 4_485),
+        (4_501, 30, 151, 4_500),
+        (9_000, 30, 300, 8_970),
+        (9_001, 45, 201, 9_000),
+        (86_400, 300, 288, 86_100),
+    ] {
+        let start = 1_790_398_800;
+        let mut mirror = mirror_with(&[noop_workout(
+            start,
+            start + duration_s,
+            "Running",
+            "manual",
+            // The recorded duration must not determine the series' time window.
+            json!({"durationS": 60.0}),
+        )])
+        .await;
+        let samples: Vec<_> = (0..duration_s)
+            .step_by(15)
+            .map(|offset| (start + offset, 120))
+            .collect();
+        mirror
+            .push_hr_samples(SOURCE, IMPORTED, &samples, PUSHED_AT)
+            .await;
+
+        let body = detail_of(&app(&mirror).await, IMPORTED, "2026-09-26T07:00:00+02:00").await;
+        let series = &body["hr_series"];
+        assert_eq!(series["bucket_s"], bucket_s, "duration {duration_s}");
+        let points = series["points"].as_array().unwrap();
+        assert_eq!(points.len(), count, "duration {duration_s}");
+        assert!(points.len() <= 300);
+        assert_eq!(points.first().unwrap(), &json!({"t_s": 0, "bpm": 120.0}));
+        assert_eq!(
+            points.last().unwrap(),
+            &json!({"t_s": last_t_s, "bpm": 120.0})
+        );
+        assert!(points.windows(2).all(|pair| {
+            pair[1]["t_s"].as_i64().unwrap() - pair[0]["t_s"].as_i64().unwrap() == bucket_s
+        }));
+    }
 }
 
 #[tokio::test]
@@ -434,12 +493,18 @@ async fn heart_rate_falls_back_to_the_row_only_without_strap_samples() {
         run["hr"],
         json!({"basis": "workout_row", "avg_bpm": 150.0, "min_bpm": null, "max_bpm": 170.0})
     );
-    assert_eq!(run["unavailable"], json!({}));
+    assert_eq!(run.get("hr_series"), Some(&Value::Null));
+    assert_eq!(run["unavailable"], json!({"hr_series": "no_strap_samples"}));
 
     let session = detail_of(&app, IMPORTED, "2026-09-26T18:00:00+02:00").await;
     assert_eq!(
         session["hr"],
         json!({"basis": null, "avg_bpm": null, "min_bpm": null, "max_bpm": null})
+    );
+    assert_eq!(session.get("hr_series"), Some(&Value::Null));
+    assert_eq!(
+        session["unavailable"],
+        json!({"hr_series": "no_strap_samples"})
     );
 }
 

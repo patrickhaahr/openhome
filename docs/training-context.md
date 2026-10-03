@@ -349,7 +349,7 @@ One NOOP Workout from [Workouts on a Training Day](#workouts-on-a-training-day),
 
 ### Response
 
-This example is the reference run of 2026-09-27. It was started manually in NOOP, and its stored row says 160 / 183 beats/min. The strap's samples, as the NOOP app shows them, say 166 / 185.
+This example is the reference run of 2026-09-27. It was started manually in NOOP, and its stored row says 160 / 183 beats/min. The strap's samples, as the NOOP app shows them, say 166 / 185. The series is abbreviated to its first two points here; the response includes all 183 non-empty buckets.
 
 ```json
 {
@@ -364,6 +364,7 @@ This example is the reference run of 2026-09-27. It was started manually in NOOP
   "strain_score": 58.45,
   "avg_pace_s_per_km": 382.12053039235946,
   "hr": { "basis": "strap_samples", "avg_bpm": 166.07591240875914, "min_bpm": 84.0, "max_bpm": 185.0 },
+  "hr_series": { "bucket_s": 15, "points": [{ "t_s": 0, "bpm": 86.6 }, { "t_s": 15, "bpm": 85.4 }] },
   "unavailable": {},
   "noop": {
     "installation_id": "81906e30-187d-4546-8f8a-9949b82d62fa",
@@ -383,7 +384,12 @@ This example is the reference run of 2026-09-27. It was started manually in NOOP
   - `basis: "strap_samples"`: the window holds at least one strap sample. `avg_bpm`, `min_bpm` and `max_bpm` are computed over those samples, as the NOOP app does.
   - `basis: "workout_row"`: the window has no strap samples. `avg_bpm` and `max_bpm` are the stored row's values, which NOOP may not have reconciled with the strap. `min_bpm` is null.
   - `basis: null`: neither exists, and every value is null.
-- **`unavailable`**: names why a null block of the detail is null, keyed by the block. A key is present only for a null block. The current blocks are never null, so it is `{}`.
+- **`hr_series`**: a bounded strap heart rate series over the same `[start, end)` window, with points in chronological order.
+  - `bucket_s` is 15 seconds for workouts up to 4,500 seconds. For longer workouts it is the smallest multiple of 15 that keeps `ceil((end - start) / bucket_s)` at most 300, regardless of gaps or NOOP's recorded `duration_min`. A 24-hour workout uses 300-second buckets and has at most 288 points.
+  - Each point is `{t_s, bpm}`: `t_s` is the bucket start's offset in seconds from the workout's `start`, and `bpm` is the arithmetic mean of the strap samples in that bucket. Buckets are half-open and anchored to the workout start, not wall-clock boundaries; the final bucket can be partial.
+  - Empty buckets are omitted, never zero-filled or interpolated. There are at most 300 points. Only this series is downsampled; other detail values still use full-resolution samples.
+  - When `hr.basis` is `workout_row` or null, `hr_series` is null and `unavailable.hr_series` is `"no_strap_samples"`. Stored average/max heart rate cannot substitute for a measured series.
+- **`unavailable`**: names why a null block of the detail is null, keyed by the block. A key is present only for a null block: `{}` when strap samples provide the series, or `{"hr_series": "no_strap_samples"}` when they do not.
 - **`noop`**: the same block as Workouts on the Training Day the workout starts on. The strap's heart rate stream is append-only and has no replacement windows, so the protocol gives no coverage signal for samples. Sample sufficiency shows in `hr.basis` instead.
 - **Excluded data**: the route, raw samples, RR intervals and coordinates are never returned or logged.
 
