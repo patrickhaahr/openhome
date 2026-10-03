@@ -269,6 +269,7 @@ async fn discovers_the_read_only_training_tools() {
         [
             "exercise_history",
             "metric_trend",
+            "noop_workout_detail",
             "recovery_on_day",
             "sleep_recent",
             "training_context",
@@ -287,6 +288,7 @@ async fn discovers_the_read_only_training_tools() {
         let required = match tool.name.as_ref() {
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
+            "noop_workout_detail" => json!(["source", "start"]),
             "sleep_recent" => json!(["n"]),
             "training_context" => json!(["from_day", "to_day"]),
             _ => json!(["day"]),
@@ -537,6 +539,102 @@ async fn returns_the_api_workouts_on_a_day_unchanged() {
     );
     assert_eq!(invalid.structured_content.unwrap()["status"], 400);
 
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn noop_workout_detail_forwards_one_workout_and_api_errors_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let call = |source: &str, start: &str, sport: Option<&str>| {
+        let mut arguments = json!({"source": source, "start": start});
+        if let Some(sport) = sport {
+            arguments["sport"] = json!(sport);
+        }
+        let request = CallToolRequestParams::new("noop_workout_detail")
+            .with_arguments(arguments.as_object().unwrap().clone());
+        client.call_tool(request)
+    };
+    let direct = |path: &str| {
+        let url = format!("{api}/api/training/noop-workouts/{path}");
+        async move {
+            reqwest::Client::new()
+                .get(url)
+                .bearer_auth(API_KEY)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+
+    // The NOOP Workout exactly as workouts_on_day lists it.
+    let listed = api_get_read(&api, "2026-09-14", "workouts").await["noop_workouts"][0].clone();
+    let result = call(
+        listed["source"].as_str().unwrap(),
+        listed["start"].as_str().unwrap(),
+        None,
+    )
+    .await
+    .unwrap();
+    let api_result = direct("my-whoop/2026-09-14T18:00:00+02:00").await;
+    assert_eq!(result.is_error, Some(false));
+    assert_eq!(result.structured_content, Some(api_result.clone()));
+    assert_eq!(api_result["start"], listed["start"]);
+    assert_eq!(
+        api_result["hr"],
+        json!({"basis": "workout_row", "avg_bpm": 88.0, "min_bpm": null, "max_bpm": 141.0})
+    );
+
+    // The listed sport, when passed, is a third path segment.
+    let with_sport = call(
+        listed["source"].as_str().unwrap(),
+        listed["start"].as_str().unwrap(),
+        Some(listed["sport"].as_str().unwrap()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(with_sport.is_error, Some(false));
+    assert_eq!(
+        with_sport.structured_content,
+        Some(direct("my-whoop/2026-09-14T18:00:00+02:00/Calisthenics").await)
+    );
+    assert_eq!(with_sport.structured_content, Some(api_result.clone()));
+    let other_sport = call("my-whoop", "2026-09-14T18:00:00+02:00", Some("Running"))
+        .await
+        .unwrap();
+    assert_eq!(other_sport.is_error, Some(true));
+    assert_eq!(
+        other_sport.structured_content,
+        Some(direct("my-whoop/2026-09-14T18:00:00+02:00/Running").await)
+    );
+    assert_eq!(other_sport.structured_content.unwrap()["status"], 404);
+
+    let invalid = call("my-whoop", "2026-09-14", None).await.unwrap();
+    assert_eq!(invalid.is_error, Some(true));
+    assert_eq!(
+        invalid.structured_content,
+        Some(direct("my-whoop/2026-09-14").await)
+    );
+    assert_eq!(invalid.structured_content.unwrap()["status"], 400);
+
+    // A slash stays inside the one encoded `source` segment, so it cannot reach another route.
+    let missing = call("my-whoop/../../health", "2026-09-14T18:00:00+02:00", None)
+        .await
+        .unwrap();
+    assert_eq!(missing.is_error, Some(true));
+    assert_eq!(
+        missing.structured_content,
+        Some(json!({
+            "error": "No NOOP Workout from 'my-whoop/../../health' starts at \
+                      2026-09-14T18:00:00+02:00",
+            "status": 404,
+        }))
+    );
     client.cancel().await.unwrap();
 }
 

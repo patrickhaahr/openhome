@@ -21,10 +21,32 @@ pub enum Window {
     WorkoutStarts(i64, i64),
 }
 
+/// Records one append batch may carry under the push protocol.
+const MAX_BATCH_RECORDS: usize = 5_000;
+
+/// A `workout` record from `start_ts` to `end_ts`: every metric null except `fields`.
+pub fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, fields: Value) -> Value {
+    let mut data = json!({
+        "endTs": end_ts, "source": source, "durationS": null, "energyKcal": null, "avgHr": null,
+        "maxHr": null, "strain": null, "distanceM": null, "zonesJSON": null, "notes": null,
+        "routePolyline": null, "steps": null,
+    });
+    let Value::Object(fields) = fields else {
+        panic!("fields must be a JSON object");
+    };
+    for (name, value) in fields {
+        assert!(data.get(&name).is_some(), "unknown field {name}");
+        data[&name] = value;
+    }
+    json!({"type": "record", "key": {"startTs": start_ts, "sport": sport}, "data": data})
+}
+
 /// A NOOP push mirror that fixtures are pushed into through the push endpoint.
 pub struct Mirror {
     pub db: SqlitePool,
     ids: u64,
+    /// The sender's last append row id, shared by every append stream.
+    row_id: i64,
 }
 
 impl Mirror {
@@ -32,6 +54,7 @@ impl Mirror {
         Self {
             db: super::memory_noop_db().await,
             ids: 0,
+            row_id: 0,
         }
     }
 
@@ -68,11 +91,10 @@ impl Mirror {
             Window::Starts(start, end) => ("sleepSession", "startTs", json!(start), json!(end)),
             Window::WorkoutStarts(start, end) => ("workout", "startTs", json!(start), json!(end)),
         };
-        let batch_id = self.next_id();
         let header = json!({
             "type": "batch",
             "protocolVersion": "1.0",
-            "batchId": batch_id,
+            "batchId": self.next_id(),
             "sourceId": source,
             "deviceId": device,
             "stream": stream,
@@ -89,8 +111,48 @@ impl Mirror {
                 "parts": parts,
             },
         });
+        self.send(&header, records, accepted_at).await;
+    }
+
+    /// Appends `(ts, bpm)` strap heart rate samples as `hrSample` batches of at most 5,000
+    /// records.
+    pub async fn push_hr_samples(
+        &mut self,
+        source: &str,
+        device: &str,
+        samples: &[(i64, i64)],
+        accepted_at: &str,
+    ) {
+        for chunk in samples.chunks(MAX_BATCH_RECORDS) {
+            let records: Vec<Value> = chunk
+                .iter()
+                .map(
+                    |&(ts, bpm)| json!({"type": "record", "key": {"ts": ts}, "data": {"bpm": bpm}}),
+                )
+                .collect();
+            let cursor = |row_id: i64| json!({"rowId": row_id, "keySha256": "0".repeat(64)});
+            let start_cursor = (self.row_id > 0).then(|| cursor(self.row_id));
+            self.row_id += records.len() as i64;
+            let header = json!({
+                "type": "batch",
+                "protocolVersion": "1.0",
+                "batchId": self.next_id(),
+                "sourceId": source,
+                "deviceId": device,
+                "stream": "hrSample",
+                "delivery": "append",
+                "recordCount": records.len(),
+                "startCursor": start_cursor,
+                "endCursor": cursor(self.row_id),
+            });
+            self.send(&header, &records, accepted_at).await;
+        }
+    }
+
+    /// Posts one batch through the push endpoint and records it as accepted at `accepted_at`.
+    async fn send(&self, header: &Value, records: &[Value], accepted_at: &str) {
         let mut entity = String::new();
-        for line in std::iter::once(&header).chain(records) {
+        for line in std::iter::once(header).chain(records) {
             entity.push_str(&line.to_string());
             entity.push('\n');
         }
@@ -116,7 +178,7 @@ impl Mirror {
 
         sqlx::query("UPDATE batch_ledger SET accepted_at = ? WHERE batch_id = ?")
             .bind(accepted_at)
-            .bind(&batch_id)
+            .bind(header["batchId"].as_str().unwrap())
             .execute(&self.db)
             .await
             .unwrap();

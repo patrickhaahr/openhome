@@ -5,7 +5,7 @@ mod common;
 
 use axum::Router;
 use axum::http::{Method, StatusCode};
-use common::mirror::{Mirror, Window};
+use common::mirror::{Mirror, Window, noop_workout};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
 
@@ -38,23 +38,6 @@ fn real_noop_workout() -> Value {
             "strain": 24.51,
         }),
     )
-}
-
-/// A `workout` record from `start_ts` to `end_ts`: every metric null except `fields`.
-fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, fields: Value) -> Value {
-    let mut data = json!({
-        "endTs": end_ts, "source": source, "durationS": null, "energyKcal": null, "avgHr": null,
-        "maxHr": null, "strain": null, "distanceM": null, "zonesJSON": null, "notes": null,
-        "routePolyline": null, "steps": null,
-    });
-    let Value::Object(fields) = fields else {
-        panic!("fields must be a JSON object");
-    };
-    for (name, value) in fields {
-        assert!(data.get(&name).is_some(), "unknown field {name}");
-        data[&name] = value;
-    }
-    json!({"type": "record", "key": {"startTs": start_ts, "sport": sport}, "data": data})
 }
 
 /// A NOOP Workout as the API reports it: every metric null except `fields`.

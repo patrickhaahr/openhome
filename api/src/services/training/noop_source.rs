@@ -76,6 +76,35 @@ pub async fn active_installation(pool: &SqlitePool) -> anyhow::Result<Option<Ins
     }))
 }
 
+/// One strap heart rate sample: Unix seconds and beats per minute.
+#[derive(Debug, Clone, Copy, sqlx::FromRow)]
+pub struct HrSample {
+    pub ts: i64,
+    pub bpm: i64,
+}
+
+/// The strap's heart rate samples with `from <= ts <= to` (Unix seconds), by time, at full
+/// resolution. Only the strap's imported namespace records heart rate samples, so this is the
+/// heart rate of any NOOP Workout, whatever namespace recorded the workout. The caller bounds
+/// the span.
+pub async fn strap_hr_samples(
+    pool: &SqlitePool,
+    installation: &Installation,
+    from: i64,
+    to: i64,
+) -> anyhow::Result<Vec<HrSample>> {
+    Ok(sqlx::query_as(
+        "SELECT ts, bpm FROM hr_sample \
+         WHERE source_id = ? AND device_id = ? AND ts >= ? AND ts <= ? ORDER BY ts",
+    )
+    .bind(&installation.source_id)
+    .bind(IMPORTED_DEVICE_ID)
+    .bind(from)
+    .bind(to)
+    .fetch_all(pool)
+    .await?)
+}
+
 /// Namespaces that must be accounted for before declaring a stream complete. Workout imports can
 /// have their own device IDs; retained rows and even staged windows establish that such a source
 /// exists, while only applied windows can establish its coverage.
