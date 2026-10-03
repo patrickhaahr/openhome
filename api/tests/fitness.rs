@@ -1467,3 +1467,109 @@ async fn test_profile_requires_auth() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn test_profile_hr_max_bpm_set_get_clear() {
+    let app = common::test_app().await;
+
+    let (_, body) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(body["hr_max_bpm"], serde_json::Value::Null);
+
+    let (status, body) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "hr_max_bpm": 190 })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["hr_max_bpm"], 190);
+
+    let (_, fetched) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::GET,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(fetched["hr_max_bpm"], 190);
+
+    let (status, body) = send_request_with_method(
+        app,
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "hr_max_bpm": null })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["hr_max_bpm"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn test_profile_hr_max_bpm_bounds() {
+    for (value, expected) in [
+        (99, StatusCode::BAD_REQUEST),
+        (100, StatusCode::OK),
+        (240, StatusCode::OK),
+        (241, StatusCode::BAD_REQUEST),
+    ] {
+        let app = common::test_app().await;
+        let (status, _) = send_request_with_method(
+            app,
+            "/api/profile",
+            Method::PATCH,
+            Some(json!({ "hr_max_bpm": value })),
+            Some("test-api-key"),
+        )
+        .await;
+        assert_eq!(status, expected, "hr_max_bpm {value}");
+    }
+}
+
+#[tokio::test]
+async fn test_profile_hr_max_bpm_independent_of_height_and_sex() {
+    let app = common::test_app().await;
+
+    send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "height_cm": 180.5, "sex": "male", "hr_max_bpm": 190 })),
+        Some("test-api-key"),
+    )
+    .await;
+
+    let (_, body) = send_request_with_method(
+        app.clone(),
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "hr_max_bpm": 185 })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(body["hr_max_bpm"], 185);
+    assert_eq!(body["height_cm"], 180.5);
+    assert_eq!(body["sex"], "male");
+
+    let (_, body) = send_request_with_method(
+        app,
+        "/api/profile",
+        Method::PATCH,
+        Some(json!({ "height_cm": 181.0, "sex": null })),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(body["hr_max_bpm"], 185);
+    assert_eq!(body["height_cm"], 181.0);
+    assert_eq!(body["sex"], serde_json::Value::Null);
+}

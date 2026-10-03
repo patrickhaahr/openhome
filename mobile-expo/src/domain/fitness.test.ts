@@ -13,6 +13,7 @@ import {
   parseExerciseList,
   parseExerciseUpdate,
   parseExerciseProgress,
+  HR_MAX_BPM_ERROR,
   parseProfile,
   parseProfileInput,
   parseWorkoutDetail,
@@ -568,16 +569,16 @@ describe("parseBodyWeightInput", () => {
 
 describe("parseProfile", () => {
   it("accepts a configured profile", () => {
-    expect(parseProfile({ height_cm: 182.5, sex: "male" })).toEqual({
+    expect(parseProfile({ height_cm: 182.5, sex: "male", hr_max_bpm: 190 })).toEqual({
       ok: true,
-      value: { heightCm: 182.5, sex: "male" },
+      value: { heightCm: 182.5, sex: "male", hrMaxBpm: 190 },
     });
   });
 
   it("accepts the unconfigured profile with null fields", () => {
-    expect(parseProfile({ height_cm: null, sex: null })).toEqual({
+    expect(parseProfile({ height_cm: null, sex: null, hr_max_bpm: null })).toEqual({
       ok: true,
-      value: { heightCm: null, sex: null },
+      value: { heightCm: null, sex: null, hrMaxBpm: null },
     });
   });
 
@@ -585,6 +586,9 @@ describe("parseProfile", () => {
     expect(parseProfile(null)).toEqual(failure(PROFILE_READ_ERROR));
     expect(parseProfile({ height_cm: "182" })).toEqual(failure(PROFILE_READ_ERROR));
     expect(parseProfile({ height_cm: 182, sex: 3 })).toEqual(failure(PROFILE_READ_ERROR));
+    expect(parseProfile({ height_cm: 182, hr_max_bpm: "190" })).toEqual(
+      failure(PROFILE_READ_ERROR),
+    );
   });
 });
 
@@ -616,6 +620,31 @@ describe("parseProfileInput", () => {
       ok: true,
       value: { heightCm: 182.5, sex: null },
     });
+  });
+
+  it("parses, blanks and omits max heart rate", () => {
+    expect(parseProfileInput(undefined, undefined, " 190 ")).toEqual({
+      ok: true,
+      value: { heightCm: undefined, sex: undefined, hrMaxBpm: 190 },
+    });
+    expect(parseProfileInput(undefined, undefined, " ")).toEqual({
+      ok: true,
+      value: { heightCm: undefined, sex: undefined, hrMaxBpm: null },
+    });
+    expect(parseProfileInput(undefined, undefined)).toEqual({
+      ok: true,
+      value: { heightCm: undefined, sex: undefined, hrMaxBpm: undefined },
+    });
+  });
+
+  it("validates max heart rate at 99/100/240/241 and rejects non-integers", () => {
+    for (const bad of ["99", "241", "190.5", "abc"]) {
+      expect(parseProfileInput(undefined, undefined, bad)).toEqual(failure(HR_MAX_BPM_ERROR));
+    }
+
+    for (const good of ["100", "240"]) {
+      expect(parseProfileInput(undefined, undefined, good).ok).toBe(true);
+    }
   });
 
   it("rejects an invalid height", () => {

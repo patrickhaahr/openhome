@@ -1032,13 +1032,15 @@ describe("fitness progress, body weight, and profile adapter", () => {
       requests.push({ url, method: init?.method, body: init?.body });
 
       return Promise.resolve(
-        new Response(JSON.stringify({ height_cm: 182.5, sex: "male" }), { status: 200 }),
+        new Response(JSON.stringify({ height_cm: 182.5, sex: "male", hr_max_bpm: 190 }), {
+          status: 200,
+        }),
       );
     });
 
     expect(await createOpenHomeApi(configuration).fitness.getProfile()).toEqual({
       ok: true,
-      value: { heightCm: 182.5, sex: "male" },
+      value: { heightCm: 182.5, sex: "male", hrMaxBpm: 190 },
     });
 
     expect(
@@ -1046,7 +1048,7 @@ describe("fitness progress, body weight, and profile adapter", () => {
         heightCm: 182.5,
         sex: null,
       }),
-    ).toEqual({ ok: true, value: { heightCm: 182.5, sex: "male" } });
+    ).toEqual({ ok: true, value: { heightCm: 182.5, sex: "male", hrMaxBpm: 190 } });
     expect(requests[1]).toEqual({
       url: "http://openhome.test/api/profile",
       method: "PATCH",
@@ -1074,6 +1076,10 @@ describe("fitness progress, body weight, and profile adapter", () => {
     });
     await createOpenHomeApi(configuration).fitness.updateProfile({});
     expect(requests[4]?.body).toBe(JSON.stringify({}));
+    await createOpenHomeApi(configuration).fitness.updateProfile({ hrMaxBpm: 190 });
+    expect(requests[5]?.body).toBe(JSON.stringify({ hr_max_bpm: 190 }));
+    await createOpenHomeApi(configuration).fitness.updateProfile({ hrMaxBpm: null });
+    expect(requests[6]?.body).toBe(JSON.stringify({ hr_max_bpm: null }));
 
     stubFetch(async () => new Response(JSON.stringify({ height_cm: "182" }), { status: 200 }));
     expect(await createOpenHomeApi(configuration).fitness.getProfile()).toEqual(

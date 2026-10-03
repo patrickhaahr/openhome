@@ -609,7 +609,7 @@ export function createOpenHomeApi(configuration: Configuration): OpenHomeApi {
       updateProfile: async (input): Promise<Result<Profile>> => {
         const response = await request("/api/profile", {
           method: "PATCH",
-          body: { height_cm: input.heightCm, sex: input.sex },
+          body: { height_cm: input.heightCm, sex: input.sex, hr_max_bpm: input.hrMaxBpm },
           defaultError: "Couldn't save the profile.",
         });
 

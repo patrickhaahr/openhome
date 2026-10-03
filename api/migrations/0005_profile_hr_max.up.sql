@@ -1,0 +1,1 @@
+ALTER TABLE profile ADD COLUMN hr_max_bpm INTEGER;

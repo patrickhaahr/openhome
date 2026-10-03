@@ -12,11 +12,11 @@ import {
 
 const ENTRY: BodyWeightEntry = { id: 3, date: "2026-09-12", weightKg: 72.5 };
 
-const PROFILE: Profile = { heightCm: 182.5, sex: "male" };
+const PROFILE: Profile = { heightCm: 182.5, sex: "male", hrMaxBpm: 190 };
 
 const WEIGHT_INPUT: BodyWeightInput = { date: "2026-09-12", weightKg: 72.5 };
 
-const PROFILE_INPUT: ProfileInput = { heightCm: 182.5, sex: "male" };
+const PROFILE_INPUT: ProfileInput = { heightCm: 182.5, sex: "male", hrMaxBpm: 190 };
 
 /** A scripted fake of the body weight and profile adapter surface with manually resolved responses. */
 function fakeApi() {
@@ -195,14 +195,44 @@ describe("body state machine", () => {
     await settle();
 
     h.controller.saveProfile(PROFILE_INPUT);
-    h.profilePending[1]?.(success({ heightCm: 182.5, sex: "male" }));
+    const saved: Profile = { heightCm: 182.5, sex: "male", hrMaxBpm: 190 };
+    h.profilePending[1]?.(success(saved));
     await settle();
 
     const state = replay(h.events);
     expect(state.saving).toBe(false);
-    expect(state.profile).toEqual({ tag: "loaded", profile: { heightCm: 182.5, sex: "male" } });
+    expect(state.profile).toEqual({ tag: "loaded", profile: saved });
     expect(h.calls.filter((call) => call.kind === "updateProfile")).toEqual([
       { kind: "updateProfile", input: PROFILE_INPUT },
+    ]);
+  });
+
+  it("clears max heart rate via the reload and surfaces an API validation error", async () => {
+    const h = harness();
+    h.controller.refresh();
+    h.listPending[0]?.(success([]));
+    h.profilePending[0]?.(success(PROFILE));
+    await settle();
+
+    const cleared: Profile = { ...PROFILE, hrMaxBpm: null };
+    h.controller.saveProfile({ hrMaxBpm: null });
+    h.profilePending[1]?.(success(cleared));
+    await settle();
+    h.listPending[1]?.(success([]));
+    h.profilePending[2]?.(success(cleared));
+    await settle();
+    expect(replay(h.events).profile).toEqual({ tag: "loaded", profile: cleared });
+
+    h.controller.saveProfile({ hrMaxBpm: 300 });
+    h.profilePending[3]?.(failure("hr_max_bpm must be between 100 and 240"));
+    await settle();
+
+    const state = replay(h.events);
+    expect(state.saveError).toBe("hr_max_bpm must be between 100 and 240");
+    expect(state.profile).toEqual({ tag: "loaded", profile: cleared });
+    expect(h.calls.filter((call) => call.kind === "updateProfile")).toEqual([
+      { kind: "updateProfile", input: { hrMaxBpm: null } },
+      { kind: "updateProfile", input: { hrMaxBpm: 300 } },
     ]);
   });
 

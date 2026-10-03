@@ -20,7 +20,13 @@ export function BodyView({
   const [form, setForm] = useState<BodyWeightFormState>({ date: today(), weightKg: "" });
   // Untouched profile fields stay undefined so the PATCH omits them and the
   // API keeps the current values; a cleared field becomes "" and sends null.
-  const [profileForm, setProfileForm] = useState<{ heightCm?: string; sex?: string }>({});
+
+  const [profileForm, setProfileForm] = useState<{
+    heightCm?: string;
+    sex?: string;
+    hrMaxBpm?: string;
+  }>({});
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -52,7 +58,7 @@ export function BodyView({
   }
 
   function submitProfile(): void {
-    const parsed = parseProfileInput(profileForm.heightCm, profileForm.sex);
+    const parsed = parseProfileInput(profileForm.heightCm, profileForm.sex, profileForm.hrMaxBpm);
 
     if (!parsed.ok) {
       setProfileError(parsed.error);
@@ -86,6 +92,9 @@ export function BodyView({
                 ? `${state.profile.profile.heightCm} cm`
                 : null,
               state.profile.profile.sex !== null ? state.profile.profile.sex : null,
+              state.profile.profile.hrMaxBpm !== null
+                ? `max HR ${state.profile.profile.hrMaxBpm} bpm`
+                : null,
             ]
               .filter(Boolean)
               .join(" · ") || "Not configured"}
@@ -125,12 +134,37 @@ export function BodyView({
               />
             </View>
             <View style={shared.row}>
+              <TextInput
+                accessibilityLabel="Max heart rate in bpm"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="number-pad"
+                onChangeText={(hrMaxBpm) => setProfileForm((current) => ({ ...current, hrMaxBpm }))}
+                placeholder="Max HR bpm (100-240)"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={profileForm.hrMaxBpm ?? ""}
+              />
+            </View>
+            <View style={shared.row}>
               <ActionButton
                 label="Save profile"
                 sending={state.saving}
                 disabled={state.saving}
                 onPress={submitProfile}
               />
+              {state.profile.tag === "loaded" && state.profile.profile.hrMaxBpm !== null ? (
+                <ActionButton
+                  label="Clear max HR"
+                  sending={false}
+                  disabled={state.saving}
+                  onPress={() => {
+                    setProfileError(null);
+                    setProfileForm(({ hrMaxBpm: _cleared, ...rest }) => rest);
+                    actions.saveProfile({ hrMaxBpm: null });
+                  }}
+                />
+              ) : null}
             </View>
             {profileError !== null ? (
               <Text accessibilityRole="alert" style={shared.error}>

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT height_cm, sex\n        FROM profile\n        WHERE id = 1\n        ",
+  "query": "\n        SELECT height_cm, sex, hr_max_bpm\n        FROM profile\n        WHERE id = 1\n        ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "name": "sex",
         "ordinal": 1,
         "type_info": "Text"
+      },
+      {
+        "name": "hr_max_bpm",
+        "ordinal": 2,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -19,8 +24,9 @@
     },
     "nullable": [
       true,
+      true,
       true
     ]
   },
-  "hash": "4ca5e96f0c248e7e14ba047d963ef4112f56efc13e851cb21d62dddad4c62d0b"
+  "hash": "082881a068131dacb1e5219466475c56bf1323f4d8e5268ed9172d464437fc12"
 }
