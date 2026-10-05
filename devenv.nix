@@ -33,7 +33,8 @@
     enable = true;
     reactNative.enable = true;
     platforms.version = [ "36" ];
-    buildTools.version = [ "36.0.0" ];
+    # safe-area-context uses AGP's default Build Tools 35 alongside Expo's 36.
+    buildTools.version = [ "35.0.0" "36.0.0" ];
     ndk = {
       enable = true;
       version = [ "27.1.12297006" ];

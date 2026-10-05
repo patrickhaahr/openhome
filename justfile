@@ -225,6 +225,13 @@ expo-android:
     set -euo pipefail
     bunx expo run:android --variant release --no-bundler
 
+# Build a standalone release APK without a connected device
+[group('expo')]
+[working-directory: 'mobile-expo']
+expo-apk:
+    bunx expo prebuild --platform android --no-install
+    NODE_ENV=production android/gradlew -p android assembleRelease -Pandroid.buildToolsVersion=36.0.0 -Pandroid.compileSdkVersion=36 -Pandroid.targetSdkVersion=36
+
 # Typecheck the Expo client
 [group('expo')]
 [working-directory: 'mobile-expo']

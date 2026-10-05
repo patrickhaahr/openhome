@@ -30,3 +30,4 @@ devenv.local.yaml
 .pre-commit-config.yaml
 
 .android
+local.properties
