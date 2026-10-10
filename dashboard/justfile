@@ -1,0 +1,37 @@
+default:
+    @just --list
+
+run:
+    bunx vite dev --port 3000
+
+build:
+    bunx vite build
+
+preview:
+    bunx vite preview
+
+test:
+    bunx vitest run
+
+test-watch:
+    bunx vitest
+
+lint:
+    bunx oxlint --type-aware --deny-warnings
+
+fmt:
+    bunx oxfmt --write .
+
+typecheck:
+    bunx tsc --noEmit
+
+routes:
+    bunx tsr generate
+
+install:
+    bun install --frozen-lockfile
+
+add component:
+    bunx --bun shadcn@latest add {{quote(component)}}
+
+check: fmt lint typecheck test build
