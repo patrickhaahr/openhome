@@ -2,7 +2,7 @@ default:
     @just --list
 
 # Full gate across repos
-check: check-api check-mcp check-mobile check-firmware check-cli
+check: check-api check-mcp check-mobile check-firmware check-cli check-dashboard
 
 # Show this help grouped by area
 groups:
@@ -204,6 +204,7 @@ check-mcp: mcp-check
 check-mobile: mobile-check
 check-firmware: firmware-check
 check-cli: cli-check
+check-dashboard: dashboard-check
 
 # Install Expo client dependencies
 [group('expo')]
@@ -329,3 +330,74 @@ switchbot-monitor:
 [working-directory: 'firmware/switchbot']
 switchbot-clean:
     PLATFORMIO_CORE_DIR={{switchbot-core-dir}} pio run --target clean
+
+# Start the dashboard dev server on port 3000
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-run:
+    bunx vite dev --port 3000
+
+# Build the dashboard
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-build:
+    bunx vite build
+
+# Preview the dashboard production build
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-preview:
+    bunx vite preview
+
+# Run dashboard tests
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-test:
+    bunx vitest run
+
+# Watch dashboard tests
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-test-watch:
+    bunx vitest
+
+# Lint the dashboard
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-lint:
+    bunx oxlint --type-aware --deny-warnings
+
+# Format the dashboard with oxfmt
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-format:
+    bunx oxfmt --write .
+
+# Typecheck the dashboard
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-typecheck:
+    bunx tsc --noEmit
+
+# Generate dashboard routes
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-routes:
+    bunx tsr generate
+
+# Install dashboard dependencies from the lockfile
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-install:
+    bun install --frozen-lockfile
+
+# Add a shadcn component to the dashboard
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-add component:
+    bunx --bun shadcn@latest add {{quote(component)}}
+
+# Format, lint, typecheck, test, and build the dashboard in one pass
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-check: dashboard-format dashboard-lint dashboard-typecheck dashboard-test dashboard-build

@@ -3,15 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "just run",
-    "generate-routes": "just routes",
-    "build": "just build",
-    "preview": "just preview",
-    "lint": "just lint",
-    "format": "just fmt",
-    "check": "just check",
-    "typecheck": "just typecheck",
-    "test": "just test"
+    "dev": "just dashboard-run",
+    "generate-routes": "just dashboard-routes",
+    "build": "just dashboard-build",
+    "preview": "just dashboard-preview",
+    "lint": "just dashboard-lint",
+    "format": "just dashboard-format",
+    "check": "just dashboard-check",
+    "typecheck": "just dashboard-typecheck",
+    "test": "just dashboard-test"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
