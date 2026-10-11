@@ -9,13 +9,18 @@ import {
 } from "@tanstack/react-router"
 import { expect, test, vi } from "vitest"
 import { Route as HomeRoute } from "@/routes/index"
+import { Route as WeatherRoute } from "@/routes/weather"
+import { unavailableWeather } from "@/lib/weather"
 import { routeTree } from "@/routeTree.gen"
 
 test("opens focused views through persistent navigation, restores browser history and moves focus to the page", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   const originalLoader = HomeRoute.options.loader
+  const originalWeatherLoader = WeatherRoute.options.loader
+  WeatherRoute.options.loader = () => unavailableWeather
 
   HomeRoute.options.loader = () => ({
+    weather: Promise.resolve(unavailableWeather),
     health: { state: "connected", checkedAt: "2026-10-11T10:00:00.000Z" },
     tvRemote: Promise.resolve({ state: "available", commands: ["power"] }),
     speakerRemote: Promise.resolve({ state: "available", commands: ["power"] }),
@@ -88,7 +93,7 @@ test("opens focused views through persistent navigation, restores browser histor
     })
     expect(document.querySelector("h1")?.textContent).toBe("Weather")
     expect(document.querySelector("main")?.textContent).toContain(
-      "No current conditions or forecast are available."
+      "Weather unavailable"
     )
   } finally {
     await act(async () => {
@@ -97,5 +102,8 @@ test("opens focused views through persistent navigation, restores browser histor
     vi.unstubAllGlobals()
 
     if (originalLoader !== undefined) HomeRoute.options.loader = originalLoader
+
+    if (originalWeatherLoader !== undefined)
+      WeatherRoute.options.loader = originalWeatherLoader
   }
 })

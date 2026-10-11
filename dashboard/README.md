@@ -5,6 +5,10 @@ Home shows the live clock/date and links to focused feature views. Connection
 at `/connection` checks the authenticated `/api/health` route.
 Axum continues to own domain rules, persistence and provider integrations.
 
+Current weather on Home and the seven-day forecast at `/weather` use Axum's
+shared Open-Meteo cache. Configure `WEATHER_LATITUDE` and `WEATHER_LONGITUDE`
+privately on the API. See [weather verification and setup](docs/weather/README.md).
+
 ## Shell and navigation
 
 The persistent icon-above-label rail opens Home, Weather, Controls, Travel,

@@ -1,0 +1,73 @@
+{
+  "state": "fresh",
+  "forecast": {
+    "fetched_at": "2026-10-11T10:00:00Z",
+    "valid_until": "2026-10-11T10:15:00Z",
+    "timezone": "Europe/Copenhagen",
+    "current": {
+      "observed_at": "2026-10-11T10:00:00Z",
+      "temperature_c": 9.3,
+      "feels_like_c": 6.6,
+      "weather_code": 3,
+      "wind_ms": 3.3
+    },
+    "days": [
+      {
+        "date": "2026-10-11",
+        "weather_code": 53,
+        "high_c": 13.0,
+        "low_c": 9.1,
+        "precipitation_mm": 0.9,
+        "wind_ms": 4.9
+      },
+      {
+        "date": "2026-10-12",
+        "weather_code": 51,
+        "high_c": 12.6,
+        "low_c": 7.2,
+        "precipitation_mm": 0.2,
+        "wind_ms": 4.8
+      },
+      {
+        "date": "2026-10-13",
+        "weather_code": 63,
+        "high_c": 13.0,
+        "low_c": 6.8,
+        "precipitation_mm": 4.9,
+        "wind_ms": 9.3
+      },
+      {
+        "date": "2026-10-14",
+        "weather_code": 3,
+        "high_c": 14.1,
+        "low_c": 10.5,
+        "precipitation_mm": 0.0,
+        "wind_ms": 7.2
+      },
+      {
+        "date": "2026-10-15",
+        "weather_code": 3,
+        "high_c": 14.2,
+        "low_c": 10.2,
+        "precipitation_mm": 0.0,
+        "wind_ms": 5.19
+      },
+      {
+        "date": "2026-10-16",
+        "weather_code": 51,
+        "high_c": 15.3,
+        "low_c": 12.5,
+        "precipitation_mm": 0.9,
+        "wind_ms": 5.95
+      },
+      {
+        "date": "2026-10-17",
+        "weather_code": 51,
+        "high_c": 12.5,
+        "low_c": 11.3,
+        "precipitation_mm": 0.9,
+        "wind_ms": 5.27
+      }
+    ]
+  }
+}
