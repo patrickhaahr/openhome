@@ -1,14 +1,12 @@
 import { getConnectionHealth } from "./connection.functions"
-import type { IrRemoteState } from "./ir"
+import type { IrRemotes } from "./ir"
 import { loadIrRemotes } from "./ir.functions"
-import type { SpeakerCommand } from "./speaker"
-import type { TvCommand } from "./tv"
 
 /** What the home controls render: connection health now, IR Remote discovery when it arrives. */
 export type ControlsData = {
   health: Awaited<ReturnType<typeof getConnectionHealth>>
-  tvRemote: Promise<IrRemoteState<TvCommand>>
-  speakerRemote: Promise<IrRemoteState<SpeakerCommand>>
+  tvRemote: Promise<IrRemotes["tv"]>
+  speakerRemote: Promise<IrRemotes["speaker"]>
 }
 
 /**
