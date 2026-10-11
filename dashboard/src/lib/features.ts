@@ -26,7 +26,7 @@ export const features = [
     icon: SlidersHorizontalIcon,
     description: "Lights, TV and speaker, together in one place.",
     unavailable:
-      "The speaker remote has not been added to this dashboard. Observed device states are unavailable.",
+      "Home controls are unavailable. Observed device states are not reported.",
   },
   {
     id: "travel",

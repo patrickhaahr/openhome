@@ -4,11 +4,12 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
 import { FeatureCard } from "@/components/feature-card"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
+import { SpeakerRemote } from "@/components/speaker-remote"
 import { TvRemote } from "@/components/tv-remote"
 import { loadControls } from "@/lib/controls-loader"
 import { features } from "@/lib/features"
 import { sendLightCommand } from "@/lib/lights.functions"
-import { sendTvCommand } from "@/lib/tv.functions"
+import { sendSpeakerCommand, sendTvCommand } from "@/lib/ir.functions"
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Home · OpenHome" }] }),
@@ -22,7 +23,7 @@ const rootRoute = getRouteApi("__root__")
 
 function HomePage(): React.JSX.Element {
   const { openedAt } = rootRoute.useLoaderData()
-  const { health, tvRemote } = Route.useLoaderData()
+  const { health, tvRemote, speakerRemote } = Route.useLoaderData()
 
   return (
     <div>
@@ -55,7 +56,8 @@ function HomePage(): React.JSX.Element {
         </div>
       </section>
       <section aria-label="Home features" className="home-features">
-        {features.slice(0, 3).map((feature) =>
+        {/* Home controls fill three of the four slots; Travel stays in the navigation rail. */}
+        {features.slice(0, 2).map((feature) =>
           feature.id === "controls" ? (
             <Fragment key={feature.id}>
               <LightControls
@@ -68,6 +70,12 @@ function HomePage(): React.JSX.Element {
                 connectionState={health.state}
                 remote={tvRemote}
                 sendCommand={sendTvCommand}
+              />
+              <SpeakerRemote
+                layout="quick"
+                connectionState={health.state}
+                remote={speakerRemote}
+                sendCommand={sendSpeakerCommand}
               />
             </Fragment>
           ) : (
