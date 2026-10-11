@@ -13,6 +13,8 @@ Before editing files for a substantial task:
 
 <!-- intent-skills:end -->
 
+In this repository, run Intent as `just dashboard-intent list` and `just dashboard-intent load <package>#<skill>` from the repository root. `bunx … intent` resolves to `@tanstack/devtools`' unrelated `intent` bin and fails.
+
 # Dashboard guidance
 
 Production TanStack Start dashboard for a private household iPad: glanceable information, home controls and focused feature views.
