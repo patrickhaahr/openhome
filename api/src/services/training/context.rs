@@ -175,11 +175,10 @@ pub async fn training_context(
             },
         };
         if let Some(installation) = &installation {
-            let edited = recovery::sleep_edited(noop_db, installation, day).await?;
-            let daily = recovery::daily_metrics(noop_db, installation, day, edited).await?;
-            entry.sleep_duration = Measurement::new(daily.total_sleep_min, MINUTES);
-            entry.resting_hr = Measurement::new(daily.resting_hr, BEATS_PER_MINUTE);
-            entry.hrv_rmssd = Measurement::new(daily.avg_hrv, MILLISECONDS);
+            let measurements = recovery::training_measurements(noop_db, installation, day).await?;
+            entry.sleep_duration = measurements.sleep_duration;
+            entry.resting_hr = measurements.resting_hr;
+            entry.hrv_rmssd = measurements.hrv_rmssd;
             entry.noop_workouts = noop_merge::merge_workouts(
                 workouts::noop_workout_rows(noop_db, installation, day).await?,
             )
