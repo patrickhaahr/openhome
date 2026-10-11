@@ -33,17 +33,30 @@ export function DashboardShell(): React.JSX.Element {
             <HouseSimpleIcon size={24} aria-hidden="true" />
             <span>Home</span>
           </Link>
-          {features.map((feature) => (
-            <Link
-              key={feature.id}
-              to="/$feature"
-              params={{ feature: feature.id }}
-              className="nav-link"
-            >
-              <feature.icon size={24} aria-hidden="true" />
-              <span>{feature.label}</span>
-            </Link>
-          ))}
+          {features.map((feature) => {
+            const content = (
+              <>
+                <feature.icon size={24} aria-hidden="true" />
+                <span>{feature.label}</span>
+              </>
+            )
+
+            // Controls has its own route; the other features share the focused placeholder.
+            return feature.id === "controls" ? (
+              <Link key={feature.id} to="/controls" className="nav-link">
+                {content}
+              </Link>
+            ) : (
+              <Link
+                key={feature.id}
+                to="/$feature"
+                params={{ feature: feature.id }}
+                className="nav-link"
+              >
+                {content}
+              </Link>
+            )
+          })}
           <Link to="/connection" className="nav-link connection-link">
             <PlugsConnectedIcon size={24} aria-hidden="true" />
             <span>Connection</span>

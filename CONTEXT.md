@@ -116,6 +116,13 @@ The glanceable overview shown by the Dashboard, where selecting a feature opens
 its focused view and inactivity returns to the overview.
 _Avoid_: Home Tab, permanent widget grid
 
+**Dashboard Remote**:
+A Dashboard control surface for one IR Remote. It shows only the Remote Buttons
+whose Commands the Axum API currently reports, omitting rather than disabling
+the rest. An accepted Command acknowledges the request only; it never
+establishes the device's power, input or volume.
+_Avoid_: Unavailable Remote Button, device state panel
+
 **Household User**:
 A configured person who owns Wishlists and Watchlists. The shared Dashboard
 shows household members together within these list views, without separate
