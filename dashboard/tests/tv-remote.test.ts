@@ -19,6 +19,8 @@ type Check = { connection: ConnectionState; remote: TvRemoteState }
 type Harness = {
   commands: TvCommand[]
   checks: () => number
+  /** Re-run the page's checks, as any Check again on the page does. */
+  recheck: () => Promise<void>
   resolve: (result: TvCommandResult) => Promise<void>
   reject: (error: Error) => Promise<void>
 }
@@ -119,6 +121,11 @@ async function renderTv(
   return {
     commands,
     checks: () => loads,
+    recheck: async () => {
+      await act(async () => {
+        await router.invalidate({ sync: true })
+      })
+    },
     resolve: (result) => pendingCommand().resolve(result),
     reject: (error) => pendingCommand().reject(error),
   }
@@ -272,6 +279,7 @@ test("explains a missing TV remote without offering buttons, then recovers on a 
   expect(status()).not.toContain("may have responded")
   expect(buttonLabels()).toEqual(["Check again"])
   expect(linkTexts()).not.toContain("Open Connection")
+  expect(linkTexts()).not.toContain("Full remote")
 
   await tap("Check again")
   expect(tv.checks()).toBe(2)
@@ -300,4 +308,24 @@ test("pauses commands while disconnected and links to Connection", async () => {
   expect(linkTexts()).toContain("Open Connection")
   expect(buttonLabels()).toEqual(["Check again"])
   expect(tv.commands).toEqual([])
+})
+
+test("keeps a pending command guarded when the page re-checks before it settles", async () => {
+  const tv = await renderTv(
+    "quick",
+    { connection: "connected", remote: synthetic },
+    { connection: "connected", remote: synthetic }
+  )
+
+  await tap("Power")
+  await tv.recheck()
+  expect(tv.checks()).toBe(2)
+  expect(status()).toBe("Sending Power command…")
+  expect(button("Power").disabled).toBe(true)
+
+  await tap("Volume up")
+  expect(tv.commands).toEqual(["power"])
+
+  await tv.resolve({ state: "accepted" })
+  expect(status()).toBe("Power command accepted by OpenHome.")
 })

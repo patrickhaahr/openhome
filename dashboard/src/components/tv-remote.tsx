@@ -22,7 +22,7 @@ import {
   type TvFailure,
   type TvRemoteState,
 } from "@/lib/tv"
-import { useSingleCommand } from "@/lib/use-single-command"
+import { type SingleCommand, useSingleCommand } from "@/lib/use-single-command"
 
 type SendTvCommand = (options: {
   data: TvCommand
@@ -152,8 +152,12 @@ const recheckFailures = new Set<TvFailure>([
 /** An LG TV remote whose buttons come from the commands OpenHome reports. */
 export function TvRemote({
   remote,
+  sendCommand,
   ...props
 }: TvRemoteProps): React.JSX.Element {
+  // Held above Await so a re-check that suspends discovery cannot reset the pending-command guard.
+  const command = useSingleCommand(sendCommand)
+
   return (
     <Await
       promise={remote}
@@ -165,7 +169,9 @@ export function TvRemote({
         </TvRemoteCard>
       }
     >
-      {(discovered) => <TvRemoteControls remote={discovered} {...props} />}
+      {(discovered) => (
+        <TvRemoteControls remote={discovered} command={command} {...props} />
+      )}
     </Await>
   )
 }
@@ -173,12 +179,12 @@ export function TvRemote({
 function TvRemoteControls({
   connectionState,
   remote,
-  sendCommand,
+  command: { commandState, send, clear },
   layout,
-}: Omit<TvRemoteProps, "remote"> & {
+}: Pick<TvRemoteProps, "connectionState" | "layout"> & {
   remote: TvRemoteState
+  command: SingleCommand<TvCommand, TvFailure>
 }): React.JSX.Element {
-  const { commandState, send, clear } = useSingleCommand(sendCommand)
   const [discovery, setDiscovery] = useState(remote)
 
   // Each check resolves a new discovery; an earlier outcome no longer describes these buttons.
@@ -288,7 +294,7 @@ function TvRemoteControls({
             Open Connection
           </Link>
         ) : null}
-        {layout === "quick" ? (
+        {layout === "quick" && !discoveryFailed ? (
           <Link to="/controls" className="action-link">
             Full remote <ArrowUpRightIcon size={18} aria-hidden="true" />
           </Link>
