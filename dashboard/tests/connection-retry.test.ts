@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router"
 import { expect, test, vi } from "vitest"
 import type { ConnectionHealth } from "@/lib/connection"
-import { Route } from "@/routes/index"
+import { Route } from "@/routes/connection"
 import { routeTree } from "@/routeTree.gen"
 
 type PendingHealth = { resolve?: (health: ConnectionHealth) => void }
@@ -41,7 +41,7 @@ test("keeps retry disabled and announces checking until the refreshed health arr
 
   const router = createRouter({
     routeTree,
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    history: createMemoryHistory({ initialEntries: ["/connection"] }),
     isServer: false,
   })
 
@@ -80,7 +80,9 @@ test("keeps retry disabled and announces checking until the refreshed health arr
     expect(document.querySelector("[role=status]")?.textContent).toContain(
       "Unreachable"
     )
-    expect(document.querySelector("time")?.dateTime).toBe(refreshed.checkedAt)
+    expect(
+      document.querySelector("[role=status]")?.querySelector("time")?.dateTime
+    ).toBe(refreshed.checkedAt)
   } finally {
     await act(async () => {
       deferred.resolve?.(refreshed)

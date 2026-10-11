@@ -83,8 +83,8 @@ async function dashboard({
   })
 }
 
-async function page(url: string): Promise<string> {
-  const response = await fetch(url)
+async function page(url: string, path = "/connection"): Promise<string> {
+  const response = await fetch(`${url}${path}`)
   expect(response.status).toBe(200)
   expect(response.headers.get("cache-control")).toBe("no-store")
   const html = await response.text()
@@ -153,6 +153,19 @@ test("renders authenticated health from the real Axum route without exposing con
   expect(html).toContain("Your home is connected.")
   expect(html).toContain("Connected")
   expect(html).toContain("Check again")
+})
+
+test("renders Home and a focused deep link without treating healthy Axum as connected integrations", async () => {
+  const url = await dashboard({ url: axumUrl, key: apiKey })
+  const home = await page(url, "/")
+  expect(home).toContain("Home connected")
+  expect(home).toContain("Current time")
+  expect(home).toContain("Copenhagen time")
+  expect(home).toContain("Not available yet")
+
+  const photos = await page(url, "/photos")
+  expect(photos).toContain("No photo library is connected here")
+  expect(photos).toContain("Back to Home")
 })
 
 test("renders a rejected credential from Axum authentication", async () => {
