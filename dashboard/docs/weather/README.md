@@ -30,10 +30,12 @@ household weather. Before is the existing parent-branch Home capture.
   timezone, concurrent refreshes, the 15-minute freshness boundary, one-minute
   failure backoff, six-hour stale expiry and recovery. The route requires the
   API key even when location is missing.
-- `devenv shell -- just dashboard-check` passes, including all 64 tests and
+- `devenv shell -- just dashboard-check` passes, including all 65 tests and
   the production build. HTTP application tests cover Home and Weather,
   dates/units, missing/stale/setup/failure states, privacy and browser streaming
-  before weather completes.
+  before weather completes. A rendered lifecycle regression covers validity
+  expiry, a cached read shortly before expiry, failure retries, overnight pause
+  while hidden and recovery when Safari resumes.
 - On 2026-10-11 the production Axum executable, with isolated temporary
   databases and the unrelated demo location, fetched real Open-Meteo data:
   fresh current conditions and seven normalized days without coordinates in
@@ -69,6 +71,9 @@ configuration and never calls the provider directly.
 One Axum instance shares a cache across views and clients: 15 minutes fresh,
 failed refreshes at most once per minute, stale data retained for at most six
 hours. Upstream calls time out after five seconds. Failed refreshes preserve
-fetch/validity times; Check again never forces an upstream request. Cache is
+fetch/validity times. Both views refresh weather at its validity boundary,
+retry unavailable or stale reads once a minute while visible, and refresh on
+visibility resume independently of controls. Check again never forces an
+upstream request. Cache is
 lost on restart. Open-Meteo's free terms permit personal home automation; see
 [ADR 0006](../../../docs/adr/0006-weather-provider-and-cache.md).
