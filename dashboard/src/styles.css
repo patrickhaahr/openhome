@@ -443,6 +443,10 @@ a:focus-visible {
   }
 }
 @media (max-width: 560px) {
+  #page-content {
+    /* Clear the sticky rail and its scrollbar, including enlarged text. */
+    scroll-margin-top: 6rem;
+  }
   .sidebar {
     position: sticky;
     top: 0;

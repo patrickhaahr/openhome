@@ -93,4 +93,5 @@ export const features = [
   },
 ] as const
 
+/** One destination's display metadata, independent of provider configuration or health. */
 export type Feature = (typeof features)[number]

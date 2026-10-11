@@ -15,7 +15,9 @@ All unfinished features explicitly say **Not available yet**.
 | -------------------------------- | --------------------------------- |
 | ![Connection screen](before.png) | ![Home frame](home-landscape.png) |
 
-![Home in portrait, 768 × 1024](home-portrait.png)
+| Before (768 × 1024)                                   | Home (768 × 1024)                      |
+| ----------------------------------------------------- | -------------------------------------- |
+| ![Connection screen in portrait](before-portrait.png) | ![Home in portrait](home-portrait.png) |
 
 ![Focused unavailable feature](feature-landscape.png)
 
@@ -40,6 +42,11 @@ All unfinished features explicitly say **Not available yet**.
 - Skip-link activation moves focus to the main content; page changes move it
   to the destination heading. Visual focus-ring verification remains part of
   the device pass because the automated preview document is not window-focused.
+- The reviewer caught the narrow skip-link target scrolling under the sticky
+  rail. A text-scaled anchor offset keeps the heading and first control below
+  it; the browser geometry check failed before the fix and passed afterward
+  at normal and 200% root text size. The DOM test environment cannot measure
+  layout, so this is verified at the actual browser boundary.
 - The reduced-motion stylesheet suppresses transitions/animations; the clock
   itself does not animate. No continuous animation or provider polling is added.
 

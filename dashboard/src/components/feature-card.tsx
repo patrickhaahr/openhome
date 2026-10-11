@@ -5,6 +5,7 @@ import type { Feature } from "@/lib/features"
 
 type FeatureCardProps = { readonly feature: Feature }
 
+/** Opens a focused feature while making its unfinished availability explicit. */
 export function FeatureCard({ feature }: FeatureCardProps): React.JSX.Element {
   return (
     <Link
