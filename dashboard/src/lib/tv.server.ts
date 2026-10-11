@@ -8,8 +8,11 @@ import {
   type TvRemoteState,
 } from "./tv"
 
-// Axum's IR device request has a 10-second timeout. Allow it to return its outcome.
-const irTimeoutMs = 12000
+// Axum's IR device request has a 10-second timeout. Allow a command to return its outcome.
+const commandTimeoutMs = 12000
+
+// Discovery only fills the remote; a stalled bridge should not hold its card on "Checking…".
+const discoveryTimeoutMs = 6000
 
 const acknowledgement = z.object({ message: z.string() })
 
@@ -19,14 +22,28 @@ const missingSetup = z.object({
   error: z.literal("IR service is not configured"),
 })
 
-async function isMissingSetup(response: Response): Promise<boolean> {
-  if (response.status !== 503) return false
+const unknownCommand = z.object({ error: z.literal("Unknown command") })
 
+/** Classify an unsuccessful Axum response; only exact known errors earn specific guidance. */
+async function classifyFailure(
+  response: Response
+): Promise<"missing-device" | "unsupported-command" | "unavailable"> {
   try {
-    return missingSetup.safeParse(await response.json()).success
+    const body: unknown = await response.json()
+
+    if (response.status === 503 && missingSetup.safeParse(body).success) {
+      return "missing-device"
+    }
+
+    // The IR remote rejects commands it does not know; discovery may be stale.
+    if (response.status === 404 && unknownCommand.safeParse(body).success) {
+      return "unsupported-command"
+    }
   } catch {
-    return false
+    // An unreadable error cannot be attributed to setup or a stale command.
   }
+
+  return "unavailable"
 }
 
 /** Ask Axum which TV commands the IR remote reports, keeping only those with Remote Buttons. */
@@ -34,7 +51,7 @@ export async function readTvRemote(): Promise<TvRemoteState> {
   const result = await requestOpenHome({
     path: "/api/ir",
     method: "GET",
-    timeoutMs: irTimeoutMs,
+    timeoutMs: discoveryTimeoutMs,
   })
 
   if (result.state !== "received") {
@@ -64,9 +81,12 @@ export async function readTvRemote(): Promise<TvRemoteState> {
     return { state: "unavailable", reason: "unavailable" }
   }
 
+  const reason = await classifyFailure(response)
+
+  // A stale-command answer cannot apply to discovery.
   return {
     state: "unavailable",
-    reason: (await isMissingSetup(response)) ? "missing-device" : "unavailable",
+    reason: reason === "unsupported-command" ? "unavailable" : reason,
   }
 }
 
@@ -77,7 +97,7 @@ export async function dispatchTvCommand(
   const result = await requestOpenHome({
     path: "/api/ir/lgtv",
     method: "POST",
-    timeoutMs: irTimeoutMs,
+    timeoutMs: commandTimeoutMs,
     json: { command },
   })
 
@@ -99,13 +119,5 @@ export async function dispatchTvCommand(
     return { state: "failed", reason: "unavailable" }
   }
 
-  // The IR remote rejects commands it does not know; discovery may be stale.
-  if (response.status === 404) {
-    return { state: "failed", reason: "unsupported-command" }
-  }
-
-  return {
-    state: "failed",
-    reason: (await isMissingSetup(response)) ? "missing-device" : "unavailable",
-  }
+  return { state: "failed", reason: await classifyFailure(response) }
 }

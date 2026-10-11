@@ -135,8 +135,18 @@ test("sends one authenticated JSON command to the LG TV remote", async () => {
 test.each([
   {
     status: 404,
-    body: '{"error":"synthetic-private-unknown-command"}',
+    body: '{"error":"Unknown command"}',
     reason: "unsupported-command",
+  },
+  {
+    status: 404,
+    body: '{"error":"Unknown remote"}',
+    reason: "unavailable",
+  },
+  {
+    status: 404,
+    body: "synthetic-private-missing-route",
+    reason: "unavailable",
   },
   {
     status: 503,
