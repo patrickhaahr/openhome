@@ -1,0 +1,1 @@
+DROP TABLE wishlist_addition_receipts;

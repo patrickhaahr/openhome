@@ -10,6 +10,7 @@ import {
 import { expect, test, vi } from "vitest"
 import { Route as HomeRoute } from "@/routes/index"
 import { Route as WeatherRoute } from "@/routes/weather"
+import { Route as WishlistRoute } from "@/routes/wishlist"
 import { unavailableWeather } from "@/lib/weather"
 import { routeTree } from "@/routeTree.gen"
 
@@ -17,6 +18,11 @@ test("opens focused views through persistent navigation, restores browser histor
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   const originalLoader = HomeRoute.options.loader
   const originalWeatherLoader = WeatherRoute.options.loader
+  const originalWishlistLoader = WishlistRoute.options.loader
+  WishlistRoute.options.loader = () => ({
+    state: "unavailable",
+    reason: "unavailable",
+  })
   WeatherRoute.options.loader = () => unavailableWeather
 
   HomeRoute.options.loader = () => ({
@@ -52,7 +58,7 @@ test("opens focused views through persistent navigation, restores browser histor
       document.querySelector('nav a[aria-current="page"]')?.textContent
     ).toBe("Wishlist")
     expect(document.querySelector("main")?.textContent).toContain(
-      "Household users and their lists are unavailable."
+      "Wishlists unavailable"
     )
 
     const photos = document.querySelector<HTMLAnchorElement>(
@@ -105,5 +111,8 @@ test("opens focused views through persistent navigation, restores browser histor
 
     if (originalWeatherLoader !== undefined)
       WeatherRoute.options.loader = originalWeatherLoader
+
+    if (originalWishlistLoader !== undefined)
+      WishlistRoute.options.loader = originalWishlistLoader
   }
 })

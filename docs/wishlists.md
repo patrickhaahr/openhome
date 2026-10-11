@@ -1,4 +1,4 @@
-# Generic wishes through the OpenHome MCP
+# Shared Wishlists through the Dashboard and OpenHome MCP
 
 Axum owns Household Users, named Wishlists, generic Wishlist Items and destination
 resolution ([ADR 0004](adr/0004-household-users-and-list-ownership.md),
@@ -28,7 +28,33 @@ unique within its owner (SQLite NOCASE comparison), so different owners can each
 have an `Ideas` list. Names allow 1–200 characters. Titles allow 1–500 characters.
 Text is trimmed; empty values and control characters are rejected. This slice
 stores generic titles only and rejects unrecognized body fields. It does not fetch
-URLs, choose products, or expose rich item editing.
+URLs, choose products, or expose rich item editing. The Dashboard also supports
+minimal title editing through the same store.
+
+## Dashboard management
+
+Open Wishlist on the private Dashboard. All household members and their named
+lists are visible together. Select a list inside its owner's group; additions,
+title edits and removals carry that owner's stable ID and the explicit list ID.
+Use **Manage household members** to add, rename or remove members. This is shared
+household configuration, without passwords or an active-user selector.
+
+| Authenticated Axum operation | Body / behavior |
+| --- | --- |
+| `PATCH /api/household-users/{owner_id}` | `{"name":"Member A"}`; preserve ID |
+| `DELETE /api/household-users/{owner_id}` | Remove member, their lists and items |
+| `PATCH /api/household-users/{owner_id}/wishlists/{list_id}` | `{"name":"Outdoors"}`; preserve owner and ID |
+| `DELETE /api/household-users/{owner_id}/wishlists/{list_id}` | Remove this owner's list and all its items |
+| `PATCH /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | `{"title":"A warm jacket"}`; preserve destination and ID |
+| `DELETE /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | Remove only this owner's item in this list |
+
+Successful edits return the updated resource; removal returns 204. Missing or
+mismatched destinations return 404. Invalid text returns 400; duplicate names
+return 409. Database cascades prevent orphaned items. The Dashboard explains the
+scope of removal in a confirmation dialog, preserves failed drafts, and refreshes
+from Axum after confirmed writes. Its credential stays on the Start server.
+If a deleted list was the private `WISHLIST_DEFAULT_LIST_ID`, update that setting;
+Axum continues to reject the missing default rather than guessing a replacement.
 
 ## Destination resolution
 
@@ -57,17 +83,28 @@ it must not mint another ID just because a response was lost.
 Axum atomically inserts the item with a globally unique request ID. The first
 success returns 201 and `{"item":{"id","list_id","title","created_at"},
 "replayed":false}`. An identical accepted retry returns 200 with the original
-item and `replayed:true`, even if the private default changed or the owner now has
+item's current value and `replayed:true`, even if the private default changed or the owner now has
 another list. Identity compares the trimmed title and submitted owner/list IDs,
 not a newly resolved destination. Reusing an accepted ID with different inputs
 returns 409. A rejected request consumes no ID, so clarification can be followed
 by a corrected request. A separate intentional addition uses a new ID, even when
 its title is the same.
 
-Deduplication persists with the item in the main SQLite database. This slice has
-no deletion/edit tools; the migration cascades item deletion with its list and
-list deletion with its owner. Future editing/deletion must preserve the retry
-contract deliberately. Back up the main database, including these tables.
+Deduplication persists in immutable `wishlist_addition_receipts` in the main
+SQLite database. Migration 0007 backfills receipts for existing additions. The
+receipt and new item commit together, so a failed addition consumes no request
+ID. Title edits leave the original retry arguments unchanged; an accepted retry
+reads the current title and never reverts an edit. Receipts survive item, list
+and owner deletion: a delayed retry of a removed item returns 409 and never
+recreates it. A new intentional addition needs a new request ID. Back up the main
+database, including receipts.
+
+The Dashboard keeps an unconfirmed addition's ID and arguments in tab-local
+session storage before sending it. The same title/destination reuses that ID
+across list navigation and page refresh. A confirmed result clears the pending
+intention. If browser storage is unavailable, retries in the mounted form still
+reuse the in-memory ID. After uncertain member/list creation, refresh discovery
+before retrying; their names are unique within their defined scopes.
 
 MCP marks reads read-only, creation non-destructive but non-idempotent, and
 deduplicated additions non-destructive and idempotent. After uncertain list
