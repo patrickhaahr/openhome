@@ -13,11 +13,15 @@ async function listen(server: Server): Promise<string> {
   server.listen(0, "127.0.0.1")
   await once(server, "listening")
   const { port } = z.object({ port: z.number() }).parse(server.address())
-  const url = `http://127.0.0.1:${port}`
+
+  return `http://127.0.0.1:${port}`
+}
+
+/** Configure the dashboard server to reach OpenHome at this server. */
+async function listenAsOpenHome(server: Server): Promise<void> {
+  const url = await listen(server)
   vi.stubEnv("OPENHOME_API_URL", `${url}/deployment/`)
   vi.stubEnv("API_KEY", key)
-
-  return url
 }
 
 afterEach(async () => {
@@ -53,7 +57,7 @@ test("sends each supported command once with server-held authentication and pres
     )
   })
 
-  await listen(upstream)
+  await listenAsOpenHome(upstream)
 
   expect(await dispatchLightCommand("on")).toEqual({ state: "accepted" })
   expect(await dispatchLightCommand("off")).toEqual({ state: "accepted" })
@@ -100,7 +104,7 @@ test.each([
 ])(
   "sanitizes unconfirmed command responses ($status, $reason)",
   async ({ status, body, reason }) => {
-    await listen(
+    await listenAsOpenHome(
       createServer((_request, response) => {
         response.writeHead(status, { "Content-Type": "application/json" })
         response.end(body)
@@ -133,7 +137,7 @@ test("does not follow redirects that could expose the API key or replay commands
     })
   )
 
-  await listen(
+  await listenAsOpenHome(
     createServer((_request, response) => {
       response.writeHead(307, { Location: `${destination}/other-device` })
       response.end()
@@ -149,7 +153,7 @@ test("does not follow redirects that could expose the API key or replay commands
 
 test("bounds a stalled command without automatically retrying it", async () => {
   let requests = 0
-  await listen(
+  await listenAsOpenHome(
     createServer(() => {
       requests += 1
     })

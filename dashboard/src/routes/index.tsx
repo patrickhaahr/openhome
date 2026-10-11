@@ -1,10 +1,10 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
 import { FeatureCard } from "@/components/feature-card"
-import { LiveClock } from "@/components/live-clock"
 import { LightControls } from "@/components/light-controls"
-import { features } from "@/lib/features"
+import { LiveClock } from "@/components/live-clock"
 import { getConnectionHealth } from "@/lib/connection.functions"
+import { features } from "@/lib/features"
 import { sendLightCommand } from "@/lib/lights.functions"
 
 export const Route = createFileRoute("/")({

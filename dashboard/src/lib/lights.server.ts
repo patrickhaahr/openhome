@@ -1,6 +1,6 @@
 import "@tanstack/react-start/server-only"
 import { z } from "zod"
-import { requestOpenHome } from "./connection.server"
+import { requestOpenHome } from "./openhome.server"
 import type { LightCommand, LightCommandResult } from "./lights"
 
 const acknowledgement = z.object({ message: z.string() })

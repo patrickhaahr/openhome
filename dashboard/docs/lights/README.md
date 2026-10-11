@@ -17,18 +17,28 @@ They contain no household devices, identities, provider addresses or credentials
 | -------------------------------------------------- | ------------------------------------------------ |
 | ![Light controls in landscape](home-landscape.png) | ![Light controls in portrait](home-portrait.png) |
 
-![Missing light setup with actionable feedback](missing-setup.png)
+| Missing light setup · 1024 × 768                                   | OpenHome unreachable · 1024 × 768                                                   |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| ![Missing light setup with actionable feedback](missing-setup.png) | ![Paused commands with Check again while OpenHome is unreachable](disconnected.png) |
 
 ## Automated and browser checks
 
-- `devenv shell -- just dashboard-check`: formatting, lint, types, 26 tests and
+- `devenv shell -- just dashboard-check`: formatting, lint, types, 30 tests and
   the production build pass. Existing authenticated Axum health tests remain
-  intact after sharing the private request transport with light commands.
+  intact after moving the private request transport to `openhome.server.ts`,
+  shared by health checks and light commands.
 - `devenv shell -- just api-test-integration switchbot`: all five existing
   production SwitchBot route tests pass; no API behavior changes were needed.
 - Rendered controls verify pending announcements, disabled buttons, queued-tap
   suppression, accepted on/off outcomes, missing setup, provider failure, RPC
   failure and recovery. Every result keeps observed power unknown.
+- When Home's connection check fails, the card explains that commands are
+  paused without suggesting the lights changed. **Check again** re-runs the
+  health check, and controls recover without a page reload. Setup failures
+  after a command link to Connection, and **All controls** keeps the focused
+  Controls view reachable from Home.
+- The browser abandons a command after 15 seconds and reports an uncertain
+  outcome, so a dropped iPad connection cannot leave the controls disabled.
 - Controlled HTTP responses verify authenticated POST paths, deployment URL
   prefixes, safe acknowledgements, rejected credentials, malformed responses,
   missing setup, redirect refusal and a bounded stalled command. No command is
@@ -48,6 +58,8 @@ They contain no household devices, identities, provider addresses or credentials
 
 The attached iPad 6th generation (`iPad7,5`, iPadOS 17.7.11) loaded the synthetic
 dashboard over a USB tunnel, inspected through Safari Web Inspector.
+This inspection predates the **Check again**, **Open Connection** and
+**All controls** additions to the card, which were checked in a desktop browser.
 
 ![Actual iPad Safari, landscape · 1024 × 698 CSS px](ipad-safari.png)
 
@@ -67,9 +79,16 @@ dashboard over a USB tunnel, inspected through Safari Web Inspector.
 
 One deliberately chosen `devenv shell -- openhome lights on` command used the
 configured private OpenHome connection. The real Axum API acknowledged it with
-`{"message":"Light switched on"}`. No live command was used as an automated
-fixture or public capture. This verifies the live command acknowledgement;
-physical power was not independently observed and remains unknown in the UI.
+`{"message":"Light switched on"}`.
+
+The dashboard path was then checked end to end: a local dashboard server held
+the private connection, Home reported **Home connected** from the real health
+check, and one **Turn on** tap in a desktop browser sent the command through the
+TanStack server function to the real Axum API. The card showed **On command
+accepted by OpenHome.** and **Observed state Unknown**.
+
+No live command was used as an automated fixture or public capture. Physical
+power was not independently observed and remains unknown in the UI.
 
 This completes the light-command slice; it does not close the parent controls
 specification (#71) or dashboard release tracker (#69).
