@@ -1,15 +1,22 @@
+import { Fragment } from "react"
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
 import { FeatureCard } from "@/components/feature-card"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
+import { TvRemote } from "@/components/tv-remote"
 import { getConnectionHealth } from "@/lib/connection.functions"
 import { features } from "@/lib/features"
 import { sendLightCommand } from "@/lib/lights.functions"
+import { loadTvRemote, sendTvCommand } from "@/lib/tv.functions"
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Home · OpenHome" }] }),
-  loader: () => getConnectionHealth(),
+  // TV discovery is deferred so a slow IR remote never delays Home.
+  loader: async () => ({
+    tvRemote: loadTvRemote(),
+    health: await getConnectionHealth(),
+  }),
   headers: () => ({ "Cache-Control": "no-store" }),
   component: HomePage,
   errorComponent: HomeError,
@@ -19,7 +26,7 @@ const rootRoute = getRouteApi("__root__")
 
 function HomePage(): React.JSX.Element {
   const { openedAt } = rootRoute.useLoaderData()
-  const health = Route.useLoaderData()
+  const { health, tvRemote } = Route.useLoaderData()
 
   return (
     <div>
@@ -52,19 +59,25 @@ function HomePage(): React.JSX.Element {
         </div>
       </section>
       <section aria-label="Home features" className="home-features">
-        {features
-          .slice(0, 4)
-          .map((feature) =>
-            feature.id === "controls" ? (
+        {features.slice(0, 3).map((feature) =>
+          feature.id === "controls" ? (
+            <Fragment key={feature.id}>
               <LightControls
-                key={feature.id}
+                layout="quick"
                 connectionState={health.state}
                 sendCommand={sendLightCommand}
               />
-            ) : (
-              <FeatureCard key={feature.id} feature={feature} />
-            )
-          )}
+              <TvRemote
+                layout="quick"
+                connectionState={health.state}
+                remote={tvRemote}
+                sendCommand={sendTvCommand}
+              />
+            </Fragment>
+          ) : (
+            <FeatureCard key={feature.id} feature={feature} />
+          )
+        )}
       </section>
       <div className="home-bottom">
         <p>

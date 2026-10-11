@@ -319,22 +319,22 @@
   gap: 1.5rem;
   margin-top: 1.5rem;
 }
-.light-observed {
+.control-observed {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   color: var(--muted-foreground);
   font-size: 0.8125rem;
 }
-.light-observed span {
+.control-observed span {
   color: var(--foreground);
 }
-.light-actions {
+.control-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
   gap: 0.75rem;
 }
-.light-actions button {
+.control-actions button {
   min-width: 0;
   padding-inline: 0.75rem;
   white-space: normal;
@@ -342,32 +342,104 @@
   min-height: 3.5rem;
   touch-action: manipulation;
 }
-.light-feedback {
+.control-feedback {
   margin-top: 1rem;
   min-height: 2.5rem;
   font-size: 0.875rem;
   line-height: 1.5;
   color: var(--primary);
 }
-.light-feedback[data-failed="true"] {
+.control-feedback[data-failed="true"] {
   color: var(--destructive);
 }
-.light-explanation {
+.control-explanation {
   margin-top: 0.75rem;
   color: var(--muted-foreground);
   font-size: 0.75rem;
   line-height: 1.5;
 }
-.light-links {
+.control-links {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1.5rem;
   margin-top: 0.75rem;
 }
-.light-links button {
+.control-links button {
   min-height: 3rem;
   touch-action: manipulation;
+}
+.tv-groups {
+  display: grid;
+  gap: 1.25rem;
+}
+[data-slot="card-content"] > .control-feedback:first-child {
+  margin: 0 0 1rem;
+  min-height: 0;
+}
+.tv-group {
+  display: grid;
+  gap: 0.5rem;
+}
+.tv-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
+  gap: 0.75rem;
+}
+.tv-buttons button {
+  min-width: 0;
+  height: auto;
+  min-height: 3.5rem;
+  padding-inline: 0.75rem;
+  white-space: normal;
+  touch-action: manipulation;
+}
+.tv-buttons[data-kind="quick"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.tv-buttons[data-kind="quick"] button {
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-block: 0.5rem;
+}
+.tv-buttons[data-kind="keypad"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.tv-buttons[data-kind="keypad"] [data-command="0"] {
+  grid-column: 2;
+}
+/* Fixed areas keep the direction pad readable when some directions are unavailable. */
+.tv-buttons[data-kind="dpad"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    ". up ."
+    "left ok right"
+    ". down .";
+  max-width: 24rem;
+}
+.tv-buttons[data-kind="dpad"] [data-command="up"] {
+  grid-area: up;
+}
+.tv-buttons[data-kind="dpad"] [data-command="down"] {
+  grid-area: down;
+}
+.tv-buttons[data-kind="dpad"] [data-command="left"] {
+  grid-area: left;
+}
+.tv-buttons[data-kind="dpad"] [data-command="right"] {
+  grid-area: right;
+}
+.tv-buttons[data-kind="dpad"] [data-command="ok"] {
+  grid-area: ok;
+}
+.focused-page.controls-page {
+  max-width: 72rem;
+}
+.controls-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: start;
+  gap: 1rem;
 }
 .home-bottom > p {
   max-width: 32rem;
@@ -490,6 +562,9 @@ a:focus-visible {
   .home-note p {
     max-width: none;
     margin-top: 0.5rem;
+  }
+  .controls-grid {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 560px) {

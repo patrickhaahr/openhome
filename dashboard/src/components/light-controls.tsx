@@ -1,7 +1,7 @@
-import { useRef, useState, useTransition } from "react"
-import { Link, useRouter } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb"
+import { CheckAgainButton } from "@/components/check-again-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import type { ConnectionState } from "@/lib/connection"
@@ -10,22 +10,17 @@ import type {
   LightCommandResult,
   LightFailure,
 } from "@/lib/lights"
+import { useSingleCommand } from "@/lib/use-single-command"
 
 type LightControlsProps = {
   connectionState: ConnectionState
+  /** Home links to the focused Controls view, which shows every control. */
+  layout: "quick" | "full"
   sendCommand: (options: {
     data: LightCommand
     signal: AbortSignal
   }) => Promise<LightCommandResult>
 }
-
-type CommandState =
-  | { state: "idle" }
-  | { state: "pending"; command: LightCommand }
-  | { state: "result"; command: LightCommand; result: LightCommandResult }
-
-// The dashboard server allows Axum 12 seconds; this also bounds a dropped iPad connection.
-const commandTimeoutMs = 15000
 
 const commandLabels: Record<LightCommand, string> = { on: "On", off: "Off" }
 
@@ -67,17 +62,11 @@ const setupFailures = new Set<LightFailure>([
 
 /** Light commands and their acknowledgements stay separate from unknown observed power. */
 export function LightControls({
+  layout,
   connectionState,
   sendCommand,
 }: LightControlsProps): React.JSX.Element {
-  const router = useRouter()
-  const [isChecking, startTransition] = useTransition()
-
-  const [commandState, setCommandState] = useState<CommandState>({
-    state: "idle",
-  })
-
-  const inFlight = useRef(false)
+  const { commandState, send } = useSingleCommand(sendCommand)
   const pending = commandState.state === "pending"
   const connected = connectionState === "connected"
   let feedback = "Ready to send a command."
@@ -99,36 +88,8 @@ export function LightControls({
     }
   }
 
-  async function send(command: LightCommand): Promise<void> {
-    // The synchronous guard also catches taps queued before React renders disabled buttons.
-    if (inFlight.current || !connected) return
-
-    inFlight.current = true
-    setCommandState({ state: "pending", command })
-
-    try {
-      const result = await sendCommand({
-        data: command,
-        signal: AbortSignal.timeout(commandTimeoutMs),
-      })
-
-      setCommandState({ state: "result", command, result })
-    } catch {
-      // RPC failures may include private details. Offer a safe, uncertain outcome without retrying.
-      setCommandState({
-        state: "result",
-        command,
-        result: { state: "failed", reason: "unreachable" },
-      })
-    } finally {
-      inFlight.current = false
-    }
-  }
-
-  function checkAgain(): void {
-    startTransition(async () => {
-      await router.invalidate({ sync: true })
-    })
+  function dispatch(command: LightCommand): void {
+    if (connected) void send(command)
   }
 
   return (
@@ -141,13 +102,13 @@ export function LightControls({
         <h2 id="lights-heading" className="feature-card-title">
           Lights
         </h2>
-        <p className="light-observed">
+        <p className="control-observed">
           Observed state <span>Unknown</span>
         </p>
       </CardHeader>
       <CardContent>
         <div
-          className="light-actions"
+          className="control-actions"
           role="group"
           aria-label="Light commands"
           aria-busy={pending}
@@ -155,7 +116,7 @@ export function LightControls({
           <Button
             size="lg"
             disabled={pending || !connected}
-            onClick={() => void send("on")}
+            onClick={() => dispatch("on")}
           >
             Turn on
           </Button>
@@ -163,13 +124,13 @@ export function LightControls({
             size="lg"
             variant="outline"
             disabled={pending || !connected}
-            onClick={() => void send("off")}
+            onClick={() => dispatch("off")}
           >
             Turn off
           </Button>
         </div>
         <p
-          className="light-feedback"
+          className="control-feedback"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -177,33 +138,23 @@ export function LightControls({
         >
           {feedback}
         </p>
-        <p className="light-explanation">
+        <p className="control-explanation">
           Commands control the configured lights. OpenHome does not report their
           current power state.
         </p>
-        <div className="light-links">
-          {connected ? null : (
-            <Button
-              variant="outline"
-              disabled={isChecking}
-              onClick={checkAgain}
-            >
-              {isChecking ? "Checking…" : "Check again"}
-            </Button>
-          )}
+        <div className="control-links">
+          {connected ? null : <CheckAgainButton />}
           {!connected ||
           (failure !== undefined && setupFailures.has(failure)) ? (
             <Link to="/connection" className="action-link">
               Open Connection
             </Link>
           ) : null}
-          <Link
-            to="/$feature"
-            params={{ feature: "controls" }}
-            className="action-link"
-          >
-            All controls <ArrowUpRightIcon size={18} aria-hidden="true" />
-          </Link>
+          {layout === "quick" ? (
+            <Link to="/controls" className="action-link">
+              All controls <ArrowUpRightIcon size={18} aria-hidden="true" />
+            </Link>
+          ) : null}
         </div>
       </CardContent>
     </Card>
