@@ -394,7 +394,7 @@ test("sends one speaker command for a burst of taps and never claims power, inpu
 
   await speaker.resolve({ state: "accepted" })
   expect(status()).toBe("Optical command accepted by OpenHome.")
-  expect(container.textContent).toContain("Power and volume Not reported")
+  expect(container.textContent).toContain("Observed state Not reported")
   expect(container.textContent).toContain(
     "does not report whether the speaker is on, its input, its volume or what is playing"
   )
