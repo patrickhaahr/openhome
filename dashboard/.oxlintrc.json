@@ -9,6 +9,7 @@
     ".continue/**",
     ".cursor/**",
     ".gemini/**",
+    ".intent/**",
     ".opencode/**",
     ".pi/**",
     ".roo/**",
