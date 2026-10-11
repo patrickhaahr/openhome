@@ -21,5 +21,5 @@ Production TanStack Start dashboard for a private household iPad: glanceable inf
 - Use `../prototypes/executor-dashboard/` as inspiration; develop a cohesive production design with better hierarchy, usability and polish. Reuse components selectively.
 - Use shadcn/ui for new UI components; add them from the repo root with `just dashboard-add <component>`. Extend the existing theme tokens consistently.
 - Keep rules, data and integrations in the Axum API and credentials on the server.
-- Design for iPad touch, landscape and portrait, accessible contrast, reduced motion and older-device performance. Verify physical iPad/Safari behavior separately from desktop previews.
+- Design for iPad touch, landscape and portrait, accessible contrast, reduced motion and older-device performance. Use browser previews and project tests for routine webapp checks. When an attached iPad can resolve a Safari/device-specific issue or a hardware acceptance check, invoke [ipad-control](.agents/skills/ipad-control/SKILL.md) for actual-device verification.
 - Use anonymous synthetic data in public code, fixtures and screenshots; keep household identities, coordinates and credentials private.

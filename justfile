@@ -337,6 +337,12 @@ switchbot-clean:
 dashboard-run:
     bunx vite dev --port 3000
 
+# Inspect the attached iPad's exact Safari dashboard tab
+[group('dashboard')]
+[positional-arguments]
+dashboard-ipad-inspect commands page_url="http://127.0.0.1:3000/" directory="http://127.0.0.1:9222/json":
+    bun dashboard/.agents/skills/ipad-control/scripts/inspect.mjs "$1" "$2" --directory "$3"
+
 # Build the dashboard
 [group('dashboard')]
 [working-directory: 'dashboard']
