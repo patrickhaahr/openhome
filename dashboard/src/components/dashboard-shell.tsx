@@ -4,6 +4,7 @@ import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple"
 import { PlugsConnectedIcon } from "@phosphor-icons/react/dist/csr/PlugsConnected"
 import { features } from "@/lib/features"
 
+/** Persistent navigation with one content landmark and focus after rendered navigation. */
 export function DashboardShell(): React.JSX.Element {
   const router = useRouter()
 
