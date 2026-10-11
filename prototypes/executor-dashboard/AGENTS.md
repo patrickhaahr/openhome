@@ -4,7 +4,7 @@ Applies to this directory and its descendants. Follow the repository's root `AGE
 
 ## Scope and product constraints
 
-This is an isolated Executor v2 experiment, not the production TanStack Start dashboard in `../../dashboard/`. It does not choose a replacement for TanStack Start. OpenHome's Axum API remains the production boundary for clients; do not bypass it with browser-to-device, LAN, bridge or database integrations. See [dashboard plan](../../docs/dashboard-plan.md), [API boundary ADR](../../docs/adr/0003-dashboard-api-boundary.md) and [household ownership ADR](../../docs/adr/0004-household-users-and-list-ownership.md).
+This is an isolated Executor v2 experiment, not the production TanStack Start dashboard in `../../dashboard/`. It does not choose a replacement for TanStack Start. OpenHome's Axum API remains the production boundary for clients; do not bypass it with browser-to-device, LAN, bridge or database integrations. See the [dashboard release specs and tickets](https://github.com/patrickhaahr/openhome/issues/69), [API boundary ADR](../../docs/adr/0003-dashboard-api-boundary.md) and [household ownership ADR](../../docs/adr/0004-household-users-and-list-ownership.md).
 
 Target: iPad 6th generation, iPadOS 17.7.11, primarily 1024×768 landscape CSS pixels. Also inspect 768×1024 portrait and narrow screens. Chromium screenshots are layout evidence; physical iPad/Safari rendering and performance still need verification.
 
@@ -19,7 +19,7 @@ Preserve the agreed design:
 - Routes and transit share a full-content map destination. Keep required map attribution visible: beneath the Home map, in the map control on the full map page.
 - Keep UI copy short and useful. Do not put build, API or architectural details into ordinary product flows.
 
-The repository is public. Use synthetic data, anonymous labels, public Immich demo data when needed and unrelated public Copenhagen coordinates. Never add household locations, names, private photos, calendar entries, viewing history, credentials, pairing links or tokens to source, docs, screenshots or logs. Services must remain free under the current product constraint. Paid GPT-Live is backlog; Hermes/live voice is not connected.
+The repository is public. Use synthetic data, anonymous labels, public Immich demo data when needed and unrelated public Copenhagen coordinates. Never add household locations, names, private photos, calendar entries, viewing history, credentials, pairing links or tokens to source, docs, screenshots or logs. Services must remain free under the current product constraint. [Subscription-backed Hermes live voice](https://github.com/patrickhaahr/openhome/issues/85) is required for production; paid API fallback is excluded. This prototype has no connected Hermes/live voice.
 
 ## How this prototype runs
 

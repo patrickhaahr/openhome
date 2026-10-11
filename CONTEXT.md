@@ -136,10 +136,25 @@ The selected walking or running route made available to the Dashboard and the
 Mobile Client for viewing with the phone's current location.
 _Avoid_: GPX transfer, route screenshot
 
+**Route Session**:
+A started walk or run on the Mobile Client that keeps its chosen route until
+the user accepts a replacement or ends the session.
+_Avoid_: Workout, NOOP Workout
+
 **Watchlist**:
 A Household User's collection of movies and series planned for watching,
 currently being watched or completed, with dates recording addition and completion.
 _Avoid_: Wishlist, viewing history import
+
+**Watchlist Entry**:
+One movie or whole series on a Household User's Watchlist, with a planned,
+watching or completed status and addition/completion dates.
+_Avoid_: Episode log, Wishlist Item
+
+**Shared Viewing Progress**:
+Viewing state reported by the household's shared Jellyfin account, without
+attributing it to an individual Household User.
+_Avoid_: Personal completion history, Watchlist status
 
 ### Server Operations
 
