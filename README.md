@@ -33,12 +33,6 @@ The app can also register a home geofence and automatically ask the API to turn 
 | :---: | :---: |
 | <img src="assets/expo/esp32-infrared.jpg" alt="ESP32 infrared controller beside an Edifier speaker" width="400"> | <img src="assets/expo/esp32-switchbot.jpg" alt="ESP32 servo controller mounted above a wall light switch" width="400"> |
 
-### Tauri Client
-
-| Home Dashboard | Docker Management |
-| :---: | :---: |
-| <img src="assets/screen2.png" alt="Tauri home dashboard" width="300"> | <img src="assets/screen3.png" alt="Tauri Docker management" width="300"> |
-
 ## Features
 
 - Control lights, an LG TV, and an Edifier speaker.

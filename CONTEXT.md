@@ -343,4 +343,3 @@ _Avoid_: Survey, habit log
 - "same auth flow" was used ambiguously. Resolved: `mobile-native` preserves the backend **API Key** contract and **Setup Flow**, but does not use the old launch-time **Unlock Flow**.
 - The tab roadmap is incremental. Resolved: `mobile-native` only shows **Initial Native Tabs** that are actually implemented, starting with `Home` and `Remote`.
 - "Top-Level Tabs mirror one API area" conflicts with the Server Tab grouping three areas. Resolved: the **Server Tab** is a deliberate mixed operations tab, playing the same role for server ops that the **Home Tab** plays for quick access.
-- "migrate features" could mean moving or copying them off the deprecated Tauri client. Resolved: AdGuard control, Docker management, and the Compact Timeline are reimplemented in `mobile-expo`; the deprecated client stays untouched.

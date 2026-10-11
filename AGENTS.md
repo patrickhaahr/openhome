@@ -5,8 +5,6 @@ Start here for repo-wide guidance. Then read `api/AGENTS.md`, `mcp/AGENTS.md` or
 ## Current Repo Reality
 
 - `mobile-expo/` is the active mobile client.
-- `mobile/` is the old Tauri/SolidJS client and is deprecated. Do not treat it as the default mobile target.
-- The root `README.md` is stale and still describes the deprecated Tauri client. Prefer `justfile`, `devenv.nix`, `CONTEXT.md`, and the service-specific `AGENTS.md` files as sources of truth.
 
 ## Commands
 
