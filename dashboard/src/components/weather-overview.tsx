@@ -25,6 +25,17 @@ const date = new Intl.DateTimeFormat("da-DK", {
   month: "short",
 })
 
+const hourTime = new Intl.DateTimeFormat("da-DK", {
+  timeZone: "Europe/Copenhagen",
+  hour: "2-digit",
+  minute: "2-digit",
+})
+
+const hourOffset = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Copenhagen",
+  timeZoneName: "shortOffset",
+})
+
 function value(amount: number | null | undefined, unit: string): string {
   return amount === null || amount === undefined
     ? "Unavailable"
@@ -50,6 +61,150 @@ function WeatherFailure({
       </p>
       <CheckAgainButton />
     </div>
+  )
+}
+
+function HourlyForecast({
+  hours,
+}: {
+  hours: Extract<WeatherRead, { state: "fresh" }>["forecast"]["hourly"]
+}): React.JSX.Element {
+  const peak = Math.max(1, ...hours.map((hour) => hour.precipitation_mm ?? 0))
+
+  return (
+    <section className="weather-hourly" aria-labelledby="hourly-heading">
+      <div className="weather-week-heading">
+        <div>
+          <p className="weather-outdoor-label">Walking or running?</p>
+          <h2 id="hourly-heading">Next 24 hours</h2>
+        </div>
+        <p>Copenhagen time · Next hours highlighted</p>
+      </div>
+      {hours.length === 0 ? (
+        <p className="weather-empty">Hourly forecast unavailable</p>
+      ) : (
+        <>
+          <p id="hourly-help" className="weather-meta">
+            Compare temperature, precipitation and wind before heading out.
+            Swipe or scroll across for later hours. Missing values are
+            unavailable.
+          </p>
+          <div
+            className="weather-hourly-scroll"
+            role="region"
+            aria-label="Hourly conditions"
+            aria-describedby="hourly-help"
+            tabIndex={0}
+          >
+            <table className="weather-hourly-table">
+              <caption className="sr-only">
+                Temperature and wind at the start of each hour. Precipitation
+                amount and chance cover the following hour, including rain,
+                showers and snow. Bars compare amounts on the same scale.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Hour starting</th>
+                  {hours.map((hour, index) => (
+                    <th
+                      scope="col"
+                      key={hour.starts_at}
+                      data-upcoming={index < 3}
+                    >
+                      <span className="weather-hour-day">
+                        {date.format(new Date(hour.starts_at))}
+                      </span>
+                      <time dateTime={hour.starts_at}>
+                        {hourTime.format(new Date(hour.starts_at))}
+                      </time>
+                      <span className="weather-hour-zone">
+                        {
+                          hourOffset
+                            .formatToParts(new Date(hour.starts_at))
+                            .find((part) => part.type === "timeZoneName")?.value
+                        }
+                      </span>
+                      {hour.temperature_c === null &&
+                      hour.wind_ms === null &&
+                      hour.precipitation_mm === null &&
+                      hour.precipitation_probability_percent === null ? (
+                        <span className="sr-only">
+                          Hourly conditions unavailable
+                        </span>
+                      ) : null}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="weather-hour-temperature">
+                  <th scope="row">Temperature</th>
+                  {hours.map((hour) => (
+                    <td key={hour.starts_at}>
+                      {value(hour.temperature_c, "°C")}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th scope="row">
+                    Precipitation
+                    <span className="weather-hour-note">Over this hour</span>
+                  </th>
+                  {hours.map((hour) => (
+                    <td key={hour.starts_at}>
+                      <div
+                        className="weather-rain-track"
+                        aria-hidden="true"
+                        data-missing={hour.precipitation_mm === null}
+                      >
+                        {hour.precipitation_mm !== null ? (
+                          <svg
+                            className="weather-rain-bar"
+                            viewBox="0 0 24 48"
+                            aria-hidden="true"
+                          >
+                            <rect
+                              x="0"
+                              y={48 - (hour.precipitation_mm / peak) * 48}
+                              width="24"
+                              height={(hour.precipitation_mm / peak) * 48}
+                              rx="3"
+                            />
+                          </svg>
+                        ) : null}
+                      </div>
+                      {value(hour.precipitation_mm, "mm")}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th scope="row">
+                    Chance
+                    <span className="weather-hour-note">Of precipitation</span>
+                  </th>
+                  {hours.map((hour) => (
+                    <td key={hour.starts_at}>
+                      {value(hour.precipitation_probability_percent, "%")}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th scope="row">Wind</th>
+                  {hours.map((hour) => (
+                    <td key={hour.starts_at}>{value(hour.wind_ms, "m/s")}</td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="weather-meta">
+            Precipitation includes rain, showers and snow. Each amount and
+            chance covers the hour starting above; temperature and wind are at
+            its start.
+          </p>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -112,7 +267,8 @@ export function WeatherCard({
               aria-label="Open Weather"
               className="feature-card-link"
             >
-              Seven-day forecast <ArrowRightIcon size={18} aria-hidden="true" />
+              Hourly &amp; seven-day forecast{" "}
+              <ArrowRightIcon size={18} aria-hidden="true" />
             </Link>
           </div>
         </CardContent>
@@ -190,6 +346,7 @@ export function WeatherOverview({
           </CardContent>
         </Card>
       </div>
+      <HourlyForecast hours={forecast.hourly} />
       <section aria-labelledby="forecast-heading">
         <div className="weather-week-heading">
           <h2 id="forecast-heading">Seven-day forecast</h2>

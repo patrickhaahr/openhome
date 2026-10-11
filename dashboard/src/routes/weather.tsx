@@ -20,7 +20,8 @@ function WeatherPage(): React.JSX.Element {
           Weather
         </h1>
         <p className="feature-intro">
-          A look outside. Current conditions and the week ahead.
+          A look outside. Plan time outside with hourly conditions and the week
+          ahead.
         </p>
       </header>
       <LiveWeather initial={Route.useLoaderData()} readWeather={getWeather}>
