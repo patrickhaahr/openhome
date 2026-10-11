@@ -18,7 +18,7 @@ export type CommandState<C extends string, F extends string> =
 /** A control surface's command state and its burst-safe sender. */
 export type SingleCommand<C extends string, F extends string> = {
   commandState: CommandState<C, F>
-  /** Ignores taps while a command is pending. */
+  /** Ignores taps while a command is pending or the surface is not ready. */
   send: (command: C) => Promise<void>
   /** Forget a settled outcome, for example after controls are rediscovered. */
   clear: () => void
@@ -30,15 +30,20 @@ const commandTimeoutMs = 15000
 /**
  * Send at most one command at a time and never retry it automatically.
  *
- * @param sendCommand - The server function that dispatches one command.
+ * @param options.sendCommand - The server function that dispatches one command.
+ * @param options.ready - Whether OpenHome is connected; taps are ignored otherwise.
  * @returns The latest command state and a burst-safe `send`.
  */
-export function useSingleCommand<C extends string, F extends string>(
+export function useSingleCommand<C extends string, F extends string>({
+  sendCommand,
+  ready,
+}: {
   sendCommand: (options: {
     data: C
     signal: AbortSignal
   }) => Promise<Acknowledgement<F>>
-): SingleCommand<C, F> {
+  ready: boolean
+}): SingleCommand<C, F> {
   const [commandState, setCommandState] = useState<CommandState<C, F>>({
     state: "idle",
   })
@@ -47,7 +52,7 @@ export function useSingleCommand<C extends string, F extends string>(
 
   async function send(command: C): Promise<void> {
     // The synchronous guard also catches taps queued before React renders disabled buttons.
-    if (inFlight.current) return
+    if (inFlight.current || !ready) return
 
     inFlight.current = true
     setCommandState({ state: "pending", command })

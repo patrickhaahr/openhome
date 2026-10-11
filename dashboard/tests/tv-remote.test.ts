@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import { TvRemote } from "@/components/tv-remote"
+import type { ControlLayout } from "@/lib/command-feedback"
 import type { ConnectionState } from "@/lib/connection"
 import type { TvCommand, TvCommandResult, TvRemoteState } from "@/lib/tv"
 
@@ -51,7 +52,7 @@ const synthetic: TvRemoteState = {
 
 /** Render the TV remote in a router whose checks return each health and discovery outcome in turn. */
 async function renderTv(
-  layout: "quick" | "full",
+  layout: ControlLayout,
   ...checks: [Check, ...Check[]]
 ): Promise<Harness> {
   const commands: TvCommand[] = []

@@ -1,13 +1,10 @@
 import "@tanstack/react-start/server-only"
-import { z } from "zod"
-import { requestOpenHome } from "./openhome.server"
+import {
+  isAcknowledged,
+  readErrorMessage,
+  requestOpenHome,
+} from "./openhome.server"
 import type { LightCommand, LightCommandResult } from "./lights"
-
-const acknowledgement = z.object({ message: z.string() })
-
-const missingSetup = z.object({
-  error: z.literal("SwitchBot service is not configured"),
-})
 
 /** Dispatch once through Axum. Provider messages never become observed state or public copy. */
 export async function dispatchLightCommand(
@@ -26,18 +23,13 @@ export async function dispatchLightCommand(
 
   const { response } = result
 
-  try {
-    const body: unknown = await response.json()
+  if (await isAcknowledged(response)) return { state: "accepted" }
 
-    if (response.ok && acknowledgement.safeParse(body).success) {
-      return { state: "accepted" }
-    }
-
-    if (response.status === 503 && missingSetup.safeParse(body).success) {
-      return { state: "failed", reason: "missing-device" }
-    }
-  } catch {
-    // An unreadable acknowledgement cannot establish whether a command was accepted.
+  if (
+    response.status === 503 &&
+    (await readErrorMessage(response)) === "SwitchBot service is not configured"
+  ) {
+    return { state: "failed", reason: "missing-device" }
   }
 
   return { state: "failed", reason: "unavailable" }
