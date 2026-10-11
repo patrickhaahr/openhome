@@ -1,5 +1,6 @@
-import { useRef, useState } from "react"
-import { Link } from "@tanstack/react-router"
+import { useRef, useState, useTransition } from "react"
+import { Link, useRouter } from "@tanstack/react-router"
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -12,7 +13,10 @@ import type {
 
 type LightControlsProps = {
   connectionState: ConnectionState
-  sendCommand: (options: { data: LightCommand }) => Promise<LightCommandResult>
+  sendCommand: (options: {
+    data: LightCommand
+    signal: AbortSignal
+  }) => Promise<LightCommandResult>
 }
 
 type CommandState =
@@ -20,7 +24,28 @@ type CommandState =
   | { state: "pending"; command: LightCommand }
   | { state: "result"; command: LightCommand; result: LightCommandResult }
 
-const failures: Record<LightFailure, string> = {
+// The dashboard server allows Axum 12 seconds; this also bounds a dropped iPad connection.
+const commandTimeoutMs = 15000
+
+const commandLabels: Record<LightCommand, string> = { on: "On", off: "Off" }
+
+/** Shown before any command is sent, so the copy never suggests the lights changed. */
+const connectionMessages: Record<
+  Exclude<ConnectionState, "connected">,
+  string
+> = {
+  "missing-configuration": "Connect OpenHome before sending a light command.",
+  "invalid-configuration":
+    "The OpenHome connection needs a correction before light commands can be sent.",
+  "rejected-credential":
+    "OpenHome rejected the API key. Light commands are paused until it is fixed.",
+  unreachable:
+    "OpenHome is unreachable. Light commands are paused until it responds.",
+  unavailable:
+    "OpenHome is not responding normally. Light commands are paused until it recovers.",
+}
+
+const failureMessages: Record<LightFailure, string> = {
   "missing-configuration": "Connect OpenHome before sending a light command.",
   "invalid-configuration":
     "The OpenHome connection needs a correction. Open Connection for setup help.",
@@ -34,11 +59,20 @@ const failures: Record<LightFailure, string> = {
     "Command not confirmed. Check the lights and OpenHome’s SwitchBot connection before trying again.",
 }
 
+const setupFailures = new Set<LightFailure>([
+  "missing-configuration",
+  "invalid-configuration",
+  "rejected-credential",
+])
+
 /** Light commands and their acknowledgements stay separate from unknown observed power. */
 export function LightControls({
   connectionState,
   sendCommand,
 }: LightControlsProps): React.JSX.Element {
+  const router = useRouter()
+  const [isChecking, startTransition] = useTransition()
+
   const [commandState, setCommandState] = useState<CommandState>({
     state: "idle",
   })
@@ -47,20 +81,22 @@ export function LightControls({
   const pending = commandState.state === "pending"
   const connected = connectionState === "connected"
   let feedback = "Ready to send a command."
-  let failed = false
+  let failure: LightFailure | undefined
 
   if (commandState.state === "pending") {
     feedback = `Sending ${commandState.command} command…`
+  } else if (!connected) {
+    feedback = connectionMessages[connectionState]
+    failure = connectionState
   } else if (commandState.state === "result") {
     const { result, command } = commandState
-    failed = result.state === "failed"
-    feedback =
-      result.state === "accepted"
-        ? `${command === "on" ? "On" : "Off"} command accepted by OpenHome.`
-        : failures[result.reason]
-  } else if (!connected) {
-    feedback = failures[connectionState]
-    failed = true
+
+    if (result.state === "accepted") {
+      feedback = `${commandLabels[command]} command accepted by OpenHome.`
+    } else {
+      feedback = failureMessages[result.reason]
+      failure = result.reason
+    }
   }
 
   async function send(command: LightCommand): Promise<void> {
@@ -71,7 +107,11 @@ export function LightControls({
     setCommandState({ state: "pending", command })
 
     try {
-      const result = await sendCommand({ data: command })
+      const result = await sendCommand({
+        data: command,
+        signal: AbortSignal.timeout(commandTimeoutMs),
+      })
+
       setCommandState({ state: "result", command, result })
     } catch {
       // RPC failures may include private details. Offer a safe, uncertain outcome without retrying.
@@ -85,8 +125,14 @@ export function LightControls({
     }
   }
 
+  function checkAgain(): void {
+    startTransition(async () => {
+      await router.invalidate({ sync: true })
+    })
+  }
+
   return (
-    <Card className="h-full" aria-labelledby="lights-heading">
+    <Card className="h-full" role="group" aria-labelledby="lights-heading">
       <CardHeader>
         <div className="feature-card-top">
           <LightbulbIcon size={28} aria-hidden="true" />
@@ -102,6 +148,7 @@ export function LightControls({
       <CardContent>
         <div
           className="light-actions"
+          role="group"
           aria-label="Light commands"
           aria-busy={pending}
         >
@@ -126,7 +173,7 @@ export function LightControls({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          data-failed={failed}
+          data-failed={failure !== undefined}
         >
           {feedback}
         </p>
@@ -134,11 +181,30 @@ export function LightControls({
           Commands control the configured lights. OpenHome does not report their
           current power state.
         </p>
-        {!connected ? (
-          <Link to="/connection" className="action-link">
-            Open Connection
+        <div className="light-links">
+          {connected ? null : (
+            <Button
+              variant="outline"
+              disabled={isChecking}
+              onClick={checkAgain}
+            >
+              {isChecking ? "Checking…" : "Check again"}
+            </Button>
+          )}
+          {!connected ||
+          (failure !== undefined && setupFailures.has(failure)) ? (
+            <Link to="/connection" className="action-link">
+              Open Connection
+            </Link>
+          ) : null}
+          <Link
+            to="/$feature"
+            params={{ feature: "controls" }}
+            className="action-link"
+          >
+            All controls <ArrowUpRightIcon size={18} aria-hidden="true" />
           </Link>
-        ) : null}
+        </div>
       </CardContent>
     </Card>
   )
