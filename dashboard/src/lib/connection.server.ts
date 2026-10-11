@@ -5,7 +5,7 @@ import type { ConnectionHealth, ConnectionState } from "./connection"
 const healthResponse = z.object({ status: z.literal("ok") })
 
 type PrivateConnection = {
-  healthUrl: URL
+  baseUrl: URL
   headers: Headers
 }
 
@@ -38,13 +38,10 @@ function parseConfiguration():
       return { state: "invalid-configuration" }
     }
 
-    // Preserve an installer-supplied deployment prefix, with or without a trailing slash.
-    url.pathname = `${url.pathname.replace(/\/$/, "")}/api/health`
-
     return {
       state: "ready",
       connection: {
-        healthUrl: url,
+        baseUrl: url,
         // Headers encapsulates the credential; only fetch receives it.
         headers: new Headers({ Authorization: `Bearer ${apiKey}` }),
       },
@@ -54,48 +51,71 @@ function parseConfiguration():
   }
 }
 
-async function checkHealth(
-  connection: PrivateConnection
-): Promise<ConnectionState> {
+type OpenHomeResponse =
+  | { state: "received"; response: Response }
+  | { state: Exclude<ConnectionState, "connected" | "unavailable"> }
+
+/** Shared private transport; callers parse responses and serialize only safe outcomes. */
+export async function requestOpenHome({
+  path,
+  method,
+  timeoutMs,
+}: {
+  path: string
+  method: "GET" | "POST"
+  timeoutMs: number
+}): Promise<OpenHomeResponse> {
+  const config = parseConfiguration()
+
+  if (config.state !== "ready") return config
+
+  const { baseUrl, headers } = config.connection
+  // Preserve an installer-supplied deployment prefix, with or without a trailing slash.
+  baseUrl.pathname = `${baseUrl.pathname.replace(/\/$/, "")}${path}`
+
   try {
-    const response = await fetch(connection.healthUrl, {
-      headers: connection.headers,
+    const response = await fetch(baseUrl, {
+      method,
+      headers,
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
 
     if (response.status === 401 || response.status === 403) {
-      return "rejected-credential"
+      return { state: "rejected-credential" }
     }
 
-    if (!response.ok) {
-      return "unavailable"
-    }
-
-    try {
-      const body: unknown = await response.json()
-
-      return healthResponse.safeParse(body).success
-        ? "connected"
-        : "unavailable"
-    } catch {
-      return "unavailable"
-    }
+    return { state: "received", response }
   } catch {
     // Transport errors can contain private URLs. Never serialize or log the raw error.
-    return "unreachable"
+    return { state: "unreachable" }
+  }
+}
+
+async function checkHealth(): Promise<ConnectionState> {
+  const result = await requestOpenHome({
+    path: "/api/health",
+    method: "GET",
+    timeoutMs: 4000,
+  })
+
+  if (result.state !== "received") return result.state
+
+  if (!result.response.ok) return "unavailable"
+
+  try {
+    const body: unknown = await result.response.json()
+
+    return healthResponse.safeParse(body).success ? "connected" : "unavailable"
+  } catch {
+    return "unavailable"
   }
 }
 
 /** Read private runtime configuration and return only an authenticated health outcome. */
 export async function readConnectionHealth(): Promise<ConnectionHealth> {
-  const config = parseConfiguration()
-
-  const state =
-    config.state === "ready"
-      ? await checkHealth(config.connection)
-      : config.state
+  const state = await checkHealth()
 
   return { state, checkedAt: new Date().toISOString() }
 }

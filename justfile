@@ -358,8 +358,8 @@ dashboard-preview:
 # Run dashboard tests
 [group('dashboard')]
 [working-directory: 'dashboard']
-dashboard-test: dashboard-health-fixture-build
-    bunx vitest run
+dashboard-test *args: dashboard-health-fixture-build
+    bunx vitest run {{args}}
 
 # Build the real authenticated Axum health seam for dashboard tests
 [group('dashboard')]

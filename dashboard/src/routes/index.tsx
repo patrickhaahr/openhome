@@ -2,8 +2,10 @@ import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
 import { FeatureCard } from "@/components/feature-card"
 import { LiveClock } from "@/components/live-clock"
+import { LightControls } from "@/components/light-controls"
 import { features } from "@/lib/features"
 import { getConnectionHealth } from "@/lib/connection.functions"
+import { sendLightCommand } from "@/lib/lights.functions"
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Home · OpenHome" }] }),
@@ -50,9 +52,19 @@ function HomePage(): React.JSX.Element {
         </div>
       </section>
       <section aria-label="Home features" className="home-features">
-        {features.slice(0, 4).map((feature) => (
-          <FeatureCard key={feature.id} feature={feature} />
-        ))}
+        {features
+          .slice(0, 4)
+          .map((feature) =>
+            feature.id === "controls" ? (
+              <LightControls
+                key={feature.id}
+                connectionState={health.state}
+                sendCommand={sendLightCommand}
+              />
+            ) : (
+              <FeatureCard key={feature.id} feature={feature} />
+            )
+          )}
       </section>
       <div className="home-bottom">
         <p>

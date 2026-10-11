@@ -319,6 +319,45 @@
   gap: 1.5rem;
   margin-top: 1.5rem;
 }
+.light-observed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+.light-observed span {
+  color: var(--foreground);
+}
+.light-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  gap: 0.75rem;
+}
+.light-actions button {
+  min-width: 0;
+  padding-inline: 0.75rem;
+  white-space: normal;
+  height: auto;
+  min-height: 3.5rem;
+  touch-action: manipulation;
+}
+.light-feedback {
+  margin-top: 1rem;
+  min-height: 2.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--primary);
+}
+.light-feedback[data-failed="true"] {
+  color: var(--destructive);
+}
+.light-explanation {
+  margin-top: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
 .home-bottom > p {
   max-width: 32rem;
   color: var(--muted-foreground);
