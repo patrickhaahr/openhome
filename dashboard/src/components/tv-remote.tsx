@@ -20,6 +20,7 @@ const tvRemote: IrRemoteConfig<TvCommand> = {
   title: "TV",
   remoteName: "LG TV remote",
   icon: TelevisionSimpleIcon,
+  primary: "power",
   labels: tvCommandLabels,
   commandIcons: {
     power: PowerIcon,

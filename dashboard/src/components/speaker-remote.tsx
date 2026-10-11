@@ -18,6 +18,7 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
   title: "Speaker",
   remoteName: "Edifier speaker remote",
   icon: SpeakerHifiIcon,
+  primary: "power",
   labels: speakerCommandLabels,
   commandIcons: {
     power: PowerIcon,
@@ -48,7 +49,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
       commands: ["volume-down", "mute", "volume-up"],
     },
   ],
-  unobserved: "Power and volume",
+  // Input matters most for the speaker, so the label covers every unreported state.
+  unobserved: "Observed state",
   explanation:
     "Commands are sent to the speaker by infrared. OpenHome does not report whether the speaker is on, its input, its volume or what is playing.",
 }
