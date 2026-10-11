@@ -3,8 +3,10 @@ import { Await, Link } from "@tanstack/react-router"
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
 import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
 import { CheckAgainButton } from "./check-again-button"
+import { LiveWeather } from "./live-weather"
 import { Card, CardContent, CardHeader } from "./ui/card"
 import { weatherDescription, type WeatherRead } from "@/lib/weather"
+import { getWeather } from "@/lib/weather.functions"
 
 const number = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 1 })
 
@@ -74,29 +76,35 @@ export function WeatherCard({
           <div className="flex h-full flex-col gap-2">
             <Suspense fallback={<p role="status">Checking weather…</p>}>
               <Await promise={weather}>
-                {(read) =>
-                  read.state === "unavailable" ? (
-                    <WeatherFailure reason={read.reason} />
-                  ) : (
-                    <>
-                      <p className="weather-card-temperature">
-                        {value(read.forecast.current?.temperature_c, "°C")}
-                      </p>
-                      <p>
-                        {weatherDescription(
-                          read.forecast.current?.weather_code ?? null
-                        )}
-                      </p>
-                      <p className="weather-meta">
-                        {read.state === "stale"
-                          ? "Stale forecast · "
-                          : "Fetched · "}
-                        {timestamp.format(new Date(read.forecast.fetched_at))}
-                      </p>
-                      <p className="weather-meta">Copenhagen time</p>
-                    </>
-                  )
-                }
+                {(initial) => (
+                  <LiveWeather initial={initial} readWeather={getWeather}>
+                    {(read) =>
+                      read.state === "unavailable" ? (
+                        <WeatherFailure reason={read.reason} />
+                      ) : (
+                        <>
+                          <p className="weather-card-temperature">
+                            {value(read.forecast.current?.temperature_c, "°C")}
+                          </p>
+                          <p>
+                            {weatherDescription(
+                              read.forecast.current?.weather_code ?? null
+                            )}
+                          </p>
+                          <p className="weather-meta">
+                            {read.state === "stale"
+                              ? "Stale forecast · "
+                              : "Fetched · "}
+                            {timestamp.format(
+                              new Date(read.forecast.fetched_at)
+                            )}
+                          </p>
+                          <p className="weather-meta">Copenhagen time</p>
+                        </>
+                      )
+                    }
+                  </LiveWeather>
+                )}
               </Await>
             </Suspense>
             <Link
@@ -145,8 +153,7 @@ export function WeatherOverview({
       </div>
       {weather.state === "stale" ? (
         <p className="weather-stale-note">
-          Refresh unavailable. Showing the last cached forecast; conditions may
-          have changed.
+          Showing the last cached forecast; conditions may have changed.
         </p>
       ) : null}
       <div className="weather-current">
