@@ -146,6 +146,10 @@ test("guides the installer when private configuration is missing", async () => {
   expect(html).toContain("Setup needed")
   expect(html).toContain("OPENHOME_API_URL")
   expect(html).toContain("API_KEY")
+  const home = await page(await dashboard(), "/")
+  expect(home).toContain("Connect OpenHome before sending a light command.")
+  expect(home).toContain("Turn on")
+  expect(home).toContain("disabled")
 })
 
 test("renders authenticated health from the real Axum route without exposing configuration", async () => {
@@ -162,6 +166,10 @@ test("renders Home and a focused deep link without treating healthy Axum as conn
   expect(home).toContain("Current time")
   expect(home).toContain("Copenhagen time")
   expect(home).toContain("Not available yet")
+  expect(home).toContain("Turn on")
+  expect(home).toContain("Turn off")
+  expect(home).toContain("Observed state")
+  expect(home).toContain("Unknown")
 
   const photos = await page(url, "/photos")
   expect(photos).toContain("No photo library is connected here")
