@@ -273,6 +273,146 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
+.weather-card {
+  min-width: 0;
+}
+.weather-card-temperature {
+  font-size: 2.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+.feature-card-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  margin-top: auto;
+  color: var(--primary);
+}
+.weather-meta,
+.weather-attribution {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.weather-freshness {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.weather-freshness button {
+  margin-left: auto;
+}
+.weather-state {
+  color: var(--primary);
+  font-weight: 650;
+}
+.weather-state[data-stale="true"],
+.weather-stale-note {
+  color: var(--primary);
+}
+.weather-current {
+  margin: 1.25rem 0 1.75rem;
+}
+.weather-current-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+.weather-temperature {
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 1.15;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.weather-condition {
+  margin-top: 0.5rem;
+  font-size: 1.125rem;
+}
+.weather-measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 3rem;
+}
+.weather-measures dt,
+.weather-day dt {
+  color: var(--muted-foreground);
+}
+.weather-measures dd {
+  margin-top: 0.25rem;
+  font-size: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.weather-week-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.weather-week-heading h2,
+.weather-current h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.weather-week-heading p {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+.weather-page {
+  max-width: 72rem;
+}
+.weather-days {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.weather-day h3 {
+  font-weight: 650;
+  text-transform: capitalize;
+}
+.weather-day-condition {
+  color: var(--muted-foreground);
+}
+.weather-day dl {
+  display: grid;
+  gap: 0.75rem;
+}
+.weather-day dl > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+.weather-day dd {
+  font-variant-numeric: tabular-nums;
+}
+.weather-day-temperature dd {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.weather-empty {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+.weather-empty h3 {
+  font-weight: 650;
+}
+.weather-empty p {
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.weather-attribution a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
 .feature-link {
   display: block;
   text-decoration: none;
@@ -555,6 +695,9 @@ a:focus-visible {
   }
 }
 @media (max-width: 800px) {
+  .weather-days {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .dashboard-workspace {
     padding: 1.5rem;
   }
@@ -582,6 +725,9 @@ a:focus-visible {
   }
 }
 @media (max-width: 560px) {
+  .weather-days {
+    grid-template-columns: 1fr;
+  }
   #page-content {
     /* Clear the sticky rail and its scrollbar, including enlarged text. */
     scroll-margin-top: 6rem;

@@ -7,7 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use openhome_api::auth;
 use openhome_api::routes;
-use openhome_api::services::{adguard, docker, feed, ir, noop_push, switchbot};
+use openhome_api::services::{adguard, docker, feed, ir, noop_push, switchbot, weather};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -36,6 +36,23 @@ async fn main() -> anyhow::Result<()> {
     let adguard_insecure_tls = std::env::var("ADGUARD_INSECURE_TLS").unwrap_or_default() == "true";
     let ir_base_url = std::env::var("IR_BASE_URL").unwrap_or_default();
     let switchbot_base_url = std::env::var("SWITCHBOT_BASE_URL").unwrap_or_default();
+    let weather_service = weather::WeatherLocation::parse(
+        std::env::var("WEATHER_LATITUDE")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .as_deref(),
+        std::env::var("WEATHER_LONGITUDE")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .as_deref(),
+    )?
+    .map(|location| {
+        weather::WeatherService::new(
+            location,
+            url::Url::parse("https://api.open-meteo.com/v1/forecast")?,
+        )
+    })
+    .transpose()?;
 
     let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {
         match docker::DockerService::new() {
@@ -123,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::ir::router())
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
+        .merge(routes::weather::router(weather_service))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())
