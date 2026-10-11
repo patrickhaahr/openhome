@@ -69,17 +69,15 @@ pub struct Addition {
     pub replayed: bool,
 }
 
-struct StoredItem {
-    id: String,
-    list_id: String,
+struct AdditionReceipt {
+    item_id: String,
     title: String,
-    created_at: String,
     requested_owner_id: Option<String>,
     requested_list_id: Option<String>,
 }
 
-impl StoredItem {
-    fn addition(self, request: &AddItem, replayed: bool) -> Result<Addition> {
+impl AdditionReceipt {
+    async fn replay(self, db: &SqlitePool, request: &AddItem) -> Result<Addition> {
         if self.title != request.title
             || self.requested_owner_id != request.owner_id
             || self.requested_list_id != request.list_id
@@ -89,14 +87,21 @@ impl StoredItem {
                     .into(),
             ));
         }
+        let item = sqlx::query_as!(
+            WishlistItem,
+            "SELECT id, list_id, title, created_at FROM wishlist_items WHERE id = ?",
+            self.item_id
+        )
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            WishlistError::Conflict(
+                "The retried item was removed; use a new request_id to add it again".into(),
+            )
+        })?;
         Ok(Addition {
-            item: WishlistItem {
-                id: self.id,
-                list_id: self.list_id,
-                title: self.title,
-                created_at: self.created_at,
-            },
-            replayed,
+            item,
+            replayed: true,
         })
     }
 }
@@ -229,9 +234,9 @@ async fn destination(
     })
 }
 
-async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<StoredItem>> {
-    Ok(sqlx::query_as!(StoredItem,
-        "SELECT id, list_id, title, created_at, requested_owner_id, requested_list_id FROM wishlist_items WHERE request_id = ?", request_id)
+async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<AdditionReceipt>> {
+    Ok(sqlx::query_as!(AdditionReceipt,
+        "SELECT item_id, title, requested_owner_id, requested_list_id FROM wishlist_addition_receipts WHERE request_id = ?", request_id)
         .fetch_optional(db).await?)
 }
 
@@ -244,19 +249,29 @@ pub async fn add_item(
     request.request_id = text(&request.request_id, "request_id", 128)?;
     // Replay before resolving: a changed default or newly created list cannot move an accepted request.
     if let Some(item) = previous(db, &request.request_id).await? {
-        return item.addition(&request, true);
+        return item.replay(db, &request).await;
     }
     let list = destination(db, &request, default_list_id).await?;
     let id = Uuid::new_v4().to_string();
-    // One atomic statement claims the request ID and creates the item. Concurrent retries cannot
-    // both insert; a losing request reads and checks the winning request's original inputs.
-    let inserted = sqlx::query_as!(StoredItem,
-        "INSERT INTO wishlist_items (id, list_id, title, request_id, requested_owner_id, requested_list_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING id, list_id, title, created_at, requested_owner_id, requested_list_id",
-        id, list.id, request.title, request.request_id, request.owner_id, request.list_id)
-        .fetch_optional(db).await?;
-    if let Some(item) = inserted {
-        return item.addition(&request, false);
+    let mut transaction = db.begin().await?;
+    // Claim before inserting, in one transaction. Receipts have no foreign key so delayed
+    // retries cannot recreate a deleted item, list or owner. Failed writes consume no ID.
+    let claimed = sqlx::query!(
+        "INSERT INTO wishlist_addition_receipts (request_id, item_id, title, requested_owner_id, requested_list_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
+        request.request_id, id, request.title, request.owner_id, request.list_id)
+        .fetch_optional(&mut *transaction).await?;
+    if claimed.is_some() {
+        let item = sqlx::query_as!(WishlistItem,
+            "INSERT INTO wishlist_items (id, list_id, title, request_id, requested_owner_id, requested_list_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, list_id, title, created_at",
+            id, list.id, request.title, request.request_id, request.owner_id, request.list_id)
+            .fetch_one(&mut *transaction).await?;
+        transaction.commit().await?;
+        return Ok(Addition {
+            item,
+            replayed: false,
+        });
     }
+    transaction.rollback().await?;
     previous(db, &request.request_id)
         .await?
         .ok_or_else(|| {
@@ -264,5 +279,106 @@ pub async fn add_item(
                 "The retried item was removed; use a new request_id to add it again".into(),
             )
         })?
-        .addition(&request, true)
+        .replay(db, &request)
+        .await
+}
+
+/// Rename-only changes preserve stable IDs and ownership.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rename {
+    pub name: String,
+}
+
+/// A title edit never changes the original addition's retry identity.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditTitle {
+    pub title: String,
+}
+
+/// Rename one configured household member.
+pub async fn rename_owner(db: &SqlitePool, id: &str, request: Rename) -> Result<HouseholdUser> {
+    let name = text(&request.name, "name", 200)?;
+    sqlx::query_as!(
+        HouseholdUser,
+        "UPDATE household_users SET name = ? WHERE id = ? RETURNING id, name",
+        name,
+        id
+    )
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| WishlistError::NotFound("Household User not found".into()))
+}
+
+/// Delete a member and cascade all their lists/items. Addition receipts remain retired.
+pub async fn remove_owner(db: &SqlitePool, id: &str) -> Result<()> {
+    let removed = sqlx::query!("DELETE FROM household_users WHERE id = ?", id)
+        .execute(db)
+        .await?;
+    changed(removed.rows_affected())
+}
+
+/// Rename a list only within its explicit owner.
+pub async fn rename_list(
+    db: &SqlitePool,
+    owner_id: &str,
+    id: &str,
+    request: Rename,
+) -> Result<Wishlist> {
+    let name = text(&request.name, "name", 200)?;
+    sqlx::query_as!(
+        Wishlist,
+        "UPDATE wishlists SET name = ? WHERE id = ? AND owner_id = ? RETURNING id, owner_id, name",
+        name,
+        id,
+        owner_id
+    )
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| WishlistError::NotFound("Wishlist not found for this Household User".into()))
+}
+
+/// Remove a list and its items only within its explicit owner.
+pub async fn remove_list(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()> {
+    let removed = sqlx::query!(
+        "DELETE FROM wishlists WHERE id = ? AND owner_id = ?",
+        id,
+        owner_id
+    )
+    .execute(db)
+    .await?;
+    changed(removed.rows_affected())
+}
+
+/// Edit a title through the complete owner/list/item destination, without moving it.
+pub async fn edit_item(
+    db: &SqlitePool,
+    owner_id: &str,
+    list_id: &str,
+    id: &str,
+    request: EditTitle,
+) -> Result<WishlistItem> {
+    let title = text(&request.title, "title", 500)?;
+    sqlx::query_as!(WishlistItem,
+        "UPDATE wishlist_items SET title = ? WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?) RETURNING id, list_id, title, created_at", title, id, list_id, list_id, owner_id)
+        .fetch_optional(db).await?
+        .ok_or_else(|| WishlistError::NotFound("Wishlist Item not found for this owner and list".into()))
+}
+
+/// Remove a title through the complete owner/list/item destination.
+pub async fn remove_item(db: &SqlitePool, owner_id: &str, list_id: &str, id: &str) -> Result<()> {
+    let removed = sqlx::query!(
+        "DELETE FROM wishlist_items WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?)", id, list_id, list_id, owner_id).execute(db).await?;
+    changed(removed.rows_affected())
+}
+
+fn changed(rows: u64) -> Result<()> {
+    if rows == 0 {
+        Err(WishlistError::NotFound(
+            "Wishlist destination not found; refresh before trying again".into(),
+        ))
+    } else {
+        Ok(())
+    }
 }

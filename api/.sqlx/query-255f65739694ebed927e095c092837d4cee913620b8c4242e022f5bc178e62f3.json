@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM wishlist_items WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "255f65739694ebed927e095c092837d4cee913620b8c4242e022f5bc178e62f3"
+}

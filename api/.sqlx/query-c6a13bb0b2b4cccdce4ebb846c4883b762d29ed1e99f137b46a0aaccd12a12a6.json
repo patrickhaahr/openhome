@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE wishlists SET name = ? WHERE id = ? AND owner_id = ? RETURNING id, owner_id, name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c6a13bb0b2b4cccdce4ebb846c4883b762d29ed1e99f137b46a0aaccd12a12a6"
+}

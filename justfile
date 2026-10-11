@@ -367,13 +367,13 @@ dashboard-preview:
 dashboard-test *args: dashboard-health-fixture-build
     bunx vitest run {{args}}
 
-# Build the real authenticated Axum health seam for dashboard tests
+# Build the isolated authenticated Axum health/Wishlist seam for dashboard tests
 [group('dashboard')]
 [working-directory: 'api']
 dashboard-health-fixture-build:
     cargo build --locked --example dashboard_health
 
-# Serve isolated authenticated health for synthetic dashboard previews
+# Serve isolated authenticated health/Wishlists for synthetic dashboard previews
 [group('dashboard')]
 [working-directory: 'api']
 dashboard-health-fixture-run: dashboard-health-fixture-build

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT item_id, title, requested_owner_id, requested_list_id FROM wishlist_addition_receipts WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "item_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "requested_owner_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "requested_list_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "88e0ce486884c7ce17047979e4b203228de91287f4063c3082a42de1623941ee"
+}
