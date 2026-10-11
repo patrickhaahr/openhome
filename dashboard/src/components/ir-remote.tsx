@@ -13,7 +13,12 @@ import {
   setupFailureMessages,
 } from "@/lib/command-feedback"
 import type { ConnectionState } from "@/lib/connection"
-import type { IrCommandResult, IrFailure, IrRemoteState } from "@/lib/ir"
+import type {
+  DiscoveryFailure,
+  IrCommandResult,
+  IrFailure,
+  IrRemoteState,
+} from "@/lib/ir"
 import { type SingleCommand, useSingleCommand } from "@/lib/use-single-command"
 
 /** A labelled set of Remote Buttons; `kind` selects its touch layout. */
@@ -62,10 +67,7 @@ const recheckFailures = new Set<IrFailure>([
 
 /** Copy for one remote's discovery, connection and command outcomes. */
 type RemoteMessages = {
-  discovery: Record<
-    Extract<IrRemoteState<string>, { state: "unavailable" }>["reason"],
-    string
-  >
+  discovery: Record<DiscoveryFailure, string>
   failure: Record<IrFailure, string>
   connection: ReturnType<typeof connectionPausedMessages>
 }
@@ -303,6 +305,7 @@ function RemoteButton<C extends string>({
   disabled: boolean
   onPress: (command: C) => void
 }): React.JSX.Element {
+  // Indexing a generic record does not resolve to a JSX component type without this annotation.
   const CommandIcon: Icon | undefined = config.commandIcons[command]
 
   return (

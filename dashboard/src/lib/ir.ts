@@ -8,13 +8,13 @@ export type IrFailure =
   | "missing-device"
   | "unsupported-command"
 
+/** Why OpenHome could not report an IR Remote's Commands; a stale command cannot apply. */
+export type DiscoveryFailure = Exclude<IrFailure, "unsupported-command">
+
 /** The Commands OpenHome currently reports for one IR Remote, safe to serialize. */
 export type IrRemoteState<C extends string> =
   | { state: "available"; commands: C[] }
-  | {
-      state: "unavailable"
-      reason: Exclude<IrFailure, "unsupported-command">
-    }
+  | { state: "unavailable"; reason: DiscoveryFailure }
 
 /** Whether OpenHome acknowledged a Command; it never establishes device state. Safe to serialize. */
 export type IrCommandResult =
@@ -33,9 +33,7 @@ export type IrRemotes = {
  * @param reason - Why OpenHome could not report the remotes' Commands.
  * @returns An unavailable state for each remote.
  */
-export function unavailableRemotes(
-  reason: Extract<IrRemoteState<string>, { state: "unavailable" }>["reason"]
-): IrRemotes {
+export function unavailableRemotes(reason: DiscoveryFailure): IrRemotes {
   return {
     tv: { state: "unavailable", reason },
     speaker: { state: "unavailable", reason },
