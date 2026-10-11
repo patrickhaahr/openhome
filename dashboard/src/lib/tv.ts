@@ -1,5 +1,4 @@
 import { z } from "zod"
-import type { ConnectionState } from "./connection"
 
 /** LG TV Commands the dashboard has Remote Buttons for; OpenHome reports which are available. */
 export const tvCommand = z.enum([
@@ -73,22 +72,3 @@ export const tvCommandLabels: Record<TvCommand, string> = {
   "hdmi-2": "HDMI 2",
   "hdmi-3": "HDMI 3",
 }
-
-/** Sanitized reasons OpenHome could not report or confirm TV commands. */
-export type TvFailure =
-  | Exclude<ConnectionState, "connected">
-  | "missing-device"
-  | "unsupported-command"
-
-/** The TV commands OpenHome currently reports, safe to serialize. */
-export type TvRemoteState =
-  | { state: "available"; commands: TvCommand[] }
-  | {
-      state: "unavailable"
-      reason: Exclude<TvFailure, "unsupported-command">
-    }
-
-/** Whether OpenHome acknowledged a TV Command, safe to serialize. */
-export type TvCommandResult =
-  | { state: "accepted" }
-  | { state: "failed"; reason: TvFailure }

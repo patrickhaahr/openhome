@@ -2,11 +2,11 @@ import { once } from "node:events"
 import { createServer, type Server } from "node:http"
 import { afterEach, expect, test, vi } from "vitest"
 import { z } from "zod"
-import { dispatchTvCommand, readTvRemote } from "@/lib/tv.server"
+import { dispatchIrCommand, readIrRemotes } from "@/lib/ir.server"
 
 const servers: Server[] = []
 
-const key = "synthetic-tv-api-key"
+const key = "synthetic-ir-api-key"
 
 /** Configure the dashboard server to reach OpenHome at this server. */
 async function listenAsOpenHome(server: Server): Promise<void> {
@@ -39,7 +39,7 @@ afterEach(async () => {
   }
 })
 
-test("discovers only reported TV commands that have Remote Buttons, in remote order", async () => {
+test("discovers only reported commands that have Remote Buttons, in remote order, with one request", async () => {
   const requests: { path: string | undefined; authorization?: string }[] = []
 
   await listenAsOpenHome(
@@ -53,7 +53,7 @@ test("discovers only reported TV commands that have Remote Buttons, in remote or
         JSON.stringify({
           message: "synthetic-private-provider-detail",
           remotes: {
-            edifier: ["bluetooth"],
+            edifier: ["volume-up", "synthetic-unknown", "bluetooth"],
             lgtv: ["hdmi-1", "synthetic-unknown", "mute", "power"],
           },
         })
@@ -61,9 +61,9 @@ test("discovers only reported TV commands that have Remote Buttons, in remote or
     })
   )
 
-  expect(await readTvRemote()).toEqual({
-    state: "available",
-    commands: ["power", "mute", "hdmi-1"],
+  expect(await readIrRemotes()).toEqual({
+    tv: { state: "available", commands: ["power", "mute", "hdmi-1"] },
+    speaker: { state: "available", commands: ["bluetooth", "volume-up"] },
   })
   expect(requests).toEqual([
     { path: "/deployment/api/ir", authorization: `Bearer ${key}` },
@@ -87,6 +87,7 @@ test.each([
     reason: "rejected-credential",
   },
   { status: 200, body: '{"remotes":{}}', reason: "unavailable" },
+  { status: 200, body: '{"remotes":{"lgtv":[]}}', reason: "unavailable" },
   {
     status: 200,
     body: "synthetic-private-invalid-json",
@@ -97,40 +98,49 @@ test.each([
   async ({ status, body, reason }) => {
     await listenAsOpenHome(respondWith(status, body))
 
-    expect(await readTvRemote()).toEqual({ state: "unavailable", reason })
+    expect(await readIrRemotes()).toEqual({
+      tv: { state: "unavailable", reason },
+      speaker: { state: "unavailable", reason },
+    })
   }
 )
 
-test("sends one authenticated JSON command to the LG TV remote", async () => {
-  const requests: { method?: string; path?: string; body: string }[] = []
+test.each([
+  { remote: "lgtv", command: "volume-up" },
+  { remote: "edifier", command: "optical" },
+] as const)(
+  "sends one authenticated JSON command to the $remote remote",
+  async (target) => {
+    const requests: { method?: string; path?: string; body: string }[] = []
 
-  await listenAsOpenHome(
-    createServer((request, response) => {
-      let body = ""
-      request.on("data", (chunk: Buffer) => {
-        body += chunk.toString()
-      })
-      request.on("end", () => {
-        requests.push({
-          method: request.method ?? "",
-          path: request.url ?? "",
-          body,
+    await listenAsOpenHome(
+      createServer((request, response) => {
+        let body = ""
+        request.on("data", (chunk: Buffer) => {
+          body += chunk.toString()
         })
-        response.writeHead(200, { "Content-Type": "application/json" })
-        response.end('{"message":"synthetic-private-provider-detail"}')
+        request.on("end", () => {
+          requests.push({
+            method: request.method ?? "",
+            path: request.url ?? "",
+            body,
+          })
+          response.writeHead(200, { "Content-Type": "application/json" })
+          response.end('{"message":"synthetic-private-provider-detail"}')
+        })
       })
-    })
-  )
+    )
 
-  expect(await dispatchTvCommand("volume-up")).toEqual({ state: "accepted" })
-  expect(requests).toEqual([
-    {
-      method: "POST",
-      path: "/deployment/api/ir/lgtv",
-      body: '{"command":"volume-up"}',
-    },
-  ])
-})
+    expect(await dispatchIrCommand(target)).toEqual({ state: "accepted" })
+    expect(requests).toEqual([
+      {
+        method: "POST",
+        path: `/deployment/api/ir/${target.remote}`,
+        body: JSON.stringify({ command: target.command }),
+      },
+    ])
+  }
+)
 
 test.each([
   {
@@ -169,26 +179,27 @@ test.each([
     reason: "unavailable",
   },
 ])(
-  "sanitizes unconfirmed TV commands ($status, $reason)",
+  "sanitizes unconfirmed commands ($status, $reason)",
   async ({ status, body, reason }) => {
     await listenAsOpenHome(respondWith(status, body))
 
-    expect(await dispatchTvCommand("power")).toEqual({
-      state: "failed",
-      reason,
-    })
+    expect(
+      await dispatchIrCommand({ remote: "edifier", command: "power" })
+    ).toEqual({ state: "failed", reason })
   }
 )
 
-test("keeps missing dashboard setup distinct from a missing TV remote", async () => {
+test("keeps missing dashboard setup distinct from a missing IR remote", async () => {
   vi.stubEnv("OPENHOME_API_URL", "")
   vi.stubEnv("API_KEY", "")
-  expect(await readTvRemote()).toEqual({
-    state: "unavailable",
-    reason: "missing-configuration",
+  expect(await readIrRemotes()).toEqual({
+    tv: { state: "unavailable", reason: "missing-configuration" },
+    speaker: { state: "unavailable", reason: "missing-configuration" },
   })
-  expect(await dispatchTvCommand("power")).toEqual({
-    state: "failed",
-    reason: "missing-configuration",
-  })
+  expect(await dispatchIrCommand({ remote: "lgtv", command: "power" })).toEqual(
+    {
+      state: "failed",
+      reason: "missing-configuration",
+    }
+  )
 })

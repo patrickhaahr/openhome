@@ -369,7 +369,7 @@
   min-height: 3rem;
   touch-action: manipulation;
 }
-.tv-groups {
+.remote-groups {
   display: grid;
   gap: 1.25rem;
 }
@@ -377,40 +377,47 @@
   margin: 0 0 1rem;
   min-height: 0;
 }
-.tv-group {
+.remote-group {
   display: grid;
   gap: 0.5rem;
 }
-.tv-buttons {
+.remote-buttons {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
   gap: 0.75rem;
 }
-.tv-buttons button {
+.remote-buttons button {
   min-width: 0;
   height: auto;
   min-height: 3.5rem;
   padding-inline: 0.75rem;
   white-space: normal;
+  /* Single-word labels such as "Bluetooth" must still fit narrow buttons at enlarged text sizes. */
+  overflow-wrap: anywhere;
   touch-action: manipulation;
 }
-.tv-buttons[data-kind="quick"] {
+.remote-buttons[data-kind="quick"] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.tv-buttons[data-kind="quick"] button,
-.tv-buttons[data-kind="dpad"] button {
+/* Three stacked buttons per row at normal text size; fewer when text is enlarged. */
+.remote-buttons[data-kind="trio"] {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr));
+}
+.remote-buttons[data-kind="quick"] button,
+.remote-buttons[data-kind="trio"] button,
+.remote-buttons[data-kind="dpad"] button {
   flex-direction: column;
   gap: 0.25rem;
   padding-block: 0.5rem;
 }
-.tv-buttons[data-kind="keypad"] {
+.remote-buttons[data-kind="keypad"] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.tv-buttons[data-kind="keypad"] [data-command="0"] {
+.remote-buttons[data-kind="keypad"] [data-command="0"] {
   grid-column: 2;
 }
 /* Fixed areas keep the direction pad readable when some directions are unavailable. */
-.tv-buttons[data-kind="dpad"] {
+.remote-buttons[data-kind="dpad"] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-areas:
     ". up ."
@@ -418,19 +425,19 @@
     ". down .";
   max-width: 24rem;
 }
-.tv-buttons[data-kind="dpad"] [data-command="up"] {
+.remote-buttons[data-kind="dpad"] [data-command="up"] {
   grid-area: up;
 }
-.tv-buttons[data-kind="dpad"] [data-command="down"] {
+.remote-buttons[data-kind="dpad"] [data-command="down"] {
   grid-area: down;
 }
-.tv-buttons[data-kind="dpad"] [data-command="left"] {
+.remote-buttons[data-kind="dpad"] [data-command="left"] {
   grid-area: left;
 }
-.tv-buttons[data-kind="dpad"] [data-command="right"] {
+.remote-buttons[data-kind="dpad"] [data-command="right"] {
   grid-area: right;
 }
-.tv-buttons[data-kind="dpad"] [data-command="ok"] {
+.remote-buttons[data-kind="dpad"] [data-command="ok"] {
   grid-area: ok;
 }
 .focused-page.controls-page {
@@ -438,8 +445,14 @@
 }
 .controls-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  /* Equal columns leave the speaker's three buttons per row room for whole words on iPad Safari. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
+  gap: 1rem;
+}
+/* Lights and the short speaker remote share a column beside the long TV remote. */
+.controls-stack {
+  display: grid;
   gap: 1rem;
 }
 .home-bottom > p {

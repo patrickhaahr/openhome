@@ -10,7 +10,7 @@ export type SetupFailure = Exclude<
 >
 
 /** The device a control surface commands, as it reads in copy. */
-type Device = "light" | "TV"
+export type Device = "light" | "TV" | "speaker"
 
 function capitalized(device: Device): string {
   return `${device.charAt(0).toUpperCase()}${device.slice(1)}`
