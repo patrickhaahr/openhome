@@ -9,3 +9,4 @@ pub mod switchbot;
 pub mod timeline;
 pub mod training;
 pub mod weather;
+pub mod wishlist;

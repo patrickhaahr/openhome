@@ -1,10 +1,9 @@
 //! Hermes MCP adapter for OpenHome.
 //!
-//! A Streamable HTTP MCP server that exposes read-only training context as typed tools. Each tool
-//! with representable path arguments is one authenticated GET against the OpenHome API whose
-//! JSON becomes the tool's structured content unchanged. The adapter has no database access
-//! and no training rules of its own: days,
-//! units, source resolution, freshness and coverage all come from the API (ADR 0002).
+//! A Streamable HTTP MCP server for read-only training and writable Wishlists. Each tool
+//! makes one authenticated API request and passes its JSON unchanged. The adapter has no
+//! database access or domain rules; Axum owns training interpretation, destination resolution
+//! and mutation deduplication (ADRs 0002 and 0005).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -30,6 +29,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
 use url::Url;
+use wishlist::{AddWishlistItemRequest, CreateWishlistRequest, WishlistItemsRequest};
+
+mod wishlist;
 
 /// Where the MCP endpoint is mounted.
 pub const MCP_PATH: &str = "/mcp";
@@ -37,10 +39,16 @@ pub const MCP_PATH: &str = "/mcp";
 const BEARER_PREFIX: &str = "Bearer ";
 const API_TIMEOUT: Duration = Duration::from_secs(15);
 
-const INSTRUCTIONS: &str = "Read-only training context from OpenHome. Every tool reads the \
-OpenHome API, which owns days (Europe/Copenhagen), units, NOOP source selection, freshness and \
+const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add generic wishes. \
+Every tool calls the OpenHome API, which owns days (Europe/Copenhagen), units, NOOP source selection, freshness and \
 coverage; results are returned as the API sent them. A null value means no value was recorded or \
-synced; check each result's freshness and coverage before treating a gap as real.";
+synced; check each result's freshness and coverage before treating a gap as real. For wishlist requests, discover household owners and named \
+ lists first. Use explicit IDs or the privately configured default; never guess an owner/list. \
+ On wishlist_destination_required, ask the returned question once with the returned choices before \
+ writing. Store a generic request as a generic title; do not choose or research products unless \
+ requested. Generate a unique request_id for each intended addition and reuse the same ID and \
+ arguments on retries, including after an uncertain transport failure. Only report success after \
+ a successful tool result; failures are not accepted writes.";
 
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
@@ -211,7 +219,7 @@ pub fn parse_allowed_hosts(text: &str) -> anyhow::Result<Vec<String>> {
     Ok(hosts)
 }
 
-/// Authenticated reads against the OpenHome API.
+/// Authenticated requests against the OpenHome API.
 #[derive(Clone)]
 pub struct OpenHomeApi {
     http: reqwest::Client,
@@ -236,6 +244,20 @@ impl OpenHomeApi {
     /// on success, the API's error body as a tool error otherwise. Every segment is
     /// percent-encoded; literal dot segments are rejected before URL construction.
     async fn get(&self, segments: &[&str]) -> CallToolResult {
+        self.request(reqwest::Method::GET, segments, None).await
+    }
+
+    async fn post(&self, segments: &[&str], body: Value) -> CallToolResult {
+        self.request(reqwest::Method::POST, segments, Some(body))
+            .await
+    }
+
+    async fn request(
+        &self,
+        method: reqwest::Method,
+        segments: &[&str],
+        body: Option<Value>,
+    ) -> CallToolResult {
         // URL path construction discards literal dot segments. Reject them before they can
         // change the endpoint; calendar validation remains the API's responsibility.
         if segments
@@ -252,16 +274,18 @@ impl OpenHomeApi {
             .expect("parse_api_url accepts only base URLs")
             .pop_if_empty()
             .extend(segments);
-        let response = self
+        let mut request = self
             .http
-            .get(url)
+            .request(method, url)
             .header(
                 header::AUTHORIZATION,
                 format!("{BEARER_PREFIX}{}", self.api_key.0),
             )
-            .header(header::ACCEPT, "application/json")
-            .send()
-            .await;
+            .header(header::ACCEPT, "application/json");
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request.send().await;
         let response = match response {
             Ok(response) => response,
             Err(err) => {
@@ -370,14 +394,14 @@ pub struct TrainingContextRequest {
     pub to_day: String,
 }
 
-/// The read-only training tools.
+/// Read-only training tools and additive Wishlist tools.
 #[derive(Clone)]
-pub struct TrainingTools {
+pub struct OpenHomeTools {
     api: OpenHomeApi,
     tool_router: ToolRouter<Self>,
 }
 
-impl TrainingTools {
+impl OpenHomeTools {
     #[must_use]
     pub fn new(api: OpenHomeApi) -> Self {
         Self {
@@ -388,7 +412,68 @@ impl TrainingTools {
 }
 
 #[tool_router]
-impl TrainingTools {
+impl OpenHomeTools {
+    #[tool(
+        description = "Discover configured Household Users and their stable IDs. All Wishlists are household-visible; ownership is not per-user authentication.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn household_users(&self) -> CallToolResult {
+        self.api.get(&["api", "household-users"]).await
+    }
+
+    #[tool(
+        description = "Discover all household-visible named Wishlists with their list IDs and owner IDs. Use these IDs for explicit destinations; never guess ownership.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn wishlists(&self) -> CallToolResult {
+        self.api.get(&["api", "wishlists"]).await
+    }
+
+    #[tool(
+        description = "Create a named Wishlist for an explicit Household User ID. Discover owners first. Names are unique per owner; a duplicate is a conflict, not a successful creation. After an uncertain response, discover lists before retrying.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn create_wishlist(
+        &self,
+        Parameters(request): Parameters<CreateWishlistRequest>,
+    ) -> CallToolResult {
+        self.api.post(&["api", "wishlists"], json!(request)).await
+    }
+
+    #[tool(
+        description = "Add a generic wish title without researching or selecting a product. Use an explicit list_id, an owner_id with exactly one list, or the private default. Ambiguity returns one clarification question with choices and writes nothing. Generate a unique request_id per intended addition; reuse the ID and identical arguments on every retry. An accepted retry returns the original item with replayed=true; changed arguments conflict.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn add_wishlist_item(
+        &self,
+        Parameters(request): Parameters<AddWishlistItemRequest>,
+    ) -> CallToolResult {
+        self.api
+            .post(&["api", "wishlist", "items"], json!(request))
+            .await
+    }
+
+    #[tool(
+        description = "Read the generic items of one household-visible Wishlist using its stable list_id. Returns the stored titles unchanged; does not infer products or purchase state.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn wishlist_items(
+        &self,
+        Parameters(WishlistItemsRequest { list_id }): Parameters<WishlistItemsRequest>,
+    ) -> CallToolResult {
+        self.api.get(&["api", "wishlists", &list_id, "items"]).await
+    }
+
     #[tool(
         description = TRAINING_CONTEXT,
         annotations(
@@ -541,7 +626,7 @@ impl TrainingTools {
     reason = "the async methods are generated by rmcp's `tool_handler` macro"
 )]
 #[tool_handler(router = self.tool_router)]
-impl ServerHandler for TrainingTools {
+impl ServerHandler for OpenHomeTools {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(
@@ -555,9 +640,9 @@ impl ServerHandler for TrainingTools {
 /// The MCP endpoint at [`MCP_PATH`], answering only clients that present `client_key` as a
 /// bearer token.
 pub fn router(api: OpenHomeApi, client_key: ApiKey, config: StreamableHttpServerConfig) -> Router {
-    let service: StreamableHttpService<TrainingTools, LocalSessionManager> =
+    let service: StreamableHttpService<OpenHomeTools, LocalSessionManager> =
         StreamableHttpService::new(
-            move || Ok(TrainingTools::new(api.clone())),
+            move || Ok(OpenHomeTools::new(api.clone())),
             Arc::default(),
             config,
         );
