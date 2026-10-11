@@ -14,7 +14,12 @@ export function CheckAgainButton(): React.JSX.Element {
   }
 
   return (
-    <Button variant="outline" disabled={isChecking} onClick={checkAgain}>
+    <Button
+      size="lg"
+      variant="outline"
+      disabled={isChecking}
+      onClick={checkAgain}
+    >
       {isChecking ? "Checking…" : "Check again"}
     </Button>
   )

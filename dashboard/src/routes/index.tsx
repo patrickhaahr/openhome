@@ -1,7 +1,7 @@
 import { Fragment } from "react"
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
-import { FeatureCard } from "@/components/feature-card"
+import { WeatherCard } from "@/components/weather-overview"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
 import { SpeakerRemote } from "@/components/speaker-remote"
@@ -10,10 +10,16 @@ import { loadControls } from "@/lib/controls-loader"
 import { features } from "@/lib/features"
 import { sendLightCommand } from "@/lib/lights.functions"
 import { sendSpeakerCommand, sendTvCommand } from "@/lib/ir.functions"
+import { getWeather } from "@/lib/weather.functions"
+import { unavailableWeather } from "@/lib/weather"
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Home · OpenHome" }] }),
-  loader: loadControls,
+  loader: async () => {
+    const weather = getWeather().catch(() => unavailableWeather)
+
+    return { ...(await loadControls()), weather }
+  },
   headers: () => ({ "Cache-Control": "no-store" }),
   component: HomePage,
   errorComponent: HomeError,
@@ -23,7 +29,7 @@ const rootRoute = getRouteApi("__root__")
 
 function HomePage(): React.JSX.Element {
   const { openedAt } = rootRoute.useLoaderData()
-  const { health, tvRemote, speakerRemote } = Route.useLoaderData()
+  const { health, tvRemote, speakerRemote, weather } = Route.useLoaderData()
 
   return (
     <div>
@@ -79,7 +85,7 @@ function HomePage(): React.JSX.Element {
               />
             </Fragment>
           ) : (
-            <FeatureCard key={feature.id} feature={feature} />
+            <WeatherCard key={feature.id} weather={weather} />
           )
         )}
       </section>
