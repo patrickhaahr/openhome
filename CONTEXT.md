@@ -62,6 +62,14 @@ _Avoid_: IR device, bridge, blaster
 A named IR action that the user triggers from an IR Remote.
 _Avoid_: Action, button press, event
 
+### Lights
+
+**Light Command**:
+An on or off request sent through the Axum API to the configured SwitchBot
+lights. An accepted Light Command acknowledges the request only; it never
+establishes the lights' power state.
+_Avoid_: Light toggle, IR Command, light state
+
 ### Mobile Navigation
 
 **Home Tab**:
@@ -286,6 +294,7 @@ _Avoid_: Survey, habit log
 - `mobile-expo` uses **Native Client Access**.
 - An **IR Remote** exposes one or more **Commands**.
 - A **Mobile Client** triggers **IR Remote** **Commands** by calling the **Axum API**.
+- The **Dashboard** sends **Light Commands** through the **Axum API** and shows the lights' observed power as unknown.
 - A **Home Tab** combines summaries and shortcuts from multiple **Top-Level Tabs**.
 - Each **Top-Level Tab** intentionally aligns to one Axum API area.
 - A **Remote Button** maps to exactly one **Command**.
@@ -326,5 +335,6 @@ _Avoid_: Survey, habit log
 
 - "feature tab" and "API endpoint category" were both used for top-level navigation. Resolved: the app uses **Top-Level Tabs** that intentionally mirror Axum API areas, while **Home Tab** is the mixed overview.
 - The IR API may expose more commands than the Android app shows. Resolved: the Android app uses a curated **Remote Button Set**, and the `test` command is not exposed.
+- "command" was used for both IR actions and light on/off requests. Resolved: an IR action is a **Command**; a light request is a **Light Command**.
 - "test endpoint" was used to refer to IR behavior. Resolved: the current API has a `test` **Command**, not a separate endpoint.
 - "Top-Level Tabs mirror one API area" conflicts with the Server Tab grouping three areas. Resolved: the **Server Tab** is a deliberate mixed operations tab, playing the same role for server ops that the **Home Tab** plays for quick access.

@@ -358,6 +358,17 @@
   font-size: 0.75rem;
   line-height: 1.5;
 }
+.light-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.75rem;
+}
+.light-links button {
+  min-height: 3rem;
+  touch-action: manipulation;
+}
 .home-bottom > p {
   max-width: 32rem;
   color: var(--muted-foreground);

@@ -148,8 +148,7 @@ test("guides the installer when private configuration is missing", async () => {
   expect(html).toContain("API_KEY")
   const home = await page(await dashboard(), "/")
   expect(home).toContain("Connect OpenHome before sending a light command.")
-  expect(home).toContain("Turn on")
-  expect(home).toContain("disabled")
+  expect(home).toMatch(/<button[^>]*\sdisabled[^>]*>Turn on<\/button>/)
 })
 
 test("renders authenticated health from the real Axum route without exposing configuration", async () => {
