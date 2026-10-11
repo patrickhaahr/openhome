@@ -50,13 +50,43 @@ All unfinished features explicitly say **Not available yet**.
 - The reduced-motion stylesheet suppresses transitions/animations; the clock
   itself does not animate. No continuous animation or provider polling is added.
 
-## Required physical verification
+## Physical Safari inspection — 11 October 2026
 
-The target iPad 6th generation running iPadOS 17.7.11 was not available in this
-environment. Before release, verify landscape/portrait touch navigation,
-sidebar/content scrolling, 200% zoom, keyboard and visible focus, reduced-motion
-settings and a live minute/date rollover on that device. Record actual results
-before completing the device gates in #70/#69. Screenshots do not complete them.
+The attached iPad 6th generation (`iPad7,5`), running iPadOS 17.7.11, was
+inspected through Safari Web Inspector over USB after Web Inspector was enabled
+on the device. Safari loaded the development dashboard through a localhost USB
+tunnel, using the same isolated authenticated Axum health fixture. These are
+actual Safari page snapshots, excluding browser chrome and other tabs.
+
+| Landscape · 1024 × 665 CSS px                        | Portrait · 768 × 921 CSS px                        |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| ![Safari Home in landscape](ipad-home-landscape.png) | ![Safari Home in portrait](ipad-home-portrait.png) |
+
+- Both orientations rendered without horizontal document overflow. Safari
+  supported the theme's `oklch` colors and `svh` viewport sizing.
+- Inspector-driven link activation reached all eleven navigation destinations
+  in portrait. Each destination had the correct URL, current-page indication
+  and focused heading; browser history returned Weather to Home. Connection
+  reported the synthetic API as connected. No console errors were observed
+  during inspection and navigation.
+- The landscape rail had 735 px of content in its 665 px viewport and was
+  independently scrollable. Portrait content scrolling kept the rail fixed.
+  At 200% root text size, Home and Connection had no horizontal document
+  overflow, and scrolling the rail brought Connection fully into view.
+  This text enlargement is not Safari page zoom or a physical pinch gesture.
+- The live clock advanced across the 19.00 minute boundary and continued to
+  19.02 while Safari remained visible.
+- Portrait inspection caught joined headline sentences when the responsive
+  layout hid the line break. A real Safari `innerText` assertion failed before
+  adding the separating space and passed afterward. The portrait snapshots
+  show the fix; landscape was captured before it, where the line break remains.
+
+![Safari Home with 200% root text size](ipad-home-portrait-text-200.png)
+
+Physical finger taps/swipes, Safari 200% page zoom, hardware keyboard and visible
+focus, reduced-motion settings, date rollover and hidden/resumed clock behavior
+still require manual device verification. Remote DOM activation and screenshots
+do not complete those gates in #70/#69.
 
 Feature implementation, provider health, the integrated Home (#133), data
 recovery/drafts (#119) and release acceptance remain separate slices. No parent
