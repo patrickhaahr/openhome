@@ -81,7 +81,11 @@ async function renderLights(
       // Re-render after each check, as Home does when its loader data changes.
       useRouterState({ select: (state) => state.matches[0]?.updatedAt })
 
-      return createElement(LightControls, { connectionState, sendCommand })
+      return createElement(LightControls, {
+        layout: "quick",
+        connectionState,
+        sendCommand,
+      })
     },
   })
 

@@ -57,10 +57,12 @@ export async function requestOpenHome({
   path,
   method,
   timeoutMs,
+  json,
 }: {
   path: `/api/${string}`
   method: "GET" | "POST"
   timeoutMs: number
+  json?: Record<string, string>
 }): Promise<OpenHomeResponse> {
   const config = parseConfiguration()
 
@@ -70,10 +72,13 @@ export async function requestOpenHome({
   // Preserve an installer-supplied deployment prefix, with or without a trailing slash.
   baseUrl.pathname = `${baseUrl.pathname.replace(/\/$/, "")}${path}`
 
+  if (json !== undefined) headers.set("Content-Type", "application/json")
+
   try {
     const response = await fetch(baseUrl, {
       method,
       headers,
+      body: json === undefined ? null : JSON.stringify(json),
       cache: "no-store",
       redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as ConnectionRouteImport } from './routes/connection'
+import { Route as ControlsRouteImport } from './routes/controls'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ConnectionRoute = ConnectionRouteImport.update({
   path: '/connection',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ControlsRoute = ControlsRouteImport.update({
+  id: '/controls',
+  path: '/controls',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
+  '/controls': typeof ControlsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
+  '/controls': typeof ControlsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
+  '/controls': typeof ControlsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$feature' | '/connection'
+  fullPaths: '/' | '/$feature' | '/connection' | '/controls'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$feature' | '/connection'
-  id: '__root__' | '/' | '/$feature' | '/connection'
+  to: '/' | '/$feature' | '/connection' | '/controls'
+  id: '__root__' | '/' | '/$feature' | '/connection' | '/controls'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FeatureRoute: typeof FeatureRoute
   ConnectionRoute: typeof ConnectionRoute
+  ControlsRoute: typeof ControlsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnectionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/controls': {
+      id: '/controls'
+      path: '/controls'
+      fullPath: '/controls'
+      preLoaderRoute: typeof ControlsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FeatureRoute: FeatureRoute,
   ConnectionRoute: ConnectionRoute,
+  ControlsRoute: ControlsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

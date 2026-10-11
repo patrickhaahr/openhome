@@ -16,8 +16,8 @@ test("opens focused views through persistent navigation, restores browser histor
   const originalLoader = HomeRoute.options.loader
 
   HomeRoute.options.loader = () => ({
-    state: "connected",
-    checkedAt: "2026-10-11T10:00:00.000Z",
+    health: { state: "connected", checkedAt: "2026-10-11T10:00:00.000Z" },
+    tvRemote: Promise.resolve({ state: "available", commands: ["power"] }),
   })
   const history = createMemoryHistory({ initialEntries: ["/"] })
   const router = createRouter({ routeTree, history, isServer: false })
