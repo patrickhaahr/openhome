@@ -421,6 +421,14 @@ dashboard-install:
 dashboard-add-package package *args:
     bun add {{quote(package)}} {{args}}
 
+# Run the dashboard's TanStack Intent CLI (just dashboard-intent list; just dashboard-intent load <package>#<skill>)
+# Calls the package CLI directly: @tanstack/devtools also ships an `intent` bin that shadows it.
+[group('dashboard')]
+[working-directory: 'dashboard']
+[positional-arguments]
+dashboard-intent *args:
+    node node_modules/@tanstack/intent/dist/cli.mjs "$@"
+
 # Add a shadcn component to the dashboard
 [group('dashboard')]
 [working-directory: 'dashboard']
