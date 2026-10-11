@@ -1,4 +1,5 @@
 import "@tanstack/react-start/server-only"
+import { z } from "zod"
 import type { ConnectionState } from "./connection"
 
 type PrivateConnection = {
@@ -92,5 +93,37 @@ export async function requestOpenHome({
   } catch {
     // Transport errors can contain private URLs. Never serialize or log the raw error.
     return { state: "unreachable" }
+  }
+}
+
+const acknowledgement = z.object({ message: z.string() })
+
+const errorBody = z.object({ error: z.string() })
+
+/** Whether Axum accepted a command; any other body cannot confirm it. */
+export async function isAcknowledged(response: Response): Promise<boolean> {
+  if (!response.ok) return false
+
+  try {
+    return acknowledgement.safeParse(await response.json()).success
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Read Axum's error message for exact classification only.
+ *
+ * @returns The message, or undefined when the body is not Axum's error shape. Never serialize it.
+ */
+export async function readErrorMessage(
+  response: Response
+): Promise<string | undefined> {
+  try {
+    const parsed = errorBody.safeParse(await response.json())
+
+    return parsed.success ? parsed.data.error : undefined
+  } catch {
+    return undefined
   }
 }

@@ -1,6 +1,10 @@
 import "@tanstack/react-start/server-only"
 import { z } from "zod"
-import { requestOpenHome } from "./openhome.server"
+import {
+  isAcknowledged,
+  readErrorMessage,
+  requestOpenHome,
+} from "./openhome.server"
 import {
   tvCommand,
   type TvCommand,
@@ -14,33 +18,21 @@ const commandTimeoutMs = 12000
 // Discovery only fills the remote; a stalled bridge should not hold its card on "Checking…".
 const discoveryTimeoutMs = 6000
 
-const acknowledgement = z.object({ message: z.string() })
-
 const remotes = z.object({ remotes: z.object({ lgtv: z.array(z.string()) }) })
-
-const missingSetup = z.object({
-  error: z.literal("IR service is not configured"),
-})
-
-const unknownCommand = z.object({ error: z.literal("Unknown command") })
 
 /** Classify an unsuccessful Axum response; only exact known errors earn specific guidance. */
 async function classifyFailure(
   response: Response
 ): Promise<"missing-device" | "unsupported-command" | "unavailable"> {
-  try {
-    const body: unknown = await response.json()
+  const message = await readErrorMessage(response)
 
-    if (response.status === 503 && missingSetup.safeParse(body).success) {
-      return "missing-device"
-    }
+  if (response.status === 503 && message === "IR service is not configured") {
+    return "missing-device"
+  }
 
-    // The IR remote rejects commands it does not know; discovery may be stale.
-    if (response.status === 404 && unknownCommand.safeParse(body).success) {
-      return "unsupported-command"
-    }
-  } catch {
-    // An unreadable error cannot be attributed to setup or a stale command.
+  // The IR remote rejects commands it does not know; discovery may be stale.
+  if (response.status === 404 && message === "Unknown command") {
+    return "unsupported-command"
   }
 
   return "unavailable"
@@ -107,17 +99,10 @@ export async function dispatchTvCommand(
 
   const { response } = result
 
-  if (response.ok) {
-    try {
-      if (acknowledgement.safeParse(await response.json()).success) {
-        return { state: "accepted" }
-      }
-    } catch {
-      // An unreadable acknowledgement cannot establish whether a command was accepted.
-    }
+  if (await isAcknowledged(response)) return { state: "accepted" }
 
-    return { state: "failed", reason: "unavailable" }
-  }
+  // A successful status without an acknowledgement cannot confirm the command.
+  if (response.ok) return { state: "failed", reason: "unavailable" }
 
   return { state: "failed", reason: await classifyFailure(response) }
 }
