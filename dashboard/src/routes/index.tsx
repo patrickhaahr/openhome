@@ -41,8 +41,7 @@ function HomePage(): React.JSX.Element {
           <span className="page-eyebrow">At a glance</span>
           <h2>
             One home.
-            <br />
-            A shared view.
+            <br /> A shared view.
           </h2>
           <p>
             Open a feature for its details. Unavailable features stay visible as
