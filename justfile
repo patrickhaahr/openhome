@@ -352,13 +352,25 @@ dashboard-preview:
 # Run dashboard tests
 [group('dashboard')]
 [working-directory: 'dashboard']
-dashboard-test:
+dashboard-test: dashboard-health-fixture-build
     bunx vitest run
+
+# Build the real authenticated Axum health seam for dashboard tests
+[group('dashboard')]
+[working-directory: 'api']
+dashboard-health-fixture-build:
+    cargo build --locked --example dashboard_health
+
+# Serve isolated authenticated health for synthetic dashboard previews
+[group('dashboard')]
+[working-directory: 'api']
+dashboard-health-fixture-run: dashboard-health-fixture-build
+    target/debug/examples/dashboard_health
 
 # Watch dashboard tests
 [group('dashboard')]
 [working-directory: 'dashboard']
-dashboard-test-watch:
+dashboard-test-watch: dashboard-health-fixture-build
     bunx vitest
 
 # Lint the dashboard
@@ -366,6 +378,12 @@ dashboard-test-watch:
 [working-directory: 'dashboard']
 dashboard-lint:
     bunx oxlint --type-aware --deny-warnings
+
+# Apply supported dashboard lint fixes
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-lint-fix:
+    bunx oxlint --type-aware --fix
 
 # Format the dashboard with oxfmt
 [group('dashboard')]
@@ -390,6 +408,12 @@ dashboard-routes:
 [working-directory: 'dashboard']
 dashboard-install:
     bun install --frozen-lockfile
+
+# Add a dashboard dependency and update its lockfile
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-add-package package *args:
+    bun add {{quote(package)}} {{args}}
 
 # Add a shadcn component to the dashboard
 [group('dashboard')]
