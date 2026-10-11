@@ -61,7 +61,7 @@ export async function requestOpenHome({
   json,
 }: {
   path: `/api/${string}`
-  method: "GET" | "POST"
+  method: "GET" | "POST" | "PATCH" | "DELETE"
   timeoutMs: number
   json?: Record<string, string>
 }): Promise<OpenHomeResponse> {

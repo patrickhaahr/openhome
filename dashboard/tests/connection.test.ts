@@ -183,6 +183,55 @@ test("renders a rejected credential from Axum authentication", async () => {
   expect(html).not.toContain(rejectedKey)
 })
 
+test("renders shared Wishlists through Start SSR and authenticated Axum without exposing credentials", async () => {
+  const ownerResponse = await fetch(`${axumUrl}/api/household-users`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: "Member A" }),
+  })
+
+  const owner = z.object({ id: z.uuid() }).parse(await ownerResponse.json())
+
+  const listResponse = await fetch(`${axumUrl}/api/wishlists`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ owner_id: owner.id, name: "Outdoors" }),
+  })
+
+  const list = z.object({ id: z.uuid() }).parse(await listResponse.json())
+
+  await fetch(`${axumUrl}/api/wishlist/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      owner_id: owner.id,
+      list_id: list.id,
+      title: "A warm jacket",
+      request_id: "dashboard-ssr-wish",
+    }),
+  })
+
+  const html = await page(
+    await dashboard({ url: axumUrl, key: apiKey }),
+    "/wishlist"
+  )
+
+  expect(html).toContain("Member A")
+  expect(html).toContain("Outdoors")
+  expect(html).toContain("A warm jacket")
+  expect(html).toContain("Something you’d like")
+  expect(html).not.toContain("Not available yet")
+})
+
 test.each([
   "http://synthetic-private-host.invalid/?token=synthetic-secret",
   "http://synthetic-user:synthetic-password@synthetic-private-host.invalid",

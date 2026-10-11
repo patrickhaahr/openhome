@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, patch},
 };
 use serde_json::json;
 
@@ -19,10 +19,74 @@ struct DefaultList(Option<String>);
 pub fn router(default_list_id: Option<String>) -> Router<AppState> {
     Router::new()
         .route("/api/household-users", get(owners).post(create_owner))
+        .route(
+            "/api/household-users/{owner_id}",
+            patch(rename_owner).delete(remove_owner),
+        )
+        .route(
+            "/api/household-users/{owner_id}/wishlists/{id}",
+            patch(rename_list).delete(remove_list),
+        )
+        .route(
+            "/api/household-users/{owner_id}/wishlists/{list_id}/items/{id}",
+            patch(edit_item).delete(remove_item),
+        )
         .route("/api/wishlists", get(lists).post(create_list))
         .route("/api/wishlists/{id}/items", get(items))
         .route("/api/wishlist/items", axum::routing::post(add_item))
         .layer(Extension(DefaultList(default_list_id)))
+}
+
+async fn rename_owner(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<wishlist::Rename>,
+) -> Result<Json<wishlist::HouseholdUser>, WishlistError> {
+    Ok(Json(wishlist::rename_owner(&state.db, &id, request).await?))
+}
+
+async fn remove_owner(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, WishlistError> {
+    wishlist::remove_owner(&state.db, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn rename_list(
+    State(state): State<AppState>,
+    Path((owner_id, id)): Path<(String, String)>,
+    Json(request): Json<wishlist::Rename>,
+) -> Result<Json<wishlist::Wishlist>, WishlistError> {
+    Ok(Json(
+        wishlist::rename_list(&state.db, &owner_id, &id, request).await?,
+    ))
+}
+
+async fn remove_list(
+    State(state): State<AppState>,
+    Path((owner_id, id)): Path<(String, String)>,
+) -> Result<StatusCode, WishlistError> {
+    wishlist::remove_list(&state.db, &owner_id, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn edit_item(
+    State(state): State<AppState>,
+    Path((owner_id, list_id, id)): Path<(String, String, String)>,
+    Json(request): Json<wishlist::EditTitle>,
+) -> Result<Json<wishlist::WishlistItem>, WishlistError> {
+    Ok(Json(
+        wishlist::edit_item(&state.db, &owner_id, &list_id, &id, request).await?,
+    ))
+}
+
+async fn remove_item(
+    State(state): State<AppState>,
+    Path((owner_id, list_id, id)): Path<(String, String, String)>,
+) -> Result<StatusCode, WishlistError> {
+    wishlist::remove_item(&state.db, &owner_id, &list_id, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 impl IntoResponse for WishlistError {

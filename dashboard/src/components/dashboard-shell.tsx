@@ -42,10 +42,18 @@ export function DashboardShell(): React.JSX.Element {
             )
 
             // Implemented features use their own typed routes; the rest share the placeholder.
-            return feature.id === "controls" || feature.id === "weather" ? (
+            return feature.id === "controls" ||
+              feature.id === "weather" ||
+              feature.id === "wishlist" ? (
               <Link
                 key={feature.id}
-                to={feature.id === "controls" ? "/controls" : "/weather"}
+                to={
+                  feature.id === "controls"
+                    ? "/controls"
+                    : feature.id === "weather"
+                      ? "/weather"
+                      : "/wishlist"
+                }
                 className="nav-link"
               >
                 {content}

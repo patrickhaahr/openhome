@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, list_id, title, created_at, requested_owner_id, requested_list_id FROM wishlist_items WHERE request_id = ?",
+  "query": "INSERT INTO wishlist_items (id, list_id, title, request_id, requested_owner_id, requested_list_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, list_id, title, created_at",
   "describe": {
     "columns": [
       {
@@ -22,29 +22,17 @@
         "name": "created_at",
         "ordinal": 3,
         "type_info": "Text"
-      },
-      {
-        "name": "requested_owner_id",
-        "ordinal": 4,
-        "type_info": "Text"
-      },
-      {
-        "name": "requested_list_id",
-        "ordinal": 5,
-        "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 6
     },
     "nullable": [
       false,
       false,
       false,
-      false,
-      true,
-      true
+      false
     ]
   },
-  "hash": "6969922ab714d55618c89ed056f636f0f30764ded992fa03d4211f1194deb8ce"
+  "hash": "70cb0b8509721322796e65ed99f34bd51f741cce5fda0489e85ad40eb9b12b7f"
 }
