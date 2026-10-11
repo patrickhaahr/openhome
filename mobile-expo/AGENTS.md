@@ -1,17 +1,5 @@
-# Expo HAS CHANGED
+# Mobile guidance
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
-
-## Project Shape
-
-- `src/domain/` contains pure parsing and control definitions.
-- `src/application/` owns the application state machine and sequences effects.
-- `src/infrastructure/` contains SecureStore and Axum API adapters.
-- `src/ui/` contains render-only React Native components.
-- Mobile clients call only the Axum API. Do not add direct device or bridge integrations.
-
-## Commands
-
-- `just expo-start`
-- `just expo-android`
-- `just expo-check`
+- Before using Expo APIs, consult the documentation matching the installed version in `package.json`.
+- Keep domain logic pure in `src/domain/`, state and effect sequencing in `src/application/`, adapters in `src/infrastructure/`, and rendering in `src/ui/`.
+- Route device and service access through the Axum API; keep bridge and LAN integration on the server.
