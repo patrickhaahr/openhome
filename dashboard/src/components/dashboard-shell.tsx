@@ -1,0 +1,63 @@
+import { Link, Outlet, useRouter } from "@tanstack/react-router"
+import { useEffect } from "react"
+import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple"
+import { PlugsConnectedIcon } from "@phosphor-icons/react/dist/csr/PlugsConnected"
+import { features } from "@/lib/features"
+
+export function DashboardShell(): React.JSX.Element {
+  const router = useRouter()
+
+  useEffect(
+    () =>
+      router.subscribe("onRendered", ({ pathChanged }) => {
+        if (pathChanged)
+          document
+            .getElementById("page-heading")
+            ?.focus({ preventScroll: true })
+      }),
+    [router]
+  )
+
+  return (
+    <div className="dashboard-shell">
+      <a className="skip-link" href="#page-content">
+        Skip to page content
+      </a>
+      <aside className="sidebar">
+        <div className="sidebar-brand" aria-label="OpenHome">
+          OH<span aria-hidden="true">.</span>
+        </div>
+        <nav className="sidebar-nav" aria-label="Main navigation">
+          <Link to="/" className="nav-link" activeOptions={{ exact: true }}>
+            <HouseSimpleIcon size={24} aria-hidden="true" />
+            <span>Home</span>
+          </Link>
+          {features.map((feature) => (
+            <Link
+              key={feature.id}
+              to="/$feature"
+              params={{ feature: feature.id }}
+              className="nav-link"
+            >
+              <feature.icon size={24} aria-hidden="true" />
+              <span>{feature.label}</span>
+            </Link>
+          ))}
+          <Link to="/connection" className="nav-link connection-link">
+            <PlugsConnectedIcon size={24} aria-hidden="true" />
+            <span>Connection</span>
+          </Link>
+        </nav>
+      </aside>
+      <div className="dashboard-workspace">
+        <main id="page-content" tabIndex={-1} className="page-content">
+          <Outlet />
+        </main>
+        <footer className="page-footer">
+          <span>OpenHome</span>
+          <span>Private household display</span>
+        </footer>
+      </div>
+    </div>
+  )
+}

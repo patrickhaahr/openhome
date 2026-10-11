@@ -1,212 +1,89 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router"
-import { useTransition } from "react"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
-import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple"
-import { ShieldCheckIcon } from "@phosphor-icons/react/dist/csr/ShieldCheck"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import type { ConnectionState } from "@/lib/connection"
+import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
+import { FeatureCard } from "@/components/feature-card"
+import { LiveClock } from "@/components/live-clock"
+import { features } from "@/lib/features"
 import { getConnectionHealth } from "@/lib/connection.functions"
 
 export const Route = createFileRoute("/")({
+  head: () => ({ meta: [{ title: "Home · OpenHome" }] }),
   loader: () => getConnectionHealth(),
   headers: () => ({ "Cache-Control": "no-store" }),
-  component: ConnectionPage,
-  errorComponent: ConnectionError,
+  component: HomePage,
+  errorComponent: HomeError,
 })
 
-const outcomes: Record<
-  ConnectionState,
-  { label: string; title: string; detail: string }
-> = {
-  connected: {
-    label: "Connected",
-    title: "Your home is connected.",
-    detail: "OpenHome accepted the API key and returned a healthy response.",
-  },
-  "missing-configuration": {
-    label: "Setup needed",
-    title: "Connect your home.",
-    detail:
-      "The dashboard needs a private server connection before it can reach OpenHome.",
-  },
-  "invalid-configuration": {
-    label: "Check setup",
-    title: "The connection needs a correction.",
-    detail:
-      "Ask the installer to check the server’s base URL and API key, then restart the dashboard.",
-  },
-  "rejected-credential": {
-    label: "API key rejected",
-    title: "OpenHome rejected the API key.",
-    detail:
-      "Ask the installer to update the dashboard’s API key to match OpenHome, then restart the dashboard.",
-  },
-  unreachable: {
-    label: "Unreachable",
-    title: "We couldn’t reach your home.",
-    detail:
-      "Check that OpenHome is running and the dashboard server has network access, then try again.",
-  },
-  unavailable: {
-    label: "Unavailable",
-    title: "OpenHome couldn’t confirm its health.",
-    detail:
-      "The server responded, but a healthy response wasn’t available. Check OpenHome and try again.",
-  },
-}
+const rootRoute = getRouteApi("__root__")
 
-const checkTime = new Intl.DateTimeFormat("da-DK", {
-  dateStyle: "medium",
-  timeStyle: "medium",
-  timeZone: "Europe/Copenhagen",
-})
-
-function ConnectionPage() {
+function HomePage(): React.JSX.Element {
+  const { openedAt } = rootRoute.useLoaderData()
   const health = Route.useLoaderData()
-  const router = useRouter()
-  const [isChecking, startTransition] = useTransition()
-  const outcome = outcomes[health.state]
-
-  function checkAgain() {
-    startTransition(async () => {
-      await router.invalidate({ sync: true })
-    })
-  }
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-6xl flex-col gap-12 px-6 py-8 sm:px-12 sm:py-12">
-      <header className="flex items-center gap-3">
-        <HouseSimpleIcon
-          size={28}
-          weight="duotone"
-          className="text-primary"
-          aria-hidden="true"
-        />
-        <span className="text-lg font-semibold tracking-tight">OpenHome</span>
+    <div>
+      <header className="page-header">
+        <h1 id="page-heading" tabIndex={-1} className="page-eyebrow">
+          Home
+        </h1>
+        <Link to="/connection" className="connection-summary">
+          <span
+            className="connection-dot"
+            data-connected={health.state === "connected"}
+            aria-hidden="true"
+          />
+          {health.state === "connected" ? "Home connected" : "Check connection"}
+          <ArrowRightIcon size={16} aria-hidden="true" />
+        </Link>
       </header>
-
-      <div className="grid flex-1 content-center items-start gap-10 lg:grid-cols-2 lg:gap-16">
-        <section
-          aria-labelledby="connection-heading"
-          className="flex flex-col gap-6"
+      <section className="home-hero" aria-label="Today">
+        <LiveClock initialTime={openedAt} />
+        <div className="home-note">
+          <span className="page-eyebrow">At a glance</span>
+          <h2>
+            One home.
+            <br />
+            A shared view.
+          </h2>
+          <p>
+            Open a feature for its details. Unavailable features stay visible as
+            your dashboard grows.
+          </p>
+        </div>
+      </section>
+      <section aria-label="Home features" className="home-features">
+        {features.slice(0, 4).map((feature) => (
+          <FeatureCard key={feature.id} feature={feature} />
+        ))}
+      </section>
+      <div className="home-bottom">
+        <p>
+          Features are being added. A connected home does not mean every
+          integration is available.
+        </p>
+        <Link
+          to="/$feature"
+          params={{ feature: "agent" }}
+          className="agent-link"
         >
-          <p className="text-sm font-medium tracking-widest text-muted-foreground uppercase">
-            Dashboard connection
-          </p>
-          <h1
-            id="connection-heading"
-            className="text-4xl leading-tight font-semibold tracking-tight sm:text-5xl"
-          >
-            {outcome.title}
-          </h1>
-          <p className="max-w-md text-lg leading-relaxed text-muted-foreground">
-            {outcome.detail}
-          </p>
-          <div className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground">
-            <ShieldCheckIcon
-              size={24}
-              className="shrink-0 text-primary"
-              aria-hidden="true"
-            />
-            <p>
-              The API key stays on the dashboard server. It is never saved on
-              this iPad.
-            </p>
-          </div>
-        </section>
-
-        <Card>
-          <CardHeader>
-            <h2 className="text-xl font-semibold">Connection status</h2>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-6">
-              <div
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-                className="flex flex-col gap-2"
-              >
-                <p className="text-2xl font-medium">
-                  {isChecking ? "Checking connection…" : outcome.label}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Last checked{" "}
-                  <time dateTime={health.checkedAt}>
-                    {checkTime.format(new Date(health.checkedAt))}
-                  </time>
-                </p>
-              </div>
-              {health.state === "missing-configuration" ? (
-                <SetupInstructions />
-              ) : null}
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button
-              size="lg"
-              onClick={checkAgain}
-              disabled={isChecking}
-              className="w-full"
-            >
-              <ArrowClockwiseIcon aria-hidden="true" data-icon="inline-start" />
-              {isChecking ? "Checking…" : "Check again"}
-            </Button>
-          </CardFooter>
-        </Card>
+          Open agent <ArrowRightIcon size={20} aria-hidden="true" />
+        </Link>
       </div>
-
-      <footer className="text-sm text-muted-foreground">
-        Private household dashboard
-      </footer>
-    </main>
-  )
-}
-
-function SetupInstructions() {
-  return (
-    <div className="flex flex-col gap-3 border-t pt-6 text-sm leading-relaxed">
-      <h3 className="font-semibold">For the installer</h3>
-      <p className="text-muted-foreground">
-        Set these private environment variables on the dashboard server, then
-        restart it and check again.
-      </p>
-      <dl className="flex flex-col gap-3">
-        <div>
-          <dt className="font-mono text-primary">OPENHOME_API_URL</dt>
-          <dd className="text-muted-foreground">Your Axum API base URL</dd>
-        </div>
-        <div>
-          <dt className="font-mono text-primary">API_KEY</dt>
-          <dd className="text-muted-foreground">
-            The API key configured on Axum
-          </dd>
-        </div>
-      </dl>
     </div>
   )
 }
 
-function ConnectionError() {
-  const router = useRouter()
-
+function HomeError(): React.JSX.Element {
   return (
-    <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center gap-6 p-8">
-      <h1 className="text-3xl font-semibold">
-        The dashboard couldn’t check the connection.
+    <section className="focused-page">
+      <h1 id="page-heading" tabIndex={-1}>
+        Home connection unavailable
       </h1>
-      <p className="text-muted-foreground">
-        Check your connection to the dashboard and try again.
+      <p>
+        The dashboard could not check OpenHome. Open Connection to try again.
       </p>
-      <Button
-        size="lg"
-        onClick={() => {
-          void router.invalidate()
-        }}
-      >
-        Try again
-      </Button>
-    </main>
+      <Link to="/connection" className="action-link">
+        Open Connection
+      </Link>
+    </section>
   )
 }
