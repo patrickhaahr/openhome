@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, list_id, title, created_at, requested_owner_id, requested_list_id FROM wishlist_items WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "list_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "requested_owner_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "requested_list_id",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6969922ab714d55618c89ed056f636f0f30764ded992fa03d4211f1194deb8ce"
+}

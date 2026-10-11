@@ -57,6 +57,7 @@ async fn start_api() -> String {
     };
     let api_key = auth::ApiKey::new(API_KEY.to_string());
     let app = routes::training::router()
+        .merge(routes::wishlist::router(None))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, api_key.clone())
@@ -144,13 +145,7 @@ async fn noop_mirror() -> SqlitePool {
 /// The training log: one Pull Workout on 2026-09-14.
 async fn training_log() -> SqlitePool {
     let db = memory_db().await;
-    for migration in [
-        include_str!("../../api/migrations/0003_fitness.up.sql"),
-        include_str!("../../api/migrations/0004_remove_workout_body_weight.up.sql"),
-        include_str!("../../api/migrations/0005_profile_hr_max.up.sql"),
-    ] {
-        sqlx::raw_sql(migration).execute(&db).await.unwrap();
-    }
+    sqlx::migrate!("../api/migrations").run(&db).await.unwrap();
     sqlx::raw_sql(
         "INSERT INTO workouts (id, date, name) VALUES (1, '2026-09-14', 'Pull'); \
          INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index) \
@@ -205,6 +200,134 @@ async fn call_day_tool(
         .unwrap()
 }
 
+async fn wishlist_call(
+    client: &RunningService<RoleClient, ClientConfig>,
+    tool: &'static str,
+    arguments: Value,
+) -> CallToolResult {
+    client
+        .call_tool(
+            CallToolRequestParams::new(tool).with_arguments(arguments.as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn wishlist_mutations_and_clarification_pass_through_the_authenticated_api() {
+    let api = start_api().await;
+    let http = reqwest::Client::new();
+    let owner: Value = http
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name":"Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let owners = wishlist_call(&client, "household_users", json!({})).await;
+    assert_eq!(owners.structured_content, Some(json!([owner])));
+    let created = wishlist_call(
+        &client,
+        "create_wishlist",
+        json!({"owner_id":owner["id"],"name":"Ideas"}),
+    )
+    .await;
+    assert_eq!(created.is_error, Some(false));
+    let list = created.structured_content.unwrap();
+    assert_eq!(list["owner_id"], owner["id"]);
+    let lists = wishlist_call(&client, "wishlists", json!({})).await;
+    assert_eq!(lists.structured_content, Some(json!([list])));
+    let payload = json!({"title":"A warm jacket","request_id":"mcp-wish-1"});
+    let ambiguous = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
+    assert_eq!(ambiguous.is_error, Some(true));
+    let direct: Value = http
+        .post(format!("{api}/api/wishlist/items"))
+        .bearer_auth(API_KEY)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(ambiguous.structured_content, Some(direct.clone()));
+    assert_eq!(direct["code"], "wishlist_destination_required");
+    let mut payload = payload;
+    payload["list_id"] = list["id"].clone();
+    let added = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
+    assert_eq!(added.is_error, Some(false));
+    let addition = added.structured_content.unwrap();
+    assert_eq!(addition["item"]["title"], "A warm jacket");
+    let replayed = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
+    assert_eq!(replayed.is_error, Some(false));
+    assert_eq!(
+        replayed.structured_content,
+        Some(json!({"item":addition["item"],"replayed":true}))
+    );
+    let items = wishlist_call(&client, "wishlist_items", json!({"list_id":list["id"]})).await;
+    let direct: Value = http
+        .get(format!(
+            "{api}/api/wishlists/{}/items",
+            list["id"].as_str().unwrap()
+        ))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(items.is_error, Some(false));
+    assert_eq!(items.structured_content, Some(direct.clone()));
+    assert_eq!(direct, json!([addition["item"]]));
+    payload["title"] = json!("Another wish");
+    let conflict = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
+    let direct: Value = http
+        .post(format!("{api}/api/wishlist/items"))
+        .bearer_auth(API_KEY)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(conflict.is_error, Some(true));
+    assert_eq!(conflict.structured_content, Some(direct));
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn wishlist_write_auth_and_transport_failures_remain_tool_errors() {
+    let api = start_api().await;
+    for (api_url, key, expected_status) in [
+        (api.as_str(), "wrong-key", json!(401)),
+        ("http://127.0.0.1:1", API_KEY, Value::Null),
+    ] {
+        let client = connect(&start_mcp(api_url, key).await, API_KEY)
+            .await
+            .unwrap();
+        let result = wishlist_call(
+            &client,
+            "add_wishlist_item",
+            json!({"title":"A warm jacket","request_id":"failed-1"}),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(true));
+        assert_eq!(
+            result.structured_content.unwrap()["status"],
+            expected_status
+        );
+        client.cancel().await.unwrap();
+    }
+}
+
 async fn recovery_on_day(
     client: &RunningService<RoleClient, ClientConfig>,
     day: &str,
@@ -254,7 +377,7 @@ async fn call_sleep_recent(
 }
 
 #[tokio::test]
-async fn discovers_the_read_only_training_tools() {
+async fn discovers_read_only_training_and_additive_wishlist_tools() {
     let mcp = start_mcp(&start_api().await, API_KEY).await;
     let client = connect(&mcp, API_KEY).await.unwrap();
 
@@ -268,12 +391,17 @@ async fn discovers_the_read_only_training_tools() {
     assert_eq!(
         names,
         [
+            "add_wishlist_item",
+            "create_wishlist",
             "exercise_history",
+            "household_users",
             "metric_trend",
             "noop_workout_detail",
             "recovery_on_day",
             "sleep_recent",
             "training_context",
+            "wishlist_items",
+            "wishlists",
             "workouts_on_day"
         ]
     );
@@ -282,11 +410,29 @@ async fn discovers_the_read_only_training_tools() {
             tool.annotations
                 .as_ref()
                 .and_then(|annotations| annotations.read_only_hint),
-            Some(true),
+            Some(!matches!(
+                tool.name.as_ref(),
+                "create_wishlist" | "add_wishlist_item"
+            )),
             "{}",
             tool.name
         );
+        if matches!(tool.name.as_ref(), "create_wishlist" | "add_wishlist_item") {
+            let annotations = tool.annotations.as_ref().unwrap();
+            assert_eq!(annotations.destructive_hint, Some(false));
+            assert_eq!(
+                annotations.idempotent_hint,
+                Some(tool.name == "add_wishlist_item")
+            );
+        }
         let required = match tool.name.as_ref() {
+            "household_users" | "wishlists" => {
+                assert!(tool.input_schema.get("required").is_none());
+                continue;
+            }
+            "create_wishlist" => json!(["owner_id", "name"]),
+            "add_wishlist_item" => json!(["title", "request_id"]),
+            "wishlist_items" => json!(["list_id"]),
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "noop_workout_detail" => json!(["source", "start"]),
@@ -306,7 +452,8 @@ async fn discovers_the_read_only_training_tools() {
             );
         }
         assert!(tool.description.as_deref().is_some_and(|description| {
-            description.contains("Europe/Copenhagen") && !description.contains('\n')
+            (description.contains("Europe/Copenhagen") || tool.name.contains("wishlist"))
+                && !description.contains('\n')
         }));
     }
 
