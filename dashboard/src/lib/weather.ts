@@ -17,11 +17,21 @@ const day = z.object({
   wind_ms: z.number().nonnegative().nullable(),
 })
 
+const hour = z.object({
+  starts_at: z.iso.datetime({ offset: true }),
+  temperature_c: z.number().nullable(),
+  wind_ms: z.number().nonnegative().nullable(),
+  precipitation_mm: z.number().nonnegative().nullable(),
+  precipitation_probability_percent: z.number().min(0).max(100).nullable(),
+})
+
 const forecast = z.object({
   fetched_at: z.iso.datetime({ offset: true }),
   valid_until: z.iso.datetime({ offset: true }),
   timezone: z.literal("Europe/Copenhagen"),
   current: current.nullable(),
+  // Older Axum instances can still serve current/daily weather during rollout.
+  hourly: z.array(hour).max(24).default([]),
   days: z.array(day).length(7),
 })
 

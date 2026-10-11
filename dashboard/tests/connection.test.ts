@@ -278,7 +278,7 @@ test("bounds a stalled health check so the connection screen remains usable", as
   expect(html).not.toContain(privateUrl)
 })
 
-test("renders current and seven-day weather through the private server boundary without exposing upstream fields", async () => {
+test("renders current, hourly and seven-day weather through the private server boundary without exposing upstream fields", async () => {
   const forecast = structuredClone(demoWeather)
   forecast.forecast.days[2] = {
     date: "2026-10-13",
@@ -317,7 +317,7 @@ test("renders current and seven-day weather through the private server boundary 
   const home = await page(url, "/")
   expect(home).toContain("9,3 °C")
   expect(home).toContain("Overcast")
-  expect(home).toContain("Seven-day forecast")
+  expect(home).toContain("Hourly &amp; seven-day forecast")
   expect(home).toContain("Turn on")
   const weather = await page(url, "/weather")
   expect(weather).toContain("Fresh forecast")
@@ -326,7 +326,15 @@ test("renders current and seven-day weather through the private server boundary 
   expect(weather).toContain("3,3 m/s")
   expect(weather).toContain("0,9 mm")
   expect(weather).toContain("Conditions unavailable")
-  expect(weather.match(/<time dateTime=/g)).toHaveLength(7)
+  expect(weather.match(/<time dateTime=/g)).toHaveLength(31)
+  expect(weather).toContain("Walking or running?")
+  expect(weather).toContain("Next 24 hours")
+  expect(weather).toContain("60 %")
+  expect(weather).toContain("0,7 mm")
+  expect(weather).toContain("4,2 m/s")
+  expect(weather).toContain("10,4 °C")
+  expect(weather).toContain("Hourly conditions unavailable")
+  expect(weather).toContain("2026-10-12T09:00:00Z")
   expect(weather).toContain("2026-10-17")
   expect(weather).toContain("Open-Meteo")
   expect(weather).toContain("CC BY 4.0")
@@ -337,6 +345,48 @@ test("renders current and seven-day weather through the private server boundary 
     expect(html).not.toContain(privateUrl)
   }
 })
+
+test.each([
+  { start: "2026-03-29T00:00:00Z", labels: ["01", "03"] },
+  { start: "2026-10-25T00:00:00Z", labels: ["02", "02"] },
+])(
+  "renders distinct Copenhagen hours across DST at $start",
+  async ({ start, labels }) => {
+    const upstream = createServer((_request, response) => {
+      response.writeHead(200, { "Content-Type": "application/json" })
+      response.end(
+        JSON.stringify({
+          ...demoWeather,
+          forecast: {
+            ...demoWeather.forecast,
+            hourly: demoWeather.forecast.hourly.map((hour, index) => ({
+              ...hour,
+              starts_at: new Date(
+                Date.parse(start) + index * 3_600_000
+              ).toISOString(),
+            })),
+          },
+        })
+      )
+    })
+
+    const html = await page(
+      await dashboard({ url: await listen(upstream), key: apiKey }),
+      "/weather"
+    )
+
+    for (const [index, label] of labels.entries()) {
+      const instant = new Date(
+        Date.parse(start) + index * 3_600_000
+      ).toISOString()
+
+      expect(html).toContain(`<time dateTime="${instant}">${label}.00</time>`)
+    }
+
+    expect(html).toContain("GMT+1")
+    expect(html).toContain("GMT+2")
+  }
+)
 
 test.each([
   { state: "stale", expected: "Stale forecast" },
@@ -359,6 +409,7 @@ test.each([
                   forecast: {
                     ...demoWeather.forecast,
                     current: null,
+                    hourly: [],
                     days: demoWeather.forecast.days.map((day) => ({
                       ...day,
                       precipitation_mm: null,
@@ -379,6 +430,7 @@ test.each([
 
     if (state === "stale") {
       expect(weather).toContain("Current conditions unavailable")
+      expect(weather).toContain("Hourly forecast unavailable")
       expect(weather).toContain("conditions may have changed")
       expect(weather).toContain("Fetched")
       expect(weather).toMatch(/11\. okt\.[, ]+12[.:]00/)

@@ -3,7 +3,9 @@
 Home shows current conditions; `/weather` shows current temperature, apparent
 temperature, wind and seven dated daily forecasts. Reads go through the private
 TanStack server to authenticated `GET /api/weather`. Home defers weather
-independently of controls. Hourly conditions remain the next slice, #96.
+independently of controls. The hourly slice (#96) adds a 24-hour comparison with temperature, precipitation
+amount/chance and wind. The next three hours are highlighted for planning a walk
+or run; no suitability score or personalized advice is inferred.
 
 ## Public evidence
 
@@ -77,3 +79,45 @@ visibility resume independently of controls. Check again never forces an
 upstream request. Cache is
 lost on restart. Open-Meteo's free terms permit personal home automation; see
 [ADR 0006](../../../docs/adr/0006-weather-provider-and-cache.md).
+
+## Hourly conditions (#96)
+
+The chart is a semantic table with a keyboard-focusable horizontal scroll region
+and sticky measure labels. Dates and GMT offsets distinguish midnight and both
+DST transitions. Amount bars share a scale; a hatched missing bar and explicit
+Unavailable values distinguish missing data from zero precipitation. Each column
+starts an hour: temperature/wind are instantaneous; amount/chance cover the
+following hour and include rain, showers and snow.
+
+| Before                                       | Hourly landscape                           | Hourly portrait                         |
+| -------------------------------------------- | ------------------------------------------ | --------------------------------------- |
+| ![Current and daily forecast](landscape.png) | ![Hourly comparison](hourly-landscape.png) | ![Hourly portrait](hourly-portrait.png) |
+
+![Hourly chart on actual iPad Safari](hourly-ipad-safari.png)
+
+Verification on 2026-10-11:
+
+- Controlled provider tests cover end-stamped precipitation, missing timestamps,
+  null and invalid values, rejected hourly units/timestamps, absent hourly data,
+  24-hour selection across both DST transitions, and stale window advancement.
+  Review also found and fixed a daily-date integration defect: provider daily
+  timestamps use a fixed request offset, so interpreting them with changing DST
+  rules rejected autumn forecasts. The corrected provider fixture failed before
+  the repair and now covers that case alongside hourly data.
+  The shared cache/failure backoff still bounds requests across Home and Weather.
+- Dashboard HTTP tests verify rendered units, missing/stale/error states,
+  privacy, and local labels/offsets across both DST changes. Existing lifecycle
+  coverage still protects refresh, hidden-page pause and visibility recovery.
+- The production Axum executable fetched 24 real hours for the unrelated
+  Copenhagen demo origin using isolated temporary databases and synthetic keys.
+  Two consecutive reads retained the same fetch timestamp; responses contained
+  no coordinates. Provider terms remain those recorded in ADR 0006.
+- Browser previews at 1024 × 768 and 768 × 1024, and enlarged 200% text, keep
+  horizontal overflow inside the chart. Row labels remain visible while it scrolls.
+- Attached iPad7,5 / iPadOS 17.7.11 Safari rendered 24 columns at 1024 × 665 CSS
+  px. Inspector-driven horizontal scrolling preserved sticky labels. 200% text
+  initially exposed overflow from hidden accessibility text; positioning its
+  scroll region fixed it, confirmed on the device. Physical portrait rotation,
+  finger swipes and Safari page zoom remain manual release checks.
+
+This slice does not close the #72 parent or the #69 release tracker.
