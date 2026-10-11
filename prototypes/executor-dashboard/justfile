@@ -1,0 +1,38 @@
+default:
+    @just --list
+
+registry-info package:
+    npm view {{quote(package)}} dist-tags --json
+
+install-runtime:
+    npm install --prefix .runtime --include=optional --no-audit --no-fund executor@2.0.0-beta.14
+
+install-browser:
+    npm install --prefix .runtime --no-audit --no-fund agent-browser
+
+serve:
+    NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-/etc/ssl/certs/ca-certificates.crt}" EXECUTOR_DATA_DIR="$PWD/.runtime/data" EXECUTOR_KEY_STORAGE=file EXECUTOR_DISABLE_ANALYTICS=1 EXECUTOR_NO_UPDATE_CHECK=1 .runtime/node_modules/.bin/executor serve
+
+[positional-arguments]
+executor *args:
+    EXECUTOR_DISABLE_ANALYTICS=1 EXECUTOR_NO_UPDATE_CHECK=1 node tools/executor.mjs "$@"
+
+install-app:
+    npm --prefix app install --no-audit --no-fund
+
+fmt:
+    app/node_modules/.bin/oxfmt --write app/index.ts app/schemas.ts app/ui/*.ts app/ui/*.tsx app/ui/*.css tools/*.mjs
+
+check:
+    app/node_modules/.bin/oxfmt --check app/index.ts app/schemas.ts app/ui/*.ts app/ui/*.tsx app/ui/*.css tools/*.mjs
+    cd app && npx --no-install tsc --noEmit
+
+[positional-arguments]
+browser *args:
+    .runtime/node_modules/.bin/agent-browser --session openhome-executor-ui --executable-path "$(command -v chromium)" --args "--use-angle=swiftshader,--enable-unsafe-swiftshader" "$@"
+
+deploy:
+    EXECUTOR_DISABLE_ANALYTICS=1 EXECUTOR_NO_UPDATE_CHECK=1 node tools/deploy.mjs
+
+pair-browser:
+    EXECUTOR_DISABLE_ANALYTICS=1 EXECUTOR_NO_UPDATE_CHECK=1 node tools/pair-browser.mjs

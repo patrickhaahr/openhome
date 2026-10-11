@@ -15,7 +15,7 @@ A noninteractive command-line program that consumes the Axum API and does not co
 _Avoid_: Device script, API wrapper
 
 **Agent**:
-An automated operator that invokes a CLI Client or read-only training tools to fulfill a user request.
+An automated operator that invokes a CLI Client or OpenHome tools to fulfill a user request.
 _Avoid_: Integration Service, direct device agent
 
 **Axum API**:
@@ -103,6 +103,43 @@ _Avoid_: Full remote, duplicate tab
 **V1 Home Remote Controls**:
 The initial Home Remote Controls: `bluetooth` and `optical`.
 _Avoid_: Full remote shortcut set, implicit defaults
+
+### Dashboard
+
+**Dashboard**:
+A user-facing OpenHome interface on a dedicated household display, combining
+information and home controls with access to focused feature views.
+_Avoid_: Home Tab, Training Context
+
+**Dashboard Home**:
+The glanceable overview shown by the Dashboard, where selecting a feature opens
+its focused view and inactivity returns to the overview.
+_Avoid_: Home Tab, permanent widget grid
+
+**Household User**:
+A configured person who owns Wishlists and Watchlists. The shared Dashboard
+shows household members together within these list views, without separate
+passwords or private lists.
+_Avoid_: Fitness Profile, authenticated account
+
+**Wishlist**:
+A Household User's named collection of items they would like to acquire.
+_Avoid_: Shopping checklist, Watchlist
+
+**Wishlist Item**:
+A desired item recorded in a Wishlist, described by a generic request or a
+specific product with an optional link and supporting details.
+_Avoid_: Gift reservation, shopping order
+
+**Active Route**:
+The selected walking or running route made available to the Dashboard and the
+Mobile Client for viewing with the phone's current location.
+_Avoid_: GPX transfer, route screenshot
+
+**Watchlist**:
+A Household User's collection of movies and series planned for watching,
+currently being watched or completed, with dates recording addition and completion.
+_Avoid_: Wishlist, viewing history import
 
 ### Server Operations
 
@@ -232,7 +269,7 @@ _Avoid_: Survey, habit log
 
 - A **Mobile Client** calls the **Axum API** for every user-visible capability.
 - A **CLI Client** calls the **Axum API** for all device and service access.
-- An **Agent** invokes a **CLI Client** or read-only training tools to fulfill a user request.
+- An **Agent** invokes a **CLI Client** or OpenHome tools to fulfill a user request; training tools remain read-only.
 - The **Axum API** delegates device-specific work to one or more **Integration Services**.
 - A **Mobile Client** uses a configured **Base URL** to reach the **Axum API**.
 - A **Mobile Client** authorizes requests to the **Axum API** with an **API Key**.

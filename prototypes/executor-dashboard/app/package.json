@@ -1,0 +1,18 @@
+{
+  "name": "openhome-dashboard-prototype",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "apps": "0.0.1-beta.69",
+    "maplibre-gl": "5.24.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3",
+    "oxfmt": "0.71.0"
+  }
+}
