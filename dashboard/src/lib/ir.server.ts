@@ -1,6 +1,6 @@
 import "@tanstack/react-start/server-only"
 import { z } from "zod"
-import type { IrCommandResult, IrRemoteState } from "./ir"
+import { type IrCommandResult, type IrRemotes, unavailableRemotes } from "./ir"
 import {
   isAcknowledged,
   readErrorMessage,
@@ -21,12 +21,6 @@ const remotes = z.object({
     edifier: z.array(z.string()),
   }),
 })
-
-/** Both IR Remotes come from one discovery, so they always share its outcome. */
-export type IrRemotes = {
-  tv: IrRemoteState<TvCommand>
-  speaker: IrRemoteState<SpeakerCommand>
-}
 
 /** Classify an unsuccessful Axum response; only exact known errors earn specific guidance. */
 async function classifyFailure(
@@ -56,15 +50,6 @@ function withButtons<C extends string>(
   return options.filter((command) => names.has(command))
 }
 
-function unavailable(
-  reason: Extract<IrRemoteState<string>, { state: "unavailable" }>["reason"]
-): IrRemotes {
-  return {
-    tv: { state: "unavailable", reason },
-    speaker: { state: "unavailable", reason },
-  }
-}
-
 /** Ask Axum which Commands each IR Remote reports, keeping only those with Remote Buttons. */
 export async function readIrRemotes(): Promise<IrRemotes> {
   const result = await requestOpenHome({
@@ -73,7 +58,7 @@ export async function readIrRemotes(): Promise<IrRemotes> {
     timeoutMs: discoveryTimeoutMs,
   })
 
-  if (result.state !== "received") return unavailable(result.state)
+  if (result.state !== "received") return unavailableRemotes(result.state)
 
   const { response } = result
 
@@ -99,13 +84,15 @@ export async function readIrRemotes(): Promise<IrRemotes> {
       // An unreadable response cannot establish which commands are available.
     }
 
-    return unavailable("unavailable")
+    return unavailableRemotes("unavailable")
   }
 
   const reason = await classifyFailure(response)
 
   // A stale-command answer cannot apply to discovery.
-  return unavailable(reason === "unsupported-command" ? "unavailable" : reason)
+  return unavailableRemotes(
+    reason === "unsupported-command" ? "unavailable" : reason
+  )
 }
 
 /**

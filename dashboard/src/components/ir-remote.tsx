@@ -32,6 +32,8 @@ export type IrRemoteConfig<C extends string> = {
   /** Names the remote on the focused Controls view. */
   remoteName: string
   icon: Icon
+  /** The Command given the filled button style. */
+  primary: C
   labels: Record<C, string>
   commandIcons: Partial<Record<C, Icon>>
   quickGroups: CommandGroup<C>[]
@@ -306,7 +308,7 @@ function RemoteButton<C extends string>({
   return (
     <Button
       size="lg"
-      variant={command === "power" ? "default" : "outline"}
+      variant={command === config.primary ? "default" : "outline"}
       disabled={disabled}
       data-command={command}
       onClick={() => onPress(command)}

@@ -5,8 +5,8 @@ Volume down and Volume up). The focused Controls view (`/controls`) offers every
 reported speaker command in two rows: Power and input, then Volume. The TV and
 speaker share one discovery at `GET /api/ir`; speaker commands are sent through
 the private TanStack server to `POST /api/ir/edifier`. A command acknowledgement
-stays separate from **Power and volume: Not reported**. The card also explains
-that OpenHome does not report the speaker's input or playback.
+stays separate from **Observed state: Not reported**, which covers the
+speaker's power, input, volume and playback.
 
 The TV and speaker now render through one shared Dashboard Remote component, so
 the speaker has the same pending guard, timeout, failure copy and **Check again**
@@ -70,8 +70,9 @@ dashboard over a USB tunnel. It was inspected through Safari Web Inspector
   horizontal overflow.
 - With a delayed response, three inspector-driven activations of **Volume up**
   produced one command. All speaker buttons were disabled during the pending
-  announcement. The accepted result then showed power and volume still
-  **Not reported**.
+  announcement. The accepted result then showed the device state still
+  **Not reported**. The capture predates renaming the speaker's state label
+  from "Power and volume" to "Observed state".
 - Safari's wider font broke **Bluetooth** mid-word in the original 2:3 Controls
   columns. The columns are now equal, and every speaker label fits on whole
   words on Controls and Home. At 200% root text size, no speaker or TV button
@@ -89,7 +90,8 @@ A local dashboard server then held the private connection. The Controls view
 discovered all six speaker commands from the real Axum API. One deliberately
 chosen **Volume down** command was sent from the browser, chosen because it is a
 single small step that toggles nothing. The card showed **Volume down command
-accepted by OpenHome.** and **Power and volume Not reported**. The server was
+accepted by OpenHome.** and **Power and volume Not reported** (since renamed
+**Observed state**). The server was
 stopped immediately afterwards.
 
 No live command was used as an automated fixture or public capture. The

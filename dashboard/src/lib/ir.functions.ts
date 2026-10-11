@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
-import type { IrRemotes } from "./ir.server"
+import { type IrRemotes, unavailableRemotes } from "./ir"
 import { speakerCommand } from "./speaker"
 import { tvCommand } from "./tv"
 
@@ -43,8 +43,6 @@ export async function loadIrRemotes(): Promise<IrRemotes> {
   try {
     return await getIrRemotes()
   } catch {
-    const unreachable = { state: "unavailable", reason: "unreachable" } as const
-
-    return { tv: unreachable, speaker: unreachable }
+    return unavailableRemotes("unreachable")
   }
 }
