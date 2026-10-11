@@ -36,16 +36,12 @@ _Avoid_: Device address, bridge address
 A shared bearer credential that authorizes a Mobile Client to call the Axum API.
 _Avoid_: User token, session token
 
-**Unlock Flow**:
-A client-side step used by some Mobile Clients to restore access to the stored API Key before the user can use the app.
-_Avoid_: Server login, account sign-in
-
 **Setup Flow**:
 A client-side step where the user enters the Base URL and API Key and validates them against the Axum API before first use.
 _Avoid_: Account onboarding, server registration
 
 **Native Client Access**:
-The access model for `mobile-native` and `mobile-expo`: complete Setup Flow once, then open directly into the app without a launch-time Unlock Flow.
+The access model for `mobile-expo`: complete Setup Flow once, then open directly into the app.
 _Avoid_: Biometric gate, locked-by-default startup
 
 **Home Geofence**:
@@ -55,10 +51,6 @@ _Avoid_: Continuous GPS tracking, direct light automation
 **Home Radius**:
 The distance in meters from the center of the Home Geofence that defines when the Mobile Client has left home.
 _Avoid_: GPS interval, polling distance
-
-**Initial Native Tabs**:
-The first visible top-level tabs in `mobile-native`: `Home` and `Remote` only.
-_Avoid_: Placeholder tabs, future empty destinations
 
 ### IR Control
 
@@ -291,10 +283,7 @@ _Avoid_: Survey, habit log
 - A user completes the **Setup Flow** before first use of the **Mobile Client**.
 - `mobile-expo` can register one **Home Geofence** and sends a light-off command to the **Axum API** when it exits that region.
 - A **Home Radius** defines the boundary of the **Home Geofence** in meters.
-- Some **Mobile Clients** use an **Unlock Flow** before the stored **API Key** can be used.
-- `mobile-native` uses **Native Client Access**.
-- `mobile-expo` uses **Native Client Access** and preserves the same initial capabilities as `mobile-native`.
-- `mobile-native` starts with **Initial Native Tabs** only.
+- `mobile-expo` uses **Native Client Access**.
 - An **IR Remote** exposes one or more **Commands**.
 - A **Mobile Client** triggers **IR Remote** **Commands** by calling the **Axum API**.
 - A **Home Tab** combines summaries and shortcuts from multiple **Top-Level Tabs**.
@@ -338,8 +327,4 @@ _Avoid_: Survey, habit log
 - "feature tab" and "API endpoint category" were both used for top-level navigation. Resolved: the app uses **Top-Level Tabs** that intentionally mirror Axum API areas, while **Home Tab** is the mixed overview.
 - The IR API may expose more commands than the Android app shows. Resolved: the Android app uses a curated **Remote Button Set**, and the `test` command is not exposed.
 - "test endpoint" was used to refer to IR behavior. Resolved: the current API has a `test` **Command**, not a separate endpoint.
-- "auth" could mean either backend authorization or client re-entry behavior. Resolved: **API Key** names the Axum credential, and **Unlock Flow** names the client-side step to regain access to the stored credential.
-- The native Android migration scope is clientside only. Resolved: the backend contract, endpoint shapes, and auth model stay unchanged while the **Mobile Client** is reimplemented natively.
-- "same auth flow" was used ambiguously. Resolved: `mobile-native` preserves the backend **API Key** contract and **Setup Flow**, but does not use the old launch-time **Unlock Flow**.
-- The tab roadmap is incremental. Resolved: `mobile-native` only shows **Initial Native Tabs** that are actually implemented, starting with `Home` and `Remote`.
 - "Top-Level Tabs mirror one API area" conflicts with the Server Tab grouping three areas. Resolved: the **Server Tab** is a deliberate mixed operations tab, playing the same role for server ops that the **Home Tab** plays for quick access.
