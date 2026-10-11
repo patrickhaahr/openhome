@@ -1,21 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { LightControls } from "@/components/light-controls"
 import { TvRemote } from "@/components/tv-remote"
-import { getConnectionHealth } from "@/lib/connection.functions"
+import { loadControls } from "@/lib/controls-loader"
 import { features } from "@/lib/features"
 import { sendLightCommand } from "@/lib/lights.functions"
-import { loadTvRemote, sendTvCommand } from "@/lib/tv.functions"
+import { sendTvCommand } from "@/lib/tv.functions"
 
 const controls = features[1] satisfies { id: "controls" }
 
 /** The focused Controls view: every home control, including the full TV remote. */
 export const Route = createFileRoute("/controls")({
   head: () => ({ meta: [{ title: `${controls.title} · OpenHome` }] }),
-  // TV discovery is deferred so a slow IR remote never delays the lights.
-  loader: async () => ({
-    tvRemote: loadTvRemote(),
-    health: await getConnectionHealth(),
-  }),
+  loader: loadControls,
   headers: () => ({ "Cache-Control": "no-store" }),
   component: ControlsPage,
 })

@@ -4,6 +4,12 @@ import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import {
+  connectionPausedMessages,
+  type ControlLayout,
+  isSetupFailure,
+  setupFailureMessages,
+} from "@/lib/command-feedback"
 import type { ConnectionState } from "@/lib/connection"
 import type {
   LightCommand,
@@ -14,8 +20,8 @@ import { useSingleCommand } from "@/lib/use-single-command"
 
 type LightControlsProps = {
   connectionState: ConnectionState
-  /** Home links to the focused Controls view, which shows every control. */
-  layout: "quick" | "full"
+  /** Only Home links to the focused Controls view. */
+  layout: ControlLayout
   sendCommand: (options: {
     data: LightCommand
     signal: AbortSignal
@@ -24,28 +30,10 @@ type LightControlsProps = {
 
 const commandLabels: Record<LightCommand, string> = { on: "On", off: "Off" }
 
-/** Shown before any command is sent, so the copy never suggests the lights changed. */
-const connectionMessages: Record<
-  Exclude<ConnectionState, "connected">,
-  string
-> = {
-  "missing-configuration": "Connect OpenHome before sending a light command.",
-  "invalid-configuration":
-    "The OpenHome connection needs a correction before light commands can be sent.",
-  "rejected-credential":
-    "OpenHome rejected the API key. Light commands are paused until it is fixed.",
-  unreachable:
-    "OpenHome is unreachable. Light commands are paused until it responds.",
-  unavailable:
-    "OpenHome is not responding normally. Light commands are paused until it recovers.",
-}
+const connectionMessages = connectionPausedMessages("light")
 
 const failureMessages: Record<LightFailure, string> = {
-  "missing-configuration": "Connect OpenHome before sending a light command.",
-  "invalid-configuration":
-    "The OpenHome connection needs a correction. Open Connection for setup help.",
-  "rejected-credential":
-    "OpenHome rejected the API key. Open Connection for setup help.",
+  ...setupFailureMessages("light"),
   "missing-device":
     "Lights are not configured. Ask the installer to set up SwitchBot in OpenHome, then try again.",
   unreachable:
@@ -54,21 +42,20 @@ const failureMessages: Record<LightFailure, string> = {
     "Command not confirmed. Check the lights and OpenHome’s SwitchBot connection before trying again.",
 }
 
-const setupFailures = new Set<LightFailure>([
-  "missing-configuration",
-  "invalid-configuration",
-  "rejected-credential",
-])
-
 /** Light commands and their acknowledgements stay separate from unknown observed power. */
 export function LightControls({
   layout,
   connectionState,
   sendCommand,
 }: LightControlsProps): React.JSX.Element {
-  const { commandState, send } = useSingleCommand(sendCommand)
-  const pending = commandState.state === "pending"
   const connected = connectionState === "connected"
+
+  const { commandState, send } = useSingleCommand({
+    sendCommand,
+    ready: connected,
+  })
+
+  const pending = commandState.state === "pending"
   let feedback = "Ready to send a command."
   let failure: LightFailure | undefined
 
@@ -86,10 +73,6 @@ export function LightControls({
       feedback = failureMessages[result.reason]
       failure = result.reason
     }
-  }
-
-  function dispatch(command: LightCommand): void {
-    if (connected) void send(command)
   }
 
   return (
@@ -116,7 +99,7 @@ export function LightControls({
           <Button
             size="lg"
             disabled={pending || !connected}
-            onClick={() => dispatch("on")}
+            onClick={() => void send("on")}
           >
             Turn on
           </Button>
@@ -124,7 +107,7 @@ export function LightControls({
             size="lg"
             variant="outline"
             disabled={pending || !connected}
-            onClick={() => dispatch("off")}
+            onClick={() => void send("off")}
           >
             Turn off
           </Button>
@@ -144,8 +127,7 @@ export function LightControls({
         </p>
         <div className="control-links">
           {connected ? null : <CheckAgainButton />}
-          {!connected ||
-          (failure !== undefined && setupFailures.has(failure)) ? (
+          {!connected || (failure !== undefined && isSetupFailure(failure)) ? (
             <Link to="/connection" className="action-link">
               Open Connection
             </Link>

@@ -5,18 +5,14 @@ import { FeatureCard } from "@/components/feature-card"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
 import { TvRemote } from "@/components/tv-remote"
-import { getConnectionHealth } from "@/lib/connection.functions"
+import { loadControls } from "@/lib/controls-loader"
 import { features } from "@/lib/features"
 import { sendLightCommand } from "@/lib/lights.functions"
-import { loadTvRemote, sendTvCommand } from "@/lib/tv.functions"
+import { sendTvCommand } from "@/lib/tv.functions"
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Home · OpenHome" }] }),
-  // TV discovery is deferred so a slow IR remote never delays Home.
-  loader: async () => ({
-    tvRemote: loadTvRemote(),
-    health: await getConnectionHealth(),
-  }),
+  loader: loadControls,
   headers: () => ({ "Cache-Control": "no-store" }),
   component: HomePage,
   errorComponent: HomeError,

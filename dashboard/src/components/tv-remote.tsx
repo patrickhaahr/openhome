@@ -14,6 +14,12 @@ import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import {
+  connectionPausedMessages,
+  type ControlLayout,
+  isSetupFailure,
+  setupFailureMessages,
+} from "@/lib/command-feedback"
 import type { ConnectionState } from "@/lib/connection"
 import {
   tvCommandLabels,
@@ -34,8 +40,7 @@ type TvRemoteProps = {
   /** Deferred discovery, so a slow IR remote never delays the rest of the page. */
   remote: Promise<TvRemoteState>
   sendCommand: SendTvCommand
-  /** Home shows common commands; the Controls view shows the full remote. */
-  layout: "quick" | "full"
+  layout: ControlLayout
 }
 
 type CommandGroup = {
@@ -92,21 +97,10 @@ const commandIcons: Partial<Record<TvCommand, Icon>> = {
   right: CaretRightIcon,
 }
 
-/** Shown before any command is sent, so the copy never suggests the TV responded. */
-const connectionMessages: Record<
-  Exclude<ConnectionState, "connected">,
-  string
-> = {
-  "missing-configuration": "Connect OpenHome before sending a TV command.",
-  "invalid-configuration":
-    "The OpenHome connection needs a correction before TV commands can be sent.",
-  "rejected-credential":
-    "OpenHome rejected the API key. TV commands are paused until it is fixed.",
-  unreachable:
-    "OpenHome is unreachable. TV commands are paused until it responds.",
-  unavailable:
-    "OpenHome is not responding normally. TV commands are paused until it recovers.",
-}
+const connectionMessages = connectionPausedMessages("TV")
+
+const missingDevice =
+  "The TV remote is not configured. Ask the installer to set up the IR remote in OpenHome, then check again."
 
 /** Discovery failures; no command has been sent, so the TV cannot have changed. */
 const discoveryMessages: Record<
@@ -114,8 +108,7 @@ const discoveryMessages: Record<
   string
 > = {
   ...connectionMessages,
-  "missing-device":
-    "The TV remote is not configured. Ask the installer to set up the IR remote in OpenHome, then check again.",
+  "missing-device": missingDevice,
   unreachable:
     "OpenHome did not report the TV commands in time. Check your connection, then check again.",
   unavailable:
@@ -123,13 +116,8 @@ const discoveryMessages: Record<
 }
 
 const failureMessages: Record<TvFailure, string> = {
-  "missing-configuration": "Connect OpenHome before sending a TV command.",
-  "invalid-configuration":
-    "The OpenHome connection needs a correction. Open Connection for setup help.",
-  "rejected-credential":
-    "OpenHome rejected the API key. Open Connection for setup help.",
-  "missing-device":
-    "The TV remote is not configured. Ask the installer to set up the IR remote in OpenHome, then check again.",
+  ...setupFailureMessages("TV"),
+  "missing-device": missingDevice,
   "unsupported-command":
     "The IR remote no longer reports this command. Check again to refresh the available buttons.",
   unreachable:
@@ -137,12 +125,6 @@ const failureMessages: Record<TvFailure, string> = {
   unavailable:
     "Command not confirmed. Check the TV and OpenHome’s IR remote before trying again.",
 }
-
-const setupFailures = new Set<TvFailure>([
-  "missing-configuration",
-  "invalid-configuration",
-  "rejected-credential",
-])
 
 const recheckFailures = new Set<TvFailure>([
   "missing-device",
@@ -156,7 +138,10 @@ export function TvRemote({
   ...props
 }: TvRemoteProps): React.JSX.Element {
   // Held above Await so a re-check that suspends discovery cannot reset the pending-command guard.
-  const command = useSingleCommand(sendCommand)
+  const command = useSingleCommand({
+    sendCommand,
+    ready: props.connectionState === "connected",
+  })
 
   return (
     <Await
@@ -244,10 +229,6 @@ function TvRemoteControls({
     </p>
   )
 
-  function dispatch(command: TvCommand): void {
-    if (connected) void send(command)
-  }
-
   return (
     <TvRemoteCard layout={layout}>
       {/* The full remote is long; keep its outcome beside the commands it describes. */}
@@ -270,7 +251,7 @@ function TvRemoteControls({
                     key={command}
                     command={command}
                     disabled={pending || !connected}
-                    onPress={dispatch}
+                    onPress={(command) => void send(command)}
                   />
                 ))}
               </div>
@@ -289,7 +270,7 @@ function TvRemoteControls({
         (failure !== undefined && recheckFailures.has(failure)) ? (
           <CheckAgainButton />
         ) : null}
-        {!connected || (failure !== undefined && setupFailures.has(failure)) ? (
+        {!connected || (failure !== undefined && isSetupFailure(failure)) ? (
           <Link to="/connection" className="action-link">
             Open Connection
           </Link>
