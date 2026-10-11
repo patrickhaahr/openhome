@@ -2,7 +2,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
 use chrono_tz::Europe::Copenhagen;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -74,7 +74,51 @@ pub struct Forecast {
     pub valid_until: DateTime<Utc>,
     pub timezone: &'static str,
     pub current: Option<CurrentConditions>,
+    pub hourly: Vec<ForecastHour>,
     pub days: Vec<ForecastDay>,
+}
+
+/// Conditions at the start of an hour; precipitation covers that following hour.
+#[derive(Clone, Serialize)]
+pub struct ForecastHour {
+    pub starts_at: DateTime<Utc>,
+    pub temperature_c: Option<f64>,
+    pub wind_ms: Option<f64>,
+    pub precipitation_mm: Option<f64>,
+    pub precipitation_probability_percent: Option<f64>,
+}
+
+impl Forecast {
+    // Select on every read so stale cached data never starts with an elapsed hour.
+    fn upcoming(&self, now: DateTime<Utc>) -> Self {
+        let start = now
+            - chrono::Duration::seconds(now.timestamp().rem_euclid(3600))
+            - chrono::Duration::nanoseconds(i64::from(now.timestamp_subsec_nanos()));
+        let hourly = (0..24)
+            .map(|index| {
+                let starts_at = start + chrono::Duration::hours(index);
+                self.hourly
+                    .iter()
+                    .find(|hour| hour.starts_at == starts_at)
+                    .cloned()
+                    .unwrap_or(ForecastHour {
+                        starts_at,
+                        temperature_c: None,
+                        wind_ms: None,
+                        precipitation_mm: None,
+                        precipitation_probability_percent: None,
+                    })
+            })
+            .collect();
+        Self {
+            fetched_at: self.fetched_at,
+            valid_until: self.valid_until,
+            timezone: self.timezone,
+            current: self.current.clone(),
+            hourly,
+            days: self.days.clone(),
+        }
+    }
 }
 
 /// Modelled current conditions. Null is absence, never zero or clear skies.
@@ -149,10 +193,10 @@ impl WeatherService {
         }
         match &cache.forecast {
             Some(forecast) if now < forecast.valid_until => WeatherRead::Fresh {
-                forecast: forecast.clone(),
+                forecast: forecast.upcoming(now),
             },
             Some(forecast) if now < forecast.fetched_at + MAX_STALE => WeatherRead::Stale {
-                forecast: forecast.clone(),
+                forecast: forecast.upcoming(now),
             },
             _ => WeatherRead::Unavailable {
                 reason: WeatherUnavailable::ProviderUnavailable,
@@ -166,6 +210,7 @@ impl WeatherService {
             ("latitude", self.location.latitude.to_string()),
             ("longitude", self.location.longitude.to_string()),
             ("current", "temperature_2m,apparent_temperature,weather_code,wind_speed_10m".to_string()),
+            ("hourly", "temperature_2m,wind_speed_10m,precipitation,precipitation_probability".to_string()),
             ("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max".to_string()),
             ("timezone", "Europe/Copenhagen".to_string()),
             ("temperature_unit", "celsius".to_string()),
@@ -190,10 +235,82 @@ impl WeatherService {
 #[derive(Deserialize)]
 struct ProviderForecast {
     timezone: String,
+    utc_offset_seconds: i32,
     current_units: Option<CurrentUnits>,
     current: Option<ProviderCurrent>,
+    hourly_units: Option<HourlyUnits>,
+    hourly: Option<ProviderHours>,
     daily_units: DailyUnits,
     daily: ProviderDays,
+}
+
+#[derive(Deserialize)]
+struct HourlyUnits {
+    temperature_2m: String,
+    wind_speed_10m: String,
+    precipitation: String,
+    precipitation_probability: String,
+}
+
+#[derive(Deserialize)]
+struct ProviderHours {
+    time: Vec<i64>,
+    #[serde(default)]
+    temperature_2m: Vec<Option<f64>>,
+    #[serde(default)]
+    wind_speed_10m: Vec<Option<f64>>,
+    #[serde(default)]
+    precipitation: Vec<Option<f64>>,
+    #[serde(default)]
+    precipitation_probability: Vec<Option<f64>>,
+}
+
+impl ProviderHours {
+    fn normalize(self, units: &HourlyUnits) -> Result<Vec<ForecastHour>, ()> {
+        if units.temperature_2m != "°C"
+            || units.wind_speed_10m != "m/s"
+            || units.precipitation != "mm"
+            || units.precipitation_probability != "%"
+            || self.time.len() > 200
+            || self.time.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(());
+        }
+        self.time
+            .iter()
+            .enumerate()
+            .map(|(index, timestamp)| {
+                if timestamp.rem_euclid(3600) != 0 {
+                    return Err(());
+                }
+                // Open-Meteo precipitation is stamped at the END of its interval.
+                // Never shift by array index across a missing hour or a DST transition.
+                let next = timestamp
+                    .checked_add(3600)
+                    .and_then(|end| self.time.binary_search(&end).ok());
+                Ok(ForecastHour {
+                    starts_at: DateTime::from_timestamp(*timestamp, 0).ok_or(())?,
+                    temperature_c: self.temperature_2m.get(index).copied().flatten(),
+                    wind_ms: self
+                        .wind_speed_10m
+                        .get(index)
+                        .copied()
+                        .flatten()
+                        .filter(|v| *v >= 0.0),
+                    precipitation_mm: next
+                        .and_then(|i| self.precipitation.get(i))
+                        .copied()
+                        .flatten()
+                        .filter(|v| *v >= 0.0),
+                    precipitation_probability_percent: next
+                        .and_then(|i| self.precipitation_probability.get(i))
+                        .copied()
+                        .flatten()
+                        .filter(|v| (0.0..=100.0).contains(v)),
+                })
+            })
+            .collect()
+    }
 }
 
 #[derive(Deserialize)]
@@ -239,6 +356,7 @@ impl ProviderForecast {
     fn normalize(self, now: DateTime<Utc>) -> Result<Forecast, ()> {
         let units = &self.daily_units;
         if self.timezone != "Europe/Copenhagen"
+            || !matches!(self.utc_offset_seconds, 3600 | 7200)
             || units.temperature_2m_max != "°C"
             || units.temperature_2m_min != "°C"
             || units.precipitation_sum != "mm"
@@ -265,6 +383,14 @@ impl ProviderForecast {
             _ => return Err(()),
         };
         let first_day = now.with_timezone(&Copenhagen).date_naive();
+        // Daily Unix timestamps retain the provider's fixed request offset across DST.
+        // Copenhagen's offset is still used for the current date and hourly labels.
+        let daily_offset = FixedOffset::east_opt(self.utc_offset_seconds).ok_or(())?;
+        let hourly = match (self.hourly, self.hourly_units) {
+            (Some(hours), Some(units)) => hours.normalize(&units)?,
+            (None, _) => Vec::new(),
+            _ => return Err(()),
+        };
         let days = self
             .daily
             .time
@@ -273,7 +399,7 @@ impl ProviderForecast {
             .map(|(index, timestamp)| {
                 let date = DateTime::from_timestamp(*timestamp, 0)
                     .ok_or(())?
-                    .with_timezone(&Copenhagen)
+                    .with_timezone(&daily_offset)
                     .date_naive();
                 if Some(date) != first_day.checked_add_days(chrono::Days::new(index as u64)) {
                     return Err(());
@@ -305,6 +431,7 @@ impl ProviderForecast {
             valid_until: now + TTL,
             timezone: "Europe/Copenhagen",
             current,
+            hourly,
             days,
         })
     }
@@ -313,7 +440,7 @@ impl ProviderForecast {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use chrono::Offset;
     use serde_json::{Value, json};
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
@@ -325,19 +452,33 @@ mod tests {
             serde_json::from_str(include_str!("../../tests/fixtures/weather-copenhagen.json"))
                 .unwrap();
         let first = now.with_timezone(&Copenhagen).date_naive();
+        // Open-Meteo daily Unix timestamps use one fixed request offset, even across DST.
+        let offset = now
+            .with_timezone(&Copenhagen)
+            .offset()
+            .fix()
+            .local_minus_utc();
+        body["utc_offset_seconds"] = json!(offset);
+        let first_timestamp =
+            first.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp() - i64::from(offset);
         body["daily"]["time"] = json!(
             (0..7)
-                .map(|index| {
-                    let day = first.checked_add_days(chrono::Days::new(index)).unwrap();
-                    Copenhagen
-                        .from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap())
-                        .single()
-                        .unwrap()
-                        .timestamp()
-                })
+                .map(|index| first_timestamp + index * 86_400)
                 .collect::<Vec<_>>()
         );
         body["current"]["time"] = json!(now.timestamp());
+        let start = now.timestamp().div_euclid(3600) * 3600;
+        body["hourly_units"] = json!({
+            "temperature_2m": "°C", "wind_speed_10m": "m/s",
+            "precipitation": "mm", "precipitation_probability": "%"
+        });
+        body["hourly"] = json!({
+            "time": (0..36).map(|i| start + i * 3600).collect::<Vec<_>>(),
+            "temperature_2m": vec![Some(12.5); 36],
+            "wind_speed_10m": vec![Some(4.2); 36],
+            "precipitation": vec![Some(0.3); 36],
+            "precipitation_probability": vec![Some(25.0); 36]
+        });
         body
     }
 
@@ -352,12 +493,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn serves_upcoming_hours_across_dst_with_gaps_and_end_timestamped_precipitation() {
+        for instant in ["2026-03-29T00:30:00Z", "2026-10-25T00:30:00Z"] {
+            let now: DateTime<Utc> = instant.parse().unwrap();
+            let server = MockServer::start().await;
+            let mut body = fixture(now);
+            body["hourly"]["precipitation"][0] = json!(9.0);
+            body["hourly"]["precipitation"][1] = json!(0.7);
+            body["hourly"]["precipitation_probability"][1] = json!(60.0);
+            body["hourly"]["temperature_2m"][1] = Value::Null;
+            body["hourly"]["wind_speed_10m"][1] = json!(-1);
+            body["hourly"]["precipitation_probability"][2] = json!(101);
+            // Drop a timestamp and every corresponding value, preserving a true gap.
+            for field in [
+                "time",
+                "temperature_2m",
+                "wind_speed_10m",
+                "precipitation",
+                "precipitation_probability",
+            ] {
+                body["hourly"][field].as_array_mut().unwrap().remove(3);
+            }
+            Mock::given(method("GET"))
+                .and(query_param(
+                    "hourly",
+                    "temperature_2m,wind_speed_10m,precipitation,precipitation_probability",
+                ))
+                .respond_with(ResponseTemplate::new(200).set_body_json(body))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let service = service(&server);
+            let response = serde_json::to_value(service.read_at(now).await).unwrap();
+            assert_eq!(response["state"], "fresh");
+            let hours = response["forecast"]["hourly"].as_array().unwrap();
+            assert_eq!(hours.len(), 24);
+            assert_eq!(hours[0]["starts_at"], instant.replace("30:00", "00:00"));
+            assert_eq!(hours[0]["temperature_c"], 12.5);
+            assert_eq!(hours[0]["wind_ms"], 4.2);
+            assert_eq!(hours[0]["precipitation_mm"], 0.7);
+            assert_eq!(hours[0]["precipitation_probability_percent"], 60.0);
+            assert_eq!(hours[1]["temperature_c"], Value::Null);
+            assert_eq!(hours[1]["wind_ms"], Value::Null);
+            assert_eq!(hours[1]["precipitation_probability_percent"], Value::Null);
+            assert_eq!(hours[2]["precipitation_mm"], Value::Null);
+            assert_eq!(hours[3]["temperature_c"], Value::Null);
+            assert_eq!(hours[4]["temperature_c"], 12.5);
+            server.verify().await;
+            server.reset().await;
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(503))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let stale =
+                serde_json::to_value(service.read_at(now + chrono::Duration::hours(1)).await)
+                    .unwrap();
+            assert_eq!(stale["state"], "stale");
+            assert_eq!(
+                stale["forecast"]["fetched_at"],
+                response["forecast"]["fetched_at"]
+            );
+            assert_eq!(stale["forecast"]["hourly"][0], hours[1]);
+        }
+    }
+
+    #[tokio::test]
     async fn normalizes_danish_calendar_days_across_dst_and_preserves_missing_values() {
         for instant in ["2026-03-28T23:30:00Z", "2026-10-24T22:30:00Z"] {
             let now: DateTime<Utc> = instant.parse().unwrap();
             let server = MockServer::start().await;
             let mut body = fixture(now);
             body["current"]["temperature_2m"] = Value::Null;
+            body.as_object_mut().unwrap().remove("hourly");
+            body.as_object_mut().unwrap().remove("hourly_units");
             body["daily"]["precipitation_sum"] = json!([null, 0.2]);
             Mock::given(method("GET"))
                 .and(query_param("timezone", "Europe/Copenhagen"))
@@ -369,6 +578,15 @@ mod tests {
                 .await;
             let response = serde_json::to_value(service(&server).read_at(now).await).unwrap();
             assert_eq!(response["state"], "fresh");
+            assert_eq!(response["forecast"]["hourly"].as_array().unwrap().len(), 24);
+            assert_eq!(
+                response["forecast"]["hourly"][0]["temperature_c"],
+                Value::Null
+            );
+            assert_eq!(
+                response["forecast"]["hourly"][0]["precipitation_mm"],
+                Value::Null
+            );
             assert_eq!(
                 response["forecast"]["days"][0]["date"],
                 if instant.starts_with("2026-03") {
@@ -485,8 +703,15 @@ mod tests {
         let now: DateTime<Utc> = "2026-10-11T10:00:00Z".parse().unwrap();
         for (field, value) in [
             ("timezone", json!("UTC")),
+            ("utc_offset_seconds", json!(0)),
             ("daily_units", json!({})),
             ("daily", json!({ "time": [] })),
+            (
+                "hourly_units",
+                json!({ "temperature_2m": "°C", "wind_speed_10m": "mph", "precipitation": "mm", "precipitation_probability": "%" }),
+            ),
+            ("hourly", json!({ "time": [1, 1] })),
+            ("hourly", json!({ "time": [i64::MAX] })),
             (
                 "current_units",
                 json!({ "temperature_2m": "°F", "apparent_temperature": "°F", "wind_speed_10m": "mph" }),
