@@ -121,6 +121,12 @@ api-test-integration name:
 api-run:
     cargo run
 
+# Apply main API migrations to DATABASE_URL
+[group('api')]
+[working-directory: 'api']
+api-migrate:
+    sqlx migrate run
+
 # Regenerate the offline SQLx query cache (api/.sqlx) used by the SQLX_OFFLINE Docker build
 [group('api')]
 [working-directory: 'api']

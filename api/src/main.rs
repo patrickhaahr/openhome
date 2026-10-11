@@ -140,6 +140,11 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::ir::router())
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
+        .merge(routes::wishlist::router(
+            std::env::var("WISHLIST_DEFAULT_LIST_ID")
+                .ok()
+                .filter(|id| !id.trim().is_empty()),
+        ))
         .merge(routes::weather::router(weather_service))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {

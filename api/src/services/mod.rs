@@ -6,3 +6,4 @@ pub mod noop_push;
 pub mod switchbot;
 pub mod training;
 pub mod weather;
+pub mod wishlist;

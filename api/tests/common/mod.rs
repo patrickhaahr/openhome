@@ -151,6 +151,7 @@ fn test_app_with_pools(
         .merge(switchbot_router())
         .merge(timeline_router())
         .merge(training_router())
+        .merge(openhome_api::routes::wishlist::router(None))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             auth_middleware(req, next, api_key_clone.clone())
