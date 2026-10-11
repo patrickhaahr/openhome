@@ -1352,7 +1352,7 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
         (0..count)
             .map(|index| {
                 let start = SEP_20 + index * 600;
-                sleep(start, start + 300, json!({}))
+                sleep(start, start + 300, json!({"userEdited": index == 24}))
             })
             .collect()
     };
@@ -1361,7 +1361,19 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
     let body = full.recovery_day("2026-09-20").await;
     assert_eq!(body["sleep"]["sessions"].as_array().unwrap().len(), 24);
 
-    let over = covered_mirror(&[], &[], &[], &naps(25)).await;
+    let over = covered_mirror(
+        &[daily(
+            "2026-09-20",
+            json!({"totalSleepMin": 400.0, "efficiency": 0.8, "restingHr": 50.0}),
+        )],
+        &[daily(
+            "2026-09-20",
+            json!({"totalSleepMin": 430.0, "efficiency": 0.9, "restingHr": 40.0, "avgHrv": 70.0}),
+        )],
+        &[],
+        &naps(25),
+    )
+    .await;
     let (status, body) = over.recovery("2026-09-20", Some(API_KEY)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
@@ -1375,4 +1387,48 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
     // The previous night is unaffected.
     let previous = over.recovery_day("2026-09-19").await;
     assert_eq!(previous["sleep"]["sessions"], json!([]));
+
+    // Summary reads still resolve the edited night without loading its over-cap sessions.
+    let app = common::test_app_with_noop_db(over.db).await;
+    let (status, context) = common::send_request(
+        app.clone(),
+        "/api/training/context/2026-09-20/2026-09-20",
+        Some(API_KEY),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{context}");
+    assert_eq!(
+        context["days"][0]["sleep_duration"],
+        measured(json!(430.0), "min", COMPUTED)
+    );
+    assert_eq!(
+        context["days"][0]["resting_hr"],
+        measured(json!(50.0), "beats/min", IMPORTED)
+    );
+    assert_eq!(
+        context["days"][0]["hrv_rmssd"],
+        measured(json!(70.0), "ms", COMPUTED)
+    );
+
+    for (metric, value, unit, source) in [
+        ("sleep_duration", 430.0, "min", COMPUTED),
+        ("resting_heart_rate", 50.0, "beats/min", IMPORTED),
+        ("hrv", 70.0, "ms", COMPUTED),
+    ] {
+        let (status, trend) = common::send_request(
+            app.clone(),
+            &format!("/api/training/trends/{metric}/2026-09-20/2026-09-20"),
+            Some(API_KEY),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{metric}: {trend}");
+        assert_eq!(
+            trend["daily_points"],
+            json!([{
+                "day": "2026-09-20", "value": value, "unit": unit, "source": source,
+                "freshness": "confirmed", "coverage": "covered",
+            }]),
+            "{metric}",
+        );
+    }
 }

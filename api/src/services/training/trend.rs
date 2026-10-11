@@ -8,9 +8,10 @@ use sqlx::SqlitePool;
 use crate::error::{AppError, Result};
 
 use super::calendar::{self, CalendarDay, TIME_ZONE_NAME, days};
-use super::noop_merge::{Namespace, ResolvedDaily, Sourced};
 use super::noop_source::{self, Coverage, Freshness, Rows, Stream};
-use super::recovery::{self, BEATS_PER_MINUTE, MILLISECONDS, MINUTES};
+use super::recovery;
+
+pub use super::recovery::NoopMetric;
 
 /// Body Weight's unit; the daily Body Weight log stores kilograms.
 pub(super) const KILOGRAMS: &str = "kg";
@@ -22,13 +23,6 @@ pub(super) const BODY_WEIGHT_SOURCE: &str = "body_weight";
 pub enum Metric {
     BodyWeight,
     Noop(NoopMetric),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum NoopMetric {
-    SleepDuration,
-    RestingHeartRate,
-    Hrv,
 }
 
 impl Metric {
@@ -56,28 +50,6 @@ impl Metric {
         match self {
             Self::BodyWeight => KILOGRAMS,
             Self::Noop(metric) => metric.unit(),
-        }
-    }
-}
-
-impl NoopMetric {
-    const fn unit(self) -> &'static str {
-        match self {
-            Self::SleepDuration => MINUTES,
-            Self::RestingHeartRate => BEATS_PER_MINUTE,
-            Self::Hrv => MILLISECONDS,
-        }
-    }
-
-    const fn reads_sleep(self) -> bool {
-        matches!(self, Self::SleepDuration)
-    }
-
-    const fn select(self, daily: &ResolvedDaily) -> Sourced<f64> {
-        match self {
-            Self::SleepDuration => daily.total_sleep_min,
-            Self::RestingHeartRate => daily.resting_hr,
-            Self::Hrv => daily.avg_hrv,
         }
     }
 }
@@ -206,14 +178,9 @@ pub async fn metric_trend(
                 let pushed = noop_source::last_push_at(noop_db, &installation, streams).await?;
                 last_push_at = pushed.map(calendar::iso);
                 for day in days(from_day, to_day) {
-                    let edited = if noop_metric.reads_sleep() {
-                        recovery::sleep_edited(noop_db, &installation, day).await?
-                    } else {
-                        false
-                    };
-                    let resolved =
-                        recovery::daily_metrics(noop_db, &installation, day, edited).await?;
-                    let sourced = noop_metric.select(&resolved);
+                    let measurement =
+                        recovery::metric_measurement(noop_db, &installation, day, noop_metric)
+                            .await?;
                     let rows = [Rows::DailyMetrics(day), Rows::SleepSessions(day)];
                     let relevant = if noop_metric.reads_sleep() {
                         &rows[..]
@@ -235,9 +202,9 @@ pub async fn metric_trend(
                             .await?;
                     daily_points.push(DailyPoint {
                         day: day.to_string(),
-                        value: sourced.value,
-                        unit,
-                        source: sourced.source.map(Namespace::device_id),
+                        value: measurement.value,
+                        unit: measurement.unit,
+                        source: measurement.source,
                         freshness: Some(freshness),
                         coverage: Some(coverage),
                     });

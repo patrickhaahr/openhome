@@ -4,6 +4,8 @@
 //! bounds, matching NOOP's daily rows, which are keyed by wake day. Every value carries its unit
 //! and the namespace it was selected from, and the `noop` block says how far the receiver's copy
 //! can be trusted, so a missing sync is never mistaken for a recorded null.
+//! Training Context and metric trends read focused measurements here without loading sessions;
+//! edit detection and daily source selection remain private to this module.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -56,12 +58,50 @@ pub struct Measurement<T> {
 }
 
 impl<T> Measurement<T> {
-    pub(super) fn new(sourced: Sourced<T>, unit: &'static str) -> Self {
+    fn new(sourced: Sourced<T>, unit: &'static str) -> Self {
         Self {
             value: sourced.value,
             unit,
             source: sourced.source.map(Namespace::device_id),
         }
+    }
+}
+
+/// The daily measurements Training Context includes, without sleep sessions or Journal Entries.
+pub(super) struct TrainingMeasurements {
+    pub sleep_duration: Measurement<f64>,
+    pub resting_hr: Measurement<f64>,
+    pub hrv_rmssd: Measurement<f64>,
+}
+
+/// A daily NOOP measurement available as a metric trend.
+#[derive(Debug, Clone, Copy)]
+pub enum NoopMetric {
+    SleepDuration,
+    RestingHeartRate,
+    Hrv,
+}
+
+impl NoopMetric {
+    pub(super) const fn unit(self) -> &'static str {
+        match self {
+            Self::SleepDuration => MINUTES,
+            Self::RestingHeartRate => BEATS_PER_MINUTE,
+            Self::Hrv => MILLISECONDS,
+        }
+    }
+
+    pub(super) const fn reads_sleep(self) -> bool {
+        matches!(self, Self::SleepDuration)
+    }
+
+    fn measurement(self, daily: &ResolvedDaily) -> Measurement<f64> {
+        let sourced = match self {
+            Self::SleepDuration => daily.total_sleep_min,
+            Self::RestingHeartRate => daily.resting_hr,
+            Self::Hrv => daily.avg_hrv,
+        };
+        Measurement::new(sourced, self.unit())
     }
 }
 
@@ -131,9 +171,9 @@ pub struct RecoveryCoverage {
 /// resolved daily values, and the sync state of both.
 pub(super) struct Night {
     pub sleep: Sleep,
-    pub daily: ResolvedDaily,
+    daily: ResolvedDaily,
     pub noop: NoopSync<NoopCoverage>,
-    pub installation: Option<Installation>,
+    installation: Option<Installation>,
 }
 
 pub(super) const MINUTES: &str = "min";
@@ -249,9 +289,38 @@ fn sleep(daily: &ResolvedDaily, sessions: Vec<SleepSession>) -> Sleep {
     }
 }
 
-/// Whether a computed session waking on this Copenhagen day was edited in NOOP. Trends use this
-/// bounded lookup because they do not fetch the full sessions that a Recovery Day already has.
-pub(super) async fn sleep_edited(
+/// The three daily measurements used by Training Context. Edited sleep is resolved with a bounded
+/// lookup, so the full Sleep Night's session cap and Journal Entries cannot affect this read.
+pub(super) async fn training_measurements(
+    pool: &SqlitePool,
+    installation: &Installation,
+    day: CalendarDay,
+) -> Result<TrainingMeasurements> {
+    let edited = sleep_edited(pool, installation, day).await?;
+    let daily = daily_metrics(pool, installation, day, edited).await?;
+    Ok(TrainingMeasurements {
+        sleep_duration: NoopMetric::SleepDuration.measurement(&daily),
+        resting_hr: NoopMetric::RestingHeartRate.measurement(&daily),
+        hrv_rmssd: NoopMetric::Hrv.measurement(&daily),
+    })
+}
+
+/// One metric trend's daily measurement. Only sleep duration needs edited-Sleep-Night evidence;
+/// resting heart rate and HRV are selected entirely from the daily rows.
+pub(super) async fn metric_measurement(
+    pool: &SqlitePool,
+    installation: &Installation,
+    day: CalendarDay,
+    metric: NoopMetric,
+) -> Result<Measurement<f64>> {
+    let edited = metric.reads_sleep() && sleep_edited(pool, installation, day).await?;
+    let daily = daily_metrics(pool, installation, day, edited).await?;
+    Ok(metric.measurement(&daily))
+}
+
+/// Whether a computed session waking on this Copenhagen day was edited in NOOP. Summary reads use
+/// this bounded lookup; the full Recovery Day reuses the sessions it already fetched.
+async fn sleep_edited(
     pool: &SqlitePool,
     installation: &Installation,
     day: CalendarDay,
@@ -270,7 +339,7 @@ pub(super) async fn sleep_edited(
     Ok(edited != 0)
 }
 
-pub(super) async fn daily_metrics(
+async fn daily_metrics(
     pool: &SqlitePool,
     installation: &Installation,
     day: CalendarDay,
