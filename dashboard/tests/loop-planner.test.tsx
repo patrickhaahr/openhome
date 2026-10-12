@@ -264,9 +264,44 @@ test("shows Axum's reason for an unsupported target and asks for missing input",
   await type("Steps", "")
   await click("Plan loops")
   expect(container.textContent).toContain("Enter a whole number of steps.")
+
+  const steps = container.querySelector("[aria-invalid=true]")
+
+  const problem = document.getElementById(
+    steps?.getAttribute("aria-describedby") ?? ""
+  )
+
+  expect(problem?.textContent).toBe("Enter a whole number of steps.")
+
   expect(requests).toHaveLength(1)
   expect(routes).toEqual([])
 })
+
+test.each([
+  {
+    target: "Steps",
+    field: "Steps",
+    value: "9007199254740992",
+    message: "Enter a whole number of steps.",
+  },
+  {
+    target: "Custom",
+    field: "Distance in km",
+    value: "0.0004",
+    message: "Enter a distance in kilometres.",
+  },
+])(
+  "explains an unrepresentable $field target before sending it",
+  async ({ target, field, value, message }) => {
+    await render()
+    await click(target)
+    await type(field, value)
+    await click("Plan loops")
+    expect(container.textContent).toContain(message)
+    expect(requests).toEqual([])
+    expect(routes).toEqual([])
+  }
+)
 
 test("keeps earlier loops usable when a later request fails, and never draws an invalid route", async () => {
   const plan = await generatedPlan()
@@ -339,6 +374,9 @@ test("explains too few matching loops and labels deviations without calling them
   await click("Plan loops")
   expect(container.textContent).toContain(
     "The search used all its attempts. Only 1 distinct loop came within ±10% of the target. The closest others are shown with their deviation."
+  )
+  expect(container.querySelector("[role=status]")?.textContent).toContain(
+    "Only 1 distinct loop came within ±10% of the target."
   )
   const [, deviation] = alternatives()
   expect(deviation?.textContent).toContain("4.30 km")

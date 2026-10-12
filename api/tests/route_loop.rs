@@ -1,5 +1,7 @@
 mod common;
 
+use std::time::Duration;
+
 use axum::{
     Router,
     http::{Method, StatusCode},
@@ -303,6 +305,98 @@ async fn reports_fewer_distinct_matches_and_labels_deviations_without_padding() 
 }
 
 #[tokio::test]
+async fn replaces_a_near_miss_with_a_matching_loop_on_the_same_streets() {
+    // The 5 km square plus a 400 m out-and-back spur: 5.8 km, 16% long.
+    let square_ne = rectangle(ORIGIN, 1250, NORTH_EAST);
+    let spur = rectangle(ORIGIN, 400, SOUTH_EAST);
+    let mut near_miss = square_ne.clone();
+    near_miss.extend(&spur[1..=8]);
+    near_miss.extend(spur[1..8].iter().rev());
+    near_miss.push(ORIGIN);
+    let server = MockServer::start().await;
+    answer_seed(&server, 1, ok(trip(&near_miss, 5800.0)), 1).await;
+    answer_seed(&server, 2, ok(trip(&square_ne, 5000.0)), 1).await;
+    for seed in 3..=6 {
+        answer_seed(&server, seed, ok(trip(&square_ne, 5000.0)), 1).await;
+    }
+
+    let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
+    let loops = body["plan"]["loops"].as_array().unwrap();
+    assert_eq!(loops.len(), 1);
+    assert_eq!(loops[0]["within_tolerance"], true);
+}
+
+#[tokio::test]
+async fn keeps_searching_when_a_later_seed_cannot_place_its_waypoints() {
+    let server = MockServer::start().await;
+    answer_seed(&server, 1, ok(square(5000, NORTH_EAST)), 1).await;
+    answer_seed(
+        &server,
+        2,
+        ResponseTemplate::new(404).set_body_json(json!({ "error": { "code": 2010 } })),
+        1,
+    )
+    .await;
+    answer_seed(&server, 3, ok(square(5100, NORTH_WEST)), 1).await;
+    answer_seed(&server, 4, ok(square(4900, SOUTH_WEST)), 1).await;
+    for seed in 5..=6 {
+        answer_seed(&server, seed, ok(square(5000, SOUTH_EAST)), 0).await;
+    }
+
+    let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
+    assert_eq!(body["plan"]["search"], "complete");
+    assert_eq!(distances(&body["plan"]).len(), 3);
+}
+
+#[tokio::test]
+async fn matches_the_tolerance_verdict_to_the_displayed_percentage() {
+    // Southbound squares measure just over 10% and 10.05% long respectively.
+    // Only the first rounds to the displayed 10.0% tolerance boundary.
+    for (perimeter, percent, matches) in [(5500, 10.0, true), (5504, 10.1, false)] {
+        let server = provider(ok(square(perimeter, SOUTH_EAST)), MAX_ATTEMPTS).await;
+        let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
+        let route = &body["plan"]["loops"][0];
+        assert_eq!(route["deviation_percent"], percent);
+        assert_eq!(route["within_tolerance"], matches);
+    }
+}
+
+#[tokio::test]
+async fn bounds_a_queued_search_and_reports_provider_unavailability() {
+    let server = MockServer::start().await;
+    // Three slow, individually valid responses occupy the provider for 27 s.
+    for (seed, direction) in [(1, NORTH_EAST), (2, NORTH_WEST), (3, SOUTH_WEST)] {
+        answer_seed(
+            &server,
+            seed,
+            ok(square(5000, direction)).set_delay(Duration::from_secs(9)),
+            1,
+        )
+        .await;
+    }
+    let app = app(demo(), Some(&server)).await;
+    let first = tokio::spawn(generate(app.clone(), walk(5000)));
+    // Start the different-target request only once the provider has received the first.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while server.received_requests().await.unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the first search must reach the provider");
+
+    let queued = tokio::time::timeout(Duration::from_secs(22), generate(app, walk(10_000))).await;
+    let (_, first) = first.await.unwrap();
+    assert_eq!(first["plan"]["search"], "complete");
+    let (status, body) = queued.expect("a queued search must answer within its own time budget");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({ "state": "unavailable", "reason": "provider-unavailable" })
+    );
+}
+
+#[tokio::test]
 async fn corrects_later_requests_for_a_provider_that_overshoots() {
     let server = MockServer::start().await;
     // 6.25 km for 5 km overshoots by 25%, so the next request asks for 4 km.
@@ -437,6 +531,12 @@ async fn reports_no_route_refusal_and_outage_outcomes_without_upstream_text() {
         ),
         (
             ResponseTemplate::new(502).set_body_string("synthetic-upstream-detail"),
+            1,
+            "provider-unavailable",
+        ),
+        // A rate-limited or over-quota instance is a provider failure (ADR 0008).
+        (
+            ResponseTemplate::new(429).set_body_json(json!({ "error": { "code": 2099 } })),
             1,
             "provider-unavailable",
         ),

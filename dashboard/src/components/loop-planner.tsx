@@ -11,6 +11,7 @@ import {
   describeEstimatedSteps,
   describeFailure,
   describePlan,
+  describeCount,
   describeShortfall,
   formatKilometers,
   type Activity,
@@ -40,10 +41,16 @@ const INITIAL_FORM: Form = {
   stepLength: { walking: "75", running: "100" },
 }
 
+/** The typed input a problem belongs to. */
+type Field = "kilometers" | "steps" | "step-length"
+
+/** What is missing before a request can be sent, and where. */
+type Problem = { readonly field: Field; readonly message: string }
+
 /** The request the form describes, or what is missing before one can be sent. */
 type FormRead =
   | { readonly state: "ready"; readonly request: LoopRequest }
-  | { readonly state: "incomplete"; readonly message: string }
+  | ({ readonly state: "incomplete" } & Problem)
 
 /** A failed request: Axum's outcome, a rejected target or a lost connection. */
 type Failure = Exclude<LoopRead, { state: "generated" }>
@@ -52,7 +59,7 @@ type Failure = Exclude<LoopRead, { state: "generated" }>
 type Status =
   | { readonly state: "idle" | "planning" | "planned" }
   | { readonly state: "failed"; readonly failure: Failure }
-  | { readonly state: "incomplete"; readonly message: string }
+  | ({ readonly state: "incomplete" } & Problem)
 
 /** The loops on screen; they stay usable when a later request fails. */
 type Shown = {
@@ -61,7 +68,7 @@ type Shown = {
   readonly focused: number
 }
 
-const LETTERS = ["A", "B", "C", "D", "E", "F"]
+const LETTERS = ["A", "B", "C"]
 
 /**
  * Plan walking or running loops from the shared map origin by distance or
@@ -118,6 +125,23 @@ export function LoopPlanner({
   }
 
   const busy = status.state === "planning"
+  const problemId = `${id}-problem`
+
+  /** Marks the input a problem belongs to and describes it with the message. */
+  function problemFor(
+    field: Field,
+    hint?: string
+  ): { "aria-invalid": boolean; "aria-describedby"?: string } {
+    const invalid = status.state === "incomplete" && status.field === field
+
+    const describedBy = [hint, invalid ? problemId : undefined]
+      .filter((part) => part !== undefined)
+      .join(" ")
+
+    return describedBy === ""
+      ? { "aria-invalid": invalid }
+      : { "aria-invalid": invalid, "aria-describedby": describedBy }
+  }
 
   return (
     <Card aria-busy={busy}>
@@ -194,6 +218,7 @@ export function LoopPlanner({
                     id={`${id}-kilometers`}
                     inputMode="decimal"
                     autoComplete="off"
+                    {...problemFor("kilometers")}
                     value={form.kilometers}
                     onChange={(event) =>
                       setForm({ ...form, kilometers: event.target.value })
@@ -208,6 +233,7 @@ export function LoopPlanner({
                     id={`${id}-steps`}
                     inputMode="numeric"
                     autoComplete="off"
+                    {...problemFor("steps")}
                     value={form.steps}
                     onChange={(event) =>
                       setForm({ ...form, steps: event.target.value })
@@ -226,7 +252,7 @@ export function LoopPlanner({
                 inputMode="numeric"
                 autoComplete="off"
                 disabled={busy}
-                aria-describedby={`${id}-step-length-hint`}
+                {...problemFor("step-length", `${id}-step-length-hint`)}
                 value={form.stepLength[form.activity]}
                 onChange={(event) =>
                   setForm({
@@ -247,7 +273,11 @@ export function LoopPlanner({
             </Button>
           </form>
           <div role="status" className="loop-planner-status">
-            <StatusMessage status={status} shown={shown} />
+            <StatusMessage
+              status={status}
+              shown={shown}
+              problemId={problemId}
+            />
           </div>
           {shown === undefined ? null : (
             <LoopAlternatives shown={shown} onFocus={focus} />
@@ -281,6 +311,7 @@ function readForm(form: Form): FormRead {
   if (stepLength === undefined)
     return {
       state: "incomplete",
+      field: "step-length",
       message: "Enter the step length in whole centimetres.",
     }
 
@@ -290,9 +321,7 @@ function readForm(form: Form): FormRead {
   }
 }
 
-function readTarget(
-  form: Form
-): LoopRequest["target"] | { readonly message: string } {
+function readTarget(form: Form): LoopRequest["target"] | Problem {
   switch (form.target) {
     case "5k":
       return { kind: "distance", meters: 5000 }
@@ -300,18 +329,21 @@ function readTarget(
       return { kind: "distance", meters: 10_000 }
     case "distance": {
       const text = form.kilometers.trim().replace(",", ".")
-      const kilometers = /^\d+(\.\d+)?$/.test(text) ? Number(text) : 0
 
-      return kilometers > 0
-        ? { kind: "distance", meters: Math.round(kilometers * 1000) }
-        : { message: "Enter a distance in kilometres." }
+      const meters = /^\d+(\.\d+)?$/.test(text)
+        ? Math.round(Number(text) * 1000)
+        : 0
+
+      return Number.isSafeInteger(meters) && meters > 0
+        ? { kind: "distance", meters }
+        : { field: "kilometers", message: "Enter a distance in kilometres." }
     }
 
     case "steps": {
       const steps = wholeNumber(form.steps)
 
       return steps === undefined
-        ? { message: "Enter a whole number of steps." }
+        ? { field: "steps", message: "Enter a whole number of steps." }
         : { kind: "steps", steps }
     }
   }
@@ -322,15 +354,17 @@ function wholeNumber(text: string): number | undefined {
   const trimmed = text.trim()
   const value = /^\d+$/.test(trimmed) ? Number(trimmed) : 0
 
-  return value > 0 ? value : undefined
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 
 function StatusMessage({
   status,
   shown,
+  problemId,
 }: {
   status: Status
   shown: Shown | undefined
+  problemId: string
 }): React.JSX.Element | null {
   switch (status.state) {
     case "idle":
@@ -344,15 +378,17 @@ function StatusMessage({
     case "planned":
       return shown === undefined ? null : (
         <p className="loop-planner-hint">
-          Found{" "}
-          {shown.plan.loops.length === 1
-            ? "1 loop"
-            : `${shown.plan.loops.length} loops`}
-          . Shown on the map; each starts and ends near the origin.
+          Found {describeCount(shown.plan.loops.length, "loop")}. Shown on the
+          map; each starts and ends near the origin.
+          <ShortfallAnnouncement plan={shown.plan} />
         </p>
       )
     case "incomplete":
-      return <p className="loop-planner-problem">{status.message}</p>
+      return (
+        <p id={problemId} className="loop-planner-problem">
+          {status.message}
+        </p>
+      )
     case "failed": {
       const { title, detail } = describeFailure(status.failure)
 
@@ -369,6 +405,19 @@ function StatusMessage({
       )
     }
   }
+}
+
+/** Announces a shortfall with the result; it is shown visibly beside the loops. */
+function ShortfallAnnouncement({
+  plan,
+}: {
+  plan: LoopPlan
+}): React.JSX.Element | null {
+  const shortfall = describeShortfall(plan)
+
+  return shortfall === undefined ? null : (
+    <span className="sr-only"> {shortfall}</span>
+  )
 }
 
 function LoopAlternatives({
@@ -391,9 +440,10 @@ function LoopAlternatives({
       <ul>
         {plan.loops.map((route, index) => (
           <li key={index}>
-            <button
+            <Button
               type="button"
-              className="loop-alternative"
+              variant="loop"
+              className="h-auto"
               aria-pressed={index === shown.focused}
               data-fit={route.within_tolerance ? "within" : "outside"}
               onClick={() => onFocus(index)}
@@ -410,7 +460,7 @@ function LoopAlternatives({
               <span className="loop-alternative-steps">
                 {describeEstimatedSteps({ route, plan })}
               </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

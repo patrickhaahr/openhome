@@ -103,6 +103,10 @@ rendering path end to end.
   step length; repeated loops are not counted twice; a 16% deviation is kept but
   never labelled a match; later requests are corrected for overshoot; completed
   searches are served from the cache while interrupted ones are retried;
+  matching loops replace near-misses on the same streets; a later waypoint
+  refusal does not end the search; tolerance labels agree at the rounding
+  boundary; a queued search reports provider unavailability within its own
+  time budget;
   no-route, outage and invalid responses stay explicit outcomes; invalid
   targets and step lengths are rejected before the provider is contacted.
 - Dashboard component tests run against the real Axum fixture: the 5 km preset
@@ -111,6 +115,8 @@ rendering path end to end.
   running step length and labels steps as estimates; Axum's reason for an
   unsupported target is shown; failures keep the earlier loops and their
   heading; a shortfall is explained and deviations are labelled outside ±10%.
+  Input errors identify and describe their field, and the result announcement
+  includes any shortfall explanation.
 - Desktop preview: the map stays in view beside the planner while scrolling to
   compare alternatives in landscape and the planner follows the map in
   portrait.

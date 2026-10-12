@@ -2,14 +2,16 @@ import { z } from "zod"
 
 const activity = z.enum(["walking", "running"])
 
+const distanceTarget = z.object({
+  kind: z.literal("distance"),
+  meters: z.number().int().positive(),
+})
+
 /** A request for loops from the shared map origin; Axum owns the supported ranges. */
 export const loopRequest = z.object({
   activity,
   target: z.discriminatedUnion("kind", [
-    z.object({
-      kind: z.literal("distance"),
-      meters: z.number().int().positive(),
-    }),
+    distanceTarget,
     z.object({ kind: z.literal("steps"), steps: z.number().int().positive() }),
   ]),
   step_length_cm: z.number().int().positive(),
@@ -41,10 +43,7 @@ const generatedLoop = z.object({
 const loopPlan = z.object({
   activity,
   target: z.discriminatedUnion("kind", [
-    z.object({
-      kind: z.literal("distance"),
-      meters: z.number().int().positive(),
-    }),
+    distanceTarget,
     z.object({
       kind: z.literal("steps"),
       steps: z.number().int().positive(),
@@ -178,20 +177,22 @@ export function describeShortfall(plan: LoopPlan): string | undefined {
   const found =
     matching === 0
       ? `No loop came ${tolerance}`
-      : `Only ${matching === 1 ? "1 distinct loop" : `${matching} distinct loops`} came ${tolerance}`
+      : `Only ${describeCount(matching, "distinct loop")} came ${tolerance}`
 
   const rest =
     plan.loops.length > matching
       ? " The closest others are shown with their deviation."
       : ""
 
-  switch (plan.search) {
-    case "interrupted":
-      return `The route planner stopped before the search finished. ${found}.${rest}`
-    case "exhausted":
-    case "complete":
-      return `The search used all its attempts. ${found}.${rest}`
-  }
+  // A complete search found enough matches, so only these two can fall short.
+  return plan.search === "interrupted"
+    ? `The route planner stopped before the search finished. ${found}.${rest}`
+    : `The search used all its attempts. ${found}.${rest}`
+}
+
+/** A count with its noun, such as "1 loop" or "3 loops". */
+export function describeCount(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
 
 /** A short heading and the next step for a missing loop. */
