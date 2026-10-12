@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react"
-import type { Map as MapLibreMap } from "maplibre-gl"
+import type {
+  FillExtrusionLayerSpecification,
+  Map as MapLibreMap,
+} from "maplibre-gl"
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"
 import { CrosshairSimpleIcon } from "@phosphor-icons/react/dist/csr/CrosshairSimple"
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
@@ -18,18 +21,61 @@ const LOAD_TIMEOUT_MS = 20_000
 /** The dark theme's primary accent; MapLibre cannot read CSS oklch tokens. */
 const ORIGIN_COLOR = "#ecca6c"
 
+/** OpenMapTiles carries building heights from this zoom; lower zooms stay flat. */
+const BUILDINGS_MIN_ZOOM = 14
+
+/** Tilt for the 3D view: recognisable buildings without hiding the horizon-side streets. */
+const BUILDINGS_PITCH = 55
+
+const BUILDINGS_LAYER = "buildings-3d"
+
+/** OpenFreeMap's vector source, which carries the OpenMapTiles building layer. */
+const BUILDINGS_SOURCE = "openmaptiles"
+
+const buildingsLayer = {
+  id: BUILDINGS_LAYER,
+  type: "fill-extrusion",
+  source: BUILDINGS_SOURCE,
+  "source-layer": "building",
+  minzoom: BUILDINGS_MIN_ZOOM,
+  filter: ["!=", ["get", "hide_3d"], true],
+  paint: {
+    "fill-extrusion-color": "#3d4a6b",
+    "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
+    "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+    "fill-extrusion-opacity": 0.9,
+  },
+} satisfies Omit<FillExtrusionLayerSpecification, "layout">
+
 type MapView =
   | { state: "loading" }
-  | { state: "ready"; tiles: "complete" | "incomplete" }
+  | {
+      state: "ready"
+      tiles: "complete" | "incomplete"
+      buildings: "available" | "unavailable"
+    }
   | { state: "provider-unavailable" | "graphics-unavailable" | "failed" }
+
+/**
+ * Flat north-up 2D, or pitched 3D with extruded buildings. A graphics failure
+ * in 3D restarts the map flat and says why.
+ */
+type Perspective =
+  | { mode: "2d"; reason: "chosen" | "graphics-failure" }
+  | { mode: "3d" }
+
+/** What the 3D view can show for the current viewport once rendering settles. */
+type BuildingCoverage = "shown" | "zoom-in" | "none-here"
 
 function prefersReducedMotion(): boolean {
   return matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
 /**
- * Interactive 2D map centered on the private origin. MapLibre loads only after
- * mount and is removed on unmount, releasing its WebGL context when the view closes.
+ * Interactive map centered on the private origin, switchable between flat 2D
+ * and pitched 3D buildings. Switching keeps the map, its overlays and viewport.
+ * MapLibre loads only after mount and is removed on unmount, releasing its
+ * WebGL context when the view closes.
  */
 export function SharedMap({
   origin,
@@ -41,6 +87,21 @@ export function SharedMap({
   const [view, setView] = useState<MapView>({ state: "loading" })
   const [attempt, setAttempt] = useState(0)
   const [visible, setVisible] = useState(true)
+
+  const [perspective, setPerspective] = useState<Perspective>({
+    mode: "2d",
+    reason: "chosen",
+  })
+
+  const [coverage, setCoverage] = useState<BuildingCoverage>("shown")
+  // A retried map starts in the current perspective without recreating on toggles.
+  const mode = useRef<Perspective["mode"]>("2d")
+
+  // The viewport a graphics restart resumes from, consumed by the next map.
+  const resume = useRef<{ center: [number, number]; zoom: number } | undefined>(
+    undefined
+  )
+
   const center: [number, number] = [origin.longitude, origin.latitude]
 
   useEffect(() => {
@@ -95,11 +156,16 @@ export function SharedMap({
           instance = new Map({
             container: element,
             style: STYLE_URL,
-            center: [origin.longitude, origin.latitude],
-            zoom: LOCAL_ZOOM,
+            center: resume.current?.center ?? [
+              origin.longitude,
+              origin.latitude,
+            ],
+            zoom: resume.current?.zoom ?? LOCAL_ZOOM,
             minZoom: 10,
             maxZoom: 18,
-            maxPitch: 0,
+            pitch: mode.current === "3d" ? BUILDINGS_PITCH : 0,
+            // Only the perspective toggle tilts the map; pitch gestures stay off.
+            maxPitch: BUILDINGS_PITCH,
             dragRotate: false,
             pitchWithRotate: false,
             touchPitch: false,
@@ -114,6 +180,8 @@ export function SharedMap({
         }
 
         const created = instance
+
+        resume.current = undefined
         let loaded = false
 
         map.current = created
@@ -123,6 +191,30 @@ export function SharedMap({
         created.on("load", () => {
           loaded = true
           clearTimeout(timeout)
+
+          // A style without the building source still serves a usable 2D map.
+          const buildings =
+            created.getSource(BUILDINGS_SOURCE) === undefined
+              ? "unavailable"
+              : "available"
+
+          if (buildings === "available") {
+            // Below the labels, so street names stay readable over rooftops.
+            const firstLabel = created
+              .getStyle()
+              .layers.find((layer) => layer.type === "symbol")?.id
+
+            created.addLayer(
+              {
+                ...buildingsLayer,
+                layout: {
+                  visibility: mode.current === "3d" ? "visible" : "none",
+                },
+              },
+              firstLabel
+            )
+          }
+
           created.addSource("origin", {
             type: "geojson",
             data: {
@@ -156,7 +248,13 @@ export function SharedMap({
             },
           })
 
-          if (!disposed) setView({ state: "ready", tiles: "complete" })
+          if (!disposed)
+            setView({ state: "ready", tiles: "complete", buildings })
+        })
+        created.on("idle", () => {
+          if (disposed || mode.current !== "3d") return
+
+          setCoverage(buildingCoverage(created))
         })
         created.on("error", () => {
           // Before load the style or source failed; afterwards only some tiles did.
@@ -166,10 +264,29 @@ export function SharedMap({
             return
           }
 
-          if (!disposed) setView({ state: "ready", tiles: "incomplete" })
+          if (!disposed)
+            setView((current) =>
+              current.state === "ready"
+                ? { ...current, tiles: "incomplete" }
+                : current
+            )
         })
         created.on("webglcontextlost", () => {
-          fail("graphics-unavailable")
+          if (mode.current !== "3d") {
+            fail("graphics-unavailable")
+
+            return
+          }
+
+          // Extrusions can exhaust older GPUs; restart flat rather than blank.
+          disposed = true
+          clearTimeout(timeout)
+          resume.current = {
+            center: created.getCenter().toArray(),
+            zoom: created.getZoom(),
+          }
+          choose({ mode: "2d", reason: "graphics-failure" })
+          setAttempt((count) => count + 1)
         })
       },
       () => {
@@ -184,6 +301,34 @@ export function SharedMap({
       map.current = undefined
     }
   }, [origin.latitude, origin.longitude, attempt, visible])
+
+  const ready = view.state === "ready"
+
+  useEffect(() => {
+    const current = map.current
+
+    if (!ready || current === undefined) return
+
+    if (current.getLayer(BUILDINGS_LAYER) !== undefined)
+      current.setLayoutProperty(
+        BUILDINGS_LAYER,
+        "visibility",
+        perspective.mode === "3d" ? "visible" : "none"
+      )
+
+    current.easeTo({
+      pitch: perspective.mode === "3d" ? BUILDINGS_PITCH : 0,
+      duration: prefersReducedMotion() ? 0 : 500,
+    })
+  }, [perspective.mode, ready])
+
+  function choose(next: Perspective): void {
+    mode.current = next.mode
+
+    // Coverage is measured again once the tilted map settles.
+    if (next.mode === "3d") setCoverage("shown")
+    setPerspective(next)
+  }
 
   function reload(): void {
     setView({ state: "loading" })
@@ -218,6 +363,30 @@ export function SharedMap({
       />
       {view.state === "ready" ? (
         <div className="shared-map-controls">
+          <div
+            className="shared-map-perspective"
+            role="group"
+            aria-label="Map perspective"
+          >
+            <Button
+              size="icon-lg"
+              variant="secondary"
+              aria-pressed={perspective.mode === "2d"}
+              onClick={() => choose({ mode: "2d", reason: "chosen" })}
+            >
+              2D
+            </Button>
+            <Button
+              size="icon-lg"
+              variant="secondary"
+              aria-pressed={perspective.mode === "3d"}
+              aria-label="3D buildings"
+              disabled={view.buildings === "unavailable"}
+              onClick={() => choose({ mode: "3d" })}
+            >
+              3D
+            </Button>
+          </div>
           <Button
             size="icon-lg"
             variant="secondary"
@@ -244,16 +413,25 @@ export function SharedMap({
           </Button>
         </div>
       ) : null}
-      <MapStatus view={view} reload={reload} />
+      <MapStatus
+        view={view}
+        perspective={perspective}
+        coverage={coverage}
+        reload={reload}
+      />
     </div>
   )
 }
 
 function MapStatus({
   view,
+  perspective,
+  coverage,
   reload,
 }: {
   view: MapView
+  perspective: Perspective
+  coverage: BuildingCoverage
   reload: () => void
 }): React.JSX.Element | null {
   switch (view.state) {
@@ -263,15 +441,28 @@ function MapStatus({
           Loading map…
         </p>
       )
-    case "ready":
-      return view.tiles === "incomplete" ? (
-        <div className="shared-map-notice" role="status">
-          <p>Some map tiles could not load. The map may be incomplete.</p>
-          <Button variant="outline" onClick={reload}>
-            Reload map
-          </Button>
+    case "ready": {
+      const buildings = buildingsNotice({ view, perspective, coverage })
+
+      if (view.tiles === "complete" && buildings === undefined) return null
+
+      return (
+        <div className="shared-map-notices" role="status">
+          {view.tiles === "incomplete" ? (
+            <div className="shared-map-notice">
+              <p>Some map tiles could not load. The map may be incomplete.</p>
+              <Button variant="outline" onClick={reload}>
+                Reload map
+              </Button>
+            </div>
+          ) : null}
+          {buildings === undefined ? null : (
+            <p className="shared-map-notice">{buildings}</p>
+          )}
         </div>
-      ) : null
+      )
+    }
+
     case "provider-unavailable":
       return (
         <MapFailure
@@ -317,4 +508,41 @@ function MapFailure({
       </Button>
     </div>
   )
+}
+
+/** Explains why 3D buildings are absent, or nothing when the view is as chosen. */
+function buildingsNotice({
+  view,
+  perspective,
+  coverage,
+}: {
+  view: Extract<MapView, { state: "ready" }>
+  perspective: Perspective
+  coverage: BuildingCoverage
+}): string | undefined {
+  if (view.buildings === "unavailable")
+    return "3D buildings are unavailable from the map provider. The 2D map still works."
+
+  if (perspective.mode === "2d")
+    return perspective.reason === "graphics-failure"
+      ? "3D buildings stopped after a graphics failure, so the map returned to 2D."
+      : undefined
+
+  switch (coverage) {
+    case "shown":
+      return undefined
+    case "zoom-in":
+      return "Zoom in to see buildings in 3D."
+    case "none-here":
+      return "No building data in this area. The map is tilted without buildings."
+  }
+}
+
+/** Whether the settled 3D viewport has any extruded buildings to show. */
+function buildingCoverage(map: MapLibreMap): BuildingCoverage {
+  if (map.getZoom() < BUILDINGS_MIN_ZOOM) return "zoom-in"
+
+  return map.queryRenderedFeatures({ layers: [BUILDINGS_LAYER] }).length > 0
+    ? "shown"
+    : "none-here"
 }
