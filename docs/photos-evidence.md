@@ -54,8 +54,14 @@ Installed-version requests independently verified these routes and formats.
   the full-screen variant now uses independent positioning and fills the viewport.
 
 Checks: `devenv shell -- just api-check` and `devenv shell -- just dashboard-check`
-passed, including formatting, Clippy/lint, typecheck, the full API suite, all 97
+passed, including formatting, Clippy/lint, typecheck, the full API suite, all 98
 dashboard tests (13 files) and the production build.
+
+The single reviewer reported no standards findings and one recovery defect:
+**First page** could switch a stale page in the second selected album to the first
+album. A two-album interaction regression failed before the repair. Gallery data
+now preserves the selected album through failures, and recovery opens its own
+first page.
 
 ## Remaining release work
 
