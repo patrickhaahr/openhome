@@ -76,8 +76,16 @@ export async function readWishlists(): Promise<WishlistState> {
 type WishlistOperation = {
   path: `/api/${string}`
   method: "POST" | "PATCH" | "DELETE"
-  json?: Record<string, string>
+  json?: Record<string, string | number | null | undefined>
   schema?: z.ZodType
+}
+
+function details(
+  command: Extract<WishlistCommand, { kind: "add-item" | "edit-item" }>
+) {
+  const { title, url, image_url, notes, price, quantity, priority } = command
+
+  return { title, url, image_url, notes, price, quantity, priority }
 }
 
 function operation(command: WishlistCommand): WishlistOperation {
@@ -127,7 +135,7 @@ function operation(command: WishlistCommand): WishlistOperation {
         json: {
           owner_id: command.owner_id,
           list_id: command.list_id,
-          title: command.title,
+          ...details(command),
           request_id: command.request_id,
         },
         schema: z.object({ item: wishlistItem, replayed: z.boolean() }),
@@ -136,7 +144,7 @@ function operation(command: WishlistCommand): WishlistOperation {
       return {
         path: `/api/household-users/${command.owner_id}/wishlists/${command.list_id}/items/${command.item_id}`,
         method: "PATCH",
-        json: { title: command.title },
+        json: details(command),
         schema: wishlistItem,
       }
     case "remove-item":

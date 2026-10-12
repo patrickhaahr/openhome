@@ -1108,3 +1108,81 @@ a:focus-visible {
     animation-duration: 0s !important;
   }
 }
+
+@utility wishlist-item-form {
+  width: 100%;
+  margin-block: 1rem;
+  input {
+    min-height: 3rem;
+  }
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+  }
+}
+@utility wishlist-item-fields {
+  margin-top: 0.75rem;
+  summary {
+    cursor: pointer;
+    min-height: 3rem;
+    padding-block: 0.75rem;
+  }
+  summary span {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+  }
+}
+@utility wishlist-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding-block: 0.75rem;
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+@utility wishlist-field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  select {
+    min-height: 3rem;
+    width: 100%;
+  }
+}
+@utility wishlist-field-notes {
+  grid-column: 1 / -1;
+}
+@utility wishlist-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  margin-top: 0.375rem;
+  [data-priority="high"] {
+    color: var(--primary);
+  }
+}
+@utility wishlist-item-notes {
+  white-space: pre-wrap;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+@utility wishlist-item-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 3rem;
+    color: var(--primary);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.25rem;
+  }
+}
