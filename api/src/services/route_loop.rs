@@ -49,7 +49,8 @@ const SOUGHT_LOOPS: usize = 3;
 /// Round trips one search may request, each with its own seed.
 const MAX_ATTEMPTS: u32 = 6;
 
-/// A search starts no new round trip after this long, so the dashboard is answered promptly.
+/// A search, including its wait behind another search, starts no new round trip after this
+/// long, so the dashboard is answered promptly.
 const SEARCH_BUDGET: Duration = Duration::from_secs(20);
 
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(10);
@@ -299,8 +300,10 @@ struct MeasuredLoop {
 }
 
 impl MeasuredLoop {
+    /// Decided on the one-decimal percentage the dashboard shows, so the label and the verdict
+    /// always agree.
     fn matches(&self) -> bool {
-        self.deviation_percent.abs() <= TOLERANCE_PERCENT
+        rounded_percent(self.deviation_percent).abs() <= TOLERANCE_PERCENT
     }
 }
 
@@ -412,7 +415,7 @@ fn describe(request: LoopRequest, found: Found) -> LoopPlan {
             GeneratedLoop {
                 distance_meters: measured.distance.round(),
                 deviation_meters: deviation.round(),
-                deviation_percent: (measured.deviation_percent * 10.0).round() / 10.0,
+                deviation_percent: rounded_percent(measured.deviation_percent),
                 within_tolerance: measured.matches(),
                 estimated_steps,
                 geometry: LineString {
@@ -431,6 +434,10 @@ fn describe(request: LoopRequest, found: Found) -> LoopPlan {
         search: found.end,
         loops,
     }
+}
+
+fn rounded_percent(percent: f64) -> f64 {
+    (percent * 10.0).round() / 10.0
 }
 
 /// What one round trip contributed to a search.
@@ -457,20 +464,26 @@ impl Provider {
         if let Some(found) = self.cached(key) {
             return Ok(found);
         }
-        let _turn = self.gate.lock().await;
+        let started = Instant::now();
+        let Ok(_turn) = tokio::time::timeout(SEARCH_BUDGET, self.gate.lock()).await else {
+            tracing::warn!("Route provider busy with another search");
+            return Err(LoopUnavailable::ProviderUnavailable);
+        };
         // A request queued behind an identical one reuses its answer.
         if let Some(found) = self.cached(key) {
             return Ok(found);
         }
 
-        let started = Instant::now();
         let target = f64::from(request.target.meters());
         let mut kept: Vec<MeasuredLoop> = Vec::new();
         let mut overshoot: Vec<f64> = Vec::new();
-        let mut empty = LoopUnavailable::NoRoute;
+        // The outcome reported if nothing is kept.
+        let mut nothing_kept = LoopUnavailable::NoRoute;
         let mut end = SearchEnd::Exhausted;
         for seed in 1..=MAX_ATTEMPTS {
             if started.elapsed() >= SEARCH_BUDGET {
+                tracing::warn!(seed, "Route search ran out of time");
+                nothing_kept = LoopUnavailable::ProviderUnavailable;
                 end = SearchEnd::Interrupted;
                 break;
             }
@@ -482,29 +495,26 @@ impl Provider {
                 Ok(trip) => {
                     let Some((coordinates, distance)) = trip.geometry() else {
                         tracing::warn!("Route provider sent an invalid loop");
-                        empty = LoopUnavailable::ProviderUnavailable;
+                        nothing_kept = LoopUnavailable::ProviderUnavailable;
                         end = SearchEnd::Interrupted;
                         break;
                     };
                     overshoot.push(distance / f64::from(length));
                     match suitable(origin, target, coordinates, distance) {
-                        Some(candidate) if kept.iter().all(|loop_| distinct(&candidate, loop_)) => {
-                            kept.push(candidate);
-                            Attempt::Kept
-                        }
-                        Some(_) => Attempt::Duplicate,
+                        Some(candidate) => keep(&mut kept, candidate),
                         None => Attempt::Unsuitable,
                     }
                 }
-                Err(Refusal::NoRoute { origin_unroutable }) => {
-                    if origin_unroutable {
-                        // No walkable way near the origin: no other seed can start a loop.
-                        break;
-                    }
-                    Attempt::NoRoute
+                // Before any loop, no walkable way near the origin means no seed can start one;
+                // afterwards it only concerns this seed's generated waypoints.
+                Err(Refusal::NoRoute { origin_unroutable })
+                    if origin_unroutable && kept.is_empty() =>
+                {
+                    break;
                 }
+                Err(Refusal::NoRoute { .. }) => Attempt::NoRoute,
                 Err(Refusal::Unavailable) => {
-                    empty = LoopUnavailable::ProviderUnavailable;
+                    nothing_kept = LoopUnavailable::ProviderUnavailable;
                     end = SearchEnd::Interrupted;
                     break;
                 }
@@ -512,7 +522,7 @@ impl Provider {
             match attempt {
                 Attempt::Unsuitable => {
                     tracing::warn!(seed, "Rejected a loop from the route provider");
-                    empty = LoopUnavailable::UnsuitableRoute;
+                    nothing_kept = LoopUnavailable::UnsuitableRoute;
                 }
                 Attempt::Kept
                     if kept.iter().filter(|loop_| loop_.matches()).count() >= SOUGHT_LOOPS =>
@@ -525,7 +535,7 @@ impl Provider {
         }
 
         if kept.is_empty() {
-            return Err(empty);
+            return Err(nothing_kept);
         }
         kept.sort_by(|a, b| {
             b.matches().cmp(&a.matches()).then(
@@ -607,6 +617,27 @@ impl Provider {
             }
         }
     }
+}
+
+/// Keep `candidate` when it mostly follows other ways than every kept loop. A matching loop also
+/// replaces near-misses it retraces, so a near-miss never crowds out a match on the same streets.
+fn keep(kept: &mut Vec<MeasuredLoop>, candidate: MeasuredLoop) -> Attempt {
+    let retraced = |loop_: &MeasuredLoop| !distinct(&candidate, loop_);
+    if !kept.iter().any(retraced) {
+        kept.push(candidate);
+        return Attempt::Kept;
+    }
+    if candidate.matches()
+        && kept
+            .iter()
+            .filter(|loop_| retraced(loop_))
+            .all(|loop_| !loop_.matches())
+    {
+        kept.retain(|loop_| !retraced(loop_));
+        kept.push(candidate);
+        return Attempt::Kept;
+    }
+    Attempt::Duplicate
 }
 
 /// Why the provider returned no loop for one attempt.

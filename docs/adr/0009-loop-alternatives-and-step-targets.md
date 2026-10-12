@@ -33,12 +33,21 @@ search was `complete`, `exhausted` (all attempts spent) or `interrupted`, so
 the dashboard can explain a shortfall without padding the set. Duplicates and
 mismatches are never relabelled as matches.
 
+A matching loop replaces any near-misses it retraces, provided it retraces no
+already matching loop. The tolerance verdict uses the same one-decimal
+percentage shown on the dashboard, so a displayed 10.0% never contradicts its
+label.
+
 The search is bounded for the household's instance. One search runs at a time;
-it starts no attempt after 20 seconds and each attempt times out after 10. An
+its queue wait counts toward the 20-second budget and times out within it;
+it starts no attempt after that budget and each attempt times out after 10. An
 outage or invalid response ends the search: loops already kept are returned as
 `interrupted`, otherwise the outcome is `provider-unavailable`. Provider code
-2010 (no walkable way near the origin) ends it as `no-route`; 2009 only spends
-that attempt. Seeds are fixed, so the same origin and target plan the same
+2010 (no walkable way near a waypoint) ends it as `no-route` only before a loop
+has been kept; after that, it spends that attempt, as does 2009. HTTP 429 is
+reported as `provider-unavailable`, like other refusals: the household's
+self-hosted instance has no third-party plan quota (ADR 0008). Seeds are fixed,
+so the same origin and target plan the same
 loops: completed searches are cached in memory for 30 minutes (32 entries) by
 activity and target metres, and a request queued behind an identical one reuses
 its answer. Interrupted searches are not cached, so a retry tries again.
