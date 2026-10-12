@@ -102,7 +102,7 @@ household configuration, without passwords or an active-user selector.
 | Authenticated Axum operation | Body / behavior |
 | --- | --- |
 | `PATCH /api/household-users/{owner_id}` | `{"name":"Member A"}`; preserve ID |
-| `DELETE /api/household-users/{owner_id}` | Remove member, their lists and items |
+| `DELETE /api/household-users/{owner_id}` | Remove member, their wishlists, wishes and watchlist entries |
 | `PATCH /api/household-users/{owner_id}/wishlists/{list_id}` | `{"name":"Outdoors"}`; preserve owner and ID |
 | `DELETE /api/household-users/{owner_id}/wishlists/{list_id}` | Remove this owner's list and all its items |
 | `PATCH /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | `{"title":"A warm jacket"}`; preserve destination and ID |
