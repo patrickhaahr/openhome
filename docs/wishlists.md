@@ -1,6 +1,6 @@
 # Shared Wishlists through the Dashboard and OpenHome MCP
 
-Axum owns Household Users, named Wishlists, generic Wishlist Items and destination
+Axum owns Household Users, named Wishlists, rich Wishlist Items and destination
 resolution ([ADR 0004](adr/0004-household-users-and-list-ownership.md),
 [ADR 0005](adr/0005-wishlist-writes-through-mcp.md)). All reads are household-visible.
 Ownership checks select the intended destination; they do not introduce private
@@ -19,23 +19,48 @@ stable UUID `id` and the trimmed name. Names are unique in the household.
 | `household_users` | `GET /api/household-users` | None |
 | `wishlists` | `GET /api/wishlists` | None |
 | `create_wishlist` | `POST /api/wishlists` | `owner_id`, `name` |
-| `add_wishlist_item` | `POST /api/wishlist/items` | `title`, `request_id`, optional `owner_id`, `list_id` |
+| `add_wishlist_item` | `POST /api/wishlist/items` | `title`, `request_id`, optional `owner_id`, `list_id`, rich fields |
 | `wishlist_items` | `GET /api/wishlists/{list_id}/items` | `list_id` |
+| `wishlist_item` | `GET /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | `owner_id`, `list_id`, `item_id` |
+| `update_wishlist_item` | `PATCH /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | Explicit IDs, supplied item fields |
+| `delete_wishlist_item` | `DELETE /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | Explicit IDs |
 
 Every operation uses `Authorization: Bearer <API_KEY>`. Household Users and
 Wishlists have stable IDs; lists return `id`, `owner_id`, `name`. A list name is
 unique within its owner (SQLite NOCASE comparison), so different owners can each
 have an `Ideas` list. Names allow 1–200 characters. Titles allow 1–500 characters.
-Text is trimmed; empty values and control characters are rejected. This slice
-stores generic titles only and rejects unrecognized body fields. It does not fetch
-URLs, choose products, or expose rich item editing. The Dashboard also supports
-minimal title editing through the same store.
+Text is trimmed; empty values and control characters are rejected, except line breaks
+and tabs in notes. Unknown body fields are rejected. Generic requests remain generic:
+no URL fetch, product choice or research runs implicitly. URL metadata assistance
+belongs to #100.
+
+## Item fields
+
+| Field | API-owned contract |
+| --- | --- |
+| `title` | Required, 1–500 characters |
+| `url`, `image_url` | Optional absolute HTTP(S) links, at most 2048 characters, without embedded credentials |
+| `notes` | Optional text, 1–5000 characters; line breaks and tabs allowed |
+| `price` | Optional text, 1–100 characters; include currency, e.g. `DKK 199.95`. No price arithmetic or assumed currency |
+| `quantity` | Integer 1–999, defaults to 1 |
+| `priority` | `low`, `normal` or `high`, defaults to `normal` |
+
+All reads return these fields. Nullable fields default to null. Migration 0008
+adds the defaults to existing items and immutable rich-field identity to addition
+receipts. PATCH preserves omitted fields; explicit null clears URL/image/notes/price.
+Title, quantity and priority cannot be null. Validation completes before the atomic
+update so rejected edits never alter stored values. Every item edit/read/delete
+checks the complete stable owner/list/item destination.
+
+The dashboard's Item details panel supports these fields for both addition and
+editing. Product and image links open only when selected, with no referrer; remote
+images are not automatically fetched from a private household display.
 
 ## Dashboard management
 
 Open Wishlist on the private Dashboard. All household members and their named
 lists are visible together. Select a list inside its owner's group; additions,
-title edits and removals carry that owner's stable ID and the explicit list ID.
+item edits and removals carry that owner's stable ID and the explicit list ID.
 Use **Manage household members** to add, rename or remove members. This is shared
 household configuration, without passwords or an active-user selector.
 
@@ -84,7 +109,7 @@ Axum atomically inserts the item with a globally unique request ID. The first
 success returns 201 and `{"item":{"id","list_id","title","created_at"},
 "replayed":false}`. An identical accepted retry returns 200 with the original
 item's current value and `replayed:true`, even if the private default changed or the owner now has
-another list. Identity compares the trimmed title and submitted owner/list IDs,
+another list. Identity compares the trimmed title, normalized rich fields (including defaults) and submitted owner/list IDs,
 not a newly resolved destination. Reusing an accepted ID with different inputs
 returns 409. A rejected request consumes no ID, so clarification can be followed
 by a corrected request. A separate intentional addition uses a new ID, even when
@@ -93,8 +118,8 @@ its title is the same.
 Deduplication persists in immutable `wishlist_addition_receipts` in the main
 SQLite database. Migration 0007 backfills receipts for existing additions. The
 receipt and new item commit together, so a failed addition consumes no request
-ID. Title edits leave the original retry arguments unchanged; an accepted retry
-reads the current title and never reverts an edit. Receipts survive item, list
+ID. Item edits leave the original retry arguments unchanged; an accepted retry
+reads the current item and never reverts an edit. Receipts survive item, list
 and owner deletion: a delayed retry of a removed item returns 409 and never
 recreates it. A new intentional addition needs a new request ID. Back up the main
 database, including receipts.
@@ -107,7 +132,11 @@ reuse the in-memory ID. After uncertain member/list creation, refresh discovery
 before retrying; their names are unique within their defined scopes.
 
 MCP marks reads read-only, creation non-destructive but non-idempotent, and
-deduplicated additions non-destructive and idempotent. After uncertain list
+deduplicated additions non-destructive and idempotent. Item edits and deletes are
+destructive and idempotent (reapplying the same values/removal cannot duplicate an
+item). Successful deletion's API 204 maps to MCP `{ "deleted": true }`; a repeated
+delete remains a not-found tool error. Read the item after an uncertain edit/delete
+before retrying, so another household edit is not blindly overwritten. After uncertain list
 creation, discover lists before retrying. API and transport failures are tool
 errors (`isError:true`), never successful writes. All existing training tools
 retain their read-only GET contracts.

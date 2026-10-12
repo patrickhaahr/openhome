@@ -393,6 +393,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         [
             "add_wishlist_item",
             "create_wishlist",
+            "delete_wishlist_item",
             "exercise_history",
             "household_users",
             "metric_trend",
@@ -400,6 +401,8 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "recovery_on_day",
             "sleep_recent",
             "training_context",
+            "update_wishlist_item",
+            "wishlist_item",
             "wishlist_items",
             "wishlists",
             "workouts_on_day"
@@ -412,7 +415,10 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 .and_then(|annotations| annotations.read_only_hint),
             Some(!matches!(
                 tool.name.as_ref(),
-                "create_wishlist" | "add_wishlist_item"
+                "create_wishlist"
+                    | "add_wishlist_item"
+                    | "update_wishlist_item"
+                    | "delete_wishlist_item"
             )),
             "{}",
             tool.name
@@ -425,6 +431,14 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 Some(tool.name == "add_wishlist_item")
             );
         }
+        if matches!(
+            tool.name.as_ref(),
+            "update_wishlist_item" | "delete_wishlist_item"
+        ) {
+            let annotations = tool.annotations.as_ref().unwrap();
+            assert_eq!(annotations.destructive_hint, Some(true));
+            assert_eq!(annotations.idempotent_hint, Some(true));
+        }
         let required = match tool.name.as_ref() {
             "household_users" | "wishlists" => {
                 assert!(tool.input_schema.get("required").is_none());
@@ -433,6 +447,9 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "create_wishlist" => json!(["owner_id", "name"]),
             "add_wishlist_item" => json!(["title", "request_id"]),
             "wishlist_items" => json!(["list_id"]),
+            "wishlist_item" | "delete_wishlist_item" | "update_wishlist_item" => {
+                json!(["owner_id", "list_id", "item_id"])
+            }
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "noop_workout_detail" => json!(["source", "start"]),
@@ -921,4 +938,129 @@ async fn returns_api_errors_as_tool_errors() {
         Some(json!({"error": "The OpenHome API could not be reached", "status": null}))
     );
     unreachable.cancel().await.unwrap();
+}
+
+#[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one real transport lifecycle protects partial writes, retries and deletion"
+)]
+async fn rich_item_management_uses_real_transport_with_partial_updates_and_deletion() {
+    let api = start_api().await;
+    let http = reqwest::Client::new();
+    let owner: Value = http
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name":"Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let list = wishlist_call(
+        &client,
+        "create_wishlist",
+        json!({"owner_id":owner["id"],"name":"Outdoors"}),
+    )
+    .await
+    .structured_content
+    .unwrap();
+    let payload = json!({"owner_id":owner["id"],"list_id":list["id"],"title":"A jacket","request_id":"rich-mcp-1",
+        "url":"https://example.com/jacket","image_url":"https://example.com/jacket.png","notes":"For winter","price":"DKK 199.95","quantity":2,"priority":"high"});
+    let added = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
+    assert_eq!(added.is_error, Some(false));
+    let item = added.structured_content.unwrap()["item"].clone();
+    assert_eq!(item["quantity"], 2);
+    assert_eq!(item["priority"], "high");
+    let target = json!({"owner_id":owner["id"],"list_id":list["id"],"item_id":item["id"]});
+    assert_eq!(
+        wishlist_call(&client, "wishlist_item", target.clone())
+            .await
+            .structured_content,
+        Some(item.clone())
+    );
+    let mut edit = target.clone();
+    edit["notes"] = Value::Null;
+    edit["quantity"] = json!(3);
+    let result = wishlist_call(&client, "update_wishlist_item", edit.clone()).await;
+    assert_eq!(result.is_error, Some(false));
+    let edited = result.structured_content.unwrap();
+    assert_eq!(edited["notes"], Value::Null);
+    assert_eq!(edited["quantity"], 3);
+    assert_eq!(edited["title"], item["title"]);
+    assert_eq!(edited["url"], item["url"]);
+    assert_eq!(edited["price"], item["price"]);
+    let direct: Value = http
+        .get(format!(
+            "{api}/api/household-users/{}/wishlists/{}/items/{}",
+            owner["id"].as_str().unwrap(),
+            list["id"].as_str().unwrap(),
+            item["id"].as_str().unwrap()
+        ))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(edited, direct);
+    assert_eq!(
+        wishlist_call(&client, "update_wishlist_item", edit.clone())
+            .await
+            .structured_content,
+        Some(edited.clone())
+    );
+    edit["quantity"] = json!(0);
+    let invalid = wishlist_call(&client, "update_wishlist_item", edit).await;
+    assert_eq!(invalid.is_error, Some(true));
+    assert_eq!(invalid.structured_content.unwrap()["status"], 400);
+    assert_eq!(
+        wishlist_call(&client, "wishlist_item", target.clone())
+            .await
+            .structured_content,
+        Some(edited.clone())
+    );
+    let replay = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
+    assert_eq!(
+        replay.structured_content,
+        Some(json!({"item":edited,"replayed":true}))
+    );
+    let mut wrong = target.clone();
+    wrong["owner_id"] = json!("other-owner");
+    for tool in [
+        "wishlist_item",
+        "update_wishlist_item",
+        "delete_wishlist_item",
+    ] {
+        let result = wishlist_call(&client, tool, wrong.clone()).await;
+        assert_eq!(result.is_error, Some(true));
+        assert_eq!(result.structured_content.unwrap()["status"], 404);
+    }
+    let removed = wishlist_call(&client, "delete_wishlist_item", target.clone()).await;
+    assert_eq!(removed.is_error, Some(false));
+    assert_eq!(removed.structured_content, Some(json!({"deleted":true})));
+    assert_eq!(
+        wishlist_call(&client, "delete_wishlist_item", target)
+            .await
+            .is_error,
+        Some(true)
+    );
+    assert_eq!(
+        wishlist_call(&client, "add_wishlist_item", payload)
+            .await
+            .is_error,
+        Some(true)
+    );
+    assert_eq!(
+        wishlist_call(&client, "wishlist_items", json!({"list_id":list["id"]}))
+            .await
+            .structured_content,
+        Some(json!([]))
+    );
+    client.cancel().await.unwrap();
 }

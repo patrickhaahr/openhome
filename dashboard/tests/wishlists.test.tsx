@@ -169,7 +169,10 @@ async function clickButton(element: HTMLButtonElement): Promise<void> {
 }
 
 function field(label: string): HTMLInputElement {
-  const fieldLabel = Array.from(container.querySelectorAll("label")).find(
+  const scope =
+    container.querySelector('form[aria-label="Save wish"]') ?? container
+
+  const fieldLabel = Array.from(scope.querySelectorAll("label")).find(
     (element) => element.textContent === label
   )
 
@@ -307,16 +310,44 @@ test("refresh updates untouched member names and preserves edited drafts", async
 })
 
 test.each([
-  { title: " A book ", retry: "A book", expected: ["A book"] },
-  { title: "\u0085A book\u0085", retry: "A book", expected: ["A book"] },
+  {
+    title: " A book ",
+    retry: "A book",
+    expected: ["A book"],
+    legacy: false,
+    rich: false,
+  },
+  {
+    title: " A book ",
+    retry: "A book",
+    expected: ["A book"],
+    legacy: true,
+    rich: false,
+  },
+  {
+    title: "A book",
+    retry: "A book",
+    expected: ["A book"],
+    legacy: false,
+    rich: true,
+  },
+  {
+    title: "\u0085A book\u0085",
+    retry: "A book",
+    expected: ["A book"],
+    legacy: false,
+    rich: false,
+  },
   {
     title: "\uFEFFA book\uFEFF",
     retry: "A book",
     expected: ["A book", "\uFEFFA book\uFEFF"],
+    legacy: false,
+    rich: false,
   },
 ])(
   "a lost addition respects API title identity after remount ($title), and auth failures retain the draft",
-  async ({ title, retry, expected }) => {
+  async ({ title, retry, expected, legacy, rich }) => {
     await writeWishlist({ kind: "create-owner", name: "Member A" })
     const member = (await available()).owners[0]
 
@@ -375,11 +406,37 @@ test.each([
 
     vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
     await render()
+
+    if (rich) {
+      await type("Price (include currency)", "DKK 199.95")
+      await type("Quantity", "2")
+    }
+
     await submit("Something you’d like", title)
     expect(container.textContent).toContain("The response was lost")
+
+    if (legacy) {
+      const list = (await available()).lists[0]
+
+      if (!list) throw new Error("Expected list")
+      const key = `openhome.pending-wish.${list.id}`
+
+      const prior = z
+        .object({ ownerId: z.uuid(), listId: z.uuid(), requestId: z.uuid() })
+        .parse(JSON.parse(sessionStorage.getItem(key) ?? "null"))
+
+      sessionStorage.setItem(key, JSON.stringify({ ...prior, title }))
+    }
+
     await act(async () => root.unmount())
     root = createRoot(container)
     await render()
+
+    if (rich) {
+      expect(field("Price (include currency)").value).toBe("DKK 199.95")
+      expect(field("Quantity").value).toBe("2")
+    }
+
     await submit("Something you’d like", retry)
     expect((await available()).items.map((item) => item.title).sort()).toEqual(
       expected
@@ -389,10 +446,7 @@ test.each([
     await submit("Something you’d like", "A rain hat")
     expect(container.textContent).toContain("OpenHome rejected the API key")
     expect(container.textContent).not.toContain("synthetic-rejected-key")
-    expect(
-      container.querySelector<HTMLInputElement>('input[value="A rain hat"]')
-        ?.value
-    ).toBe("A rain hat")
+    expect(field("Something you’d like").value).toBe("A rain hat")
     vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
     await click("Refresh lists")
     await submit("Something you’d like", "A rain hat")
@@ -401,3 +455,75 @@ test.each([
     )
   }
 )
+
+test("rich edits persist fields, preserve failed drafts, and clear optional context", async () => {
+  await render()
+  await submit("New household member", "Member A")
+  await submit("List name for Member A", "Ideas")
+  await submit("Something you’d like", "A warm jacket")
+  await click("Edit A warm jacket")
+  await type("Product URL", "https://example.com/jacket")
+  await type("Image URL", "https://example.com/jacket.png")
+  await type("Price (include currency)", "DKK 199.95")
+  await type("Quantity", "2")
+
+  const notes = container.querySelector<HTMLTextAreaElement>(
+    'form[aria-label="Save wish"] textarea[name="notes"]'
+  )
+
+  const priority = container.querySelector<HTMLSelectElement>(
+    'form[aria-label="Save wish"] select[name="priority"]'
+  )
+
+  if (!notes || !priority) throw new Error("Expected rich edit controls")
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value"
+    )?.set?.call(notes, "For winter")
+    notes.dispatchEvent(new Event("input", { bubbles: true }))
+    priority.value = "high"
+    priority.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  await submit("Wish title", "A waterproof jacket")
+  const item = (await available()).items[0]
+  expect(item).toMatchObject({
+    title: "A waterproof jacket",
+    url: "https://example.com/jacket",
+    image_url: "https://example.com/jacket.png",
+    notes: "For winter",
+    price: "DKK 199.95",
+    quantity: 2,
+    priority: "high",
+  })
+  expect(container.textContent).toContain("high priority")
+  expect(
+    container.querySelector('a[href="https://example.com/jacket"]')?.textContent
+  ).toContain("Product link")
+  await render()
+  await click("Edit A waterproof jacket")
+  await type("Product URL", "javascript:alert(1)")
+  // Dispatch at the form seam so Axum validation is exercised even when native URL validation would stop submission.
+  await act(async () => {
+    field("Wish title")
+      .closest("form")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    await mutationWork
+    await refreshWork
+  })
+  expect(container.textContent).toContain("Check the fields")
+  expect(field("Product URL").value).toBe("javascript:alert(1)")
+  expect((await available()).items[0]).toEqual(item)
+  await type("Product URL", "")
+  await type("Image URL", "")
+  await type("Price (include currency)", "")
+  await submit("Wish title", "A waterproof jacket")
+  expect((await available()).items[0]).toMatchObject({
+    url: null,
+    image_url: null,
+    price: null,
+    notes: "For winter",
+    quantity: 2,
+    priority: "high",
+  })
+})

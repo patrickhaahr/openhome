@@ -39,6 +39,12 @@ pub struct WishlistItem {
     pub list_id: String,
     pub title: String,
     pub created_at: String,
+    pub url: Option<String>,
+    pub image_url: Option<String>,
+    pub notes: Option<String>,
+    pub price: Option<String>,
+    pub quantity: i64,
+    pub priority: String,
 }
 
 #[derive(Deserialize)]
@@ -61,6 +67,14 @@ pub struct AddItem {
     pub request_id: String,
     pub owner_id: Option<String>,
     pub list_id: Option<String>,
+    pub url: Option<String>,
+    pub image_url: Option<String>,
+    pub notes: Option<String>,
+    pub price: Option<String>,
+    #[serde(default = "one")]
+    pub quantity: i64,
+    #[serde(default = "normal")]
+    pub priority: String,
 }
 
 #[derive(Serialize)]
@@ -74,6 +88,7 @@ struct AdditionReceipt {
     title: String,
     requested_owner_id: Option<String>,
     requested_list_id: Option<String>,
+    details: String,
 }
 
 impl AdditionReceipt {
@@ -81,6 +96,7 @@ impl AdditionReceipt {
         if self.title != request.title
             || self.requested_owner_id != request.owner_id
             || self.requested_list_id != request.list_id
+            || self.details != request.details()
         {
             return Err(WishlistError::Conflict(
                 "request_id was already used for a different addition; use a new ID for a new request"
@@ -89,7 +105,7 @@ impl AdditionReceipt {
         }
         let item = sqlx::query_as!(
             WishlistItem,
-            "SELECT id, list_id, title, created_at FROM wishlist_items WHERE id = ?",
+            "SELECT id, list_id, title, created_at, url, image_url, notes, price, quantity, priority FROM wishlist_items WHERE id = ?",
             self.item_id
         )
         .fetch_optional(db)
@@ -189,7 +205,7 @@ async fn get_list(db: &SqlitePool, id: &str) -> Result<Wishlist> {
 pub async fn items(db: &SqlitePool, list_id: &str) -> Result<Vec<WishlistItem>> {
     get_list(db, list_id).await?;
     Ok(sqlx::query_as!(WishlistItem,
-        "SELECT id, list_id, title, created_at FROM wishlist_items WHERE list_id = ? ORDER BY created_at, id", list_id)
+        "SELECT id, list_id, title, created_at, url, image_url, notes, price, quantity, priority FROM wishlist_items WHERE list_id = ? ORDER BY created_at, id", list_id)
         .fetch_all(db)
         .await?)
 }
@@ -236,7 +252,7 @@ async fn destination(
 
 async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<AdditionReceipt>> {
     Ok(sqlx::query_as!(AdditionReceipt,
-        "SELECT item_id, title, requested_owner_id, requested_list_id FROM wishlist_addition_receipts WHERE request_id = ?", request_id)
+        "SELECT item_id, title, requested_owner_id, requested_list_id, details FROM wishlist_addition_receipts WHERE request_id = ?", request_id)
         .fetch_optional(db).await?)
 }
 
@@ -247,6 +263,13 @@ pub async fn add_item(
 ) -> Result<Addition> {
     request.title = text(&request.title, "title", 500)?;
     request.request_id = text(&request.request_id, "request_id", 128)?;
+    request.url = optional_url(request.url)?;
+    request.image_url = optional_url(request.image_url)?;
+    request.notes = notes(request.notes)?;
+    request.price = optional_text(request.price, "price", 100)?;
+    quantity(request.quantity)?;
+    priority(&request.priority)?;
+    let details = request.details();
     // Replay before resolving: a changed default or newly created list cannot move an accepted request.
     if let Some(item) = previous(db, &request.request_id).await? {
         return item.replay(db, &request).await;
@@ -257,13 +280,13 @@ pub async fn add_item(
     // Claim before inserting, in one transaction. Receipts have no foreign key so delayed
     // retries cannot recreate a deleted item, list or owner. Failed writes consume no ID.
     let claimed = sqlx::query!(
-        "INSERT INTO wishlist_addition_receipts (request_id, item_id, title, requested_owner_id, requested_list_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
-        request.request_id, id, request.title, request.owner_id, request.list_id)
+        "INSERT INTO wishlist_addition_receipts (request_id, item_id, title, requested_owner_id, requested_list_id, details) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
+        request.request_id, id, request.title, request.owner_id, request.list_id, details)
         .fetch_optional(&mut *transaction).await?;
     if claimed.is_some() {
         let item = sqlx::query_as!(WishlistItem,
-            "INSERT INTO wishlist_items (id, list_id, title, request_id, requested_owner_id, requested_list_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, list_id, title, created_at",
-            id, list.id, request.title, request.request_id, request.owner_id, request.list_id)
+            "INSERT INTO wishlist_items (id, list_id, title, request_id, requested_owner_id, requested_list_id, url, image_url, notes, price, quantity, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, list_id, title, created_at, url, image_url, notes, price, quantity, priority",
+            id, list.id, request.title, request.request_id, request.owner_id, request.list_id, request.url, request.image_url, request.notes, request.price, request.quantity, request.priority)
             .fetch_one(&mut *transaction).await?;
         transaction.commit().await?;
         return Ok(Addition {
@@ -290,11 +313,119 @@ pub struct Rename {
     pub name: String,
 }
 
-/// A title edit never changes the original addition's retry identity.
+/// An absent field preserves its stored value; explicit null clears a nullable field.
+#[derive(Default)]
+pub enum ItemPatch<T> {
+    #[default]
+    Missing,
+    Value(Option<T>),
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for ItemPatch<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        Option::<T>::deserialize(deserializer).map(Self::Value)
+    }
+}
+
+impl<T> ItemPatch<T> {
+    fn supplied(&self) -> bool {
+        matches!(self, Self::Value(_))
+    }
+    fn value(self) -> Option<T> {
+        match self {
+            Self::Missing => None,
+            Self::Value(value) => value,
+        }
+    }
+}
+
+/// Partial item edits preserve the original addition's retry identity and destination.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EditTitle {
-    pub title: String,
+pub struct EditItem {
+    #[serde(default)]
+    pub title: ItemPatch<String>,
+    #[serde(default)]
+    pub url: ItemPatch<String>,
+    #[serde(default)]
+    pub image_url: ItemPatch<String>,
+    #[serde(default)]
+    pub notes: ItemPatch<String>,
+    #[serde(default)]
+    pub price: ItemPatch<String>,
+    #[serde(default)]
+    pub quantity: ItemPatch<i64>,
+    #[serde(default)]
+    pub priority: ItemPatch<String>,
+}
+
+fn one() -> i64 {
+    1
+}
+fn normal() -> String {
+    "normal".into()
+}
+
+fn quantity(value: i64) -> Result<()> {
+    if !(1..=999).contains(&value) {
+        return Err(WishlistError::Validation(
+            "quantity must be an integer from 1 to 999".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn priority(value: &str) -> Result<()> {
+    if !matches!(value, "low" | "normal" | "high") {
+        return Err(WishlistError::Validation(
+            "priority must be low, normal or high".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn optional_text(value: Option<String>, field: &str, max: usize) -> Result<Option<String>> {
+    value.map(|value| text(&value, field, max)).transpose()
+}
+
+fn notes(value: Option<String>) -> Result<Option<String>> {
+    value.map(|value| {
+        let value = value.trim();
+        if value.is_empty() || value.chars().count() > 5000 || value.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')) {
+            return Err(WishlistError::Validation("notes must contain 1-5000 characters; only line breaks and tabs are allowed as controls".into()));
+        }
+        Ok(value.to_owned())
+    }).transpose()
+}
+
+fn optional_url(value: Option<String>) -> Result<Option<String>> {
+    let value = optional_text(value, "URL", 2048)?;
+    if let Some(value) = &value {
+        let url = reqwest::Url::parse(value).map_err(|_| {
+            WishlistError::Validation("URL must be an absolute HTTP(S) link".into())
+        })?;
+        if !matches!(url.scheme(), "http" | "https")
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Err(WishlistError::Validation(
+                "URL must be an absolute HTTP(S) link without credentials".into(),
+            ));
+        }
+    }
+    Ok(value)
+}
+
+impl AddItem {
+    fn details(&self) -> String {
+        // Fixed JSON keys also backfill legacy title-only receipts in migration 0008.
+        serde_json::json!({"url":self.url,"image_url":self.image_url,"notes":self.notes,
+            "price":self.price,"quantity":self.quantity,"priority":self.priority})
+        .to_string()
+    }
 }
 
 /// Rename one configured household member.
@@ -351,17 +482,64 @@ pub async fn remove_list(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()
     changed(removed.rows_affected())
 }
 
-/// Edit a title through the complete owner/list/item destination, without moving it.
+/// Read one item through its complete owner/list/item destination.
+pub async fn item(
+    db: &SqlitePool,
+    owner_id: &str,
+    list_id: &str,
+    id: &str,
+) -> Result<WishlistItem> {
+    sqlx::query_as!(WishlistItem,
+        "SELECT id, list_id, title, created_at, url, image_url, notes, price, quantity, priority FROM wishlist_items WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?)", id, list_id, list_id, owner_id)
+        .fetch_optional(db).await?
+        .ok_or_else(|| WishlistError::NotFound("Wishlist Item not found for this owner and list".into()))
+}
+
+/// Atomically patch supplied fields, without moving an item or changing its retry receipt.
 pub async fn edit_item(
     db: &SqlitePool,
     owner_id: &str,
     list_id: &str,
     id: &str,
-    request: EditTitle,
+    request: EditItem,
 ) -> Result<WishlistItem> {
-    let title = text(&request.title, "title", 500)?;
+    let title_set = request.title.supplied();
+    let url_set = request.url.supplied();
+    let image_set = request.image_url.supplied();
+    let notes_set = request.notes.supplied();
+    let price_set = request.price.supplied();
+    let quantity_set = request.quantity.supplied();
+    let priority_set = request.priority.supplied();
+    let title = optional_text(request.title.value(), "title", 500)?;
+    let url = optional_url(request.url.value())?;
+    let image_url = optional_url(request.image_url.value())?;
+    let notes = notes(request.notes.value())?;
+    let price = optional_text(request.price.value(), "price", 100)?;
+    let quantity_value = request.quantity.value();
+    let priority_value = request.priority.value();
+    if (title_set && title.is_none())
+        || (quantity_set && quantity_value.is_none())
+        || (priority_set && priority_value.is_none())
+    {
+        return Err(WishlistError::Validation(
+            "title, quantity and priority cannot be null".into(),
+        ));
+    }
+    if let Some(value) = quantity_value {
+        quantity(value)?;
+    }
+    if let Some(value) = &priority_value {
+        priority(value)?;
+    }
     sqlx::query_as!(WishlistItem,
-        "UPDATE wishlist_items SET title = ? WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?) RETURNING id, list_id, title, created_at", title, id, list_id, list_id, owner_id)
+        "UPDATE wishlist_items SET title = CASE WHEN ? THEN ? ELSE title END,
+        url = CASE WHEN ? THEN ? ELSE url END, image_url = CASE WHEN ? THEN ? ELSE image_url END,
+        notes = CASE WHEN ? THEN ? ELSE notes END, price = CASE WHEN ? THEN ? ELSE price END,
+        quantity = CASE WHEN ? THEN ? ELSE quantity END, priority = CASE WHEN ? THEN ? ELSE priority END
+        WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?)
+        RETURNING id, list_id, title, created_at, url, image_url, notes, price, quantity, priority",
+        title_set, title, url_set, url, image_set, image_url, notes_set, notes, price_set, price,
+        quantity_set, quantity_value, priority_set, priority_value, id, list_id, list_id, owner_id)
         .fetch_optional(db).await?
         .ok_or_else(|| WishlistError::NotFound("Wishlist Item not found for this owner and list".into()))
 }

@@ -1,9 +1,11 @@
 import { z } from "zod"
+import { wishlistDetails } from "./wishlist"
 
 const pendingAddition = z.object({
   ownerId: z.uuid(),
   listId: z.uuid(),
   title: z.string(),
+  details: wishlistDetails.optional(),
   requestId: z.uuid(),
 })
 

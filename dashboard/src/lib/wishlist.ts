@@ -10,12 +10,18 @@ export const wishlist = z.object({
   name: z.string(),
 })
 
-/** Minimal generic title item; additional fields belong to the rich-item slice. */
+/** Rich desired item, without purchase or reservation state. */
 export const wishlistItem = z.object({
   id: z.uuid(),
   list_id: z.uuid(),
   title: z.string(),
   created_at: z.string(),
+  url: z.string().nullable(),
+  image_url: z.string().nullable(),
+  notes: z.string().nullable(),
+  price: z.string().nullable(),
+  quantity: z.number().int(),
+  priority: z.enum(["low", "normal", "high"]),
 })
 
 /** One configured person, without authentication or active-user state. */
@@ -53,6 +59,20 @@ export type WishlistMutation =
   | { readonly state: "saved" }
   | { readonly state: "failed"; readonly reason: WishlistFailure }
 
+/** Item write protocol; Axum owns field limits and HTTP(S) URL validation. */
+export const wishlistDetails = z.object({
+  title: z.string(),
+  url: z.string().nullable().optional(),
+  image_url: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  price: z.string().nullable().optional(),
+  quantity: z.number().optional(),
+  priority: z.string().optional(),
+})
+
+/** Editable item fields carried unchanged to the API. */
+export type WishlistDetails = z.infer<typeof wishlistDetails>
+
 const ownerTarget = z.object({ owner_id: z.uuid() })
 
 const listTarget = ownerTarget.extend({ list_id: z.uuid() })
@@ -67,12 +87,13 @@ export const wishlistCommand = z.discriminatedUnion("kind", [
   ownerTarget.extend({ kind: z.literal("create-list"), name: z.string() }),
   listTarget.extend({ kind: z.literal("rename-list"), name: z.string() }),
   listTarget.extend({ kind: z.literal("remove-list") }),
-  listTarget.extend({
+  listTarget.extend(wishlistDetails.shape).extend({
     kind: z.literal("add-item"),
-    title: z.string(),
     request_id: z.uuid(),
   }),
-  itemTarget.extend({ kind: z.literal("edit-item"), title: z.string() }),
+  itemTarget
+    .extend(wishlistDetails.partial().shape)
+    .extend({ kind: z.literal("edit-item") }),
   itemTarget.extend({ kind: z.literal("remove-item") }),
 ])
 
@@ -90,7 +111,7 @@ export const wishlistFailureMessage: Record<WishlistFailure, string> = {
   unavailable:
     "OpenHome could not confirm the result. Refresh before trying again.",
   invalid:
-    "Use a name of 1–200 characters or a wish of 1–500 characters, without control characters.",
+    "Check the fields: title 1–500 characters, notes up to 5000, price up to 100, quantity 1–999, and priority low, normal or high. Links must use HTTP(S) without credentials. Names allow 1–200 characters. Only notes allow line breaks and tabs.",
   conflict:
     "This name or request is already in use. Refresh and check the destination before trying again.",
   "not-found":

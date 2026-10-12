@@ -29,7 +29,7 @@ pub fn router(default_list_id: Option<String>) -> Router<AppState> {
         )
         .route(
             "/api/household-users/{owner_id}/wishlists/{list_id}/items/{id}",
-            patch(edit_item).delete(remove_item),
+            get(item).patch(edit_item).delete(remove_item),
         )
         .route("/api/wishlists", get(lists).post(create_list))
         .route("/api/wishlists/{id}/items", get(items))
@@ -71,10 +71,19 @@ async fn remove_list(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn item(
+    State(state): State<AppState>,
+    Path((owner_id, list_id, id)): Path<(String, String, String)>,
+) -> Result<Json<wishlist::WishlistItem>, WishlistError> {
+    Ok(Json(
+        wishlist::item(&state.db, &owner_id, &list_id, &id).await?,
+    ))
+}
+
 async fn edit_item(
     State(state): State<AppState>,
     Path((owner_id, list_id, id)): Path<(String, String, String)>,
-    Json(request): Json<wishlist::EditTitle>,
+    Json(request): Json<wishlist::EditItem>,
 ) -> Result<Json<wishlist::WishlistItem>, WishlistError> {
     Ok(Json(
         wishlist::edit_item(&state.db, &owner_id, &list_id, &id, request).await?,
