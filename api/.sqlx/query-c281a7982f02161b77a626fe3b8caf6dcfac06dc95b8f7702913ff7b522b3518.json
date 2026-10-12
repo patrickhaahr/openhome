@@ -1,26 +1,31 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT entry_id, owner_id, kind AS \"kind: MediaKind\", title FROM watchlist_addition_receipts WHERE request_id = ?",
+  "query": "SELECT tmdb_id, entry_id, owner_id, kind AS \"kind: MediaKind\", title FROM watchlist_addition_receipts WHERE request_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "entry_id",
+        "name": "tmdb_id",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Integer"
       },
       {
-        "name": "owner_id",
+        "name": "entry_id",
         "ordinal": 1,
         "type_info": "Text"
       },
       {
-        "name": "kind: MediaKind",
+        "name": "owner_id",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "title",
+        "name": "kind: MediaKind",
         "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 4,
         "type_info": "Text"
       }
     ],
@@ -28,11 +33,12 @@
       "Right": 1
     },
     "nullable": [
+      true,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "c69c189772a180f5e5f216f846f7273697d06cf127b50106805bd34406ec6ae7"
+  "hash": "c281a7982f02161b77a626fe3b8caf6dcfac06dc95b8f7702913ff7b522b3518"
 }

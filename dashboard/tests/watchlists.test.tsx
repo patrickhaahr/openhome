@@ -27,10 +27,18 @@ import {
   vi,
 } from "vitest"
 import { Watchlists } from "@/components/watchlists"
-import { readWatchlists, writeWatchlist } from "@/lib/watchlist.server"
+import {
+  readWatchlists,
+  writeWatchlist,
+  searchWatchlistMedia,
+} from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
-import type { WatchlistFilters, WatchlistMutation } from "@/lib/watchlist"
+import type {
+  WatchlistFilters,
+  WatchlistMutation,
+  MediaSearchResult,
+} from "@/lib/watchlist"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
@@ -39,6 +47,10 @@ let root: Root
 let container: HTMLDivElement
 
 let work: Promise<WatchlistMutation> = Promise.resolve({ state: "saved" })
+
+let searchWork: Promise<MediaSearchResult> = Promise.resolve({
+  state: "unavailable",
+})
 
 let refreshWork: Promise<void> = Promise.resolve()
 
@@ -105,6 +117,11 @@ async function render(): Promise<void> {
       <RouterContextProvider router={router}>
         <Watchlists
           data={data}
+          search={(input) => {
+            searchWork = searchWatchlistMedia(input)
+
+            return searchWork
+          }}
           filters={filters}
           filter={(next) => {
             filters = next
@@ -170,6 +187,7 @@ async function click(
   if (!button) throw new Error(`Missing button ${name}`)
   await act(async () => {
     button.click()
+    await searchWork
     await work
     await refreshWork
   })
@@ -386,7 +404,7 @@ test("status/date editing persists through remount and filters retain household 
 
   async function edit(): Promise<void> {
     const summary = container
-      .querySelector<HTMLDetailsElement>(`details`)
+      .querySelector<HTMLDetailsElement>(`details.watchlist-edit`)
       ?.querySelector("summary")
 
     if (!summary) throw new Error("Expected status/date editor")
@@ -413,13 +431,15 @@ test("status/date editing persists through remount and filters retain household 
   await type("Completion date for A Quiet Orbit / Member A", "2024-02-29")
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await click("Save status & dates")
-  expect(container.querySelector("details")?.open).toBe(true)
+  expect(
+    container.querySelector<HTMLDetailsElement>("details.watchlist-edit")?.open
+  ).toBe(true)
   expect(field("Completion date for A Quiet Orbit / Member A").value).toBe(
     "2024-02-29"
   )
-  expect(container.querySelector("details")?.textContent).toContain(
-    "OpenHome rejected the API key"
-  )
+  expect(
+    container.querySelector("details.watchlist-edit")?.textContent
+  ).toContain("OpenHome rejected the API key")
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   await click("Save status & dates")
   await act(async () => root.unmount())
@@ -464,5 +484,181 @@ test("status/date editing persists through remount and filters retain household 
     status: "planned",
     date_added: "2024-02-28",
     completion_date: null,
+  })
+})
+
+test("TMDB selection persists kind-specific identity and metadata while failed lookup retains manual planning", async () => {
+  await writeWishlist({ kind: "create-owner", name: "Member A" })
+  await render()
+
+  const form = container.querySelector(
+    'form[aria-label="Add plan for Member A"]'
+  )
+
+  if (!form) throw new Error("Expected owner form")
+  await type("Title for Member A", "Orbit")
+  await click("Search TMDB", form)
+  await vi.waitFor(() =>
+    expect(form.textContent).toContain("Select A Quiet Orbit")
+  )
+  expect(form.querySelector("img")?.getAttribute("src")).toBe(
+    "https://image.tmdb.org/t/p/w342/synthetic.jpg"
+  )
+  expect(form.textContent).toContain("A fictional journey")
+  expect(
+    container.querySelector('[aria-label="TMDB credits"]')?.textContent
+  ).toContain("not endorsed or certified by TMDB")
+  await click("Select A Quiet Orbit", form)
+  await click("Add plan", form)
+  await type("Type for Member A", "series")
+  await type("Title for Member A", "Lighthouse")
+  await click("Search TMDB", form)
+  await vi.waitFor(() =>
+    expect(form.textContent).toContain("Select The Lighthouse Journey")
+  )
+  await click("Select The Lighthouse Journey", form)
+  await click("Add plan", form)
+
+  const poster = container.querySelector<HTMLImageElement>(
+    ".watchlist-entries img"
+  )
+
+  if (!poster) throw new Error("Expected persisted poster")
+  await act(async () => poster.dispatchEvent(new Event("error")))
+  expect(poster.hidden).toBe(true)
+  await act(async () => poster.dispatchEvent(new Event("load")))
+  expect(poster.hidden).toBe(false)
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render()
+  const entries = (await available()).entries
+  expect(entries).toHaveLength(2)
+  expect(entries.find((entry) => entry.kind === "movie")).toMatchObject({
+    tmdb_id: 42,
+    title: "A Quiet Orbit",
+    release_date: "2020-02-29",
+    status: "planned",
+  })
+  expect(entries.find((entry) => entry.kind === "series")).toMatchObject({
+    tmdb_id: 42,
+    title: "The Lighthouse Journey",
+    status: "planned",
+  })
+
+  const metadataDetails = container.querySelector<HTMLDetailsElement>(
+    "details.watchlist-metadata-details"
+  )
+
+  if (!metadataDetails) throw new Error("Expected metadata editor")
+
+  const previousPoster = metadataDetails
+    .closest("li")
+    ?.querySelector<HTMLImageElement>("img")
+
+  if (!previousPoster) throw new Error("Expected poster before replacement")
+  await act(async () => {
+    previousPoster.dispatchEvent(new Event("error"))
+    metadataDetails.open = true
+  })
+  expect(previousPoster.hidden).toBe(true)
+  const searchTitle = metadataDetails.querySelector("input")
+
+  if (!searchTitle) throw new Error("Expected metadata query")
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set?.call(searchTitle, "Replacement poster")
+    searchTitle.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await click("Search TMDB", metadataDetails)
+
+  const select = metadataDetails.querySelector(
+    ".watchlist-search-results button"
+  )
+
+  if (!(select instanceof HTMLButtonElement))
+    throw new Error("Expected replacement result")
+  await click(select.textContent ?? "", metadataDetails)
+
+  const replacementPoster = metadataDetails
+    .closest("li")
+    ?.querySelector<HTMLImageElement>("img")
+
+  expect(replacementPoster?.getAttribute("src")).toBe(
+    "https://image.tmdb.org/t/p/w342/replacement.jpg"
+  )
+  expect(replacementPoster?.hidden).toBe(false)
+  await type("Type for Member A", "series")
+  await type("Title for Member A", "Offline story")
+  await click("Search TMDB")
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain("TMDB is unavailable")
+  )
+  expect(field("Title for Member A").value).toBe("Offline story")
+  await click("Add plan")
+  expect(
+    (await available()).entries.find((entry) => entry.title === "Offline story")
+  ).toMatchObject({ tmdb_id: null, kind: "series", status: "planned" })
+  await type("Type for Member A", "movie")
+  await type("Title for Member A", "Unavailable details")
+  await click("Search TMDB")
+  await click("Select A Quiet Orbit")
+  await click("Add plan")
+  expect(container.textContent).toContain("TMDB could not load the title")
+  expect(field("Title for Member A").value).toBe("A Quiet Orbit")
+  await click("Add manually")
+  await click("Add plan")
+  expect(
+    (await available()).entries.filter(
+      (entry) => entry.title === "A Quiet Orbit"
+    )
+  ).toHaveLength(2)
+  expect(
+    (await available()).entries.find(
+      (entry) => entry.title === "A Quiet Orbit" && entry.tmdb_id === null
+    )
+  ).toMatchObject({ kind: "movie", status: "planned" })
+})
+
+test("manual plans can gain TMDB details without losing completed state or dates", async () => {
+  await writeWishlist({ kind: "create-owner", name: "Member A" })
+  await render()
+  await add("Member A", "A Quiet Orbit")
+  const original = (await available()).entries[0]
+
+  if (!original) throw new Error("Expected manual plan")
+  await writeWatchlist({
+    action: "edit",
+    owner_id: original.owner_id,
+    entry_id: original.id,
+    status: "completed",
+    date_added: "2024-02-28",
+    completion_date: "2024-02-29",
+  })
+  await render()
+  const details = container.querySelector("details.watchlist-metadata-details")
+
+  if (!(details instanceof HTMLDetailsElement))
+    throw new Error("Expected metadata details")
+  await act(async () => {
+    details.open = true
+  })
+  await click("Search TMDB", details)
+  await vi.waitFor(() =>
+    expect(details.textContent).toContain("Select A Quiet Orbit")
+  )
+  await click("Select A Quiet Orbit", details)
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render()
+  expect(container.textContent).toContain("A fictional journey")
+  expect(container.textContent).toContain("Completed 2024-02-29")
+  expect((await available()).entries[0]).toMatchObject({
+    id: original.id,
+    tmdb_id: 42,
+    date_added: "2024-02-28",
+    status: "completed",
+    completion_date: "2024-02-29",
   })
 })

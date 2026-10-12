@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE id = ? AND owner_id = ?",
+  "query": "UPDATE watchlist_entries SET status = ?, date_added = ?, completion_date = ? WHERE id = ? AND owner_id = ? AND status = ? AND date_added = ? AND completion_date IS ? RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date",
   "describe": {
     "columns": [
       {
@@ -37,10 +37,30 @@
         "name": "completion_date",
         "ordinal": 6,
         "type_info": "Text"
+      },
+      {
+        "name": "tmdb_id",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "overview",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "poster_path",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "release_date",
+        "ordinal": 10,
+        "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 8
     },
     "nullable": [
       false,
@@ -49,8 +69,12 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "bc28f20c4f92b27a319894015858263ac4e2297a9ae380225b2b4f39a6517078"
+  "hash": "2dadfae5c1dd73ee25b627e921c57a8e299754613380d6e903798fb43c1d3ec0"
 }
