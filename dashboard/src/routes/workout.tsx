@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Workouts } from "@/components/workouts"
-import { historyStep, workoutSearch } from "@/lib/workout"
+import { historyStep, maxHistory, workoutSearch } from "@/lib/workout"
 import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
 
 /** Logged Workouts and the exercise library, read and written through Axum. */
@@ -54,7 +54,10 @@ function WorkoutPage(): React.JSX.Element {
           navigate({
             search: (previous) => ({
               ...previous,
-              shown: (previous.shown ?? historyStep) + historyStep,
+              shown: Math.min(
+                maxHistory,
+                (previous.shown ?? historyStep) + historyStep
+              ),
             }),
             resetScroll: false,
           })

@@ -89,7 +89,7 @@ const workoutRows = workoutSummary.array()
 async function api<T>(
   schema: z.ZodType<T>,
   path: string,
-  init?: { method: "POST" | "DELETE"; body?: string }
+  init?: { method: "POST" | "PATCH" | "DELETE"; body?: string }
 ): Promise<T> {
   const response = await fetch(`${fixture.url}${path}`, {
     method: init?.method ?? "GET",
@@ -302,9 +302,8 @@ test("shows unusable set fields beside the set without saving anything", async (
 test("a rejected edit keeps the draft and the stored workout, and saves once corrected", async () => {
   const pullUp = await libraryId("Pull-up")
 
-  const created = await api(workoutDetail, "/api/workouts", {
-    method: "POST",
-    body: JSON.stringify({
+  const backDay = (reps: number): string =>
+    JSON.stringify({
       date: "2026-10-08",
       name: "Back day",
       notes: null,
@@ -316,16 +315,20 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
           sets: [
             {
               set_number: 1,
-              reps: 5,
-              weight_kg: null,
-              duration_seconds: null,
+              reps,
+              weight_kg: 12.345,
+              duration_seconds: 40,
               rpe: null,
               notes: "Strict form",
             },
           ],
         },
       ],
-    }),
+    })
+
+  const created = await api(workoutDetail, "/api/workouts", {
+    method: "POST",
+    body: backDay(5),
   })
 
   const row = await api(exercise, "/api/exercises", {
@@ -334,7 +337,13 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
   })
 
   await render()
+  // Another device corrects the workout after this page read it.
+  await api(workoutDetail, `/api/workouts/${created.id}`, {
+    method: "PATCH",
+    body: backDay(6),
+  })
   await click("Edit")
+  expect(control("Pull-up set 1 reps", HTMLInputElement).value).toBe("6")
   await type("Pull-up set 1 reps", "7")
   await addExercise("Synthetic Row")
   await type("Synthetic Row set 1 reps", "12")
@@ -342,12 +351,13 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
   await api(z.undefined(), `/api/exercises/${row.id}`, { method: "DELETE" })
   await click("Save changes")
 
-  expect(container.textContent).toContain(
+  // The failure sits beside the save button rather than above a long editor.
+  expect(container.querySelector('form [role="alert"]')?.textContent).toContain(
     "An exercise in this workout is no longer in the library."
   )
   expect(control("Pull-up set 1 reps", HTMLInputElement).value).toBe("7")
   expect((await stored(created.id)).exercises).toHaveLength(1)
-  expect((await stored(created.id)).exercises[0]?.sets[0]?.reps).toBe(5)
+  expect((await stored(created.id)).exercises[0]?.sets[0]?.reps).toBe(6)
 
   await click("Remove Synthetic Row from this workout")
   await click("Save changes")
@@ -357,12 +367,14 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
   expect(saved.exercises.map((entry) => entry.exercise.name)).toEqual([
     "Pull-up",
   ])
-  // The set note the form does not edit survives the full replacement.
+  // Stored values the form does not edit survive the full replacement unrounded.
   expect(saved.exercises[0]?.sets[0]).toMatchObject({
     reps: 7,
+    weight_kg: 12.345,
+    duration_seconds: 40,
     notes: "Strict form",
   })
-  expect(container.textContent).toContain("7 reps · bodyweight")
+  expect(container.textContent).toContain("7 reps in 40 s · +12,35 kg")
 })
 
 test("removes a workout only after confirmation and then shows the next newest", async () => {

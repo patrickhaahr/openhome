@@ -4,6 +4,7 @@ import { requestOpenHome } from "./openhome.server"
 import {
   exercise,
   historyStep,
+  maxHistory,
   workoutDetail,
   workoutSummary,
   type SelectedWorkout,
@@ -17,7 +18,7 @@ import {
 function reason(status: number): WorkoutFailure {
   if (status === 400) return "invalid"
 
-  // Axum answers 422 only when an entry names an Exercise that is not stored.
+  // Axum answers 422 when an entry names an Exercise that is not stored; typed writes rule out body-shape 422s.
   if (status === 422) return "missing-exercise"
 
   if (status === 404) return "not-found"
@@ -101,7 +102,7 @@ export async function readWorkouts(
     state: "available",
     exercises: exercises.data,
     history: history.data.slice(0, shown),
-    hasOlder: history.data.length > shown,
+    hasOlder: history.data.length > shown && shown < maxHistory,
     selected,
   }
 }

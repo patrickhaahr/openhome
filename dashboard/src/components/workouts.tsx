@@ -55,7 +55,7 @@ function entryCount(count: number): string {
 
 type Editing =
   | { readonly kind: "create"; readonly today: string }
-  | { readonly kind: "replace"; readonly workout: WorkoutDetail }
+  | { readonly kind: "replace"; readonly workoutId: number }
 
 type WorkoutsProps = {
   readonly data: WorkoutState
@@ -153,12 +153,25 @@ export function Workouts({
       ? data.selected.workout
       : undefined
 
+  // An edit drafts from the freshly read Workout; once it is gone the editor closes.
+  const active =
+    editing?.kind === "replace" && selected?.id !== editing.workoutId
+      ? undefined
+      : editing
+
+  // Failures belong beside the control that caused them, not above a long editor.
+  const toolbarFeedback =
+    feedback?.failed === true && (active !== undefined || removal !== undefined)
+      ? undefined
+      : feedback
+
   function editorFor(current: Editing): React.JSX.Element | null {
     if (data.state !== "available") return null
 
     const shared = {
       exercises: data.exercises,
       disabled: busy,
+      failure: feedback?.failed === true ? feedback.text : undefined,
       cancel: () => {
         setEditing(undefined)
         setFeedback(undefined)
@@ -178,17 +191,19 @@ export function Workouts({
           />
         )
       case "replace":
+        if (selected === undefined) return null
+
         return (
           <WorkoutEditor
             {...shared}
-            key={current.workout.id}
+            key={selected.id}
             title="Edit workout"
             submitLabel="Save changes"
-            initial={draftFromWorkout(current.workout, createRequestId)}
+            initial={draftFromWorkout(selected, createRequestId)}
             save={(input) =>
               save({
                 kind: "replace",
-                workout_id: current.workout.id,
+                workout_id: selected.id,
                 ...input,
               })
             }
@@ -204,7 +219,7 @@ export function Workouts({
         <div className="workout-toolbar-actions">
           <Button
             variant="outline"
-            disabled={busy}
+            disabled={busy || active !== undefined}
             onClick={() => {
               void run(async () => {
                 await refresh()
@@ -216,7 +231,7 @@ export function Workouts({
           </Button>
           {data.state === "available" ? (
             <Button
-              disabled={busy || editing !== undefined}
+              disabled={busy || active !== undefined}
               onClick={() => {
                 setFeedback(undefined)
                 setEditing({ kind: "create", today: trainingDayOn(new Date()) })
@@ -231,9 +246,9 @@ export function Workouts({
       <p
         className="workout-feedback"
         role="status"
-        data-failed={feedback?.failed}
+        data-failed={toolbarFeedback?.failed}
       >
-        {feedback?.text ?? (busy ? "Working…" : "")}
+        {toolbarFeedback?.text ?? (busy ? "Working…" : "")}
       </p>
       {data.state === "unavailable" ? (
         <Card>
@@ -265,7 +280,7 @@ export function Workouts({
                     <Button
                       variant="ghost"
                       aria-pressed={selected?.id === workout.id}
-                      disabled={busy || editing !== undefined}
+                      disabled={busy || active !== undefined}
                       onClick={() => {
                         setFeedback(undefined)
                         void run(
@@ -286,7 +301,7 @@ export function Workouts({
             {data.hasOlder ? (
               <Button
                 variant="outline"
-                disabled={busy || editing !== undefined}
+                disabled={busy || active !== undefined}
                 onClick={() => {
                   void run(
                     showOlder,
@@ -300,18 +315,21 @@ export function Workouts({
           </aside>
           <Card>
             <CardContent>
-              {editing === undefined ? (
+              {active === undefined ? (
                 <WorkoutView
                   data={data}
                   disabled={busy}
                   edit={(workout) => {
-                    setFeedback(undefined)
-                    setEditing({ kind: "replace", workout })
+                    // Another device may have changed it since this page read it.
+                    void run(async () => {
+                      await open(workout.id)
+                      setEditing({ kind: "replace", workoutId: workout.id })
+                    }, "Could not read the latest version of this workout. Refresh history and try again.")
                   }}
                   remove={setRemoval}
                 />
               ) : (
-                editorFor(editing)
+                editorFor(active)
               )}
             </CardContent>
           </Card>
@@ -333,14 +351,17 @@ export function Workouts({
             </AlertDialogDescription>
           </AlertDialogHeader>
           {feedback?.failed === true ? (
-            <p role="status" className="workout-feedback" data-failed="true">
+            <p role="alert" className="workout-feedback" data-failed="true">
               {feedback.text}
             </p>
           ) : null}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Keep it</AlertDialogCancel>
+            <AlertDialogCancel size="lg" disabled={busy}>
+              Keep it
+            </AlertDialogCancel>
             <Button
               variant="destructive"
+              size="lg"
               disabled={busy}
               onClick={() => {
                 if (removal !== undefined)
