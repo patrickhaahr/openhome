@@ -128,7 +128,12 @@ async function render(
 
           return work
         }}
-        reloadActive={readActiveRoute}
+        reloadActive={() => {
+          const work = readActiveRoute()
+          planning = work
+
+          return work
+        }}
         plan={(request) => {
           requests.push(request)
           const work = generateLoops(request)
@@ -244,7 +249,7 @@ test("compares three measured 5 km walking loops from authenticated Axum on the 
   await click("Loop B")
   expect(second?.getAttribute("aria-pressed")).toBe("true")
   expect(first?.getAttribute("aria-pressed")).toBe("false")
-  expect(routes.at(-1)).toEqual({ lines: drawn?.lines, focused: 1 })
+  expect(routes.at(-1)).toMatchObject({ lines: drawn?.lines, focused: 1 })
   expect(container.innerHTML).not.toContain(apiKey)
 })
 
@@ -441,7 +446,7 @@ test("selects the compared loop through Axum and restores it after unmount and r
   ).toContain("4.75 km walking loop")
   expect(alternatives()).toHaveLength(0)
   await click("Show active route on map")
-  expect(routes.at(-1)).toEqual({ lines: [second.geometry], focused: 0 })
+  expect(routes.at(-1)).toMatchObject({ lines: [second.geometry], focused: 0 })
   expect(container.innerHTML).not.toContain(apiKey)
 })
 
@@ -491,6 +496,10 @@ test("announces a pending selection and retains the confirmed route after a fail
     container.querySelector('[aria-label="Active route"]')?.textContent
   ).toContain("5.10 km walking loop")
   expect(await readActiveRoute()).toEqual(saved)
+  await click("Check selection")
+  expect(alternatives()[0]?.getAttribute("aria-pressed")).toBe("true")
+  expect(alternatives()[1]?.getAttribute("aria-pressed")).toBe("false")
+  expect(routes.at(-1)?.lines[0]).toEqual(saved.route.geometry)
 })
 
 test("failed reads and pruned choices offer recovery without claiming an empty or changed selection", async () => {
@@ -508,5 +517,55 @@ test("failed reads and pruned choices offer recovery without claiming an empty o
   )
   expect(container.textContent).not.toContain(
     "Loop selected. Your phone can retrieve it."
+  )
+})
+
+test("showing the saved route synchronizes the choice with the map", async () => {
+  const plan = await generatedPlan()
+  const first = plan.loops[0]
+
+  if (first === undefined) throw new Error("Expected Loop A")
+
+  const saved = await selectActiveRoute({ route_id: first.id })
+
+  if (saved.state !== "selected") throw new Error("Expected a saved route")
+
+  await render(saved)
+  await click("Plan loops")
+  await click("Loop B")
+  await click("Show active route on map")
+  expect(alternatives()[0]?.getAttribute("aria-pressed")).toBe("true")
+  expect(alternatives()[1]?.getAttribute("aria-pressed")).toBe("false")
+
+  const selected = Array.from(container.querySelectorAll("button")).find(
+    (button) => button.textContent === "Active route selected"
+  )
+
+  expect(selected?.disabled).toBe(true)
+
+  // The saved 5 km loop is outside a new 10 km comparison: nothing there is inspected yet.
+  await click("10 km")
+  await click("Plan loops")
+  await click("Show active route on map")
+  expect(
+    alternatives().every(
+      (button) => button.getAttribute("aria-pressed") === "false"
+    )
+  ).toBe(true)
+
+  const choose = Array.from(container.querySelectorAll("button")).find(
+    (button) => button.textContent === "Choose a loop to select"
+  )
+
+  expect(choose?.disabled).toBe(true)
+  await click("Loop B")
+  await click("Select Loop B")
+  const replacement = await readActiveRoute()
+  expect(replacement.state).toBe("selected")
+
+  if (replacement.state !== "selected") throw new Error("Expected selection")
+
+  expect(routes.at(-1)?.lines[routes.at(-1)?.focused ?? 0]).toEqual(
+    replacement.route.geometry
   )
 })

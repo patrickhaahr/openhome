@@ -11,6 +11,7 @@ import {
   type MapOriginRead,
   type MapRoutes,
 } from "@/lib/map"
+import { activeRouteMap, type ActiveRouteRead } from "@/lib/route-loop"
 import { getMapOrigin } from "@/lib/map.functions"
 import {
   loadActiveRoute,
@@ -41,8 +42,33 @@ export const Route = createFileRoute("/travel")({
 })
 
 function TravelPage(): React.JSX.Element {
-  const { map: read, active } = Route.useLoaderData()
+  const { map, active } = Route.useLoaderData()
+
+  return (
+    <TravelContent
+      key={
+        active.state === "selected"
+          ? `${active.route.id}:${active.route.version}`
+          : active.state
+      }
+      map={map}
+      active={active}
+    />
+  )
+}
+
+function TravelContent({
+  map: read,
+  active,
+}: {
+  map: MapOriginRead
+  active: ActiveRouteRead
+}): React.JSX.Element {
   const [routes, setRoutes] = useState<MapRoutes | undefined>(undefined)
+
+  const displayedRoutes =
+    routes ??
+    (active.state === "selected" ? activeRouteMap(active.route) : undefined)
 
   return (
     <section className="focused-page travel-page">
@@ -63,12 +89,7 @@ function TravelPage(): React.JSX.Element {
             <SharedMap
               key={`${read.origin.latitude},${read.origin.longitude}`}
               origin={read.origin}
-              routes={
-                routes ??
-                (active.state === "selected"
-                  ? { lines: [active.route.geometry], focused: 0 }
-                  : undefined)
-              }
+              routes={displayedRoutes}
             />
             <figcaption>
               <span className="travel-map-origin">
@@ -77,15 +98,13 @@ function TravelPage(): React.JSX.Element {
                   ? "Demo origin · central Copenhagen"
                   : "Private origin"}
               </span>
-              <span>Stops and live vehicles are not connected yet.</span>
+              <span>
+                {displayedRoutes?.label ??
+                  "Stops and live vehicles are not connected yet."}
+              </span>
             </figcaption>
           </figure>
           <LoopPlanner
-            key={
-              active.state === "selected"
-                ? `${active.route.id}:${active.route.version}`
-                : active.state
-            }
             plan={requestLoops}
             initialActive={active}
             select={requestRouteSelection}
