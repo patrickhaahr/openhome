@@ -65,9 +65,9 @@ state.
   frame intervals median 17 ms, p95 29 ms, worst 139 ms. Eighty keyboard pans
   in 3D over 16 s: median 17 ms, p95 19 ms, worst 141 ms.
   [Actual iPad Safari capture](ipad-safari-3d.png).
-- Finger pan and pinch in 3D on the physical iPad still need confirmation by
-  hand; Web Inspector cannot produce real touches, so the pans above were
-  keyboard-driven.
+- The user confirmed that finger pan and pinch work in 3D on the physical iPad.
+  The automated pans above were keyboard-driven; Web Inspector cannot produce
+  real touches.
 
 The no-building-data notice was reasoned from the rendered-features check and
 not reproduced: the demo area has buildings everywhere.
