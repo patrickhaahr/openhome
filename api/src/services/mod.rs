@@ -15,3 +15,5 @@ pub mod wishlist;
 pub mod wishlist_metadata;
 
 pub mod photos;
+
+pub mod active_route;

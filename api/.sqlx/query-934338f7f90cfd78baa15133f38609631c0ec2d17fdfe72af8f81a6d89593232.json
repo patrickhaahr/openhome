@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO route_candidates (id, snapshot) VALUES (?, ?)\n             ON CONFLICT(id) DO UPDATE SET rowid = (SELECT COALESCE(MAX(rowid), 0) + 1 FROM route_candidates)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "934338f7f90cfd78baa15133f38609631c0ec2d17fdfe72af8f81a6d89593232"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT a.version, c.snapshot FROM active_route a\n         JOIN route_candidates c ON c.id = a.route_id WHERE a.slot = 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "version",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "snapshot",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "323d23d04e6e4ca32d5e6ccd34af795d1acaecc9744cc21ae8e302b99d19d2cf"
+}

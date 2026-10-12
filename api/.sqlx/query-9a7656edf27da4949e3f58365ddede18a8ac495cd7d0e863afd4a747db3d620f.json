@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM route_candidates\n         WHERE id NOT IN (SELECT route_id FROM active_route)\n           AND rowid NOT IN (SELECT rowid FROM route_candidates ORDER BY rowid DESC LIMIT 96)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "9a7656edf27da4949e3f58365ddede18a8ac495cd7d0e863afd4a747db3d620f"
+}
