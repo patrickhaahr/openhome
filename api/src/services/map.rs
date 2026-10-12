@@ -23,6 +23,12 @@ pub enum MapOriginSource {
 }
 
 impl MapOrigin {
+    /// Longitude and latitude for server-side integrations; never log them.
+    #[must_use]
+    pub fn coordinates(self) -> [f64; 2] {
+        [self.longitude, self.latitude]
+    }
+
     /// Private coordinates must be supplied together. The demo origin is only used when explicitly
     /// enabled and never combined with private coordinates, so it cannot become a silent default.
     pub fn parse(

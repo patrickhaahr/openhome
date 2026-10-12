@@ -699,6 +699,73 @@
   display: grid;
   gap: 0.75rem;
 }
+/* Map and planner side by side in landscape; the planner follows the map in portrait. */
+.travel-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+@media (min-width: 960px) {
+  .travel-layout {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+  }
+}
+.walking-loop-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.walking-loop-body {
+  display: grid;
+  gap: 1.25rem;
+}
+.walking-loop-body [data-slot="button"] {
+  width: 100%;
+}
+.walking-loop-result {
+  display: grid;
+  gap: 0.5rem;
+}
+.walking-loop-result h3 {
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+.walking-loop-distance {
+  display: grid;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+.walking-loop-distance span {
+  color: var(--foreground);
+  font-size: 2.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.walking-loop-fit {
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--primary);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.walking-loop-fit[data-fit="outside"] {
+  border-left-color: var(--muted-foreground);
+}
+.walking-loop-hint {
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.walking-loop-attribution {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
 .travel-map figcaption {
   display: flex;
   flex-wrap: wrap;

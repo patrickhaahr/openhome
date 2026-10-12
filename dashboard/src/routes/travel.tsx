@@ -1,17 +1,24 @@
+import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/csr/MapTrifold"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { SharedMap } from "@/components/shared-map"
+import { WalkingLoopPlanner } from "@/components/walking-loop"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { features } from "@/lib/features"
-import { unavailableMapOrigin, type MapOriginRead } from "@/lib/map"
+import {
+  unavailableMapOrigin,
+  type MapLine,
+  type MapOriginRead,
+} from "@/lib/map"
 import { getMapOrigin } from "@/lib/map.functions"
+import { requestWalkingLoop } from "@/lib/route-loop.functions"
 
 import mapCss from "maplibre-gl/dist/maplibre-gl.css?url"
 
 const travel = features[2] satisfies { id: "travel" }
 
-/** Routes and transit around the private origin; overlays arrive with their integrations. */
+/** Walking loops and, later, transit around the private origin. */
 export const Route = createFileRoute("/travel")({
   head: () => ({
     meta: [{ title: `${travel.title} · OpenHome` }],
@@ -24,6 +31,7 @@ export const Route = createFileRoute("/travel")({
 
 function TravelPage(): React.JSX.Element {
   const read = Route.useLoaderData()
+  const [route, setRoute] = useState<MapLine | undefined>(undefined)
 
   return (
     <section className="focused-page travel-page">
@@ -33,26 +41,34 @@ function TravelPage(): React.JSX.Element {
           {travel.title}
         </h1>
         <p className="feature-intro">
-          Explore the local area. Walking routes, departures and live vehicles
-          will appear on this map as they are added.
+          Plan a walking loop from the origin and explore the local area.
+          Departures and live vehicles will appear on this map as they are
+          added.
         </p>
       </header>
       {read.state === "configured" ? (
-        <figure className="travel-map">
-          <SharedMap
-            key={`${read.origin.latitude},${read.origin.longitude}`}
-            origin={read.origin}
+        <div className="travel-layout">
+          <figure className="travel-map">
+            <SharedMap
+              key={`${read.origin.latitude},${read.origin.longitude}`}
+              origin={read.origin}
+              route={route}
+            />
+            <figcaption>
+              <span className="travel-map-origin">
+                <span aria-hidden="true" />
+                {read.origin.source === "demo"
+                  ? "Demo origin · central Copenhagen"
+                  : "Private origin"}
+              </span>
+              <span>Stops and live vehicles are not connected yet.</span>
+            </figcaption>
+          </figure>
+          <WalkingLoopPlanner
+            plan={requestWalkingLoop}
+            onRouteChange={setRoute}
           />
-          <figcaption>
-            <span className="travel-map-origin">
-              <span aria-hidden="true" />
-              {read.origin.source === "demo"
-                ? "Demo origin · central Copenhagen"
-                : "Private origin"}
-            </span>
-            <span>No routes, stops or vehicles are connected yet.</span>
-          </figcaption>
-        </figure>
+        </div>
       ) : (
         <MapSetup reason={read.reason} />
       )}

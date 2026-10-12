@@ -138,6 +138,12 @@ A desired item recorded in a Wishlist, described by a generic request or a
 specific product with an optional link and supporting details.
 _Avoid_: Gift reservation, shopping order
 
+**Walking Loop**:
+A generated route that starts and ends near the shared map origin, measured
+from its own geometry and compared with the requested distance. It becomes the
+Active Route only when the household selects it.
+_Avoid_: Active Route, fabricated route
+
 **Active Route**:
 The selected walking or running route made available to the Dashboard and the
 Mobile Client for viewing with the phone's current location.
