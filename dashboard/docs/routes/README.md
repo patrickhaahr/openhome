@@ -211,7 +211,11 @@ The selected snapshot remains stored regardless of provider/cache availability.
 - Rendered dashboard tests select Loop B through the real authenticated Axum
   fixture, unmount/reload the read, restore its summary and map geometry, show
   pending feedback, retain the confirmed choice after a failed replacement and
-  offer recovery for unavailable reads and pruned candidates.
+  offer recovery for unavailable reads and pruned candidates. Showing/checking
+  a saved route synchronizes the inspected candidate; when the saved route is
+  outside the alternatives, selection waits for another comparison. A rendered
+  Travel route refresh also replaces the map's displayed route when another
+  client selects a different loop.
 - The desktop browser verifies real Start server functions: compare B, select
   B, then reload Travel; the saved 4.75 km loop returns without generating again.
   Public captures use only the unrelated Copenhagen demo origin and synthetic
