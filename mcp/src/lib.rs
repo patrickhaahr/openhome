@@ -272,6 +272,7 @@ impl OpenHomeApi {
                 "status": 400,
             }));
         }
+        let deleting = method == reqwest::Method::DELETE;
         let mut url = self.base_url.clone();
         url.path_segments_mut()
             .expect("parse_api_url accepts only base URLs")
@@ -301,7 +302,7 @@ impl OpenHomeApi {
         };
         let status = response.status();
         // DELETE is the only API operation whose success deliberately has no JSON body.
-        if status == reqwest::StatusCode::NO_CONTENT {
+        if deleting && status == reqwest::StatusCode::NO_CONTENT {
             return CallToolResult::structured(json!({"deleted":true}));
         }
         let body: Option<Value> = match response.bytes().await {

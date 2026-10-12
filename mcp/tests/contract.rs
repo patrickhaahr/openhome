@@ -1064,3 +1064,38 @@ async fn rich_item_management_uses_real_transport_with_partial_updates_and_delet
     );
     client.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn unexpected_no_content_never_confirms_a_read_or_item_write() {
+    let upstream = Router::new().route(
+        "/api/{*path}",
+        axum::routing::any(|| async { axum::http::StatusCode::NO_CONTENT }),
+    );
+    let api = format!("http://{}", serve(upstream).await);
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    for (tool, args) in [
+        (
+            "training_context",
+            json!({"from_day":"2026-09-14","to_day":"2026-09-14"}),
+        ),
+        (
+            "add_wishlist_item",
+            json!({"title":"A jacket","request_id":"missing-receipt"}),
+        ),
+        (
+            "update_wishlist_item",
+            json!({"owner_id":"owner","list_id":"list","item_id":"item","quantity":2}),
+        ),
+    ] {
+        let result = wishlist_call(&client, tool, args).await;
+        assert_eq!(
+            result.is_error,
+            Some(true),
+            "{tool} must not confirm an empty result"
+        );
+        assert_eq!(result.structured_content.unwrap()["status"], 204);
+    }
+    client.cancel().await.unwrap();
+}
