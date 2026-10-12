@@ -774,12 +774,41 @@
 .shared-map-message p {
   max-width: 28rem;
 }
-.shared-map-notice {
+.shared-map-perspective {
+  display: grid;
+  margin-bottom: 0.25rem;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 18px oklch(0 0 0 / 35%);
+}
+.shared-map-controls .shared-map-perspective [data-slot="button"] {
+  border-radius: 0;
+  box-shadow: none;
+  font-variant-numeric: tabular-nums;
+}
+.shared-map-controls
+  .shared-map-perspective
+  [data-slot="button"]
+  + [data-slot="button"] {
+  border-top-width: 0;
+}
+.shared-map-controls .shared-map-perspective [aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.shared-map-notices {
   position: absolute;
   top: 1rem;
   left: 1rem;
   right: 5rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.shared-map-notice {
   display: flex;
+  pointer-events: auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1rem;
