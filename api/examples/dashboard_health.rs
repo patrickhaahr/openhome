@@ -1,9 +1,10 @@
-//! Isolated, loopback-only health and Wishlist seam for tests and synthetic previews.
-//! Uses production routes, migrations and authentication without household configuration.
+//! Isolated, loopback-only health, Wishlist and map seam for tests and synthetic previews.
+//! Uses production routes, migrations and authentication without household configuration;
+//! the map explicitly serves the unrelated Copenhagen demo origin.
 
 use std::sync::Arc;
 
-use openhome_api::{AppState, DockerCache, auth, routes};
+use openhome_api::{AppState, DockerCache, auth, routes, services::map::MapOrigin};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 use tokio::net::TcpListener;
 
@@ -24,8 +25,10 @@ async fn main() -> anyhow::Result<()> {
         docker_cache: Arc::new(tokio::sync::Mutex::new(DockerCache::default())),
     };
     let key = auth::ApiKey::new("synthetic-dashboard-api-key".to_string());
+    let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
+        .merge(routes::map::router(demo_origin))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, key.clone())
