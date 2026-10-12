@@ -1,10 +1,15 @@
+use crate::services::{
+    tmdb::{MediaMetadata, TmdbService},
+    watchlist::MediaKind,
+};
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
 };
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::{
@@ -15,13 +20,19 @@ use crate::{
     },
 };
 
-pub fn router() -> Router<AppState> {
+pub fn router(provider: Option<TmdbService>) -> Router<AppState> {
     Router::new()
+        .route("/api/watchlist/search", get(search))
+        .route(
+            "/api/household-users/{owner_id}/watchlist/entries/{id}/metadata",
+            axum::routing::post(enrich_entry),
+        )
         .route("/api/watchlist/entries", get(entries).post(add_entry))
         .route(
             "/api/household-users/{owner_id}/watchlist/entries/{id}",
             get(entry).patch(edit_entry).delete(remove_entry),
         )
+        .layer(Extension(provider))
 }
 
 async fn entries(
@@ -33,9 +44,10 @@ async fn entries(
 
 async fn add_entry(
     State(state): State<AppState>,
+    Extension(provider): Extension<Option<TmdbService>>,
     Json(request): Json<AddEntry>,
 ) -> Result<(StatusCode, Json<Addition>), WatchlistError> {
-    let addition = watchlist::add_entry(&state.db, request).await?;
+    let addition = watchlist::add_entry(&state.db, request, provider.as_ref()).await?;
     let status = if addition.replayed {
         StatusCode::OK
     } else {
@@ -72,6 +84,9 @@ async fn remove_entry(
 impl IntoResponse for WatchlistError {
     fn into_response(self) -> Response {
         match self {
+            Self::ProviderUnavailable => (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
+                "code": "tmdb_unavailable", "error": "TMDB is unavailable; you can still add a manual plan", "status": 503
+            }))).into_response(),
             Self::Validation(message) => AppError::Validation(message).into_response(),
             Self::NotFound(message) => AppError::NotFound(message).into_response(),
             Self::Conflict(message) => AppError::Conflict(message).into_response(),
@@ -92,4 +107,53 @@ impl IntoResponse for WatchlistError {
             Self::Database(error) => AppError::Internal(error.into()).into_response(),
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Search {
+    kind: MediaKind,
+    query: String,
+}
+
+async fn search(
+    Extension(provider): Extension<Option<TmdbService>>,
+    Query(request): Query<Search>,
+) -> Result<Json<Vec<MediaMetadata>>, WatchlistError> {
+    let query = request.query.trim();
+    if query.is_empty() || query.chars().count() > 200 || query.chars().any(char::is_control) {
+        return Err(WatchlistError::Validation(
+            "Search requires 1-200 characters without control characters".into(),
+        ));
+    }
+    Ok(Json(
+        provider
+            .ok_or(WatchlistError::ProviderUnavailable)?
+            .search(request.kind, query)
+            .await?,
+    ))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Enrichment {
+    tmdb_id: i64,
+}
+
+async fn enrich_entry(
+    State(state): State<AppState>,
+    Extension(provider): Extension<Option<TmdbService>>,
+    Path((owner_id, id)): Path<(String, String)>,
+    Json(request): Json<Enrichment>,
+) -> Result<Json<WatchlistEntry>, WatchlistError> {
+    Ok(Json(
+        watchlist::enrich_entry(
+            &state.db,
+            &owner_id,
+            &id,
+            request.tmdb_id,
+            provider.as_ref(),
+        )
+        .await?,
+    ))
 }

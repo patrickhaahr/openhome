@@ -6,6 +6,7 @@ pub mod map;
 pub mod noop_push;
 mod patch;
 pub mod switchbot;
+pub mod tmdb;
 pub mod training;
 pub mod watchlist;
 pub mod weather;

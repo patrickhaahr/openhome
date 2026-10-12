@@ -1,3 +1,4 @@
+import { WatchlistPoster } from "./watchlist-poster"
 import { useEffect, useId, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { FilmSlateIcon } from "@phosphor-icons/react/dist/csr/FilmSlate"
@@ -16,6 +17,12 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
+import {
+  WatchlistMediaSearch,
+  WatchlistMetadataDetails,
+  TmdbCredits,
+  type SearchMedia,
+} from "./watchlist-media-search"
 import { WatchlistEntryDetails } from "./watchlist-entry-details"
 import { createRequestId } from "@/lib/request-id"
 import {
@@ -23,6 +30,7 @@ import {
   watchlistFailureMessage,
   watchlistFilters,
   watchStatusLabels,
+  type MediaMetadata,
   type WatchlistFilters,
   type WatchlistCommand,
   type WatchlistEntry,
@@ -39,7 +47,9 @@ export function Watchlists({
   refresh,
   filters,
   filter,
+  search,
 }: {
+  search: SearchMedia
   data: WatchlistState
   filters: WatchlistFilters
   filter: (filters: WatchlistFilters) => void
@@ -105,6 +115,7 @@ export function Watchlists({
         text: {
           add: "Plan saved to OpenHome.",
           edit: "Status and dates saved to OpenHome.",
+          enrich: "Title details saved. Your status and dates are unchanged.",
           remove: "Plan removed from OpenHome.",
         }[command.action],
       })
@@ -272,6 +283,7 @@ export function Watchlists({
                       ownerName={owner.name}
                       disabled={busy}
                       save={save}
+                      search={search}
                     />
                     {entries.length === 0 ? (
                       <div className="watchlist-empty">
@@ -294,15 +306,35 @@ export function Watchlists({
                       >
                         {entries.map((entry) => (
                           <li key={entry.id}>
-                            <span className="watchlist-kind-icon">
-                              {entry.kind === "movie" ? (
-                                <FilmSlateIcon size={24} aria-hidden="true" />
-                              ) : (
-                                <TelevisionIcon size={24} aria-hidden="true" />
-                              )}
-                            </span>
+                            {entry.poster_path !== null ? (
+                              <WatchlistPoster path={entry.poster_path} />
+                            ) : (
+                              <span className="watchlist-kind-icon">
+                                {entry.kind === "movie" ? (
+                                  <FilmSlateIcon size={24} aria-hidden="true" />
+                                ) : (
+                                  <TelevisionIcon
+                                    size={24}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </span>
+                            )}
                             <div className="watchlist-entry-text">
-                              <h3>{entry.title}</h3>
+                              <h3>
+                                {entry.title}
+                                {entry.release_date !== null ? (
+                                  <span className="watchlist-release-year">
+                                    {" "}
+                                    · {entry.release_date.slice(0, 4)}
+                                  </span>
+                                ) : null}
+                              </h3>
+                              {entry.overview !== null ? (
+                                <p className="watchlist-overview">
+                                  {entry.overview}
+                                </p>
+                              ) : null}
                               <p>
                                 {entry.kind === "movie"
                                   ? "Movie"
@@ -329,6 +361,13 @@ export function Watchlists({
                                   </time>
                                 </p>
                               ) : null}
+                              <WatchlistMetadataDetails
+                                entry={entry}
+                                ownerName={owner.name}
+                                disabled={busy}
+                                search={search}
+                                save={save}
+                              />
                               <WatchlistEntryDetails
                                 entry={entry}
                                 ownerName={owner.name}
@@ -362,6 +401,7 @@ export function Watchlists({
             })}
         </div>
       )}
+      <TmdbCredits />
       <AlertDialog
         open={removal !== undefined}
         onOpenChange={(open) => {
@@ -443,7 +483,9 @@ function AddPlan({
   ownerName,
   disabled,
   save,
+  search,
 }: {
+  search: SearchMedia
   ownerId: string
   ownerName: string
   disabled: boolean
@@ -452,6 +494,10 @@ function AddPlan({
   const id = useId()
   const [title, setTitle] = useState("")
   const [kind, setKind] = useState<WatchlistEntry["kind"]>("movie")
+
+  const [selected, setSelected] =
+    useState<Pick<MediaMetadata, "kind" | "title" | "tmdb_id">>()
+
   const pending = useRef<PendingPlan | undefined>(undefined)
   // Read tab storage after hydration, keeping SSR and the first client render identical.
   useEffect(() => {
@@ -462,6 +508,13 @@ function AddPlan({
       // eslint-disable-next-line react/set-state-in-effect -- Restore a browser-owned retry draft after hydration.
       setTitle(recovered.title)
       setKind(recovered.kind)
+
+      if (recovered.tmdb_id !== undefined)
+        setSelected({
+          kind: recovered.kind,
+          title: recovered.title,
+          tmdb_id: recovered.tmdb_id,
+        })
     }
   }, [ownerId])
 
@@ -475,7 +528,8 @@ function AddPlan({
     if (
       !pending.current ||
       pending.current.title !== normalized ||
-      pending.current.kind !== kind
+      pending.current.kind !== kind ||
+      pending.current.tmdb_id !== selected?.tmdb_id
     ) {
       pending.current = {
         action: "add",
@@ -483,6 +537,7 @@ function AddPlan({
         title: normalized,
         kind,
         request_id: createRequestId(),
+        tmdb_id: selected?.tmdb_id,
       }
     }
 
@@ -492,6 +547,7 @@ function AddPlan({
       pending.current = undefined
       storePending(ownerId, undefined)
       setTitle("")
+      setSelected(undefined)
     }
   }
 
@@ -511,7 +567,10 @@ function AddPlan({
           id={`${id}-title`}
           name="title"
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            setTitle(event.target.value)
+            setSelected(undefined)
+          }}
           required
           maxLength={500}
           autoComplete="off"
@@ -530,7 +589,10 @@ function AddPlan({
             onChange={(event) => {
               const value = event.target.value
 
-              if (value === "movie" || value === "series") setKind(value)
+              if (value === "movie" || value === "series") {
+                setKind(value)
+                setSelected(undefined)
+              }
             }}
           >
             <NativeSelectOption value="movie">Movie</NativeSelectOption>
@@ -548,11 +610,36 @@ function AddPlan({
             pending.current = undefined
             storePending(ownerId, undefined)
             setTitle("")
+            setSelected(undefined)
           }}
         >
           Discard draft
         </Button>
       </div>
+      {selected ? (
+        <div className="watchlist-selected-title">
+          <p>Selected from TMDB: {selected.title}</p>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => setSelected(undefined)}
+          >
+            Add manually
+          </Button>
+        </div>
+      ) : null}
+      <WatchlistMediaSearch
+        query={title}
+        kind={kind}
+        disabled={disabled}
+        search={search}
+        select={(item) => {
+          setSelected(item)
+          setTitle(item.title)
+          setKind(item.kind)
+        }}
+      />
     </form>
   )
 }

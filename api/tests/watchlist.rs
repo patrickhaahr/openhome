@@ -530,7 +530,7 @@ async fn upgrading_manual_plans_preserves_entries_and_accepted_retry_identity() 
     assert_eq!(status, StatusCode::OK, "{replayed}");
     assert_eq!(
         replayed,
-        json!({"entry":{"id":"legacy-entry","owner_id":owner_id,"kind":"series","title":"A Quiet Orbit","status":"planned","date_added":"2024-02-28","completion_date":null},"replayed":true})
+        json!({"entry":{"id":"legacy-entry","owner_id":owner_id,"kind":"series","title":"A Quiet Orbit","status":"planned","date_added":"2024-02-28","completion_date":null,"tmdb_id":null,"overview":null,"poster_path":null,"release_date":null},"replayed":true})
     );
 }
 
@@ -582,4 +582,26 @@ async fn migration_backfills_legacy_completed_rows_and_rollback_is_readable_by_t
         assert_eq!(entry["status"], "planned");
         assert_eq!(entry["completion_date"], Value::Null);
     }
+}
+
+#[tokio::test]
+async fn missing_tmdb_configuration_keeps_manual_planning_available() {
+    let (app, _) = test_app_with_db().await;
+    let member = owner(&app, "Member A").await;
+    let (status, body) = request(
+        &app,
+        Method::GET,
+        "/api/watchlist/search?kind=movie&query=Orbit",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["code"], "tmdb_unavailable");
+    let payload = json!({"owner_id":member["id"],"kind":"movie","title":"A Quiet Orbit","request_id":"manual-fallback"});
+    assert_eq!(
+        request(&app, Method::POST, "/api/watchlist/entries", payload)
+            .await
+            .0,
+        StatusCode::CREATED
+    );
 }

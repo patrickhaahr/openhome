@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE (? IS NULL OR owner_id = ?) AND (? IS NULL OR status = ?) ORDER BY date_added DESC, id",
+  "query": "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added, tmdb_id, overview, poster_path, release_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date",
   "describe": {
     "columns": [
       {
@@ -37,10 +37,30 @@
         "name": "completion_date",
         "ordinal": 6,
         "type_info": "Text"
+      },
+      {
+        "name": "tmdb_id",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "overview",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "poster_path",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "release_date",
+        "ordinal": 10,
+        "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 4
+      "Right": 9
     },
     "nullable": [
       false,
@@ -49,8 +69,12 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "30ce2f394f237c1fd90a06f2098226fb1c964047da61702781696e86bda4eb48"
+  "hash": "cd46b56ec955c8fec3e65b4a090307feee464d09e1bab125a11a16d39f91147e"
 }

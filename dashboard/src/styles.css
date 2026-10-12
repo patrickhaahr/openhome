@@ -1552,3 +1552,121 @@ a:focus-visible {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+@utility watchlist-media-search {
+  display: grid;
+  gap: 0.75rem;
+  > button {
+    justify-self: start;
+    min-height: 3rem;
+  }
+  p {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+}
+@utility watchlist-search-results {
+  display: grid;
+  gap: 1rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  li {
+    display: flex;
+    gap: 1rem;
+    align-items: start;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  li > div {
+    min-width: 0;
+  }
+  h4 {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  button {
+    margin-top: 0.75rem;
+    min-height: 3rem;
+    white-space: normal;
+    text-align: start;
+  }
+}
+@utility watchlist-poster {
+  width: 4.25rem;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--radius) / 2);
+  flex-shrink: 0;
+}
+@utility watchlist-poster-placeholder {
+  width: 4.25rem;
+  aspect-ratio: 2 / 3;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--muted);
+  border-radius: calc(var(--radius) / 2);
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+@utility watchlist-overview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+@utility watchlist-selected-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: var(--primary);
+}
+@utility watchlist-release-year {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+@utility watchlist-metadata-details {
+  margin-block: 0.5rem;
+  summary {
+    cursor: pointer;
+    min-height: 3rem;
+    display: list-item;
+    align-content: center;
+    font-size: 0.875rem;
+  }
+  &[open] {
+    display: grid;
+    gap: 0.75rem;
+  }
+  label {
+    display: grid;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+}
+@utility tmdb-credits {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-block: 1.5rem;
+  flex-wrap: wrap;
+  p {
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+  }
+  a {
+    min-height: 3rem;
+    display: grid;
+    align-items: center;
+  }
+}
+
+.watchlist-household > :only-child {
+  grid-column: 1 / -1;
+}

@@ -4,6 +4,9 @@ import { requestOpenHome } from "./openhome.server"
 import { householdUser } from "./wishlist"
 import {
   watchlistEntry,
+  mediaMetadata,
+  mediaSearch,
+  type MediaSearchResult,
   type WatchlistCommand,
   type WatchlistFailure,
   type WatchlistMutation,
@@ -14,6 +17,8 @@ function reason(status: number): WatchlistFailure {
   if (status === 400 || status === 422) return "invalid"
 
   if (status === 404) return "not-found"
+
+  if (status === 503) return "tmdb-unavailable"
 
   if (status === 409) return "conflict"
 
@@ -79,6 +84,7 @@ export async function writeWatchlist(
           kind: command.kind,
           title: command.title,
           request_id: command.request_id,
+          tmdb_id: command.tmdb_id,
         },
       }
       break
@@ -91,6 +97,13 @@ export async function writeWatchlist(
           date_added: command.date_added,
           completion_date: command.completion_date,
         },
+      }
+      break
+    case "enrich":
+      request = {
+        path: `${path}/metadata`,
+        method: "POST",
+        json: { tmdb_id: command.tmdb_id },
       }
       break
     case "remove":
@@ -125,4 +138,29 @@ export async function writeWatchlist(
   }
 
   return { state: "failed", reason: "unavailable" }
+}
+
+/** Search through the private Axum transport; no provider credential reaches Start or the browser. */
+export async function searchWatchlistMedia(
+  input: z.infer<typeof mediaSearch>
+): Promise<MediaSearchResult> {
+  const result = await requestOpenHome({
+    path: "/api/watchlist/search",
+    method: "GET",
+    query: input,
+    timeoutMs: 5000,
+  })
+
+  if (result.state !== "received" || !result.response.ok)
+    return { state: "unavailable" }
+
+  try {
+    const parsed = mediaMetadata.array().safeParse(await result.response.json())
+
+    if (parsed.success) return { state: "available", results: parsed.data }
+  } catch {
+    /* Never expose private provider diagnostics. */
+  }
+
+  return { state: "unavailable" }
 }
