@@ -1,6 +1,20 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
-import { wishlistCommand, type WishlistState } from "./wishlist"
+import {
+  wishlistCommand,
+  wishlistMetadataRequest,
+  type WishlistState,
+} from "./wishlist"
+
+/** Non-persistent URL assistance through the same authenticated Axum operation as MCP. */
+export const getWishlistUrlMetadata = createServerFn({ method: "POST" })
+  .validator(wishlistMetadataRequest)
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { previewWishlistUrl } = await import("./wishlist.server")
+
+    return previewWishlistUrl(data)
+  })
 
 /** Read shared Wishlists through the server-held Axum credential. */
 export const getWishlists = createServerFn({ method: "GET" }).handler(

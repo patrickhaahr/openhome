@@ -5,11 +5,42 @@ import {
   householdUser,
   wishlist,
   wishlistItem,
+  wishlistMetadata,
+  wishlistMetadataRequest,
+  type WishlistMetadataResult,
   type WishlistCommand,
   type WishlistFailure,
   type WishlistMutation,
   type WishlistState,
 } from "./wishlist"
+
+/** Fetch suggestions from Axum; credentials and fetching policy stay on the server. */
+export async function previewWishlistUrl(
+  request: z.infer<typeof wishlistMetadataRequest>
+): Promise<WishlistMetadataResult> {
+  const result = await requestOpenHome({
+    path: "/api/wishlist/url-metadata",
+    method: "POST",
+    json: request,
+    timeoutMs: 10000,
+  })
+
+  if (result.state !== "received")
+    return { state: "failed", reason: result.state }
+
+  if (!result.response.ok)
+    return { state: "failed", reason: reason(result.response.status) }
+
+  try {
+    const parsed = wishlistMetadata.safeParse(await result.response.json())
+
+    if (parsed.success) return { state: "preview", data: parsed.data }
+  } catch {
+    /* Only sanitized outcomes reach the browser. */
+  }
+
+  return { state: "failed", reason: "unavailable" }
+}
 
 function reason(status: number): WishlistFailure {
   if (status === 400 || status === 422) return "invalid"

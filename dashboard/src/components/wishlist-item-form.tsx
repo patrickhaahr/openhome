@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import type { WishlistDetails } from "@/lib/wishlist"
+import type { WishlistDetails, WishlistMetadataResult } from "@/lib/wishlist"
 
 const fields = [
   "title",
@@ -35,6 +35,7 @@ export function ItemForm({
   disabled,
   save,
   cancel,
+  loadMetadata,
 }: {
   label: string
   initialValue?: WishlistDetails | undefined
@@ -42,10 +43,70 @@ export function ItemForm({
   disabled: boolean
   save: (details: WishlistDetails) => Promise<boolean>
   cancel?: () => void
+  loadMetadata?: (url: string) => Promise<WishlistMetadataResult>
 }): React.JSX.Element {
   const id = useId()
   const source = itemDraft(initialValue)
-  const [draft, setDraft] = useState(() => ({ source, values: source }))
+
+  const [draft, setDraft] = useState(() => ({
+    source,
+    values: source,
+    generated: new Set<(typeof fields)[number]>(),
+  }))
+
+  const [preview, setPreview] = useState<{
+    state: "loading" | "finished"
+    message: string
+  }>()
+
+  const locked = disabled || preview?.state === "loading"
+
+  async function load(): Promise<void> {
+    if (!loadMetadata || locked) return
+    setPreview({ state: "loading", message: "Reading product details…" })
+
+    try {
+      const result = await loadMetadata(draft.values.url)
+
+      if (result.state === "failed") {
+        setPreview({
+          state: "finished",
+          message:
+            "Could not read this link. Keep the URL and enter the details manually.",
+        })
+
+        return
+      }
+
+      const data = result.data
+      setDraft((current) => {
+        const values = { ...current.values, url: data.url }
+        const generated = new Set(current.generated)
+
+        for (const field of ["title", "image_url", "price"] as const) {
+          if (values[field] !== "" && !generated.has(field)) continue
+
+          values[field] = data[field] ?? ""
+          generated.add(field)
+        }
+
+        return { source: current.source, values, generated }
+      })
+      setPreview({
+        state: "finished",
+        message:
+          data.status === "unavailable"
+            ? "Could not read product details. Keep the URL and enter the details manually."
+            : "Review the suggestions and fill in anything missing. Nothing is saved until you add the wish.",
+      })
+    } catch {
+      setPreview({
+        state: "finished",
+        message:
+          "Could not read this link. Keep the URL and enter the details manually.",
+      })
+    }
+  }
 
   // Refreshed server values replace pristine fields; unsaved edits remain intact.
   if (fields.some((field) => source[field] !== draft.source[field])) {
@@ -54,14 +115,22 @@ export function ItemForm({
     for (const field of fields)
       if (values[field] === draft.source[field]) values[field] = source[field]
 
-    setDraft({ source, values })
+    setDraft({ source, values, generated: draft.generated })
   }
 
   function edit(field: (typeof fields)[number], value: string): void {
-    setDraft((current) => ({
-      source: current.source,
-      values: { ...current.values, [field]: value },
-    }))
+    setDraft((current) => {
+      const values = { ...current.values, [field]: value }
+      const generated = new Set(current.generated)
+
+      if (field === "url") {
+        for (const generatedField of generated) values[generatedField] = ""
+
+        generated.clear()
+      } else generated.delete(field)
+
+      return { source: current.source, values, generated }
+    })
   }
 
   return (
@@ -70,6 +139,8 @@ export function ItemForm({
       aria-label={submitLabel}
       onSubmit={(event) => {
         event.preventDefault()
+
+        if (locked) return
 
         // Match Axum's Unicode whitespace trimming for stable retry arguments.
         const text = (name: (typeof fields)[number]): string =>
@@ -91,7 +162,9 @@ export function ItemForm({
           priority: text("priority"),
         }).then((saved) => {
           if (saved && initialValue === undefined)
-            setDraft({ source, values: itemDraft() })
+            setDraft({ source, values: itemDraft(), generated: new Set() })
+
+          if (saved) setPreview(undefined)
         })
       }}
     >
@@ -104,44 +177,67 @@ export function ItemForm({
           onChange={(event) => edit("title", event.target.value)}
           required
           maxLength={500}
-          disabled={disabled}
+          disabled={locked}
           autoComplete="off"
         />
-        <Button type="submit" disabled={disabled}>
+        <Button type="submit" disabled={locked}>
           {submitLabel}
         </Button>
         {cancel ? (
           <Button
             type="button"
             variant="ghost"
-            disabled={disabled}
+            disabled={locked}
             onClick={cancel}
           >
             Cancel
           </Button>
         ) : null}
       </div>
+      <div className="wishlist-url-assistance">
+        <label htmlFor={`${id}-url`}>Product URL</label>
+        <div className="wishlist-form-row">
+          <Input
+            id={`${id}-url`}
+            name="url"
+            type="url"
+            value={draft.values.url}
+            onChange={(event) => {
+              edit("url", event.target.value)
+              setPreview(undefined)
+            }}
+            maxLength={2048}
+            disabled={locked}
+            placeholder="https://…"
+          />
+          {loadMetadata ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={locked || draft.values.url.trim() === ""}
+              onClick={() => void load()}
+            >
+              {preview?.state === "loading"
+                ? "Reading…"
+                : "Read product details"}
+            </Button>
+          ) : null}
+        </div>
+        {loadMetadata ? (
+          <p className="wishlist-metadata-status" role="status">
+            {preview?.message ??
+              "Paste a product link for editable suggestions, or add your own idea above."}
+          </p>
+        ) : null}
+      </div>
       <details
-        open={initialValue !== undefined}
+        open={initialValue !== undefined || preview !== undefined}
         className="wishlist-item-fields"
       >
         <summary>
           Item details <span>Links, notes, quantity and priority</span>
         </summary>
         <div className="wishlist-field-grid">
-          <div>
-            <label htmlFor={`${id}-url`}>Product URL</label>
-            <Input
-              id={`${id}-url`}
-              name="url"
-              type="url"
-              value={draft.values.url}
-              onChange={(event) => edit("url", event.target.value)}
-              maxLength={2048}
-              disabled={disabled}
-              placeholder="https://…"
-            />
-          </div>
           <div>
             <label htmlFor={`${id}-image`}>Image URL</label>
             <Input
@@ -151,7 +247,7 @@ export function ItemForm({
               value={draft.values.image_url}
               onChange={(event) => edit("image_url", event.target.value)}
               maxLength={2048}
-              disabled={disabled}
+              disabled={locked}
               placeholder="https://…"
             />
           </div>
@@ -163,7 +259,7 @@ export function ItemForm({
               value={draft.values.price}
               onChange={(event) => edit("price", event.target.value)}
               maxLength={100}
-              disabled={disabled}
+              disabled={locked}
               placeholder="DKK 199.95"
             />
           </div>
@@ -180,7 +276,7 @@ export function ItemForm({
                 value={draft.values.quantity}
                 onChange={(event) => edit("quantity", event.target.value)}
                 required
-                disabled={disabled}
+                disabled={locked}
               />
             </div>
             <div>
@@ -190,7 +286,7 @@ export function ItemForm({
                 name="priority"
                 value={draft.values.priority}
                 onChange={(event) => edit("priority", event.target.value)}
-                disabled={disabled}
+                disabled={locked}
               >
                 <NativeSelectOption value="low">Low</NativeSelectOption>
                 <NativeSelectOption value="normal">Normal</NativeSelectOption>
@@ -206,7 +302,7 @@ export function ItemForm({
               value={draft.values.notes}
               onChange={(event) => edit("notes", event.target.value)}
               maxLength={5000}
-              disabled={disabled}
+              disabled={locked}
               rows={3}
             />
           </div>

@@ -10,6 +10,12 @@ groups:
 
 expodir := 'mobile-expo'
 
+# Add an API dependency and update its lockfile
+[group('api')]
+[working-directory: 'api']
+api-add-package package *args:
+    cargo add {{quote(package)}} {{args}}
+
 # Build the OpenHome CLI
 [group('cli')]
 [working-directory: 'cli']

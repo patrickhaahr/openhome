@@ -1,6 +1,10 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Wishlists } from "@/components/wishlists"
-import { loadWishlists, mutateWishlist } from "@/lib/wishlist.functions"
+import {
+  loadWishlists,
+  mutateWishlist,
+  getWishlistUrlMetadata,
+} from "@/lib/wishlist.functions"
 
 /** Owner-aware shared Wishlists, backed by the same Axum persistence as MCP. */
 export const Route = createFileRoute("/wishlist")({
@@ -28,6 +32,7 @@ function WishlistPage(): React.JSX.Element {
       <Wishlists
         data={data}
         change={(command) => mutateWishlist({ data: command })}
+        metadata={(request) => getWishlistUrlMetadata({ data: request })}
         refresh={() => router.invalidate({ sync: true })}
       />
     </section>
