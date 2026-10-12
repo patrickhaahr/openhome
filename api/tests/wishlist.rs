@@ -157,7 +157,7 @@ async fn validates_inputs_and_authentication_before_writes() {
     for payload in [
         json!({"title":" ","request_id":"a"}),
         json!({"title":"Jacket","request_id":" "}),
-        json!({"title":"Jacket","request_id":"a","url":"https://example.com"}),
+        json!({"title":"Jacket","request_id":"a","unexpected":"value"}),
     ] {
         assert!(
             request(&app, Method::POST, "/api/wishlist/items", payload)
@@ -419,7 +419,7 @@ async fn cascading_removal_retires_additions_and_all_management_routes_require_a
         &item_path,
         &format!("/api/household-users/{}", member["id"].as_str().unwrap()),
     ] {
-        for method in [Method::PATCH, Method::DELETE] {
+        for method in [Method::GET, Method::PATCH, Method::DELETE] {
             assert_eq!(
                 send_request_with_method(
                     app.clone(),
@@ -502,4 +502,75 @@ async fn upgrading_existing_wishlists_preserves_accepted_addition_receipts() {
     assert_eq!(status, StatusCode::OK, "{replayed}");
     assert_eq!(replayed["item"]["id"], "legacy-item");
     assert_eq!(replayed["replayed"], true);
+}
+
+#[tokio::test]
+async fn rich_items_validate_patch_clear_and_keep_addition_identity() {
+    let (app, _) = test_app_with_db().await;
+    let member = owner(&app, "Member A").await;
+    let ideas = list(&app, &member, "Ideas").await;
+    let payload = json!({"owner_id":member["id"],"list_id":ideas["id"],"request_id":"rich-1",
+        "title":"A warm jacket", "url":"https://example.com/jacket", "image_url":"https://example.com/jacket.png",
+        "notes":"For winter\nWaterproof", "price":"DKK 199.95", "quantity":2,"priority":"high"});
+    let (status, added) = request(&app, Method::POST, "/api/wishlist/items", payload.clone()).await;
+    assert_eq!(status, StatusCode::CREATED, "{added}");
+    for field in ["url", "image_url", "notes", "price", "quantity", "priority"] {
+        assert_eq!(added["item"][field], payload[field]);
+    }
+    let path = format!(
+        "/api/household-users/{}/wishlists/{}/items/{}",
+        member["id"].as_str().unwrap(),
+        ideas["id"].as_str().unwrap(),
+        added["item"]["id"].as_str().unwrap()
+    );
+    for invalid in [
+        json!({"quantity":0}),
+        json!({"quantity":1000}),
+        json!({"quantity":1.5}),
+        json!({"priority":"urgent"}),
+        json!({"url":"javascript:alert(1)"}),
+        json!({"image_url":"https://user:pass@example.com/a"}),
+        json!({"notes":"bad\u{0000}text"}),
+        json!({"price":""}),
+        json!({"title":null}),
+    ] {
+        let (status, error) = request(&app, Method::PATCH, &path, invalid).await;
+        assert!(status.is_client_error(), "{error}");
+    }
+    let (_, unchanged) = request(&app, Method::GET, &path, Value::Null).await;
+    assert_eq!(unchanged, added["item"]);
+    let (status, edited) = request(
+        &app,
+        Method::PATCH,
+        &path,
+        json!({"title":"A rain jacket","url":null,"notes":null,"quantity":3}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["url"], Value::Null);
+    assert_eq!(edited["notes"], Value::Null);
+    assert_eq!(edited["image_url"], payload["image_url"]);
+    assert_eq!(edited["price"], payload["price"]);
+    assert_eq!(edited["priority"], "high");
+    let (_, retried) = request(&app, Method::POST, "/api/wishlist/items", payload.clone()).await;
+    assert_eq!(retried["item"], edited);
+    assert_eq!(retried["replayed"], true);
+    let mut changed = payload.clone();
+    changed["quantity"] = json!(3);
+    assert_eq!(
+        request(&app, Method::POST, "/api/wishlist/items", changed)
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        request(&app, Method::DELETE, &path, Value::Null).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(&app, Method::POST, "/api/wishlist/items", payload)
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
 }

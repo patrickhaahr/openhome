@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wishlist_addition_receipts (request_id, item_id, title, requested_owner_id, requested_list_id, details) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "request_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "54061ddf7342868e8ec07fa0869741d9b529d534eae18acb489f4ad40edd42f7"
+}

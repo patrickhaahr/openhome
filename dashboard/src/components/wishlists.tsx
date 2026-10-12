@@ -1,10 +1,12 @@
-import { useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { ItemForm } from "@/components/wishlist-item-form"
+import { ItemDetails } from "@/components/wishlist-item-details"
 import {
   createWishRequestId,
   readPendingAddition,
@@ -399,20 +401,19 @@ export function Wishlists({
                       {selectedItems.map((item, index) => (
                         <li key={item.id}>
                           {editing === `item-${item.id}` ? (
-                            <TextForm
+                            <ItemForm
                               label="Wish title"
-                              initialValue={item.title}
+                              initialValue={item}
                               submitLabel="Save wish"
-                              maxLength={500}
                               disabled={busy}
                               cancel={() => setEditing(undefined)}
-                              save={(title) =>
+                              save={(details) =>
                                 save({
                                   kind: "edit-item",
                                   owner_id: selected.owner_id,
                                   list_id: selected.id,
                                   item_id: item.id,
-                                  title,
+                                  ...details,
                                 })
                               }
                             />
@@ -424,9 +425,7 @@ export function Wishlists({
                               >
                                 {String(index + 1).padStart(2, "0")}
                               </span>
-                              <span className="wishlist-item-title">
-                                {item.title}
-                              </span>
+                              <ItemDetails item={item} />
                               <div className="wishlist-item-actions">
                                 <Button
                                   variant="ghost"
@@ -575,25 +574,51 @@ function AddWish({
   save: (command: WishlistCommand) => Promise<boolean>
 }): React.JSX.Element {
   const pending = useRef<PendingAddition | undefined>(undefined)
+  const [restored, setRestored] = useState<PendingAddition>()
+
+  // Browser storage is read after hydration; server rendering stays deterministic.
+  useEffect(() => {
+    const recovered = readPendingAddition(listId)
+
+    pending.current = recovered
+    // eslint-disable-next-line react/set-state-in-effect -- Synchronize a browser storage retry intention after hydration; SSR has no sessionStorage.
+    setRestored(recovered)
+  }, [listId])
 
   return (
-    <TextForm
+    <ItemForm
+      key={restored?.requestId ?? "fresh"}
+      initialValue={
+        restored?.details ?? (restored ? { title: restored.title } : undefined)
+      }
       label="Something you’d like"
       submitLabel="Add wish"
-      maxLength={500}
       disabled={disabled}
-      save={async (title) => {
+      save={async (details) => {
+        const title = details.title
         pending.current ??= readPendingAddition(listId)
 
         if (
           !pending.current ||
           trimWishlistText(pending.current.title) !== trimWishlistText(title) ||
-          pending.current.ownerId !== ownerId
+          pending.current.ownerId !== ownerId ||
+          JSON.stringify(
+            pending.current.details ?? {
+              title: trimWishlistText(pending.current.title),
+              url: null,
+              image_url: null,
+              notes: null,
+              price: null,
+              quantity: 1,
+              priority: "normal",
+            }
+          ) !== JSON.stringify(details)
         )
           pending.current = {
             ownerId,
             listId,
             title,
+            details,
             requestId: createWishRequestId(),
           }
 
@@ -603,12 +628,13 @@ function AddWish({
           kind: "add-item",
           owner_id: ownerId,
           list_id: listId,
-          title,
+          ...details,
           request_id: pending.current.requestId,
         })
 
         if (saved) {
           pending.current = undefined
+          setRestored(undefined)
           storePendingAddition(listId, undefined)
         }
 

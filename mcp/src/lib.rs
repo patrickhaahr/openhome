@@ -29,7 +29,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
 use url::Url;
-use wishlist::{AddWishlistItemRequest, CreateWishlistRequest, WishlistItemsRequest};
+use wishlist::{
+    AddWishlistItemRequest, CreateWishlistRequest, UpdateWishlistItemRequest, WishlistItemRequest,
+    WishlistItemsRequest,
+};
 
 mod wishlist;
 
@@ -39,7 +42,7 @@ pub const MCP_PATH: &str = "/mcp";
 const BEARER_PREFIX: &str = "Bearer ";
 const API_TIMEOUT: Duration = Duration::from_secs(15);
 
-const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add generic wishes. \
+const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add, read, update or delete wishes. \
 Every tool calls the OpenHome API, which owns days (Europe/Copenhagen), units, NOOP source selection, freshness and \
 coverage; results are returned as the API sent them. A null value means no value was recorded or \
 synced; check each result's freshness and coverage before treating a gap as real. For wishlist requests, discover household owners and named \
@@ -48,7 +51,7 @@ synced; check each result's freshness and coverage before treating a gap as real
  writing. Store a generic request as a generic title; do not choose or research products unless \
  requested. Generate a unique request_id for each intended addition and reuse the same ID and \
  arguments on retries, including after an uncertain transport failure. Only report success after \
- a successful tool result; failures are not accepted writes.";
+ a successful tool result; failures are not accepted writes. For updates/deletions, use explicit owner/list/item IDs. Omitted edit fields stay unchanged; null clears optional fields. After an uncertain edit or deletion, read the destination before deciding whether to retry.";
 
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
@@ -297,6 +300,10 @@ impl OpenHomeApi {
             }
         };
         let status = response.status();
+        // DELETE is the only API operation whose success deliberately has no JSON body.
+        if status == reqwest::StatusCode::NO_CONTENT {
+            return CallToolResult::structured(json!({"deleted":true}));
+        }
         let body: Option<Value> = match response.bytes().await {
             Ok(bytes) => serde_json::from_slice(&bytes).ok(),
             Err(_) => None,
@@ -446,7 +453,7 @@ impl OpenHomeTools {
     }
 
     #[tool(
-        description = "Add a generic wish title without researching or selecting a product. Use an explicit list_id, an owner_id with exactly one list, or the private default. Ambiguity returns one clarification question with choices and writes nothing. Generate a unique request_id per intended addition; reuse the ID and identical arguments on every retry. An accepted retry returns the original item with replayed=true; changed arguments conflict.",
+        description = "Add a wish with optional URL/image/notes/price, quantity and priority supplied by the user. Keep generic requests generic without researching or selecting a product. Use an explicit list_id, an owner_id with exactly one list, or the private default. Ambiguity returns one clarification question with choices and writes nothing. Generate a unique request_id per intended addition; reuse the ID and identical arguments on every retry. An accepted retry returns the original item with replayed=true; changed arguments conflict.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -464,7 +471,7 @@ impl OpenHomeTools {
     }
 
     #[tool(
-        description = "Read the generic items of one household-visible Wishlist using its stable list_id. Returns the stored titles unchanged; does not infer products or purchase state.",
+        description = "Read all stored rich items of one household-visible Wishlist using its stable list_id. Returns the stored fields unchanged; does not infer products or purchase state.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn wishlist_items(
@@ -472,6 +479,87 @@ impl OpenHomeTools {
         Parameters(WishlistItemsRequest { list_id }): Parameters<WishlistItemsRequest>,
     ) -> CallToolResult {
         self.api.get(&["api", "wishlists", &list_id, "items"]).await
+    }
+
+    #[tool(
+        description = "Read one Wishlist Item by explicit stable owner/list/item IDs. Returns stored fields without product research.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn wishlist_item(
+        &self,
+        Parameters(request): Parameters<WishlistItemRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&[
+                "api",
+                "household-users",
+                &request.owner,
+                "wishlists",
+                &request.list,
+                "items",
+                &request.item,
+            ])
+            .await
+    }
+
+    #[tool(
+        description = "Update supplied Wishlist Item fields by explicit stable owner/list/item IDs. Omitted fields are preserved; null clears URL/image/notes/price. No product research. After an uncertain response, read the item before retrying to avoid overwriting a newer edit.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn update_wishlist_item(
+        &self,
+        Parameters(request): Parameters<UpdateWishlistItemRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PATCH,
+                &[
+                    "api",
+                    "household-users",
+                    &request.owner_id,
+                    "wishlists",
+                    &request.list_id,
+                    "items",
+                    &request.item_id,
+                ],
+                Some(json!(request)),
+            )
+            .await
+    }
+
+    #[tool(
+        description = "Permanently remove one Wishlist Item by explicit stable owner/list/item IDs. Returns deleted=true only after Axum confirms removal. A missing destination remains a tool error; read after an uncertain response. Delayed addition retries cannot recreate the removed item.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_wishlist_item(
+        &self,
+        Parameters(request): Parameters<WishlistItemRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::DELETE,
+                &[
+                    "api",
+                    "household-users",
+                    &request.owner,
+                    "wishlists",
+                    &request.list,
+                    "items",
+                    &request.item,
+                ],
+                None,
+            )
+            .await
     }
 
     #[tool(
