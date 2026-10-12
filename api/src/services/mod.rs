@@ -12,3 +12,5 @@ pub mod watchlist;
 pub mod weather;
 pub mod wishlist;
 pub mod wishlist_metadata;
+
+pub mod photos;
