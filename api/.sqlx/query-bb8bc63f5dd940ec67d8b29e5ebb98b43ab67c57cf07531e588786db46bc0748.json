@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT snapshot FROM route_candidates WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "snapshot",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bb8bc63f5dd940ec67d8b29e5ebb98b43ab67c57cf07531e588786db46bc0748"
+}

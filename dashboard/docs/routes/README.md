@@ -175,3 +175,52 @@ geometry agreed with each reported distance to the nearest metre.
 
 Repeat against the configured instance with
 `OPENROUTESERVICE_URL=https://<instance>/ors devenv shell -- just dashboard-health-fixture-run`.
+
+# Persisted Active Route (#108)
+
+Compare the alternatives, then use **Select Loop A/B/C** to persist the inspected
+loop. The Active route panel identifies the last confirmed choice independently
+of the alternatives currently being compared. Reloading Travel restores its
+summary and draws its saved geometry; Show active route on map returns to it.
+Starting a walk or run belongs to the phone's Route Session.
+
+The authenticated mobile read is `GET /api/routes/active`; selection uses
+`PUT /api/routes/active` with `{ "route_id": "<generated loop identity>" }`.
+The read returns `{ "state": "none" }` before first selection, or
+`{ "state": "selected", "route": { "id": "…", "version": 1, … } }`.
+The route includes activity, original target (including converted step distance),
+step length, actual distance, deviation, estimated steps and LineString geometry.
+The revision increases when the selected identity changes. Retrying the current
+identity keeps the revision. Axum accepts only previously generated candidates;
+client-supplied geometry cannot become an Active Route. See
+[ADR 0010](../../../docs/adr/0010-persisted-active-route-selection.md).
+
+Selection shows pending feedback and confirms success only after Axum has
+persisted it. A failed replacement keeps the last confirmed route visible.
+Check selection reconciles a response that was lost after saving. Failed reads
+state that an earlier choice may still be saved. Candidate retention is bounded
+at 96 recent choices plus the selected route; a pruned choice asks for replanning.
+The selected snapshot remains stored regardless of provider/cache availability.
+
+## Observed evidence — 2026-10-12
+
+- Authenticated API tests use migrated SQLite: running Step Target selection,
+  exact geometry/distance retrieval, idempotent retries, database reconnect with
+  no origin/provider, atomic concurrent revisions, unknown/forged candidates,
+  failed-write rollback and bounded candidate retention.
+- Rendered dashboard tests select Loop B through the real authenticated Axum
+  fixture, unmount/reload the read, restore its summary and map geometry, show
+  pending feedback, retain the confirmed choice after a failed replacement and
+  offer recovery for unavailable reads and pruned candidates.
+- The desktop browser verifies real Start server functions: compare B, select
+  B, then reload Travel; the saved 4.75 km loop returns without generating again.
+  Public captures use only the unrelated Copenhagen demo origin and synthetic
+  fixture squares, which are not real walkable paths.
+- Physical iPad Safari and phone GPS/session acceptance remain separate release
+  checks; this slice implements the authenticated phone read contract.
+
+| Before: compared loops only                | After: saved selection restored on reload            |
+| ------------------------------------------ | ---------------------------------------------------- |
+| ![Compared loop](alternatives-compare.png) | ![Restored active route](active-route-landscape.png) |
+
+![Active Route in portrait](active-route-portrait.png)

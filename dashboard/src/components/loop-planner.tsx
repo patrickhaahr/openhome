@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { PersonSimpleRunIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleRun"
 import { PersonSimpleWalkIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleWalk"
 import { Button } from "@/components/ui/button"
@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { MapLine, MapRoutes } from "@/lib/map"
 import {
+  describeTarget,
+  type ActiveRouteRead,
+  type RouteSelectionRead,
   describeDeviation,
   describeEstimatedSteps,
   describeFailure,
@@ -77,12 +80,21 @@ const LETTERS = ["A", "B", "C"]
  */
 export function LoopPlanner({
   plan,
+  initialActive,
+  select,
+  reloadActive,
   onRoutesChange,
 }: {
   plan: (request: LoopRequest) => Promise<LoopRead>
+  initialActive: ActiveRouteRead
+  select: (routeId: string) => Promise<RouteSelectionRead>
+  reloadActive: () => Promise<ActiveRouteRead>
   onRoutesChange: (routes: MapRoutes) => void
 }): React.JSX.Element {
   const id = useId()
+  const [active, setActive] = useState(initialActive)
+  const [selection, setSelection] = useState<SelectionStatus>({ state: "idle" })
+  const writing = useRef(false)
   const [form, setForm] = useState<Form>(INITIAL_FORM)
   const [status, setStatus] = useState<Status>({ state: "idle" })
   const [shown, setShown] = useState<Shown | undefined>(undefined)
@@ -124,7 +136,48 @@ export function LoopPlanner({
     onRoutesChange({ lines: shown.lines, focused: index })
   }
 
-  const busy = status.state === "planning"
+  async function choose(): Promise<void> {
+    const route = shown?.plan.loops[shown.focused]
+
+    if (route === undefined || writing.current) return
+
+    writing.current = true
+    setSelection({ state: "saving" })
+    const result = await select(route.id)
+    writing.current = false
+
+    if (result.state === "selected") {
+      setActive(result)
+      setSelection({ state: "saved" })
+    } else setSelection(result)
+  }
+
+  async function checkSelection(): Promise<void> {
+    if (writing.current) return
+
+    writing.current = true
+    setSelection({ state: "checking" })
+    const result = await reloadActive()
+    writing.current = false
+
+    if (result.state === "unavailable") {
+      setSelection({ state: "failed", reason: "connection-unavailable" })
+    } else {
+      setActive(result)
+      setSelection({ state: "idle" })
+
+      if (result.state === "selected")
+        onRoutesChange({ lines: [result.route.geometry], focused: 0 })
+    }
+  }
+
+  const saving = selection.state === "saving" || selection.state === "checking"
+  const busy = status.state === "planning" || saving
+  const candidate = shown?.plan.loops[shown.focused]
+
+  const alreadySelected =
+    active.state === "selected" && active.route.id === candidate?.id
+
   const problemId = `${id}-problem`
 
   /** Marks the input a problem belongs to and describes it with the message. */
@@ -158,6 +211,16 @@ export function LoopPlanner({
       </CardHeader>
       <CardContent>
         <div className="loop-planner-body">
+          <ActiveSelection
+            active={active}
+            status={selection}
+            busy={busy}
+            onCheck={() => void checkSelection()}
+            onShow={() => {
+              if (active.state === "selected")
+                onRoutesChange({ lines: [active.route.geometry], focused: 0 })
+            }}
+          />
           <form
             className="loop-planner-form"
             onSubmit={(event) => {
@@ -269,7 +332,7 @@ export function LoopPlanner({
               </p>
             </div>
             <Button type="submit" size="lg" disabled={busy}>
-              {busy ? "Planning…" : "Plan loops"}
+              {status.state === "planning" ? "Planning…" : "Plan loops"}
             </Button>
           </form>
           <div role="status" className="loop-planner-status">
@@ -280,7 +343,29 @@ export function LoopPlanner({
             />
           </div>
           {shown === undefined ? null : (
-            <LoopAlternatives shown={shown} onFocus={focus} />
+            <>
+              <LoopAlternatives
+                shown={shown}
+                onFocus={focus}
+                disabled={saving}
+              />
+              <Button
+                type="button"
+                size="lg"
+                disabled={busy || alreadySelected}
+                onClick={() => void choose()}
+              >
+                {selection.state === "saving"
+                  ? "Selecting…"
+                  : alreadySelected
+                    ? "Active route selected"
+                    : `Select Loop ${LETTERS[shown.focused] ?? shown.focused + 1}`}
+              </Button>
+              <p className="loop-planner-hint">
+                Comparing loops does not change the route selected for your
+                phone.
+              </p>
+            </>
           )}
           <p className="loop-planner-attribution">
             Routes by openrouteservice · Map data © OpenStreetMap contributors
@@ -288,6 +373,90 @@ export function LoopPlanner({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/** Saving and checking are mutually exclusive; errors never claim a replacement was saved. */
+type SelectionStatus =
+  | { readonly state: "idle" | "saving" | "saved" | "checking" }
+  | Extract<RouteSelectionRead, { state: "failed" }>
+
+function ActiveSelection({
+  active,
+  status,
+  busy,
+  onCheck,
+  onShow,
+}: {
+  active: ActiveRouteRead
+  status: SelectionStatus
+  busy: boolean
+  onCheck: () => void
+  onShow: () => void
+}): React.JSX.Element {
+  return (
+    <section className="loop-active" aria-label="Active route">
+      <p className="loop-planner-eyebrow">Active route</p>
+      {active.state === "selected" ? (
+        <>
+          <h3>
+            {formatKilometers(active.route.distance_meters)}{" "}
+            {active.route.activity} loop
+          </h3>
+          <p className="loop-planner-hint">
+            Target: {describeTarget(active.route.target)} · About{" "}
+            {describeCount(active.route.estimated_steps, "step")}, estimated
+            from a {active.route.step_length_cm} cm step.
+          </p>
+          <p className="loop-planner-hint">
+            Selected for your phone. A walk or run starts on the phone.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={onShow}
+          >
+            Show active route on map
+          </Button>
+        </>
+      ) : (
+        <p className="loop-planner-hint">
+          {active.state === "none"
+            ? "No route selected yet. Compare loops, then select one for your phone."
+            : "Could not read the selected route. An earlier selection may still be saved on OpenHome."}
+        </p>
+      )}
+      <div role="status" aria-live="polite">
+        {status.state === "saving" ? <p>Saving the selected loop…</p> : null}
+        {status.state === "checking" ? (
+          <p>Checking the selected route…</p>
+        ) : null}
+        {status.state === "saved" ? (
+          <p>Loop selected. Your phone can retrieve it.</p>
+        ) : null}
+        {status.state === "failed" ? (
+          <p className="loop-planner-problem">
+            {status.reason === "candidate-unavailable"
+              ? "This loop is no longer available. Plan loops again to select a route."
+              : "Selection could not be confirmed. Check the saved route or try selecting again."}{" "}
+            {active.state === "selected"
+              ? "The last confirmed active route is still shown."
+              : ""}
+          </p>
+        ) : null}
+      </div>
+      {active.state === "unavailable" || status.state === "failed" ? (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={onCheck}
+        >
+          Check selection
+        </Button>
+      ) : null}
+    </section>
   )
 }
 
@@ -423,7 +592,9 @@ function ShortfallAnnouncement({
 function LoopAlternatives({
   shown,
   onFocus,
+  disabled,
 }: {
+  disabled: boolean
   shown: Shown
   onFocus: (index: number) => void
 }): React.JSX.Element {
@@ -439,13 +610,14 @@ function LoopAlternatives({
       )}
       <ul>
         {plan.loops.map((route, index) => (
-          <li key={index}>
+          <li key={route.id}>
             <Button
               type="button"
               variant="loop"
               className="h-auto"
               aria-pressed={index === shown.focused}
               data-fit={route.within_tolerance ? "within" : "outside"}
+              disabled={disabled}
               onClick={() => onFocus(index)}
             >
               <span className="loop-alternative-name">
