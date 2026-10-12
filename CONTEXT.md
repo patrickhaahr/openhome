@@ -138,11 +138,23 @@ A desired item recorded in a Wishlist, described by a generic request or a
 specific product with an optional link and supporting details.
 _Avoid_: Gift reservation, shopping order
 
-**Walking Loop**:
-A generated route that starts and ends near the shared map origin, measured
-from its own geometry and compared with the requested distance. It becomes the
-Active Route only when the household selects it.
-_Avoid_: Active Route, fabricated route
+**Loop**:
+A generated walking or running route that starts and ends near the shared map
+origin, measured from its own geometry and compared with the requested
+distance. It becomes the Active Route only when the household selects it.
+_Avoid_: Walking Loop, Active Route, fabricated route
+
+**Loop Alternatives**:
+Up to three Loops for one request that mostly follow different ways, matching
+loops first. Fewer are shown, and the shortfall explained, when the search finds
+fewer distinct loops within tolerance; none is invented to fill the set.
+_Avoid_: Route variants, padded results
+
+**Step Target**:
+A Loop target given in steps and converted to distance with the household's
+adjustable step length. Step counts shown beside a Loop are estimates from that
+step length, never measurements.
+_Avoid_: Step tracking, measured steps
 
 **Active Route**:
 The selected walking or running route made available to the Dashboard and the

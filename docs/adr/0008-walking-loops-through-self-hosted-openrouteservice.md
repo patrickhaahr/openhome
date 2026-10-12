@@ -10,7 +10,8 @@ arrive with the Active Route.
 Loops start at the validated MapOrigin, so they draw where the shared map opens
 and need no second private coordinate. `POST /api/routes/loops` accepts an
 activity and a whole-metre target. Only walking is accepted until running has
-its own profile choice. Invalid requests are rejected before the provider is
+its own profile choice ([ADR 0009](0009-loop-alternatives-and-step-targets.md)
+adds running, Step Targets and alternatives). Invalid requests are rejected before the provider is
 contacted. Outcomes are values: missing origin or provider, provider outage or
 refusal or invalid response, no route, and unsuitable route. Responses carry no
 upstream messages. Logs carry only the HTTP status, the provider's numeric
@@ -46,4 +47,5 @@ loop exists; every other refusal is a provider failure.
 The round-trip seed is fixed, so the same origin and target plan the same loop.
 The dashboard therefore stops offering to re-plan once a loop is shown, rather
 than repeating identical work; varied alternatives arrive with distance and
-step targets.
+step targets. [ADR 0009](0009-loop-alternatives-and-step-targets.md) replaces
+the single seed with a bounded, cached search over several seeds.
