@@ -2,7 +2,7 @@ import { Link, Outlet, useRouter } from "@tanstack/react-router"
 import { useEffect } from "react"
 import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple"
 import { PlugsConnectedIcon } from "@phosphor-icons/react/dist/csr/PlugsConnected"
-import { features } from "@/lib/features"
+import { features, type Feature } from "@/lib/features"
 
 /** Persistent navigation with one content landmark and focus after rendered navigation. */
 export function DashboardShell(): React.JSX.Element {
@@ -41,30 +41,20 @@ export function DashboardShell(): React.JSX.Element {
               </>
             )
 
+            const to = implementedRoute(feature.id)
+
             // Implemented features use their own typed routes; the rest share the placeholder.
-            return feature.id === "controls" ||
-              feature.id === "weather" ||
-              feature.id === "wishlist" ? (
-              <Link
-                key={feature.id}
-                to={
-                  feature.id === "controls"
-                    ? "/controls"
-                    : feature.id === "weather"
-                      ? "/weather"
-                      : "/wishlist"
-                }
-                className="nav-link"
-              >
-                {content}
-              </Link>
-            ) : (
+            return to === undefined ? (
               <Link
                 key={feature.id}
                 to="/$feature"
                 params={{ feature: feature.id }}
                 className="nav-link"
               >
+                {content}
+              </Link>
+            ) : (
+              <Link key={feature.id} to={to} className="nav-link">
                 {content}
               </Link>
             )
@@ -86,4 +76,25 @@ export function DashboardShell(): React.JSX.Element {
       </div>
     </div>
   )
+}
+
+function implementedRoute(
+  id: Feature["id"]
+): "/controls" | "/weather" | "/travel" | "/wishlist" | undefined {
+  switch (id) {
+    case "controls":
+      return "/controls"
+    case "weather":
+      return "/weather"
+    case "travel":
+      return "/travel"
+    case "wishlist":
+      return "/wishlist"
+    case "agent":
+    case "photos":
+    case "server":
+    case "watchlist":
+    case "workout":
+      return undefined
+  }
 }

@@ -688,6 +688,121 @@
   display: grid;
   gap: 1rem;
 }
+/* The map fills the remaining viewport so touch panning rarely competes with page scroll. */
+.focused-page.travel-page {
+  max-width: 80rem;
+}
+.travel-page .feature-intro {
+  margin-bottom: 1.5rem;
+}
+.travel-map {
+  display: grid;
+  gap: 0.75rem;
+}
+.travel-map figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.travel-map-origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+}
+.travel-map-origin > span {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 4px oklch(0.85 0.12 90 / 20%);
+}
+.travel-setup {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+.shared-map {
+  position: relative;
+  height: clamp(22rem, calc(100svh - 22rem), 52rem);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+}
+.shared-map .shared-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+.shared-map:not([data-map-state="ready"]) .shared-map-canvas {
+  visibility: hidden;
+}
+.shared-map-controls {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.shared-map-controls [data-slot="button"] {
+  border: 1px solid var(--border);
+  background: oklch(0.205 0.003 250 / 92%);
+  box-shadow: 0 6px 18px oklch(0 0 0 / 35%);
+}
+.shared-map-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  line-height: 1.6;
+}
+.shared-map-message h3 {
+  color: var(--foreground);
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+.shared-map-message p {
+  max-width: 28rem;
+}
+.shared-map-notice {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  width: fit-content;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: oklch(0.205 0.003 250 / 94%);
+  font-size: 0.875rem;
+}
+/* MapLibre's attribution, restyled for the dark surface while staying legible. */
+.shared-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib {
+  margin: 0;
+  padding: 0.25rem 0.625rem;
+  border-top-left-radius: var(--radius-md);
+  background: oklch(0.145 0.003 250 / 88%);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.shared-map .maplibregl-ctrl-attrib a {
+  color: var(--foreground);
+}
 .home-bottom > p {
   max-width: 32rem;
   color: var(--muted-foreground);

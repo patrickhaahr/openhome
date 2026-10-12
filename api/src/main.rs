@@ -7,7 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use openhome_api::auth;
 use openhome_api::routes;
-use openhome_api::services::{adguard, docker, feed, ir, noop_push, switchbot, weather};
+use openhome_api::services::{adguard, docker, feed, ir, map, noop_push, switchbot, weather};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,14 +37,8 @@ async fn main() -> anyhow::Result<()> {
     let ir_base_url = std::env::var("IR_BASE_URL").unwrap_or_default();
     let switchbot_base_url = std::env::var("SWITCHBOT_BASE_URL").unwrap_or_default();
     let weather_service = weather::WeatherLocation::parse(
-        std::env::var("WEATHER_LATITUDE")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .as_deref(),
-        std::env::var("WEATHER_LONGITUDE")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .as_deref(),
+        non_empty_env("WEATHER_LATITUDE").as_deref(),
+        non_empty_env("WEATHER_LONGITUDE").as_deref(),
     )?
     .map(|location| {
         weather::WeatherService::new(
@@ -53,6 +47,12 @@ async fn main() -> anyhow::Result<()> {
         )
     })
     .transpose()?;
+
+    let map_origin = map::MapOrigin::parse(
+        non_empty_env("MAP_ORIGIN_LATITUDE").as_deref(),
+        non_empty_env("MAP_ORIGIN_LONGITUDE").as_deref(),
+        non_empty_env("MAP_DEMO_ORIGIN").as_deref(),
+    )?;
 
     let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {
         match docker::DockerService::new() {
@@ -138,6 +138,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::adguard::router())
         .merge(routes::docker::router())
         .merge(routes::ir::router())
+        .merge(routes::map::router(map_origin))
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
         .merge(routes::wishlist::router(
@@ -178,6 +179,12 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+fn non_empty_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 async fn shutdown_signal() {
