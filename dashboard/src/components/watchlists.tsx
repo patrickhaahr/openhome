@@ -166,7 +166,11 @@ export function Watchlists({
             )
 
             return (
-              <Card key={owner.id} aria-label={`${owner.name}’s watchlist`}>
+              <Card
+                key={owner.id}
+                role="group"
+                aria-label={`${owner.name}’s watchlist`}
+              >
                 <CardHeader>
                   <div className="watchlist-owner-heading">
                     <div>
@@ -428,6 +432,18 @@ function AddPlan({
         </div>
         <Button type="submit" disabled={disabled || title === ""}>
           Add plan
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={disabled || title === ""}
+          onClick={() => {
+            pending.current = undefined
+            storePending(ownerId, undefined)
+            setTitle("")
+          }}
+        >
+          Discard draft
         </Button>
       </div>
     </form>

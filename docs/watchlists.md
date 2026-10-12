@@ -60,10 +60,17 @@ recreating removed plans. Back up the main database including
 Dashboard saves unconfirmed additions in tab-local session storage before dispatch,
 preserving owner, kind, normalized title and request ID across refresh. When browser
 storage is unavailable, mounted forms retain the same in-memory retry intention.
-Only a parsed API receipt clears it. Removal requires confirmation, names its owner,
+Only a parsed API receipt or explicit **Discard draft** clears it. If another
+client removes a plan whose addition response was lost, ordinary retries keep its
+retired ID and return conflict. Discard the draft and re-enter the title to make
+a new intentional addition with a fresh ID. Removal requires confirmation, names its owner,
 and refreshes from Axum; a failed removal keeps the dialog open. Incomplete reads
 show recovery controls instead of an empty household. After an uncertain removal,
 read its destination before retrying.
+
+Removing a Household User in Wishlist also removes all their watchlist entries.
+The member-removal dialog discloses both Wishlist and Watchlist deletion; accepted
+addition receipts remain retired.
 
 Reads are annotated read-only; deduplicated additions are non-destructive and
 idempotent; removals are destructive and idempotent. All training tools retain

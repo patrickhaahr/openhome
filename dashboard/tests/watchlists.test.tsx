@@ -313,4 +313,51 @@ test("a dropped accepted addition retains owner, whole-series kind and request I
   expect(requests[0]).toBe(requests[1])
   expect((await available()).entries).toHaveLength(1)
   expect(container.textContent).toContain("Plan saved to OpenHome")
+
+  // A second intention loses its response, then another client removes the accepted entry.
+  drop = true
+  await add("Member A", "The Lighthouse Journey")
+  expect(container.textContent).toContain("The response was lost")
+
+  const removed = (await available()).entries.find(
+    (entry) => entry.title === "The Lighthouse Journey"
+  )
+
+  if (removed === undefined)
+    throw new Error("Expected accepted plan before remote removal")
+
+  await writeWatchlist({
+    action: "remove",
+    owner_id: removed.owner_id,
+    entry_id: removed.id,
+  })
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render()
+  await add("Member A", "The Lighthouse Journey")
+  expect(container.textContent).toContain("its entry was removed")
+  await click("Refresh watchlists")
+  await add("Member A", "The Lighthouse Journey")
+  expect(requests[2]).toBe(requests[3])
+  expect(requests[2]).toBe(requests[4])
+  expect((await available()).entries).toHaveLength(1)
+
+  const form = container.querySelector(
+    'form[aria-label="Add plan for Member A"]'
+  )
+
+  if (form === null) throw new Error("Expected retry form")
+
+  await click("Discard draft", form)
+  expect(field("Title for Member A").value).toBe("")
+  expect(sessionStorage.length).toBe(0)
+  await add("Member A", "The Lighthouse Journey")
+  expect(requests[5]).not.toBe(requests[2])
+  const plans = (await available()).entries
+
+  expect(plans).toHaveLength(2)
+  expect(
+    plans.find((entry) => entry.title === "The Lighthouse Journey")
+  ).toMatchObject({ kind: "series" })
+  expect(container.textContent).toContain("Plan saved to OpenHome")
 })
