@@ -1,4 +1,4 @@
-//! Isolated, loopback-only health, Wishlist and map seam for tests and synthetic previews.
+//! Isolated, loopback-only health, Wishlist, Watchlist and map seam for tests and synthetic previews.
 //! Uses production routes, migrations and authentication without household configuration;
 //! the map explicitly serves the unrelated Copenhagen demo origin.
 
@@ -28,6 +28,7 @@ async fn main() -> anyhow::Result<()> {
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
+        .merge(routes::watchlist::router())
         .merge(routes::map::router(demo_origin))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {

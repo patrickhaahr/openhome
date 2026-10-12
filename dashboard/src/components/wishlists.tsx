@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react"
+import { createRequestId } from "@/lib/request-id"
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
@@ -8,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { ItemForm } from "@/components/wishlist-item-form"
 import { ItemDetails } from "@/components/wishlist-item-details"
 import {
-  createWishRequestId,
   readPendingAddition,
   storePendingAddition,
   type PendingAddition,
@@ -655,7 +655,7 @@ function AddWish({
             listId,
             title,
             details,
-            requestId: createWishRequestId(),
+            requestId: createRequestId(),
           }
 
         storePendingAddition(listId, pending.current)

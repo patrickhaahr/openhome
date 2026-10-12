@@ -1025,6 +1025,155 @@ a:focus-visible {
     margin-bottom: 1.5rem;
   }
 }
+
+@utility watchlist-page {
+  max-width: 80rem;
+  .feature-intro {
+    margin-bottom: 1.5rem;
+  }
+}
+.focused-page.watchlist-page {
+  max-width: 80rem;
+}
+@utility watchlists {
+  button,
+  input,
+  select {
+    min-height: 3rem;
+    touch-action: manipulation;
+  }
+  label {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+  }
+}
+@utility watchlist-household {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+  > [data-slot="card"] {
+    min-width: 0;
+  }
+  @media (max-width: 1000px) {
+    grid-template-columns: 1fr;
+  }
+}
+@utility watchlist-owner-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  > div {
+    min-width: 0;
+  }
+  h2 {
+    margin-top: 0.75rem;
+    font-size: 1.5rem;
+    overflow-wrap: anywhere;
+  }
+  .section-label {
+    font-size: 0.625rem;
+  }
+}
+@utility watchlist-total {
+  font-family: var(--font-mono);
+  font-size: 2.5rem;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+@utility watchlist-add {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 1.5rem;
+  input {
+    font-size: 1rem;
+  }
+}
+@utility watchlist-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  > div {
+    flex: 1;
+    min-width: 9rem;
+  }
+  [data-slot="native-select-wrapper"] {
+    width: 100%;
+  }
+}
+@utility watchlist-entries {
+  li {
+    display: flex;
+    gap: 0.875rem;
+    align-items: center;
+    padding-block: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+  button {
+    flex-shrink: 0;
+    min-width: 3rem;
+  }
+}
+@utility watchlist-kind-icon {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+@utility watchlist-entry-text {
+  flex: 1;
+  min-width: 0;
+  h3 {
+    font-size: 1.0625rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  p {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    margin-top: 0.25rem;
+  }
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+}
+@utility watchlist-empty {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  padding-block: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  p {
+    color: var(--foreground);
+    font-size: 1.0625rem;
+  }
+  span {
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+}
+@utility watchlist-unavailable {
+  display: grid;
+  gap: 1rem;
+  padding-block: 2rem;
+  h2 {
+    font-size: 1.25rem;
+  }
+  p {
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+  a {
+    color: var(--primary);
+    text-decoration: underline;
+    min-height: 3rem;
+    display: inline-flex;
+    align-items: center;
+  }
+}
 .focused-page.wishlist-page {
   max-width: 80rem;
 }

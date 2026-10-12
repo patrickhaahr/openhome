@@ -2,7 +2,6 @@
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
 // This harness also executes the private server transport; CORS applies to browser RPCs, not Axum calls.
 
-import { spawn, type ChildProcess } from "node:child_process"
 import { once } from "node:events"
 import {
   createServer,
@@ -10,7 +9,6 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http"
-import { resolve } from "node:path"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import {
@@ -35,7 +33,9 @@ import type {
   WishlistMetadataLoader,
 } from "@/lib/wishlist"
 
-let api: ChildProcess | undefined
+import { startAxumFixture } from "./support/axum-fixture"
+
+let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
 let apiUrl: string
 
@@ -54,42 +54,12 @@ let refreshWork: Promise<void> = Promise.resolve()
 let metadataWork: Promise<unknown> = Promise.resolve()
 
 beforeAll(async () => {
-  api = spawn(resolve("../api/target/debug/examples/dashboard_health"), [], {
-    stdio: ["ignore", "pipe", "pipe"],
-  })
-  const child = api
-  apiUrl = await new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("Axum startup timed out")),
-      20000
-    )
-
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const url = chunk.toString().match(/http:\/\/127\.0\.0\.1:\d+/)?.[0]
-
-      if (url !== undefined) {
-        clearTimeout(timeout)
-        resolve(url)
-      }
-    })
-    child.once("error", (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-    child.once("exit", (code) => {
-      clearTimeout(timeout)
-      reject(new Error(`Axum exited: ${code}`))
-    })
-  })
+  fixture = await startAxumFixture()
+  apiUrl = fixture.url
 })
 
 afterAll(async () => {
-  if (api !== undefined && api.exitCode === null && api.signalCode === null) {
-    const exited = once(api, "exit")
-
-    api.kill("SIGTERM")
-    await exited
-  }
+  await fixture.stop()
 })
 
 beforeEach(() => {

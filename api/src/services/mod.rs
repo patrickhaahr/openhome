@@ -6,6 +6,7 @@ pub mod map;
 pub mod noop_push;
 pub mod switchbot;
 pub mod training;
+pub mod watchlist;
 pub mod weather;
 pub mod wishlist;
 pub mod wishlist_metadata;

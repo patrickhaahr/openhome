@@ -80,7 +80,13 @@ export function DashboardShell(): React.JSX.Element {
 
 function implementedRoute(
   id: Feature["id"]
-): "/controls" | "/weather" | "/travel" | "/wishlist" | undefined {
+):
+  | "/controls"
+  | "/weather"
+  | "/travel"
+  | "/wishlist"
+  | "/watchlist"
+  | undefined {
   switch (id) {
     case "controls":
       return "/controls"
@@ -90,10 +96,11 @@ function implementedRoute(
       return "/travel"
     case "wishlist":
       return "/wishlist"
+    case "watchlist":
+      return "/watchlist"
     case "agent":
     case "photos":
     case "server":
-    case "watchlist":
     case "workout":
       return undefined
   }
