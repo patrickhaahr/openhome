@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added FROM watchlist_entries ORDER BY date_added DESC, id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "kind: MediaKind",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "status: WatchStatus",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "date_added",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "88c566fb49ca546deef8a81e2e7e53428b4131094b8deef6151420511651d189"
+}

@@ -14,6 +14,7 @@ import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
 import { Route as TravelRouteImport } from './routes/travel'
+import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as WeatherRouteImport } from './routes/weather'
 import { Route as WishlistRouteImport } from './routes/wishlist'
 
@@ -42,6 +43,11 @@ const TravelRoute = TravelRouteImport.update({
   path: '/travel',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WatchlistRoute = WatchlistRouteImport.update({
+  id: '/watchlist',
+  path: '/watchlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WeatherRoute = WeatherRouteImport.update({
   id: '/weather',
   path: '/weather',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/travel': typeof TravelRoute
+  '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/travel': typeof TravelRoute
+  '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/travel': typeof TravelRoute
+  '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/connection'
     | '/controls'
     | '/travel'
+    | '/watchlist'
     | '/weather'
     | '/wishlist'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/connection'
     | '/controls'
     | '/travel'
+    | '/watchlist'
     | '/weather'
     | '/wishlist'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/connection'
     | '/controls'
     | '/travel'
+    | '/watchlist'
     | '/weather'
     | '/wishlist'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
   TravelRoute: typeof TravelRoute
+  WatchlistRoute: typeof WatchlistRoute
   WeatherRoute: typeof WeatherRoute
   WishlistRoute: typeof WishlistRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TravelRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/watchlist': {
+      id: '/watchlist'
+      path: '/watchlist'
+      fullPath: '/watchlist'
+      preLoaderRoute: typeof WatchlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/weather': {
       id: '/weather'
       path: '/weather'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
   TravelRoute: TravelRoute,
+  WatchlistRoute: WatchlistRoute,
   WeatherRoute: WeatherRoute,
   WishlistRoute: WishlistRoute,
 }

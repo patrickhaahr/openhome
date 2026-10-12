@@ -141,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::map::router(map_origin))
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
+        .merge(routes::watchlist::router())
         .merge(routes::wishlist::router(
             std::env::var("WISHLIST_DEFAULT_LIST_ID")
                 .ok()
