@@ -141,7 +141,21 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::map::router(map_origin))
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
-        .merge(routes::watchlist::router())
+        .merge(routes::watchlist::router(
+            non_empty_env("TMDB_READ_ACCESS_TOKEN").and_then(|token| {
+                let base_url = url::Url::parse("https://api.themoviedb.org/3/").ok()?;
+                if let Ok(service) =
+                    openhome_api::services::tmdb::TmdbService::new(&token, base_url)
+                {
+                    Some(service)
+                } else {
+                    tracing::warn!(
+                        "TMDB configuration is invalid; manual watchlists remain available"
+                    );
+                    None
+                }
+            }),
+        ))
         .merge(routes::wishlist::router(
             std::env::var("WISHLIST_DEFAULT_LIST_ID")
                 .ok()

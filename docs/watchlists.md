@@ -8,7 +8,7 @@ the existing shared fitness model ([ADR 0004](adr/0004-household-users-and-list-
 
 Manual planning is delivered in [#101](https://github.com/patrickhaahr/openhome/issues/101);
 personal viewing states, date corrections and filters in [#102](https://github.com/patrickhaahr/openhome/issues/102).
-TMDB search, metadata and attribution remain in #103. No provider or viewing history is used
+TMDB search, metadata and attribution are delivered in [#103](https://github.com/patrickhaahr/openhome/issues/103). No provider or viewing history is used
 to infer personal state.
 
 ## Operations
@@ -38,7 +38,8 @@ local development can run `devenv shell -- just api-migrate`.
 
 Titles allow 1–500 characters and request IDs allow 1–128; both are trimmed using
 Unicode whitespace and reject control characters. Unknown body fields, episode
-kinds and supplied status/date fields are rejected. Missing or mismatched
+kinds and supplied status/date fields are rejected on addition. Optional `tmdb_id`
+selects provider metadata; omit it for a manual plan. Missing or mismatched
 owner/entry destinations return 404. A successful removal returns 204, mapped to
 MCP `{ "deleted": true }`; repeated removals remain not-found tool errors.
 
@@ -122,3 +123,55 @@ including additions/removal, status/date edits, filters, refresh, failed credent
 response followed by remount/retry. [Public screenshots](../dashboard/docs/watchlist/README.md)
 show synthetic data only. Physical iPad Safari validation remains a separate
 release gate under #69.
+
+## TMDB search, selection and enrichment
+
+Set `TMDB_READ_ACCESS_TOKEN` privately on Axum using TMDB's **API Read Access
+Token**, not the v3 query-string API key. Missing or invalid configuration disables
+provider reads and leaves manual CRUD available. Never put the token in Start,
+`VITE_*`, MCP, issues or captures. The API uses the fixed `https://api.themoviedb.org/3/`
+origin, bearer authentication, a three-second timeout, no redirects and a 1 MiB
+response limit. Provider error bodies and tokens are never returned to clients.
+
+- `GET /api/watchlist/search?kind=movie&query=...` (or `kind=series`) returns the
+  first page, up to 20 typed metadata results. Search movies and TV separately;
+  people, episodes and seasons are excluded. Queries require 1–200 characters.
+- `POST /api/watchlist/entries` accepts optional positive safe-integer `tmdb_id`.
+  Axum resolves the selected kind/ID itself, without trusting client descriptions,
+  posters or dates. New selected entries still start **planned** today.
+- `POST /api/household-users/{owner_id}/watchlist/entries/{entry_id}/metadata`
+  accepts `{ "tmdb_id": 42 }`. It enriches/refreshes the existing entry's title,
+  overview, poster path and release date while preserving its kind, owner, stable
+  ID, added date, status and completion date. A wrong owner never triggers a
+  provider request. Concurrent metadata replacement returns 409.
+
+Migration 0011 adds nullable `tmdb_id`, `overview`, `poster_path` and `release_date`
+and a unique `(owner_id, kind, tmdb_id)` index for provider entries. Equal numeric
+movie and series IDs remain distinct; each owner can plan the same provider title.
+Manual entries need no provider identity. Rollback drops metadata while preserving
+personal progress and dates. Addition receipts retain the original requested title
+and provider ID; retries resolve before provider reads, even after enrichment or
+an outage. Reusing an ID with a different provider selection conflicts. Trying to
+add an existing owner/kind/provider title with a new request ID also returns 409.
+
+Configuration, quota, search and detail failures return sanitized 503
+`code: "tmdb_unavailable"`, never an empty successful search. The dashboard keeps
+the manual title/type form available and provides **Add manually** after selection.
+No metadata failure consumes a request ID. Existing MCP tools continue to support
+manual plans and return enriched entries unchanged; this slice adds provider
+selection and enrichment to the dashboard/API, without new agent tools.
+
+TMDB confirms free non-commercial developer access with attribution in its
+[FAQ](https://developer.themoviedb.org/docs/faq). The Watchlist's Credits area shows
+an approved logo, link and required notice. Axum validates poster filenames, and
+Start builds public `image.tmdb.org/t/p/w342/...` URLs without tokens.
+See [ADR 0008](adr/0008-watchlist-tmdb-metadata.md).
+
+Validation uses migrated authenticated Axum routes with synthetic provider
+responses, plus rendered selection, persisted refresh, enrichment, attribution
+and manual outage recovery. The loopback `dashboard_health` fixture serves a
+synthetic upstream; search **Orbit** as a movie or **Lighthouse** as a series, and
+**Offline story** to exercise search failure. Its posters are intentionally fictional.
+This proves no live TMDB or physical Safari/device behavior. Live authenticated
+provider access and target-iPad verification remain release acceptance checks;
+no TMDB runtime credential was available for this implementation.
