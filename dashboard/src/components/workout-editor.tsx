@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { createRequestId } from "@/lib/request-id"
 import {
+  holdLabel,
   nextSet,
   parseDraft,
   type DraftField,
@@ -29,6 +30,8 @@ type WorkoutEditorProps = {
   readonly initial: WorkoutDraft
   readonly exercises: ReadonlyArray<Exercise>
   readonly disabled: boolean
+  /** Why OpenHome did not store the last save, shown beside the save button. */
+  readonly failure: string | undefined
   readonly save: (input: WorkoutInput) => Promise<boolean>
   readonly cancel: () => void
 }
@@ -42,6 +45,7 @@ export function WorkoutEditor({
   initial,
   exercises,
   disabled,
+  failure,
   save,
   cancel,
 }: WorkoutEditorProps): React.JSX.Element {
@@ -98,6 +102,11 @@ export function WorkoutEditor({
       className="workout-editor"
       aria-label={title}
       noValidate
+      onKeyDown={(event) => {
+        // The iPad keyboard's Go key would otherwise save a half-built draft.
+        if (event.key === "Enter" && event.target instanceof HTMLInputElement)
+          event.preventDefault()
+      }}
       onSubmit={(event) => {
         event.preventDefault()
         const parsed = parseDraft(draft)
@@ -349,6 +358,11 @@ export function WorkoutEditor({
                     {set.notes === null ? null : (
                       <p className="workout-muted">Note: {set.notes}</p>
                     )}
+                    {set.kind === "reps" && set.heldSeconds !== null ? (
+                      <p className="workout-muted">
+                        Timed {holdLabel(set.heldSeconds)}, kept as stored.
+                      </p>
+                    ) : null}
                   </li>
                 )
               })}
@@ -423,6 +437,11 @@ export function WorkoutEditor({
       {problems.size > 0 ? (
         <p className="workout-problem" role="alert">
           Check the highlighted fields. Nothing was saved.
+        </p>
+      ) : null}
+      {problems.size === 0 && failure !== undefined ? (
+        <p className="workout-problem" role="alert">
+          {failure}
         </p>
       ) : null}
       <div className="workout-editor-actions">

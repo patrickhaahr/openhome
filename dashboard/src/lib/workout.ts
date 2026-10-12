@@ -65,7 +65,8 @@ export type WorkoutDetail = z.infer<typeof workoutDetail>
 /** History pages grow in fixed steps, bounded below Axum's 500-row list limit. */
 export const historyStep = 20
 
-const maxHistory = 480
+/** The longest history view; the last page offers no older rows. */
+export const maxHistory = 480
 
 /** Selected history entry and history length; invalid values fall back to the newest view. */
 export const workoutSearch = z.object({
@@ -174,7 +175,7 @@ export const workoutFailureMessage: Record<WorkoutFailure, string> = {
 /** How a Set is performed: repetitions, or a duration-only Timed Hold. */
 export type SetKind = "reps" | "hold"
 
-/** Editable text for one Set; stored notes ride along unchanged. */
+/** Editable text for one Set; stored notes and a reps Set's stored duration ride along unchanged. */
 export type SetDraft = {
   readonly key: string
   readonly kind: SetKind
@@ -183,6 +184,7 @@ export type SetDraft = {
   readonly weight: string
   readonly rpe: string
   readonly notes: string | null
+  readonly heldSeconds: number | null
 }
 
 /** Editable entry for one Exercise in a Workout. */
@@ -231,7 +233,7 @@ export function trainingDayOn(now: Date): string {
  * Create a blank Set, repeating the previous Set's values when there is one.
  *
  * @param key - A stable React key for the new Set.
- * @param previous - The Set to repeat; its notes stay with the original.
+ * @param previous - The Set to repeat; its notes and stored duration stay with the original.
  * @returns An editable Set.
  */
 export function nextSet(key: string, previous: SetDraft | undefined): SetDraft {
@@ -244,8 +246,9 @@ export function nextSet(key: string, previous: SetDraft | undefined): SetDraft {
         weight: "",
         rpe: "",
         notes: null,
+        heldSeconds: null,
       }
-    : { ...previous, key, notes: null }
+    : { ...previous, key, notes: null, heldSeconds: null }
 }
 
 /**
@@ -273,9 +276,12 @@ export function draftFromWorkout(
         reps: set.reps?.toString() ?? "",
         seconds:
           set.duration_seconds === null ? "" : formatHold(set.duration_seconds),
-        weight: set.weight_kg === null ? "" : formatNumber(set.weight_kg),
+        // Exact text, so an unrelated edit never rounds a stored weight.
+        weight:
+          set.weight_kg === null ? "" : String(set.weight_kg).replace(".", ","),
         rpe: set.rpe?.toString() ?? "",
         notes: set.notes,
+        heldSeconds: set.reps === null ? null : set.duration_seconds,
       })),
     })),
   }
@@ -355,7 +361,10 @@ export function parseDraft(
     notes: optionalText(entry.notes),
     sets: entry.sets.map((set, setIndex) => {
       const reps = set.kind === "reps" ? positiveWhole(set.reps) : null
-      const duration = set.kind === "hold" ? parseHold(set.seconds) : null
+
+      const duration =
+        set.kind === "hold" ? parseHold(set.seconds) : set.heldSeconds
+
       const weight = addedWeight(set.weight)
       const rpe = set.rpe === "" ? null : positiveWhole(set.rpe)
 
@@ -426,7 +435,13 @@ export function formatHold(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
 }
 
-function holdLabel(seconds: number | null): string {
+/**
+ * Label a stored duration in words.
+ *
+ * @param seconds - The stored duration, null when none was recorded.
+ * @returns For example `45 s` or `1:30`.
+ */
+export function holdLabel(seconds: number | null): string {
   if (seconds === null) return "—"
 
   return seconds < 60 ? `${seconds} s` : formatHold(seconds)
@@ -444,10 +459,20 @@ export function describeSet(set: LoggedSet): string {
       ? `Hold ${holdLabel(set.duration_seconds)}`
       : `${set.reps} ${set.reps === 1 ? "rep" : "reps"}`
 
+  // Axum also accepts a duration on a reps Set; show it rather than hide stored data.
+  const timed =
+    set.reps === null || set.duration_seconds === null
+      ? undefined
+      : `in ${holdLabel(set.duration_seconds)}`
+
   const load =
     set.weight_kg === null ? "bodyweight" : `+${formatNumber(set.weight_kg)} kg`
 
-  return [effort, load, set.rpe === null ? undefined : `RPE ${set.rpe}`]
+  return [
+    timed === undefined ? effort : `${effort} ${timed}`,
+    load,
+    set.rpe === null ? undefined : `RPE ${set.rpe}`,
+  ]
     .filter((part) => part !== undefined)
     .join(" · ")
 }
