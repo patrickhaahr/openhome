@@ -62,7 +62,7 @@ export const features = [
     icon: FilmSlateIcon,
     description: "Movies and series, with everyone’s lists together.",
     unavailable:
-      "Watchlists have not been added to this dashboard. Household users and their viewing lists are unavailable.",
+      "Watchlists are unavailable. Refresh to read the household’s current plans.",
   },
   {
     id: "photos",

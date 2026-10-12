@@ -1,0 +1,316 @@
+// @vitest-environment happy-dom
+// @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
+// The private server transport calls Axum; browser CORS applies only to Start RPCs.
+import { once } from "node:events"
+import {
+  createServer,
+  type Server,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http"
+import { act } from "react"
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router"
+import { z } from "zod"
+import { createRoot, type Root } from "react-dom/client"
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+  vi,
+} from "vitest"
+import { Watchlists } from "@/components/watchlists"
+import { readWatchlists, writeWatchlist } from "@/lib/watchlist.server"
+import { writeWishlist } from "@/lib/wishlist.server"
+import { startAxumFixture } from "./support/axum-fixture"
+import type { WatchlistMutation } from "@/lib/watchlist"
+
+let fixture: Awaited<ReturnType<typeof startAxumFixture>>
+
+let root: Root
+
+let container: HTMLDivElement
+
+let work: Promise<WatchlistMutation> = Promise.resolve({ state: "saved" })
+
+let refreshWork: Promise<void> = Promise.resolve()
+
+let proxy: Server | undefined
+
+beforeAll(async () => {
+  fixture = await startAxumFixture()
+})
+
+afterAll(async () => {
+  await fixture.stop()
+})
+
+beforeEach(() => {
+  vi.stubEnv("OPENHOME_API_URL", fixture.url)
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  sessionStorage.clear()
+  container = document.createElement("div")
+  document.body.append(container)
+  root = createRoot(container)
+  work = Promise.resolve({ state: "saved" })
+  refreshWork = Promise.resolve()
+})
+
+afterEach(async () => {
+  await act(async () => root.unmount())
+  container.remove()
+
+  if (proxy) {
+    proxy.closeAllConnections()
+    await new Promise<void>((resolve, reject) =>
+      proxy?.close((error) => (error ? reject(error) : resolve()))
+    )
+    proxy = undefined
+  }
+
+  vi.stubEnv("OPENHOME_API_URL", fixture.url)
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  const data = await readWatchlists()
+
+  if (data.state !== "available") throw new Error("Expected fixture discovery")
+
+  for (const owner of data.owners)
+    await writeWishlist({ kind: "remove-owner", owner_id: owner.id })
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
+
+async function render(): Promise<void> {
+  const data = await readWatchlists()
+
+  const router = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory(),
+    isServer: false,
+  })
+
+  await act(async () =>
+    root.render(
+      <RouterContextProvider router={router}>
+        <Watchlists
+          data={data}
+          change={(command) => {
+            work = writeWatchlist(command)
+
+            return work
+          }}
+          refresh={() => {
+            refreshWork = render()
+
+            return refreshWork
+          }}
+        />
+      </RouterContextProvider>
+    )
+  )
+}
+
+function field(label: string): HTMLInputElement | HTMLSelectElement {
+  const matched = Array.from(container.querySelectorAll("label")).find(
+    (item) => item.textContent === label
+  )
+
+  const input = document.getElementById(matched?.htmlFor ?? "")
+
+  if (
+    !(input instanceof HTMLInputElement) &&
+    !(input instanceof HTMLSelectElement)
+  )
+    throw new Error(`Missing field ${label}`)
+
+  return input
+}
+
+async function type(label: string, value: string): Promise<void> {
+  const input = field(label)
+  await act(async () => {
+    const prototype =
+      input instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : HTMLInputElement.prototype
+
+    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, value)
+    input.dispatchEvent(
+      new Event(input instanceof HTMLSelectElement ? "change" : "input", {
+        bubbles: true,
+      })
+    )
+  })
+}
+
+async function click(
+  name: string,
+  scope: ParentNode = document
+): Promise<void> {
+  const button = Array.from(scope.querySelectorAll("button")).find(
+    (item) => (item.getAttribute("aria-label") ?? item.textContent) === name
+  )
+
+  if (!button) throw new Error(`Missing button ${name}`)
+  await act(async () => {
+    button.click()
+    await work
+    await refreshWork
+  })
+}
+
+async function add(owner: string, title: string): Promise<void> {
+  await type(`Title for ${owner}`, title)
+
+  const form = container.querySelector(
+    `form[aria-label="Add plan for ${owner}"]`
+  )
+
+  if (!form) throw new Error("Expected owner form")
+  await click("Add plan", form)
+}
+
+async function available() {
+  const data = await readWatchlists()
+
+  if (data.state !== "available")
+    throw new Error("Expected authenticated Watchlist read")
+
+  return data
+}
+
+test("renders all owners and persists movie/whole-series additions and confirmed owner-specific removals", async () => {
+  await render()
+  expect(container.textContent).toContain("Add a household member in Wishlist")
+  await writeWishlist({ kind: "create-owner", name: "Member A" })
+  await writeWishlist({ kind: "create-owner", name: "Member B" })
+  await render()
+  expect(container.querySelectorAll("form")).toHaveLength(2)
+  await add("Member A", "A Quiet Orbit")
+  await type("Type for Member B", "series")
+  await add("Member B", "The Lighthouse Journey")
+  await render()
+  const data = await available()
+  expect(data.entries).toHaveLength(2)
+
+  const series = data.entries.find(
+    (entry) => entry.title === "The Lighthouse Journey"
+  )
+
+  expect(series).toMatchObject({ kind: "series", status: "planned" })
+  expect(container.textContent).toContain("Whole series")
+  expect(container.querySelector("time")?.dateTime).toMatch(
+    /^\d{4}-\d{2}-\d{2}$/
+  )
+  await click("Remove A Quiet Orbit from Member A’s watchlist")
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+    "Member A’s watchlist"
+  )
+  await click("Keep plan")
+  expect((await available()).entries).toHaveLength(2)
+  await click("Remove A Quiet Orbit from Member A’s watchlist")
+  await click("Remove permanently")
+  await render()
+  expect(container.textContent).not.toContain("A Quiet Orbit")
+  expect((await available()).entries).toEqual([series])
+})
+
+test("failed additions retain drafts, refresh recovers auth, and unavailable reads cannot look empty", async () => {
+  await writeWishlist({ kind: "create-owner", name: "Member A" })
+  await render()
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await add("Member A", "A Quiet Orbit")
+  expect(container.textContent).toContain("OpenHome rejected the API key")
+  expect(field("Title for Member A").value).toBe("A Quiet Orbit")
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  await click("Refresh watchlists")
+  await add("Member A", "A Quiet Orbit")
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await click("Remove A Quiet Orbit from Member A’s watchlist")
+  await click("Remove permanently")
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+    "OpenHome rejected the API key"
+  )
+  await click("Keep plan")
+  await render()
+  expect(container.textContent).toContain("Watchlists unavailable")
+  expect(container.textContent).not.toContain("No plans yet")
+  expect(container.textContent).not.toContain("synthetic-rejected-key")
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  await click("Refresh watchlists")
+  expect(container.textContent).toContain("A Quiet Orbit")
+  expect((await available()).entries).toHaveLength(1)
+})
+
+test("a dropped accepted addition retains owner, whole-series kind and request ID across remount and retries", async () => {
+  await writeWishlist({ kind: "create-owner", name: "Member A" })
+  let drop = true
+  const requests: string[] = []
+
+  async function forward(
+    request: IncomingMessage,
+    response: ServerResponse
+  ): Promise<void> {
+    const body = await new Promise<string>((resolve) => {
+      let text = ""
+      request.on("data", (chunk: Buffer) => {
+        text += chunk.toString()
+      })
+      request.on("end", () => resolve(text))
+    })
+
+    const upstream = await fetch(`${fixture.url}${request.url ?? ""}`, {
+      method: request.method ?? "GET",
+      headers: {
+        Authorization: request.headers.authorization ?? "",
+        "Content-Type": "application/json",
+      },
+      body: body || null,
+    })
+
+    if (request.url === "/api/watchlist/entries" && request.method === "POST") {
+      requests.push(body)
+
+      if (drop) {
+        drop = false
+        await upstream.text()
+        request.socket.destroy()
+
+        return
+      }
+    }
+
+    response.writeHead(upstream.status, { "Content-Type": "application/json" })
+    response.end(await upstream.text())
+  }
+
+  proxy = createServer((request, response) => {
+    void forward(request, response).catch(() => response.destroy())
+  })
+  proxy.listen(0, "127.0.0.1")
+  await once(proxy, "listening")
+  const address = z.object({ port: z.number() }).parse(proxy.address())
+  vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
+  await render()
+  await type("Type for Member A", "series")
+  await add("Member A", "\u0085A Quiet Orbit\u0085")
+  expect(container.textContent).toContain("The response was lost")
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render()
+  expect(field("Title for Member A").value).toBe("A Quiet Orbit")
+  expect(field("Type for Member A").value).toBe("series")
+  await add("Member A", "A Quiet Orbit")
+  expect(requests).toHaveLength(2)
+  expect(requests[0]).toBe(requests[1])
+  expect((await available()).entries).toHaveLength(1)
+  expect(container.textContent).toContain("Plan saved to OpenHome")
+})

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM watchlist_entries WHERE id = ? AND owner_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "8a786e397e15180f76054da249a0b536f1487ac89c676a73162d0ff43c3907d3"
+}

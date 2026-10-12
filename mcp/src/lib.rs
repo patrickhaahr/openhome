@@ -34,7 +34,9 @@ use wishlist::{
     WishlistItemsRequest, WishlistUrlMetadataRequest,
 };
 
+mod watchlist;
 mod wishlist;
+use watchlist::{AddWatchlistEntryRequest, WatchlistEntryRequest};
 
 /// Where the MCP endpoint is mounted.
 pub const MCP_PATH: &str = "/mcp";
@@ -42,7 +44,7 @@ pub const MCP_PATH: &str = "/mcp";
 const BEARER_PREFIX: &str = "Bearer ";
 const API_TIMEOUT: Duration = Duration::from_secs(15);
 
-const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add, read, update or delete wishes. \
+const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add, read, update or delete wishes. Watchlist tools add, list, read and remove manual movie or whole-series plans. Discover household_users and use explicit owner IDs; never infer ownership, even for a single owner. Missing ownership returns watchlist_destination_required: ask its question once with the returned choices, then retry with the selected owner. New entries are planned, not watched. Reuse the exact kind/title/owner/request_id on uncertain addition retries; deleted entries cannot be recreated by an old request_id. After an uncertain removal, read its owner/entry destination before retrying. \
 Every tool calls the OpenHome API, which owns days (Europe/Copenhagen), units, NOOP source selection, freshness and \
 coverage; results are returned as the API sent them. A null value means no value was recorded or \
 synced; check each result's freshness and coverage before treating a gap as real. For wishlist requests, discover household owners and named \
@@ -422,11 +424,86 @@ impl OpenHomeTools {
 #[tool_router]
 impl OpenHomeTools {
     #[tool(
-        description = "Discover configured Household Users and their stable IDs. All Wishlists are household-visible; ownership is not per-user authentication.",
+        description = "Discover configured Household Users and their stable IDs. All Wishlists and Watchlists are household-visible; ownership is not per-user authentication.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn household_users(&self) -> CallToolResult {
         self.api.get(&["api", "household-users"]).await
+    }
+
+    #[tool(
+        description = "List all household-visible Watchlist Entries with stable entry IDs, owner IDs, movie/series kind, planned status and date added. Use household_users to show every owner, including owners without entries. Does not infer viewing history.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn watchlist_entries(&self) -> CallToolResult {
+        self.api.get(&["api", "watchlist", "entries"]).await
+    }
+
+    #[tool(
+        description = "Add a manual movie or whole-series plan for an explicit owner_id discovered with household_users. Missing owner returns one clarification question with choices and writes nothing. Generate a unique request_id per intention; reuse identical arguments and ID after an uncertain response. Accepted retries return replayed=true; changed arguments conflict. New entries start planned. No provider search or completion is inferred.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn add_watchlist_entry(
+        &self,
+        Parameters(request): Parameters<AddWatchlistEntryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .post(&["api", "watchlist", "entries"], json!(request))
+            .await
+    }
+
+    #[tool(
+        description = "Read one household-visible Watchlist Entry by explicit stable owner_id and entry_id. A mismatched or removed destination is a tool error. Read after an uncertain removal before deciding to retry.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn watchlist_entry(
+        &self,
+        Parameters(request): Parameters<WatchlistEntryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&[
+                "api",
+                "household-users",
+                &request.owner_id,
+                "watchlist",
+                "entries",
+                &request.entry_id,
+            ])
+            .await
+    }
+
+    #[tool(
+        description = "Permanently remove one Watchlist Entry by explicit owner_id and entry_id. Returns deleted=true only after Axum confirms removal; missing or mismatched destinations are tool errors. Read after an uncertain response. Old addition retries cannot recreate the removed entry.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_watchlist_entry(
+        &self,
+        Parameters(request): Parameters<WatchlistEntryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::DELETE,
+                &[
+                    "api",
+                    "household-users",
+                    &request.owner_id,
+                    "watchlist",
+                    "entries",
+                    &request.entry_id,
+                ],
+                None,
+            )
+            .await
     }
 
     #[tool(

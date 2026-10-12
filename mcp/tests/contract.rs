@@ -58,6 +58,7 @@ async fn start_api() -> String {
     let api_key = auth::ApiKey::new(API_KEY.to_string());
     let app = routes::training::router()
         .merge(routes::wishlist::router(None))
+        .merge(routes::watchlist::router())
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, api_key.clone())
@@ -211,6 +212,150 @@ async fn wishlist_call(
         )
         .await
         .unwrap()
+}
+
+#[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one real MCP workflow owns pass-through, clarification, receipt replay and owner-targeted removal"
+)]
+async fn manual_watchlist_tools_forward_owner_targeted_plans_and_api_receipts_unchanged() {
+    let api = start_api().await;
+    let http = reqwest::Client::new();
+    let mut owners = Vec::new();
+    for name in ["Member A", "Member B"] {
+        let owner: Value = http
+            .post(format!("{api}/api/household-users"))
+            .bearer_auth(API_KEY)
+            .json(&json!({"name":name}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        owners.push(owner);
+    }
+    let mcp = start_mcp(&api, API_KEY).await;
+    assert!(connect(&mcp, "wrong-key").await.is_err());
+    let client = connect(&mcp, API_KEY).await.unwrap();
+    assert_eq!(
+        wishlist_call(&client, "household_users", json!({}))
+            .await
+            .structured_content,
+        Some(json!(owners))
+    );
+    let payload = json!({"kind":"series","title":"A Quiet Orbit","request_id":"mcp-watch-1"});
+    let clarification = wishlist_call(&client, "add_watchlist_entry", payload.clone()).await;
+    let direct: Value = http
+        .post(format!("{api}/api/watchlist/entries"))
+        .bearer_auth(API_KEY)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(clarification.is_error, Some(true));
+    assert_eq!(direct["code"], "watchlist_destination_required");
+    assert_eq!(clarification.structured_content, Some(direct));
+    let mut payload = payload;
+    payload["owner_id"] = owners[0]["id"].clone();
+    let added = wishlist_call(&client, "add_watchlist_entry", payload.clone()).await;
+    assert_eq!(added.is_error, Some(false));
+    let addition = added.structured_content.unwrap();
+    assert_eq!(addition["entry"]["status"], "planned");
+    assert_eq!(addition["entry"]["kind"], "series");
+    let replayed = wishlist_call(&client, "add_watchlist_entry", payload.clone()).await;
+    assert_eq!(
+        replayed.structured_content,
+        Some(json!({"entry":addition["entry"],"replayed":true}))
+    );
+    let mut changed = payload.clone();
+    changed["owner_id"] = owners[1]["id"].clone();
+    assert_eq!(
+        wishlist_call(&client, "add_watchlist_entry", changed)
+            .await
+            .is_error,
+        Some(true)
+    );
+    let listed = wishlist_call(&client, "watchlist_entries", json!({})).await;
+    let direct: Value = http
+        .get(format!("{api}/api/watchlist/entries"))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed.structured_content, Some(direct));
+    let target = json!({"owner_id":owners[0]["id"],"entry_id":addition["entry"]["id"]});
+    assert_eq!(
+        wishlist_call(&client, "watchlist_entry", target.clone())
+            .await
+            .structured_content,
+        Some(addition["entry"].clone())
+    );
+    let wrong = json!({"owner_id":owners[1]["id"],"entry_id":addition["entry"]["id"]});
+    assert_eq!(
+        wishlist_call(&client, "delete_watchlist_entry", wrong)
+            .await
+            .is_error,
+        Some(true)
+    );
+    assert_eq!(
+        wishlist_call(&client, "delete_watchlist_entry", target.clone())
+            .await
+            .structured_content,
+        Some(json!({"deleted":true}))
+    );
+    assert_eq!(
+        wishlist_call(&client, "watchlist_entry", target.clone())
+            .await
+            .is_error,
+        Some(true)
+    );
+    assert_eq!(
+        wishlist_call(&client, "delete_watchlist_entry", target)
+            .await
+            .is_error,
+        Some(true)
+    );
+    assert_eq!(
+        wishlist_call(&client, "add_watchlist_entry", payload)
+            .await
+            .is_error,
+        Some(true)
+    );
+    assert_eq!(
+        wishlist_call(&client, "watchlist_entries", json!({}))
+            .await
+            .structured_content,
+        Some(json!([]))
+    );
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn watchlist_write_auth_and_transport_failures_remain_tool_errors() {
+    let api = start_api().await;
+    for (api_url, key, expected_status) in [
+        (api.as_str(), "wrong-key", json!(401)),
+        ("http://127.0.0.1:1", API_KEY, Value::Null),
+    ] {
+        let client = connect(&start_mcp(api_url, key).await, API_KEY)
+            .await
+            .unwrap();
+        let result = wishlist_call(&client, "add_watchlist_entry", json!({"owner_id":"synthetic-owner","kind":"movie","title":"A Quiet Orbit","request_id":"failed-watch"})).await;
+        assert_eq!(result.is_error, Some(true));
+        assert_eq!(
+            result.structured_content.unwrap()["status"],
+            expected_status
+        );
+        client.cancel().await.unwrap();
+    }
 }
 
 #[tokio::test]
@@ -395,8 +540,10 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
     assert_eq!(
         names,
         [
+            "add_watchlist_entry",
             "add_wishlist_item",
             "create_wishlist",
+            "delete_watchlist_entry",
             "delete_wishlist_item",
             "exercise_history",
             "household_users",
@@ -406,6 +553,8 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "sleep_recent",
             "training_context",
             "update_wishlist_item",
+            "watchlist_entries",
+            "watchlist_entry",
             "wishlist_item",
             "wishlist_items",
             "wishlist_url_metadata",
@@ -424,21 +573,26 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                     | "add_wishlist_item"
                     | "update_wishlist_item"
                     | "delete_wishlist_item"
+                    | "add_watchlist_entry"
+                    | "delete_watchlist_entry"
             )),
             "{}",
             tool.name
         );
-        if matches!(tool.name.as_ref(), "create_wishlist" | "add_wishlist_item") {
+        if matches!(
+            tool.name.as_ref(),
+            "create_wishlist" | "add_wishlist_item" | "add_watchlist_entry"
+        ) {
             let annotations = tool.annotations.as_ref().unwrap();
             assert_eq!(annotations.destructive_hint, Some(false));
             assert_eq!(
                 annotations.idempotent_hint,
-                Some(tool.name == "add_wishlist_item")
+                Some(tool.name != "create_wishlist")
             );
         }
         if matches!(
             tool.name.as_ref(),
-            "update_wishlist_item" | "delete_wishlist_item"
+            "update_wishlist_item" | "delete_wishlist_item" | "delete_watchlist_entry"
         ) {
             let annotations = tool.annotations.as_ref().unwrap();
             assert_eq!(annotations.destructive_hint, Some(true));
@@ -450,12 +604,14 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             assert_eq!(annotations.destructive_hint, Some(false));
         }
         let required = match tool.name.as_ref() {
-            "household_users" | "wishlists" => {
+            "household_users" | "wishlists" | "watchlist_entries" => {
                 assert!(tool.input_schema.get("required").is_none());
                 continue;
             }
             "create_wishlist" => json!(["owner_id", "name"]),
             "add_wishlist_item" => json!(["title", "request_id"]),
+            "add_watchlist_entry" => json!(["kind", "title", "request_id"]),
+            "watchlist_entry" | "delete_watchlist_entry" => json!(["owner_id", "entry_id"]),
             "wishlist_items" => json!(["list_id"]),
             "wishlist_url_metadata" => json!(["owner_id", "list_id", "url"]),
             "wishlist_item" | "delete_wishlist_item" | "update_wishlist_item" => {
@@ -480,7 +636,9 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             );
         }
         assert!(tool.description.as_deref().is_some_and(|description| {
-            (description.contains("Europe/Copenhagen") || tool.name.contains("wishlist"))
+            (description.contains("Europe/Copenhagen")
+                || tool.name.contains("wishlist")
+                || tool.name.contains("watchlist"))
                 && !description.contains('\n')
         }));
     }

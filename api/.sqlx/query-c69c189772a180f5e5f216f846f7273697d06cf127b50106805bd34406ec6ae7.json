@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT entry_id, owner_id, kind AS \"kind: MediaKind\", title FROM watchlist_addition_receipts WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "entry_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "kind: MediaKind",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c69c189772a180f5e5f216f846f7273697d06cf127b50106805bd34406ec6ae7"
+}

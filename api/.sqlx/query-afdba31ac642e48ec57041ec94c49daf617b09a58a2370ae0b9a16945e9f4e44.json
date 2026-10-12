@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO watchlist_addition_receipts (request_id, entry_id, owner_id, kind, title) VALUES (?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "request_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "afdba31ac642e48ec57041ec94c49daf617b09a58a2370ae0b9a16945e9f4e44"
+}
