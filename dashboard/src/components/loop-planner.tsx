@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { MapLine, MapRoutes } from "@/lib/map"
 import {
+  activeRouteMap,
   describeTarget,
+  type ActiveRoute,
   type ActiveRouteRead,
   type RouteSelectionRead,
   describeDeviation,
@@ -68,7 +70,7 @@ type Status =
 type Shown = {
   readonly plan: LoopPlan
   readonly lines: ReadonlyArray<MapLine>
-  readonly focused: number
+  readonly focused: number | undefined
 }
 
 const LETTERS = ["A", "B", "C"]
@@ -126,18 +128,19 @@ export function LoopPlanner({
 
     setShown(next)
     setStatus({ state: "planned" })
-    onRoutesChange({ lines: next.lines, focused: next.focused })
+    onRoutesChange(alternativesMap(next, 0))
   }
 
   function focus(index: number): void {
     if (shown === undefined) return
 
     setShown({ ...shown, focused: index })
-    onRoutesChange({ lines: shown.lines, focused: index })
+    onRoutesChange(alternativesMap(shown, index))
   }
 
   async function choose(): Promise<void> {
-    const route = shown?.plan.loops[shown.focused]
+    const route =
+      shown?.focused === undefined ? undefined : shown.plan.loops[shown.focused]
 
     if (route === undefined || writing.current) return
 
@@ -166,14 +169,27 @@ export function LoopPlanner({
       setActive(result)
       setSelection({ state: "idle" })
 
-      if (result.state === "selected")
-        onRoutesChange({ lines: [result.route.geometry], focused: 0 })
+      if (result.state === "selected") showActive(result.route)
     }
   }
 
   const saving = selection.state === "saving" || selection.state === "checking"
   const busy = status.state === "planning" || saving
-  const candidate = shown?.plan.loops[shown.focused]
+
+  function showActive(route: ActiveRoute): void {
+    if (shown !== undefined) {
+      const index = shown.plan.loops.findIndex(
+        (candidate) => candidate.id === route.id
+      )
+
+      setShown({ ...shown, focused: index < 0 ? undefined : index })
+    }
+
+    onRoutesChange(activeRouteMap(route))
+  }
+
+  const candidate =
+    shown?.focused === undefined ? undefined : shown.plan.loops[shown.focused]
 
   const alreadySelected =
     active.state === "selected" && active.route.id === candidate?.id
@@ -217,8 +233,7 @@ export function LoopPlanner({
             busy={busy}
             onCheck={() => void checkSelection()}
             onShow={() => {
-              if (active.state === "selected")
-                onRoutesChange({ lines: [active.route.geometry], focused: 0 })
+              if (active.state === "selected") showActive(active.route)
             }}
           />
           <form
@@ -352,14 +367,16 @@ export function LoopPlanner({
               <Button
                 type="button"
                 size="lg"
-                disabled={busy || alreadySelected}
+                disabled={busy || alreadySelected || candidate === undefined}
                 onClick={() => void choose()}
               >
                 {selection.state === "saving"
                   ? "Selecting…"
-                  : alreadySelected
-                    ? "Active route selected"
-                    : `Select Loop ${LETTERS[shown.focused] ?? shown.focused + 1}`}
+                  : shown.focused === undefined
+                    ? "Choose a loop to select"
+                    : alreadySelected
+                      ? "Active route selected"
+                      : `Select Loop ${LETTERS[shown.focused] ?? shown.focused + 1}`}
               </Button>
               <p className="loop-planner-hint">
                 Comparing loops does not change the route selected for your
@@ -374,6 +391,19 @@ export function LoopPlanner({
       </CardContent>
     </Card>
   )
+}
+
+function alternativesMap(shown: Shown, index: number): MapRoutes {
+  const route = shown.plan.loops[index]
+
+  return {
+    lines: shown.lines,
+    focused: index,
+    label:
+      route === undefined
+        ? "Showing loop alternatives"
+        : `Showing Loop ${LETTERS[index] ?? index + 1} · ${formatKilometers(route.distance_meters)}`,
+  }
 }
 
 /** Saving and checking are mutually exclusive; errors never claim a replacement was saved. */

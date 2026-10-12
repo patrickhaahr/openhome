@@ -37,6 +37,8 @@ export type MapLine = {
 
 /** Alternative lines drawn together, with the one being inspected highlighted. */
 export type MapRoutes = {
+  /** The route currently displayed, named for the household beside the map. */
+  readonly label?: string
   readonly lines: ReadonlyArray<MapLine>
   /** Index into `lines` of the highlighted line. */
   readonly focused: number

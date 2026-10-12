@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { MapRoutes } from "./map"
 
 const activity = z.enum(["walking", "running"])
 
@@ -284,3 +285,12 @@ export type RouteSelectionRead =
 
 /** Safe recovery state for failed reads or RPCs. */
 export const unavailableActiveRoute: ActiveRouteRead = { state: "unavailable" }
+
+/** Draw and name the confirmed selection independently of the compared alternatives. */
+export function activeRouteMap(route: ActiveRoute): MapRoutes {
+  return {
+    lines: [route.geometry],
+    focused: 0,
+    label: `Showing active route · ${formatKilometers(route.distance_meters)}`,
+  }
+}
