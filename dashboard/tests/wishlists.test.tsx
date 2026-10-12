@@ -168,7 +168,7 @@ async function clickButton(element: HTMLButtonElement): Promise<void> {
   })
 }
 
-async function submit(label: string, value: string): Promise<void> {
+function field(label: string): HTMLInputElement {
   const fieldLabel = Array.from(container.querySelectorAll("label")).find(
     (element) => element.textContent === label
   )
@@ -178,6 +178,12 @@ async function submit(label: string, value: string): Promise<void> {
   if (!(input instanceof HTMLInputElement))
     throw new Error(`Missing field: ${label}`)
 
+  return input
+}
+
+async function type(label: string, value: string): Promise<void> {
+  const input = field(label)
+
   await act(async () => {
     // Native setter represents typing rather than replacing React's tracked value.
     Object.getOwnPropertyDescriptor(
@@ -186,6 +192,11 @@ async function submit(label: string, value: string): Promise<void> {
     )?.set?.call(input, value)
     input.dispatchEvent(new Event("input", { bubbles: true }))
   })
+}
+
+async function submit(label: string, value: string): Promise<void> {
+  await type(label, value)
+  const input = field(label)
 
   const form = input.closest("form")
   const submitButton = form?.querySelector("button")
@@ -262,86 +273,131 @@ test("renders owner-aware CRUD, failed edits and confirmation against migrated a
   expect(container.textContent).toContain("Member B")
 })
 
-test("a lost accepted addition reuses its receipt after remount, and auth failures retain the draft", async () => {
+test("refresh updates untouched member names and preserves edited drafts", async () => {
   await writeWishlist({ kind: "create-owner", name: "Member A" })
   const member = (await available()).owners[0]
 
   if (member === undefined) throw new Error("Expected owner")
 
+  await render()
   await writeWishlist({
-    kind: "create-list",
+    kind: "rename-owner",
     owner_id: member.id,
-    name: "Ideas",
+    name: "Member B",
   })
-  let loseAddition = true
+  await click("Refresh lists")
+  expect(field("Name for Member B").value).toBe("Member B")
+  await type("Name for Member B", "My draft")
+  await writeWishlist({
+    kind: "rename-owner",
+    owner_id: member.id,
+    name: "Member C",
+  })
+  await click("Refresh lists")
+  expect(field("Name for Member C").value).toBe("My draft")
+  await submit("Name for Member C", "My draft")
+  expect((await available()).owners[0]?.name).toBe("My draft")
+  await writeWishlist({
+    kind: "rename-owner",
+    owner_id: member.id,
+    name: "Member D",
+  })
+  await click("Refresh lists")
+  expect(field("Name for Member D").value).toBe("Member D")
+})
 
-  async function forward(
-    request: IncomingMessage,
-    response: ServerResponse
-  ): Promise<void> {
-    const body = await new Promise<string>((resolveBody) => {
-      let text = ""
-      request.on("data", (chunk: Buffer) => {
-        text += chunk.toString()
+test.each([
+  { title: " A book ", retry: "A book", expected: ["A book"] },
+  { title: "\u0085A book\u0085", retry: "A book", expected: ["A book"] },
+  {
+    title: "\uFEFFA book\uFEFF",
+    retry: "A book",
+    expected: ["A book", "\uFEFFA book\uFEFF"],
+  },
+])(
+  "a lost addition respects API title identity after remount ($title), and auth failures retain the draft",
+  async ({ title, retry, expected }) => {
+    await writeWishlist({ kind: "create-owner", name: "Member A" })
+    const member = (await available()).owners[0]
+
+    if (member === undefined) throw new Error("Expected owner")
+
+    await writeWishlist({
+      kind: "create-list",
+      owner_id: member.id,
+      name: "Ideas",
+    })
+    let loseAddition = true
+
+    async function forward(
+      request: IncomingMessage,
+      response: ServerResponse
+    ): Promise<void> {
+      const body = await new Promise<string>((resolveBody) => {
+        let text = ""
+        request.on("data", (chunk: Buffer) => {
+          text += chunk.toString()
+        })
+        request.on("end", () => resolveBody(text))
       })
-      request.on("end", () => resolveBody(text))
-    })
 
-    const upstream = await fetch(`${apiUrl}${request.url ?? ""}`, {
-      method: request.method ?? "GET",
-      headers: {
-        Authorization: request.headers.authorization ?? "",
+      const upstream = await fetch(`${apiUrl}${request.url ?? ""}`, {
+        method: request.method ?? "GET",
+        headers: {
+          Authorization: request.headers.authorization ?? "",
+          "Content-Type": "application/json",
+        },
+        body: body === "" ? null : body,
+      })
+
+      if (request.url === "/api/wishlist/items" && loseAddition) {
+        loseAddition = false
+        await upstream.text()
+        request.socket.destroy()
+
+        return
+      }
+
+      response.writeHead(upstream.status, {
         "Content-Type": "application/json",
-      },
-      body: body === "" ? null : body,
-    })
-
-    if (request.url === "/api/wishlist/items" && loseAddition) {
-      loseAddition = false
-      await upstream.text()
-      request.socket.destroy()
-
-      return
+      })
+      response.end(await upstream.text())
     }
 
-    response.writeHead(upstream.status, { "Content-Type": "application/json" })
-    response.end(await upstream.text())
+    const proxy = createServer((request, response) => {
+      void forward(request, response).catch(() => response.destroy())
+    })
+
+    servers.push(proxy)
+    proxy.listen(0, "127.0.0.1")
+    await once(proxy, "listening")
+    const address = z.object({ port: z.number() }).parse(proxy.address())
+
+    vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
+    await render()
+    await submit("Something you’d like", title)
+    expect(container.textContent).toContain("The response was lost")
+    await act(async () => root.unmount())
+    root = createRoot(container)
+    await render()
+    await submit("Something you’d like", retry)
+    expect((await available()).items.map((item) => item.title).sort()).toEqual(
+      expected
+    )
+    expect(container.textContent).toContain("Saved to OpenHome")
+    vi.stubEnv("API_KEY", "synthetic-rejected-key")
+    await submit("Something you’d like", "A rain hat")
+    expect(container.textContent).toContain("OpenHome rejected the API key")
+    expect(container.textContent).not.toContain("synthetic-rejected-key")
+    expect(
+      container.querySelector<HTMLInputElement>('input[value="A rain hat"]')
+        ?.value
+    ).toBe("A rain hat")
+    vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+    await click("Refresh lists")
+    await submit("Something you’d like", "A rain hat")
+    expect((await available()).items.map((item) => item.title).sort()).toEqual(
+      [...expected, "A rain hat"].sort()
+    )
   }
-
-  const proxy = createServer((request, response) => {
-    void forward(request, response).catch(() => response.destroy())
-  })
-
-  servers.push(proxy)
-  proxy.listen(0, "127.0.0.1")
-  await once(proxy, "listening")
-  const address = z.object({ port: z.number() }).parse(proxy.address())
-
-  vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
-  await render()
-  await submit("Something you’d like", "A book")
-  expect(container.textContent).toContain("The response was lost")
-  await act(async () => root.unmount())
-  root = createRoot(container)
-  await render()
-  await submit("Something you’d like", "A book")
-  expect((await available()).items.map((item) => item.title)).toEqual([
-    "A book",
-  ])
-  expect(container.textContent).toContain("Saved to OpenHome")
-  vi.stubEnv("API_KEY", "synthetic-rejected-key")
-  await submit("Something you’d like", "A rain hat")
-  expect(container.textContent).toContain("OpenHome rejected the API key")
-  expect(container.textContent).not.toContain("synthetic-rejected-key")
-  expect(
-    container.querySelector<HTMLInputElement>('input[value="A rain hat"]')
-      ?.value
-  ).toBe("A rain hat")
-  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-  await click("Refresh lists")
-  await submit("Something you’d like", "A rain hat")
-  expect((await available()).items.map((item) => item.title).sort()).toEqual([
-    "A book",
-    "A rain hat",
-  ])
-})
+)

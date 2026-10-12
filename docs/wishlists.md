@@ -100,7 +100,7 @@ recreates it. A new intentional addition needs a new request ID. Back up the mai
 database, including receipts.
 
 The Dashboard keeps an unconfirmed addition's ID and arguments in tab-local
-session storage before sending it. The same title/destination reuses that ID
+session storage before sending it. The same trimmed title/destination reuses that ID
 across list navigation and page refresh. A confirmed result clears the pending
 intention. If browser storage is unavailable, retries in the mounted form still
 reuse the in-memory ID. After uncertain member/list creation, refresh discovery

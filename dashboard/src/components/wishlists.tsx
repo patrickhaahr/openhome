@@ -37,6 +37,11 @@ type TextFormProps = {
   cancel?: () => void
 }
 
+function trimWishlistText(value: string): string {
+  // Match Axum's Rust str::trim(): Unicode White_Space, unlike JS trim().
+  return value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "")
+}
+
 function TextForm({
   label,
   initialValue = "",
@@ -47,7 +52,20 @@ function TextForm({
   cancel,
 }: TextFormProps): React.JSX.Element {
   const id = useId()
-  const [value, setValue] = useState(initialValue)
+
+  const [draft, setDraft] = useState({
+    source: initialValue,
+    value: initialValue,
+  })
+
+  // Refresh pristine fields before rendering, while keeping unsaved edits.
+  if (draft.source !== initialValue)
+    setDraft({
+      source: initialValue,
+      value: draft.value === draft.source ? initialValue : draft.value,
+    })
+
+  const value = draft.value
 
   return (
     <form
@@ -56,7 +74,11 @@ function TextForm({
         event.preventDefault()
 
         void save(value).then((saved) => {
-          if (saved) setValue(initialValue === "" ? "" : value.trim())
+          if (saved)
+            setDraft((current) => ({
+              source: current.source,
+              value: initialValue === "" ? "" : trimWishlistText(value),
+            }))
         })
       }}
     >
@@ -65,13 +87,18 @@ function TextForm({
         <Input
           id={id}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) =>
+            setDraft({ source: draft.source, value: event.target.value })
+          }
           required
           maxLength={maxLength}
           disabled={disabled}
           autoComplete="off"
         />
-        <Button type="submit" disabled={disabled || value.trim() === ""}>
+        <Button
+          type="submit"
+          disabled={disabled || trimWishlistText(value) === ""}
+        >
           {submitLabel}
         </Button>
         {cancel ? (
@@ -560,7 +587,7 @@ function AddWish({
 
         if (
           !pending.current ||
-          pending.current.title !== title ||
+          trimWishlistText(pending.current.title) !== trimWishlistText(title) ||
           pending.current.ownerId !== ownerId
         )
           pending.current = {
