@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added FROM watchlist_entries ORDER BY date_added DESC, id",
+  "query": "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE (? IS NULL OR owner_id = ?) AND (? IS NULL OR status = ?) ORDER BY date_added DESC, id",
   "describe": {
     "columns": [
       {
@@ -32,10 +32,15 @@
         "name": "date_added",
         "ordinal": 5,
         "type_info": "Text"
+      },
+      {
+        "name": "completion_date",
+        "ordinal": 6,
+        "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 0
+      "Right": 4
     },
     "nullable": [
       false,
@@ -43,8 +48,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "88c566fb49ca546deef8a81e2e7e53428b4131094b8deef6151420511651d189"
+  "hash": "30ce2f394f237c1fd90a06f2098226fb1c964047da61702781696e86bda4eb48"
 }

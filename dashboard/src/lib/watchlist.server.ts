@@ -64,22 +64,39 @@ export async function readWatchlists(): Promise<WatchlistState> {
 export async function writeWatchlist(
   command: WatchlistCommand
 ): Promise<WatchlistMutation> {
-  const request =
-    command.action === "add"
-      ? {
-          path: "/api/watchlist/entries" as const,
-          method: "POST" as const,
-          json: {
-            owner_id: command.owner_id,
-            kind: command.kind,
-            title: command.title,
-            request_id: command.request_id,
-          },
-        }
-      : {
-          path: `/api/household-users/${command.owner_id}/watchlist/entries/${command.entry_id}` as const,
-          method: "DELETE" as const,
-        }
+  const path =
+    `/api/household-users/${command.owner_id}/watchlist/entries/${command.action === "add" ? "" : command.entry_id}` as const
+
+  let request: Omit<Parameters<typeof requestOpenHome>[0], "timeoutMs">
+
+  switch (command.action) {
+    case "add":
+      request = {
+        path: "/api/watchlist/entries",
+        method: "POST",
+        json: {
+          owner_id: command.owner_id,
+          kind: command.kind,
+          title: command.title,
+          request_id: command.request_id,
+        },
+      }
+      break
+    case "edit":
+      request = {
+        path,
+        method: "PATCH",
+        json: {
+          status: command.status,
+          date_added: command.date_added,
+          completion_date: command.completion_date,
+        },
+      }
+      break
+    case "remove":
+      request = { path, method: "DELETE" }
+      break
+  }
 
   const result = await requestOpenHome({ ...request, timeoutMs: 5000 })
 
@@ -95,12 +112,14 @@ export async function writeWatchlist(
       : { state: "failed", reason: "unavailable" }
 
   try {
-    if (
-      z
-        .object({ entry: watchlistEntry, replayed: z.boolean() })
-        .safeParse(await result.response.json()).success
-    )
-      return { state: "saved" }
+    const body: unknown = await result.response.json()
+
+    const schema =
+      command.action === "add"
+        ? z.object({ entry: watchlistEntry, replayed: z.boolean() })
+        : watchlistEntry
+
+    if (schema.safeParse(body).success) return { state: "saved" }
   } catch {
     /* An invalid acknowledgement cannot confirm a saved plan. */
   }

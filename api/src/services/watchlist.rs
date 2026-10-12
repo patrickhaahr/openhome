@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use super::wishlist::HouseholdUser;
+use super::{patch::Patch, wishlist::HouseholdUser};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchlistError {
@@ -31,12 +31,14 @@ pub enum MediaKind {
     Series,
 }
 
-/// This slice creates plans only; transitions are delivered in #102.
-#[derive(Debug, Serialize, sqlx::Type)]
+/// Personal viewing state for a movie or whole series.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, sqlx::Type)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(rename_all = "lowercase")]
 pub enum WatchStatus {
     Planned,
+    Watching,
+    Completed,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +49,7 @@ pub struct WatchlistEntry {
     pub title: String,
     pub status: WatchStatus,
     pub date_added: String,
+    pub completion_date: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -109,16 +112,16 @@ fn text(value: &str, field: &str, max: usize) -> Result<String> {
 }
 
 /// Shared read across all configured Household Users, including independent same-title plans.
-pub async fn entries(db: &SqlitePool) -> Result<Vec<WatchlistEntry>> {
+pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<WatchlistEntry>> {
     Ok(sqlx::query_as!(WatchlistEntry,
-        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added FROM watchlist_entries ORDER BY date_added DESC, id")
+        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE (? IS NULL OR owner_id = ?) AND (? IS NULL OR status = ?) ORDER BY date_added DESC, id", filter.owner_id, filter.owner_id, filter.status, filter.status)
         .fetch_all(db).await?)
 }
 
 /// Read only the complete owner/entry destination.
 pub async fn entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<WatchlistEntry> {
     sqlx::query_as!(WatchlistEntry,
-        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added FROM watchlist_entries WHERE id = ? AND owner_id = ?", id, owner_id)
+        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE id = ? AND owner_id = ?", id, owner_id)
         .fetch_optional(db).await?
         .ok_or_else(|| WatchlistError::NotFound("Watchlist Entry not found for this Household User".into()))
 }
@@ -156,10 +159,7 @@ pub async fn add_entry(db: &SqlitePool, mut request: AddEntry) -> Result<Additio
         ));
     }
     let id = Uuid::new_v4().to_string();
-    let date_added = chrono::Utc::now()
-        .with_timezone(&chrono_tz::Europe::Copenhagen)
-        .date_naive()
-        .to_string();
+    let date_added = today();
     let mut transaction = db.begin().await?;
     // Claim first to serialize simultaneous retries. The receipt has no cascading foreign key.
     let claimed = sqlx::query!(
@@ -168,7 +168,7 @@ pub async fn add_entry(db: &SqlitePool, mut request: AddEntry) -> Result<Additio
         .fetch_optional(&mut *transaction).await?;
     if claimed.is_some() {
         let entry = sqlx::query_as!(WatchlistEntry,
-            "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added) VALUES (?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added",
+            "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added) VALUES (?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date",
             id, owner_id, request.kind, request.title, date_added)
             .fetch_one(&mut *transaction).await?;
         transaction.commit().await?;
@@ -204,4 +204,109 @@ pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<(
         ));
     }
     Ok(())
+}
+
+/// Optional owner and status filters; omission retains household-wide visibility.
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EntriesFilter {
+    pub owner_id: Option<String>,
+    pub status: Option<WatchStatus>,
+}
+
+/// Omitted fields preserve values; null only clears a non-completed entry's completion date.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditEntry {
+    #[serde(default)]
+    pub status: Patch<WatchStatus>,
+    #[serde(default)]
+    pub date_added: Patch<String>,
+    #[serde(default)]
+    pub completion_date: Patch<String>,
+}
+
+fn today() -> String {
+    chrono::Utc::now()
+        .with_timezone(&chrono_tz::Europe::Copenhagen)
+        .date_naive()
+        .to_string()
+}
+
+fn calendar_date(value: String, field: &str) -> Result<String> {
+    if value.len() != 10
+        || value.starts_with("0000")
+        || chrono::NaiveDate::parse_from_str(&value, "%Y-%m-%d").is_err()
+        || !value.bytes().enumerate().all(|(i, c)| {
+            if i == 4 || i == 7 {
+                c == b'-'
+            } else {
+                c.is_ascii_digit()
+            }
+        })
+    {
+        return Err(WatchlistError::Validation(format!(
+            "{field} must be a real calendar date in YYYY-MM-DD (years 0001-9999)"
+        )));
+    }
+    Ok(value)
+}
+
+/// Apply one validated correction to an explicit destination, rejecting concurrent changes.
+pub async fn edit_entry(
+    db: &SqlitePool,
+    owner_id: &str,
+    id: &str,
+    request: EditEntry,
+) -> Result<WatchlistEntry> {
+    let current = entry(db, owner_id, id).await?;
+    let status = match request.status {
+        Patch::Missing => current.status,
+        Patch::Value(Some(value)) => value,
+        Patch::Value(None) => {
+            return Err(WatchlistError::Validation("status cannot be null".into()));
+        }
+    };
+    let date_added = match request.date_added {
+        Patch::Missing => current.date_added.clone(),
+        Patch::Value(Some(value)) => calendar_date(value, "date_added")?,
+        Patch::Value(None) => {
+            return Err(WatchlistError::Validation(
+                "date_added cannot be null".into(),
+            ));
+        }
+    };
+    let completion_date = match (status, request.completion_date) {
+        (WatchStatus::Completed, Patch::Missing) => {
+            Some(current.completion_date.clone().unwrap_or_else(today))
+        }
+        (WatchStatus::Completed, Patch::Value(Some(value))) => {
+            Some(calendar_date(value, "completion_date")?)
+        }
+        (WatchStatus::Completed, Patch::Value(None)) => {
+            return Err(WatchlistError::Validation(
+                "Completed entries require a completion_date".into(),
+            ));
+        }
+        (_, Patch::Value(Some(_))) => {
+            return Err(WatchlistError::Validation(
+                "Only completed entries can have a completion_date".into(),
+            ));
+        }
+        (_, _) => None,
+    };
+    if completion_date
+        .as_ref()
+        .is_some_and(|completed| completed < &date_added)
+    {
+        return Err(WatchlistError::Validation(
+            "completion_date cannot precede date_added; correct the dates together".into(),
+        ));
+    }
+    // Compare the snapshot in the same statement as the write, avoiding lost corrections.
+    sqlx::query_as!(WatchlistEntry,
+        "UPDATE watchlist_entries SET status = ?, date_added = ?, completion_date = ? WHERE id = ? AND owner_id = ? AND status = ? AND date_added = ? AND completion_date IS ? RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date",
+        status, date_added, completion_date, id, owner_id, current.status, current.date_added, current.completion_date)
+        .fetch_optional(db).await?
+        .ok_or_else(|| WatchlistError::Conflict("Entry changed during this correction; refresh before retrying".into()))
 }

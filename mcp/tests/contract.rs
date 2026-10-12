@@ -339,6 +339,125 @@ async fn manual_watchlist_tools_forward_owner_targeted_plans_and_api_receipts_un
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one real MCP workflow protects partial corrections, filtering and pass-through errors"
+)]
+async fn watchlist_corrections_and_filters_forward_to_real_axum_with_omission_and_null_preserved() {
+    let api = start_api().await;
+    let http = reqwest::Client::new();
+    let owner: Value = http
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name":"Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let added = wishlist_call(&client, "add_watchlist_entry", json!({"owner_id":owner["id"],"kind":"series","title":"A Quiet Orbit","request_id":"correct-watch"})).await.structured_content.unwrap();
+    let target = json!({"owner_id":owner["id"],"entry_id":added["entry"]["id"]});
+    let path = format!(
+        "{api}/api/household-users/{}/watchlist/entries/{}",
+        owner["id"].as_str().unwrap(),
+        added["entry"]["id"].as_str().unwrap()
+    );
+    for patch in [
+        json!({"status":"watching"}),
+        json!({"status":"completed","date_added":"2024-02-28","completion_date":"2024-02-29"}),
+        json!({"date_added":"2024-02-27"}),
+        json!({"status":"completed"}),
+        json!({"status":"planned","completion_date":null}),
+    ] {
+        let mut args = target.clone();
+        args.as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        let result = wishlist_call(&client, "update_watchlist_entry", args).await;
+        assert_eq!(result.is_error, Some(false), "{result:?}");
+        let stored: Value = http
+            .get(&path)
+            .bearer_auth(API_KEY)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(result.structured_content, Some(stored.clone()));
+        assert_eq!(stored["kind"], "series");
+        if patch.get("completion_date").is_none() && patch["status"] != "watching" {
+            assert_eq!(stored["completion_date"], "2024-02-29");
+        }
+    }
+    let filtered = wishlist_call(
+        &client,
+        "watchlist_entries",
+        json!({"owner_id":owner["id"],"status":"planned"}),
+    )
+    .await;
+    let direct: Value = http
+        .get(format!(
+            "{api}/api/watchlist/entries?owner_id={}&status=planned",
+            owner["id"].as_str().unwrap()
+        ))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(filtered.structured_content, Some(direct));
+    assert_eq!(
+        wishlist_call(&client, "watchlist_entries", json!({"status":"completed"}))
+            .await
+            .structured_content,
+        Some(json!([]))
+    );
+    // Owner IDs with query punctuation must remain one encoded value, never additional filters.
+    assert_eq!(
+        wishlist_call(
+            &client,
+            "watchlist_entries",
+            json!({"owner_id":"missing&status=planned"})
+        )
+        .await
+        .structured_content,
+        Some(json!([]))
+    );
+    for patch in [
+        json!({"completion_date":"2024-02-29"}),
+        json!({"date_added":null}),
+        json!({"status":"completed","completion_date":null}),
+        json!({"date_added":"2024-02-30"}),
+    ] {
+        let mut args = target.clone();
+        args.as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        let forwarded = wishlist_call(&client, "update_watchlist_entry", args).await;
+        let direct: Value = http
+            .patch(&path)
+            .bearer_auth(API_KEY)
+            .json(&patch)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(forwarded.is_error, Some(true));
+        assert_eq!(forwarded.structured_content, Some(direct));
+    }
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
 async fn watchlist_write_auth_and_transport_failures_remain_tool_errors() {
     let api = start_api().await;
     for (api_url, key, expected_status) in [
@@ -348,12 +467,23 @@ async fn watchlist_write_auth_and_transport_failures_remain_tool_errors() {
         let client = connect(&start_mcp(api_url, key).await, API_KEY)
             .await
             .unwrap();
-        let result = wishlist_call(&client, "add_watchlist_entry", json!({"owner_id":"synthetic-owner","kind":"movie","title":"A Quiet Orbit","request_id":"failed-watch"})).await;
-        assert_eq!(result.is_error, Some(true));
-        assert_eq!(
-            result.structured_content.unwrap()["status"],
-            expected_status
-        );
+        for (tool, args) in [
+            (
+                "add_watchlist_entry",
+                json!({"owner_id":"synthetic-owner","kind":"movie","title":"A Quiet Orbit","request_id":"failed-watch"}),
+            ),
+            (
+                "update_watchlist_entry",
+                json!({"owner_id":"synthetic-owner","entry_id":"synthetic-entry","status":"completed"}),
+            ),
+        ] {
+            let result = wishlist_call(&client, tool, args).await;
+            assert_eq!(result.is_error, Some(true));
+            assert_eq!(
+                result.structured_content.unwrap()["status"],
+                expected_status
+            );
+        }
         client.cancel().await.unwrap();
     }
 }
@@ -552,6 +682,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "recovery_on_day",
             "sleep_recent",
             "training_context",
+            "update_watchlist_entry",
             "update_wishlist_item",
             "watchlist_entries",
             "watchlist_entry",
@@ -575,6 +706,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                     | "delete_wishlist_item"
                     | "add_watchlist_entry"
                     | "delete_watchlist_entry"
+                    | "update_watchlist_entry"
             )),
             "{}",
             tool.name
@@ -592,7 +724,10 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         }
         if matches!(
             tool.name.as_ref(),
-            "update_wishlist_item" | "delete_wishlist_item" | "delete_watchlist_entry"
+            "update_wishlist_item"
+                | "delete_wishlist_item"
+                | "delete_watchlist_entry"
+                | "update_watchlist_entry"
         ) {
             let annotations = tool.annotations.as_ref().unwrap();
             assert_eq!(annotations.destructive_hint, Some(true));
@@ -611,7 +746,9 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "create_wishlist" => json!(["owner_id", "name"]),
             "add_wishlist_item" => json!(["title", "request_id"]),
             "add_watchlist_entry" => json!(["kind", "title", "request_id"]),
-            "watchlist_entry" | "delete_watchlist_entry" => json!(["owner_id", "entry_id"]),
+            "watchlist_entry" | "delete_watchlist_entry" | "update_watchlist_entry" => {
+                json!(["owner_id", "entry_id"])
+            }
             "wishlist_items" => json!(["list_id"]),
             "wishlist_url_metadata" => json!(["owner_id", "list_id", "url"]),
             "wishlist_item" | "delete_wishlist_item" | "update_wishlist_item" => {
@@ -1274,6 +1411,10 @@ async fn unexpected_no_content_never_confirms_a_read_or_item_write() {
         (
             "add_wishlist_item",
             json!({"title":"A jacket","request_id":"missing-receipt"}),
+        ),
+        (
+            "update_watchlist_entry",
+            json!({"owner_id":"owner","entry_id":"entry","status":"watching"}),
         ),
         (
             "update_wishlist_item",
