@@ -2,9 +2,8 @@
 //! synthetic previews. Uses production routes, migrations and authentication without household
 //! configuration; the map explicitly serves the unrelated Copenhagen demo origin.
 //!
-//! Walking loops come from a loopback provider serving a synthetic rectangle that is not a real
-//! path. Set `OPENROUTESERVICE_URL` to a household instance to plan real loops from the demo
-//! origin instead.
+//! Loops come from a loopback provider serving synthetic squares that are not real paths. Set
+//! `OPENROUTESERVICE_URL` to a household instance to plan real loops from the demo origin instead.
 
 use std::sync::Arc;
 
@@ -45,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let key = auth::ApiKey::new("synthetic-dashboard-api-key".to_string());
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
-    // A configured household instance plans real loops; otherwise serve the synthetic one.
+    // A configured household instance plans real loops; otherwise serve synthetic ones.
     let endpoint =
         match ProviderEndpoint::parse(std::env::var("OPENROUTESERVICE_URL").ok().as_deref())? {
             Some(endpoint) => endpoint,
@@ -75,13 +74,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Serve the synthetic demo loop in openrouteservice's response shape on loopback.
+/// Answer round trips on loopback in openrouteservice's response shape. Each seed draws a square
+/// in its own direction from the requested origin, slightly off the requested length, so a
+/// search finds distinct alternatives. Squares follow no real streets.
 async fn synthetic_provider() -> anyhow::Result<ProviderEndpoint> {
-    let trip: serde_json::Value =
-        serde_json::from_str(include_str!("../tests/fixtures/route-loop-copenhagen.json"))?;
     let provider = axum::Router::new().route(
         "/ors/v2/directions/foot-walking/geojson",
-        post(move || async move { Json(trip) }),
+        post(|Json(request): Json<Value>| async move { Json(synthetic_trip(&request)) }),
     );
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let base = format!("http://{}/ors", listener.local_addr()?);
@@ -147,4 +146,49 @@ async fn provider_details(
         return Err(StatusCode::SERVICE_UNAVAILABLE);
     }
     Ok(Json(provider_title(&kind, id)))
+}
+
+fn synthetic_trip(request: &Value) -> Value {
+    let origin = [
+        request["coordinates"][0][0].as_f64().unwrap_or_default(),
+        request["coordinates"][0][1].as_f64().unwrap_or_default(),
+    ];
+    let round_trip = &request["options"]["round_trip"];
+    let length = round_trip["length"].as_f64().unwrap_or_default();
+    // Direction east/north and length share per seed.
+    let ([east, north], share) = match round_trip["seed"].as_u64() {
+        Some(1) => ([1.0, 1.0], 1.02),
+        Some(2) => ([-1.0, 1.0], 0.97),
+        Some(3) => ([-1.0, -1.0], 1.06),
+        _ => ([1.0, -1.0], 0.9),
+    };
+    let side = length * share / 4.0;
+    let north = north * side / 111_195.0;
+    let east = east * side / (111_195.0 * origin[1].to_radians().cos());
+    let corners = [
+        origin,
+        [origin[0], origin[1] + north],
+        [origin[0] + east, origin[1] + north],
+        [origin[0] + east, origin[1]],
+        origin,
+    ];
+    let coordinates = std::iter::once(origin)
+        .chain(corners.windows(2).flat_map(|pair| {
+            (1..=30).map(move |step| {
+                let t = f64::from(step) / 30.0;
+                [
+                    pair[0][0] + (pair[1][0] - pair[0][0]) * t,
+                    pair[0][1] + (pair[1][1] - pair[0][1]) * t,
+                ]
+            })
+        }))
+        .collect::<Vec<_>>();
+    json!({
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": { "type": "LineString", "coordinates": coordinates },
+            "properties": { "summary": { "distance": length * share, "duration": length * share * 0.72 } }
+        }]
+    })
 }

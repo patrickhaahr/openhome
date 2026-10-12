@@ -49,6 +49,16 @@ function parseConfiguration():
   }
 }
 
+/** A JSON request body value; `undefined` fields are omitted when serialized. */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ReadonlyArray<JsonValue>
+  | { readonly [key: string]: JsonValue }
+
 type OpenHomeResponse =
   | { state: "received"; response: Response }
   | { state: Exclude<ConnectionState, "connected" | "unavailable"> }
@@ -65,7 +75,7 @@ export async function requestOpenHome({
   method: "GET" | "POST" | "PATCH" | "DELETE"
   timeoutMs: number
   query?: Record<string, string>
-  json?: Record<string, string | number | null | undefined>
+  json?: { readonly [key: string]: JsonValue }
 }): Promise<OpenHomeResponse> {
   const config = parseConfiguration()
 

@@ -71,3 +71,50 @@ To repeat the check against an instance:
 ```sh
 OPENROUTESERVICE_URL=https://<instance>/ors devenv shell -- just dashboard-health-fixture-run
 ```
+
+# Loop alternatives, running and step targets (#107)
+
+Travel now plans walking or running loops for 5 km, 10 km, a custom distance
+or a step target, and compares up to three distinct alternatives on the map.
+Axum converts steps with the household's step length, searches up to six
+round-trip seeds for three distinct loops within ±10%, caches completed
+searches and reports a shortfall instead of padding the set
+([ADR 0009](../../../docs/adr/0009-loop-alternatives-and-step-targets.md)).
+
+The captures use the isolated authenticated Axum fixture with the unrelated
+central Copenhagen demo point. **Its loopback stand-in for openrouteservice
+answers each seed with a synthetic square in its own direction, not a real
+walkable path.** It exercises the real request, search, measurement and
+rendering path end to end.
+
+| Three 5 km walking loops (1024 × 768)           | Comparing Loop B (1024 × 768)                   |
+| ----------------------------------------------- | ----------------------------------------------- |
+| ![Three measured loops](alternatives-after.png) | ![Loop B highlighted](alternatives-compare.png) |
+
+| 12,000 running steps at 100 cm (1024 × 768)            | Rejected target keeps earlier loops (768 × 1024)                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| ![Running step target](alternatives-running-steps.png) | ![Target not accepted, earlier loops kept](alternatives-portrait-rejected.png) |
+
+## Observed evidence — 2026-10-12
+
+- Axum integration tests drive a wiremock openrouteservice through the
+  authenticated route: three distinct matching loops end the search after three
+  seeds; running requests avoid steps; step targets convert with the request's
+  step length; repeated loops are not counted twice; a 16% deviation is kept but
+  never labelled a match; later requests are corrected for overshoot; completed
+  searches are served from the cache while interrupted ones are retried;
+  no-route, outage and invalid responses stay explicit outcomes; invalid
+  targets and step lengths are rejected before the provider is contacted.
+- Dashboard component tests run against the real Axum fixture: the 5 km preset
+  returns three measured loops that all start and end at the origin and are
+  handed to the map with one highlighted; a running step target sends the
+  running step length and labels steps as estimates; Axum's reason for an
+  unsupported target is shown; failures keep the earlier loops and their
+  heading; a shortfall is explained and deviations are labelled outside ±10%.
+- Desktop preview: the map stays in view beside the planner while scrolling to
+  compare alternatives in landscape and the planner follows the map in
+  portrait.
+- Pending: a real search against the household instance and a pedestrian and
+  running suitability check of its alternatives; the instance was not reachable
+  from this environment. Repeat with
+  `OPENROUTESERVICE_URL=https://<instance>/ors devenv shell -- just dashboard-health-fixture-run`.

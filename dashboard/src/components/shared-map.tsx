@@ -11,7 +11,7 @@ import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { MapLine, MapOrigin } from "@/lib/map"
+import type { MapLine, MapOrigin, MapRoutes } from "@/lib/map"
 
 /** OpenFreeMap's free Fiord style; it needs no key and carries its own attribution. */
 const STYLE_URL = "https://tiles.openfreemap.org/styles/fiord"
@@ -33,6 +33,9 @@ const BUILDINGS_PITCH = 55
 const BUILDINGS_LAYER = "buildings-3d"
 
 const ROUTE_SOURCE = "route"
+
+/** Alternatives stay readable on the dark style without competing with the highlighted line. */
+const ALTERNATIVE_COLOR = "#9aa6c4"
 
 /** Room around a fitted route, clearing the map controls on the right. */
 const ROUTE_PADDING = { top: 72, right: 96, bottom: 56, left: 56 }
@@ -89,42 +92,46 @@ function prefersReducedMotion(): boolean {
   return matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
-/** GeoJSON for the route source: the route as one line, or nothing. */
+/** GeoJSON for the route source: one line per alternative, or nothing. */
 type RouteData = {
   type: "FeatureCollection"
   features: Array<{
     type: "Feature"
-    properties: Record<string, never>
+    properties: { focused: boolean }
     geometry: { type: "LineString"; coordinates: Array<[number, number]> }
   }>
 }
 
-/** A route as GeoJSON for the route source; no route draws nothing. */
-function routeFeature(route: MapLine | undefined): RouteData {
-  if (route === undefined) return { type: "FeatureCollection", features: [] }
+/**
+ * Routes as GeoJSON for the route source, the highlighted one last so it draws
+ * above shared streets; no routes draw nothing.
+ */
+function routeFeatures(routes: MapRoutes | undefined): RouteData {
+  const features = (routes?.lines ?? []).map((line, index) => ({
+    type: "Feature" as const,
+    properties: { focused: index === routes?.focused },
+    geometry: {
+      type: "LineString" as const,
+      coordinates: line.coordinates.map(
+        ([longitude, latitude]): [number, number] => [longitude, latitude]
+      ),
+    },
+  }))
 
   return {
     type: "FeatureCollection",
     features: [
-      {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: route.coordinates.map(([longitude, latitude]) => [
-            longitude,
-            latitude,
-          ]),
-        },
-      },
+      ...features.filter((feature) => !feature.properties.focused),
+      ...features.filter((feature) => feature.properties.focused),
     ],
   }
 }
 
-/** The south-west and north-east corners enclosing a route. */
-function routeBounds(route: MapLine): LngLatBoundsLike {
-  const longitudes = route.coordinates.map(([longitude]) => longitude)
-  const latitudes = route.coordinates.map(([, latitude]) => latitude)
+/** The south-west and north-east corners enclosing every route. */
+function routeBounds(lines: ReadonlyArray<MapLine>): LngLatBoundsLike {
+  const coordinates = lines.flatMap((line) => line.coordinates)
+  const longitudes = coordinates.map(([longitude]) => longitude)
+  const latitudes = coordinates.map(([, latitude]) => latitude)
 
   return [
     [Math.min(...longitudes), Math.min(...latitudes)],
@@ -135,16 +142,17 @@ function routeBounds(route: MapLine): LngLatBoundsLike {
 /**
  * Interactive map centered on the private origin, switchable between flat 2D
  * and pitched 3D buildings. Switching keeps the map, its overlays and viewport.
- * A supplied route is drawn above the buildings and fitted into view once.
+ * Supplied routes are drawn above the buildings, the focused one highlighted,
+ * and fitted into view once per set of alternatives.
  * MapLibre loads only after mount and is removed on unmount, releasing its
  * WebGL context when the view closes.
  */
 export function SharedMap({
   origin,
-  route,
+  routes,
 }: {
   origin: MapOrigin
-  route?: MapLine | undefined
+  routes?: MapRoutes | undefined
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | undefined>(undefined)
@@ -166,9 +174,9 @@ export function SharedMap({
     undefined
   )
 
-  // A recreated map draws the current route without refitting the viewport to it.
-  const shownRoute = useRef<MapLine | undefined>(route)
-  const fittedRoute = useRef<MapLine | undefined>(undefined)
+  // A recreated map draws the current routes without refitting the viewport to them.
+  const shownRoutes = useRef<MapRoutes | undefined>(routes)
+  const fittedLines = useRef<ReadonlyArray<MapLine> | undefined>(undefined)
 
   const center: [number, number] = [origin.longitude, origin.latitude]
 
@@ -286,21 +294,35 @@ export function SharedMap({
           // Below the origin, so the start stays visible where the loop returns.
           created.addSource(ROUTE_SOURCE, {
             type: "geojson",
-            data: routeFeature(shownRoute.current),
+            data: routeFeatures(shownRoutes.current),
           })
+          // Features draw in order, so each casing sits under its own line and
+          // the highlighted route, drawn last, stays on top where loops share streets.
           created.addLayer({
             id: "route-casing",
             type: "line",
             source: ROUTE_SOURCE,
             layout: { "line-join": "round", "line-cap": "round" },
-            paint: { "line-color": "#141414", "line-width": 9 },
+            paint: {
+              "line-color": "#141414",
+              "line-width": ["case", ["get", "focused"], 9, 6],
+            },
           })
           created.addLayer({
             id: "route",
             type: "line",
             source: ROUTE_SOURCE,
             layout: { "line-join": "round", "line-cap": "round" },
-            paint: { "line-color": ORIGIN_COLOR, "line-width": 5 },
+            paint: {
+              "line-color": [
+                "case",
+                ["get", "focused"],
+                ORIGIN_COLOR,
+                ALTERNATIVE_COLOR,
+              ],
+              "line-width": ["case", ["get", "focused"], 5, 3],
+              "line-opacity": ["case", ["get", "focused"], 1, 0.75],
+            },
           })
 
           created.addSource("origin", {
@@ -418,7 +440,7 @@ export function SharedMap({
   }, [perspective.mode, ready])
 
   useEffect(() => {
-    shownRoute.current = route
+    shownRoutes.current = routes
     const current = map.current
 
     if (!ready || current === undefined) return
@@ -426,18 +448,24 @@ export function SharedMap({
     // MapLibre applies the data on its worker; the fit below does not depend on it.
     void current
       .getSource<GeoJSONSource>(ROUTE_SOURCE)
-      ?.setData(routeFeature(route))
+      ?.setData(routeFeatures(routes))
 
-    if (route === undefined || fittedRoute.current === route) return
+    // Highlighting another alternative keeps the viewport the household chose.
+    if (
+      routes === undefined ||
+      routes.lines.length === 0 ||
+      fittedLines.current === routes.lines
+    )
+      return
 
-    fittedRoute.current = route
-    current.fitBounds(routeBounds(route), {
+    fittedLines.current = routes.lines
+    current.fitBounds(routeBounds(routes.lines), {
       padding: ROUTE_PADDING,
       maxZoom: 16,
       pitch: current.getPitch(),
       duration: prefersReducedMotion() ? 0 : 600,
     })
-  }, [route, ready])
+  }, [routes, ready])
 
   function choose(next: Perspective): void {
     mode.current = next.mode
