@@ -46,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(Some(tmdb)))
         .merge(routes::map::router(demo_origin))
+        .merge(routes::photos::router(None))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, key.clone())
