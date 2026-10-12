@@ -13,6 +13,7 @@ import { photoUrl, type AlbumRead, type PhotoRead } from "@/lib/photos"
 type GalleryProps = {
   albums: AlbumRead
   page: PhotoRead | null
+  selectedAlbum: string | null
   select: (album: string, page: number) => void
   refresh: () => Promise<void>
 }
@@ -21,6 +22,7 @@ type GalleryProps = {
 export function PhotoGallery({
   albums,
   page,
+  selectedAlbum,
   select,
   refresh,
 }: GalleryProps): React.JSX.Element {
@@ -79,16 +81,10 @@ export function PhotoGallery({
           {albums.albums.map((album) => (
             <Button
               key={album.id}
-              variant={
-                page?.state === "ready" && page.photos.album.id === album.id
-                  ? "default"
-                  : "outline"
-              }
+              variant={selectedAlbum === album.id ? "default" : "outline"}
               size="lg"
               disabled={album.missing}
-              aria-pressed={
-                page?.state === "ready" && page.photos.album.id === album.id
-              }
+              aria-pressed={selectedAlbum === album.id}
               onClick={() => select(album.id, 0)}
             >
               <span className="photo-album-name">{album.name}</span>
@@ -130,9 +126,7 @@ export function PhotoGallery({
             <Button
               size="lg"
               onClick={() => {
-                const album = albums.albums.find((item) => !item.missing)
-
-                if (album) select(album.id, 0)
+                if (selectedAlbum !== null) select(selectedAlbum, 0)
               }}
             >
               First page

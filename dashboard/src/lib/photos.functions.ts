@@ -10,11 +10,13 @@ export const getGallery = createServerFn({ method: "GET" })
     const { readAlbums, readPhotos } = await import("./photos.server")
     const albums = await readAlbums()
 
-    if (albums.state !== "ready") return { albums, page: null }
+    if (albums.state !== "ready")
+      return { albums, page: null, selectedAlbum: null }
     const id = data.album ?? albums.albums.find((album) => !album.missing)?.id
 
     return {
       albums,
+      selectedAlbum: id ?? null,
       page: id === undefined ? null : await readPhotos(id, data.page ?? 0),
     }
   })

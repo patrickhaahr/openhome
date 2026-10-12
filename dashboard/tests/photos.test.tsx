@@ -29,7 +29,11 @@ const page: PhotoRead = {
   photos: { album, assets: [first, second], page: 0, next_page: 1 },
 }
 
-async function setup(data: { albums: AlbumRead; page: PhotoRead | null }) {
+async function setup(data: {
+  albums: AlbumRead
+  page: PhotoRead | null
+  selectedAlbum?: string
+}) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
 
   const completion = vi
@@ -42,7 +46,14 @@ async function setup(data: { albums: AlbumRead; page: PhotoRead | null }) {
   const select = vi.fn()
   const refresh = vi.fn(async () => {})
   await act(async () =>
-    root.render(<PhotoGallery {...data} select={select} refresh={refresh} />)
+    root.render(
+      <PhotoGallery
+        {...data}
+        selectedAlbum={data.selectedAlbum ?? albumId}
+        select={select}
+        refresh={refresh}
+      />
+    )
   )
 
   const button = (text: string): HTMLButtonElement => {
@@ -202,6 +213,7 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     <PhotoGallery
       albums={albums}
       page={page}
+      selectedAlbum={albumId}
       select={() => {}}
       refresh={async () => {}}
     />
@@ -227,5 +239,20 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     await act(async () => root.unmount())
     container.remove()
     vi.unstubAllGlobals()
+  }
+})
+
+test("an unavailable later page returns to the selected album's first page", async () => {
+  const view = await setup({
+    albums,
+    page: { state: "unavailable", reason: "invalid-page" },
+    selectedAlbum: second,
+  })
+
+  try {
+    await act(async () => view.button("First page").click())
+    expect(view.select).toHaveBeenCalledWith(second, 0)
+  } finally {
+    await view.cleanup()
   }
 })

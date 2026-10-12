@@ -10,6 +10,7 @@ export const Route = createFileRoute("/photos")({
     getGallery({ data: deps }).catch(() => ({
       albums: unavailablePhotos,
       page: null,
+      selectedAlbum: null,
     })),
   staleTime: 0,
   gcTime: 0,
