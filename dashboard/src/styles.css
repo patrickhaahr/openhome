@@ -775,26 +775,32 @@
   max-width: 28rem;
 }
 .shared-map-perspective {
-  display: grid;
   margin-bottom: 0.25rem;
   overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  background: oklch(0.205 0.003 250 / 92%);
   box-shadow: 0 6px 18px oklch(0 0 0 / 35%);
 }
-.shared-map-controls .shared-map-perspective [data-slot="button"] {
-  border-radius: 0;
-  box-shadow: none;
-  font-variant-numeric: tabular-nums;
+.shared-map-perspective [data-slot="toggle-group-item"] {
+  width: 2.75rem;
+  padding-inline: 0;
+  font-size: 0.875rem;
+  letter-spacing: 0;
 }
-.shared-map-controls
-  .shared-map-perspective
-  [data-slot="button"]
-  + [data-slot="button"] {
-  border-top-width: 0;
-}
-.shared-map-controls .shared-map-perspective [aria-pressed="true"] {
+.shared-map-perspective [data-slot="toggle-group-item"][aria-pressed="true"] {
   background: var(--primary);
   color: var(--primary-foreground);
+}
+/* MapLibre surfaces override the ring utilities; keep keyboard focus visible. */
+.shared-map-controls [data-slot="button"]:focus-visible,
+.shared-map-perspective [data-slot="toggle-group-item"]:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: -5px;
+}
+.shared-map-perspective
+  [data-slot="toggle-group-item"][aria-pressed="true"]:focus-visible {
+  outline-color: var(--primary-foreground);
 }
 .shared-map-notices {
   position: absolute;

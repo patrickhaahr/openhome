@@ -8,6 +8,7 @@ import { CrosshairSimpleIcon } from "@phosphor-icons/react/dist/csr/CrosshairSim
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { MapOrigin } from "@/lib/map"
 
 /** OpenFreeMap's free Fiord style; it needs no key and carries its own attribution. */
@@ -64,8 +65,18 @@ type Perspective =
   | { mode: "2d"; reason: "chosen" | "graphics-failure" }
   | { mode: "3d" }
 
-/** What the 3D view can show for the current viewport once rendering settles. */
+/** What the 3D view can show near the map center once rendering settles. */
 type BuildingCoverage = "shown" | "zoom-in" | "none-here"
+
+/** Camera pitch and building visibility for a perspective. */
+function presentation(mode: Perspective["mode"]): {
+  pitch: number
+  buildings: "visible" | "none"
+} {
+  return mode === "3d"
+    ? { pitch: BUILDINGS_PITCH, buildings: "visible" }
+    : { pitch: 0, buildings: "none" }
+}
 
 function prefersReducedMotion(): boolean {
   return matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -122,6 +133,8 @@ export function SharedMap({
     if (element === null || !visible || document.hidden) return
 
     setView({ state: "loading" })
+    // A recreated map measures its own buildings; never show the last map's notice.
+    setCoverage("shown")
 
     let instance: MapLibreMap | undefined
     let disposed = false
@@ -163,7 +176,7 @@ export function SharedMap({
             zoom: resume.current?.zoom ?? LOCAL_ZOOM,
             minZoom: 10,
             maxZoom: 18,
-            pitch: mode.current === "3d" ? BUILDINGS_PITCH : 0,
+            pitch: presentation(mode.current).pitch,
             // Only the perspective toggle tilts the map; pitch gestures stay off.
             maxPitch: BUILDINGS_PITCH,
             dragRotate: false,
@@ -207,9 +220,7 @@ export function SharedMap({
             created.addLayer(
               {
                 ...buildingsLayer,
-                layout: {
-                  visibility: mode.current === "3d" ? "visible" : "none",
-                },
+                layout: { visibility: presentation(mode.current).buildings },
               },
               firstLabel
             )
@@ -272,6 +283,8 @@ export function SharedMap({
             )
         })
         created.on("webglcontextlost", () => {
+          if (disposed) return
+
           if (mode.current !== "3d") {
             fail("graphics-unavailable")
 
@@ -309,17 +322,22 @@ export function SharedMap({
 
     if (!ready || current === undefined) return
 
-    if (current.getLayer(BUILDINGS_LAYER) !== undefined)
-      current.setLayoutProperty(
-        BUILDINGS_LAYER,
-        "visibility",
-        perspective.mode === "3d" ? "visible" : "none"
-      )
+    const { pitch, buildings } = presentation(perspective.mode)
 
-    current.easeTo({
-      pitch: perspective.mode === "3d" ? BUILDINGS_PITCH : 0,
-      duration: prefersReducedMotion() ? 0 : 500,
-    })
+    // Visibility is a layout change, so MapLibre re-parses the visible tiles on
+    // each switch; a hidden layer keeps 2D from paying for extrusions (ADR 0007).
+    if (
+      current.getLayer(BUILDINGS_LAYER) !== undefined &&
+      current.getLayoutProperty(BUILDINGS_LAYER, "visibility") !== buildings
+    )
+      current.setLayoutProperty(BUILDINGS_LAYER, "visibility", buildings)
+
+    // A freshly loaded map already has this pitch; easing would cancel a pan.
+    if (current.getPitch() !== pitch)
+      current.easeTo({
+        pitch,
+        duration: prefersReducedMotion() ? 0 : 500,
+      })
   }, [perspective.mode, ready])
 
   function choose(next: Perspective): void {
@@ -363,29 +381,30 @@ export function SharedMap({
       />
       {view.state === "ready" ? (
         <div className="shared-map-controls">
-          <div
-            className="shared-map-perspective"
-            role="group"
-            aria-label="Map perspective"
-          >
-            <Button
-              size="icon-lg"
-              variant="secondary"
-              aria-pressed={perspective.mode === "2d"}
-              onClick={() => choose({ mode: "2d", reason: "chosen" })}
+          <div className="shared-map-perspective">
+            <ToggleGroup
+              aria-label="Map perspective"
+              orientation="vertical"
+              spacing={0}
+              value={[perspective.mode]}
+              onValueChange={([next]) => {
+                if (next === "2d") choose({ mode: "2d", reason: "chosen" })
+
+                if (next === "3d") choose({ mode: "3d" })
+              }}
             >
-              2D
-            </Button>
-            <Button
-              size="icon-lg"
-              variant="secondary"
-              aria-pressed={perspective.mode === "3d"}
-              aria-label="3D buildings"
-              disabled={view.buildings === "unavailable"}
-              onClick={() => choose({ mode: "3d" })}
-            >
-              3D
-            </Button>
+              <ToggleGroupItem value="2d" size="lg">
+                2D
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="3d"
+                size="lg"
+                aria-label="3D buildings"
+                disabled={view.buildings === "unavailable"}
+              >
+                3D
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
           <Button
             size="icon-lg"
@@ -534,15 +553,29 @@ function buildingsNotice({
     case "zoom-in":
       return "Zoom in to see buildings in 3D."
     case "none-here":
-      return "No building data in this area. The map is tilted without buildings."
+      // Failed tiles are already reported; they are not proof of no buildings.
+      return view.tiles === "incomplete"
+        ? undefined
+        : "No building data near the map center. The map is tilted without buildings."
   }
 }
 
-/** Whether the settled 3D viewport has any extruded buildings to show. */
+/**
+ * Whether the settled 3D view has extruded buildings near its center. Querying
+ * only the central quarter keeps this cheap after every gesture on an older iPad.
+ */
 function buildingCoverage(map: MapLibreMap): BuildingCoverage {
   if (map.getZoom() < BUILDINGS_MIN_ZOOM) return "zoom-in"
 
-  return map.queryRenderedFeatures({ layers: [BUILDINGS_LAYER] }).length > 0
-    ? "shown"
-    : "none-here"
+  const { clientWidth: width, clientHeight: height } = map.getContainer()
+
+  const buildings = map.queryRenderedFeatures(
+    [
+      [width / 4, height / 4],
+      [(width * 3) / 4, (height * 3) / 4],
+    ],
+    { layers: [BUILDINGS_LAYER] }
+  )
+
+  return buildings.length > 0 ? "shown" : "none-here"
 }
