@@ -22,7 +22,8 @@ when moving back to planned.
 
 The API suite covers every status transition for both media kinds, strict date
 validation, date-only corrections, explicit null, owner targeting, combined
-filters and upgrade of existing plans/receipts. The real MCP contract verifies
+filters, upgrade of existing plans/receipts, legacy completed-row backfill and
+rollback/reapply compatibility. The real MCP contract verifies
 partial edits preserve omitted fields, null is forwarded distinctly, query
 values are encoded and API errors pass through unchanged. Training tools keep
 their read-only contracts.

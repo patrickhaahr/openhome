@@ -533,3 +533,53 @@ async fn upgrading_manual_plans_preserves_entries_and_accepted_retry_identity() 
         json!({"entry":{"id":"legacy-entry","owner_id":owner_id,"kind":"series","title":"A Quiet Orbit","status":"planned","date_added":"2024-02-28","completion_date":null},"replayed":true})
     );
 }
+
+#[tokio::test]
+async fn migration_backfills_legacy_completed_rows_and_rollback_is_readable_by_the_planned_only_client()
+ {
+    let (app, state) = test_app_with_db().await;
+    sqlx::migrate!("./migrations")
+        .undo(&state.db, 9)
+        .await
+        .unwrap();
+    let member = owner(&app, "Member A").await;
+    let owner_id = member["id"].as_str().unwrap();
+    // 0009's schema permits these states even though #101 only created planned entries.
+    for status in ["planned", "watching", "completed"] {
+        sqlx::query("INSERT INTO watchlist_entries (id, owner_id, kind, title, status, date_added) VALUES (?, ?, 'series', 'A Quiet Orbit', ?, '2024-02-28')")
+            .bind(status).bind(owner_id).bind(status).execute(&state.db).await.unwrap();
+    }
+    sqlx::migrate!("./migrations").run(&state.db).await.unwrap();
+    let entries = request(&app, Method::GET, "/api/watchlist/entries", Value::Null)
+        .await
+        .1;
+    for entry in entries.as_array().unwrap() {
+        assert_eq!(entry["status"], entry["id"]);
+        let expected = if entry["status"] == "completed" {
+            json!("2024-02-28")
+        } else {
+            Value::Null
+        };
+        assert_eq!(entry["completion_date"], expected);
+    }
+    sqlx::migrate!("./migrations")
+        .undo(&state.db, 9)
+        .await
+        .unwrap();
+    let states =
+        sqlx::query_scalar::<_, String>("SELECT status FROM watchlist_entries ORDER BY id")
+            .fetch_all(&state.db)
+            .await
+            .unwrap();
+    assert_eq!(states, ["planned", "planned", "planned"]);
+    sqlx::migrate!("./migrations").run(&state.db).await.unwrap();
+    let entries = request(&app, Method::GET, "/api/watchlist/entries", Value::Null)
+        .await
+        .1;
+    assert_eq!(entries.as_array().unwrap().len(), 3);
+    for entry in entries.as_array().unwrap() {
+        assert_eq!(entry["date_added"], "2024-02-28");
+        assert_eq!(entry["status"], "planned");
+        assert_eq!(entry["completion_date"], Value::Null);
+    }
+}

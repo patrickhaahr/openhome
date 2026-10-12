@@ -29,7 +29,11 @@ request per tool and returns its JSON unchanged.
 Migration 0009 persists each entry's stable UUID `id`, `owner_id`, `kind` (`movie`
 or whole `series`), `title`, `status` (initially `planned`) and `date_added` (the Axum server's
 current Europe/Copenhagen calendar date, `YYYY-MM-DD`). Migration 0010 adds nullable
-`completion_date` and enforces completion/status consistency in SQLite. Startup applies migrations;
+`completion_date` and enforces completion/status consistency in SQLite. Legacy
+completed rows are backfilled from their added date before enforcing the constraint.
+Rolling back 0010 discards viewing progress and completion dates, resetting entries
+to planned for compatibility with the previous application; IDs, added dates and
+addition receipts remain intact. Back up before a downgrade (`just api-migrate-revert`). Startup applies migrations;
 local development can run `devenv shell -- just api-migrate`.
 
 Titles allow 1–500 characters and request IDs allow 1–128; both are trimmed using
