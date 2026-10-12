@@ -7,3 +7,4 @@ pub mod switchbot;
 pub mod training;
 pub mod weather;
 pub mod wishlist;
+pub mod wishlist_metadata;

@@ -377,6 +377,10 @@ async fn call_sleep_recent(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one discovery contract verifies training and Wishlist tool schemas and annotations"
+)]
 async fn discovers_read_only_training_and_additive_wishlist_tools() {
     let mcp = start_mcp(&start_api().await, API_KEY).await;
     let client = connect(&mcp, API_KEY).await.unwrap();
@@ -404,6 +408,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "update_wishlist_item",
             "wishlist_item",
             "wishlist_items",
+            "wishlist_url_metadata",
             "wishlists",
             "workouts_on_day"
         ]
@@ -439,6 +444,11 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             assert_eq!(annotations.destructive_hint, Some(true));
             assert_eq!(annotations.idempotent_hint, Some(true));
         }
+        if tool.name == "wishlist_url_metadata" {
+            let annotations = tool.annotations.as_ref().unwrap();
+            assert_eq!(annotations.open_world_hint, Some(true));
+            assert_eq!(annotations.destructive_hint, Some(false));
+        }
         let required = match tool.name.as_ref() {
             "household_users" | "wishlists" => {
                 assert!(tool.input_schema.get("required").is_none());
@@ -447,6 +457,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "create_wishlist" => json!(["owner_id", "name"]),
             "add_wishlist_item" => json!(["title", "request_id"]),
             "wishlist_items" => json!(["list_id"]),
+            "wishlist_url_metadata" => json!(["owner_id", "list_id", "url"]),
             "wishlist_item" | "delete_wishlist_item" | "update_wishlist_item" => {
                 json!(["owner_id", "list_id", "item_id"])
             }
@@ -971,6 +982,28 @@ async fn rich_item_management_uses_real_transport_with_partial_updates_and_delet
     .unwrap();
     let payload = json!({"owner_id":owner["id"],"list_id":list["id"],"title":"A jacket","request_id":"rich-mcp-1",
         "url":"https://example.com/jacket","image_url":"https://example.com/jacket.png","notes":"For winter","price":"DKK 199.95","quantity":2,"priority":"high"});
+    let blocked = wishlist_call(
+        &client,
+        "wishlist_url_metadata",
+        json!({"owner_id":owner["id"],"list_id":list["id"],"url":"http://127.0.0.1/product"}),
+    )
+    .await;
+    assert_eq!(blocked.is_error, Some(true));
+    assert_eq!(blocked.structured_content.as_ref().unwrap()["status"], 400);
+    assert_eq!(
+        wishlist_call(&client, "wishlist_items", json!({"list_id":list["id"]}))
+            .await
+            .structured_content,
+        Some(json!([]))
+    );
+    let wrong = wishlist_call(
+        &client,
+        "wishlist_url_metadata",
+        json!({"owner_id":"wrong-owner","list_id":list["id"],"url":"https://example.com/jacket"}),
+    )
+    .await;
+    assert_eq!(wrong.is_error, Some(true));
+    assert_eq!(wrong.structured_content.unwrap()["status"], 409);
     let added = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
     assert_eq!(added.is_error, Some(false));
     let item = added.structured_content.unwrap()["item"].clone();

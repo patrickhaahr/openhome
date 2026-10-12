@@ -27,6 +27,7 @@ import {
   type WishlistCommand,
   type WishlistMutation,
   type WishlistState,
+  type WishlistMetadataLoader,
 } from "@/lib/wishlist"
 
 type TextFormProps = {
@@ -125,10 +126,12 @@ export function Wishlists({
   data,
   change,
   refresh,
+  metadata,
 }: {
   readonly data: WishlistState
   readonly change: (command: WishlistCommand) => Promise<WishlistMutation>
   readonly refresh: () => Promise<void>
+  readonly metadata: WishlistMetadataLoader
 }): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string>()
   const [editing, setEditing] = useState<string>()
@@ -384,6 +387,7 @@ export function Wishlists({
                       listId={selected.id}
                       disabled={busy}
                       save={save}
+                      metadata={metadata}
                     />
                     {selectedItems.length === 0 ? (
                       <div className="wishlist-empty-detail">
@@ -594,11 +598,13 @@ function AddWish({
   listId,
   disabled,
   save,
+  metadata,
 }: {
   ownerId: string
   listId: string
   disabled: boolean
   save: (command: WishlistCommand) => Promise<boolean>
+  metadata: WishlistMetadataLoader
 }): React.JSX.Element {
   const pending = useRef<PendingAddition | undefined>(undefined)
   const [restored, setRestored] = useState<PendingAddition>()
@@ -621,6 +627,9 @@ function AddWish({
       label="Something you’d like"
       submitLabel="Add wish"
       disabled={disabled}
+      loadMetadata={(url) =>
+        metadata({ owner_id: ownerId, list_id: listId, url })
+      }
       save={async (details) => {
         const title = details.title
         pending.current ??= readPendingAddition(listId)

@@ -24,8 +24,16 @@ import {
 } from "vitest"
 import { z } from "zod"
 import { Wishlists } from "@/components/wishlists"
-import { readWishlists, writeWishlist } from "@/lib/wishlist.server"
-import type { WishlistState, WishlistMutation } from "@/lib/wishlist"
+import {
+  readWishlists,
+  writeWishlist,
+  previewWishlistUrl,
+} from "@/lib/wishlist.server"
+import type {
+  WishlistState,
+  WishlistMutation,
+  WishlistMetadataLoader,
+} from "@/lib/wishlist"
 
 let api: ChildProcess | undefined
 
@@ -42,6 +50,8 @@ let mutationWork: Promise<WishlistMutation> = Promise.resolve({
 })
 
 let refreshWork: Promise<void> = Promise.resolve()
+
+let metadataWork: Promise<unknown> = Promise.resolve()
 
 beforeAll(async () => {
   api = spawn(resolve("../api/target/debug/examples/dashboard_health"), [], {
@@ -92,6 +102,7 @@ beforeEach(() => {
   root = createRoot(container)
   mutationWork = Promise.resolve({ state: "saved" })
   refreshWork = Promise.resolve()
+  metadataWork = Promise.resolve()
 })
 
 afterEach(async () => {
@@ -123,7 +134,9 @@ afterEach(async () => {
     })
 })
 
-async function render(): Promise<void> {
+async function render(
+  metadata: WishlistMetadataLoader = previewWishlistUrl
+): Promise<void> {
   const data = await readWishlists()
 
   await act(async () => {
@@ -139,6 +152,12 @@ async function render(): Promise<void> {
           refreshWork = render()
 
           return refreshWork
+        }}
+        metadata={(request) => {
+          const work = metadata(request)
+          metadataWork = work
+
+          return work
         }}
       />
     )
@@ -165,6 +184,7 @@ async function clickButton(element: HTMLButtonElement): Promise<void> {
     element.click()
     await mutationWork
     await refreshWork
+    await metadataWork
   })
 }
 
@@ -274,6 +294,96 @@ test("renders owner-aware CRUD, failed edits and confirmation against migrated a
   await render()
   expect(container.textContent).toContain("Member C")
   expect(container.textContent).toContain("Member B")
+})
+
+test("URL suggestions remain editable and only save on explicit addition", async () => {
+  await render()
+  await submit("New household member", "Member A")
+  await submit("List name for Member A", "Ideas")
+  const list = (await available()).lists[0]
+
+  if (!list) throw new Error("Expected list")
+
+  // A protocol fixture exercises UI review, not extraction (owned by authenticated Axum tests).
+  await render(async (request) => {
+    const { url, ...destination } = request
+
+    expect(destination).toEqual({
+      owner_id: list.owner_id,
+      list_id: list.id,
+    })
+    expect(url).toMatch(/^https:\/\/example\.com\/(product|another-product)$/)
+
+    return {
+      state: "preview",
+      data: {
+        status: "ready",
+        title: request.url.endsWith("another-product")
+          ? "Suggested hat"
+          : "Suggested coat",
+        url: request.url,
+        image_url: "https://example.com/coat.png",
+        price: "DKK 199.95",
+      },
+    }
+  })
+  await type("Product URL", "https://example.com/product")
+  await click("Read product details")
+  expect(field("Something you’d like").value).toBe("Suggested coat")
+  expect(field("Image URL").value).toBe("https://example.com/coat.png")
+  expect(field("Price (include currency)").value).toBe("DKK 199.95")
+  expect((await available()).items).toEqual([])
+  await type("Product URL", "https://example.com/another-product")
+  expect(field("Something you’d like").value).toBe("")
+  expect(field("Image URL").value).toBe("")
+  expect(field("Price (include currency)").value).toBe("")
+  await click("Read product details")
+  expect(field("Something you’d like").value).toBe("Suggested hat")
+  await type("Product URL", "https://example.com/product")
+  await click("Read product details")
+  await type("Image URL", "https://example.com/reviewed.png")
+  await type("Price (include currency)", "DKK 179.95")
+  await submit("Something you’d like", "My coat")
+  expect((await available()).items[0]).toMatchObject({
+    title: "My coat",
+    list_id: list.id,
+    url: "https://example.com/product",
+    image_url: "https://example.com/reviewed.png",
+    price: "DKK 179.95",
+  })
+  await render(async () => ({
+    state: "preview",
+    data: {
+      status: "partial",
+      title: "Suggested title",
+      url: "https://example.com/other",
+      image_url: null,
+      price: null,
+    },
+  }))
+  await type("Something you’d like", "My own idea")
+  await type("Product URL", "https://example.com/other")
+  await click("Read product details")
+  expect(field("Something you’d like").value).toBe("My own idea")
+  await submit("Something you’d like", "My own idea")
+  expect((await available()).items).toHaveLength(2)
+})
+
+test("rejected URL assistance keeps the manual draft and can still add a wish", async () => {
+  await render()
+  await submit("New household member", "Member A")
+  await submit("List name for Member A", "Ideas")
+  await type("Product URL", "http://127.0.0.1/product")
+  await click("Read product details")
+  expect(container.textContent).toContain("enter the details manually")
+  expect(field("Product URL").value).toBe("http://127.0.0.1/product")
+  expect((await available()).items).toEqual([])
+  await type("Product URL", "https://example.com/product")
+  await submit("Something you’d like", "A manually described coat")
+  expect((await available()).items[0]).toMatchObject({
+    title: "A manually described coat",
+    url: "https://example.com/product",
+  })
 })
 
 test("refresh updates untouched member names and preserves edited drafts", async () => {

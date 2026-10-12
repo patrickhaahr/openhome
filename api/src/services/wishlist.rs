@@ -202,6 +202,17 @@ async fn get_list(db: &SqlitePool, id: &str) -> Result<Wishlist> {
     .ok_or_else(|| WishlistError::NotFound("Wishlist not found; discover wishlists first".into()))
 }
 
+/// Require an explicit owner/list pair before metadata assistance or item writes.
+pub async fn require_list_owner(db: &SqlitePool, owner_id: &str, list_id: &str) -> Result<()> {
+    let list = get_list(db, list_id).await?;
+    if list.owner_id != owner_id {
+        return Err(WishlistError::Conflict(
+            "Wishlist does not belong to this Household User".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn items(db: &SqlitePool, list_id: &str) -> Result<Vec<WishlistItem>> {
     get_list(db, list_id).await?;
     Ok(sqlx::query_as!(WishlistItem,

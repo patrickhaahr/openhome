@@ -1186,3 +1186,13 @@ a:focus-visible {
     text-underline-offset: 0.25rem;
   }
 }
+.wishlist-url-assistance {
+  margin-block: 1rem;
+}
+
+.wishlist-metadata-status {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-top: 0.6rem;
+}

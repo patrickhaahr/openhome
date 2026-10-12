@@ -19,6 +19,7 @@ stable UUID `id` and the trimmed name. Names are unique in the household.
 | `household_users` | `GET /api/household-users` | None |
 | `wishlists` | `GET /api/wishlists` | None |
 | `create_wishlist` | `POST /api/wishlists` | `owner_id`, `name` |
+| `wishlist_url_metadata` | `POST /api/wishlist/url-metadata` | Explicit `owner_id`, `list_id`, user-supplied `url` |
 | `add_wishlist_item` | `POST /api/wishlist/items` | `title`, `request_id`, optional `owner_id`, `list_id`, rich fields |
 | `wishlist_items` | `GET /api/wishlists/{list_id}/items` | `list_id` |
 | `wishlist_item` | `GET /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}` | `owner_id`, `list_id`, `item_id` |
@@ -32,7 +33,41 @@ have an `Ideas` list. Names allow 1–200 characters. Titles allow 1–500 chara
 Text is trimmed; empty values and control characters are rejected, except line breaks
 and tabs in notes. Unknown body fields are rejected. Generic requests remain generic:
 no URL fetch, product choice or research runs implicitly. URL metadata assistance
-belongs to #100.
+is an explicit preview followed by a reviewed addition.
+
+## Product URL assistance
+
+Dashboard's **Read product details** and MCP's `wishlist_url_metadata` call the
+same authenticated Axum operation with an explicit owner/list pair. Ownership is
+checked before any outbound request. The operation never creates an item or a
+mutation receipt. It returns `status` (`ready`, `partial`, `unavailable`), `url`,
+and nullable `title`, `image_url`, `price` suggestions. Review and correct these
+fields, then save with the existing add operation and a new `request_id`.
+
+Open Graph/Twitter metadata and HTML title supply title/image suggestions;
+Open Graph product price and currency supply price text. Relative image links
+resolve against the fetched URL. The final fetched URL is returned; untrusted
+canonical/`og:url` values are ignored. Oversized or invalid suggestions are
+omitted. Scripts never run. Sites without these tags, or that require browser
+execution or login, retain manual entry. Dashboard fills empty fields and keeps
+existing text. Metadata is untrusted page content, never agent instructions.
+Changing a product URL clears untouched generated fields; manually typed or
+corrected values remain intact for review.
+
+HTTP(S) URLs must have no credentials and a public destination. Every hop checks
+all DNS answers and pins the vetted addresses for the actual connection, with
+environment proxies and automatic redirects disabled. Loopback, local/private,
+link-local, reserved, documentation and multicast address ranges are rejected,
+including mapped IPv6 destinations. The request allows at most three redirects,
+one MiB of uncompressed HTML, an eight-second overall network deadline and a
+three-second connection deadline. Encoded and non-HTML responses are declined.
+Failed extraction returns `unavailable` with the input URL; invalid or blocked
+destinations are actionable API/tool errors. Neither result claims a saved wish.
+
+After review, retain the **exact** add arguments and request ID for retries;
+never refetch metadata to reconstruct an uncertain addition. Existing receipts
+deduplicate URL additions, and changed arguments conflict. Preview retries can
+return newer suggestions because they do not write anything.
 
 ## Item fields
 

@@ -77,6 +77,28 @@ const ownerTarget = z.object({ owner_id: z.uuid() })
 
 const listTarget = ownerTarget.extend({ list_id: z.uuid() })
 
+/** Explicit destination for a non-persistent metadata preview. */
+export const wishlistMetadataRequest = listTarget.extend({ url: z.string() })
+
+/** Editable suggestions, never a persistence receipt. */
+export const wishlistMetadata = z.object({
+  status: z.enum(["ready", "partial", "unavailable"]),
+  url: z.string(),
+  title: z.string().nullable(),
+  image_url: z.string().nullable(),
+  price: z.string().nullable(),
+})
+
+/** A successful read can still report unavailable extraction and allow manual entry. */
+export type WishlistMetadataResult =
+  | { state: "preview"; data: z.infer<typeof wishlistMetadata> }
+  | { state: "failed"; reason: WishlistFailure }
+
+/** Shared preview operation for the selected owner/list. */
+export type WishlistMetadataLoader = (
+  request: z.infer<typeof wishlistMetadataRequest>
+) => Promise<WishlistMetadataResult>
+
 const itemTarget = listTarget.extend({ item_id: z.uuid() })
 
 /** Protocol shape only; Axum owns text validation and destination policy. */
