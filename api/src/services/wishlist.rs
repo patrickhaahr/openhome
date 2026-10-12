@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use super::patch::Patch;
+
 #[derive(Debug, thiserror::Error)]
 pub enum WishlistError {
     #[error("{0}")]
@@ -324,52 +326,24 @@ pub struct Rename {
     pub name: String,
 }
 
-/// An absent field preserves its stored value; explicit null clears a nullable field.
-#[derive(Default)]
-pub enum ItemPatch<T> {
-    #[default]
-    Missing,
-    Value(Option<T>),
-}
-
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for ItemPatch<T> {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> std::result::Result<Self, D::Error> {
-        Option::<T>::deserialize(deserializer).map(Self::Value)
-    }
-}
-
-impl<T> ItemPatch<T> {
-    fn supplied(&self) -> bool {
-        matches!(self, Self::Value(_))
-    }
-    fn value(self) -> Option<T> {
-        match self {
-            Self::Missing => None,
-            Self::Value(value) => value,
-        }
-    }
-}
-
 /// Partial item edits preserve the original addition's retry identity and destination.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditItem {
     #[serde(default)]
-    pub title: ItemPatch<String>,
+    pub title: Patch<String>,
     #[serde(default)]
-    pub url: ItemPatch<String>,
+    pub url: Patch<String>,
     #[serde(default)]
-    pub image_url: ItemPatch<String>,
+    pub image_url: Patch<String>,
     #[serde(default)]
-    pub notes: ItemPatch<String>,
+    pub notes: Patch<String>,
     #[serde(default)]
-    pub price: ItemPatch<String>,
+    pub price: Patch<String>,
     #[serde(default)]
-    pub quantity: ItemPatch<i64>,
+    pub quantity: Patch<i64>,
     #[serde(default)]
-    pub priority: ItemPatch<String>,
+    pub priority: Patch<String>,
 }
 
 fn one() -> i64 {

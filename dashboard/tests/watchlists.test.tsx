@@ -30,7 +30,7 @@ import { Watchlists } from "@/components/watchlists"
 import { readWatchlists, writeWatchlist } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
-import type { WatchlistMutation } from "@/lib/watchlist"
+import type { WatchlistFilters, WatchlistMutation } from "@/lib/watchlist"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
@@ -41,6 +41,8 @@ let container: HTMLDivElement
 let work: Promise<WatchlistMutation> = Promise.resolve({ state: "saved" })
 
 let refreshWork: Promise<void> = Promise.resolve()
+
+let filters: WatchlistFilters = {}
 
 let proxy: Server | undefined
 
@@ -57,6 +59,7 @@ beforeEach(() => {
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   sessionStorage.clear()
+  filters = {}
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -102,6 +105,11 @@ async function render(): Promise<void> {
       <RouterContextProvider router={router}>
         <Watchlists
           data={data}
+          filters={filters}
+          filter={(next) => {
+            filters = next
+            refreshWork = render()
+          }}
           change={(command) => {
             work = writeWatchlist(command)
 
@@ -360,4 +368,101 @@ test("a dropped accepted addition retains owner, whole-series kind and request I
     plans.find((entry) => entry.title === "The Lighthouse Journey")
   ).toMatchObject({ kind: "series" })
   expect(container.textContent).toContain("Plan saved to OpenHome")
+})
+
+test("status/date editing persists through remount and filters retain household ownership", async () => {
+  await writeWishlist({ kind: "create-owner", name: "Member A" })
+  await writeWishlist({ kind: "create-owner", name: "Member B" })
+  await render()
+  await type("Type for Member A", "series")
+  await add("Member A", "A Quiet Orbit")
+  await add("Member B", "The Lighthouse Journey")
+
+  const original = (await available()).entries.find(
+    (entry) => entry.title === "A Quiet Orbit"
+  )
+
+  if (!original) throw new Error("Expected persisted series")
+
+  async function edit(): Promise<void> {
+    const summary = container
+      .querySelector<HTMLDetailsElement>(`details`)
+      ?.querySelector("summary")
+
+    if (!summary) throw new Error("Expected status/date editor")
+    await act(async () => {
+      summary.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  await edit()
+  await type("Status for A Quiet Orbit / Member A", "watching")
+  await click("Save status & dates")
+  expect(container.textContent).toContain("Whole series")
+  expect(
+    (await available()).entries.find((entry) => entry.id === original.id)
+  ).toMatchObject({
+    status: "watching",
+    date_added: original.date_added,
+    completion_date: null,
+  })
+  await edit()
+  await type("Status for A Quiet Orbit / Member A", "completed")
+  await type("Date added for A Quiet Orbit / Member A", "2024-02-28")
+  await type("Completion date for A Quiet Orbit / Member A", "2024-02-29")
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await click("Save status & dates")
+  expect(container.querySelector("details")?.open).toBe(true)
+  expect(field("Completion date for A Quiet Orbit / Member A").value).toBe(
+    "2024-02-29"
+  )
+  expect(container.querySelector("details")?.textContent).toContain(
+    "OpenHome rejected the API key"
+  )
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  await click("Save status & dates")
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render()
+  expect(container.textContent).toContain("Completed 2024-02-29")
+  expect(
+    (await available()).entries.find((entry) => entry.id === original.id)
+  ).toMatchObject({
+    status: "completed",
+    kind: "series",
+    date_added: "2024-02-28",
+    completion_date: "2024-02-29",
+  })
+  await type("Household member", original.owner_id)
+  await act(async () => {
+    await refreshWork
+  })
+  await type("Watch status", "planned")
+  await act(async () => {
+    await refreshWork
+  })
+  expect(container.querySelectorAll('[role="group"]')).toHaveLength(1)
+  expect(container.textContent).toContain("No planned entries")
+  expect(container.textContent).not.toContain("The Lighthouse Journey")
+  await type("Watch status", "completed")
+  await act(async () => {
+    await refreshWork
+  })
+  expect(container.textContent).toContain("A Quiet Orbit")
+  await click("Refresh watchlists")
+  expect(field("Watch status").value).toBe("completed")
+  await edit()
+  await type("Status for A Quiet Orbit / Member A", "planned")
+  await click("Save status & dates")
+  expect(container.textContent).toContain("No completed entries")
+  await click("Clear filters")
+  expect(container.querySelectorAll('[role="group"]')).toHaveLength(2)
+  expect(
+    (await available()).entries.find((entry) => entry.id === original.id)
+  ).toMatchObject({
+    status: "planned",
+    date_added: "2024-02-28",
+    completion_date: null,
+  })
 })

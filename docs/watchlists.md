@@ -6,9 +6,9 @@ come from the existing `/api/household-users` discovery; configure members in
 Dashboard Wishlist. Ownership does not introduce private accounts or change
 the existing shared fitness model ([ADR 0004](adr/0004-household-users-and-list-ownership.md)).
 
-This implements manual planning in [#101](https://github.com/patrickhaahr/openhome/issues/101).
-Watching/completion transitions and editable dates remain in #102; TMDB search,
-metadata and attribution remain in #103. No provider or viewing history is used
+Manual planning is delivered in [#101](https://github.com/patrickhaahr/openhome/issues/101);
+personal viewing states, date corrections and filters in [#102](https://github.com/patrickhaahr/openhome/issues/102).
+TMDB search, metadata and attribution remain in #103. No provider or viewing history is used
 to infer personal state.
 
 ## Operations
@@ -20,14 +20,16 @@ request per tool and returns its JSON unchanged.
 | MCP tool | Authenticated Axum operation | Input |
 | --- | --- | --- |
 | `household_users` | `GET /api/household-users` | None; discovers all owners, including empty watchlists |
-| `watchlist_entries` | `GET /api/watchlist/entries` | None; shared read across all owners |
+| `watchlist_entries` | `GET /api/watchlist/entries` | Optional `owner_id` and `status` filters; omitted filters read across all owners/statuses |
 | `add_watchlist_entry` | `POST /api/watchlist/entries` | `kind`, `title`, `request_id`, explicit `owner_id` |
 | `watchlist_entry` | `GET /api/household-users/{owner_id}/watchlist/entries/{entry_id}` | Explicit owner and entry IDs |
+| `update_watchlist_entry` | `PATCH /api/household-users/{owner_id}/watchlist/entries/{entry_id}` | Explicit owner/entry IDs; optional `status`, `date_added`, `completion_date` |
 | `delete_watchlist_entry` | `DELETE /api/household-users/{owner_id}/watchlist/entries/{entry_id}` | Explicit owner and entry IDs |
 
 Migration 0009 persists each entry's stable UUID `id`, `owner_id`, `kind` (`movie`
-or whole `series`), `title`, `status` (`planned`) and `date_added` (the Axum server's
-current Europe/Copenhagen calendar date, `YYYY-MM-DD`). Startup applies migrations;
+or whole `series`), `title`, `status` (initially `planned`) and `date_added` (the Axum server's
+current Europe/Copenhagen calendar date, `YYYY-MM-DD`). Migration 0010 adds nullable
+`completion_date` and enforces completion/status consistency in SQLite. Startup applies migrations;
 local development can run `devenv shell -- just api-migrate`.
 
 Titles allow 1–500 characters and request IDs allow 1–128; both are trimmed using
@@ -35,6 +37,35 @@ Unicode whitespace and reject control characters. Unknown body fields, episode
 kinds and supplied status/date fields are rejected. Missing or mismatched
 owner/entry destinations return 404. A successful removal returns 204, mapped to
 MCP `{ "deleted": true }`; repeated removals remain not-found tool errors.
+
+## Personal status and dates
+
+`PATCH` changes only supplied status/date fields; title, kind, owner and retry
+identity remain unchanged. All transitions between `planned`, `watching` and
+`completed` are permitted. Completing records the current Europe/Copenhagen
+calendar date unless an explicit `completion_date` is supplied. A repeated
+completed transition preserves the recorded date. Leaving completed clears it;
+`date_added` is preserved unless explicitly corrected.
+
+Dates must be real `YYYY-MM-DD` calendar dates, years 0001–9999. A completed entry
+requires a completion date on or after its added date; correct both together
+when needed. Null `status`/`date_added`, null completion while completed, and
+non-null completion outside completed are rejected without changing anything.
+No rewatch history, episode progress or provider-inferred completion is stored.
+Concurrent corrections detected during a PATCH return 409; refresh before retrying.
+After an uncertain edit, read the entry before deciding to retry so a newer
+correction is not overwritten.
+
+```json
+{ "status": "completed", "date_added": "2024-02-28", "completion_date": "2024-02-29" }
+```
+
+`GET /api/watchlist/entries?owner_id=<id>&status=watching` combines optional owner
+and status filters. Invalid statuses are rejected; unmatched owners produce an
+empty filtered list. Dashboard retains owner/status filters in the URL, while
+showing configured household members including those without matching entries.
+Each entry's **Edit status & dates** form targets its named owner, keeps failed
+edits open, and reads back the persisted result after success.
 
 ## Ownership and retries
 
@@ -73,7 +104,7 @@ The member-removal dialog discloses both Wishlist and Watchlist deletion; accept
 addition receipts remain retired.
 
 Reads are annotated read-only; deduplicated additions are non-destructive and
-idempotent; removals are destructive and idempotent. All training tools retain
+idempotent; corrections and removals are destructive and idempotent. All training tools retain
 their read-only contracts. API and transport failures are MCP tool errors and
 never imply a successful write.
 
@@ -83,7 +114,7 @@ Run `devenv shell -- just api-check mcp-check dashboard-check`. The primary doma
 proof is migrated SQLite behind authenticated Axum in `api/tests/watchlist.rs`.
 The real Streamable HTTP MCP client/adapter/Axum seam is in `mcp/tests/contract.rs`.
 Rendered Dashboard tests use the same authenticated routes with synthetic owners,
-including additions/removal, refresh, failed credentials and a lost accepted
+including additions/removal, status/date edits, filters, refresh, failed credentials and a lost accepted
 response followed by remount/retry. [Public screenshots](../dashboard/docs/watchlist/README.md)
 show synthetic data only. Physical iPad Safari validation remains a separate
 release gate under #69.

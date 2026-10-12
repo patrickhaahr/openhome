@@ -7,9 +7,24 @@ export const watchlistEntry = z.object({
   owner_id: z.uuid(),
   kind: z.enum(["movie", "series"]),
   title: z.string(),
-  status: z.literal("planned"),
+  status: z.enum(["planned", "watching", "completed"]),
   date_added: z.iso.date(),
+  completion_date: z.iso.date().nullable(),
 })
+
+/** URL filters keep the household view recoverable after navigation and refresh. */
+export const watchlistFilters = z.object({
+  owner_id: z.uuid().optional().catch(undefined),
+  status: watchlistEntry.shape.status.optional().catch(undefined),
+})
+
+export type WatchlistFilters = z.infer<typeof watchlistFilters>
+
+export const watchStatusLabels: Record<WatchlistEntry["status"], string> = {
+  planned: "Planned",
+  watching: "Watching",
+  completed: "Completed",
+}
 
 /** Stored entry returned by authenticated Axum. */
 export type WatchlistEntry = z.infer<typeof watchlistEntry>
@@ -40,6 +55,14 @@ export const watchlistCommand = z.discriminatedUnion("action", [
     request_id: z.uuid(),
   }),
   z.object({
+    action: z.literal("edit"),
+    owner_id: z.uuid(),
+    entry_id: z.uuid(),
+    status: watchlistEntry.shape.status.optional(),
+    date_added: z.iso.date().optional(),
+    completion_date: z.iso.date().nullable().optional(),
+  }),
+  z.object({
     action: z.literal("remove"),
     owner_id: z.uuid(),
     entry_id: z.uuid(),
@@ -65,9 +88,9 @@ export const watchlistFailureMessage: Record<WatchlistFailure, string> = {
   unavailable:
     "OpenHome could not confirm the result. Refresh before trying again.",
   invalid:
-    "Enter a title of 1–500 characters without control characters, and choose Movie or Whole series.",
+    "Check the title, media type and dates. Completed entries need a real completion date on or after the added date.",
   conflict:
-    "This request was already accepted or its entry was removed. Refresh to check the list before adding a new plan.",
+    "This request conflicts with a saved change or its entry was removed. Refresh to check the list before retrying.",
   "not-found":
     "This member or plan is no longer available. Refresh to see the current watchlists.",
 }

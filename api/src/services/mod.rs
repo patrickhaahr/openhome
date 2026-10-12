@@ -4,6 +4,7 @@ pub mod feed;
 pub mod ir;
 pub mod map;
 pub mod noop_push;
+mod patch;
 pub mod switchbot;
 pub mod training;
 pub mod watchlist;

@@ -34,9 +34,13 @@ use wishlist::{
     WishlistItemsRequest, WishlistUrlMetadataRequest,
 };
 
+mod patch;
 mod watchlist;
 mod wishlist;
-use watchlist::{AddWatchlistEntryRequest, WatchlistEntryRequest};
+use watchlist::{
+    AddWatchlistEntryRequest, UpdateWatchlistEntryRequest, WatchlistEntriesRequest,
+    WatchlistEntryRequest,
+};
 
 /// Where the MCP endpoint is mounted.
 pub const MCP_PATH: &str = "/mcp";
@@ -44,7 +48,7 @@ pub const MCP_PATH: &str = "/mcp";
 const BEARER_PREFIX: &str = "Bearer ";
 const API_TIMEOUT: Duration = Duration::from_secs(15);
 
-const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add, read, update or delete wishes. Watchlist tools add, list, read and remove manual movie or whole-series plans. Discover household_users and use explicit owner IDs; never infer ownership, even for a single owner. Missing ownership returns watchlist_destination_required: ask its question once with the returned choices, then retry with the selected owner. New entries are planned, not watched. Reuse the exact kind/title/owner/request_id on uncertain addition retries; deleted entries cannot be recreated by an old request_id. After an uncertain removal, read its owner/entry destination before retrying. \
+const INSTRUCTIONS: &str = "OpenHome training tools are read-only; wishlist tools can create named lists and add, read, update or delete wishes. Watchlist tools add, list, read, update and remove movie or whole-series plans. Status/owner filters are optional. Axum owns planned/watching/completed states and date corrections; completing records today in Europe/Copenhagen unless specified, leaving completed clears the completion date, and omitted dates are preserved. After an uncertain correction, read the entry before retrying. Discover household_users and use explicit owner IDs; never infer ownership, even for a single owner. Missing ownership returns watchlist_destination_required: ask its question once with the returned choices, then retry with the selected owner. New entries are planned, not watched. Reuse the exact kind/title/owner/request_id on uncertain addition retries; deleted entries cannot be recreated by an old request_id. After an uncertain removal, read its owner/entry destination before retrying. \
 Every tool calls the OpenHome API, which owns days (Europe/Copenhagen), units, NOOP source selection, freshness and \
 coverage; results are returned as the API sent them. A null value means no value was recorded or \
 synced; check each result's freshness and coverage before treating a gap as real. For wishlist requests, discover household owners and named \
@@ -249,11 +253,12 @@ impl OpenHomeApi {
     /// on success, the API's error body as a tool error otherwise. Every segment is
     /// percent-encoded; literal dot segments are rejected before URL construction.
     async fn get(&self, segments: &[&str]) -> CallToolResult {
-        self.request(reqwest::Method::GET, segments, None).await
+        self.request(reqwest::Method::GET, segments, None, &[])
+            .await
     }
 
     async fn post(&self, segments: &[&str], body: Value) -> CallToolResult {
-        self.request(reqwest::Method::POST, segments, Some(body))
+        self.request(reqwest::Method::POST, segments, Some(body), &[])
             .await
     }
 
@@ -262,6 +267,7 @@ impl OpenHomeApi {
         method: reqwest::Method,
         segments: &[&str],
         body: Option<Value>,
+        query: &[(String, String)],
     ) -> CallToolResult {
         // URL path construction discards literal dot segments. Reject them before they can
         // change the endpoint; calendar validation remains the API's responsibility.
@@ -280,6 +286,13 @@ impl OpenHomeApi {
             .expect("parse_api_url accepts only base URLs")
             .pop_if_empty()
             .extend(segments);
+        if !query.is_empty() {
+            url.query_pairs_mut().extend_pairs(
+                query
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), value.as_str())),
+            );
+        }
         let mut request = self
             .http
             .request(method, url)
@@ -432,11 +445,34 @@ impl OpenHomeTools {
     }
 
     #[tool(
-        description = "List all household-visible Watchlist Entries with stable entry IDs, owner IDs, movie/series kind, planned status and date added. Use household_users to show every owner, including owners without entries. Does not infer viewing history.",
+        description = "List household-visible Watchlist Entries with optional owner_id and planned/watching/completed status filters. Returns stable IDs, media kind, title, personal status, date added and completion date. Use household_users to discover owners with empty lists. Does not infer viewing history.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    async fn watchlist_entries(&self) -> CallToolResult {
-        self.api.get(&["api", "watchlist", "entries"]).await
+    async fn watchlist_entries(
+        &self,
+        Parameters(request): Parameters<WatchlistEntriesRequest>,
+    ) -> CallToolResult {
+        let mut query = Vec::new();
+        if let Some(owner) = request.owner_id {
+            query.push(("owner_id".into(), owner));
+        }
+        if let Some(status) = request.status {
+            // Serialize only the typed enum; query encoding belongs to the HTTP client.
+            let value = match status {
+                watchlist::WatchStatus::Planned => "planned",
+                watchlist::WatchStatus::Watching => "watching",
+                watchlist::WatchStatus::Completed => "completed",
+            };
+            query.push(("status".into(), value.into()));
+        }
+        self.api
+            .request(
+                reqwest::Method::GET,
+                &["api", "watchlist", "entries"],
+                None,
+                &query,
+            )
+            .await
     }
 
     #[tool(
@@ -478,6 +514,36 @@ impl OpenHomeTools {
     }
 
     #[tool(
+        description = "Correct a Watchlist Entry's personal status/dates by explicit owner_id and entry_id. Omitted fields are preserved. Completing records today in Europe/Copenhagen unless completion_date is supplied; leaving completed clears it. Dates must be real YYYY-MM-DD and completion cannot precede addition. Whole series only; never infer completion from providers. After an uncertain response, read the entry before retrying.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn update_watchlist_entry(
+        &self,
+        Parameters(request): Parameters<UpdateWatchlistEntryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PATCH,
+                &[
+                    "api",
+                    "household-users",
+                    &request.owner_id,
+                    "watchlist",
+                    "entries",
+                    &request.entry_id,
+                ],
+                Some(json!(request)),
+                &[],
+            )
+            .await
+    }
+
+    #[tool(
         description = "Permanently remove one Watchlist Entry by explicit owner_id and entry_id. Returns deleted=true only after Axum confirms removal; missing or mismatched destinations are tool errors. Read after an uncertain response. Old addition retries cannot recreate the removed entry.",
         annotations(
             read_only_hint = false,
@@ -502,6 +568,7 @@ impl OpenHomeTools {
                     &request.entry_id,
                 ],
                 None,
+                &[],
             )
             .await
     }
@@ -623,6 +690,7 @@ impl OpenHomeTools {
                     &request.item_id,
                 ],
                 Some(json!(request)),
+                &[],
             )
             .await
     }
@@ -653,6 +721,7 @@ impl OpenHomeTools {
                     &request.item,
                 ],
                 None,
+                &[],
             )
             .await
     }
