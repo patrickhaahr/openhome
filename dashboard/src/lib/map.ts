@@ -28,3 +28,9 @@ export const unavailableMapOrigin: MapOriginRead = {
   state: "unavailable",
   reason: "connection-unavailable",
 }
+
+/** A line drawn on shared maps, as GeoJSON `[longitude, latitude]` pairs. */
+export type MapLine = {
+  readonly type: "LineString"
+  readonly coordinates: ReadonlyArray<readonly [number, number]>
+}

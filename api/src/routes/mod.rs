@@ -6,6 +6,7 @@ pub mod health;
 pub mod ir;
 pub mod map;
 pub mod noop_push;
+pub mod route_loop;
 pub mod switchbot;
 pub mod timeline;
 pub mod training;

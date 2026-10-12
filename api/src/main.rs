@@ -7,7 +7,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use openhome_api::auth;
 use openhome_api::routes;
-use openhome_api::services::{adguard, docker, feed, ir, map, noop_push, switchbot, weather};
+use openhome_api::services::{
+    adguard, docker, feed, ir, map, noop_push, route_loop, switchbot, weather,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -52,6 +54,12 @@ async fn main() -> anyhow::Result<()> {
         non_empty_env("MAP_ORIGIN_LATITUDE").as_deref(),
         non_empty_env("MAP_ORIGIN_LONGITUDE").as_deref(),
         non_empty_env("MAP_DEMO_ORIGIN").as_deref(),
+    )?;
+    // Loops start at the shared map origin, so routes draw where the map opens.
+    let loop_planner = route_loop::LoopPlanner::new(
+        map_origin,
+        route_loop::ProviderKey::parse(std::env::var("OPENROUTESERVICE_API_KEY").ok().as_deref()),
+        url::Url::parse("https://api.openrouteservice.org/v2/directions/foot-walking/geojson")?,
     )?;
 
     let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {
@@ -139,6 +147,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::docker::router())
         .merge(routes::ir::router())
         .merge(routes::map::router(map_origin))
+        .merge(routes::route_loop::router(loop_planner))
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
         .merge(routes::watchlist::router())
