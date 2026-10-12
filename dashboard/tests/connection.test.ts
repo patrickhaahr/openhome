@@ -186,7 +186,8 @@ test("opens the map at the explicit demo origin served by the real Axum route", 
   expect(travel).toContain("Demo origin · central Copenhagen")
   expect(travel).toContain("Map of the Copenhagen demo area")
   expect(travel).toContain("Loading map…")
-  expect(travel).toContain("No routes, stops or vehicles are connected yet.")
+  expect(travel).toContain("Stops and live vehicles are not connected yet.")
+  expect(travel).toContain("Plan a 5 km walk")
   expect(travel).toMatch(
     /<link rel="stylesheet" href="[^"]*maplibre-gl[^"]*\.css/
   )
