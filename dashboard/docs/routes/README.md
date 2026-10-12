@@ -120,7 +120,56 @@ rendering path end to end.
 - Desktop preview: the map stays in view beside the planner while scrolling to
   compare alternatives in landscape and the planner follows the map in
   portrait.
-- Pending: a real search against the household instance and a pedestrian and
-  running suitability check of its alternatives; the instance was not reachable
-  from this environment. Repeat with
-  `OPENROUTESERVICE_URL=https://<instance>/ors devenv shell -- just dashboard-health-fixture-run`.
+
+## Real alternatives from the self-hosted provider — 2026-10-12
+
+The same openrouteservice 10.0.1 instance used for #106 generated these routes
+through the current authenticated Axum endpoint and dashboard. The isolated
+fixture supplies the unrelated Copenhagen demo origin and temporary database;
+**every route below comes from the live pedestrian graph, not its synthetic
+provider.** The instance's private hostname did not resolve locally, so a
+temporary loopback relay reached the cluster service over SSH. No private
+hostname, household coordinates or credentials are included in the evidence.
+
+| Request                         | Converted target | Measured alternatives A / B / C | Matches within ±10% | Search    |
+| ------------------------------- | ---------------- | ------------------------------- | ------------------- | --------- |
+| Walking, 5 km                   | 5,000 m          | 5,328 / 5,371 / 4,573 m         | 3                   | Complete  |
+| Walking, 10,000 steps at 75 cm  | 7,500 m          | 7,933 / 7,938 / 6,827 m         | 3                   | Complete  |
+| Running, 10 km                  | 10,000 m         | 10,325 / 9,563 / 9,182 m        | 3                   | Complete  |
+| Running, 12,000 steps at 100 cm | 12,000 m         | 11,606 / 10,918 / 10,310 m      | 2                   | Exhausted |
+| Walking, custom 8.5 km          | 8,500 m          | 8,443 / 8,100 / 9,298 m         | 3                   | Complete  |
+
+The running Step Target used all six attempts. Its third loop is 1,690 m
+(14.1%) short and is labelled outside ±10%; the dashboard explains that only
+two distinct loops matched instead of presenting all three as matches.
+
+| Three real 5 km walking loops (1024 × 768)                  | Comparing the real Loop B (1024 × 768)                    |
+| ----------------------------------------------------------- | --------------------------------------------------------- |
+| ![Real walking alternatives](real-alternatives-walking.png) | ![Real Loop B highlighted](real-alternatives-compare.png) |
+
+| Three real 10 km running loops (1024 × 768)                 | Real running Step Target with a shortfall (1024 × 768)                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ![Real running alternatives](real-alternatives-running.png) | ![Two matching running loops and a labelled deviation](real-alternatives-running-steps.png) |
+
+Suitability was inspected for all 15 returned alternatives by repeating their
+exact provider seed, calibrated length and avoidance options with `waytype`,
+`waycategory` and `surface` extra information. The repeated geometry matched
+the geometry returned by Axum in every case, and independently measured
+geometry agreed with each reported distance to the nearest metre.
+
+- Every loop starts 3.5 m from the demo origin and closes at its starting point.
+- No returned alternative contains a motorway or ferry according to the
+  provider's [way categories](https://giscience.github.io/openrouteservice/api-reference/endpoints/directions/extra-info/waycategory).
+- All six running alternatives contain no steps. The three 5 km walking loops
+  are 86.57%, 89.05% and 94.53% footway according to the provider's
+  [way types](https://giscience.github.io/openrouteservice/api-reference/endpoints/directions/extra-info/waytype).
+- The walking alternatives visit different areas: Sortedam Dossering and
+  Kronprinsessegade; Christiansborg and Marmorbroen; and the pedestrian streets
+  around Kultorvet and Strøget. Running alternatives reach Kastellet and
+  Christianshavn, Nørrebro, and Østerbro.
+- Stopping the temporary provider relay before an uncached 13 km request
+  produces `provider-unavailable`; all three earlier real running loops remain
+  on the map and can still be compared. Restarting the relay allows a retry.
+
+Repeat against the configured instance with
+`OPENROUTESERVICE_URL=https://<instance>/ors devenv shell -- just dashboard-health-fixture-run`.
