@@ -45,7 +45,7 @@ beforeAll(async () => {
     [],
     {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, OPENROUTESERVICE_API_KEY: "" },
+      env: { ...process.env, OPENROUTESERVICE_URL: "" },
     }
   )
 
@@ -154,7 +154,7 @@ test("plans a measured 5 km loop through authenticated Axum and hands its geomet
   expect(container.textContent).toContain(
     "100 m (2.0%) longer than the 5.00 km target, within ±10%"
   )
-  expect(container.textContent).toContain("Plan again")
+  expect(container.querySelector("button")).toBeNull()
   expect(routes).toHaveLength(1)
   const [route] = routes
   expect(route?.coordinates[0]).toEqual([12.5692, 55.6869])
@@ -162,7 +162,7 @@ test("plans a measured 5 km loop through authenticated Axum and hands its geomet
   expect(container.innerHTML).not.toContain(apiKey)
 })
 
-test("explains provider outcomes and clears an earlier loop instead of presenting it as the answer", async () => {
+test("explains provider outcomes, never draws an invalid route and stops re-planning a shown loop", async () => {
   const generated = await generateLoop({
     activity: "walking",
     target_meters: 5000,
@@ -171,24 +171,20 @@ test("explains provider outcomes and clears an earlier loop instead of presentin
   vi.stubEnv(
     "OPENHOME_API_URL",
     await upstream([
-      generated,
-      { state: "unavailable", reason: "quota-exceeded" },
+      { state: "unavailable", reason: "provider-unavailable" },
       { state: "unavailable", reason: "no-route" },
       // A route outside the contract is rejected, never drawn.
       {
         state: "generated",
         route: { geometry: { type: "LineString", coordinates: [[200, 95]] } },
       },
+      generated,
     ])
   )
   await render()
   await plan("Plan a 5 km walk")
-  expect(routes.at(-1)?.type).toBe("LineString")
-
-  await plan("Plan again")
-  expect(container.textContent).toContain("Free route quota used up")
-  expect(container.textContent).not.toContain("measured loop")
-  expect(routes.at(-1)).toBeUndefined()
+  expect(container.textContent).toContain("Route planner unavailable")
+  expect(routes).toEqual([undefined])
 
   await plan("Try again")
   expect(container.textContent).toContain("No walkable loop found")
@@ -196,7 +192,13 @@ test("explains provider outcomes and clears an earlier loop instead of presentin
 
   await plan("Try again")
   expect(container.textContent).toContain("Route planning unavailable")
-  expect(routes.at(-1)).toBeUndefined()
+  expect(routes).toEqual([undefined, undefined, undefined])
+
+  await plan("Try again")
+  expect(container.textContent).toContain("measured loop")
+  expect(routes.at(-1)?.type).toBe("LineString")
+  // The same request plans the same loop, so no button spends another request.
+  expect(container.querySelector("button")).toBeNull()
 })
 
 test("labels a loop outside the tolerance as a deviation, never a match", async () => {

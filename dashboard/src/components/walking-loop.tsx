@@ -59,23 +59,29 @@ export function WalkingLoopPlanner({
           <div role="status" className="walking-loop-result">
             <PlanningResult planning={planning} />
           </div>
-          <Button
-            size="lg"
-            disabled={busy}
-            onClick={() => {
-              void planLoop()
-            }}
-          >
-            {planButtonLabel(planning)}
-          </Button>
+          {/* The same request plans the same loop, so a shown loop offers no re-plan. */}
+          {isGenerated(planning) ? null : (
+            <Button
+              size="lg"
+              disabled={busy}
+              onClick={() => {
+                void planLoop()
+              }}
+            >
+              {planButtonLabel(planning)}
+            </Button>
+          )}
           <p className="walking-loop-attribution">
-            Routes © openrouteservice.org by HeiGIT · Map data © OpenStreetMap
-            contributors
+            Routes by openrouteservice · Map data © OpenStreetMap contributors
           </p>
         </div>
       </CardContent>
     </Card>
   )
+}
+
+function isGenerated(planning: Planning): boolean {
+  return planning.state === "planned" && planning.read.state === "generated"
 }
 
 function planButtonLabel(planning: Planning): string {
@@ -85,7 +91,7 @@ function planButtonLabel(planning: Planning): string {
     case "planning":
       return "Planning…"
     case "planned":
-      return planning.read.state === "generated" ? "Plan again" : "Try again"
+      return "Try again"
   }
 }
 
@@ -98,8 +104,7 @@ function PlanningResult({
     case "idle":
       return (
         <p className="walking-loop-hint">
-          A loop that returns to the origin, preferring parks and quiet paths
-          where they are mapped.
+          A walking loop on footways and streets that returns to the origin.
         </p>
       )
     case "planning":
@@ -127,7 +132,7 @@ function MeasuredLoop({ route }: { route: WalkingLoop }): React.JSX.Element {
         {describeDeviation(route)}
       </p>
       <p className="walking-loop-hint">
-        Shown on the map. It starts and ends at the origin.
+        Shown on the map. It starts and ends near the origin.
       </p>
     </>
   )

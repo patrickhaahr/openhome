@@ -139,8 +139,8 @@ specific product with an optional link and supporting details.
 _Avoid_: Gift reservation, shopping order
 
 **Walking Loop**:
-A generated route that starts and ends at the shared map origin, measured from
-its own geometry and compared with the requested distance. It becomes the
+A generated route that starts and ends near the shared map origin, measured
+from its own geometry and compared with the requested distance. It becomes the
 Active Route only when the household selects it.
 _Avoid_: Active Route, fabricated route
 

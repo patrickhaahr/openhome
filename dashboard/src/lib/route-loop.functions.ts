@@ -6,7 +6,7 @@ import {
   type LoopRead,
 } from "./route-loop"
 
-/** Plan a walking loop through Axum; the API key, provider key and origin stay server-side. */
+/** Plan a walking loop through Axum; the API key and route planner stay server-side. */
 export const planWalkingLoop = createServerFn({ method: "POST" })
   .validator(walkingLoopRequest)
   .handler(async ({ data }) => {

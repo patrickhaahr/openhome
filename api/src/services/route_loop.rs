@@ -1,6 +1,6 @@
-//! Walking loops from the shared map origin through openrouteservice's free round-trip routing.
+//! Walking loops from the shared map origin through the household's self-hosted openrouteservice.
 
-use std::{fmt, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -34,23 +34,33 @@ const MAX_POINTS: usize = 20_000;
 
 const EARTH_RADIUS_METERS: f64 = 6_371_008.8;
 
-/// Server-held openrouteservice key; never serialized, logged or debug-printed.
-#[derive(Clone)]
-pub struct ProviderKey(String);
+/// Path of the foot-walking directions service below an instance's base URL.
+const DIRECTIONS_PATH: &str = "/v2/directions/foot-walking/geojson";
 
-impl ProviderKey {
-    /// A blank key is absent configuration, not a credential.
-    #[must_use]
-    pub fn parse(key: Option<&str>) -> Option<Self> {
-        key.map(str::trim)
-            .filter(|key| !key.is_empty())
-            .map(|key| Self(key.to_string()))
-    }
-}
+/// Foot-walking directions endpoint of the household's own openrouteservice instance.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderEndpoint(Url);
 
-impl fmt::Debug for ProviderKey {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("ProviderKey([redacted])")
+impl ProviderEndpoint {
+    /// Parse an instance base URL such as `http://openrouteservice:8082/ors`. Only plain HTTP(S)
+    /// without credentials, query or fragment is accepted; errors never echo the input.
+    pub fn parse(base: Option<&str>) -> anyhow::Result<Option<Self>> {
+        let Some(base) = base.map(str::trim).filter(|base| !base.is_empty()) else {
+            return Ok(None);
+        };
+        let mut url =
+            Url::parse(base).map_err(|_| anyhow::anyhow!("Invalid OPENROUTESERVICE_URL"))?;
+        anyhow::ensure!(
+            matches!(url.scheme(), "http" | "https")
+                && url.username().is_empty()
+                && url.password().is_none()
+                && url.query().is_none()
+                && url.fragment().is_none(),
+            "Invalid OPENROUTESERVICE_URL"
+        );
+        let path = format!("{}{DIRECTIONS_PATH}", url.path().trim_end_matches('/'));
+        url.set_path(&path);
+        Ok(Some(Self(url)))
     }
 }
 
@@ -124,17 +134,13 @@ pub enum LoopRead {
 pub enum LoopUnavailable {
     /// The shared map origin is not configured.
     MissingOrigin,
-    /// No openrouteservice key is configured.
+    /// No openrouteservice instance is configured.
     MissingProvider,
-    /// The provider rejected the configured key.
-    ProviderRejected,
-    /// The free per-minute or daily quota is used up.
-    QuotaExceeded,
-    /// The provider was unreachable, failed or answered with an invalid response.
+    /// The instance was unreachable, failed, refused the request or answered invalidly.
     ProviderUnavailable,
     /// No walkable loop could be found from the origin.
     NoRoute,
-    /// The returned loop does not start at the origin, does not close or misses the target badly.
+    /// The returned loop starts too far from the origin, does not close or misses the target badly.
     UnsuitableRoute,
 }
 
@@ -162,9 +168,8 @@ pub struct LineString {
 #[derive(Clone)]
 struct Provider {
     client: Client,
-    endpoint: Url,
-    key: ProviderKey,
-    // One provider request at a time keeps repeated taps inside the free per-minute quota.
+    endpoint: ProviderEndpoint,
+    // One request at a time keeps repeated taps from piling work onto the household's instance.
     gate: Arc<Mutex<()>>,
 }
 
@@ -179,17 +184,15 @@ impl LoopPlanner {
     /// The endpoint is supplied by bootstrap, allowing a controlled provider at the HTTP seam.
     pub fn new(
         origin: Option<MapOrigin>,
-        key: Option<ProviderKey>,
-        endpoint: Url,
+        endpoint: Option<ProviderEndpoint>,
     ) -> anyhow::Result<Self> {
-        let provider = match key {
-            Some(key) => Some(Provider {
+        let provider = match endpoint {
+            Some(endpoint) => Some(Provider {
                 client: Client::builder()
                     .timeout(Duration::from_secs(15))
                     .redirect(reqwest::redirect::Policy::none())
                     .build()?,
                 endpoint,
-                key,
                 gate: Arc::new(Mutex::new(())),
             }),
             None => None,
@@ -208,7 +211,10 @@ impl LoopPlanner {
         match provider.round_trip(origin.coordinates(), request).await {
             Ok(trip) => match trip.measure(origin.coordinates(), request) {
                 Ok(route) => LoopRead::Generated { route },
-                Err(reason) => unavailable(reason),
+                Err(reason) => {
+                    tracing::warn!(?reason, "Rejected a loop from the route provider");
+                    unavailable(reason)
+                }
             },
             Err(reason) => unavailable(reason),
         }
@@ -226,6 +232,8 @@ impl Provider {
         request: LoopRequest,
     ) -> Result<ProviderTrip, LoopUnavailable> {
         let _turn = self.gate.lock().await;
+        // The profile already prefers footways and paths. Green and quiet weightings would need
+        // external green and noise datasets that a standard self-hosted build does not have.
         let body = json!({
             "coordinates": [origin],
             "preference": "recommended",
@@ -233,52 +241,48 @@ impl Provider {
             "elevation": false,
             "options": {
                 "round_trip": { "length": request.target_meters, "points": 4, "seed": 1 },
-                "avoid_features": ["ferries"],
-                // Prefer green areas and quiet ways, where the provider has that data.
-                "profile_params": { "weightings": {
-                    "green": { "factor": 1.0 },
-                    "quiet": { "factor": 0.5 }
-                } }
+                "avoid_features": ["ferries"]
             }
         });
-        // Raw request errors can include the origin-bearing body. Never log them.
+        // Logs carry status, provider code and error kind only: never the origin-bearing body.
         let response = self
             .client
-            .post(self.endpoint.clone())
-            .header(reqwest::header::AUTHORIZATION, &self.key.0)
+            .post(self.endpoint.0.clone())
             .header(reqwest::header::ACCEPT, "application/geo+json")
             .json(&body)
             .send()
             .await
-            .map_err(|_| LoopUnavailable::ProviderUnavailable)?;
-        match response.status() {
-            StatusCode::OK => response
-                .json::<ProviderTrip>()
-                .await
-                .map_err(|_| LoopUnavailable::ProviderUnavailable),
-            // 429 is the per-minute limit. The gateway also answers a spent daily quota with 403,
-            // naming the quota in its body; any other 403 rejects the key.
-            StatusCode::TOO_MANY_REQUESTS => Err(LoopUnavailable::QuotaExceeded),
-            StatusCode::FORBIDDEN => match response.text().await {
-                Ok(text) if text.to_ascii_lowercase().contains("quota") => {
-                    Err(LoopUnavailable::QuotaExceeded)
-                }
-                _ => Err(LoopUnavailable::ProviderRejected),
-            },
-            StatusCode::UNAUTHORIZED => Err(LoopUnavailable::ProviderRejected),
-            status if status.is_client_error() => {
-                // 2009: no route between locations; 2010: no walkable way near the origin.
-                let code = response
-                    .json::<ProviderError>()
-                    .await
-                    .ok()
-                    .map(|body| body.error.code);
-                match code {
-                    Some(2009 | 2010) => Err(LoopUnavailable::NoRoute),
-                    _ => Err(LoopUnavailable::ProviderUnavailable),
-                }
+            .map_err(|error| {
+                tracing::warn!(
+                    timeout = error.is_timeout(),
+                    connect = error.is_connect(),
+                    "Route provider unreachable"
+                );
+                LoopUnavailable::ProviderUnavailable
+            })?;
+        let status = response.status();
+        if status == StatusCode::OK {
+            return response.json::<ProviderTrip>().await.map_err(|_| {
+                tracing::warn!("Route provider sent an unreadable loop");
+                LoopUnavailable::ProviderUnavailable
+            });
+        }
+        let code = response
+            .json::<ProviderError>()
+            .await
+            .ok()
+            .map(|body| body.error.code);
+        match code {
+            // 2009: no route between locations; 2010: no walkable way near the origin.
+            Some(2009 | 2010) if status.is_client_error() => Err(LoopUnavailable::NoRoute),
+            _ => {
+                tracing::warn!(
+                    status = status.as_u16(),
+                    code,
+                    "Route provider refused a loop request"
+                );
+                Err(LoopUnavailable::ProviderUnavailable)
             }
-            _ => Err(LoopUnavailable::ProviderUnavailable),
         }
     }
 }
@@ -440,9 +444,31 @@ mod tests {
     }
 
     #[test]
-    fn redacts_the_provider_key() {
-        let key = ProviderKey::parse(Some(" synthetic-secret ")).unwrap();
-        assert!(!format!("{key:?}").contains("synthetic-secret"));
-        assert!(ProviderKey::parse(Some("  ")).is_none());
+    fn derives_the_directions_endpoint_from_a_plain_instance_url() {
+        for base in [
+            "http://openrouteservice:8082/ors",
+            "http://openrouteservice:8082/ors/",
+        ] {
+            assert_eq!(
+                ProviderEndpoint::parse(Some(base))
+                    .unwrap()
+                    .unwrap()
+                    .0
+                    .as_str(),
+                "http://openrouteservice:8082/ors/v2/directions/foot-walking/geojson"
+            );
+        }
+        assert_eq!(ProviderEndpoint::parse(Some("  ")).unwrap(), None);
+        assert_eq!(ProviderEndpoint::parse(None).unwrap(), None);
+        for base in [
+            "synthetic-secret",
+            "ftp://synthetic-secret/ors",
+            "http://user:synthetic-secret@host/ors",
+            "http://host/ors?key=synthetic-secret",
+            "http://host/ors#synthetic-secret",
+        ] {
+            let error = ProviderEndpoint::parse(Some(base)).unwrap_err().to_string();
+            assert!(!error.contains("synthetic-secret"), "{error}");
+        }
     }
 }
