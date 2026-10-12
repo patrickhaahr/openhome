@@ -102,10 +102,7 @@ type RouteData = {
   }>
 }
 
-/**
- * Routes as GeoJSON for the route source, the highlighted one last so it draws
- * above shared streets; no routes draw nothing.
- */
+/** Routes as GeoJSON for the route source; no routes draw nothing. */
 function routeFeatures(routes: MapRoutes | undefined): RouteData {
   const features = (routes?.lines ?? []).map((line, index) => ({
     type: "Feature" as const,
@@ -118,13 +115,7 @@ function routeFeatures(routes: MapRoutes | undefined): RouteData {
     },
   }))
 
-  return {
-    type: "FeatureCollection",
-    features: [
-      ...features.filter((feature) => !feature.properties.focused),
-      ...features.filter((feature) => feature.properties.focused),
-    ],
-  }
+  return { type: "FeatureCollection", features }
 }
 
 /** The south-west and north-east corners enclosing every route. */
@@ -296,13 +287,17 @@ export function SharedMap({
             type: "geojson",
             data: routeFeatures(shownRoutes.current),
           })
-          // Features draw in order, so each casing sits under its own line and
-          // the highlighted route, drawn last, stays on top where loops share streets.
+          // Every casing sits below every line, and the sort key keeps the
+          // highlighted route on top where loops share streets.
           created.addLayer({
             id: "route-casing",
             type: "line",
             source: ROUTE_SOURCE,
-            layout: { "line-join": "round", "line-cap": "round" },
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+              "line-sort-key": ["case", ["get", "focused"], 1, 0],
+            },
             paint: {
               "line-color": "#141414",
               "line-width": ["case", ["get", "focused"], 9, 6],
@@ -312,7 +307,11 @@ export function SharedMap({
             id: "route",
             type: "line",
             source: ROUTE_SOURCE,
-            layout: { "line-join": "round", "line-cap": "round" },
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+              "line-sort-key": ["case", ["get", "focused"], 1, 0],
+            },
             paint: {
               "line-color": [
                 "case",
