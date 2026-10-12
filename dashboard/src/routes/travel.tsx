@@ -3,22 +3,22 @@ import { createFileRoute } from "@tanstack/react-router"
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/csr/MapTrifold"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { SharedMap } from "@/components/shared-map"
-import { WalkingLoopPlanner } from "@/components/walking-loop"
+import { LoopPlanner } from "@/components/loop-planner"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { features } from "@/lib/features"
 import {
   unavailableMapOrigin,
-  type MapLine,
   type MapOriginRead,
+  type MapRoutes,
 } from "@/lib/map"
 import { getMapOrigin } from "@/lib/map.functions"
-import { requestWalkingLoop } from "@/lib/route-loop.functions"
+import { requestLoops } from "@/lib/route-loop.functions"
 
 import mapCss from "maplibre-gl/dist/maplibre-gl.css?url"
 
 const travel = features[2] satisfies { id: "travel" }
 
-/** Walking loops and, later, transit around the private origin. */
+/** Walking and running loops and, later, transit around the private origin. */
 export const Route = createFileRoute("/travel")({
   head: () => ({
     meta: [{ title: `${travel.title} · OpenHome` }],
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/travel")({
 
 function TravelPage(): React.JSX.Element {
   const read = Route.useLoaderData()
-  const [route, setRoute] = useState<MapLine | undefined>(undefined)
+  const [routes, setRoutes] = useState<MapRoutes | undefined>(undefined)
 
   return (
     <section className="focused-page travel-page">
@@ -41,8 +41,8 @@ function TravelPage(): React.JSX.Element {
           {travel.title}
         </h1>
         <p className="feature-intro">
-          Plan a walking loop from the origin and explore the local area.
-          Departures and live vehicles will appear on this map as they are
+          Plan walking or running loops from the origin and explore the local
+          area. Departures and live vehicles will appear on this map as they are
           added.
         </p>
       </header>
@@ -52,7 +52,7 @@ function TravelPage(): React.JSX.Element {
             <SharedMap
               key={`${read.origin.latitude},${read.origin.longitude}`}
               origin={read.origin}
-              route={route}
+              routes={routes}
             />
             <figcaption>
               <span className="travel-map-origin">
@@ -64,10 +64,7 @@ function TravelPage(): React.JSX.Element {
               <span>Stops and live vehicles are not connected yet.</span>
             </figcaption>
           </figure>
-          <WalkingLoopPlanner
-            plan={requestWalkingLoop}
-            onRouteChange={setRoute}
-          />
+          <LoopPlanner plan={requestLoops} onRoutesChange={setRoutes} />
         </div>
       ) : (
         <MapSetup reason={read.reason} />

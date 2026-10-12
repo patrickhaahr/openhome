@@ -34,3 +34,10 @@ export type MapLine = {
   readonly type: "LineString"
   readonly coordinates: ReadonlyArray<readonly [number, number]>
 }
+
+/** Alternative lines drawn together, with the one being inspected highlighted. */
+export type MapRoutes = {
+  readonly lines: ReadonlyArray<MapLine>
+  /** Index into `lines` of the highlighted line. */
+  readonly focused: number
+}
