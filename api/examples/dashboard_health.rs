@@ -8,14 +8,22 @@
 
 use std::sync::Arc;
 
-use axum::{Json, routing::post};
+use axum::{
+    Json,
+    extract::{Path, Query},
+    http::StatusCode,
+    routing::{get, post},
+};
 use openhome_api::{
     AppState, DockerCache, auth, routes,
     services::{
         map::MapOrigin,
         route_loop::{LoopPlanner, ProviderEndpoint},
+        tmdb::TmdbService,
     },
 };
+use serde::Deserialize;
+use serde_json::{Value, json};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 use tokio::net::TcpListener;
 
@@ -44,11 +52,19 @@ async fn main() -> anyhow::Result<()> {
             None => synthetic_provider().await?,
         };
     let planner = LoopPlanner::new(demo_origin, Some(endpoint))?;
+    let provider = axum::Router::new()
+        .route("/3/search/{kind}", get(provider_search))
+        .route("/3/{kind}/{id}", get(provider_details));
+    let provider_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let provider_url = format!("http://{}/3/", provider_listener.local_addr()?);
+    tokio::spawn(async move { axum::serve(provider_listener, provider).await });
+    let tmdb = TmdbService::new("synthetic-provider-token", provider_url.parse()?)?;
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
-        .merge(routes::watchlist::router())
+        .merge(routes::watchlist::router(Some(tmdb)))
         .merge(routes::map::router(demo_origin))
         .merge(routes::route_loop::router(planner))
+        .merge(routes::photos::router(None))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, key.clone())
@@ -72,4 +88,63 @@ async fn synthetic_provider() -> anyhow::Result<ProviderEndpoint> {
     tokio::spawn(async move { axum::serve(listener, provider).await });
     ProviderEndpoint::parse(Some(&base))?
         .ok_or_else(|| anyhow::anyhow!("synthetic provider URL is empty"))
+}
+
+// Synthetic upstream exercises the real private adapter without a provider token or household data.
+fn provider_title(kind: &str, id: i64) -> Value {
+    let mut item = json!({ "id": id, "overview": "A fictional journey through distant skies, with an unexpected friendship along the way.", "poster_path": "/synthetic.jpg" });
+    if kind == "movie" {
+        item["title"] = json!("A Quiet Orbit");
+        item["release_date"] = json!("2020-02-29");
+    } else {
+        item["name"] = json!("The Lighthouse Journey");
+        item["first_air_date"] = json!("2021-01-01");
+    }
+    item
+}
+
+#[derive(Deserialize)]
+struct ProviderSearch {
+    query: String,
+}
+
+async fn provider_search(
+    Path(kind): Path<String>,
+    Query(search): Query<ProviderSearch>,
+) -> Result<Json<Value>, StatusCode> {
+    if search.query.to_lowercase().contains("offline") {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    if search.query == "Replacement poster" {
+        return Ok(Json(json!({ "results": [provider_title(&kind, 44)] })));
+    }
+    if search.query == "Unavailable details" {
+        return Ok(Json(json!({ "results": [provider_title(&kind, 43)] })));
+    }
+    let title = provider_title(&kind, 42);
+    let name = if kind == "movie" {
+        "A Quiet Orbit"
+    } else {
+        "The Lighthouse Journey"
+    };
+    let results = if name.to_lowercase().contains(&search.query.to_lowercase()) {
+        vec![title]
+    } else {
+        vec![]
+    };
+    Ok(Json(json!({ "results": results })))
+}
+
+async fn provider_details(
+    Path((kind, id)): Path<(String, i64)>,
+) -> Result<Json<Value>, StatusCode> {
+    if id == 44 {
+        let mut item = provider_title(&kind, id);
+        item["poster_path"] = json!("/replacement.jpg");
+        return Ok(Json(item));
+    }
+    if id != 42 {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    Ok(Json(provider_title(&kind, id)))
 }

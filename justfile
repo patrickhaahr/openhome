@@ -457,3 +457,9 @@ dashboard-add component:
 [group('dashboard')]
 [working-directory: 'dashboard']
 dashboard-check: dashboard-format dashboard-lint dashboard-typecheck dashboard-test dashboard-build
+
+# Smoke-test resized photos and serve approved albums on loopback; requires IMMICH_PUBLIC_DEMO=true
+[group('dashboard')]
+[working-directory: 'api']
+dashboard-photos-preview:
+    cargo run --locked --example photos_preview

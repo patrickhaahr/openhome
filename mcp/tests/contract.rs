@@ -58,7 +58,7 @@ async fn start_api() -> String {
     let api_key = auth::ApiKey::new(API_KEY.to_string());
     let app = routes::training::router()
         .merge(routes::wishlist::router(None))
-        .merge(routes::watchlist::router())
+        .merge(routes::watchlist::router(None))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, api_key.clone())
