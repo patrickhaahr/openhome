@@ -1,10 +1,13 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
+import { watchlistFilters } from "@/lib/watchlist"
 import { Watchlists } from "@/components/watchlists"
 import { loadWatchlists, mutateWatchlist } from "@/lib/watchlist.functions"
 
 /** Shared household plans, with Axum-owned persistence and explicit-owner writes. */
 export const Route = createFileRoute("/watchlist")({
   head: () => ({ meta: [{ title: "Watchlist · OpenHome" }] }),
+  validateSearch: watchlistFilters,
   loader: loadWatchlists,
   headers: () => ({ "Cache-Control": "no-store" }),
   component: WatchlistPage,
@@ -13,6 +16,9 @@ export const Route = createFileRoute("/watchlist")({
 function WatchlistPage(): React.JSX.Element {
   const data = Route.useLoaderData()
   const router = useRouter()
+  const filters = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const mutate = useServerFn(mutateWatchlist)
 
   return (
     <section className="focused-page watchlist-page">
@@ -27,7 +33,11 @@ function WatchlistPage(): React.JSX.Element {
       </header>
       <Watchlists
         data={data}
-        change={(command) => mutateWatchlist({ data: command })}
+        filters={filters}
+        filter={(next) =>
+          void navigate({ search: next, replace: true, resetScroll: false })
+        }
+        change={(command) => mutate({ data: command })}
         refresh={() => router.invalidate({ sync: true })}
       />
     </section>

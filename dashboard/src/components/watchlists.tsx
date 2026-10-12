@@ -16,10 +16,14 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
+import { WatchlistEntryDetails } from "./watchlist-entry-details"
 import { createRequestId } from "@/lib/request-id"
 import {
   watchlistCommand,
   watchlistFailureMessage,
+  watchlistFilters,
+  watchStatusLabels,
+  type WatchlistFilters,
   type WatchlistCommand,
   type WatchlistEntry,
   type WatchlistMutation,
@@ -33,11 +37,16 @@ export function Watchlists({
   data,
   change,
   refresh,
+  filters,
+  filter,
 }: {
   data: WatchlistState
+  filters: WatchlistFilters
+  filter: (filters: WatchlistFilters) => void
   change: (command: WatchlistCommand) => Promise<WatchlistMutation>
   refresh: () => Promise<void>
 }): React.JSX.Element {
+  const filterId = useId()
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const [feedback, setFeedback] = useState<Feedback>()
@@ -93,10 +102,11 @@ export function Watchlists({
       setRemoval(undefined)
       setFeedback({
         state: "saved",
-        text:
-          command.action === "add"
-            ? "Plan saved to OpenHome."
-            : "Plan removed from OpenHome.",
+        text: {
+          add: "Plan saved to OpenHome.",
+          edit: "Status and dates saved to OpenHome.",
+          remove: "Plan removed from OpenHome.",
+        }[command.action],
       })
 
       try {
@@ -120,13 +130,66 @@ export function Watchlists({
       <div className="wishlist-toolbar">
         <p className="section-label">
           {data.state === "available"
-            ? `${data.entries.length} planned · ${data.owners.length} household members`
+            ? `${data.entries.filter((entry) => entry.status === "planned").length} planned · ${data.entries.filter((entry) => entry.status === "watching").length} watching · ${data.entries.filter((entry) => entry.status === "completed").length} completed`
             : "Shared household watchlists"}
         </p>
         <Button variant="outline" disabled={busy} onClick={() => void reload()}>
           {busy ? "Working…" : "Refresh watchlists"}
         </Button>
       </div>
+      {data.state === "available" && data.owners.length > 0 ? (
+        <div className="watchlist-filters" aria-label="Watchlist filters">
+          <div>
+            <label htmlFor={`${filterId}-owner`}>Household member</label>
+            <NativeSelect
+              id={`${filterId}-owner`}
+              value={filters.owner_id ?? ""}
+              disabled={busy}
+              onChange={(event) =>
+                filter({
+                  ...filters,
+                  owner_id: event.target.value || undefined,
+                })
+              }
+            >
+              <NativeSelectOption value="">Everyone</NativeSelectOption>
+              {data.owners.map((owner) => (
+                <NativeSelectOption key={owner.id} value={owner.id}>
+                  {owner.name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+          <div>
+            <label htmlFor={`${filterId}-status`}>Watch status</label>
+            <NativeSelect
+              id={`${filterId}-status`}
+              value={filters.status ?? ""}
+              disabled={busy}
+              onChange={(event) =>
+                filter(
+                  watchlistFilters.parse({
+                    ...filters,
+                    status: event.target.value || undefined,
+                  })
+                )
+              }
+            >
+              <NativeSelectOption value="">All statuses</NativeSelectOption>
+              {Object.entries(watchStatusLabels).map(([value, label]) => (
+                <NativeSelectOption key={value} value={value}>
+                  {label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+          {filters.owner_id !== undefined || filters.status !== undefined ? (
+            <Button variant="ghost" disabled={busy} onClick={() => filter({})}>
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <p
         className="wishlist-feedback"
         role="status"
@@ -160,99 +223,143 @@ export function Watchlists({
         </Card>
       ) : (
         <div className="watchlist-household">
-          {data.owners.map((owner) => {
-            const entries = data.entries.filter(
-              (entry) => entry.owner_id === owner.id
+          {filters.owner_id !== undefined &&
+          !data.owners.some((owner) => owner.id === filters.owner_id) ? (
+            <p role="status">
+              This household member is no longer available. Clear filters to see
+              everyone.
+            </p>
+          ) : null}
+          {data.owners
+            .filter(
+              (owner) =>
+                filters.owner_id === undefined || owner.id === filters.owner_id
             )
+            .map((owner) => {
+              const entries = data.entries.filter(
+                (entry) =>
+                  entry.owner_id === owner.id &&
+                  (!filters.status || entry.status === filters.status)
+              )
 
-            return (
-              <Card
-                key={owner.id}
-                role="group"
-                aria-label={`${owner.name}’s watchlist`}
-              >
-                <CardHeader>
-                  <div className="watchlist-owner-heading">
-                    <div>
-                      <p className="section-label">
-                        Personal plans / Shared with everyone
-                      </p>
-                      <CardTitle>
-                        <h2>{owner.name}</h2>
-                      </CardTitle>
-                    </div>
-                    <span
-                      className="watchlist-total"
-                      aria-label={`${entries.length} planned`}
-                    >
-                      {entries.length.toString().padStart(2, "0")}
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <AddPlan
-                    ownerId={owner.id}
-                    ownerName={owner.name}
-                    disabled={busy}
-                    save={save}
-                  />
-                  {entries.length === 0 ? (
-                    <div className="watchlist-empty">
-                      <FilmSlateIcon size={32} aria-hidden="true" />
-                      <p>No plans yet.</p>
-                      <span>
-                        Add a movie or an entire series for another evening.
+              return (
+                <Card
+                  key={owner.id}
+                  role="group"
+                  aria-label={`${owner.name}’s watchlist`}
+                >
+                  <CardHeader>
+                    <div className="watchlist-owner-heading">
+                      <div>
+                        <p className="section-label">
+                          Personal plans / Shared with everyone
+                        </p>
+                        <CardTitle>
+                          <h2>{owner.name}</h2>
+                        </CardTitle>
+                      </div>
+                      <span
+                        className="watchlist-total"
+                        aria-label={`${entries.length} entries shown`}
+                      >
+                        {entries.length.toString().padStart(2, "0")}
                       </span>
                     </div>
-                  ) : (
-                    <ul
-                      className="watchlist-entries"
-                      aria-label={`Plans for ${owner.name}`}
-                    >
-                      {entries.map((entry) => (
-                        <li key={entry.id}>
-                          <span className="watchlist-kind-icon">
-                            {entry.kind === "movie" ? (
-                              <FilmSlateIcon size={24} aria-hidden="true" />
-                            ) : (
-                              <TelevisionIcon size={24} aria-hidden="true" />
-                            )}
-                          </span>
-                          <div className="watchlist-entry-text">
-                            <h3>{entry.title}</h3>
-                            <p>
-                              {entry.kind === "movie"
-                                ? "Movie"
-                                : "Whole series"}
-                              <span aria-hidden="true"> · </span>
-                              <span>Planned</span>
-                            </p>
-                            <p>
-                              Added{" "}
-                              <time dateTime={entry.date_added}>
-                                {entry.date_added}
-                              </time>
-                            </p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            aria-label={`Remove ${entry.title} from ${owner.name}’s watchlist`}
-                            disabled={busy}
-                            onClick={() => {
-                              setFeedback(undefined)
-                              setRemoval({ entry, ownerName: owner.name })
-                            }}
-                          >
-                            <TrashIcon aria-hidden="true" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          })}
+                  </CardHeader>
+                  <CardContent>
+                    <AddPlan
+                      ownerId={owner.id}
+                      ownerName={owner.name}
+                      disabled={busy}
+                      save={save}
+                    />
+                    {entries.length === 0 ? (
+                      <div className="watchlist-empty">
+                        <FilmSlateIcon size={32} aria-hidden="true" />
+                        <p>
+                          {filters.status
+                            ? `No ${watchStatusLabels[filters.status].toLowerCase()} entries.`
+                            : "No plans yet."}
+                        </p>
+                        <span>
+                          {filters.status
+                            ? "Choose another status to see more, or add a new plan."
+                            : "Add a movie or an entire series for another evening."}
+                        </span>
+                      </div>
+                    ) : (
+                      <ul
+                        className="watchlist-entries"
+                        aria-label={`Plans for ${owner.name}`}
+                      >
+                        {entries.map((entry) => (
+                          <li key={entry.id}>
+                            <span className="watchlist-kind-icon">
+                              {entry.kind === "movie" ? (
+                                <FilmSlateIcon size={24} aria-hidden="true" />
+                              ) : (
+                                <TelevisionIcon size={24} aria-hidden="true" />
+                              )}
+                            </span>
+                            <div className="watchlist-entry-text">
+                              <h3>{entry.title}</h3>
+                              <p>
+                                {entry.kind === "movie"
+                                  ? "Movie"
+                                  : "Whole series"}
+                                <span aria-hidden="true"> · </span>
+                                <span
+                                  className="watchlist-status"
+                                  data-status={entry.status}
+                                >
+                                  {watchStatusLabels[entry.status]}
+                                </span>
+                              </p>
+                              <p>
+                                Added{" "}
+                                <time dateTime={entry.date_added}>
+                                  {entry.date_added}
+                                </time>
+                              </p>
+                              {entry.completion_date !== null ? (
+                                <p>
+                                  Completed{" "}
+                                  <time dateTime={entry.completion_date}>
+                                    {entry.completion_date}
+                                  </time>
+                                </p>
+                              ) : null}
+                              <WatchlistEntryDetails
+                                entry={entry}
+                                ownerName={owner.name}
+                                disabled={busy}
+                                save={save}
+                                failure={
+                                  feedback?.state === "failed"
+                                    ? feedback.text
+                                    : undefined
+                                }
+                              />
+                            </div>
+                            <Button
+                              variant="ghost"
+                              aria-label={`Remove ${entry.title} from ${owner.name}’s watchlist`}
+                              disabled={busy}
+                              onClick={() => {
+                                setFeedback(undefined)
+                                setRemoval({ entry, ownerName: owner.name })
+                              }}
+                            >
+                              <TrashIcon aria-hidden="true" />
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
         </div>
       )}
       <AlertDialog

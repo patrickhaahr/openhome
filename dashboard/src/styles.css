@@ -1109,7 +1109,7 @@ a:focus-visible {
   li {
     display: flex;
     gap: 0.875rem;
-    align-items: center;
+    align-items: start;
     padding-block: 1.25rem;
     border-top: 1px solid var(--border);
   }
@@ -1494,4 +1494,61 @@ a:focus-visible {
   font-size: 0.875rem;
   line-height: 1.5;
   margin-top: 0.6rem;
+}
+
+@utility watchlist-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  > div {
+    min-width: 10rem;
+  }
+  [data-slot="native-select-wrapper"] {
+    width: 100%;
+  }
+}
+@utility watchlist-status {
+  font-weight: 600;
+  &[data-status="watching"] {
+    color: var(--primary);
+  }
+  &[data-status="completed"] {
+    color: var(--foreground);
+  }
+}
+@utility watchlist-edit {
+  margin-top: 0.75rem;
+  summary {
+    display: list-item;
+    min-height: 3rem;
+    align-content: center;
+    font-size: 0.8125rem;
+    color: var(--primary);
+    cursor: pointer;
+    touch-action: manipulation;
+    border-radius: var(--radius);
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+  }
+  form {
+    display: grid;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+  input {
+    width: 100%;
+    min-width: 0;
+    font-size: 1rem;
+  }
+  [data-slot="native-select-wrapper"] {
+    width: 100%;
+  }
+}
+@utility watchlist-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

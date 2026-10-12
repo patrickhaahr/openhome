@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added) VALUES (?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added",
+  "query": "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added) VALUES (?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "name": "date_added",
         "ordinal": 5,
         "type_info": "Text"
+      },
+      {
+        "name": "completion_date",
+        "ordinal": 6,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -43,8 +48,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "ee8f76d2f71e9dca4308940464c9d31aa8e5d337e0ce56dbc773f6fe1fb99ed7"
+  "hash": "22f2a7e2d02410892544e8b73e6bb09a3a052adcad44b6f551490ee4a7834f41"
 }

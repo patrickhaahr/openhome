@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -10,7 +10,9 @@ use serde_json::json;
 use crate::{
     AppState,
     error::AppError,
-    services::watchlist::{self, AddEntry, Addition, WatchlistEntry, WatchlistError},
+    services::watchlist::{
+        self, AddEntry, Addition, EditEntry, EntriesFilter, WatchlistEntry, WatchlistError,
+    },
 };
 
 pub fn router() -> Router<AppState> {
@@ -18,14 +20,15 @@ pub fn router() -> Router<AppState> {
         .route("/api/watchlist/entries", get(entries).post(add_entry))
         .route(
             "/api/household-users/{owner_id}/watchlist/entries/{id}",
-            get(entry).delete(remove_entry),
+            get(entry).patch(edit_entry).delete(remove_entry),
         )
 }
 
 async fn entries(
     State(state): State<AppState>,
+    Query(filter): Query<EntriesFilter>,
 ) -> Result<Json<Vec<WatchlistEntry>>, WatchlistError> {
-    Ok(Json(watchlist::entries(&state.db).await?))
+    Ok(Json(watchlist::entries(&state.db, filter).await?))
 }
 
 async fn add_entry(
@@ -46,6 +49,16 @@ async fn entry(
     Path((owner_id, id)): Path<(String, String)>,
 ) -> Result<Json<WatchlistEntry>, WatchlistError> {
     Ok(Json(watchlist::entry(&state.db, &owner_id, &id).await?))
+}
+
+async fn edit_entry(
+    State(state): State<AppState>,
+    Path((owner_id, id)): Path<(String, String)>,
+    Json(request): Json<EditEntry>,
+) -> Result<Json<WatchlistEntry>, WatchlistError> {
+    Ok(Json(
+        watchlist::edit_entry(&state.db, &owner_id, &id, request).await?,
+    ))
 }
 
 async fn remove_entry(
