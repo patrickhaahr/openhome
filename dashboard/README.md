@@ -76,7 +76,8 @@ devenv shell -- just dashboard-check
 builds the production application. The tests start TanStack Start and the actual
 Axum health route behind its authentication middleware on isolated loopback
 ports with explicit synthetic connection configuration. The Axum fixture does
-not load household configuration, databases or provider services.
+not load household configuration, databases or live provider services. Its local
+synthetic TMDB upstream exercises production search and enrichment without credentials.
 They cover missing/invalid configuration, successful authentication, rejected
 credentials, transport failure and recovery, and unhealthy/malformed responses,
 including checking that private test values do not enter rendered page data.

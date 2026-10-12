@@ -50,6 +50,12 @@ async fn main() -> anyhow::Result<()> {
     })
     .transpose()?;
 
+    let photo_service = openhome_api::services::photos::PhotoService::configure(
+        non_empty_env("IMMICH_URL").as_deref(),
+        non_empty_env("IMMICH_API_KEY").as_deref(),
+        non_empty_env("IMMICH_ALBUM_IDS").as_deref(),
+    )?;
+
     let map_origin = map::MapOrigin::parse(
         non_empty_env("MAP_ORIGIN_LATITUDE").as_deref(),
         non_empty_env("MAP_ORIGIN_LONGITUDE").as_deref(),
@@ -149,13 +155,28 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::route_loop::router(loop_planner))
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
-        .merge(routes::watchlist::router())
+        .merge(routes::watchlist::router(
+            non_empty_env("TMDB_READ_ACCESS_TOKEN").and_then(|token| {
+                let base_url = url::Url::parse("https://api.themoviedb.org/3/").ok()?;
+                if let Ok(service) =
+                    openhome_api::services::tmdb::TmdbService::new(&token, base_url)
+                {
+                    Some(service)
+                } else {
+                    tracing::warn!(
+                        "TMDB configuration is invalid; manual watchlists remain available"
+                    );
+                    None
+                }
+            }),
+        ))
         .merge(routes::wishlist::router(
             std::env::var("WISHLIST_DEFAULT_LIST_ID")
                 .ok()
                 .filter(|id| !id.trim().is_empty()),
         ))
         .merge(routes::weather::router(weather_service))
+        .merge(routes::photos::router(photo_service))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())

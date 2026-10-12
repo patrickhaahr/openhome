@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use super::{patch::Patch, wishlist::HouseholdUser};
+use super::{patch::Patch, tmdb::TmdbService, wishlist::HouseholdUser};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchlistError {
@@ -16,6 +16,8 @@ pub enum WatchlistError {
     Conflict(String),
     #[error("Which household owner's watchlist should receive this entry?")]
     DestinationRequired { choices: Vec<HouseholdUser> },
+    #[error("TMDB is unavailable; you can still add a manual plan")]
+    ProviderUnavailable,
     #[error("Watchlist database operation failed")]
     Database(#[from] sqlx::Error),
 }
@@ -50,6 +52,10 @@ pub struct WatchlistEntry {
     pub status: WatchStatus,
     pub date_added: String,
     pub completion_date: Option<String>,
+    pub tmdb_id: Option<i64>,
+    pub overview: Option<String>,
+    pub poster_path: Option<String>,
+    pub release_date: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -59,6 +65,7 @@ pub struct AddEntry {
     pub kind: MediaKind,
     pub title: String,
     pub request_id: String,
+    pub tmdb_id: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -68,6 +75,7 @@ pub struct Addition {
 }
 
 struct AdditionReceipt {
+    tmdb_id: Option<i64>,
     entry_id: String,
     owner_id: String,
     kind: MediaKind,
@@ -79,6 +87,7 @@ impl AdditionReceipt {
         if request.owner_id.as_deref() != Some(self.owner_id.as_str())
             || request.kind != self.kind
             || request.title != self.title
+            || request.tmdb_id != self.tmdb_id
         {
             return Err(WatchlistError::Conflict(
                 "request_id was already used for a different addition; use a new ID for a new request".into(),
@@ -114,26 +123,30 @@ fn text(value: &str, field: &str, max: usize) -> Result<String> {
 /// Shared read across all configured Household Users, including independent same-title plans.
 pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<WatchlistEntry>> {
     Ok(sqlx::query_as!(WatchlistEntry,
-        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE (? IS NULL OR owner_id = ?) AND (? IS NULL OR status = ?) ORDER BY date_added DESC, id", filter.owner_id, filter.owner_id, filter.status, filter.status)
+        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date FROM watchlist_entries WHERE (? IS NULL OR owner_id = ?) AND (? IS NULL OR status = ?) ORDER BY date_added DESC, id", filter.owner_id, filter.owner_id, filter.status, filter.status)
         .fetch_all(db).await?)
 }
 
 /// Read only the complete owner/entry destination.
 pub async fn entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<WatchlistEntry> {
     sqlx::query_as!(WatchlistEntry,
-        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date FROM watchlist_entries WHERE id = ? AND owner_id = ?", id, owner_id)
+        "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date FROM watchlist_entries WHERE id = ? AND owner_id = ?", id, owner_id)
         .fetch_optional(db).await?
         .ok_or_else(|| WatchlistError::NotFound("Watchlist Entry not found for this Household User".into()))
 }
 
 async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<AdditionReceipt>> {
     Ok(sqlx::query_as!(AdditionReceipt,
-        "SELECT entry_id, owner_id, kind AS \"kind: MediaKind\", title FROM watchlist_addition_receipts WHERE request_id = ?", request_id)
+        "SELECT tmdb_id, entry_id, owner_id, kind AS \"kind: MediaKind\", title FROM watchlist_addition_receipts WHERE request_id = ?", request_id)
         .fetch_optional(db).await?)
 }
 
 /// Persist a plan and immutable receipt together. Rejected additions consume no retry ID.
-pub async fn add_entry(db: &SqlitePool, mut request: AddEntry) -> Result<Addition> {
+pub async fn add_entry(
+    db: &SqlitePool,
+    mut request: AddEntry,
+    provider: Option<&TmdbService>,
+) -> Result<Addition> {
     request.title = text(&request.title, "title", 500)?;
     request.request_id = text(&request.request_id, "request_id", 128)?;
     // Resolve accepted retries before discovery, so removed owners cannot revive an intention.
@@ -158,18 +171,39 @@ pub async fn add_entry(db: &SqlitePool, mut request: AddEntry) -> Result<Additio
             "Household User not found; discover household users first".into(),
         ));
     }
+    let metadata = match request.tmdb_id {
+        Some(id) => Some(
+            provider
+                .ok_or(WatchlistError::ProviderUnavailable)?
+                .details(request.kind, id)
+                .await?,
+        ),
+        None => None,
+    };
+    let stored_title = metadata
+        .as_ref()
+        .map_or(request.title.as_str(), |value| value.title.as_str());
+    let overview = metadata
+        .as_ref()
+        .and_then(|value| value.overview.as_deref());
+    let poster_path = metadata
+        .as_ref()
+        .and_then(|value| value.poster_path.as_deref());
+    let release_date = metadata
+        .as_ref()
+        .and_then(|value| value.release_date.as_deref());
     let id = Uuid::new_v4().to_string();
     let date_added = today();
     let mut transaction = db.begin().await?;
     // Claim first to serialize simultaneous retries. The receipt has no cascading foreign key.
     let claimed = sqlx::query!(
-        "INSERT INTO watchlist_addition_receipts (request_id, entry_id, owner_id, kind, title) VALUES (?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
-        request.request_id, id, owner_id, request.kind, request.title)
+        "INSERT INTO watchlist_addition_receipts (request_id, entry_id, owner_id, kind, title, tmdb_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
+        request.request_id, id, owner_id, request.kind, request.title, request.tmdb_id)
         .fetch_optional(&mut *transaction).await?;
     if claimed.is_some() {
         let entry = sqlx::query_as!(WatchlistEntry,
-            "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added) VALUES (?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date",
-            id, owner_id, request.kind, request.title, date_added)
+            "INSERT INTO watchlist_entries (id, owner_id, kind, title, date_added, tmdb_id, overview, poster_path, release_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date",
+            id, owner_id, request.kind, stored_title, date_added, request.tmdb_id, overview, poster_path, release_date)
             .fetch_one(&mut *transaction).await?;
         transaction.commit().await?;
         return Ok(Addition {
@@ -305,8 +339,28 @@ pub async fn edit_entry(
     }
     // Compare the snapshot in the same statement as the write, avoiding lost corrections.
     sqlx::query_as!(WatchlistEntry,
-        "UPDATE watchlist_entries SET status = ?, date_added = ?, completion_date = ? WHERE id = ? AND owner_id = ? AND status = ? AND date_added = ? AND completion_date IS ? RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date",
+        "UPDATE watchlist_entries SET status = ?, date_added = ?, completion_date = ? WHERE id = ? AND owner_id = ? AND status = ? AND date_added = ? AND completion_date IS ? RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date",
         status, date_added, completion_date, id, owner_id, current.status, current.date_added, current.completion_date)
         .fetch_optional(db).await?
         .ok_or_else(|| WatchlistError::Conflict("Entry changed during this correction; refresh before retrying".into()))
+}
+
+/// Enrich only metadata at an explicit destination; preserve all personal status/date fields.
+pub async fn enrich_entry(
+    db: &SqlitePool,
+    owner_id: &str,
+    id: &str,
+    tmdb_id: i64,
+    provider: Option<&TmdbService>,
+) -> Result<WatchlistEntry> {
+    let current = entry(db, owner_id, id).await?;
+    let metadata = provider
+        .ok_or(WatchlistError::ProviderUnavailable)?
+        .details(current.kind, tmdb_id)
+        .await?;
+    sqlx::query_as!(WatchlistEntry,
+        "UPDATE watchlist_entries SET tmdb_id = ?, title = ?, overview = ?, poster_path = ?, release_date = ? WHERE id = ? AND owner_id = ? AND tmdb_id IS ? RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date",
+        tmdb_id, metadata.title, metadata.overview, metadata.poster_path, metadata.release_date, id, owner_id, current.tmdb_id)
+        .fetch_optional(db).await?
+        .ok_or_else(|| WatchlistError::Conflict("Entry metadata changed; refresh before retrying".into()))
 }

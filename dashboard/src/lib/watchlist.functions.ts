@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
-import { watchlistCommand, type WatchlistState } from "./watchlist"
+import { mediaSearch, watchlistCommand, type WatchlistState } from "./watchlist"
 
 /** Household-visible read through authenticated Axum, with credentials held by Start. */
 export const getWatchlists = createServerFn({ method: "GET" }).handler(
@@ -30,3 +30,13 @@ export async function loadWatchlists(): Promise<WatchlistState> {
     return { state: "unavailable", reason: "unreachable" }
   }
 }
+
+/** Deliberate provider lookup behind Start's server boundary. */
+export const searchWatchlist = createServerFn({ method: "GET" })
+  .validator(mediaSearch)
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { searchWatchlistMedia } = await import("./watchlist.server")
+
+    return searchWatchlistMedia(data)
+  })
