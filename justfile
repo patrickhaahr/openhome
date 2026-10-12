@@ -133,6 +133,12 @@ api-run:
 api-migrate:
     sqlx migrate run
 
+# Revert the latest main API migration
+[group('api')]
+[working-directory: 'api']
+api-migrate-revert:
+    sqlx migrate revert
+
 # Regenerate the offline SQLx query cache (api/.sqlx) used by the SQLX_OFFLINE Docker build
 [group('api')]
 [working-directory: 'api']
