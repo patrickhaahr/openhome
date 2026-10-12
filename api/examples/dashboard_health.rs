@@ -1,6 +1,6 @@
-//! Isolated, loopback-only health, Wishlist, Watchlist, map and walking-loop seam for tests and
-//! synthetic previews. Uses production routes, migrations and authentication without household
-//! configuration; the map explicitly serves the unrelated Copenhagen demo origin.
+//! Isolated, loopback-only health, Wishlist, Watchlist, fitness, map and walking-loop seam for
+//! tests and synthetic previews. Uses production routes, migrations and authentication without
+//! household configuration; the map explicitly serves the unrelated Copenhagen demo origin.
 //!
 //! Loops come from a loopback provider serving synthetic squares that are not real paths. Set
 //! `OPENROUTESERVICE_URL` to a household instance to plan real loops from the demo origin instead.
@@ -64,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::map::router(demo_origin))
         .merge(routes::route_loop::router(planner))
         .merge(routes::photos::router(None))
+        .merge(routes::fitness::router())
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, key.clone())

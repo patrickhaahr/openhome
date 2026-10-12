@@ -87,6 +87,7 @@ function implementedRoute(
   | "/wishlist"
   | "/watchlist"
   | "/photos"
+  | "/workout"
   | undefined {
   switch (id) {
     case "controls":
@@ -101,9 +102,10 @@ function implementedRoute(
       return "/watchlist"
     case "photos":
       return "/photos"
+    case "workout":
+      return "/workout"
     case "agent":
     case "server":
-    case "workout":
       return undefined
   }
 }
