@@ -19,9 +19,11 @@ visible controls measured at least 44 px high.
 
 The automated rendered seam runs against the real Axum fixture and verifies
 logging reps, added weight, RPE and a bodyweight hold, then reviewing them from
-history; field problems shown beside the set without saving; a rejected edit
+history; field problems shown beside the set without saving; an edit drafting
+from a fresh read after another device changed the workout; a rejected edit
 (exercise removed from the library elsewhere) keeping both the draft and the
-stored workout before saving once corrected, with untouched set notes preserved;
+stored workout, with the failure beside the save button, before saving once
+corrected with untouched set notes, durations and exact weights preserved;
 removal only after confirmation; and an unreachable read rendering as
 unavailable rather than an empty history.
 
