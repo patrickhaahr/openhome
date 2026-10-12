@@ -527,3 +527,54 @@ test("rich edits persist fields, preserve failed drafts, and clear optional cont
     priority: "high",
   })
 })
+
+test("refresh merges untouched rich fields while preserving edited drafts and partial saves", async () => {
+  await render()
+  await submit("New household member", "Member A")
+  await submit("List name for Member A", "Ideas")
+  await submit("Something you’d like", "A jacket")
+  const item = (await available()).items[0]
+  const list = (await available()).lists[0]
+
+  if (item === undefined || list === undefined) throw new Error("Expected wish")
+
+  await click("Edit A jacket")
+  await type("Wish title", "My draft jacket")
+  await writeWishlist({
+    kind: "edit-item",
+    owner_id: list.owner_id,
+    list_id: list.id,
+    item_id: item.id,
+    quantity: 3,
+    priority: "high",
+    notes: "Updated through API",
+  })
+  await click("Refresh lists")
+  expect(field("Quantity").value).toBe("3")
+  expect(field("Wish title").value).toBe("My draft jacket")
+  expect(
+    container.querySelector<HTMLSelectElement>(
+      'form[aria-label="Save wish"] select[name="priority"]'
+    )?.value
+  ).toBe("high")
+  expect(
+    container.querySelector<HTMLTextAreaElement>(
+      'form[aria-label="Save wish"] textarea[name="notes"]'
+    )?.value
+  ).toBe("Updated through API")
+  // A concurrent change without another refresh also stays intact when only the title was edited.
+  await writeWishlist({
+    kind: "edit-item",
+    owner_id: list.owner_id,
+    list_id: list.id,
+    item_id: item.id,
+    quantity: 4,
+  })
+  await submit("Wish title", "My draft jacket")
+  expect((await available()).items[0]).toMatchObject({
+    title: "My draft jacket",
+    quantity: 4,
+    priority: "high",
+    notes: "Updated through API",
+  })
+})

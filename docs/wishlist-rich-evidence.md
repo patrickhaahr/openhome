@@ -25,8 +25,6 @@ the target branch. New captures contain synthetic public data only.
 
 ![Rich context in portrait](evidence/wishlist-rich-after-portrait.png)
 
-![Rich edit form](evidence/wishlist-rich-edit-landscape.png)
-
 ## Automated acceptance
 
 - Authenticated migrated Axum routes verify field persistence, invalid fields,
@@ -39,7 +37,9 @@ the target branch. New captures contain synthetic public data only.
   empty list. Tool discovery checks management schemas/annotations and preserves
   all read-only training contracts.
 - Rendered Dashboard tests use authenticated Axum to create/edit/read fields,
-  retain failed drafts and clear optional context. A forwarding server deliberately
+  retain failed drafts and clear optional context. Open editors merge refreshed
+  pristine fields, preserve dirty drafts, and PATCH only changed fields so
+  concurrent agent edits to other fields survive saving. A forwarding server deliberately
   loses an accepted addition's response; reload restores the original rich draft
   and retry ID without duplication. The same seam verifies legacy title-only
   pending intentions survive an upgrade, including Unicode title normalization.

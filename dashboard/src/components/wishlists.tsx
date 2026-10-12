@@ -413,7 +413,34 @@ export function Wishlists({
                                   owner_id: selected.owner_id,
                                   list_id: selected.id,
                                   item_id: item.id,
-                                  ...details,
+                                  title:
+                                    details.title === item.title
+                                      ? undefined
+                                      : details.title,
+                                  url:
+                                    details.url === item.url
+                                      ? undefined
+                                      : details.url,
+                                  image_url:
+                                    details.image_url === item.image_url
+                                      ? undefined
+                                      : details.image_url,
+                                  notes:
+                                    details.notes === item.notes
+                                      ? undefined
+                                      : details.notes,
+                                  price:
+                                    details.price === item.price
+                                      ? undefined
+                                      : details.price,
+                                  quantity:
+                                    details.quantity === item.quantity
+                                      ? undefined
+                                      : details.quantity,
+                                  priority:
+                                    details.priority === item.priority
+                                      ? undefined
+                                      : details.priority,
                                 })
                               }
                             />

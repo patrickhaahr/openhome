@@ -1,10 +1,31 @@
-import { useId } from "react"
-import { z } from "zod"
+import { useId, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import type { WishlistDetails } from "@/lib/wishlist"
+
+const fields = [
+  "title",
+  "url",
+  "image_url",
+  "notes",
+  "price",
+  "quantity",
+  "priority",
+] as const
+
+function itemDraft(item?: WishlistDetails) {
+  return {
+    title: item?.title ?? "",
+    url: item?.url ?? "",
+    image_url: item?.image_url ?? "",
+    notes: item?.notes ?? "",
+    price: item?.price ?? "",
+    quantity: String(item?.quantity ?? 1),
+    priority: item?.priority ?? "normal",
+  }
+}
 
 /** Manual rich-item entry; failed writes keep the draft and Axum validates the fields. */
 export function ItemForm({
@@ -23,6 +44,25 @@ export function ItemForm({
   cancel?: () => void
 }): React.JSX.Element {
   const id = useId()
+  const source = itemDraft(initialValue)
+  const [draft, setDraft] = useState(() => ({ source, values: source }))
+
+  // Refreshed server values replace pristine fields; unsaved edits remain intact.
+  if (fields.some((field) => source[field] !== draft.source[field])) {
+    const values = { ...draft.values }
+
+    for (const field of fields)
+      if (values[field] === draft.source[field]) values[field] = source[field]
+
+    setDraft({ source, values })
+  }
+
+  function edit(field: (typeof fields)[number], value: string): void {
+    setDraft((current) => ({
+      source: current.source,
+      values: { ...current.values, [field]: value },
+    }))
+  }
 
   return (
     <form
@@ -30,17 +70,16 @@ export function ItemForm({
       aria-label={submitLabel}
       onSubmit={(event) => {
         event.preventDefault()
-        const form = event.currentTarget
-        const values = new FormData(form)
 
         // Match Axum's Unicode whitespace trimming for stable retry arguments.
-        const text = (name: string): string => {
-          const value = z.string().parse(values.get(name) ?? "")
+        const text = (name: (typeof fields)[number]): string =>
+          draft.values[name].replace(
+            /^\p{White_Space}+|\p{White_Space}+$/gu,
+            ""
+          )
 
-          return value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "")
-        }
-
-        const optional = (name: string): string | null => text(name) || null
+        const optional = (name: (typeof fields)[number]): string | null =>
+          text(name) || null
 
         void save({
           title: text("title"),
@@ -48,10 +87,11 @@ export function ItemForm({
           image_url: optional("image_url"),
           notes: optional("notes"),
           price: optional("price"),
-          quantity: Number(values.get("quantity")),
+          quantity: Number(draft.values.quantity),
           priority: text("priority"),
         }).then((saved) => {
-          if (saved && initialValue === undefined) form.reset()
+          if (saved && initialValue === undefined)
+            setDraft({ source, values: itemDraft() })
         })
       }}
     >
@@ -60,7 +100,8 @@ export function ItemForm({
         <Input
           id={`${id}-title`}
           name="title"
-          defaultValue={initialValue?.title ?? ""}
+          value={draft.values.title}
+          onChange={(event) => edit("title", event.target.value)}
           required
           maxLength={500}
           disabled={disabled}
@@ -94,7 +135,8 @@ export function ItemForm({
               id={`${id}-url`}
               name="url"
               type="url"
-              defaultValue={initialValue?.url ?? ""}
+              value={draft.values.url}
+              onChange={(event) => edit("url", event.target.value)}
               maxLength={2048}
               disabled={disabled}
               placeholder="https://…"
@@ -106,7 +148,8 @@ export function ItemForm({
               id={`${id}-image`}
               name="image_url"
               type="url"
-              defaultValue={initialValue?.image_url ?? ""}
+              value={draft.values.image_url}
+              onChange={(event) => edit("image_url", event.target.value)}
               maxLength={2048}
               disabled={disabled}
               placeholder="https://…"
@@ -117,7 +160,8 @@ export function ItemForm({
             <Input
               id={`${id}-price`}
               name="price"
-              defaultValue={initialValue?.price ?? ""}
+              value={draft.values.price}
+              onChange={(event) => edit("price", event.target.value)}
               maxLength={100}
               disabled={disabled}
               placeholder="DKK 199.95"
@@ -133,7 +177,8 @@ export function ItemForm({
                 min={1}
                 max={999}
                 step={1}
-                defaultValue={initialValue?.quantity ?? 1}
+                value={draft.values.quantity}
+                onChange={(event) => edit("quantity", event.target.value)}
                 required
                 disabled={disabled}
               />
@@ -143,7 +188,8 @@ export function ItemForm({
               <NativeSelect
                 id={`${id}-priority`}
                 name="priority"
-                defaultValue={initialValue?.priority ?? "normal"}
+                value={draft.values.priority}
+                onChange={(event) => edit("priority", event.target.value)}
                 disabled={disabled}
               >
                 <NativeSelectOption value="low">Low</NativeSelectOption>
@@ -157,7 +203,8 @@ export function ItemForm({
             <Textarea
               id={`${id}-notes`}
               name="notes"
-              defaultValue={initialValue?.notes ?? ""}
+              value={draft.values.notes}
+              onChange={(event) => edit("notes", event.target.value)}
               maxLength={5000}
               disabled={disabled}
               rows={3}
