@@ -172,6 +172,7 @@ test("renders Home and a focused deep link without treating healthy Axum as conn
   expect(home).toContain("Unknown")
 
   const photos = await page(url, "/photos")
+  expect(photos).toContain("Photo setup needed")
   expect(photos).toContain("No photo library is connected here")
   expect(photos).toContain("Back to Home")
 })
@@ -596,4 +597,86 @@ test("streams usable Home controls before a stalled weather request completes", 
   } finally {
     await reader.cancel()
   }
+})
+
+test("gallery SSR and media HTTP routes keep private configuration and upstream headers server-side", async () => {
+  const album = "00000000-0000-4000-8000-000000000001"
+  const asset = "00000000-0000-4000-8000-000000000002"
+
+  const summary = {
+    id: album,
+    name: "Demo places",
+    photo_count: 1,
+    cover_id: asset,
+    missing: false,
+  }
+
+  const requests: string[] = []
+  let mediaStatus = 200
+
+  const upstream = createServer((request, response) => {
+    expect(request.headers.authorization).toBe(`Bearer ${apiKey}`)
+    requests.push(request.url ?? "")
+
+    if (request.url?.includes("/assets/") === true) {
+      response.writeHead(mediaStatus, {
+        "Content-Type": "image/webp",
+        "X-Provider-Key": "synthetic-private-key",
+        Location: "https://private.invalid/image",
+      })
+      response.end(
+        mediaStatus === 200 ? Buffer.from([1, 2, 3]) : "synthetic-private-key"
+      )
+
+      return
+    }
+
+    response.writeHead(200, { "Content-Type": "application/json" })
+    response.end(
+      JSON.stringify(
+        request.url === "/api/photos/albums"
+          ? {
+              state: "ready",
+              albums: [summary],
+              credential: "synthetic-private-key",
+            }
+          : {
+              state: "ready",
+              photos: {
+                album: summary,
+                assets: [asset],
+                page: 0,
+                next_page: null,
+              },
+              exif: "synthetic-private-key",
+            }
+      )
+    )
+  })
+
+  const url = await dashboard({ url: await listen(upstream), key: apiKey })
+  const html = await page(url, "/photos")
+  expect(html).toContain("Demo places")
+  expect(html).toContain(`/photo-media/${album}/${asset}/thumbnail`)
+  expect(html).not.toContain("synthetic-private-key")
+  expect(html).not.toContain("private.invalid")
+  const image = await fetch(`${url}/photo-media/${album}/${asset}/thumbnail`)
+  expect(image.status).toBe(200)
+  expect(image.headers.get("cache-control")).toBe("no-store")
+  expect(image.headers.get("content-type")).toBe("image/webp")
+  expect(image.headers.get("x-provider-key")).toBeNull()
+  expect(image.headers.get("location")).toBeNull()
+  expect([...new Uint8Array(await image.arrayBuffer())]).toEqual([1, 2, 3])
+  const count = requests.length
+  expect(
+    (await fetch(`${url}/photo-media/${album}/${asset}/original`)).status
+  ).toBe(404)
+  expect(
+    (await fetch(`${url}/photo-media/not-an-id/${asset}/thumbnail`)).status
+  ).toBe(404)
+  expect(requests).toHaveLength(count)
+  mediaStatus = 404
+  const missing = await fetch(`${url}/photo-media/${album}/${asset}/preview`)
+  expect(missing.status).toBe(404)
+  expect(await missing.text()).toBe("")
 })

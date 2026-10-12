@@ -13,10 +13,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
+import { Route as PhotosRouteImport } from './routes/photos'
 import { Route as TravelRouteImport } from './routes/travel'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as WeatherRouteImport } from './routes/weather'
 import { Route as WishlistRouteImport } from './routes/wishlist'
+import { Route as PhotoMediaAlbumAssetSizeRouteImport } from './routes/photo-media.$album.$asset.$size'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +38,11 @@ const ConnectionRoute = ConnectionRouteImport.update({
 const ControlsRoute = ControlsRouteImport.update({
   id: '/controls',
   path: '/controls',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhotosRoute = PhotosRouteImport.update({
+  id: '/photos',
+  path: '/photos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TravelRoute = TravelRouteImport.update({
@@ -58,26 +65,36 @@ const WishlistRoute = WishlistRouteImport.update({
   path: '/wishlist',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PhotoMediaAlbumAssetSizeRoute =
+  PhotoMediaAlbumAssetSizeRouteImport.update({
+    id: '/photo-media/$album/$asset/$size',
+    path: '/photo-media/$album/$asset/$size',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/photos': typeof PhotosRoute
   '/travel': typeof TravelRoute
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
+  '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/photos': typeof PhotosRoute
   '/travel': typeof TravelRoute
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
+  '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,10 +102,12 @@ export interface FileRoutesById {
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/photos': typeof PhotosRoute
   '/travel': typeof TravelRoute
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
+  '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,30 +116,36 @@ export interface FileRouteTypes {
     | '/$feature'
     | '/connection'
     | '/controls'
+    | '/photos'
     | '/travel'
     | '/watchlist'
     | '/weather'
     | '/wishlist'
+    | '/photo-media/$album/$asset/$size'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$feature'
     | '/connection'
     | '/controls'
+    | '/photos'
     | '/travel'
     | '/watchlist'
     | '/weather'
     | '/wishlist'
+    | '/photo-media/$album/$asset/$size'
   id:
     | '__root__'
     | '/'
     | '/$feature'
     | '/connection'
     | '/controls'
+    | '/photos'
     | '/travel'
     | '/watchlist'
     | '/weather'
     | '/wishlist'
+    | '/photo-media/$album/$asset/$size'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -128,10 +153,12 @@ export interface RootRouteChildren {
   FeatureRoute: typeof FeatureRoute
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
+  PhotosRoute: typeof PhotosRoute
   TravelRoute: typeof TravelRoute
   WatchlistRoute: typeof WatchlistRoute
   WeatherRoute: typeof WeatherRoute
   WishlistRoute: typeof WishlistRoute
+  PhotoMediaAlbumAssetSizeRoute: typeof PhotoMediaAlbumAssetSizeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -164,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ControlsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/photos': {
+      id: '/photos'
+      path: '/photos'
+      fullPath: '/photos'
+      preLoaderRoute: typeof PhotosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/travel': {
       id: '/travel'
       path: '/travel'
@@ -192,6 +226,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WishlistRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/photo-media/$album/$asset/$size': {
+      id: '/photo-media/$album/$asset/$size'
+      path: '/photo-media/$album/$asset/$size'
+      fullPath: '/photo-media/$album/$asset/$size'
+      preLoaderRoute: typeof PhotoMediaAlbumAssetSizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -200,10 +241,12 @@ const rootRouteChildren: RootRouteChildren = {
   FeatureRoute: FeatureRoute,
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
+  PhotosRoute: PhotosRoute,
   TravelRoute: TravelRoute,
   WatchlistRoute: WatchlistRoute,
   WeatherRoute: WeatherRoute,
   WishlistRoute: WishlistRoute,
+  PhotoMediaAlbumAssetSizeRoute: PhotoMediaAlbumAssetSizeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
