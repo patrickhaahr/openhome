@@ -12,7 +12,11 @@ import {
   type MapRoutes,
 } from "@/lib/map"
 import { getMapOrigin } from "@/lib/map.functions"
-import { requestLoops } from "@/lib/route-loop.functions"
+import {
+  loadActiveRoute,
+  requestRouteSelection,
+  requestLoops,
+} from "@/lib/route-loop.functions"
 
 import mapCss from "maplibre-gl/dist/maplibre-gl.css?url"
 
@@ -24,13 +28,20 @@ export const Route = createFileRoute("/travel")({
     meta: [{ title: `${travel.title} · OpenHome` }],
     links: [{ rel: "stylesheet", href: mapCss }],
   }),
-  loader: () => getMapOrigin().catch(() => unavailableMapOrigin),
+  loader: async () => {
+    const [map, active] = await Promise.all([
+      getMapOrigin().catch(() => unavailableMapOrigin),
+      loadActiveRoute(),
+    ])
+
+    return { map, active }
+  },
   headers: () => ({ "Cache-Control": "no-store" }),
   component: TravelPage,
 })
 
 function TravelPage(): React.JSX.Element {
-  const read = Route.useLoaderData()
+  const { map: read, active } = Route.useLoaderData()
   const [routes, setRoutes] = useState<MapRoutes | undefined>(undefined)
 
   return (
@@ -52,7 +63,12 @@ function TravelPage(): React.JSX.Element {
             <SharedMap
               key={`${read.origin.latitude},${read.origin.longitude}`}
               origin={read.origin}
-              routes={routes}
+              routes={
+                routes ??
+                (active.state === "selected"
+                  ? { lines: [active.route.geometry], focused: 0 }
+                  : undefined)
+              }
             />
             <figcaption>
               <span className="travel-map-origin">
@@ -64,7 +80,18 @@ function TravelPage(): React.JSX.Element {
               <span>Stops and live vehicles are not connected yet.</span>
             </figcaption>
           </figure>
-          <LoopPlanner plan={requestLoops} onRoutesChange={setRoutes} />
+          <LoopPlanner
+            key={
+              active.state === "selected"
+                ? `${active.route.id}:${active.route.version}`
+                : active.state
+            }
+            plan={requestLoops}
+            initialActive={active}
+            select={requestRouteSelection}
+            reloadActive={loadActiveRoute}
+            onRoutesChange={setRoutes}
+          />
         </div>
       ) : (
         <MapSetup reason={read.reason} />

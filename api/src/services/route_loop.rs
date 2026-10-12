@@ -11,8 +11,10 @@ use std::{
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 use url::Url;
+use uuid::Uuid;
 
 use crate::services::map::MapOrigin;
 
@@ -106,7 +108,7 @@ impl ProviderEndpoint {
 }
 
 /// Activities the planner can route. Both use the pedestrian `foot-walking` graph.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Activity {
     Walking,
@@ -139,7 +141,7 @@ enum TargetBody {
 }
 
 /// The requested effort: a distance, or steps converted with the request's step length.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum LoopTarget {
     Distance { meters: u32 },
@@ -272,8 +274,10 @@ pub struct LoopPlan {
 }
 
 /// A measured loop. Distances come from the returned geometry, so they describe what is drawn.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GeneratedLoop {
+    /// Immutable identity assigned by Axum before offering the loop for selection.
+    pub id: Uuid,
     pub distance_meters: f64,
     pub deviation_meters: f64,
     pub deviation_percent: f64,
@@ -284,10 +288,10 @@ pub struct GeneratedLoop {
 }
 
 /// Line geometry, serialized as a `LineString` in `[longitude, latitude]` order.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LineString {
     #[serde(rename = "type")]
-    kind: &'static str,
+    kind: String,
     pub coordinates: Vec<[f64; 2]>,
 }
 
@@ -413,13 +417,14 @@ fn describe(request: LoopRequest, found: Found) -> LoopPlan {
             )]
             let estimated_steps = (measured.distance / step_length).round() as u32;
             GeneratedLoop {
+                id: candidate_id(request, &measured.coordinates),
                 distance_meters: measured.distance.round(),
                 deviation_meters: deviation.round(),
                 deviation_percent: rounded_percent(measured.deviation_percent),
                 within_tolerance: measured.matches(),
                 estimated_steps,
                 geometry: LineString {
-                    kind: "LineString",
+                    kind: "LineString".to_string(),
                     coordinates: measured.coordinates,
                 },
             }
@@ -434,6 +439,37 @@ fn describe(request: LoopRequest, found: Found) -> LoopPlan {
         search: found.end,
         loops,
     }
+}
+
+/// Identity covers both geometry and the requested effort, including stride. Cached geometry
+/// can serve different targets without letting their selection snapshots overwrite each other.
+fn candidate_id(request: LoopRequest, coordinates: &[[f64; 2]]) -> Uuid {
+    let mut hash = Sha256::new();
+    hash.update(b"openhome-loop-v1");
+    hash.update([match request.activity {
+        Activity::Walking => 0,
+        Activity::Running => 1,
+    }]);
+    match request.target {
+        LoopTarget::Distance { meters } => {
+            hash.update([0]);
+            hash.update(meters.to_le_bytes());
+        }
+        LoopTarget::Steps { steps, meters } => {
+            hash.update([1]);
+            hash.update(steps.to_le_bytes());
+            hash.update(meters.to_le_bytes());
+        }
+    }
+    hash.update(request.step_length_cm.to_le_bytes());
+    for coordinate in coordinates {
+        for value in coordinate {
+            hash.update(value.to_le_bytes());
+        }
+    }
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&hash.finalize()[..16]);
+    uuid::Builder::from_random_bytes(bytes).into_uuid()
 }
 
 fn rounded_percent(percent: f64) -> f64 {

@@ -72,7 +72,7 @@ export async function requestOpenHome({
   query,
 }: {
   path: `/api/${string}`
-  method: "GET" | "POST" | "PATCH" | "DELETE"
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
   timeoutMs: number
   query?: Record<string, string>
   json?: { readonly [key: string]: JsonValue }

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO active_route (slot, route_id, version)\n         SELECT 1, id, 1 FROM route_candidates WHERE id = ?\n         ON CONFLICT(slot) DO UPDATE SET\n           route_id = excluded.route_id,\n           version = active_route.version + (active_route.route_id != excluded.route_id)\n         RETURNING version",
+  "describe": {
+    "columns": [
+      {
+        "name": "version",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c33faf7658645896d9f0a94e15bb3dfb3542a9f538d5627f7c15645efeea3598"
+}

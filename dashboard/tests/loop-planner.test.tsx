@@ -20,8 +20,16 @@ import {
 import { z } from "zod"
 import { LoopPlanner } from "@/components/loop-planner"
 import type { MapRoutes } from "@/lib/map"
-import type { LoopRequest } from "@/lib/route-loop"
-import { generateLoops } from "@/lib/route-loop.server"
+import type {
+  ActiveRouteRead,
+  LoopRequest,
+  RouteSelectionRead,
+} from "@/lib/route-loop"
+import {
+  readActiveRoute,
+  selectActiveRoute,
+  generateLoops,
+} from "@/lib/route-loop.server"
 
 const apiKey = "synthetic-dashboard-api-key"
 
@@ -105,10 +113,22 @@ afterEach(async () => {
   }
 })
 
-async function render(): Promise<void> {
+async function render(
+  initialActive: ActiveRouteRead = { state: "none" },
+  select: (id: string) => Promise<RouteSelectionRead> = (id) =>
+    selectActiveRoute({ route_id: id })
+): Promise<void> {
   await act(async () => {
     root.render(
       <LoopPlanner
+        initialActive={initialActive}
+        select={(id) => {
+          const work = select(id)
+          planning = work
+
+          return work
+        }}
+        reloadActive={readActiveRoute}
         plan={(request) => {
           requests.push(request)
           const work = generateLoops(request)
@@ -360,6 +380,7 @@ test("explains too few matching loops and labels deviations without calling them
             match,
             {
               ...match,
+              id: "9c0f5882-a4c1-4fb0-b155-645198b19e1a",
               distance_meters: 4300,
               deviation_meters: -700,
               deviation_percent: -14,
@@ -375,13 +396,117 @@ test("explains too few matching loops and labels deviations without calling them
   expect(container.textContent).toContain(
     "The search used all its attempts. Only 1 distinct loop came within ±10% of the target. The closest others are shown with their deviation."
   )
-  expect(container.querySelector("[role=status]")?.textContent).toContain(
-    "Only 1 distinct loop came within ±10% of the target."
-  )
+  expect(
+    Array.from(container.querySelectorAll('[role="status"]')).some(
+      (announcement) =>
+        announcement.textContent?.includes(
+          "Only 1 distinct loop came within ±10% of the target."
+        )
+    )
+  ).toBe(true)
   const [, deviation] = alternatives()
   expect(deviation?.textContent).toContain("4.30 km")
   expect(deviation?.textContent).toContain(
     "700 m (14.0%) shorter than 5.00 km, outside ±10%"
   )
   expect(deviation?.textContent).not.toContain("within")
+})
+
+test("selects the compared loop through Axum and restores it after unmount and reload", async () => {
+  await render()
+  await click("Plan loops")
+  const plan = await generatedPlan()
+  const second = plan.loops[1]
+
+  if (second === undefined) throw new Error("Expected Loop B")
+
+  await click("Loop B")
+  await click("Select Loop B")
+  expect(container.textContent).toContain(
+    "Loop selected. Your phone can retrieve it."
+  )
+  const saved = await readActiveRoute()
+  expect(saved.state).toBe("selected")
+
+  if (saved.state !== "selected") throw new Error("Expected a saved route")
+
+  expect(saved.route.id).toBe(second.id)
+  expect(saved.route.geometry).toEqual(second.geometry)
+  expect(saved.route.distance_meters).toBe(second.distance_meters)
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render(await readActiveRoute())
+  expect(
+    container.querySelector('[aria-label="Active route"]')?.textContent
+  ).toContain("4.75 km walking loop")
+  expect(alternatives()).toHaveLength(0)
+  await click("Show active route on map")
+  expect(routes.at(-1)).toEqual({ lines: [second.geometry], focused: 0 })
+  expect(container.innerHTML).not.toContain(apiKey)
+})
+
+test("announces a pending selection and retains the confirmed route after a failed replacement", async () => {
+  const plan = await generatedPlan()
+  const first = plan.loops[0]
+
+  if (first === undefined) throw new Error("Expected Loop A")
+
+  const saved = await selectActiveRoute({ route_id: first.id })
+
+  if (saved.state !== "selected") throw new Error("Expected a saved route")
+
+  let finish: (result: RouteSelectionRead) => void = () => {
+    throw new Error("Selection has not started")
+  }
+
+  await render(
+    saved,
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  await click("Plan loops")
+  await click("Loop B")
+
+  const button = Array.from(container.querySelectorAll("button")).find(
+    (element) => element.textContent === "Select Loop B"
+  )
+
+  if (button === undefined) throw new Error("Expected selection button")
+
+  await act(async () => button.click())
+  expect(container.textContent).toContain("Saving the selected loop…")
+  expect(
+    container.querySelector<HTMLButtonElement>('button[type="submit"]')
+      ?.disabled
+  ).toBe(true)
+  expect(alternatives().every((alternative) => alternative.disabled)).toBe(true)
+  await act(async () => {
+    finish({ state: "failed", reason: "connection-unavailable" })
+    await planning
+  })
+  expect(container.textContent).toContain("Selection could not be confirmed.")
+  expect(
+    container.querySelector('[aria-label="Active route"]')?.textContent
+  ).toContain("5.10 km walking loop")
+  expect(await readActiveRoute()).toEqual(saved)
+})
+
+test("failed reads and pruned choices offer recovery without claiming an empty or changed selection", async () => {
+  await render({ state: "unavailable" }, async () => ({
+    state: "failed",
+    reason: "candidate-unavailable",
+  }))
+  expect(container.textContent).toContain(
+    "An earlier selection may still be saved"
+  )
+  await click("Plan loops")
+  await click("Select Loop A")
+  expect(container.textContent).toContain(
+    "This loop is no longer available. Plan loops again"
+  )
+  expect(container.textContent).not.toContain(
+    "Loop selected. Your phone can retrieve it."
+  )
 })

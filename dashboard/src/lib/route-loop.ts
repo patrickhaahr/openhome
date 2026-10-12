@@ -29,6 +29,7 @@ const coordinate = z.tuple([
 ])
 
 const generatedLoop = z.object({
+  id: z.uuid(),
   distance_meters: z.number().positive(),
   deviation_meters: z.number(),
   deviation_percent: z.number(),
@@ -246,3 +247,40 @@ export function describeFailure(
       }
   }
 }
+
+/** A persisted route and its selection revision, ready for a phone to pin independently. */
+export const activeRoute = generatedLoop.extend({
+  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  activity,
+  target: loopPlan.shape.target,
+  step_length_cm: z.number().int().positive(),
+  tolerance_percent: z.number().positive(),
+})
+
+/** Axum's persisted selection, including a truthful absence. */
+export const activeRouteRead = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("none") }),
+  z.object({ state: z.literal("selected"), route: activeRoute }),
+])
+
+/** The requested selection references only a previously generated loop. */
+export const routeSelection = z.object({ route_id: z.uuid() })
+
+/** A selected route; the phone owns any started Route Session separately. */
+export type ActiveRoute = z.infer<typeof activeRoute>
+
+/** Failed reads cannot be mistaken for an empty selection. */
+export type ActiveRouteRead =
+  | z.infer<typeof activeRouteRead>
+  | { state: "unavailable" }
+
+/** Selection succeeds only after Axum confirms persistence. */
+export type RouteSelectionRead =
+  | Extract<ActiveRouteRead, { state: "selected" }>
+  | {
+      state: "failed"
+      reason: "candidate-unavailable" | "connection-unavailable"
+    }
+
+/** Safe recovery state for failed reads or RPCs. */
+export const unavailableActiveRoute: ActiveRouteRead = { state: "unavailable" }
