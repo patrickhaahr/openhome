@@ -34,6 +34,7 @@ import type {
 } from "@/lib/wishlist"
 
 import { startAxumFixture } from "./support/axum-fixture"
+import { readWatchlists, writeWatchlist } from "@/lib/watchlist.server"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
@@ -264,6 +265,40 @@ test("renders owner-aware CRUD, failed edits and confirmation against migrated a
   await render()
   expect(container.textContent).toContain("Member C")
   expect(container.textContent).toContain("Member B")
+
+  const member = (await available()).owners.find(
+    (owner) => owner.name === "Member C"
+  )
+
+  if (member === undefined) throw new Error("Expected Member C")
+
+  await writeWatchlist({
+    action: "add",
+    owner_id: member.id,
+    kind: "movie",
+    title: "A Quiet Orbit",
+    request_id: crypto.randomUUID(),
+  })
+  await click("Remove Member C")
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+    "wishlists, wishes and watchlist entries"
+  )
+  await click("Keep it")
+  const retained = await readWatchlists()
+
+  expect(
+    retained.state === "available" ? retained.entries.length : undefined
+  ).toBe(1)
+  await click("Remove Member C")
+  await click("Remove permanently")
+  const remaining = await readWatchlists()
+
+  expect(
+    remaining.state === "available" ? remaining.entries : undefined
+  ).toEqual([])
+  expect((await available()).owners.map((owner) => owner.name)).toEqual([
+    "Member B",
+  ])
 })
 
 test("URL suggestions remain editable and only save on explicit addition", async () => {

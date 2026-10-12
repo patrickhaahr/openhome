@@ -534,7 +534,7 @@ export function Wishlists({
                         command: { kind: "remove-owner", owner_id: owner.id },
                         title: `Remove ${owner.name}?`,
                         description:
-                          "This removes the household member and all their wishlists and wishes. This cannot be undone.",
+                          "This removes the household member and all their wishlists, wishes and watchlist entries. This cannot be undone.",
                       })
                     }
                   >
