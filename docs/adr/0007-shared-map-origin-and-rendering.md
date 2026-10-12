@@ -31,6 +31,12 @@ source is used. A style without the building source disables 3D with an
 explanation. Losing the graphics context in 3D restarts the map in 2D at the
 same viewport rather than failing the whole view.
 
+The building layer is hidden in 2D rather than kept under a zero opacity, so
+2D never pays for extrusions. MapLibre treats visibility as a layout change
+and re-parses the visible tiles on each switch; that one-off cost per switch
+was preferred over continuous extrusion work. The 3D coverage notice samples
+only the central quarter of the view to keep each settle cheap.
+
 OpenFreeMap's [public service](https://openfreemap.org/) and
 [terms](https://openfreemap.org/tos/), checked 2026-10-11, permit free map use
 without a key, registration or paid plan. Its built-in OpenMapTiles and

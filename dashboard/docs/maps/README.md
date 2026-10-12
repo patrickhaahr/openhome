@@ -49,7 +49,8 @@ overlays: it stays above the buildings, and switching keeps the center and zoom.
 | ![2D map](landscape.png) | ![3D buildings](3d-landscape.png) |
 
 Fallbacks are explicit. Below zoom 14 the 3D view says to zoom in; a view with
-no building data says so; a provider style without building data disables 3D.
+no buildings near the map center says so; a provider style without building
+data disables 3D.
 Losing the WebGL context in 3D restarts the map in 2D at the same viewport
 ([capture](3d-graphics-fallback.png)). Losing it in 2D keeps the existing retry
 state.
@@ -60,11 +61,13 @@ state.
   zoom-in notice and `WEBGL_lose_context` fallback (center and zoom preserved)
   behaved as described. [Portrait](3d-portrait.png) fits without overflow.
 - Target hardware: iPad7,5, actual Safari viewport 1024×665. Twenty automated
-  2D/3D switches 1.5 s apart left the map ready without graphics failure.
-  Frame intervals over that run: median 17 ms, p95 33 ms, worst 700 ms (first
-  building tiles). [Actual iPad Safari capture](ipad-safari-3d.png).
+  2D/3D switches 1.5 s apart left the map ready without graphics failure:
+  frame intervals median 17 ms, p95 29 ms, worst 139 ms. Eighty keyboard pans
+  in 3D over 16 s: median 17 ms, p95 19 ms, worst 141 ms.
+  [Actual iPad Safari capture](ipad-safari-3d.png).
 - Finger pan and pinch in 3D on the physical iPad still need confirmation by
-  hand; Web Inspector cannot produce real touches.
+  hand; Web Inspector cannot produce real touches, so the pans above were
+  keyboard-driven.
 
 The no-building-data notice was reasoned from the rendered-features check and
 not reproduced: the demo area has buildings everywhere.
