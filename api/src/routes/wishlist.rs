@@ -11,12 +11,20 @@ use crate::{
     AppState,
     error::AppError,
     services::wishlist::{self, AddItem, CreateHouseholdUser, CreateWishlist, WishlistError},
+    services::wishlist_metadata::{MetadataPreview, MetadataRequest, MetadataService},
 };
 
 #[derive(Clone)]
 struct DefaultList(Option<String>);
 
 pub fn router(default_list_id: Option<String>) -> Router<AppState> {
+    router_with_metadata(default_list_id, MetadataService::default())
+}
+
+pub(crate) fn router_with_metadata(
+    default_list_id: Option<String>,
+    metadata: MetadataService,
+) -> Router<AppState> {
     Router::new()
         .route("/api/household-users", get(owners).post(create_owner))
         .route(
@@ -34,7 +42,21 @@ pub fn router(default_list_id: Option<String>) -> Router<AppState> {
         .route("/api/wishlists", get(lists).post(create_list))
         .route("/api/wishlists/{id}/items", get(items))
         .route("/api/wishlist/items", axum::routing::post(add_item))
+        .route(
+            "/api/wishlist/url-metadata",
+            axum::routing::post(url_metadata),
+        )
+        .layer(Extension(metadata))
         .layer(Extension(DefaultList(default_list_id)))
+}
+
+async fn url_metadata(
+    State(state): State<AppState>,
+    Extension(metadata): Extension<MetadataService>,
+    Json(request): Json<MetadataRequest>,
+) -> Result<Json<MetadataPreview>, WishlistError> {
+    wishlist::require_list_owner(&state.db, &request.owner_id, &request.list_id).await?;
+    Ok(Json(metadata.preview(&request.url).await?))
 }
 
 async fn rename_owner(

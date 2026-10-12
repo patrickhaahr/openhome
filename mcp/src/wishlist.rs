@@ -45,6 +45,17 @@ pub struct WishlistItemsRequest {
     pub list_id: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WishlistUrlMetadataRequest {
+    /// Explicit stable Household User ID; must own `list_id`.
+    pub owner_id: String,
+    /// Explicit stable Wishlist ID discovered before requesting URL assistance.
+    pub list_id: String,
+    /// Product URL supplied by the user. HTTP(S), public destinations only.
+    pub url: String,
+}
+
 fn one() -> i64 {
     1
 }
