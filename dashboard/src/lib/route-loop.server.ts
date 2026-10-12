@@ -7,7 +7,7 @@ import {
   type WalkingLoopRequest,
 } from "./route-loop"
 
-/** Ask Axum for a walking loop using server-held credentials; the provider key stays in Axum. */
+/** Ask Axum for a walking loop using server-held credentials; only Axum reaches the route planner. */
 export async function generateLoop(
   request: WalkingLoopRequest
 ): Promise<LoopRead> {

@@ -36,8 +36,6 @@ export const loopRead = z.discriminatedUnion("state", [
     reason: z.enum([
       "missing-origin",
       "missing-provider",
-      "provider-rejected",
-      "quota-exceeded",
       "provider-unavailable",
       "no-route",
       "unsuitable-route",
@@ -106,37 +104,25 @@ export function describeUnavailable(
       return {
         title: "Route planning not set up",
         detail:
-          "Add a free OpenRouteService key to OpenHome to plan walking loops.",
-      }
-    case "provider-rejected":
-      return {
-        title: "Route provider rejected the key",
-        detail:
-          "OpenRouteService did not accept the configured key. Check it on OpenHome.",
-      }
-    case "quota-exceeded":
-      return {
-        title: "Free route quota used up",
-        detail:
-          "OpenRouteService's free limit is reached. Try again in a minute, or tomorrow if the daily limit is spent.",
+          "Connect OpenHome to the household’s openrouteservice instance to plan walking loops.",
       }
     case "provider-unavailable":
       return {
-        title: "Route provider unavailable",
+        title: "Route planner unavailable",
         detail:
-          "OpenRouteService could not plan a loop right now. Try again shortly.",
+          "The household route planner could not plan a loop right now. Try again shortly.",
       }
     case "no-route":
       return {
         title: "No walkable loop found",
         detail:
-          "OpenRouteService found no walking loop from the origin. No route was invented.",
+          "The route planner found no walking loop from the origin. No route was invented.",
       }
     case "unsuitable-route":
       return {
         title: "No suitable loop",
         detail:
-          "The proposed loop did not return to the origin or was far from the target distance, so it is not shown.",
+          "The proposed loop started too far from the origin, did not close or was far from the target distance, so it is not shown.",
       }
     case "connection-unavailable":
       return {

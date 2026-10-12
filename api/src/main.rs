@@ -58,8 +58,7 @@ async fn main() -> anyhow::Result<()> {
     // Loops start at the shared map origin, so routes draw where the map opens.
     let loop_planner = route_loop::LoopPlanner::new(
         map_origin,
-        route_loop::ProviderKey::parse(std::env::var("OPENROUTESERVICE_API_KEY").ok().as_deref()),
-        url::Url::parse("https://api.openrouteservice.org/v2/directions/foot-walking/geojson")?,
+        route_loop::ProviderEndpoint::parse(non_empty_env("OPENROUTESERVICE_URL").as_deref())?,
     )?;
 
     let docker_service = if std::path::Path::new("/var/run/docker.sock").exists() {

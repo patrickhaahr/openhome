@@ -10,32 +10,26 @@ use openhome_api::{
     routes,
     services::{
         map::MapOrigin,
-        route_loop::{LoopPlanner, ProviderKey},
+        route_loop::{LoopPlanner, ProviderEndpoint},
     },
 };
 use serde_json::{Value, json};
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{body_partial_json, header, method},
+    matchers::{body_partial_json, method, path},
 };
 
 /// The unrelated central Copenhagen demo origin.
 const ORIGIN: [f64; 2] = [12.5692, 55.6869];
 
-const PROVIDER_KEY: &str = "synthetic-provider-key";
-
 async fn app(origin: Option<MapOrigin>, provider: Option<&MockServer>) -> Router {
     let (_, state) = common::test_app_with_db().await;
-    let endpoint = match provider {
-        Some(server) => format!("{}/v2/directions/foot-walking/geojson", server.uri()),
-        None => "http://127.0.0.1:9/unused".to_string(),
-    };
-    let planner = LoopPlanner::new(
-        origin,
-        provider.and_then(|_| ProviderKey::parse(Some(PROVIDER_KEY))),
-        endpoint.parse().unwrap(),
-    )
-    .unwrap();
+    let endpoint = provider.map(|server| {
+        ProviderEndpoint::parse(Some(&format!("{}/ors", server.uri())))
+            .unwrap()
+            .unwrap()
+    });
+    let planner = LoopPlanner::new(origin, endpoint).unwrap();
     routes::route_loop::router(planner)
         .with_state(state)
         .layer(axum::middleware::from_fn(|req, next| {
@@ -143,13 +137,10 @@ async fn authenticates_and_reports_missing_origin_or_provider_without_contacting
 async fn generates_a_measured_walking_loop_through_the_pedestrian_provider() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(header("authorization", PROVIDER_KEY))
+        .and(path("/ors/v2/directions/foot-walking/geojson"))
         .and(body_partial_json(json!({
             "coordinates": [ORIGIN],
-            "options": {
-                "round_trip": { "length": 5000 },
-                "profile_params": { "weightings": { "green": { "factor": 1.0 } } }
-            }
+            "options": { "round_trip": { "length": 5000 }, "avoid_features": ["ferries"] }
         })))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(trip(&rectangle(ORIGIN, 1250), 4990.0)),
@@ -173,7 +164,6 @@ async fn generates_a_measured_walking_loop_through_the_pedestrian_provider() {
     let coordinates = route["geometry"]["coordinates"].as_array().unwrap();
     assert_eq!(coordinates[0], json!(ORIGIN));
     assert_eq!(coordinates.first(), coordinates.last());
-    assert!(!body.to_string().contains(PROVIDER_KEY));
 }
 
 #[tokio::test]
@@ -238,20 +228,8 @@ async fn rejects_invalid_provider_responses_without_inventing_a_route() {
 }
 
 #[tokio::test]
-async fn reports_quota_credential_no_route_and_outage_outcomes_without_upstream_text() {
+async fn reports_no_route_refusal_and_outage_outcomes_without_upstream_text() {
     for (response, reason) in [
-        (
-            ResponseTemplate::new(429).set_body_json(json!({ "error": "Rate limit exceeded" })),
-            "quota-exceeded",
-        ),
-        (
-            ResponseTemplate::new(403).set_body_json(json!({ "error": "Quota exceeded" })),
-            "quota-exceeded",
-        ),
-        (
-            ResponseTemplate::new(403).set_body_json(json!({ "error": "Access disallowed" })),
-            "provider-rejected",
-        ),
         (
             ResponseTemplate::new(404).set_body_json(
                 json!({ "error": { "code": 2009, "message": "synthetic-upstream-detail" } }),
