@@ -127,9 +127,10 @@ The same openrouteservice 10.0.1 instance used for #106 generated these routes
 through the current authenticated Axum endpoint and dashboard. The isolated
 fixture supplies the unrelated Copenhagen demo origin and temporary database;
 **every route below comes from the live pedestrian graph, not its synthetic
-provider.** The instance's private hostname did not resolve locally, so a
-temporary loopback relay reached the cluster service over SSH. No private
-hostname, household coordinates or credentials are included in the evidence.
+provider.** All five searches were also repeated against the instance's HTTPS
+endpoint, producing identical plans and geometry to the cluster-service
+check. No private hostname, household coordinates or credentials are included
+in the evidence.
 
 | Request                         | Converted target | Measured alternatives A / B / C | Matches within ±10% | Search    |
 | ------------------------------- | ---------------- | ------------------------------- | ------------------- | --------- |
@@ -167,7 +168,8 @@ geometry agreed with each reported distance to the nearest metre.
   Kronprinsessegade; Christiansborg and Marmorbroen; and the pedestrian streets
   around Kultorvet and Strøget. Running alternatives reach Kastellet and
   Christianshavn, Nørrebro, and Østerbro.
-- Stopping the temporary provider relay before an uncached 13 km request
+- During the cluster-service check, stopping the temporary provider relay
+  before an uncached 13 km request
   produces `provider-unavailable`; all three earlier real running loops remain
   on the map and can still be compared. Restarting the relay allows a retry.
 
