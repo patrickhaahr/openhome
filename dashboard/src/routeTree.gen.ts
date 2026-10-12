@@ -18,6 +18,7 @@ import { Route as TravelRouteImport } from './routes/travel'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as WeatherRouteImport } from './routes/weather'
 import { Route as WishlistRouteImport } from './routes/wishlist'
+import { Route as WorkoutRouteImport } from './routes/workout'
 import { Route as PhotoMediaAlbumAssetSizeRouteImport } from './routes/photo-media.$album.$asset.$size'
 
 const IndexRoute = IndexRouteImport.update({
@@ -65,6 +66,11 @@ const WishlistRoute = WishlistRouteImport.update({
   path: '/wishlist',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkoutRoute = WorkoutRouteImport.update({
+  id: '/workout',
+  path: '/workout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PhotoMediaAlbumAssetSizeRoute =
   PhotoMediaAlbumAssetSizeRouteImport.update({
     id: '/photo-media/$album/$asset/$size',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
+  '/workout': typeof WorkoutRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
 }
 export interface FileRoutesByTo {
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
+  '/workout': typeof WorkoutRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
 }
 export interface FileRoutesById {
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
   '/wishlist': typeof WishlistRoute
+  '/workout': typeof WorkoutRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
 }
 export interface FileRouteTypes {
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/weather'
     | '/wishlist'
+    | '/workout'
     | '/photo-media/$album/$asset/$size'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/weather'
     | '/wishlist'
+    | '/workout'
     | '/photo-media/$album/$asset/$size'
   id:
     | '__root__'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/weather'
     | '/wishlist'
+    | '/workout'
     | '/photo-media/$album/$asset/$size'
   fileRoutesById: FileRoutesById
 }
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   WatchlistRoute: typeof WatchlistRoute
   WeatherRoute: typeof WeatherRoute
   WishlistRoute: typeof WishlistRoute
+  WorkoutRoute: typeof WorkoutRoute
   PhotoMediaAlbumAssetSizeRoute: typeof PhotoMediaAlbumAssetSizeRoute
 }
 
@@ -226,6 +239,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WishlistRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workout': {
+      id: '/workout'
+      path: '/workout'
+      fullPath: '/workout'
+      preLoaderRoute: typeof WorkoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/photo-media/$album/$asset/$size': {
       id: '/photo-media/$album/$asset/$size'
       path: '/photo-media/$album/$asset/$size'
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
   WatchlistRoute: WatchlistRoute,
   WeatherRoute: WeatherRoute,
   WishlistRoute: WishlistRoute,
+  WorkoutRoute: WorkoutRoute,
   PhotoMediaAlbumAssetSizeRoute: PhotoMediaAlbumAssetSizeRoute,
 }
 export const routeTree = rootRouteImport

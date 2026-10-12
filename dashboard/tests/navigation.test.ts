@@ -12,6 +12,7 @@ import { Route as HomeRoute } from "@/routes/index"
 import { Route as WeatherRoute } from "@/routes/weather"
 import { Route as WishlistRoute } from "@/routes/wishlist"
 import { Route as WatchlistRoute } from "@/routes/watchlist"
+import { Route as WorkoutRoute } from "@/routes/workout"
 import { unavailableWeather } from "@/lib/weather"
 import { routeTree } from "@/routeTree.gen"
 
@@ -21,6 +22,11 @@ test("opens focused views through persistent navigation, restores browser histor
   const originalWeatherLoader = WeatherRoute.options.loader
   const originalWishlistLoader = WishlistRoute.options.loader
   const originalWatchlistLoader = WatchlistRoute.options.loader
+  const originalWorkoutLoader = WorkoutRoute.options.loader
+  WorkoutRoute.options.loader = () => ({
+    state: "unavailable",
+    reason: "unavailable",
+  })
   WatchlistRoute.options.loader = () => ({
     state: "available",
     owners: [],
@@ -131,6 +137,24 @@ test("opens focused views through persistent navigation, restores browser histor
     expect(document.querySelector("main")?.textContent).toContain(
       "Weather unavailable"
     )
+
+    const workout = document.querySelector<HTMLAnchorElement>(
+      'nav a[href="/workout"]'
+    )
+
+    if (workout === null) throw new Error("Expected Workout navigation")
+
+    await act(async () => {
+      workout.click()
+      await router.load()
+    })
+    expect(document.querySelector("h1")?.textContent).toBe("Workout")
+    expect(
+      document.querySelector('nav a[aria-current="page"]')?.textContent
+    ).toBe("Workout")
+    expect(document.querySelector("main")?.textContent).toContain(
+      "Workouts unavailable"
+    )
   } finally {
     await act(async () => {
       root.unmount()
@@ -147,5 +171,8 @@ test("opens focused views through persistent navigation, restores browser histor
 
     if (originalWishlistLoader !== undefined)
       WishlistRoute.options.loader = originalWishlistLoader
+
+    if (originalWorkoutLoader !== undefined)
+      WorkoutRoute.options.loader = originalWorkoutLoader
   }
 })
