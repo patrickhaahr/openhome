@@ -4,6 +4,9 @@ import { z } from "zod"
 import { BodyProfile } from "@/components/body-profile"
 import { buttonVariants } from "@/components/ui/button"
 import { Workouts } from "@/components/workouts"
+import { TrainingSummaries } from "@/components/training-summaries"
+import { trainingSearch } from "@/lib/training"
+import { loadTraining } from "@/lib/training.functions"
 import { bodyRange } from "@/lib/body-profile"
 import {
   loadBodyProfile,
@@ -16,8 +19,9 @@ import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
 export const Route = createFileRoute("/workout")({
   head: () => ({ meta: [{ title: "Workout · OpenHome" }] }),
   validateSearch: workoutSearch.extend({
-    view: z.literal("body").optional().catch(undefined),
+    view: z.enum(["body", "recovery"]).optional().catch(undefined),
     ...bodyRange.shape,
+    ...trainingSearch.shape,
   }),
   loaderDeps: ({ search }) => ({
     view: search.view,
@@ -25,11 +29,15 @@ export const Route = createFileRoute("/workout")({
     to: search.to,
     workout: search.workout,
     shown: search.shown,
+    day: search.day,
+    noop: search.noop,
   }),
   loader: async ({ deps }) =>
     deps.view === "body"
       ? { view: "body" as const, data: await loadBodyProfile(deps) }
-      : { view: "training" as const, data: await loadWorkouts(deps) },
+      : deps.view === "recovery"
+        ? { view: "recovery" as const, data: await loadTraining(deps) }
+        : { view: "training" as const, data: await loadWorkouts(deps) },
   staleTime: 0,
   headers: () => ({ "Cache-Control": "no-store" }),
   component: WorkoutPage,
@@ -52,7 +60,8 @@ function WorkoutPage(): React.JSX.Element {
         </h1>
         <p className="feature-intro">
           Log your training, review earlier sessions and keep your profile up to
-          date.
+          date. Explore NOOP recovery and recorded sessions alongside your
+          training.
         </p>
       </header>
       <nav className="workout-view-nav" aria-label="Workout views">
@@ -70,6 +79,17 @@ function WorkoutPage(): React.JSX.Element {
           })}
         >
           Workouts
+        </Link>
+        <Link
+          to="/workout"
+          search={(previous) => ({ ...previous, view: "recovery" })}
+          activeOptions={{ exact: true, includeSearch: true }}
+          className={buttonVariants({
+            variant: data.view === "recovery" ? "secondary" : "ghost",
+            size: "lg",
+          })}
+        >
+          Recovery & NOOP
         </Link>
         <Link
           to="/workout"
@@ -95,6 +115,34 @@ function WorkoutPage(): React.JSX.Element {
             else
               await navigate({
                 search: (previous) => ({ ...previous, ...range }),
+                resetScroll: false,
+              })
+          }}
+        />
+      ) : data.view === "recovery" ? (
+        <TrainingSummaries
+          key={data.data.day}
+          data={data.data}
+          refresh={() => router.invalidate({ sync: true })}
+          selectDay={async (day) => {
+            if (day === data.data.day && search.noop === undefined)
+              await router.invalidate({ sync: true })
+            else
+              await navigate({
+                search: (previous) => ({ ...previous, day, noop: undefined }),
+                resetScroll: false,
+              })
+          }}
+          open={async (noop) => {
+            if (
+              noop?.source === search.noop?.source &&
+              noop?.start === search.noop?.start &&
+              noop?.sport === search.noop?.sport
+            )
+              await router.invalidate({ sync: true })
+            else
+              await navigate({
+                search: (previous) => ({ ...previous, noop }),
                 resetScroll: false,
               })
           }}
