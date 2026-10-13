@@ -26,11 +26,20 @@ function reason(status: number): WorkoutFailure {
   return "unavailable"
 }
 
-type Read<T> =
+/** One authenticated Axum read, or a sanitized failure; never a partial value. */
+export type Read<T> =
   | { readonly state: "read"; readonly data: T }
   | { readonly state: "failed"; readonly reason: WorkoutFailure }
 
-async function read<T>(
+/**
+ * Read and parse one authenticated Axum fitness resource.
+ *
+ * @param path - The Axum path.
+ * @param schema - The response contract.
+ * @param query - Query parameters.
+ * @returns The parsed body, or a sanitized failure class.
+ */
+export async function read<T>(
   path: `/api/${string}`,
   schema: z.ZodType<T>,
   query: Record<string, string> = {}

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { z } from "zod"
 import { BodyProfile } from "@/components/body-profile"
+import { ExerciseProgress } from "@/components/exercise-progress"
 import { buttonVariants } from "@/components/ui/button"
 import { Workouts } from "@/components/workouts"
 import { bodyRange } from "@/lib/body-profile"
@@ -9,6 +10,8 @@ import {
   loadBodyProfile,
   mutateBodyProfile,
 } from "@/lib/body-profile.functions"
+import { progressSearch } from "@/lib/exercise-progress"
+import { loadProgress } from "@/lib/exercise-progress.functions"
 import { historyStep, maxHistory, workoutSearch } from "@/lib/workout"
 import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
 
@@ -16,8 +19,9 @@ import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
 export const Route = createFileRoute("/workout")({
   head: () => ({ meta: [{ title: "Workout · OpenHome" }] }),
   validateSearch: workoutSearch.extend({
-    view: z.literal("body").optional().catch(undefined),
+    view: z.enum(["body", "progress"]).optional().catch(undefined),
     ...bodyRange.shape,
+    ...progressSearch.shape,
   }),
   loaderDeps: ({ search }) => ({
     view: search.view,
@@ -25,11 +29,19 @@ export const Route = createFileRoute("/workout")({
     to: search.to,
     workout: search.workout,
     shown: search.shown,
+    period: search.period,
+    compare: search.compare,
   }),
-  loader: async ({ deps }) =>
-    deps.view === "body"
-      ? { view: "body" as const, data: await loadBodyProfile(deps) }
-      : { view: "training" as const, data: await loadWorkouts(deps) },
+  loader: async ({ deps }) => {
+    switch (deps.view) {
+      case "body":
+        return { view: "body" as const, data: await loadBodyProfile(deps) }
+      case "progress":
+        return { view: "progress" as const, data: await loadProgress(deps) }
+      case undefined:
+        return { view: "training" as const, data: await loadWorkouts(deps) }
+    }
+  },
   staleTime: 0,
   headers: () => ({ "Cache-Control": "no-store" }),
   component: WorkoutPage,
@@ -51,8 +63,8 @@ function WorkoutPage(): React.JSX.Element {
           Workout
         </h1>
         <p className="feature-intro">
-          Log your training, review earlier sessions and keep your profile up to
-          date.
+          Log your training, compare progress across exercises and keep your
+          profile up to date.
         </p>
       </header>
       <nav className="workout-view-nav" aria-label="Workout views">
@@ -73,6 +85,17 @@ function WorkoutPage(): React.JSX.Element {
         </Link>
         <Link
           to="/workout"
+          search={(previous) => ({ ...previous, view: "progress" })}
+          activeOptions={{ exact: true, includeSearch: true }}
+          className={buttonVariants({
+            variant: data.view === "progress" ? "secondary" : "ghost",
+            size: "lg",
+          })}
+        >
+          Progress
+        </Link>
+        <Link
+          to="/workout"
           search={(previous) => ({ ...previous, view: "body" })}
           activeOptions={{ exact: true, includeSearch: true }}
           className={buttonVariants({
@@ -83,6 +106,27 @@ function WorkoutPage(): React.JSX.Element {
           Profile & weight
         </Link>
       </nav>
+      {data.view === "progress" ? (
+        <ExerciseProgress
+          data={data.data}
+          choosePeriod={(period) =>
+            navigate({
+              search: (previous) => ({ ...previous, period }),
+              resetScroll: false,
+            })
+          }
+          compare={(ids) =>
+            navigate({
+              search: (previous) => ({
+                ...previous,
+                compare: ids.length === 0 ? undefined : [...ids],
+              }),
+              resetScroll: false,
+            })
+          }
+          refresh={() => router.invalidate({ sync: true })}
+        />
+      ) : null}
       {data.view === "body" ? (
         <BodyProfile
           data={data.data}
@@ -99,7 +143,8 @@ function WorkoutPage(): React.JSX.Element {
               })
           }}
         />
-      ) : (
+      ) : null}
+      {data.view === "training" ? (
         <Workouts
           data={data.data}
           change={(command) => mutate({ data: command })}
@@ -127,7 +172,7 @@ function WorkoutPage(): React.JSX.Element {
             })
           }
         />
-      )}
+      ) : null}
     </section>
   )
 }

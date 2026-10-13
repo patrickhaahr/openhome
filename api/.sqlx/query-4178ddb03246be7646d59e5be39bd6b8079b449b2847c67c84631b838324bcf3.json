@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT e.id AS \"id!: i64\", e.name, e.category\n        FROM exercises e\n        JOIN workout_exercises we ON we.exercise_id = e.id\n        JOIN sets s ON s.workout_exercise_id = we.id\n        JOIN workouts w ON w.id = we.workout_id\n        WHERE w.date BETWEEN $1 AND $2\n        GROUP BY e.id\n        ORDER BY MAX(w.date) DESC, e.name COLLATE NOCASE, e.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "4178ddb03246be7646d59e5be39bd6b8079b449b2847c67c84631b838324bcf3"
+}
