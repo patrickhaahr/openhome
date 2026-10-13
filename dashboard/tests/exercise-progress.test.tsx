@@ -278,6 +278,44 @@ test("compared never-logged and out-of-period exercises get no line until logged
   expect(legend()).toEqual(lines({ Dip: false, "Ring Dip": true }))
 })
 
+test("an exercise added beyond the first six lines is shown, and a charted line can be removed", async () => {
+  await log(daysAgo(5), [
+    ["Pull-up", [{ reps: 8 }]],
+    ["Dip", [{ reps: 10 }]],
+    ["Planche Push-up", [{ reps: 4 }]],
+    ["Planche Press", [{ reps: 3 }]],
+    ["Front Lever Pull-up", [{ reps: 5 }]],
+    ["Front Lever Touch", [{ reps: 6 }]],
+    ["Handstand Push-up", [{ reps: 7 }]],
+  ])
+  await log(daysAgo(200), [["Ring Dip", [{ reps: 5 }]]])
+  await log(daysAgo(150), [["Ring Dip", [{ reps: 7 }]]])
+
+  await render()
+  expect(legendEntries()).toHaveLength(7)
+  expect(drawnLines()).toBe(6)
+
+  await click("Add exercise")
+  await click("Add Ring Dip")
+  expect(notCharted()).toEqual(["Ring DipNot logged in this period"])
+  // Charted once the period covers it, as the eighth line, and shown because it was chosen.
+  await click("12 months")
+  expect(legend().get("Ring Dip")).toBe(true)
+  expect(drawnLines()).toBe(7)
+
+  const select = container.querySelector("select")
+
+  if (select === null) throw new Error("Missing observed-values select")
+
+  await act(async () => {
+    select.value = String(await libraryId("Ring Dip"))
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  await click("Stop comparing Ring Dip")
+  expect(legend().has("Ring Dip")).toBe(false)
+  expect(search.compare).toHaveLength(7)
+})
+
 test("an unreachable read is unavailable rather than an empty chart", async () => {
   vi.stubEnv("OPENHOME_API_URL", "http://127.0.0.1:9")
   await render()

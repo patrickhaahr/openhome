@@ -17,11 +17,13 @@ isolated `dashboard-health-fixture-run` API. No household data is shown.
 - Without a choice, Axum selects the most recently logged exercises. **Add exercise**
   compares exactly the chosen ones; **Most recent** returns to the default.
 - Each legend entry is a toggle for its line, with its measure, raw baseline and
-  date, and the latest raw value and index. Six lines start shown. Colours follow
-  the read order, and toggled lines keep their state when the period or compared
-  exercises change.
+  date, and the latest raw value and index. Six lines start shown, and an added
+  exercise is always shown. Colours follow the compared order; lines after the
+  twelfth reuse the palette with square markers. Toggled lines keep their state
+  when the period or compared exercises change.
 - **Observed values** lists every logged date for one line, with its raw value,
-  unit and index.
+  unit and index. **Remove** there, or beside a Not charted exercise, stops
+  comparing it. At 24 compared exercises a note says to remove one before adding.
 - Never-logged, out-of-period and unsupported exercises appear under **Not charted**
   with their reason; they get no line.
 - An unreachable read shows _Progress unavailable_ rather than an empty chart.

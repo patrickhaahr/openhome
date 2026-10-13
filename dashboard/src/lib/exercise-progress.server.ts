@@ -31,7 +31,7 @@ export async function readProgress(
 
   const compared = (search.compare ?? []).filter((id) => known.has(id))
 
-  const bounds = periodBounds(period, trainingDayOn(new Date()))
+  const bounds = periodBounds({ period, today: trainingDayOn(new Date()) })
 
   const query: ProgressQuery =
     compared.length === 0
