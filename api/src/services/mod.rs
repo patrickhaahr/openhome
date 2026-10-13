@@ -1,5 +1,6 @@
 pub mod adguard;
 pub mod docker;
+pub mod exercise_progress;
 pub mod feed;
 pub mod ir;
 pub mod map;

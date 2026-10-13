@@ -7,6 +7,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::{AppError, Result};
+use crate::services::exercise_progress::{self, CombinedProgress, Period, Selection};
 
 #[derive(Debug, Deserialize)]
 pub struct ListExercises {
@@ -114,6 +115,7 @@ pub fn router() -> Router<crate::AppState> {
                 .patch(update_exercise)
                 .delete(delete_exercise),
         )
+        .route("/api/exercises/progress", get(combined_progress))
         .route("/api/exercises/{id}/progress", get(exercise_progress))
         .merge(workout_router())
         .merge(metrics_router())
@@ -780,6 +782,31 @@ async fn exercise_progress(
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to compute progress: {e}")))?;
 
     Ok(Json(ExerciseProgress { exercise, data }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CombinedProgressQuery {
+    from: Option<String>,
+    to: Option<String>,
+    exercise_ids: Option<String>,
+}
+
+/// Several Exercises' Progress Lines, indexed for one chart; the rules live in
+/// `services::exercise_progress`.
+async fn combined_progress(
+    State(state): State<crate::AppState>,
+    Query(params): Query<CombinedProgressQuery>,
+) -> Result<Json<CombinedProgress>> {
+    let (Some(from), Some(to)) = (params.from.as_deref(), params.to.as_deref()) else {
+        return Err(AppError::Validation(
+            "Progress needs 'from' and 'to' days written YYYY-MM-DD".to_string(),
+        ));
+    };
+    let period = Period::parse(from, to)?;
+    let selection = Selection::parse(params.exercise_ids.as_deref())?;
+    Ok(Json(
+        exercise_progress::combined_progress(&state.db, period, selection).await?,
+    ))
 }
 
 // ---------------------------------------------------------------------------
