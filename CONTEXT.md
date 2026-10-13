@@ -286,7 +286,7 @@ The per-date aggregate of one Exercise's logged Sets served by the Axum API: bes
 _Avoid_: Interpolated trend, forecast chart
 
 **Progress Line**:
-One Exercise's observed progress indexed for a combined chart: the best reps of an unweighted reps Set, or the longest unweighted Timed Hold, on each logged date, divided by its baseline (the first date in the period with a value above zero) and multiplied by 100. Raw values and units stay beside the index. An Exercise whose Sets carry Added Weight or mix reps with holds has no line.
+One Exercise's observed progress indexed for a combined chart: best unweighted reps, longest unweighted Timed Hold, or best eligible Epley added-load estimate on each logged date, divided by its baseline (the first date in the period with a value above zero) and multiplied by 100. Weighted reps use positive Added Weight at 1–10 reps; one rep uses the lifted load. Raw values, units and omitted dates stay beside the index. An Exercise that mixes reps with holds, has weighted holds, or has no valid estimate has no line. Estimated kilograms exclude Body Weight; weighted bodyweight movements show an added-load proxy, never total strength.
 _Avoid_: Strength score, combined volume, trend line
 
 **Body Weight**:

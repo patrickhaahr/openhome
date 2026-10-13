@@ -4,12 +4,12 @@
 //! Each Exercise gets one type-appropriate metric chosen from its Sets in the period:
 //! - bodyweight repetitions: the best reps of any unweighted reps Set on a day;
 //! - Timed Hold seconds: the longest unweighted hold on a day.
+//! - weighted repetitions: the best Epley added-load estimate from 1–10 reps on a day.
 //!
 //! The line is indexed to 100 at its first positive sample in the period. Only observed days have
 //! samples, so gaps, plateaus and declines stay visible; nothing is interpolated or clamped.
-//! Exercises whose Sets carry Added Weight, or mix reps with holds, are reported as unsupported
-//! instead of being forced onto a misleading line. The per-exercise Progress Series endpoint is
-//! unchanged.
+//! Mixed reps/holds and weighted holds are unsupported. See docs/exercise-progress.md for the
+//! selection policy and estimation limits. The per-exercise Progress Series endpoint is unchanged.
 
 use std::collections::HashMap;
 
@@ -115,6 +115,8 @@ pub enum LineProgress {
         unit: &'static str,
         baseline: Sample,
         samples: Vec<IndexedSample>,
+        /// Logged dates without a valid value for the selected metric; never plotted as zero.
+        omitted_dates: Vec<String>,
     },
     Unsupported {
         reason: Unsupported,
@@ -129,6 +131,8 @@ pub enum LineProgress {
 pub enum Metric {
     Repetitions,
     HoldSeconds,
+    #[serde(rename = "estimated_1rm")]
+    Estimated1rm,
 }
 
 impl Metric {
@@ -136,6 +140,7 @@ impl Metric {
         match self {
             Self::Repetitions => "reps",
             Self::HoldSeconds => "s",
+            Self::Estimated1rm => "kg",
         }
     }
 }
@@ -143,24 +148,44 @@ impl Metric {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Unsupported {
-    /// At least one Set carries Added Weight, which a reps or seconds line cannot represent.
-    AddedWeight,
+    /// Timed Holds with Added Weight have no supported strength estimate.
+    WeightedHolds,
+    /// No finite positive added-load estimate from a Set of 1–10 reps.
+    NoValidEstimate,
     /// Bodyweight reps and Timed Holds were both logged, so no single metric fits.
     MixedSetKinds,
     /// Every observed value is zero, leaving no baseline to index against.
     NoPositiveValue,
 }
 
+/// Keep repetition/second counts as JSON integers while allowing fractional load estimates.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum RawValue {
+    Count(i64),
+    Estimate(f64),
+}
+
+impl RawValue {
+    #[allow(clippy::cast_precision_loss)] // Counts are exact at realistic training sizes.
+    fn number(self) -> f64 {
+        match self {
+            Self::Count(value) => value as f64,
+            Self::Estimate(value) => value,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Sample {
     pub date: String,
-    pub value: i64,
+    pub value: RawValue,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct IndexedSample {
     pub date: String,
-    pub value: i64,
+    pub value: RawValue,
     /// `value` relative to the baseline, where the baseline is 100.
     pub index: f64,
 }
@@ -175,6 +200,7 @@ struct LoggedDay {
     hold_sets: i64,
     best_reps: Option<i64>,
     best_hold_s: Option<i64>,
+    best_estimated_1rm: Option<f64>,
 }
 
 /// Reads the selected Exercises' Progress Lines for the period.
@@ -224,11 +250,15 @@ pub async fn combined_progress(
         SELECT we.exercise_id AS "exercise_id!: i64",
                CAST(w.date AS TEXT) AS "date!: String",
                CAST(SUM(COALESCE(s.weight_kg, 0) <> 0) AS INTEGER) AS "weighted_sets!: i64",
-               CAST(SUM(COALESCE(s.weight_kg, 0) = 0 AND s.reps IS NOT NULL) AS INTEGER) AS "rep_sets!: i64",
-               CAST(SUM(COALESCE(s.weight_kg, 0) = 0 AND s.reps IS NULL) AS INTEGER) AS "hold_sets!: i64",
+               CAST(SUM(s.reps IS NOT NULL) AS INTEGER) AS "rep_sets!: i64",
+               CAST(SUM(s.reps IS NULL) AS INTEGER) AS "hold_sets!: i64",
                CAST(MAX(CASE WHEN COALESCE(s.weight_kg, 0) = 0 THEN s.reps END) AS INTEGER) AS "best_reps?: i64",
                CAST(MAX(CASE WHEN COALESCE(s.weight_kg, 0) = 0 AND s.reps IS NULL
-                             THEN s.duration_seconds END) AS INTEGER) AS "best_hold_s?: i64"
+                             THEN s.duration_seconds END) AS INTEGER) AS "best_hold_s?: i64",
+               CAST(MAX(CASE WHEN s.weight_kg > 0 AND s.reps BETWEEN 1 AND 10
+                             THEN CASE WHEN s.reps = 1 THEN s.weight_kg
+                                       ELSE s.weight_kg * (1.0 + s.reps / 30.0) END
+                        END) AS REAL) AS "best_estimated_1rm?: f64"
         FROM sets s
         JOIN workout_exercises we ON we.id = s.workout_exercise_id
         JOIN workouts w ON w.id = we.workout_id
@@ -315,14 +345,15 @@ fn line(days: &[LoggedDay]) -> LineProgress {
         total(|day| day.rep_sets),
         total(|day| day.hold_sets),
     ) {
-        (weighted, _, _) if weighted > 0 => {
-            return LineProgress::Unsupported {
-                reason: Unsupported::AddedWeight,
-            };
-        }
         (_, reps, holds) if reps > 0 && holds > 0 => {
             return LineProgress::Unsupported {
                 reason: Unsupported::MixedSetKinds,
+            };
+        }
+        (weighted, reps, _) if weighted > 0 && reps > 0 => Metric::Estimated1rm,
+        (weighted, _, _) if weighted > 0 => {
+            return LineProgress::Unsupported {
+                reason: Unsupported::WeightedHolds,
             };
         }
         (_, reps, _) if reps > 0 => Metric::Repetitions,
@@ -333,29 +364,49 @@ fn line(days: &[LoggedDay]) -> LineProgress {
         .iter()
         .filter_map(|day| {
             let value = match metric {
-                Metric::Repetitions => day.best_reps,
-                Metric::HoldSeconds => day.best_hold_s,
+                Metric::Repetitions => day.best_reps.map(RawValue::Count),
+                Metric::HoldSeconds => day.best_hold_s.map(RawValue::Count),
+                Metric::Estimated1rm => day.best_estimated_1rm.map(RawValue::Estimate),
             }?;
+            if !value.number().is_finite() {
+                return None;
+            }
             Some(Sample {
                 date: day.date.clone(),
                 value,
             })
         })
         .collect();
-    let Some(baseline) = observed.iter().find(|sample| sample.value > 0).cloned() else {
+    let Some(baseline) = observed
+        .iter()
+        .find(|sample| sample.value.number() > 0.0)
+        .cloned()
+    else {
         return LineProgress::Unsupported {
-            reason: Unsupported::NoPositiveValue,
+            reason: if metric == Metric::Estimated1rm {
+                Unsupported::NoValidEstimate
+            } else {
+                Unsupported::NoPositiveValue
+            },
         };
     };
 
-    #[allow(clippy::cast_precision_loss)] // Logged reps and seconds are far below 2^52.
-    let samples = observed
+    let samples: Vec<IndexedSample> = observed
         .into_iter()
-        .map(|sample| IndexedSample {
-            index: sample.value as f64 / baseline.value as f64 * 100.0,
-            date: sample.date,
-            value: sample.value,
+        .filter_map(|sample| {
+            let index = sample.value.number() / baseline.value.number() * 100.0;
+            index.is_finite().then_some(IndexedSample {
+                index,
+                date: sample.date,
+                value: sample.value,
+            })
         })
+        .collect();
+
+    let omitted_dates = days
+        .iter()
+        .filter(|day| !samples.iter().any(|sample| sample.date == day.date))
+        .map(|day| day.date.clone())
         .collect();
 
     LineProgress::Charted {
@@ -363,5 +414,6 @@ fn line(days: &[LoggedDay]) -> LineProgress {
         unit: metric.unit(),
         baseline,
         samples,
+        omitted_dates,
     }
 }
