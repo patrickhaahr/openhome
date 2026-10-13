@@ -210,26 +210,34 @@ test("indexes bodyweight reps and holds to their baselines, keeps declines, and 
 
   await render()
 
-  expect(legend()).toEqual(lines({ "Pull-up": true, "Planche Hold": true }))
-  expect(drawnLines()).toBe(2)
+  expect(legend()).toEqual(
+    lines({
+      "Pull-up": true,
+      "Planche Hold": true,
+      "Converging Chest Press": true,
+    })
+  )
+  expect(drawnLines()).toBe(3)
   expect(container.textContent).toContain("Best set reps · baseline 8 reps on")
   expect(container.textContent).toContain("Latest 6 reps · 75")
   expect(container.textContent).toContain("Latest 1:15 min · 375")
   // The most recently logged charted line is inspected first.
   expect(observed()).toEqual([
-    [`${shortDay(daysAgo(30))} · baseline`, "20 s", "100"],
-    [shortDay(daysAgo(2)), "1:15 min", "375"],
+    [`${shortDay(daysAgo(2))} · baseline`, "53.3 kg", "100"],
   ])
-  // The weighted lift is listed with its reason instead of an invented line.
-  expect(notCharted()).toEqual([
-    "Converging Chest PressHas sets with added weight; weighted progress is not charted yet",
-  ])
+  expect(notCharted()).toEqual([])
 
   await toggleLine("Pull-up")
-  expect(legend()).toEqual(lines({ "Pull-up": false, "Planche Hold": true }))
-  expect(drawnLines()).toBe(1)
-  await toggleLine("Pull-up")
+  expect(legend()).toEqual(
+    lines({
+      "Pull-up": false,
+      "Planche Hold": true,
+      "Converging Chest Press": true,
+    })
+  )
   expect(drawnLines()).toBe(2)
+  await toggleLine("Pull-up")
+  expect(drawnLines()).toBe(3)
 
   const select = container.querySelector("select")
 
@@ -244,6 +252,49 @@ test("indexes bodyweight reps and holds to their baselines, keeps declines, and 
     [shortDay(daysAgo(20)), "10 reps", "125"],
     [shortDay(daysAgo(2)), "6 reps", "75"],
   ])
+})
+
+test("weighted lines expose decimal estimates, selection limits and omitted days while retaining toggles", async () => {
+  await log(daysAgo(30), [
+    ["Converging Chest Press", [{ reps: 5, weight_kg: 70 }]],
+  ])
+  await log(daysAgo(20), [
+    ["Converging Chest Press", [{ reps: 11, weight_kg: 100 }]],
+  ])
+  await log(daysAgo(2), [
+    ["Converging Chest Press", [{ reps: 10, weight_kg: 45 }]],
+    ["Dip", [{ reps: 8 }]],
+    ["Planche Hold", [{ duration_seconds: 30, weight_kg: 5 }]],
+  ])
+  await render()
+  expect(container.textContent).toContain("Latest 60 kg · 73")
+  expect(container.textContent).toContain("baseline 81.7 kg")
+  expect(container.textContent).toContain(
+    "Weighted holds have no supported estimate"
+  )
+  const select = container.querySelector("select")
+
+  if (select === null) throw new Error("Missing observed-values select")
+  await act(async () => {
+    select.value = String(await libraryId("Converging Chest Press"))
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(observed()).toEqual([
+    [`${shortDay(daysAgo(30))} · baseline`, "81.7 kg", "100"],
+    [shortDay(daysAgo(2)), "60 kg", "73"],
+  ])
+  expect(container.textContent).toContain("Epley")
+  expect(container.textContent).toContain("1–10 reps")
+  expect(container.textContent).toContain("Added load only")
+  expect(container.textContent).toContain(
+    `Not estimated: ${shortDay(daysAgo(20))}`
+  )
+  await toggleLine("Converging Chest Press")
+  await click("4 weeks")
+  expect(legend().get("Converging Chest Press")).toBe(false)
+  expect(container.textContent).toContain("baseline 60 kg")
+  await toggleLine("Converging Chest Press")
+  expect(drawnLines()).toBe(2)
 })
 
 test("compared never-logged and out-of-period exercises get no line until logged in the period", async () => {
@@ -324,6 +375,26 @@ test("an unreachable read is unavailable rather than an empty chart", async () =
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
   await click("Refresh progress")
   expect(container.textContent).toContain("Nothing logged in this period")
+})
+
+test("large weighted changes keep plot work bounded without dropping observed values", async () => {
+  await log(daysAgo(10), [
+    ["Converging Chest Press", [{ reps: 1, weight_kg: 0.01 }]],
+  ])
+  await log(daysAgo(2), [
+    ["Converging Chest Press", [{ reps: 1, weight_kg: 1_000_000 }]],
+  ])
+  await render()
+  expect(drawnLines()).toBe(1)
+  expect(
+    container.querySelectorAll(".progress-grid").length
+  ).toBeLessThanOrEqual(6)
+  expect(container.querySelectorAll(".progress-line circle")).toHaveLength(2)
+  expect(observed().at(-1)).toEqual([
+    shortDay(daysAgo(2)),
+    "1,000,000 kg",
+    "10000000000",
+  ])
 })
 
 function shortDay(day: string): string {
