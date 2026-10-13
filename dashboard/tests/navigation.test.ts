@@ -23,10 +23,20 @@ test("opens focused views through persistent navigation, restores browser histor
   const originalWishlistLoader = WishlistRoute.options.loader
   const originalWatchlistLoader = WatchlistRoute.options.loader
   const originalWorkoutLoader = WorkoutRoute.options.loader
-  WorkoutRoute.options.loader = () => ({
-    state: "unavailable",
-    reason: "unavailable",
-  })
+  WorkoutRoute.options.loader = ({ deps }) =>
+    deps.view === "body"
+      ? {
+          view: "body",
+          data: {
+            state: "available",
+            profile: { height_cm: null, sex: null, hr_max_bpm: null },
+            history: [],
+          },
+        }
+      : {
+          view: "training",
+          data: { state: "unavailable", reason: "unavailable" },
+        }
   WatchlistRoute.options.loader = () => ({
     state: "available",
     owners: [],
@@ -152,6 +162,34 @@ test("opens focused views through persistent navigation, restores browser histor
     expect(
       document.querySelector('nav a[aria-current="page"]')?.textContent
     ).toBe("Workout")
+    expect(document.querySelector("main")?.textContent).toContain(
+      "Workouts unavailable"
+    )
+
+    const body = document.querySelector<HTMLAnchorElement>(
+      'nav[aria-label="Workout views"] a[href*="view=body"]'
+    )
+
+    if (body === null) throw new Error("Expected Profile & weight navigation")
+
+    await act(async () => {
+      body.click()
+      await router.load()
+    })
+    expect(router.state.location.search).toMatchObject({ view: "body" })
+    expect(
+      document.querySelector(
+        'nav[aria-label="Workout views"] a[aria-current="page"]'
+      )?.textContent
+    ).toBe("Profile & weight")
+    expect(document.querySelector("main")?.textContent).toContain(
+      "No body weight recorded in this date range."
+    )
+
+    await act(async () => {
+      history.back()
+      await router.load()
+    })
     expect(document.querySelector("main")?.textContent).toContain(
       "Workouts unavailable"
     )

@@ -355,6 +355,12 @@ switchbot-clean:
 dashboard-run:
     bunx vite dev --port 3000
 
+# Inspect and capture dashboard browser evidence in a named agent-browser session
+[group('dashboard')]
+[positional-arguments]
+dashboard-browser *args:
+    agent-browser "$@"
+
 # Inspect the attached iPad's exact Safari dashboard tab
 [group('dashboard')]
 [positional-arguments]
