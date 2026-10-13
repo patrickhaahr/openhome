@@ -5,6 +5,9 @@ import { BodyProfile } from "@/components/body-profile"
 import { ExerciseProgress } from "@/components/exercise-progress"
 import { buttonVariants } from "@/components/ui/button"
 import { Workouts } from "@/components/workouts"
+import { TrainingSummaries } from "@/components/training-summaries"
+import { trainingSearch } from "@/lib/training"
+import { loadTraining } from "@/lib/training.functions"
 import { bodyRange } from "@/lib/body-profile"
 import {
   loadBodyProfile,
@@ -19,9 +22,10 @@ import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
 export const Route = createFileRoute("/workout")({
   head: () => ({ meta: [{ title: "Workout · OpenHome" }] }),
   validateSearch: workoutSearch.extend({
-    view: z.enum(["body", "progress"]).optional().catch(undefined),
+    view: z.enum(["body", "progress", "recovery"]).optional().catch(undefined),
     ...bodyRange.shape,
     ...progressSearch.shape,
+    ...trainingSearch.shape,
   }),
   loaderDeps: ({ search }) => ({
     view: search.view,
@@ -31,6 +35,8 @@ export const Route = createFileRoute("/workout")({
     shown: search.shown,
     period: search.period,
     compare: search.compare,
+    day: search.day,
+    noop: search.noop,
   }),
   loader: async ({ deps }) => {
     switch (deps.view) {
@@ -38,6 +44,8 @@ export const Route = createFileRoute("/workout")({
         return { view: "body" as const, data: await loadBodyProfile(deps) }
       case "progress":
         return { view: "progress" as const, data: await loadProgress(deps) }
+      case "recovery":
+        return { view: "recovery" as const, data: await loadTraining(deps) }
       case undefined:
         return { view: "training" as const, data: await loadWorkouts(deps) }
     }
@@ -63,8 +71,8 @@ function WorkoutPage(): React.JSX.Element {
           Workout
         </h1>
         <p className="feature-intro">
-          Log your training, compare progress across exercises and keep your
-          profile up to date.
+          Log your training, compare exercise progress, explore NOOP recovery
+          and recorded sessions, and keep your profile up to date.
         </p>
       </header>
       <nav className="workout-view-nav" aria-label="Workout views">
@@ -93,6 +101,17 @@ function WorkoutPage(): React.JSX.Element {
           })}
         >
           Progress
+        </Link>
+        <Link
+          to="/workout"
+          search={(previous) => ({ ...previous, view: "recovery" })}
+          activeOptions={{ exact: true, includeSearch: true }}
+          className={buttonVariants({
+            variant: data.view === "recovery" ? "secondary" : "ghost",
+            size: "lg",
+          })}
+        >
+          Recovery & NOOP
         </Link>
         <Link
           to="/workout"
@@ -139,6 +158,35 @@ function WorkoutPage(): React.JSX.Element {
             else
               await navigate({
                 search: (previous) => ({ ...previous, ...range }),
+                resetScroll: false,
+              })
+          }}
+        />
+      ) : null}
+      {data.view === "recovery" ? (
+        <TrainingSummaries
+          key={data.data.day}
+          data={data.data}
+          refresh={() => router.invalidate({ sync: true })}
+          selectDay={async (day) => {
+            if (day === data.data.day && search.noop === undefined)
+              await router.invalidate({ sync: true })
+            else
+              await navigate({
+                search: (previous) => ({ ...previous, day, noop: undefined }),
+                resetScroll: false,
+              })
+          }}
+          open={async (noop) => {
+            if (
+              noop?.source === search.noop?.source &&
+              noop?.start === search.noop?.start &&
+              noop?.sport === search.noop?.sport
+            )
+              await router.invalidate({ sync: true })
+            else
+              await navigate({
+                search: (previous) => ({ ...previous, noop }),
                 resetScroll: false,
               })
           }}
