@@ -34,8 +34,14 @@ type ExerciseProgressProps = {
 /** Lines shown before the household toggles any, keeping a first glance readable. */
 const initiallyShown = 6
 
-/** Distinct line colours; a line keeps its colour however others are toggled. */
+/** Distinct line colours; later lines reuse them with square markers. */
 const paletteSize = 12
+
+/** A line's colour slot and marker shape, fixed by its place in the request. */
+type Marker = { readonly colour: number; readonly dot: "round" | "square" }
+
+/** Whether each toggled line is shown, by Exercise id; untouched lines use the default. */
+type Toggles = ReadonlyMap<number, boolean>
 
 function isCharted(line: ProgressLine): line is ChartedLine {
   return line.status === "charted"
@@ -51,6 +57,9 @@ export function ExerciseProgress({
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const [failure, setFailure] = useState<string>()
+
+  // Choices outlive reads (period changes, added exercises), so they live above the view.
+  const [toggled, setToggled] = useState<Toggles>(() => new Map())
 
   async function run(work: () => Promise<void>): Promise<void> {
     if (locked.current) return
@@ -72,6 +81,8 @@ export function ExerciseProgress({
     data.state === "available"
       ? data.progress.exercises.map((line) => line.exercise.id)
       : []
+
+  const full = shownIds.length >= maxCompared
 
   return (
     <div className="exercise-progress workouts" aria-busy={busy}>
@@ -100,8 +111,12 @@ export function ExerciseProgress({
                 exercises={data.library.filter(
                   (exercise) => !shownIds.includes(exercise.id)
                 )}
-                disabled={busy || shownIds.length >= maxCompared}
+                disabled={busy || full}
                 choose={(exercise) => {
+                  // A chosen exercise is shown even beyond the first few lines.
+                  setToggled((current) =>
+                    new Map(current).set(exercise.id, true)
+                  )
                   void run(() => compare([...shownIds, exercise.id]))
                 }}
               />
@@ -129,6 +144,12 @@ export function ExerciseProgress({
           </Button>
         </div>
       </div>
+      {data.state === "available" && full ? (
+        <p className="workout-muted">
+          {maxCompared} exercises is the most one chart compares. Remove one to
+          add another.
+        </p>
+      ) : null}
       <p className="workout-feedback" data-failed="true" role="status">
         {failure}
       </p>
@@ -147,6 +168,10 @@ export function ExerciseProgress({
           period={data.period}
           explicit={data.compared.length > 0}
           busy={busy}
+          toggled={toggled}
+          toggle={(id, shown) =>
+            setToggled((current) => new Map(current).set(id, shown))
+          }
           remove={(id) => {
             void run(() => compare(shownIds.filter((shown) => shown !== id)))
           }}
@@ -161,6 +186,9 @@ type ProgressViewProps = {
   readonly period: ProgressPeriod
   readonly explicit: boolean
   readonly busy: boolean
+  readonly toggled: Toggles
+  readonly toggle: (id: number, shown: boolean) => void
+  /** Stop comparing an Exercise; the rest become an explicit comparison. */
   readonly remove: (id: number) => void
 }
 
@@ -169,17 +197,14 @@ function ProgressView({
   period,
   explicit,
   busy,
+  toggled,
+  toggle,
   remove,
 }: ProgressViewProps): React.JSX.Element {
   const charted = progress.exercises.filter(isCharted)
 
   const missing = progress.exercises.filter(
     (line): line is Exclude<ProgressLine, ChartedLine> => !isCharted(line)
-  )
-
-  // Choices outlive reads (period changes, added exercises); untouched lines use the default.
-  const [toggled, setToggled] = useState<ReadonlyMap<number, boolean>>(
-    () => new Map()
   )
 
   const shown = new Set(
@@ -193,13 +218,20 @@ function ProgressView({
 
   const [inspected, setInspected] = useState<number>()
 
-  // Palette slots follow the read's order, so toggling never recolours a line.
-  const colour = new Map(
-    charted.map((line, position) => [
+  // Slots follow the request order, so toggling, periods and absences never recolour a
+  // compared line.
+  const markers = new Map(
+    progress.exercises.map((line, position): [number, Marker] => [
       line.exercise.id,
-      (position % paletteSize) + 1,
+      {
+        colour: (position % paletteSize) + 1,
+        dot: position < paletteSize ? "round" : "square",
+      },
     ])
   )
+
+  // Removing the only line of the default selection would change nothing.
+  const removable = explicit || progress.exercises.length > 1
 
   const visible = charted.filter((line) => shown.has(line.exercise.id))
 
@@ -245,7 +277,7 @@ function ProgressView({
                 from={progress.from}
                 to={progress.to}
                 lines={visible}
-                colour={colour}
+                markers={markers}
               />
               <div
                 className="progress-legend"
@@ -261,17 +293,13 @@ function ProgressView({
                       type="button"
                       aria-pressed={shown.has(line.exercise.id)}
                       onClick={() =>
-                        setToggled((current) =>
-                          new Map(current).set(
-                            line.exercise.id,
-                            !shown.has(line.exercise.id)
-                          )
-                        )
+                        toggle(line.exercise.id, !shown.has(line.exercise.id))
                       }
                     >
                       <span
                         className="progress-swatch"
-                        data-colour={colour.get(line.exercise.id)}
+                        data-colour={markers.get(line.exercise.id)?.colour}
+                        data-dot={markers.get(line.exercise.id)?.dot}
                         aria-hidden="true"
                       />
                       <span className="progress-legend-name">
@@ -304,26 +332,40 @@ function ProgressView({
               <label htmlFor={selectId} className="sr-only">
                 Exercise to inspect
               </label>
-              <NativeSelect
-                id={selectId}
-                className="w-full"
-                value={String(inspectedLine.exercise.id)}
-                onChange={(event) => setInspected(Number(event.target.value))}
-              >
-                {charted.map((line) => (
-                  <NativeSelectOption
-                    key={line.exercise.id}
-                    value={line.exercise.id}
+              <div className="progress-inspect">
+                <NativeSelect
+                  id={selectId}
+                  className="w-full"
+                  value={String(inspectedLine.exercise.id)}
+                  onChange={(event) => setInspected(Number(event.target.value))}
+                >
+                  {charted.map((line) => (
+                    <NativeSelectOption
+                      key={line.exercise.id}
+                      value={line.exercise.id}
+                    >
+                      {line.exercise.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                {removable ? (
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    aria-label={`Stop comparing ${inspectedLine.exercise.name}`}
+                    onClick={() => remove(inspectedLine.exercise.id)}
                   >
-                    {line.exercise.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
             </CardHeader>
             <CardContent>
               <p className="workout-muted">
                 {metricLabel(inspectedLine)} on each logged day, in{" "}
-                {inspectedLine.unit === "reps" ? "repetitions" : "seconds"}.
+                {inspectedLine.metric === "repetitions"
+                  ? "repetitions."
+                  : "seconds."}
               </p>
               <table className="body-history-table">
                 <thead>
@@ -367,7 +409,7 @@ function ProgressView({
                         {missingLineReason(line)}
                       </span>
                     </div>
-                    {explicit ? (
+                    {removable ? (
                       <Button
                         variant="ghost"
                         disabled={busy}
@@ -392,7 +434,7 @@ type ProgressChartProps = {
   readonly from: string
   readonly to: string
   readonly lines: ReadonlyArray<ChartedLine>
-  readonly colour: ReadonlyMap<number, number>
+  readonly markers: ReadonlyMap<number, Marker>
 }
 
 /** Observed days as dots joined in order; long gaps are dashed and nothing is interpolated. */
@@ -400,9 +442,9 @@ function ProgressChart({
   from,
   to,
   lines,
-  colour,
+  markers,
 }: ProgressChartProps): React.JSX.Element {
-  const scale = chartScale(from, to, lines)
+  const scale = chartScale({ from, to, lines })
 
   const right = plot.width - plot.right
 
@@ -442,7 +484,7 @@ function ProgressChart({
           <g
             key={line.exercise.id}
             className="progress-line"
-            data-colour={colour.get(line.exercise.id)}
+            data-colour={markers.get(line.exercise.id)?.colour}
           >
             {line.samples.slice(1).map((sample, position) => {
               const previous = line.samples[position]
@@ -460,14 +502,24 @@ function ProgressChart({
                 />
               )
             })}
-            {line.samples.map((sample) => (
-              <circle
-                key={sample.date}
-                cx={scale.x(sample.date)}
-                cy={scale.y(sample.index)}
-                r={4}
-              />
-            ))}
+            {line.samples.map((sample) =>
+              markers.get(line.exercise.id)?.dot === "square" ? (
+                <rect
+                  key={sample.date}
+                  x={scale.x(sample.date) - 4}
+                  y={scale.y(sample.index) - 4}
+                  width={8}
+                  height={8}
+                />
+              ) : (
+                <circle
+                  key={sample.date}
+                  cx={scale.x(sample.date)}
+                  cy={scale.y(sample.index)}
+                  r={4}
+                />
+              )
+            )}
           </g>
         ))}
       </svg>

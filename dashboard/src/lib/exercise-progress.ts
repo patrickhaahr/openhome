@@ -49,8 +49,8 @@ export type ProgressSample = z.infer<typeof sample>
 const chartedLine = z.object({
   exercise: exerciseRef,
   status: z.literal("charted"),
+  // Axum also sends `unit`; it follows from `metric`, so it is not kept.
   metric: z.enum(["repetitions", "hold_seconds"]),
-  unit: z.enum(["reps", "s"]),
   baseline: z.object({ date: z.iso.date(), value: z.number().int() }),
   samples: sample.array().min(1),
 })
@@ -143,7 +143,8 @@ export function metricLabel(line: ChartedLine): string {
 
 /** A raw value with its unit, holds as minutes and seconds like the workout log. */
 export function rawValue(line: ChartedLine, value: number): string {
-  if (line.unit === "reps") return `${value} ${value === 1 ? "rep" : "reps"}`
+  if (line.metric === "repetitions")
+    return `${value} ${value === 1 ? "rep" : "reps"}`
 
   return value >= 60
     ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")} min`
@@ -174,10 +175,13 @@ export type ProgressQuery = PeriodBounds & { readonly exercise_ids?: string }
  * @param today - Today's `YYYY-MM-DD` Training Day.
  * @returns `YYYY-MM-DD` bounds for Axum.
  */
-export function periodBounds(
-  period: ProgressPeriod,
-  today: string
-): PeriodBounds {
+export function periodBounds({
+  period,
+  today,
+}: {
+  readonly period: ProgressPeriod
+  readonly today: string
+}): PeriodBounds {
   const from = new Date(
     (dayNumber(today) - progressPeriods[period].days + 1) * dayMs
   )
@@ -210,16 +214,17 @@ const tickSteps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]
 /**
  * Fit the period and visible indexes into the plot, with at most six round y ticks.
  *
- * @param from - First day of the period.
- * @param to - Last day of the period.
+ * @param period - The period's first and last days.
  * @param lines - The lines currently shown.
  * @returns Scales and ticks for drawing.
  */
-export function chartScale(
-  from: string,
-  to: string,
-  lines: ReadonlyArray<ChartedLine>
-): ChartScale {
+export function chartScale({
+  from,
+  to,
+  lines,
+}: PeriodBounds & {
+  readonly lines: ReadonlyArray<ChartedLine>
+}): ChartScale {
   const indexes = lines.flatMap((line) =>
     line.samples.map((sample) => sample.index)
   )

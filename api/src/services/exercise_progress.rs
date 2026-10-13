@@ -168,6 +168,7 @@ pub struct IndexedSample {
 /// One Exercise's Sets on one Workout date, reduced to what metric selection needs.
 #[derive(Debug, Clone)]
 struct LoggedDay {
+    exercise_id: i64,
     date: String,
     weighted_sets: i64,
     rep_sets: i64,
@@ -218,7 +219,7 @@ pub async fn combined_progress(
     let ids = serde_json::to_string(&exercises.iter().map(|e| e.id).collect::<Vec<_>>())
         .map_err(anyhow::Error::from)?;
     let rows = sqlx::query_as!(
-        LoggedDayRow,
+        LoggedDay,
         r#"
         SELECT we.exercise_id AS "exercise_id!: i64",
                CAST(w.date AS TEXT) AS "date!: String",
@@ -246,14 +247,7 @@ pub async fn combined_progress(
 
     let mut days: HashMap<i64, Vec<LoggedDay>> = HashMap::new();
     for row in rows {
-        days.entry(row.exercise_id).or_default().push(LoggedDay {
-            date: row.date,
-            weighted_sets: row.weighted_sets,
-            rep_sets: row.rep_sets,
-            hold_sets: row.hold_sets,
-            best_reps: row.best_reps,
-            best_hold_s: row.best_hold_s,
-        });
+        days.entry(row.exercise_id).or_default().push(row);
     }
 
     let exercises = exercises
@@ -274,17 +268,6 @@ pub async fn combined_progress(
         logged_exercise_count,
         exercises,
     })
-}
-
-#[derive(Debug)]
-struct LoggedDayRow {
-    exercise_id: i64,
-    date: String,
-    weighted_sets: i64,
-    rep_sets: i64,
-    hold_sets: i64,
-    best_reps: Option<i64>,
-    best_hold_s: Option<i64>,
 }
 
 /// The chosen Exercises in request order, plus the ids with any logged Set at all.

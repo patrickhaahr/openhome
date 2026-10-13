@@ -2573,7 +2573,8 @@ a:focus-visible {
     stroke-dasharray: 2 7;
     stroke-width: 2;
   }
-  .progress-line circle {
+  .progress-line circle,
+  .progress-line rect {
     fill: var(--card);
     stroke: currentColor;
     stroke-width: 2.5;
@@ -2629,6 +2630,18 @@ a:focus-visible {
   border: 2px solid currentColor;
   border-radius: 999px;
   background: currentColor;
+  &[data-dot="square"] {
+    border-radius: 2px;
+  }
+}
+@utility progress-inspect {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
 }
 @utility progress-legend-name {
   font-weight: 600;
