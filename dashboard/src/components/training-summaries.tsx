@@ -31,6 +31,10 @@ function value(amount: number | null, unit: string): string {
   return amount === null ? "Not available" : `${number.format(amount)} ${unit}`
 }
 
+function noopButtonId(selection: NoopSelection): string {
+  return `noop-workout-${JSON.stringify([selection.source, selection.start, selection.sport])}`
+}
+
 function Observation({
   label,
   data,
@@ -121,7 +125,8 @@ export function TrainingSummaries({
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const detailRegion = useRef<HTMLDivElement>(null)
-  const detailTrigger = useRef<HTMLButtonElement>(null)
+  const detailSelection = useRef<NoopSelection | undefined>(undefined)
+  const dayButton = useRef<HTMLButtonElement>(null)
   const [feedback, setFeedback] = useState("")
 
   async function run(work: () => Promise<void>): Promise<void> {
@@ -160,7 +165,7 @@ export function TrainingSummaries({
             disabled={busy}
           />
         </label>
-        <Button type="submit" disabled={busy}>
+        <Button ref={dayButton} type="submit" disabled={busy}>
           Show day
         </Button>
         <Button
@@ -212,10 +217,31 @@ export function TrainingSummaries({
                 variant="ghost"
                 disabled={busy}
                 onClick={() => {
+                  const selection =
+                    data.detail.state === "available"
+                      ? data.detail.data
+                      : detailSelection.current
+
                   void run(async () => {
                     await open(undefined)
                     // Wait until run releases the disabled controls before restoring focus.
-                    requestAnimationFrame(() => detailTrigger.current?.focus())
+                    requestAnimationFrame(() => {
+                      const button =
+                        selection === undefined
+                          ? null
+                          : document.getElementById(noopButtonId(selection))
+
+                      if (
+                        button instanceof HTMLButtonElement &&
+                        !button.disabled
+                      ) {
+                        // A deep-linked older session may be inside a collapsed day.
+                        const dayDetails = button.closest("details")
+
+                        if (dayDetails !== null) dayDetails.open = true
+                        button.focus()
+                      } else dayButton.current?.focus()
+                    })
                   })
                 }}
               >
@@ -237,8 +263,8 @@ export function TrainingSummaries({
             data.detail.state === "available" ? data.detail.data : undefined
           }
           disabled={busy}
-          open={(selection, trigger) => {
-            detailTrigger.current = trigger
+          open={(selection) => {
+            detailSelection.current = selection
             void run(async () => {
               await open(selection)
               detailRegion.current?.focus({ preventScroll: true })
@@ -403,7 +429,7 @@ function Context({
 }: {
   readonly data: TrainingContext
   readonly selected: NoopSelection | undefined
-  readonly open: (selection: NoopSelection, trigger: HTMLButtonElement) => void
+  readonly open: (selection: NoopSelection) => void
   readonly disabled: boolean
 }): React.JSX.Element {
   return (
@@ -522,6 +548,7 @@ function Context({
                           key={`${workout.source}/${workout.start}/${workout.sport}`}
                         >
                           <Button
+                            id={noopButtonId(workout)}
                             variant="outline"
                             disabled={disabled}
                             aria-pressed={
@@ -529,15 +556,12 @@ function Context({
                               selected?.start === workout.start &&
                               selected?.sport === workout.sport
                             }
-                            onClick={(event) =>
-                              open(
-                                {
-                                  source: workout.source,
-                                  start: workout.start,
-                                  sport: workout.sport,
-                                },
-                                event.currentTarget
-                              )
+                            onClick={() =>
+                              open({
+                                source: workout.source,
+                                start: workout.start,
+                                sport: workout.sport,
+                              })
                             }
                           >
                             Open {workout.sport} · {at(workout.start)}
