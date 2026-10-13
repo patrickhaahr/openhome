@@ -2073,6 +2073,184 @@ a:focus-visible {
 }
 
 /* Workout: logged history beside one session, with touch-sized set editing. */
+@utility training-summaries {
+  display: grid;
+  gap: 1rem;
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  h3 {
+    font-weight: 600;
+    margin-block: 1.5rem 0.75rem;
+  }
+  p,
+  small {
+    overflow-wrap: anywhere;
+  }
+  button,
+  input,
+  summary {
+    min-height: 3rem;
+    touch-action: manipulation;
+  }
+  > .workout-feedback {
+    margin: 0;
+    min-height: 0;
+  }
+  > .workout-feedback:empty {
+    display: none;
+  }
+}
+@utility training-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  input {
+    font-size: 1rem;
+  }
+}
+@utility training-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  > * {
+    min-width: 0;
+  }
+  @media (max-width: 950px) {
+    grid-template-columns: 1fr;
+  }
+}
+@utility training-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 1rem;
+  margin-block: 1rem;
+}
+@utility training-observation {
+  padding-block: 0.5rem;
+  border-top: 1px solid var(--border);
+  dt {
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+  }
+  dd {
+    margin-top: 0.375rem;
+    font-size: 1.125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  small {
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    color: var(--muted-foreground);
+  }
+}
+@utility training-sync {
+  border-left: 2px solid var(--primary);
+  padding-left: 0.875rem;
+  margin-block: 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  p + p {
+    margin-top: 0.375rem;
+  }
+  strong {
+    color: var(--foreground);
+  }
+}
+@utility training-source {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+@utility training-disclosure {
+  border-top: 1px solid var(--border);
+  margin-top: 1rem;
+  summary {
+    padding-block: 1rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+  }
+  summary span + span {
+    margin-left: 1rem;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    color: var(--muted-foreground);
+  }
+}
+@utility training-day-records {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem;
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
+@utility training-records {
+  display: grid;
+  gap: 1rem;
+  > li {
+    padding-block: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  p,
+  small {
+    margin-top: 0.375rem;
+  }
+  button {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    text-align: left;
+  }
+}
+@utility training-heart-rate {
+  margin-block: 1rem;
+  svg {
+    width: 100%;
+    height: auto;
+  }
+  text {
+    fill: var(--muted-foreground);
+    font-size: 18px;
+  }
+  figcaption {
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+  }
+}
+@utility training-chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+@utility training-chart-point {
+  fill: var(--primary);
+}
+@utility training-series-values {
+  max-height: 15rem;
+  overflow: auto;
+  font-variant-numeric: tabular-nums;
+}
+@utility training-zones {
+  display: grid;
+  gap: 0.5rem;
+  > div {
+    display: grid;
+    gap: 0.25rem;
+  }
+  meter {
+    width: 100%;
+    height: 1rem;
+    accent-color: var(--primary);
+  }
+}
 @utility workout-view-nav {
   display: flex;
   flex-wrap: wrap;
