@@ -196,7 +196,11 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
   await act(async () => {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   })
-  expect(document.activeElement?.textContent).toContain("Open Mobility")
+  expect(document.activeElement).toBe(
+    Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.startsWith("Open Mobility")
+    )
+  )
   expect(container.textContent).toContain("Explore a recorded session")
 })
 
@@ -278,4 +282,67 @@ test("a missing or rejected detail and a failed context leave independent recove
   expect(
     trainingSearch.parse({ day: "2026-02-30", noop: { source: "my-whoop" } })
   ).toEqual({ day: undefined, noop: undefined })
+})
+
+test("closing a deep-linked or refreshed detail restores a current button, with a toolbar fallback when context is unavailable", async () => {
+  search.day = "2026-10-01"
+  search.noop = {
+    source: "my-whoop",
+    start: "2026-09-30T12:00:00+02:00",
+    sport: "Run / walk",
+  }
+  await render()
+
+  async function closeFromKeyboard(): Promise<void> {
+    const close = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Close NOOP detail"
+    )
+
+    if (close === undefined) throw new Error("Missing close button")
+    close.focus()
+    await click("Close NOOP detail")
+    await act(async () => {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve())
+      )
+    })
+  }
+
+  await closeFromKeyboard()
+  expect(document.activeElement).toBe(
+    Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.startsWith("Open Run / walk")
+    )
+  )
+  expect(document.activeElement?.closest("details")?.open).toBe(true)
+
+  await click("Open Cycling")
+  const realFetch = globalThis.fetch
+
+  const failedContext = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation((input, options) =>
+      (input instanceof Request ? input.url : input.toString()).includes(
+        "/api/training/context/"
+      )
+        ? Promise.resolve(new Response(null, { status: 500 }))
+        : realFetch(input, options)
+    )
+
+  await click("Refresh training")
+  expect(container.textContent).toContain("Training context unavailable")
+  failedContext.mockRestore()
+  await click("Refresh training")
+  await closeFromKeyboard()
+  expect(document.activeElement).toBe(
+    Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.startsWith("Open Cycling")
+    )
+  )
+
+  await click("Open Mobility")
+  vi.stubEnv("API_KEY", "wrong-private-credential")
+  await click("Refresh training")
+  await closeFromKeyboard()
+  expect(document.activeElement?.textContent).toBe("Show day")
 })

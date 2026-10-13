@@ -33,6 +33,8 @@ source/start/sport identity (including `/` in a sport), missing strap samples,
 Profile-dependent zones, recovery marks with missing observations, series gaps,
 covered absence versus unsynced data, authorization recovery, independent read
 failures, sanitized diagnostics and returning focus to the launching button.
+Focus restoration also covers direct detail links, a failed/recovered context
+list, and a toolbar fallback when the list remains unavailable.
 Existing API training integration fixtures remain unchanged.
 
 Browser checks found no horizontal overflow in either orientation; visible
