@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT e.id AS \"id!: i64\", e.name, e.category,\n               EXISTS (SELECT 1 FROM workout_exercises we\n                       JOIN sets s ON s.workout_exercise_id = we.id\n                       WHERE we.exercise_id = e.id) AS \"ever_logged!: bool\"\n        FROM exercises e\n        WHERE e.id IN (SELECT value FROM json_each($1))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "ever_logged!: bool",
+        "ordinal": 3,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "f5907bfcbb74b1fe7bbe29f7a350d6791c64910d31ba83b4df6e5f2cd65619b0"
+}
