@@ -2073,6 +2073,98 @@ a:focus-visible {
 }
 
 /* Workout: logged history beside one session, with touch-sized set editing. */
+@utility workout-view-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1.5rem 2rem;
+}
+@utility body-profile {
+  display: grid;
+  gap: 1.5rem;
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+}
+@utility body-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+@utility body-profile-values {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem 1rem;
+  }
+  dt {
+    color: var(--muted-foreground);
+  }
+  dd {
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+  }
+}
+@utility body-history-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  input {
+    min-height: 3rem;
+    font-size: 1rem;
+  }
+  > .workout-field {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+  button {
+    min-height: 3rem;
+  }
+  > .workout-problem {
+    flex-basis: 100%;
+  }
+}
+@utility body-history-table {
+  width: 100%;
+  margin-top: 1rem;
+  th,
+  td {
+    padding: 0.875rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  thead th {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+  }
+  tbody th {
+    font-weight: 400;
+  }
+  tr > :last-child {
+    text-align: right;
+    font-family: var(--font-mono);
+  }
+}
+@utility body-history-empty {
+  padding-block: 2rem;
+  color: var(--muted-foreground);
+}
+@utility body-history-limit {
+  margin-top: 1rem;
+  color: var(--primary);
+}
 .focused-page.workout-page {
   max-width: 80rem;
 }
