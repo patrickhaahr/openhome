@@ -28,6 +28,8 @@ let mutationWork: Promise<BodyMutation | undefined>
 
 let refreshWork: Promise<void>
 
+let afterWrite: (() => void) | undefined
+
 beforeEach(async () => {
   fixture = await startAxumFixture()
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
@@ -39,6 +41,7 @@ beforeEach(async () => {
   range = {}
   mutationWork = Promise.resolve(undefined)
   refreshWork = Promise.resolve()
+  afterWrite = undefined
 })
 
 afterEach(async () => {
@@ -77,7 +80,12 @@ async function render(): Promise<void> {
         data={data}
         range={range}
         change={(command) => {
-          const work = writeBodyProfile(command)
+          const work = writeBodyProfile(command).then((result) => {
+            afterWrite?.()
+
+            return result
+          })
+
           mutationWork = work
 
           return work
@@ -293,4 +301,47 @@ test("unavailable and unauthorized reads never masquerade as unconfigured data a
   expect(container.textContent).toContain(
     "No body weight recorded in this date range."
   )
+})
+
+test("a failed read after saving weight preserves the active Profile draft and offers recovery with the write receipt", async () => {
+  await render()
+  await click("Edit profile")
+  await type("Height (cm)", "182,75")
+  await type("Body weight (kg)", "74,5")
+  afterWrite = () => vi.stubEnv("API_KEY", "invalid-synthetic-key")
+  await click("Save body weight")
+
+  expect(container.textContent).toContain("Profile & weight unavailable")
+
+  const refresh = Array.from(container.querySelectorAll("button")).find(
+    (button) => button.textContent === "Refresh profile & weight"
+  )
+
+  expect(refresh?.disabled).toBe(false)
+  expect(container.textContent).toContain("Body weight saved to OpenHome.")
+
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  afterWrite = undefined
+  await click("Refresh profile & weight")
+  expect(input("Height (cm)").value).toBe("182,75")
+  await click("Save profile")
+  expect(await api(profile, "/api/profile")).toMatchObject({
+    height_cm: 182.75,
+  })
+  expect(
+    (await api(bodyWeight.array(), "/api/body_weight")).map(
+      (entry) => entry.weight_kg
+    )
+  ).toEqual([74.5])
+})
+
+test("a confirmed Profile save remains visible if its follow-up read is unavailable", async () => {
+  await render()
+  await click("Edit profile")
+  await type("Maximum heart rate (bpm)", "180")
+  afterWrite = () => vi.stubEnv("API_KEY", "invalid-synthetic-key")
+  await click("Save profile")
+  expect(container.textContent).toContain("Profile & weight unavailable")
+  expect(container.textContent).toContain("Profile saved to OpenHome.")
+  expect(await api(profile, "/api/profile")).toMatchObject({ hr_max_bpm: 180 })
 })

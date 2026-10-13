@@ -12,7 +12,6 @@ import {
   type BodyMutation,
   type BodyRange,
   type BodyState,
-  type Profile,
 } from "@/lib/body-profile"
 import { trainingDayOn } from "@/lib/workout"
 
@@ -30,6 +29,11 @@ type Feedback = {
   readonly area: "profile" | "weight" | "history"
 }
 
+type ProfileEditing = {
+  readonly original: ReturnType<typeof profileDraft>
+  readonly draft: ReturnType<typeof profileDraft>
+}
+
 const numberFormat = new Intl.NumberFormat("da-DK", {
   maximumFractionDigits: 3,
   useGrouping: false,
@@ -43,7 +47,8 @@ export function BodyProfile({
   refresh,
   filter,
 }: BodyProfileProps): React.JSX.Element {
-  const [editing, setEditing] = useState(false)
+  // Keep the draft above the read-dependent view so an outage cannot discard it.
+  const [editing, setEditing] = useState<ProfileEditing>()
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const [feedback, setFeedback] = useState<Feedback>()
@@ -70,7 +75,7 @@ export function BodyProfile({
 
       saved = true
 
-      if (command.kind === "profile") setEditing(false)
+      if (command.kind === "profile") setEditing(undefined)
       await refresh()
       setFeedback({
         failed: false,
@@ -124,7 +129,9 @@ export function BodyProfile({
         </p>
         <Button
           variant="outline"
-          disabled={busy || editing}
+          disabled={
+            busy || (editing !== undefined && data.state === "available")
+          }
           onClick={() => {
             void read(refresh)
           }}
@@ -155,13 +162,14 @@ export function BodyProfile({
                     <p className="page-eyebrow">Training configuration</p>
                     <h2>Profile</h2>
                   </div>
-                  {editing ? null : (
+                  {editing !== undefined ? null : (
                     <Button
                       variant="outline"
                       disabled={busy}
                       onClick={() => {
                         setFeedback(undefined)
-                        setEditing(true)
+                        const original = profileDraft(data.profile)
+                        setEditing({ original, draft: original })
                       }}
                     >
                       Edit profile
@@ -170,9 +178,17 @@ export function BodyProfile({
                 </div>
               </CardHeader>
               <CardContent>
-                {editing ? (
+                {editing !== undefined ? (
                   <ProfileEditor
-                    initial={data.profile}
+                    original={editing.original}
+                    draft={editing.draft}
+                    update={(draft) =>
+                      setEditing((current) =>
+                        current === undefined
+                          ? undefined
+                          : { ...current, draft }
+                      )
+                    }
                     disabled={busy}
                     save={save}
                     failure={
@@ -181,7 +197,7 @@ export function BodyProfile({
                         : undefined
                     }
                     cancel={() => {
-                      setEditing(false)
+                      setEditing(undefined)
                       setFeedback(undefined)
                     }}
                   />
@@ -248,7 +264,7 @@ export function BodyProfile({
               <HistoryFilter
                 key={`${range.from ?? ""}/${range.to ?? ""}`}
                 initial={range}
-                disabled={busy || editing}
+                disabled={busy || editing !== undefined}
                 filter={(next) => read(() => filter(next))}
               />
               <p className="workout-muted">
@@ -293,7 +309,11 @@ export function BodyProfile({
         </>
       )}
       <FeedbackMessage
-        feedback={feedback?.area === "history" ? feedback : undefined}
+        feedback={
+          data.state === "unavailable" || feedback?.area === "history"
+            ? feedback
+            : undefined
+        }
       />
     </div>
   )
@@ -316,7 +336,9 @@ function FeedbackMessage({
 }
 
 type ProfileEditorProps = {
-  readonly initial: Profile
+  readonly original: ProfileEditing["original"]
+  readonly draft: ProfileEditing["draft"]
+  readonly update: (draft: ProfileEditing["draft"]) => void
   readonly disabled: boolean
   readonly save: (command: BodyCommand) => Promise<boolean>
   readonly cancel: () => void
@@ -324,15 +346,14 @@ type ProfileEditorProps = {
 }
 
 function ProfileEditor({
-  initial,
+  original,
+  draft,
+  update,
   disabled,
   save,
   cancel,
   failure,
 }: ProfileEditorProps): React.JSX.Element {
-  const [original] = useState(() => profileDraft(initial))
-  const [draft, setDraft] = useState(original)
-
   const [problem, setProblem] = useState<{
     field: "height" | "heart"
     message: string
@@ -401,7 +422,7 @@ function ProfileEditor({
           value={draft.height}
           disabled={disabled}
           onChange={(event) => {
-            setDraft({ ...draft, height: event.target.value })
+            update({ ...draft, height: event.target.value })
             setProblem(undefined)
           }}
         />
@@ -412,7 +433,7 @@ function ProfileEditor({
           id={`${id}-sex`}
           value={draft.sex}
           disabled={disabled}
-          onChange={(event) => setDraft({ ...draft, sex: event.target.value })}
+          onChange={(event) => update({ ...draft, sex: event.target.value })}
         />
       </div>
       <div className="workout-field">
@@ -427,7 +448,7 @@ function ProfileEditor({
           value={draft.heartRate}
           disabled={disabled}
           onChange={(event) => {
-            setDraft({ ...draft, heartRate: event.target.value })
+            update({ ...draft, heartRate: event.target.value })
             setProblem(undefined)
           }}
         />
