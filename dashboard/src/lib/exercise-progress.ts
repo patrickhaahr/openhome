@@ -39,7 +39,7 @@ const exerciseRef = z.object({
 
 const sample = z.object({
   date: z.iso.date(),
-  value: z.number().int(),
+  value: z.number(),
   index: z.number(),
 })
 
@@ -50,12 +50,13 @@ const chartedLine = z.object({
   exercise: exerciseRef,
   status: z.literal("charted"),
   // Axum also sends `unit`; it follows from `metric`, so it is not kept.
-  metric: z.enum(["repetitions", "hold_seconds"]),
-  baseline: z.object({ date: z.iso.date(), value: z.number().int() }),
+  metric: z.enum(["repetitions", "hold_seconds", "estimated_1rm"]),
+  baseline: z.object({ date: z.iso.date(), value: z.number() }),
   samples: sample.array().min(1),
+  omitted_dates: z.iso.date().array(),
 })
 
-/** An Exercise Axum indexed: bodyweight reps or Timed Hold seconds, observed days only. */
+/** An Exercise Axum indexed in reps, hold seconds or estimated added-load kg. */
 export type ChartedLine = z.infer<typeof chartedLine>
 
 const progressLine = z.discriminatedUnion("status", [
@@ -63,7 +64,12 @@ const progressLine = z.discriminatedUnion("status", [
   z.object({
     exercise: exerciseRef,
     status: z.literal("unsupported"),
-    reason: z.enum(["added_weight", "mixed_set_kinds", "no_positive_value"]),
+    reason: z.enum([
+      "weighted_holds",
+      "no_valid_estimate",
+      "mixed_set_kinds",
+      "no_positive_value",
+    ]),
   }),
   z.object({ exercise: exerciseRef, status: z.literal("not_logged_in_range") }),
   z.object({ exercise: exerciseRef, status: z.literal("never_logged") }),
@@ -121,8 +127,10 @@ export function missingLineReason(
       return "Not logged in this period"
     case "unsupported":
       switch (line.reason) {
-        case "added_weight":
-          return "Has sets with added weight; weighted progress is not charted yet"
+        case "weighted_holds":
+          return "Weighted holds have no supported estimate"
+        case "no_valid_estimate":
+          return "No valid estimate: needs a positive added load at 1–10 reps"
         case "mixed_set_kinds":
           return "Mixes reps and timed holds, so no single measure fits"
         case "no_positive_value":
@@ -134,7 +142,18 @@ export function missingLineReason(
 const metricLabels: Record<ChartedLine["metric"], string> = {
   repetitions: "Best set reps",
   hold_seconds: "Longest hold",
+  estimated_1rm: "Estimated 1RM",
 }
+
+/** Axum's metric selection policy, shown beside the raw observations. */
+export const metricPolicy: Record<ChartedLine["metric"], string> = {
+  repetitions: "Best unweighted set on each logged day, in repetitions.",
+  hold_seconds: "Longest unweighted hold on each logged day, in seconds.",
+  estimated_1rm:
+    "Best Epley estimate from positive added loads at 1–10 reps each day; one rep uses the lifted load. Added load only: body weight is excluded, so this is not total strength for bodyweight movements. Unweighted sets and other rep ranges are excluded. Estimates assume a near-maximal set; they are not tested maximums.",
+}
+
+const kilograms = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 })
 
 /** The measure a line follows. */
 export function metricLabel(line: ChartedLine): string {
@@ -143,6 +162,8 @@ export function metricLabel(line: ChartedLine): string {
 
 /** A raw value with its unit, holds as minutes and seconds like the workout log. */
 export function rawValue(line: ChartedLine, value: number): string {
+  if (line.metric === "estimated_1rm") return `${kilograms.format(value)} kg`
+
   if (line.metric === "repetitions")
     return `${value} ${value === 1 ? "rep" : "reps"}`
 
@@ -233,16 +254,34 @@ export function chartScale({
 
   const high = Math.max(100, ...indexes)
 
+  const targetStep = (high - low) / 4
+  const magnitude = 10 ** Math.floor(Math.log10(targetStep || 1))
+
   const step =
-    tickSteps.find((candidate) => (high - low) / candidate <= 5) ?? 2000
+    tickSteps.find((candidate) => targetStep <= candidate) ??
+    (targetStep <= magnitude * 2
+      ? magnitude * 2
+      : targetStep <= magnitude * 5
+        ? magnitude * 5
+        : magnitude * 10)
 
   const bottom = Math.floor(low / step) * step
 
-  const top = Math.max(Math.ceil(high / step) * step, bottom + step)
+  const roundedTop = Math.ceil(high / step) * step
+
+  const top = Math.max(
+    Number.isFinite(roundedTop) ? roundedTop : high,
+    bottom + step
+  )
 
   const ticks: number[] = []
 
-  for (let tick = bottom; tick <= top; tick += step) ticks.push(tick)
+  for (let position = 0; position < 6; position++) {
+    const tick = bottom + position * step
+
+    if (tick > top) break
+    ticks.push(tick)
+  }
 
   const first = dayNumber(from)
   const span = Math.max(1, dayNumber(to) - first)

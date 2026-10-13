@@ -10,6 +10,7 @@ import {
   isGap,
   maxCompared,
   metricLabel,
+  metricPolicy,
   missingLineReason,
   plot,
   progressFailureMessage,
@@ -362,11 +363,15 @@ function ProgressView({
             </CardHeader>
             <CardContent>
               <p className="workout-muted">
-                {metricLabel(inspectedLine)} on each logged day, in{" "}
-                {inspectedLine.metric === "repetitions"
-                  ? "repetitions."
-                  : "seconds."}
+                {metricPolicy[inspectedLine.metric]}
               </p>
+              {inspectedLine.omitted_dates.length > 0 ? (
+                <p className="workout-muted">
+                  Not estimated:{" "}
+                  {inspectedLine.omitted_dates.map(shortDay).join(", ")}. No
+                  valid value for this measure; these days have no dot.
+                </p>
+              ) : null}
               <table className="body-history-table">
                 <thead>
                   <tr>
@@ -498,7 +503,12 @@ function ProgressChart({
                   y1={scale.y(previous.index)}
                   x2={scale.x(sample.date)}
                   y2={scale.y(sample.index)}
-                  data-gap={isGap(previous.date, sample.date)}
+                  data-gap={
+                    isGap(previous.date, sample.date) ||
+                    line.omitted_dates.some(
+                      (date) => date > previous.date && date < sample.date
+                    )
+                  }
                 />
               )
             })}
@@ -526,7 +536,7 @@ function ProgressChart({
       <figcaption className="workout-muted">
         Each line is 100 on its baseline: the exercise’s first logged day in
         this period with a value above zero. Dots are logged days; dashed joins
-        cross more than two weeks without a log.
+        cross omitted estimates or more than two weeks without a log.
       </figcaption>
     </figure>
   )

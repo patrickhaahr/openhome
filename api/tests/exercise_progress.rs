@@ -191,7 +191,7 @@ async fn baseline_is_first_positive_day_and_earlier_zero_stays_observed() {
 }
 
 #[tokio::test]
-async fn weighted_mixed_missing_and_never_logged_exercises_get_no_line() {
+async fn weighted_mixed_missing_and_never_logged_exercises_have_explicit_outcomes() {
     let app = common::test_app().await;
     let weighted = create_exercise(&app, "Synthetic Weighted Dip").await;
     let mixed = create_exercise(&app, "Synthetic Handstand").await;
@@ -252,7 +252,7 @@ async fn weighted_mixed_missing_and_never_logged_exercises_get_no_line() {
     };
     assert_eq!(
         status_of("Synthetic Weighted Dip"),
-        (json!("unsupported"), json!("added_weight"))
+        (json!("charted"), Value::Null)
     );
     assert_eq!(
         status_of("Synthetic Handstand"),
@@ -272,6 +272,107 @@ async fn weighted_mixed_missing_and_never_logged_exercises_get_no_line() {
         json!("repetitions")
     );
     assert_eq!(body["logged_exercise_count"], 3);
+}
+
+#[tokio::test]
+async fn weighted_estimates_select_valid_sets_preserve_declines_and_leave_old_progress_unchanged() {
+    let app = common::test_app().await;
+    let lift = create_exercise(&app, "Synthetic Press").await;
+    for (date, sets) in [
+        ("2026-09-01", json!([{ "set_number": 1, "reps": 20 }])),
+        (
+            "2026-09-02",
+            json!([
+                { "set_number": 1, "reps": 10, "weight_kg": 60 },
+                { "set_number": 2, "reps": 5, "weight_kg": 70 },
+                { "set_number": 3, "reps": 11, "weight_kg": 100 },
+                { "set_number": 4, "reps": 0, "weight_kg": 200 }
+            ]),
+        ),
+        (
+            "2026-09-03",
+            json!([{ "set_number": 1, "reps": 1, "weight_kg": 90 }]),
+        ),
+        (
+            "2026-09-04",
+            json!([{ "set_number": 1, "reps": 20, "weight_kg": 100 }]),
+        ),
+        (
+            "2026-09-22",
+            json!([{ "set_number": 1, "reps": 10, "weight_kg": 45 }]),
+        ),
+    ] {
+        log(&app, date, &[(lift, sets)]).await;
+    }
+    let (status, body) = progress(
+        &app,
+        &format!("from=2026-09-01&to=2026-09-30&exercise_ids={lift}"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let lift_line = line(&body, "Synthetic Press");
+    assert_eq!(lift_line["metric"], "estimated_1rm");
+    assert_eq!(lift_line["unit"], "kg");
+    assert_eq!(
+        lift_line["omitted_dates"],
+        json!(["2026-09-01", "2026-09-04"])
+    );
+    let values = lift_line["samples"].as_array().unwrap();
+    assert_eq!(values.len(), 3);
+    assert!((lift_line["baseline"]["value"].as_f64().unwrap() - 81.666_666_666_7).abs() < 1e-8);
+    for (sample, date, value, index) in [
+        (&values[0], "2026-09-02", 81.666_666_666_7, 100.0),
+        (&values[1], "2026-09-03", 90.0, 110.204_081_633),
+        (&values[2], "2026-09-22", 60.0, 73.469_387_755),
+    ] {
+        assert_eq!(sample["date"], date);
+        assert!((sample["value"].as_f64().unwrap() - value).abs() < 1e-8);
+        assert!((sample["index"].as_f64().unwrap() - index).abs() < 1e-8);
+    }
+
+    // The older endpoint still estimates all positive-rep weighted sets using its original Epley rule.
+    let (_, old) = send_request(app, &format!("/api/exercises/{lift}/progress"), KEY).await;
+    let old = old["data"].as_array().unwrap();
+    assert!((old[1]["estimated_1rm_kg"].as_f64().unwrap() - 200.0).abs() < 1e-8);
+    assert!((old[2]["estimated_1rm_kg"].as_f64().unwrap() - 93.0).abs() < 1e-8);
+}
+
+#[tokio::test]
+async fn weighted_holds_mixed_kinds_and_out_of_range_estimates_are_unsupported() {
+    let app = common::test_app().await;
+    for (name, sets, reason) in [
+        (
+            "Synthetic Loaded Hold",
+            json!([{ "set_number": 1, "duration_seconds": 30, "weight_kg": 10 }]),
+            "weighted_holds",
+        ),
+        (
+            "Synthetic Mixed Lift",
+            json!([
+                { "set_number": 1, "reps": 5, "weight_kg": 40 },
+                { "set_number": 2, "duration_seconds": 30 }
+            ]),
+            "mixed_set_kinds",
+        ),
+        (
+            "Synthetic High Reps",
+            json!([
+                { "set_number": 1, "reps": 0, "weight_kg": 40 },
+                { "set_number": 2, "reps": 11, "weight_kg": 40 }
+            ]),
+            "no_valid_estimate",
+        ),
+    ] {
+        let id = create_exercise(&app, name).await;
+        log(&app, "2026-09-02", &[(id, sets)]).await;
+        let (_, body) = progress(
+            &app,
+            &format!("from=2026-09-01&to=2026-09-30&exercise_ids={id}"),
+        )
+        .await;
+        assert_eq!(line(&body, name)["reason"], reason);
+        assert!(line(&body, name).get("samples").is_none());
+    }
 }
 
 #[tokio::test]
