@@ -247,25 +247,32 @@ pub async fn combined_progress(
     let rows = sqlx::query_as!(
         LoggedDay,
         r#"
-        SELECT we.exercise_id AS "exercise_id!: i64",
-               CAST(w.date AS TEXT) AS "date!: String",
+        WITH observed_sets AS (
+            SELECT we.exercise_id, w.date, s.weight_kg, s.reps, s.duration_seconds,
+                   CASE WHEN s.weight_kg > 0 AND s.reps BETWEEN 1 AND 10
+                        THEN CASE WHEN s.reps = 1 THEN s.weight_kg
+                                  ELSE s.weight_kg * (1.0 + s.reps / 30.0) END
+                   END AS estimate
+            FROM sets s
+            JOIN workout_exercises we ON we.id = s.workout_exercise_id
+            JOIN workouts w ON w.id = we.workout_id
+            WHERE we.exercise_id IN (SELECT value FROM json_each($1))
+              AND w.date BETWEEN $2 AND $3
+        )
+        SELECT s.exercise_id AS "exercise_id!: i64",
+               CAST(s.date AS TEXT) AS "date!: String",
                CAST(SUM(COALESCE(s.weight_kg, 0) <> 0) AS INTEGER) AS "weighted_sets!: i64",
                CAST(SUM(s.reps IS NOT NULL) AS INTEGER) AS "rep_sets!: i64",
                CAST(SUM(s.reps IS NULL) AS INTEGER) AS "hold_sets!: i64",
                CAST(MAX(CASE WHEN COALESCE(s.weight_kg, 0) = 0 THEN s.reps END) AS INTEGER) AS "best_reps?: i64",
                CAST(MAX(CASE WHEN COALESCE(s.weight_kg, 0) = 0 AND s.reps IS NULL
                              THEN s.duration_seconds END) AS INTEGER) AS "best_hold_s?: i64",
-               CAST(MAX(CASE WHEN s.weight_kg > 0 AND s.reps BETWEEN 1 AND 10
-                             THEN CASE WHEN s.reps = 1 THEN s.weight_kg
-                                       ELSE s.weight_kg * (1.0 + s.reps / 30.0) END
-                        END) AS REAL) AS "best_estimated_1rm?: f64"
-        FROM sets s
-        JOIN workout_exercises we ON we.id = s.workout_exercise_id
-        JOIN workouts w ON w.id = we.workout_id
-        WHERE we.exercise_id IN (SELECT value FROM json_each($1))
-          AND w.date BETWEEN $2 AND $3
-        GROUP BY we.exercise_id, w.date
-        ORDER BY we.exercise_id, w.date
+               -- Discard overflow before MAX so an invalid candidate cannot hide valid Sets.
+               CAST(MAX(CASE WHEN s.estimate <= 1.7976931348623157e308
+                             THEN s.estimate END) AS REAL) AS "best_estimated_1rm?: f64"
+        FROM observed_sets s
+        GROUP BY s.exercise_id, s.date
+        ORDER BY s.exercise_id, s.date
         "#,
         ids,
         from,
