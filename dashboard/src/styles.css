@@ -2475,3 +2475,183 @@ a:focus-visible {
     text-align: left;
   }
 }
+@utility exercise-progress {
+  /* Twelve hues at similar lightness so no line dominates on dark cards; the first is the accent. */
+  --progress-1: var(--primary);
+  --progress-2: oklch(0.8 0.12 230);
+  --progress-3: oklch(0.78 0.15 330);
+  --progress-4: oklch(0.82 0.15 150);
+  --progress-5: oklch(0.75 0.16 30);
+  --progress-6: oklch(0.92 0.01 250);
+  --progress-7: oklch(0.78 0.12 280);
+  --progress-8: oklch(0.83 0.13 190);
+  --progress-9: oklch(0.8 0.15 110);
+  --progress-10: oklch(0.76 0.14 0);
+  --progress-11: oklch(0.72 0.03 60);
+  --progress-12: oklch(0.85 0.1 60);
+  display: grid;
+  [data-colour="1"] {
+    color: var(--progress-1);
+  }
+  [data-colour="2"] {
+    color: var(--progress-2);
+  }
+  [data-colour="3"] {
+    color: var(--progress-3);
+  }
+  [data-colour="4"] {
+    color: var(--progress-4);
+  }
+  [data-colour="5"] {
+    color: var(--progress-5);
+  }
+  [data-colour="6"] {
+    color: var(--progress-6);
+  }
+  [data-colour="7"] {
+    color: var(--progress-7);
+  }
+  [data-colour="8"] {
+    color: var(--progress-8);
+  }
+  [data-colour="9"] {
+    color: var(--progress-9);
+  }
+  [data-colour="10"] {
+    color: var(--progress-10);
+  }
+  [data-colour="11"] {
+    color: var(--progress-11);
+  }
+  [data-colour="12"] {
+    color: var(--progress-12);
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+}
+@utility exercise-progress-layout {
+  display: grid;
+  gap: 1.5rem;
+  select {
+    min-height: 3rem;
+    font-size: 1rem;
+  }
+}
+@utility progress-chart {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  svg {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  text {
+    fill: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+  .progress-grid {
+    stroke: var(--border);
+    stroke-width: 1;
+  }
+  [data-baseline="true"] .progress-grid {
+    stroke: var(--muted-foreground);
+    stroke-dasharray: 4 4;
+  }
+  [data-baseline="true"] text {
+    fill: var(--foreground);
+  }
+  .progress-line line {
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+  .progress-line line[data-gap="true"] {
+    stroke-dasharray: 2 7;
+    stroke-width: 2;
+  }
+  .progress-line circle {
+    fill: var(--card);
+    stroke: currentColor;
+    stroke-width: 2.5;
+  }
+}
+@utility progress-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: start;
+    gap: 0.125rem 0.75rem;
+    min-height: 3rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    text-align: left;
+    color: var(--muted-foreground);
+    touch-action: manipulation;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
+    > :not(.progress-swatch) {
+      grid-column: 2;
+    }
+    &[aria-pressed="true"] {
+      background: var(--secondary);
+      border-color: var(--ring);
+      color: var(--foreground);
+    }
+    &[aria-pressed="false"] .progress-swatch {
+      background: transparent;
+    }
+    &:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button {
+      transition: none;
+    }
+  }
+}
+@utility progress-swatch {
+  grid-row: span 3;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  background: currentColor;
+}
+@utility progress-legend-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@utility progress-legend-latest {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+@utility progress-missing {
+  display: grid;
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  li > div {
+    display: grid;
+    gap: 0.125rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

@@ -285,6 +285,10 @@ _Avoid_: Tonnage including bodyweight, rep count
 The per-date aggregate of one Exercise's logged Sets served by the Axum API: best reps, best added weight, total Volume, best RPE, and the Epley estimated 1RM from the best set of the day; observed data only, no interpolation.
 _Avoid_: Interpolated trend, forecast chart
 
+**Progress Line**:
+One Exercise's observed progress indexed for a combined chart: the best reps of an unweighted reps Set, or the longest unweighted Timed Hold, on each logged date, divided by its baseline (the first date in the period with a value above zero) and multiplied by 100. Raw values and units stay beside the index. An Exercise whose Sets carry Added Weight or mix reps with holds has no line.
+_Avoid_: Strength score, combined volume, trend line
+
 **Body Weight**:
 A user-recorded day weight in kg, one row per date and kept only in the daily body-weight record, separately from Workouts.
 _Avoid_: Workout body_weight, weight log entry
@@ -345,6 +349,7 @@ _Avoid_: Survey, habit log
 - An **Added Weight** of null means bodyweight; Volume treats it as zero.
 - A **Timed Hold** replaces reps with a duration.
 - A **Progress Series** aggregates logged Sets per date and never invents data between dates.
+- A **Progress Line** has samples only on logged dates; a never-logged or unsupported Exercise gets no line, never a zero or flat one.
 - **Body Weight** is recorded per date by the client and is not stored on a Workout.
 - The **Profile** is configured by the client and consulted to interpret fitness data.
 - A **Heart Rate Zone** is always relative to the current **Max Heart Rate**; changing it re-zones all past heart rate data.
