@@ -26,6 +26,9 @@ appear in these images.
 
 - `devenv shell -- just api-check` passed, including authenticated numeric, mixed
   observation, unsupported, absence and legacy Progress Series compatibility cases.
+  The reviewer's overflow regression failed before the fix and passed after it:
+  an invalid candidate is discarded before the daily maximum, retaining valid
+  same-day Sets.
 - `devenv shell -- just dashboard-check` passed: formatting, lint, typecheck,
   132 rendered/transport tests and production build. The rendered weighted workflow
   uses the actual migrated fitness routes, exercises decimal parsing, line toggles
@@ -41,7 +44,10 @@ appear in these images.
 
 ## Remaining hardware gate
 
-The iPad skill's paired-device probe returned `No device found`; `usbmuxd` was
-inactive. Physical iPad Safari touch, readability and load acceptance remains
-unverified. Browser viewport checks are not a substitute. Keep #125 and its
-parent/release acceptance open until that device evidence is recorded.
+The USB inventory detects an attached iPad, but the paired-device probe returned
+`No device found`. The host has no `usbmuxd` system service; a temporary user
+daemon could not establish the lockdownd session, and an attempt to start the
+host daemon rejected the stored host credential. Authentication retries stopped.
+Physical iPad Safari touch, readability and load acceptance remains unverified.
+Browser viewport checks are not a substitute. Keep #125 and its parent/release
+acceptance open until that device evidence is recorded.

@@ -338,6 +338,46 @@ async fn weighted_estimates_select_valid_sets_preserve_declines_and_leave_old_pr
 }
 
 #[tokio::test]
+async fn overflowing_estimates_do_not_hide_valid_sets_on_the_same_day() {
+    let app = common::test_app().await;
+    let lift = create_exercise(&app, "Synthetic Overflow Press").await;
+    log(
+        &app,
+        "2026-09-02",
+        &[(
+            lift,
+            json!([
+                { "set_number": 1, "reps": 5, "weight_kg": 70 },
+                { "set_number": 2, "reps": 10, "weight_kg": 1.7e308 }
+            ]),
+        )],
+    )
+    .await;
+    log(
+        &app,
+        "2026-09-03",
+        &[(
+            lift,
+            json!([
+                { "set_number": 1, "reps": 10, "weight_kg": 1.7e308 }
+            ]),
+        )],
+    )
+    .await;
+    let (status, body) = progress(
+        &app,
+        &format!("from=2026-09-01&to=2026-09-30&exercise_ids={lift}"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let lift = line(&body, "Synthetic Overflow Press");
+    assert_eq!(lift["status"], "charted");
+    assert!((lift["baseline"]["value"].as_f64().unwrap() - 81.666_666_666_7).abs() < 1e-8);
+    assert_eq!(lift["samples"].as_array().unwrap().len(), 1);
+    assert_eq!(lift["omitted_dates"], json!(["2026-09-03"]));
+}
+
+#[tokio::test]
 async fn weighted_holds_mixed_kinds_and_out_of_range_estimates_are_unsupported() {
     let app = common::test_app().await;
     for (name, sets, reason) in [

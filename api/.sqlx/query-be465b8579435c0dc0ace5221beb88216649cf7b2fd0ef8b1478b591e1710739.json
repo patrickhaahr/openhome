@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        WITH observed_sets AS (\n            SELECT we.exercise_id, w.date, s.weight_kg, s.reps, s.duration_seconds,\n                   CASE WHEN s.weight_kg > 0 AND s.reps BETWEEN 1 AND 10\n                        THEN CASE WHEN s.reps = 1 THEN s.weight_kg\n                                  ELSE s.weight_kg * (1.0 + s.reps / 30.0) END\n                   END AS estimate\n            FROM sets s\n            JOIN workout_exercises we ON we.id = s.workout_exercise_id\n            JOIN workouts w ON w.id = we.workout_id\n            WHERE we.exercise_id IN (SELECT value FROM json_each($1))\n              AND w.date BETWEEN $2 AND $3\n        )\n        SELECT s.exercise_id AS \"exercise_id!: i64\",\n               CAST(s.date AS TEXT) AS \"date!: String\",\n               CAST(SUM(COALESCE(s.weight_kg, 0) <> 0) AS INTEGER) AS \"weighted_sets!: i64\",\n               CAST(SUM(s.reps IS NOT NULL) AS INTEGER) AS \"rep_sets!: i64\",\n               CAST(SUM(s.reps IS NULL) AS INTEGER) AS \"hold_sets!: i64\",\n               CAST(MAX(CASE WHEN COALESCE(s.weight_kg, 0) = 0 THEN s.reps END) AS INTEGER) AS \"best_reps?: i64\",\n               CAST(MAX(CASE WHEN COALESCE(s.weight_kg, 0) = 0 AND s.reps IS NULL\n                             THEN s.duration_seconds END) AS INTEGER) AS \"best_hold_s?: i64\",\n               -- Discard overflow before MAX so an invalid candidate cannot hide valid Sets.\n               CAST(MAX(CASE WHEN s.estimate <= 1.7976931348623157e308\n                             THEN s.estimate END) AS REAL) AS \"best_estimated_1rm?: f64\"\n        FROM observed_sets s\n        GROUP BY s.exercise_id, s.date\n        ORDER BY s.exercise_id, s.date\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "exercise_id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "date!: String",
+        "ordinal": 1,
+        "type_info": "Null"
+      },
+      {
+        "name": "weighted_sets!: i64",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "rep_sets!: i64",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "hold_sets!: i64",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "best_reps?: i64",
+        "ordinal": 5,
+        "type_info": "Null"
+      },
+      {
+        "name": "best_hold_s?: i64",
+        "ordinal": 6,
+        "type_info": "Null"
+      },
+      {
+        "name": "best_estimated_1rm?: f64",
+        "ordinal": 7,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "be465b8579435c0dc0ace5221beb88216649cf7b2fd0ef8b1478b591e1710739"
+}
