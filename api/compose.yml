@@ -1,6 +1,6 @@
 services:
   openhome-api:
-    image: patrickhaahr/openhome-api:0.4.0
+    image: patrickhaahr/openhome-api:latest
     container_name: openhome-api
     restart: unless-stopped
     volumes:
@@ -21,7 +21,7 @@ services:
       - caddy
 
   openhome-mcp:
-    image: patrickhaahr/openhome-mcp:0.1.0
+    image: patrickhaahr/openhome-mcp:latest
     container_name: openhome-mcp
     restart: unless-stopped
     depends_on:
@@ -36,6 +36,19 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - caddy
+
+  openhome-dashboard:
+    image: patrickhaahr/openhome-dashboard:latest
+    container_name: openhome-dashboard
+    restart: unless-stopped
+    depends_on:
+      openhome-api:
+        condition: service_healthy
+    environment:
+      OPENHOME_API_URL: http://openhome-api:8000
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
     networks:
       - caddy
 

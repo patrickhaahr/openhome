@@ -379,6 +379,37 @@ dashboard-build:
 dashboard-preview:
     bunx vite preview
 
+# Serve the dashboard production build with Bun
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-start:
+    bun .output/server/index.mjs
+
+# Build the dashboard image for amd64 + arm64 (Raspberry Pi) locally
+[group('dashboard')]
+dashboard-docker-build version:
+    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest dashboard
+
+# Build the dashboard image for amd64 + arm64 and push it to Docker Hub
+[group('dashboard')]
+dashboard-docker-push version:
+    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest --push dashboard
+
+# Verify a dashboard image's rendered page, static assets and private configuration
+[group('dashboard')]
+dashboard-docker-smoke image='patrickhaahr/openhome-dashboard:latest':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    container=$(docker run --rm -d -e API_KEY=synthetic-dashboard-smoke-key -e OPENHOME_API_URL=http://127.0.0.1:1 {{quote(image)}})
+    trap 'docker rm -f "$container" >/dev/null' EXIT
+    docker cp dashboard/tests/docker-smoke.ts "$container:/tmp/openhome-docker-smoke.ts"
+    docker exec "$container" bun /tmp/openhome-docker-smoke.ts
+
+# Pull the published API, MCP and dashboard images and wait for healthy containers
+[group('deployment')]
+openhome-deploy:
+    ssh pi 'cd ~/d/openhome && docker compose pull && docker compose up -d --wait --wait-timeout 180'
+
 # Run dashboard tests
 [group('dashboard')]
 [working-directory: 'dashboard']

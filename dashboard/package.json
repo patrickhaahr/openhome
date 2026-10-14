@@ -1,5 +1,6 @@
 {
   "name": "xshot",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,6 +8,7 @@
     "generate-routes": "just dashboard-routes",
     "build": "just dashboard-build",
     "preview": "just dashboard-preview",
+    "start": "bun .output/server/index.mjs",
     "lint": "just dashboard-lint",
     "format": "just dashboard-format",
     "check": "just dashboard-check",
@@ -43,6 +45,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6",
     "happy-dom": "^20.14.6",
+    "nitro": "^3.0.260903-beta",
     "oxfmt": "0.71.0",
     "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",

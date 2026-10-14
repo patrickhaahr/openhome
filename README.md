@@ -74,3 +74,8 @@ The mobile client never contacts an ESP32 directly. The Axum API is the single i
 The Axum API is available as the Docker image [`patrickhaahr/openhome-api:latest`](https://hub.docker.com/r/patrickhaahr/openhome-api).
 
 API access is protected by a Bearer API key. The mobile app stores the key in the platform's secure storage. Use HTTPS outside a trusted local network.
+
+The shared [Compose stack](api/compose.yml) runs the API, MCP and Bun dashboard
+from their `latest` images, using a private `.env` beside the Compose file.
+See the [dashboard deployment guide](dashboard/README.md#docker-deployment) for
+image publishing, Raspberry Pi updates and Caddy routing on the existing hostname.
