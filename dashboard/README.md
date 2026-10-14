@@ -44,7 +44,8 @@ Neither variable has a default. Do not prefix them with `VITE_`, put them in
 browser storage or commit their values. Supply them using the private deployment's
 environment or process manager, and restart the dashboard after changes.
 Development and preview recipes inherit the invoking process's environment;
-they do not automatically load credentials from a dotenv file.
+Bun also loads a local `.env` when starting the production server directly.
+For Docker deployment, Compose supplies the environment as described below.
 
 The browser receives only a connection outcome and check timestamp. The server
 does not return its backend address, key, backend response bodies or raw errors.
@@ -97,6 +98,67 @@ and is not a production integration service.
 `dashboard-build` builds the application; `dashboard-preview` serves that build
 for local review. The production runtime still needs the private environment
 variables even if they were present during the build.
+
+## Docker deployment
+
+The React 19 application builds with Nitro's Bun preset and runs on Bun 1.4.2.
+The runtime image contains only `.output`, runs as the `bun` user, listens on
+port 3000, and checks `/connection` for HTTP liveness. Connection status still
+reports Axum failures separately; an HTTP health check does not prove that every
+integration is configured.
+
+Use the shared stack in `api/compose.yml`. Keep the private `.env` beside that
+file, using `api/.env.example` as a template. Its existing `API_KEY` is shared
+by the API, MCP and dashboard; Compose passes only that key and the internal
+`http://openhome-api:8000` URL to the dashboard. No credential file is copied
+into the image or mounted into the container. The Docker build context excludes
+all environment files.
+
+Build and publish alongside the other services:
+
+```sh
+devenv shell -- just dashboard-docker-push 0.1.1
+devenv shell -- just api-docker-push 0.6.0
+devenv shell -- just mcp-docker-push 0.3.0
+```
+
+These use the existing `openhome-publisher` Buildx builder, which needs both
+amd64 and arm64 support (native builder nodes or binfmt emulation). Each command
+publishes the version tag and `latest`. `dashboard-docker-build` builds without
+pushing, matching the API/MCP recipes; `dashboard-start` serves a local
+production build.
+
+Run `devenv shell -- just dashboard-docker-smoke <image>` against a locally
+loaded or published image before deployment. It starts an isolated container
+with synthetic credentials and an offline API, then checks rendered HTML and
+every referenced CSS/JavaScript asset. Development-server tests cannot verify
+the packaged production assets. Tailwind scans only `src`, so generated output
+cannot change its stylesheet between the client and SSR builds.
+
+On the Pi, install `api/compose.yml` as `~/d/openhome/compose.yml`, retaining its
+private `.env` and `data/`. The stack uses `latest`; after publishing updates:
+
+```sh
+devenv shell -- just openhome-deploy
+```
+
+The recipe pulls all three images and waits for healthy containers. Before API
+upgrades, back up both SQLite databases using SQLite's online backup mechanism
+or stop the API before copying the full data directory. Keep the previous image
+digests and Compose file for rollback; database migrations may require restoring
+the matching backup.
+
+Caddy can serve the dashboard on the API's existing hostname. Keep `/api/*`
+routed to `openhome-api:8000` and `/mcp*` to `openhome-mcp:8001`, then route
+the remaining paths to `openhome-dashboard:3000`. Restrict dashboard paths,
+including its server functions, to LAN/VPN clients: the shared display does not
+have a separate login. The existing `caddy` network provides container discovery;
+no dashboard port needs to be published on the host.
+See [the OpenHome Caddy site block](Caddyfile.example) for the shared-host setup;
+replace only that block in the private Caddyfile, validate it, then reload Caddy.
+If an editor replaced the bind-mounted file, Caddy may still see the old inode:
+compare the host and container file checksums and recreate the Caddy container
+with `docker compose up -d --no-deps --force-recreate caddy` if they differ.
 
 ## Release verification
 

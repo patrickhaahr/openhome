@@ -1,0 +1,8 @@
+*
+!package.json
+!bun.lock
+!vite.config.ts
+!tsconfig.json
+!src/
+!public/
+**/.env*

@@ -1,0 +1,30 @@
+# Replace the existing OpenHome site block; keep the other Caddy sites.
+openhome.haahr.me {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+        resolvers 1.1.1.1
+    }
+
+    handle /mcp* {
+        reverse_proxy openhome-mcp:8001
+    }
+
+    handle /api/* {
+        reverse_proxy openhome-api:8000
+    }
+
+    # The shared display has no separate login. Protect pages, assets and RPCs.
+    @dashboard_private remote_ip private_ranges 100.64.0.0/10
+    handle @dashboard_private {
+        reverse_proxy openhome-dashboard:3000
+    }
+
+    handle {
+        respond "Dashboard is available on the LAN or VPN." 403
+    }
+
+    log {
+        output file /var/log/caddy/openhome.log
+        format json
+    }
+}

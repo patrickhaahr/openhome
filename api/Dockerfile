@@ -10,7 +10,7 @@ COPY .sqlx ./.sqlx
 
 ENV SQLX_OFFLINE=true
 
-RUN cargo build --release
+RUN cargo build --release --locked
 
 FROM debian:bookworm-slim AS runtime
 

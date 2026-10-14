@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* Keep generated client assets out of the subsequent SSR source scan. */
+@import "tailwindcss" source("./");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/jetbrains-mono";
