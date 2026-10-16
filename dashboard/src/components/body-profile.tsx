@@ -1,10 +1,15 @@
 import { useId, useRef, useState } from "react"
 import { z } from "zod"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check"
+import { GenderIntersexIcon } from "@phosphor-icons/react/dist/csr/GenderIntersex"
+import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
+import { RulerIcon } from "@phosphor-icons/react/dist/csr/Ruler"
+import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { WeightChart } from "@/components/weight-chart"
 import {
   bodyFailureMessage,
   optionalNumber,
@@ -14,7 +19,9 @@ import {
   type BodyMutation,
   type BodyRange,
   type BodyState,
+  type BodyWeight,
 } from "@/lib/body-profile"
+import { shiftDay } from "@/lib/training"
 import { trainingDayOn } from "@/lib/workout"
 
 type BodyProfileProps = {
@@ -39,6 +46,11 @@ type ProfileEditing = {
 const numberFormat = new Intl.NumberFormat("da-DK", {
   maximumFractionDigits: 3,
   useGrouping: false,
+})
+
+const oneDecimal = new Intl.NumberFormat("da-DK", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
 })
 
 /** Shared Profile editing and daily Body Weight logging, with no derived health values. */
@@ -123,200 +135,223 @@ export function BodyProfile({
     }
   }
 
+  const [today] = useState(() => trainingDayOn(new Date()))
+
+  const ranges = [
+    { label: "1M", from: shiftDay(today, -30) },
+    { label: "3M", from: shiftDay(today, -91) },
+    { label: "1Y", from: shiftDay(today, -365) },
+    { label: "All", from: undefined },
+  ] as const
+
+  const custom =
+    range.to !== undefined ||
+    !ranges.some((option) => option.from === range.from)
+
   return (
-    <div className="body-profile workouts" aria-busy={busy}>
-      <div className="workout-toolbar">
-        <p className="sr-only">
-          Shared fitness data · one profile, one weight record per date
-        </p>
-        <Button
-          variant="outline"
-          size="key-icon"
-          title="Refresh profile & weight"
-          data-spinning={busy}
-          disabled={
-            busy || (editing !== undefined && data.state === "available")
-          }
-          onClick={() => {
-            void read(refresh)
-          }}
-        >
-          <ArrowClockwiseIcon size={20} aria-hidden="true" />
-          <span className="sr-only">Refresh profile & weight</span>
-        </Button>
-      </div>
+    <div className="body" aria-busy={busy}>
+      <p className="sr-only">
+        Shared fitness data · one profile, one weight record per date
+      </p>
       {data.state === "unavailable" ? (
-        <Card>
-          <CardHeader>
+        <>
+          <div className="body-top">
+            <RefreshKey
+              busy={busy}
+              disabled={false}
+              refresh={() => void read(refresh)}
+            />
+          </div>
+          <div className="today-failure">
             <h2>Profile & weight unavailable</h2>
-          </CardHeader>
-          <CardContent>
             <p>
               {data.reason === "unreachable"
                 ? "OpenHome is unreachable. Refresh when the connection returns."
                 : bodyFailureMessage[data.reason]}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </>
       ) : (
         <>
-          <div className="body-profile-layout">
-            <Card>
-              <CardHeader>
-                <div className="workout-detail-header">
-                  <div>
-                    <p className="sr-only">Training configuration</p>
-                    <h2>Profile</h2>
-                  </div>
-                  {editing !== undefined ? null : (
-                    <Button
-                      variant="outline"
-                      size="key-icon"
-                      title="Edit profile"
-                      disabled={busy}
-                      onClick={() => {
-                        setFeedback(undefined)
-                        const original = profileDraft(data.profile)
-                        setEditing({ original, draft: original })
-                      }}
-                    >
-                      <PencilSimpleIcon size={20} aria-hidden="true" />
-                      <span className="sr-only">Edit profile</span>
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {editing !== undefined ? (
-                  <ProfileEditor
-                    original={editing.original}
-                    draft={editing.draft}
-                    update={(draft) =>
-                      setEditing((current) =>
-                        current === undefined
-                          ? undefined
-                          : { ...current, draft }
-                      )
-                    }
-                    disabled={busy}
-                    save={save}
-                    failure={
-                      feedback?.area === "profile" && feedback.failed
-                        ? feedback.text
-                        : undefined
-                    }
-                    cancel={() => {
-                      setEditing(undefined)
-                      setFeedback(undefined)
-                    }}
-                  />
-                ) : (
-                  <>
-                    <dl className="body-profile-values">
-                      <div>
-                        <dt>Height</dt>
-                        <dd data-gap={data.profile.height_cm === null}>
-                          {data.profile.height_cm === null
-                            ? "Not configured"
-                            : `${numberFormat.format(data.profile.height_cm)} cm`}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Sex</dt>
-                        <dd data-gap={data.profile.sex === null}>
-                          {data.profile.sex ?? "Not configured"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Maximum heart rate</dt>
-                        <dd data-gap={data.profile.hr_max_bpm === null}>
-                          {data.profile.hr_max_bpm === null
-                            ? "Not configured"
-                            : `${data.profile.hr_max_bpm} bpm`}
-                        </dd>
-                      </div>
-                    </dl>
-                    <p className="sr-only">
-                      Maximum heart rate defines the NOOP heart rate zones. It
-                      is set by you, never inferred from recorded workouts.
-                    </p>
-                    <FeedbackMessage
-                      feedback={
-                        feedback?.area === "profile" ? feedback : undefined
-                      }
-                    />
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="sr-only">Daily record</p>
-                <h2>Log body weight</h2>
-              </CardHeader>
-              <CardContent>
-                <WeightEditor disabled={busy} save={save} />
-                <FeedbackMessage
-                  feedback={feedback?.area === "weight" ? feedback : undefined}
-                />
-                <p className="sr-only">
-                  Each date can be recorded once. Existing entries cannot be
-                  edited or replaced.
-                </p>
-              </CardContent>
-            </Card>
+          <div className="body-top">
+            <WeightFigure history={data.history} />
+            <div
+              className="body-ranges"
+              role="group"
+              aria-label="Body-weight history range"
+            >
+              {ranges.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className="body-range"
+                  aria-pressed={!custom && option.from === range.from}
+                  disabled={busy || editing !== undefined}
+                  onClick={() =>
+                    void read(() =>
+                      filter({ from: option.from, to: undefined })
+                    )
+                  }
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <RefreshKey
+              busy={busy}
+              disabled={editing !== undefined}
+              refresh={() => void read(refresh)}
+            />
           </div>
-          <Card>
-            <CardHeader>
-              <p className="sr-only">Recorded values · kg</p>
-              <h2>Body-weight history</h2>
-            </CardHeader>
-            <CardContent>
-              <HistoryFilter
-                key={`${range.from ?? ""}/${range.to ?? ""}`}
-                initial={range}
-                disabled={busy || editing !== undefined}
-                filter={(next) => read(() => filter(next))}
+          <h2 className="sr-only">Body-weight history</h2>
+          {data.history.length === 500 ? (
+            <p className="body-history-limit" role="status">
+              This view reached the 500-record limit. Choose a shorter range to
+              review later records.
+            </p>
+          ) : null}
+          {data.history.length === 0 ? (
+            <p className="body-history-empty">
+              No body weight recorded in this date range.
+            </p>
+          ) : (
+            <>
+              <WeightChart history={data.history} />
+              <table className="sr-only">
+                <caption>Recorded body weight, oldest first</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Weight (kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.history.map((entry) => (
+                    <tr key={entry.id}>
+                      <th scope="row">
+                        <time dateTime={entry.date}>{entry.date}</time>
+                      </th>
+                      <td>{numberFormat.format(entry.weight_kg)} kg</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          <div className="body-panels">
+            <section className="body-panel" aria-labelledby="body-log-title">
+              <h2 id="body-log-title" className="sr-only">
+                Log body weight
+              </h2>
+              <WeightEditor disabled={busy} save={save} />
+              <FeedbackMessage
+                feedback={feedback?.area === "weight" ? feedback : undefined}
               />
               <p className="sr-only">
-                Oldest first. Up to 500 records per date range; leave either
-                date empty for an open range.
+                Each date can be recorded once. Existing entries cannot be
+                edited or replaced.
               </p>
-              {data.history.length === 500 ? (
-                <p className="body-history-limit" role="status">
-                  This view reached the 500-record limit. Narrow the date range
-                  to review later records.
-                </p>
-              ) : null}
-              {data.history.length === 0 ? (
-                <p className="body-history-empty">
-                  No body weight recorded in this date range.
-                </p>
+            </section>
+            <section
+              className="body-panel"
+              aria-labelledby="body-profile-title"
+            >
+              <div className="body-panel-head">
+                <h2 id="body-profile-title" className="sr-only">
+                  Profile
+                </h2>
+                {editing !== undefined ? null : (
+                  <Button
+                    variant="ghost"
+                    size="key-icon"
+                    title="Edit profile"
+                    disabled={busy}
+                    onClick={() => {
+                      setFeedback(undefined)
+                      const original = profileDraft(data.profile)
+                      setEditing({ original, draft: original })
+                    }}
+                  >
+                    <PencilSimpleIcon size={20} aria-hidden="true" />
+                    <span className="sr-only">Edit profile</span>
+                  </Button>
+                )}
+              </div>
+              {editing !== undefined ? (
+                <ProfileEditor
+                  original={editing.original}
+                  draft={editing.draft}
+                  update={(draft) =>
+                    setEditing((current) =>
+                      current === undefined ? undefined : { ...current, draft }
+                    )
+                  }
+                  disabled={busy}
+                  save={save}
+                  failure={
+                    feedback?.area === "profile" && feedback.failed
+                      ? feedback.text
+                      : undefined
+                  }
+                  cancel={() => {
+                    setEditing(undefined)
+                    setFeedback(undefined)
+                  }}
+                />
               ) : (
-                <table className="body-history-table">
-                  <caption className="sr-only">
-                    Recorded body weight, oldest first
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Date</th>
-                      <th scope="col">Weight (kg)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.history.map((entry) => (
-                      <tr key={entry.id}>
-                        <th scope="row">
-                          <time dateTime={entry.date}>{entry.date}</time>
-                        </th>
-                        <td>{numberFormat.format(entry.weight_kg)} kg</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <>
+                  <dl className="body-profile-values">
+                    <div>
+                      <dt>
+                        <RulerIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">Height</span>
+                      </dt>
+                      <dd data-gap={data.profile.height_cm === null}>
+                        {data.profile.height_cm === null
+                          ? "Not configured"
+                          : numberFormat.format(data.profile.height_cm)}
+                        {data.profile.height_cm === null ? null : (
+                          <small> cm</small>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        <GenderIntersexIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">Sex</span>
+                      </dt>
+                      <dd data-gap={data.profile.sex === null}>
+                        {data.profile.sex ?? "Not configured"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        <HeartbeatIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">Maximum heart rate</span>
+                      </dt>
+                      <dd data-gap={data.profile.hr_max_bpm === null}>
+                        {data.profile.hr_max_bpm === null
+                          ? "Not configured"
+                          : data.profile.hr_max_bpm}
+                        {data.profile.hr_max_bpm === null ? null : (
+                          <small> max</small>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="sr-only">
+                    Maximum heart rate defines the NOOP heart rate zones. It is
+                    set by you, never inferred from recorded workouts.
+                  </p>
+                  <FeedbackMessage
+                    feedback={
+                      feedback?.area === "profile" ? feedback : undefined
+                    }
+                  />
+                </>
               )}
-            </CardContent>
-          </Card>
+            </section>
+          </div>
         </>
       )}
       <FeedbackMessage
@@ -327,6 +362,68 @@ export function BodyProfile({
         }
       />
     </div>
+  )
+}
+
+function RefreshKey({
+  busy,
+  disabled,
+  refresh,
+}: {
+  readonly busy: boolean
+  readonly disabled: boolean
+  readonly refresh: () => void
+}): React.JSX.Element {
+  return (
+    <div className="body-refresh">
+      <Button
+        variant="outline"
+        size="key-icon"
+        title="Refresh profile & weight"
+        data-spinning={busy}
+        disabled={busy || disabled}
+        onClick={refresh}
+      >
+        <ArrowClockwiseIcon size={20} aria-hidden="true" />
+        <span className="sr-only">Refresh profile & weight</span>
+      </Button>
+    </div>
+  )
+}
+
+function directionMark(change: number): string {
+  if (change > 0) return "▲"
+
+  return change < 0 ? "▼" : "■"
+}
+
+/** The latest weigh-in, large, and how far it moved across the range shown. */
+function WeightFigure({
+  history,
+}: {
+  readonly history: ReadonlyArray<BodyWeight>
+}): React.JSX.Element | null {
+  const first = history[0]
+  const last = history.at(-1)
+
+  if (first === undefined || last === undefined) return null
+
+  const change = last.weight_kg - first.weight_kg
+  const rounded = Math.round(change * 10) / 10
+
+  return (
+    <p className="body-figure">
+      <span className="sr-only">Latest body weight, {last.date}: </span>
+      <strong>{oneDecimal.format(last.weight_kg)}</strong>
+      <small>kg</small>
+      {history.length < 2 ? null : (
+        <span className="body-change" data-direction={Math.sign(rounded)}>
+          <span aria-hidden="true">{directionMark(rounded)}</span>
+          <span className="sr-only"> Change since {first.date}: </span>
+          {oneDecimal.format(Math.abs(rounded))}
+        </span>
+      )}
+    </p>
   )
 }
 
@@ -500,7 +597,7 @@ function WeightEditor({
 
   return (
     <form
-      className="workout-editor"
+      className="body-weight-form"
       aria-label="Log body weight"
       noValidate
       onSubmit={(event) => {
@@ -534,9 +631,33 @@ function WeightEditor({
         })
       }}
     >
-      <div className="workout-editor-fields">
-        <div className="workout-field">
-          <label htmlFor={`${id}-date`}>Weight date</label>
+      <div className="body-weight-fields">
+        <div className="body-weight-amount">
+          <label htmlFor={`${id}-weight`} className="sr-only">
+            Body weight (kg)
+          </label>
+          <ScalesIcon size={24} aria-hidden="true" />
+          <Input
+            id={`${id}-weight`}
+            aria-invalid={problem?.field === "weight"}
+            aria-describedby={
+              problem?.field === "weight" ? `${id}-problem` : undefined
+            }
+            inputMode="decimal"
+            placeholder="00,0"
+            value={weight}
+            disabled={disabled}
+            onChange={(event) => {
+              setWeight(event.target.value)
+              setProblem(undefined)
+            }}
+          />
+          <span aria-hidden="true">kg</span>
+        </div>
+        <div className="body-weight-date">
+          <label htmlFor={`${id}-date`} className="sr-only">
+            Weight date
+          </label>
           <Input
             id={`${id}-date`}
             aria-invalid={problem?.field === "date"}
@@ -552,110 +673,14 @@ function WeightEditor({
             }}
           />
         </div>
-        <div className="workout-field">
-          <label htmlFor={`${id}-weight`}>Body weight (kg)</label>
-          <Input
-            id={`${id}-weight`}
-            aria-invalid={problem?.field === "weight"}
-            aria-describedby={
-              problem?.field === "weight" ? `${id}-problem` : undefined
-            }
-            inputMode="decimal"
-            value={weight}
-            disabled={disabled}
-            onChange={(event) => {
-              setWeight(event.target.value)
-              setProblem(undefined)
-            }}
-          />
-        </div>
+        <Button type="submit" size="key-icon" disabled={disabled}>
+          <CheckIcon size={22} weight="bold" aria-hidden="true" />
+          <span className="sr-only">Save body weight</span>
+        </Button>
       </div>
       {problem === undefined ? null : (
         <p id={`${id}-problem`} className="workout-problem" role="alert">
           {problem.message}
-        </p>
-      )}
-      <div>
-        <Button type="submit" disabled={disabled}>
-          Save body weight
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-function HistoryFilter({
-  initial,
-  disabled,
-  filter,
-}: {
-  readonly initial: BodyRange
-  readonly disabled: boolean
-  readonly filter: (range: BodyRange) => Promise<void>
-}): React.JSX.Element {
-  const [from, setFrom] = useState(initial.from ?? "")
-  const [to, setTo] = useState(initial.to ?? "")
-  const [problem, setProblem] = useState<string>()
-  const id = useId()
-
-  return (
-    <form
-      className="body-history-filter"
-      aria-label="Filter body-weight history"
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault()
-
-        if (
-          (from !== "" && !z.iso.date().safeParse(from).success) ||
-          (to !== "" && !z.iso.date().safeParse(to).success) ||
-          (from !== "" && to !== "" && from > to)
-        ) {
-          setProblem(
-            "Choose a valid date range with the start on or before the end."
-          )
-          document.getElementById(`${id}-from`)?.focus()
-
-          return
-        }
-
-        setProblem(undefined)
-        void filter({
-          from: from === "" ? undefined : from,
-          to: to === "" ? undefined : to,
-        })
-      }}
-    >
-      <div className="workout-field">
-        <label htmlFor={`${id}-from`}>History from</label>
-        <Input
-          id={`${id}-from`}
-          aria-invalid={problem !== undefined}
-          aria-describedby={problem === undefined ? undefined : `${id}-problem`}
-          type="date"
-          disabled={disabled}
-          value={from}
-          onChange={(event) => setFrom(event.target.value)}
-        />
-      </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-to`}>History to</label>
-        <Input
-          id={`${id}-to`}
-          aria-invalid={problem !== undefined}
-          aria-describedby={problem === undefined ? undefined : `${id}-problem`}
-          type="date"
-          disabled={disabled}
-          value={to}
-          onChange={(event) => setTo(event.target.value)}
-        />
-      </div>
-      <Button variant="outline" type="submit" disabled={disabled}>
-        Apply date range
-      </Button>
-      {problem === undefined ? null : (
-        <p id={`${id}-problem`} className="workout-problem" role="alert">
-          {problem}
         </p>
       )}
     </form>

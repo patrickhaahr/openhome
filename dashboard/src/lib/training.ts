@@ -227,6 +227,35 @@ export const noopWorkoutDetail = noopSummary.omit({ avg_hr_bpm: true }).extend({
 /** NOOP Workout Detail as returned by Axum. */
 export type NoopWorkoutDetail = z.infer<typeof noopWorkoutDetail>
 
+/** One trend metric over a bounded day range; a null value is a day with nothing recorded. */
+export const metricTrend = z.object({
+  metric: z.string(),
+  from_day: z.iso.date(),
+  to_day: z.iso.date(),
+  unit: z.string(),
+  daily_points: z
+    .object({ day: z.iso.date(), value: nullableNumber })
+    .array()
+    .max(90),
+})
+
+/** Metric Trend as returned by Axum. */
+export type MetricTrend = z.infer<typeof metricTrend>
+
+/** A trend metric read beside a Recovery Day, by its Axum name. */
+export type TrendMetric = "hrv" | "resting_heart_rate" | "sleep_duration"
+
+/** Calendar arithmetic on a Training Day, not elapsed local hours across DST. */
+export function shiftDay(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+
+  return date.toISOString().slice(0, 10)
+}
+
+/** Days in a trend read, ending on the selected day. */
+export const trendDays = 30
+
 /** Selected Training Day and atomic NOOP selection, safe for URL search and server-function input. */
 export const trainingSearch = z.object({
   day: z.iso.date().optional().catch(undefined),
@@ -251,10 +280,18 @@ export type TrainingRead<T> =
   | { readonly state: "available"; readonly data: T }
   | { readonly state: "unavailable"; readonly reason: TrainingFailure }
 
-/** Selected-day recovery, a seven-day context and optional NOOP detail. */
+/** Selected-day recovery, the six days before it, a seven-day context, trends and optional NOOP detail. */
 export type TrainingState = {
   readonly day: string
+  /** The current Training Day when the read was made; later days cannot be selected. */
+  readonly today: string
   readonly recovery: TrainingRead<RecoveryDay>
+  /** Seven Recovery Days, oldest first, ending with the selected day's read. */
+  readonly week: ReadonlyArray<{
+    readonly day: string
+    readonly recovery: TrainingRead<RecoveryDay>
+  }>
+  readonly trends: Readonly<Record<TrendMetric, TrainingRead<MetricTrend>>>
   readonly context: TrainingRead<TrainingContext>
   readonly detail: TrainingRead<NoopWorkoutDetail> | { readonly state: "none" }
 }
@@ -280,8 +317,7 @@ export const detailUnavailableMessage: Record<
   z.infer<typeof unavailableReason>,
   string
 > = {
-  hr_max_not_configured:
-    "Set Maximum heart rate in Profile & weight to enable this read.",
+  hr_max_not_configured: "Set Maximum heart rate in Body to enable this read.",
   no_strap_samples:
     "No strap heart rate samples are available for this workout.",
   not_sustained:

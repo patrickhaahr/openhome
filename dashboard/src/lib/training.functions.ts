@@ -26,9 +26,18 @@ export async function loadTraining(
   } catch {
     const failure = { state: "unavailable", reason: "unreachable" } as const
 
+    const today = trainingDayOn(new Date())
+
     return {
-      day: search.day ?? trainingDayOn(new Date()),
+      day: search.day ?? today,
+      today,
       recovery: failure,
+      week: [],
+      trends: {
+        hrv: failure,
+        resting_heart_rate: failure,
+        sleep_duration: failure,
+      },
       context: failure,
       detail: search.noop === undefined ? { state: "none" } : failure,
     }

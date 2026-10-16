@@ -14,6 +14,8 @@ import {
   type BodyRange,
 } from "@/lib/body-profile"
 import { readBodyProfile, writeBodyProfile } from "@/lib/body-profile.server"
+import { shiftDay } from "@/lib/training"
+import { trainingDayOn } from "@/lib/workout"
 import { startAxumFixture } from "./support/axum-fixture"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
@@ -158,7 +160,7 @@ test("configures the shared Profile, preserves concurrent untouched fields, and 
     sex: "female",
     hr_max_bpm: 190,
   })
-  expect(container.textContent).toContain("190 bpm")
+  expect(container.textContent).toContain("Maximum heart rate190 max")
   expect(container.textContent).toContain("Profile saved to OpenHome.")
 
   await click("Edit profile")
@@ -185,16 +187,24 @@ test("configures the shared Profile, preserves concurrent untouched fields, and 
   expect(container.textContent?.match(/Not configured/g)).toHaveLength(3)
 })
 
-test("logs decimal-comma Body Weight, rejects duplicates without replacing stored values, and filters persisted history", async () => {
+test("logs decimal-comma Body Weight, rejects duplicates without replacing stored values, and charts ranges ending today", async () => {
   await render()
   expect(container.textContent).toContain(
     "No body weight recorded in this date range."
   )
 
+  const today = trainingDayOn(new Date())
+
+  const [old, recent, latest] = [
+    shiftDay(today, -200),
+    shiftDay(today, -60),
+    shiftDay(today, -5),
+  ]
+
   for (const [date, weight] of [
-    ["2026-10-10", "74,5"],
-    ["2026-10-08", "75,125"],
-    ["2026-10-12", "74,2"],
+    [recent, "75,125"],
+    [old, "74,5"],
+    [latest, "74,2"],
   ]) {
     if (date === undefined || weight === undefined)
       throw new Error("Missing synthetic value")
@@ -207,7 +217,11 @@ test("logs decimal-comma Body Weight, rejects duplicates without replacing store
     Array.from(container.querySelectorAll("tbody tr")).map(
       (row) => row.textContent
     )
-  ).toEqual(["2026-10-0875,125 kg", "2026-10-1074,5 kg", "2026-10-1274,2 kg"])
+  ).toEqual([`${old}74,5 kg`, `${recent}75,125 kg`, `${latest}74,2 kg`])
+  expect(container.querySelector(".body-figure")?.textContent).toBe(
+    `Latest body weight, ${latest}: 74,2kg▼ Change since ${old}: 0,3`
+  )
+  expect(container.querySelectorAll(".weight-chart-dot")).toHaveLength(3)
   await type("Body weight (kg)", "73")
   await click("Save body weight")
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
@@ -219,28 +233,22 @@ test("logs decimal-comma Body Weight, rejects duplicates without replacing store
       ({ date, weight_kg }) => ({ date, weight_kg })
     )
   ).toEqual([
-    { date: "2026-10-08", weight_kg: 75.125 },
-    { date: "2026-10-10", weight_kg: 74.5 },
-    { date: "2026-10-12", weight_kg: 74.2 },
+    { date: old, weight_kg: 74.5 },
+    { date: recent, weight_kg: 75.125 },
+    { date: latest, weight_kg: 74.2 },
   ])
 
-  await type("History from", "2026-10-09")
-  await type("History to", "2026-10-11")
-  await click("Apply date range")
-  expect(container.querySelector("tbody")?.textContent).toBe(
-    "2026-10-1074,5 kg"
-  )
+  await click("1M")
+  expect(range).toEqual({ from: shiftDay(today, -30), to: undefined })
+  expect(container.querySelector("tbody")?.textContent).toBe(`${latest}74,2 kg`)
+  expect(
+    container.querySelector('.body-range[aria-pressed="true"]')?.textContent
+  ).toBe("1M")
 
-  await type("History from", "2026-10-12")
-  await click("Apply date range")
-  expect(container.textContent).toContain("Choose a valid date range")
-  expect(container.querySelector("tbody")?.textContent).toBe(
-    "2026-10-1074,5 kg"
-  )
+  await click("3M")
+  expect(container.querySelectorAll("tbody tr")).toHaveLength(2)
 
-  await type("History from", "")
-  await type("History to", "")
-  await click("Apply date range")
+  await click("All")
   expect(container.querySelectorAll("tbody tr")).toHaveLength(3)
 })
 
