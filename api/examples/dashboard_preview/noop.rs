@@ -271,6 +271,18 @@ async fn push(
     window: Option<(Value, Value, &str)>,
     records: Vec<Value>,
 ) -> anyhow::Result<()> {
+    push_rows(db, device, stream, window, records, 0).await
+}
+
+/// One batch of at most 5000 records; an append batch continues the stream after `before` rows.
+async fn push_rows(
+    db: &SqlitePool,
+    device: &str,
+    stream: &str,
+    window: Option<(Value, Value, &str)>,
+    records: Vec<Value>,
+    before: usize,
+) -> anyhow::Result<()> {
     let mut header = json!({
         "type": "batch", "protocolVersion": "1.0", "batchId": Uuid::new_v4(),
         "sourceId": SOURCE, "deviceId": device, "stream": stream,
@@ -286,8 +298,13 @@ async fn push(
         });
     } else {
         header["delivery"] = json!("append");
-        header["startCursor"] = Value::Null;
-        header["endCursor"] = json!({ "rowId": records.len(), "keySha256": "0".repeat(64) });
+        header["startCursor"] = if before == 0 {
+            Value::Null
+        } else {
+            json!({ "rowId": before, "keySha256": "0".repeat(64) })
+        };
+        header["endCursor"] =
+            json!({ "rowId": before + records.len(), "keySha256": "0".repeat(64) });
     }
     let mut entity = String::new();
     for line in std::iter::once(header).chain(records) {
@@ -428,11 +445,18 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
     push(db, COMPUTED, "journal", days(&from_day, &to_day), vec![]).await?;
     hr.sort_unstable();
     hr.dedup_by_key(|sample| sample.0);
-    let hr = hr
+    let hr: Vec<Value> = hr
         .into_iter()
         .map(|(ts, bpm)| json!({ "type": "record", "key": { "ts": ts }, "data": { "bpm": bpm } }))
         .collect();
-    push(db, STRAP, "hrSample", None, hr).await
+    // A batch holds at most 5000 samples, so a long history arrives as a continued stream.
+    let mut before = 0;
+    for chunk in hr.chunks(4000) {
+        push_rows(db, STRAP, "hrSample", None, chunk.to_vec(), before).await?;
+        before += chunk.len();
+    }
+
+    Ok(())
 }
 
 fn session(start: i64, end: i64, night: &Night, segments: &[Segment], totals: Totals) -> Value {

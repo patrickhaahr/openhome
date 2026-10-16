@@ -47,7 +47,7 @@ afterEach(async () => {
   await fixture.stop()
 })
 
-/** A Training Day `days` before today, so the default three-month period covers it. */
+/** A Training Day `days` before today. */
 function daysAgo(days: number): string {
   const today = Date.parse(`${trainingDayOn(new Date())}T00:00:00Z`)
 
@@ -119,7 +119,6 @@ async function render(): Promise<void> {
             ids.length === 0 ? rest : { ...rest, compare: [...ids] }
           )
         }}
-        refresh={() => reload(search)}
       />
     )
   })
@@ -196,6 +195,26 @@ function notCharted(): string[] {
   )
 }
 
+test("lists exercises from the latest trained to the oldest, ties alphabetically", async () => {
+  await log(daysAgo(9), [["Pull-up", [{ reps: 8 }]]])
+  await log(daysAgo(5), [
+    ["Converging Chest Press", [{ reps: 10, weight_kg: 40 }]],
+  ])
+  await log(daysAgo(2), [
+    ["Planche Hold", [{ duration_seconds: 30 }]],
+    ["Dip", [{ reps: 12 }]],
+  ])
+
+  await render()
+
+  expect(legendEntries().map(legendName)).toEqual([
+    "Dip",
+    "Planche Hold",
+    "Converging Chest Press",
+    "Pull-up",
+  ])
+})
+
 test("indexes bodyweight reps and holds to their baselines, keeps declines, and toggles each line", async () => {
   await log(daysAgo(30), [
     ["Pull-up", [{ reps: 8 }, { reps: 6 }]],
@@ -208,6 +227,7 @@ test("indexes bodyweight reps and holds to their baselines, keeps declines, and 
     ["Converging Chest Press", [{ reps: 10, weight_kg: 40 }]],
   ])
 
+  search = { period: "3m" }
   await render()
 
   expect(legend()).toEqual(
@@ -266,6 +286,7 @@ test("weighted lines expose decimal estimates, selection limits and omitted days
     ["Dip", [{ reps: 8 }]],
     ["Planche Hold", [{ duration_seconds: 30, weight_kg: 5 }]],
   ])
+  search = { period: "3m" }
   await render()
   expect(container.textContent).toContain("Latest 60 kg · 73")
   expect(container.textContent).toContain("baseline 81.7 kg")
@@ -306,10 +327,15 @@ test("compared never-logged and out-of-period exercises get no line until logged
   expect(legend()).toEqual(lines({ Dip: true }))
   await toggleLine("Dip")
 
-  await click("Add exercise")
-  await click("Add Ring Dip")
-  await click("Add exercise")
-  await click("Add Front Lever Raise")
+  // The comparison comes from the link: the logged exercise, one out of period, one never logged.
+  search = {
+    compare: [
+      await libraryId("Dip"),
+      await libraryId("Ring Dip"),
+      await libraryId("Front Lever Raise"),
+    ],
+  }
+  await render()
 
   // A line turned off stays off while the compared exercises change.
   expect(legend()).toEqual(lines({ Dip: false }))
@@ -329,7 +355,7 @@ test("compared never-logged and out-of-period exercises get no line until logged
   expect(legend()).toEqual(lines({ Dip: false, "Ring Dip": true }))
 })
 
-test("an exercise added beyond the first six lines is shown, and a charted line can be removed", async () => {
+test("a compared exercise beyond the first six lines starts off, and a charted line can be removed", async () => {
   await log(daysAgo(5), [
     ["Pull-up", [{ reps: 8 }]],
     ["Dip", [{ reps: 10 }]],
@@ -346,11 +372,28 @@ test("an exercise added beyond the first six lines is shown, and a charted line 
   expect(legendEntries()).toHaveLength(7)
   expect(drawnLines()).toBe(6)
 
-  await click("Add exercise")
-  await click("Add Ring Dip")
+  search = {
+    compare: [
+      ...(await Promise.all(
+        [
+          "Pull-up",
+          "Dip",
+          "Planche Push-up",
+          "Planche Press",
+          "Front Lever Pull-up",
+          "Front Lever Touch",
+          "Handstand Push-up",
+        ].map(libraryId)
+      )),
+      await libraryId("Ring Dip"),
+    ],
+  }
+  await render()
   expect(notCharted()).toEqual(["Ring DipNot logged in this period"])
-  // Charted once the period covers it, as the eighth line, and shown because it was chosen.
+  // Charted once the period covers it, as the eighth line; later lines start off until touched.
   await click("12 months")
+  expect(legend().get("Ring Dip")).toBe(false)
+  await toggleLine("Ring Dip")
   expect(legend().get("Ring Dip")).toBe(true)
   expect(drawnLines()).toBe(7)
 
@@ -373,7 +416,7 @@ test("an unreachable read is unavailable rather than an empty chart", async () =
   expect(container.textContent).toContain("Progress unavailable")
   expect(container.textContent).not.toContain("Nothing logged")
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
-  await click("Refresh progress")
+  await render()
   expect(container.textContent).toContain("Nothing logged in this period")
 })
 
@@ -387,8 +430,8 @@ test("large weighted changes keep plot work bounded without dropping observed va
   await render()
   expect(drawnLines()).toBe(1)
   expect(
-    container.querySelectorAll(".progress-grid").length
-  ).toBeLessThanOrEqual(6)
+    container.querySelectorAll(".progress-band").length
+  ).toBeLessThanOrEqual(5)
   expect(container.querySelectorAll(".progress-line circle")).toHaveLength(2)
   expect(observed().at(-1)).toEqual([
     shortDay(daysAgo(2)),

@@ -92,7 +92,7 @@ async function render(): Promise<void> {
 
           return work
         }}
-        refresh={() => {
+        reload={() => {
           refreshWork = render()
 
           return refreshWork
@@ -219,7 +219,7 @@ test("logs decimal-comma Body Weight, rejects duplicates without replacing store
     )
   ).toEqual([`${old}74.5 kg`, `${recent}75.125 kg`, `${latest}74.2 kg`])
   expect(container.querySelector(".body-figure")?.textContent).toBe(
-    `Latest body weight, ${latest}: 74.2kg▼ Change since ${old}: 0.3`
+    `Latest body weight, ${latest}: 74.2kg▼ Change since ${old}: 0.3 kg`
   )
   expect(container.querySelectorAll(".weight-chart-dot")).toHaveLength(3)
   await type("Body weight (kg)", "73")
@@ -230,7 +230,10 @@ test("logs decimal-comma Body Weight, rejects duplicates without replacing store
   expect(input("Body weight (kg)").value).toBe("73")
   expect(
     (await api(bodyWeight.array(), "/api/body_weight")).map(
-      ({ date, weight_kg }) => ({ date, weight_kg })
+      ({ date, weight_kg }) => ({
+        date,
+        weight_kg,
+      })
     )
   ).toEqual([
     { date: old, weight_kg: 74.5 },
@@ -297,7 +300,7 @@ test("invalid fields keep drafts and stored values; API validation also remains 
   })
 })
 
-test("unavailable and unauthorized reads never masquerade as unconfigured data and recover on refresh", async () => {
+test("unavailable and unauthorized reads never masquerade as unconfigured data and recover on a new read", async () => {
   vi.stubEnv("API_KEY", "invalid-synthetic-key")
   await render()
   expect(container.textContent).toContain("OpenHome rejected the API key.")
@@ -305,7 +308,7 @@ test("unavailable and unauthorized reads never masquerade as unconfigured data a
   expect(container.textContent).not.toContain("No body weight recorded")
 
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-  await click("Refresh profile & weight")
+  await render()
   expect(container.textContent).toContain(
     "No body weight recorded in this date range."
   )
@@ -321,16 +324,11 @@ test("a failed read after saving weight preserves the active Profile draft and o
 
   expect(container.textContent).toContain("Profile & weight unavailable")
 
-  const refresh = Array.from(container.querySelectorAll("button")).find(
-    (button) => button.textContent === "Refresh profile & weight"
-  )
-
-  expect(refresh?.disabled).toBe(false)
   expect(container.textContent).toContain("Body weight saved to OpenHome.")
 
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   afterWrite = undefined
-  await click("Refresh profile & weight")
+  await render()
   expect(input("Height (cm)").value).toBe("182,75")
   await click("Save profile")
   expect(await api(profile, "/api/profile")).toMatchObject({

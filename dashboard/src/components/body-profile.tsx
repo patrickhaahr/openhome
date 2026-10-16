@@ -1,6 +1,5 @@
 import { useId, useRef, useState } from "react"
 import { z } from "zod"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check"
 import { GenderIntersexIcon } from "@phosphor-icons/react/dist/csr/GenderIntersex"
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
@@ -28,7 +27,10 @@ type BodyProfileProps = {
   readonly data: BodyState
   readonly range: BodyRange
   readonly change: (command: BodyCommand) => Promise<BodyMutation>
-  readonly refresh: () => Promise<void>
+  /** Read the view again after a write. */
+  readonly reload: () => Promise<void>
+  /** The view switcher, which sits at the start of the toolbar. */
+  readonly lead?: React.ReactNode
   readonly filter: (range: BodyRange) => Promise<void>
 }
 
@@ -58,7 +60,8 @@ export function BodyProfile({
   data,
   range,
   change,
-  refresh,
+  reload,
+  lead,
   filter,
 }: BodyProfileProps): React.JSX.Element {
   // Keep the draft above the read-dependent view so an outage cannot discard it.
@@ -90,7 +93,7 @@ export function BodyProfile({
       saved = true
 
       if (command.kind === "profile") setEditing(undefined)
-      await refresh()
+      await reload()
       setFeedback({
         failed: false,
         area: command.kind,
@@ -104,7 +107,7 @@ export function BodyProfile({
         failed: true,
         area: command.kind,
         text: saved
-          ? "Saved to OpenHome, but the view could not refresh. Refresh to see the change."
+          ? "Saved to OpenHome, but the view could not update. Open Body again to see the change."
           : bodyFailureMessage.unreachable,
       })
     } finally {
@@ -127,7 +130,7 @@ export function BodyProfile({
       setFeedback({
         failed: true,
         area: "history",
-        text: "Could not refresh. Try again when OpenHome returns.",
+        text: "Could not update. Try again when OpenHome returns.",
       })
     } finally {
       locked.current = false
@@ -153,28 +156,10 @@ export function BodyProfile({
       <p className="sr-only">
         Shared fitness data · one profile, one weight record per date
       </p>
-      {data.state === "unavailable" ? (
-        <>
-          <div className="body-top">
-            <RefreshKey
-              busy={busy}
-              disabled={false}
-              refresh={() => void read(refresh)}
-            />
-          </div>
-          <div className="today-failure">
-            <h2>Profile & weight unavailable</h2>
-            <p>
-              {data.reason === "unreachable"
-                ? "OpenHome is unreachable. Refresh when the connection returns."
-                : bodyFailureMessage[data.reason]}
-            </p>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="body-top">
-            <WeightFigure history={data.history} />
+      <div className="view-bar">
+        {lead}
+        <div className="view-bar-tools">
+          {data.state === "unavailable" ? null : (
             <div
               className="body-ranges"
               role="group"
@@ -197,49 +182,62 @@ export function BodyProfile({
                 </button>
               ))}
             </div>
-            <RefreshKey
-              busy={busy}
-              disabled={editing !== undefined}
-              refresh={() => void read(refresh)}
-            />
-          </div>
-          <h2 className="sr-only">Body-weight history</h2>
-          {data.history.length === 500 ? (
-            <p className="body-history-limit" role="status">
-              This view reached the 500-record limit. Choose a shorter range to
-              review later records.
-            </p>
-          ) : null}
-          {data.history.length === 0 ? (
-            <p className="body-history-empty">
-              No body weight recorded in this date range.
-            </p>
-          ) : (
-            <>
-              <WeightChart history={data.history} />
-              <table className="sr-only">
-                <caption>Recorded body weight, oldest first</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Date</th>
-                    <th scope="col">Weight (kg)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.history.map((entry) => (
-                    <tr key={entry.id}>
-                      <th scope="row">
-                        <time dateTime={entry.date}>{entry.date}</time>
-                      </th>
-                      <td>{numberFormat.format(entry.weight_kg)} kg</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
           )}
-          <div className="body-panels">
-            <section className="body-panel" aria-labelledby="body-log-title">
+        </div>
+      </div>
+      {data.state === "unavailable" ? (
+        <div className="today-failure">
+          <h2>Profile & weight unavailable</h2>
+          <p>
+            {data.reason === "unreachable"
+              ? "OpenHome is unreachable. Open Body again when the connection returns."
+              : bodyFailureMessage[data.reason]}
+          </p>
+        </div>
+      ) : (
+        <div className="body-layout">
+          <div className="body-trend">
+            <h2 className="sr-only">Body-weight history</h2>
+            <WeightFigure history={data.history} />
+            {data.history.length === 500 ? (
+              <p className="body-history-limit" role="status">
+                This view reached the 500-record limit. Choose a shorter range
+                to review later records.
+              </p>
+            ) : null}
+            {data.history.length === 0 ? (
+              <p className="body-history-empty">
+                No body weight recorded in this date range.
+              </p>
+            ) : (
+              <>
+                <WeightChart history={data.history} />
+                <div className="sr-only">
+                  <table>
+                    <caption>Recorded body weight, oldest first</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Weight (kg)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.history.map((entry) => (
+                        <tr key={entry.id}>
+                          <th scope="row">
+                            <time dateTime={entry.date}>{entry.date}</time>
+                          </th>
+                          <td>{numberFormat.format(entry.weight_kg)} kg</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="body-side">
+            <section className="body-plate" aria-labelledby="body-log-title">
               <h2 id="body-log-title" className="sr-only">
                 Log body weight
               </h2>
@@ -253,51 +251,37 @@ export function BodyProfile({
               </p>
             </section>
             <section
-              className="body-panel"
+              className="body-profile"
               aria-labelledby="body-profile-title"
             >
-              <div className="body-panel-head">
-                <h2 id="body-profile-title" className="sr-only">
-                  Profile
-                </h2>
-                {editing !== undefined ? null : (
-                  <Button
-                    variant="ghost"
-                    size="key-icon"
-                    title="Edit profile"
-                    disabled={busy}
-                    onClick={() => {
-                      setFeedback(undefined)
-                      const original = profileDraft(data.profile)
-                      setEditing({ original, draft: original })
-                    }}
-                  >
-                    <PencilSimpleIcon size={20} aria-hidden="true" />
-                    <span className="sr-only">Edit profile</span>
-                  </Button>
-                )}
-              </div>
+              <h2 id="body-profile-title" className="sr-only">
+                Profile
+              </h2>
               {editing !== undefined ? (
-                <ProfileEditor
-                  original={editing.original}
-                  draft={editing.draft}
-                  update={(draft) =>
-                    setEditing((current) =>
-                      current === undefined ? undefined : { ...current, draft }
-                    )
-                  }
-                  disabled={busy}
-                  save={save}
-                  failure={
-                    feedback?.area === "profile" && feedback.failed
-                      ? feedback.text
-                      : undefined
-                  }
-                  cancel={() => {
-                    setEditing(undefined)
-                    setFeedback(undefined)
-                  }}
-                />
+                <div className="body-plate">
+                  <ProfileEditor
+                    original={editing.original}
+                    draft={editing.draft}
+                    update={(draft) =>
+                      setEditing((current) =>
+                        current === undefined
+                          ? undefined
+                          : { ...current, draft }
+                      )
+                    }
+                    disabled={busy}
+                    save={save}
+                    failure={
+                      feedback?.area === "profile" && feedback.failed
+                        ? feedback.text
+                        : undefined
+                    }
+                    cancel={() => {
+                      setEditing(undefined)
+                      setFeedback(undefined)
+                    }}
+                  />
+                </div>
               ) : (
                 <>
                   <dl className="body-profile-values">
@@ -339,6 +323,22 @@ export function BodyProfile({
                       </dd>
                     </div>
                   </dl>
+                  <div className="body-profile-edit">
+                    <Button
+                      variant="ghost"
+                      size="key-icon"
+                      title="Edit profile"
+                      disabled={busy}
+                      onClick={() => {
+                        setFeedback(undefined)
+                        const original = profileDraft(data.profile)
+                        setEditing({ original, draft: original })
+                      }}
+                    >
+                      <PencilSimpleIcon size={20} aria-hidden="true" />
+                      <span className="sr-only">Edit profile</span>
+                    </Button>
+                  </div>
                   <p className="sr-only">
                     Maximum heart rate defines the NOOP heart rate zones. It is
                     set by you, never inferred from recorded workouts.
@@ -352,7 +352,7 @@ export function BodyProfile({
               )}
             </section>
           </div>
-        </>
+        </div>
       )}
       <FeedbackMessage
         feedback={
@@ -361,32 +361,6 @@ export function BodyProfile({
             : undefined
         }
       />
-    </div>
-  )
-}
-
-function RefreshKey({
-  busy,
-  disabled,
-  refresh,
-}: {
-  readonly busy: boolean
-  readonly disabled: boolean
-  readonly refresh: () => void
-}): React.JSX.Element {
-  return (
-    <div className="body-refresh">
-      <Button
-        variant="outline"
-        size="key-icon"
-        title="Refresh profile & weight"
-        data-spinning={busy}
-        disabled={busy || disabled}
-        onClick={refresh}
-      >
-        <ArrowClockwiseIcon size={20} aria-hidden="true" />
-        <span className="sr-only">Refresh profile & weight</span>
-      </Button>
     </div>
   )
 }
@@ -421,6 +395,7 @@ function WeightFigure({
           <span aria-hidden="true">{directionMark(rounded)}</span>
           <span className="sr-only"> Change since {first.date}: </span>
           {oneDecimal.format(Math.abs(rounded))}
+          <small> kg</small>
         </span>
       )}
     </p>
@@ -644,7 +619,7 @@ function WeightEditor({
               problem?.field === "weight" ? `${id}-problem` : undefined
             }
             inputMode="decimal"
-            placeholder="00,0"
+            placeholder="00.0"
             value={weight}
             disabled={disabled}
             onChange={(event) => {

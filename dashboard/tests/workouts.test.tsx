@@ -2,7 +2,7 @@
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
 // This harness also executes the private server transport; CORS applies to browser RPCs, not Axum calls.
 
-import { act } from "react"
+import { act, useSyncExternalStore } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import {
   afterAll,
@@ -13,6 +13,13 @@ import {
   test,
   vi,
 } from "vitest"
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router"
 import { z } from "zod"
 import { Workouts } from "@/components/workouts"
 import {
@@ -56,6 +63,7 @@ beforeEach(() => {
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
+  mounted = false
   search = {}
   mutationWork = Promise.resolve(undefined)
   refreshWork = Promise.resolve()
@@ -118,39 +126,91 @@ async function stored(id: number): Promise<z.infer<typeof workoutDetail>> {
   return api(workoutDetail, `/api/workouts/${id}`)
 }
 
+/** Sessions link to Recovery, so the page sits in a router; renders swap the page without remounting it. */
+let page: React.JSX.Element = <></>
+
+let mounted = false
+
+const listeners = new Set<() => void>()
+
+function Page(): React.JSX.Element {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+
+      return () => listeners.delete(listener)
+    },
+    () => page
+  )
+}
+
+async function show(next: React.JSX.Element): Promise<void> {
+  page = next
+
+  await act(async () => {
+    if (!mounted) {
+      mounted = true
+
+      const rootRoute = createRootRoute({ component: Page })
+
+      const tree = rootRoute.addChildren([
+        createRoute({ getParentRoute: () => rootRoute, path: "/recovery" }),
+      ])
+
+      const router = createRouter({
+        routeTree: tree,
+        history: createMemoryHistory({ initialEntries: ["/"] }),
+      })
+
+      await router.load()
+      root.render(<RouterProvider router={router} />)
+    }
+
+    for (const listener of listeners) listener()
+  })
+}
+
 async function render(): Promise<void> {
   const data = await readWorkouts(search)
 
-  await act(async () => {
-    root.render(
-      <Workouts
-        data={data}
-        change={(command) => {
-          const work = writeWorkout(command)
-          mutationWork = work
+  await show(
+    <Workouts
+      data={data}
+      change={(command) => {
+        const work = writeWorkout(command)
+        mutationWork = work
 
-          return work
-        }}
-        open={(workout) => {
-          search = { ...search, workout }
-          refreshWork = render()
+        return work
+      }}
+      reload={() => {
+        refreshWork = render()
 
-          return refreshWork
-        }}
-        refresh={() => {
-          refreshWork = render()
+        return refreshWork
+      }}
+      showOlder={() => {
+        search = { ...search, shown: (search.shown ?? 20) + 20 }
+        refreshWork = render()
 
-          return refreshWork
-        }}
-        showOlder={() => {
-          search = { ...search, shown: (search.shown ?? 20) + 20 }
-          refreshWork = render()
+        return refreshWork
+      }}
+    />
+  )
+}
 
-          return refreshWork
-        }}
-      />
+/** The names of the sessions that have a logged workout, in the order the Log lists them. */
+function titles(): Array<string | null> {
+  return Array.from(
+    container.querySelectorAll(
+      '.session:not([data-kind="strap"]) .session-title h3'
     )
-  })
+  ).map((title) => title.textContent)
+}
+
+/** Every session's name, strap-only ones included. */
+function allTitles(): Array<string | null> {
+  return Array.from(container.querySelectorAll(".session-title h3")).map(
+    (title) => title.textContent
+  )
 }
 
 function control<T extends HTMLElement>(label: string, kind: new () => T): T {
@@ -218,12 +278,19 @@ async function addExercise(name: string): Promise<void> {
   await click(`Add ${name}`)
 }
 
+/** The web client only edits, so a workout to edit is stored through the API first. */
+async function storeEmpty(date: string, name: string): Promise<void> {
+  await api(workoutDetail, "/api/workouts", {
+    method: "POST",
+    body: JSON.stringify({ date, name, notes: null, exercises: [] }),
+  })
+}
+
 test("logs reps, added weight, RPE and a bodyweight hold, then reviews them from history", async () => {
+  await storeEmpty("2026-10-10", "Pull day")
   await render()
-  expect(container.textContent).toContain("No workouts logged yet.")
-  await click("Log workout")
-  await type("Date", "2026-10-10")
-  await type("Name (optional)", "Pull day")
+  expect(titles()).toEqual(["Pull day"])
+  await click("Edit Pull day")
   await addExercise("Pull-up")
   await type("Pull-up set 1 reps", "8")
   await type("Pull-up set 1 added weight in kg", "20")
@@ -234,7 +301,7 @@ test("logs reps, added weight, RPE and a bodyweight hold, then reviews them from
   await addExercise("Planche Hold")
   await click("Hold", control("Planche Hold set 1 type", HTMLElement))
   await type("Planche Hold set 1 hold time", "1:05")
-  await click("Save workout")
+  await click("Save changes")
 
   expect(container.textContent).toContain("Workout saved to OpenHome.")
 
@@ -272,19 +339,18 @@ test("logs reps, added weight, RPE and a bodyweight hold, then reviews them from
 
   // A fresh read renders the stored workout as review history.
   await render()
-  expect(container.querySelector("h2#workout-title")?.textContent).toBe(
-    "Pull day"
-  )
+  expect(titles()).toEqual(["Pull day"])
   expect(container.textContent).toContain("8 reps · +20 kg · RPE 8")
   expect(container.textContent).toContain("6 reps · +20 kg · RPE 8")
   expect(container.textContent).toContain("Hold 1:05 · bodyweight")
 })
 
 test("shows unusable set fields beside the set without saving anything", async () => {
+  await storeEmpty("2026-10-10", "Dip day")
   await render()
-  await click("Log workout")
+  await click("Edit Dip day")
   await addExercise("Dip")
-  await click("Save workout")
+  await click("Save changes")
   expect(container.textContent).toContain("Enter whole reps above zero.")
   expect(
     control("Dip set 1 reps", HTMLInputElement).getAttribute("aria-invalid")
@@ -292,11 +358,14 @@ test("shows unusable set fields beside the set without saving anything", async (
 
   await type("Dip set 1 reps", "10")
   await type("Dip set 1 added weight in kg", "0")
-  await click("Save workout")
+  await click("Save changes")
   expect(container.textContent).toContain(
     "Enter added weight in kg above zero, or leave it empty for bodyweight."
   )
-  expect(await api(workoutRows, "/api/workouts")).toEqual([])
+  const [row] = await api(workoutRows, "/api/workouts")
+
+  expect(row?.name).toBe("Dip day")
+  expect((await stored(row?.id ?? 0)).exercises).toEqual([])
 })
 
 test("a rejected edit keeps the draft and the stored workout, and saves once corrected", async () => {
@@ -342,7 +411,7 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
     method: "PATCH",
     body: backDay(6),
   })
-  await click("Edit")
+  await click("Edit Back day")
   expect(control("Pull-up set 1 reps", HTMLInputElement).value).toBe("6")
   await type("Pull-up set 1 reps", "7")
   await addExercise("Synthetic Row")
@@ -377,42 +446,74 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
   expect(container.textContent).toContain("7 reps in 40 s · +12.35 kg")
 })
 
-test("removes a workout only after confirmation and then shows the next newest", async () => {
-  for (const [date, name] of [
-    ["2026-10-01", "Older session"],
-    ["2026-10-05", "Newer session"],
-    ["2026-10-03", "Middle session"],
-  ])
-    await api(workoutDetail, "/api/workouts", {
-      method: "POST",
-      body: JSON.stringify({ date, name, notes: null, exercises: [] }),
-    })
-
+test("the web client can edit a workout but neither create nor delete one", async () => {
+  await storeEmpty("2026-10-05", "Only session")
   await render()
-  expect(container.querySelector("h2#workout-title")?.textContent).toBe(
-    "Newer session"
-  )
-  await click("Remove")
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-    "NOOP records are not affected"
-  )
-  await click("Keep it")
-  expect(await api(workoutRows, "/api/workouts")).toHaveLength(3)
 
-  await click("Remove")
-  await click("Remove permanently")
-  expect(container.textContent).toContain("Workout removed from OpenHome.")
-  expect(container.querySelector("h2#workout-title")?.textContent).toBe(
-    "Middle session"
+  const names = Array.from(document.querySelectorAll("button")).map(
+    (element) =>
+      element.getAttribute("aria-label") ?? element.textContent.trim()
   )
-  expect(
-    (await api(workoutRows, "/api/workouts")).map((workout) => workout.name)
-  ).toEqual(["Middle session", "Older session"])
+
+  expect(names).toContain("Edit Only session")
+  expect(names.some((name) => /^Log workout$|^Remove /.test(name))).toBe(false)
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+  expect(container.querySelector(".set-pill-rpe")).toBeNull()
 })
 
 test("an unreachable read is unavailable rather than an empty history", async () => {
   vi.stubEnv("OPENHOME_API_URL", "http://127.0.0.1:9")
   await render()
   expect(container.textContent).toContain("Workouts unavailable")
-  expect(container.textContent).not.toContain("No workouts logged yet.")
+  expect(container.textContent).not.toContain("Ready when you are.")
+})
+
+test("a logged workout and the strap's session on its day share one plate; the strap's other sessions stand alone", async () => {
+  await api(workoutDetail, "/api/workouts", {
+    method: "POST",
+    body: JSON.stringify({
+      date: "2026-09-30",
+      name: "Mobility day",
+      notes: null,
+      exercises: [],
+    }),
+  })
+  await api(workoutDetail, "/api/workouts", {
+    method: "POST",
+    body: JSON.stringify({
+      date: "2026-09-12",
+      name: "Quiet day",
+      notes: null,
+      exercises: [],
+    }),
+  })
+
+  await render()
+  // Only the strap's Mobility session is not movement, so it is the one that pairs.
+  expect(allTitles()).toHaveLength(4)
+  expect(allTitles()[0]).toBe("Mobility day")
+  expect(
+    [...allTitles()].sort((a, b) => (a ?? "").localeCompare(b ?? ""))
+  ).toEqual(["Cycling", "Mobility day", "Quiet day", "Run / walk"])
+
+  const plates = Array.from(container.querySelectorAll(".session")).map(
+    (plate) => [
+      plate.getAttribute("data-kind"),
+      plate.querySelector("h3")?.textContent,
+    ]
+  )
+
+  expect(plates).toContainEqual(["paired", "Mobility day"])
+  expect(plates).toContainEqual(["strap", "Cycling"])
+  expect(plates).toContainEqual(["logged", "Quiet day"])
+  // None of these sessions has a GPS route, so none draws a map or an empty frame for one.
+  expect(container.querySelector(".session-map")).toBeNull()
+  // The paired plate carries both halves and a way into the strap's full detail.
+  const paired = container.querySelector('.session[data-kind="paired"]')
+
+  expect(paired?.querySelector(".session-logged")).not.toBeNull()
+  expect(paired?.querySelector(".session-strap")).not.toBeNull()
+  expect(paired?.querySelector("a")?.getAttribute("href")).toContain(
+    "/recovery?"
+  )
 })

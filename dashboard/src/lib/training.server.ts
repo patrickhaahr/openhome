@@ -10,6 +10,7 @@ import {
   trainingContext,
   stripDays,
   trendDays,
+  type NoopSelection,
   type RecoveryDay,
   type TrendMetric,
   type TrainingRead,
@@ -57,6 +58,26 @@ async function read<T>(
   }
 }
 
+/**
+ * The Axum path of one NOOP Workout Detail, or undefined when the identity could not be a path.
+ *
+ * @param selection - The exact source, start and sport Axum listed.
+ * @returns The path, or undefined for dot segments and control characters.
+ */
+export function noopDetailPath(
+  selection: NoopSelection
+): `/api/${string}` | undefined {
+  // Literal dot segments are normalized even when URL-encoded; never let them change the API path.
+  const safeSegment = (value: string) =>
+    // oxlint-disable-next-line no-control-regex -- Axum rejects control characters in path identities.
+    value !== "." && value !== ".." && !/[\u0000-\u001f\u007f]/.test(value)
+
+  if (!safeSegment(selection.source) || !safeSegment(selection.sport))
+    return undefined
+
+  return `/api/training/noop-workouts/${encodeURIComponent(selection.source)}/${encodeURIComponent(selection.start)}/${encodeURIComponent(selection.sport)}`
+}
+
 /** The earlier of two Training Days. */
 function minDay(a: string, b: string): string {
   return a < b ? a : b
@@ -97,21 +118,15 @@ export async function readTraining(
   const weekStart = shiftDay(weekEnd, 1 - stripDays)
   const selected = search.noop
 
-  // Literal dot segments are normalized even when URL-encoded; never let them change the API path.
-  const safeSegment = (value: string) =>
-    // oxlint-disable-next-line no-control-regex -- Axum rejects control characters in path identities.
-    value !== "." && value !== ".." && !/[\u0000-\u001f\u007f]/.test(value)
+  const detailPath =
+    selected === undefined ? undefined : noopDetailPath(selected)
 
   const detail =
     selected === undefined
       ? Promise.resolve({ state: "none" } as const)
-      : !safeSegment(selected.source) || !safeSegment(selected.sport)
+      : detailPath === undefined
         ? Promise.resolve({ state: "unavailable", reason: "invalid" } as const)
-        : read(
-            `/api/training/noop-workouts/${encodeURIComponent(selected.source)}/${encodeURIComponent(selected.start)}/${encodeURIComponent(selected.sport)}`,
-            noopWorkoutDetail,
-            { route: "true" }
-          )
+        : read(detailPath, noopWorkoutDetail, { route: "true" })
 
   const trendFrom = shiftDay(day, 1 - trendDays)
 

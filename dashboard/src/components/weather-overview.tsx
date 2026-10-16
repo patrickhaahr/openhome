@@ -170,49 +170,53 @@ function HourlyForecast({
       ) : (
         <>
           <DaySky hours={hours} />
-          <table className="sr-only">
-            <caption>
-              Temperature and wind at the start of each hour. Precipitation
-              amount and chance cover the following hour, including rain,
-              showers and snow. Missing values are unavailable.
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Hour starting</th>
-                <th scope="col">Temperature</th>
-                <th scope="col">Precipitation</th>
-                <th scope="col">Chance of precipitation</th>
-                <th scope="col">Wind</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hours.map((hour) => (
-                <tr key={hour.starts_at}>
-                  <th scope="row">
-                    {date.format(new Date(hour.starts_at))}{" "}
-                    <time dateTime={hour.starts_at}>
-                      {hourTime.format(new Date(hour.starts_at))}
-                    </time>{" "}
-                    {
-                      hourOffset
-                        .formatToParts(new Date(hour.starts_at))
-                        .find((part) => part.type === "timeZoneName")?.value
-                    }
-                    {hour.temperature_c === null &&
-                    hour.wind_ms === null &&
-                    hour.precipitation_mm === null &&
-                    hour.precipitation_probability_percent === null
-                      ? " Hourly conditions unavailable"
-                      : null}
-                  </th>
-                  <td>{value(hour.temperature_c, "°C")}</td>
-                  <td>{value(hour.precipitation_mm, "mm")}</td>
-                  <td>{value(hour.precipitation_probability_percent, "%")}</td>
-                  <td>{value(hour.wind_ms, "m/s")}</td>
+          <div className="sr-only">
+            <table>
+              <caption>
+                Temperature and wind at the start of each hour. Precipitation
+                amount and chance cover the following hour, including rain,
+                showers and snow. Missing values are unavailable.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Hour starting</th>
+                  <th scope="col">Temperature</th>
+                  <th scope="col">Precipitation</th>
+                  <th scope="col">Chance of precipitation</th>
+                  <th scope="col">Wind</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {hours.map((hour) => (
+                  <tr key={hour.starts_at}>
+                    <th scope="row">
+                      {date.format(new Date(hour.starts_at))}{" "}
+                      <time dateTime={hour.starts_at}>
+                        {hourTime.format(new Date(hour.starts_at))}
+                      </time>{" "}
+                      {
+                        hourOffset
+                          .formatToParts(new Date(hour.starts_at))
+                          .find((part) => part.type === "timeZoneName")?.value
+                      }
+                      {hour.temperature_c === null &&
+                      hour.wind_ms === null &&
+                      hour.precipitation_mm === null &&
+                      hour.precipitation_probability_percent === null
+                        ? " Hourly conditions unavailable"
+                        : null}
+                    </th>
+                    <td>{value(hour.temperature_c, "°C")}</td>
+                    <td>{value(hour.precipitation_mm, "mm")}</td>
+                    <td>
+                      {value(hour.precipitation_probability_percent, "%")}
+                    </td>
+                    <td>{value(hour.wind_ms, "m/s")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </section>

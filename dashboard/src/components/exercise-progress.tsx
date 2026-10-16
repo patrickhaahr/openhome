@@ -1,15 +1,13 @@
-import { useId, useRef, useState } from "react"
-import { ExercisePicker } from "@/components/exercise-picker"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { useEffect, useId, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
+  byLatestTrained,
   chartScale,
   indexValue,
   isGap,
-  maxCompared,
   metricLabel,
   metricPolicy,
   missingLineReason,
@@ -30,7 +28,8 @@ type ExerciseProgressProps = {
   readonly choosePeriod: (period: ProgressPeriod) => Promise<void>
   /** Compare exactly these Exercises; an empty list returns to the most recently logged. */
   readonly compare: (ids: ReadonlyArray<number>) => Promise<void>
-  readonly refresh: () => Promise<void>
+  /** The view switcher, which sits at the start of the toolbar. */
+  readonly lead?: React.ReactNode
 }
 
 /** Lines shown before the household toggles any, keeping a first glance readable. */
@@ -54,7 +53,7 @@ export function ExerciseProgress({
   data,
   choosePeriod,
   compare,
-  refresh,
+  lead,
 }: ExerciseProgressProps): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
@@ -84,78 +83,41 @@ export function ExerciseProgress({
       ? data.progress.exercises.map((line) => line.exercise.id)
       : []
 
-  const full = shownIds.length >= maxCompared
-
   return (
     <div className="exercise-progress workouts" aria-busy={busy}>
-      <div className="workout-toolbar">
-        <ToggleGroup
-          aria-label="Progress period"
-          variant="outline"
-          spacing={0}
-          value={data.state === "available" ? [data.period] : []}
-          disabled={busy}
-          onValueChange={([next]) => {
-            if (next === "4w" || next === "3m" || next === "12m")
-              void run(() => choosePeriod(next))
-          }}
-        >
-          {(["4w", "3m", "12m"] as const).map((key) => (
-            <ToggleGroupItem key={key} value={key} size="lg">
-              {progressPeriods[key].label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        <div className="workout-toolbar-actions">
-          {data.state === "available" ? (
-            <>
-              <ExercisePicker
-                exercises={data.library.filter(
-                  (exercise) => !shownIds.includes(exercise.id)
-                )}
-                disabled={busy || full}
-                choose={(exercise) => {
-                  // A chosen exercise is shown even beyond the first few lines.
-                  setToggled((current) =>
-                    new Map(current).set(exercise.id, true)
-                  )
-                  void run(() => compare([...shownIds, exercise.id]))
-                }}
-              />
-              {data.compared.length > 0 ? (
-                <Button
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    void run(() => compare([]))
-                  }}
-                >
-                  Most recent
-                </Button>
-              ) : null}
-            </>
+      <div className="view-bar">
+        {lead}
+        <div className="view-bar-tools">
+          {data.state === "available" && data.compared.length > 0 ? (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                void run(() => compare([]))
+              }}
+            >
+              Most recent
+            </Button>
           ) : null}
-          <Button
+          <ToggleGroup
+            aria-label="Progress period"
             variant="outline"
-            size="key-icon"
-            title="Refresh progress"
-            data-spinning={busy}
+            spacing={0}
+            value={data.state === "available" ? [data.period] : []}
             disabled={busy}
-            onClick={() => {
-              void run(refresh)
+            onValueChange={([next]) => {
+              if (next === "4w" || next === "3m" || next === "12m")
+                void run(() => choosePeriod(next))
             }}
           >
-            <ArrowClockwiseIcon size={20} aria-hidden="true" />
-            <span className="sr-only">Refresh progress</span>
-          </Button>
+            {(["4w", "3m", "12m"] as const).map((key) => (
+              <ToggleGroupItem key={key} value={key} size="lg">
+                {progressPeriods[key].label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
       </div>
-      {data.state === "available" && full ? (
-        <p className="workout-muted">
-          {maxCompared} exercises is the most one chart compares. Remove one to
-          add another.
-        </p>
-      ) : null}
       <p className="workout-feedback" data-failed="true" role="status">
         {failure}
       </p>
@@ -207,7 +169,8 @@ function ProgressView({
   toggle,
   remove,
 }: ProgressViewProps): React.JSX.Element {
-  const charted = progress.exercises.filter(isCharted)
+  const ordered = byLatestTrained(progress.exercises)
+  const charted = ordered.filter(isCharted)
 
   const missing = progress.exercises.filter(
     (line): line is Exclude<ProgressLine, ChartedLine> => !isCharted(line)
@@ -224,10 +187,10 @@ function ProgressView({
 
   const [inspected, setInspected] = useState<number>()
 
-  // Slots follow the request order, so toggling, periods and absences never recolour a
+  // Slots follow the order, newest session first, so toggling, periods and absences never recolour a
   // compared line.
   const markers = new Map(
-    progress.exercises.map((line, position): [number, Marker] => [
+    ordered.map((line, position): [number, Marker] => [
       line.exercise.id,
       {
         colour: (position % paletteSize) + 1,
@@ -455,9 +418,30 @@ function ProgressChart({
   lines,
   markers,
 }: ProgressChartProps): React.JSX.Element {
-  const scale = chartScale({ from, to, lines })
+  const [measured, setMeasured] = useState<number>(plot.width)
+  const figure = useRef<HTMLElement>(null)
 
-  const right = plot.width - plot.right
+  useEffect(() => {
+    const element = figure.current
+
+    if (element === null) return
+
+    const measure = () => {
+      if (element.clientWidth > 0) setMeasured(Math.round(element.clientWidth))
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [])
+
+  // Drawn at its own pixel width so type stays readable on a phone.
+  const size = { width: measured, height: measured < 520 ? 260 : plot.height }
+  const scale = chartScale({ from, to, lines, size })
+
+  const right = size.width - plot.right
 
   const label =
     lines.length === 0
@@ -465,30 +449,44 @@ function ProgressChart({
       : `Progress index from ${shortDay(from)} to ${shortDay(to)} for ${lines.map((line) => line.exercise.name).join(", ")}. Exact values are in Observed values.`
 
   return (
-    <figure className="progress-chart">
+    <figure className="progress-chart" ref={figure}>
       <svg
-        viewBox={`0 0 ${plot.width} ${plot.height}`}
+        viewBox={`0 0 ${size.width} ${size.height}`}
         role="img"
         aria-label={label}
       >
-        {scale.ticks.map((tick) => (
-          <g key={tick} data-baseline={tick === 100}>
-            <line
-              className="progress-grid"
-              x1={plot.left}
-              x2={right}
-              y1={scale.y(tick)}
-              y2={scale.y(tick)}
+        {scale.ticks.slice(1).map((tick, position) => {
+          const below = scale.ticks[position]
+
+          if (below === undefined) return null
+
+          return (
+            <rect
+              key={tick}
+              className="progress-band"
+              data-dark={position % 2 === 0}
+              x={plot.left}
+              y={scale.y(tick)}
+              width={right - plot.left}
+              height={scale.y(below) - scale.y(tick)}
             />
-            <text x={plot.left - 8} y={scale.y(tick) + 4} textAnchor="end">
-              {tick}
-            </text>
-          </g>
+          )
+        })}
+        {scale.ticks.map((tick) => (
+          <text
+            key={tick}
+            data-baseline={tick === 100}
+            x={plot.left - 8}
+            y={scale.y(tick) + 4}
+            textAnchor="end"
+          >
+            {tick}
+          </text>
         ))}
-        <text x={plot.left} y={plot.height - 6}>
+        <text x={plot.left} y={size.height - 6}>
           {shortDay(from)}
         </text>
-        <text x={right} y={plot.height - 6} textAnchor="end">
+        <text x={right} y={size.height - 6} textAnchor="end">
           {shortDay(to)}
         </text>
         {lines.map((line) => (

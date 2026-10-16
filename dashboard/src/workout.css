@@ -50,21 +50,66 @@
   --band: var(--muted-ink);
 }
 
-/* ---------- View switch: one capsule track, the current view is the ink pill ---------- */
+/* ---------- The toolbar: the view switch first, the view's own tools at the other end ---------- */
 
-.view-tabs {
+.view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: clamp(1rem, 2.4vw, 1.75rem);
+}
+.view-bar-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* Every segmented control here is one capsule on a wash track; the chosen segment is the ink pill. */
+.view-tabs,
+.body-ranges,
+.view-bar [data-slot="toggle-group"] {
   display: flex;
   width: max-content;
   max-width: 100%;
   gap: 0.25rem;
-  padding: 0.3rem;
+  padding: 0.25rem;
   border-radius: 999px;
   background: var(--wash);
 }
+.view-bar .view-tabs {
+  margin-bottom: 0;
+  overflow: visible;
+}
+.view-tab,
+.body-range,
+.view-bar [data-slot="toggle-group-item"] {
+  min-height: 2.75rem;
+  padding-inline: 1.125rem;
+  border: 0;
+  border-radius: 999px !important;
+  background: transparent;
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
 .view-tab {
   gap: 0.5rem;
-  min-height: 3rem;
-  padding-inline: 1.125rem 1.375rem;
+  padding-inline: 1rem 1.25rem;
+}
+.view-tab:hover,
+.view-bar [data-slot="toggle-group-item"]:hover {
+  background: var(--wash-strong);
+  color: var(--ink);
+}
+.view-tab[aria-current="page"],
+.view-bar [data-slot="toggle-group-item"][aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ground);
 }
 .view-tab[aria-current="page"] svg {
   color: var(--sun);
@@ -1103,34 +1148,33 @@
   color: var(--muted-ink);
 }
 
-/* ---------- Body ---------- */
+/* ---------- Body: the weight trend is the page; the rest sits quietly beside it ---------- */
 
 .body {
   display: grid;
+  gap: 0;
+}
+.body-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 21rem;
+  align-items: start;
   gap: clamp(1.25rem, 3vw, 2rem);
 }
-.body-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 1rem 1.5rem;
-}
-.body-refresh {
-  margin-left: auto;
-}
-.body-ranges + .body-refresh {
-  margin-left: 0;
+.body-trend {
+  display: grid;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  min-width: 0;
 }
 .body-figure {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
-  margin-right: auto;
+  gap: 0.25rem 0.5rem;
   line-height: 0.9;
   font-variant-numeric: tabular-nums;
 }
 .body-figure strong {
-  font-size: var(--t-xl);
+  font-size: clamp(3.5rem, 2rem + 5vw, 6rem);
   font-weight: 500;
   letter-spacing: -0.06em;
 }
@@ -1142,14 +1186,19 @@
 .body-change {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.375rem;
   margin-left: 0.75rem;
-  padding: 0.25rem 0.75rem;
+  padding: 0.375rem 0.875rem;
   border-radius: 999px;
   background: var(--wash-strong);
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.4;
+}
+.body-change small {
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 .body-change span[aria-hidden="true"] {
   font-size: 0.75rem;
@@ -1164,17 +1213,18 @@
 .body-range {
   min-width: 3.25rem;
   min-height: 2.75rem;
-  padding-inline: 0.875rem;
+  padding-inline: 1.125rem;
   border-radius: 999px;
   color: var(--muted-ink);
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 500;
   touch-action: manipulation;
   transition:
     background-color var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
 }
 .body-range:hover {
+  background: var(--wash-strong);
   color: var(--ink);
 }
 .body-range[aria-pressed="true"] {
@@ -1185,36 +1235,42 @@
   opacity: 0.5;
 }
 
+/* The chart is a plate; kilograms are bands of alternating tone, not lines. */
 .weight-chart {
   position: relative;
   margin: 0;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  background: var(--tile);
 }
 .weight-chart svg {
   display: block;
   width: 100%;
-  height: auto;
-  overflow: visible;
   touch-action: pan-y;
 }
-.weight-chart-tick line {
-  stroke: var(--line);
-  stroke-width: 1;
+.weight-chart-band[data-dark="true"] {
+  fill: var(--wash);
 }
-.weight-chart-tick text,
+.weight-chart-band[data-dark="false"] {
+  fill: transparent;
+}
+.weight-chart-tick {
+  fill: var(--muted-ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-anchor: end;
+}
 .weight-chart-month {
   fill: var(--muted-ink);
-  font-size: 15px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
-}
-.weight-chart-area {
-  fill: var(--sun);
-  opacity: 0.07;
 }
 .weight-chart-trend {
   fill: none;
   stroke: var(--sun);
   stroke-width: 3.5;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 @media (prefers-reduced-motion: no-preference) {
   .weight-chart-trend {
@@ -1232,7 +1288,7 @@
 }
 .weight-chart-dot {
   fill: var(--ink);
-  opacity: 0.35;
+  opacity: 0.3;
 }
 .weight-chart-low circle {
   fill: none;
@@ -1241,7 +1297,7 @@
 }
 .weight-chart-low text {
   fill: var(--ink);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   text-anchor: middle;
 }
@@ -1250,20 +1306,15 @@
   stroke: var(--ground);
   stroke-width: 4;
 }
-.weight-chart-focus line {
-  stroke: var(--ink);
-  stroke-width: 1.5;
-  stroke-dasharray: 3 5;
-}
-.weight-chart-focus circle {
+.weight-chart-focus {
   fill: var(--ground);
   stroke: var(--ink);
   stroke-width: 3;
 }
 .weight-chart-readout {
   position: absolute;
-  top: 0;
-  left: 0.5rem;
+  top: 0.75rem;
+  left: 1.25rem;
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
@@ -1279,24 +1330,17 @@
   color: var(--muted-ink);
 }
 
-.body-panels {
+.body-side {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+  min-width: 0;
 }
-.body-panel {
-  position: relative;
+.body-plate {
   display: grid;
-  align-content: start;
-  gap: 1rem;
-  padding: 1.25rem 1.5rem;
+  gap: 0.75rem;
+  padding: 1.25rem;
   border-radius: 1.75rem;
   background: var(--tile);
-}
-.body-panel-head {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
 }
 .body-weight-form {
   display: grid;
@@ -1312,6 +1356,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-right: auto;
   color: var(--muted-ink);
   font-size: 1.125rem;
   font-weight: 600;
@@ -1333,27 +1378,34 @@
 }
 .body-weight-date {
   flex: 1;
-  min-width: 10rem;
+  min-width: 9rem;
 }
 .body-weight-date input {
   height: 3rem;
   font-size: 1rem;
 }
+/* The profile: three quiet plates, one value each. */
+.body-profile {
+  position: relative;
+  display: grid;
+  gap: 0.5rem;
+}
 .body-profile-values {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem 2rem;
-  min-height: 3.5rem;
-  padding-right: 3rem;
+  display: grid;
+  gap: 0.5rem;
 }
 .body-profile-values > div {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  min-height: 4rem;
+  padding: 0.5rem 4rem 0.5rem 0.75rem;
+  border-radius: 1.5rem;
+  background: var(--tile);
 }
 .body-profile-values dt {
   display: grid;
+  flex: none;
   place-items: center;
   width: 2.5rem;
   height: 2.5rem;
@@ -1362,7 +1414,10 @@
   color: var(--muted-ink);
 }
 .body-profile-values dd {
-  font-size: 1.5rem;
+  flex: 1;
+  margin: 0;
+  text-align: start;
+  font-size: 1.375rem;
   font-weight: 600;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
@@ -1372,6 +1427,11 @@
   font-size: 0.875rem;
   font-weight: 500;
   letter-spacing: 0;
+}
+.body-profile-edit {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
 }
 .body-history-empty {
   padding: 3rem 0;
@@ -1394,7 +1454,7 @@
   .today-glance {
     gap: 1.5rem;
   }
-  .body-panels {
+  .body-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1419,8 +1479,21 @@
     font-size: 0.9375rem;
   }
   /* Equal tabs, icon over word, so every view stays in reach on a phone. */
+  .view-bar,
+  .view-bar-tools {
+    width: 100%;
+  }
   .view-tabs {
     width: 100%;
+  }
+  .view-bar [data-slot="toggle-group"],
+  .body-ranges {
+    width: 100%;
+  }
+  .view-bar [data-slot="toggle-group-item"],
+  .body-range {
+    flex: 1 1 0;
+    padding-inline: 0.25rem;
   }
   .view-tab {
     flex: 1 1 0;
@@ -1433,121 +1506,153 @@
   }
 }
 
-/* ---------- Log: a rail of dates beside one session; sets read as pills ---------- */
+/* ---------- Log: one plate per session; the logged half and the strap's half share its type ---------- */
 
-.workouts .workout-toolbar-actions {
-  flex-direction: row-reverse;
+.log-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.workouts .workout-layout {
-  grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr);
-  gap: clamp(1.25rem, 3vw, 2.5rem);
-}
-.workouts .workout-layout > [data-slot="card"] {
-  padding: clamp(1.25rem, 3vw, 2rem);
+.session {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 2.4vw, 1.75rem);
   border-radius: 1.75rem;
   background: var(--tile);
 }
-.workouts .workout-history ul {
-  gap: 0.25rem;
+@media (prefers-reduced-motion: no-preference) {
+  .session {
+    animation: rise var(--t-mid) var(--ease) both;
+  }
 }
-.workouts .workout-history li button {
-  grid-template-columns: 2.75rem minmax(0, 1fr);
-  grid-template-areas:
-    "day date"
-    "day name";
+.session-head {
+  display: flex;
   align-items: center;
-  column-gap: 0.75rem;
-  row-gap: 0;
-  padding: 0.625rem 0.75rem;
-  border-radius: 1.125rem;
+  gap: 1rem;
 }
-.workout-history-day {
-  grid-area: day;
-  justify-self: center;
-  font-size: 1.75rem;
-  font-weight: 600;
-  letter-spacing: -0.05em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+.session-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--wash-strong);
 }
-.workouts .workout-history-date {
-  grid-area: date;
+.session-title {
+  flex: 1;
+  min-width: 0;
 }
-.workout-history-name {
-  grid-area: name;
+.session-title h3 {
   overflow: hidden;
-  max-width: 100%;
-  font-size: 0.9375rem;
+  font-size: var(--t-m);
   font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workouts .workout-history li button[aria-pressed="true"] {
-  border-radius: 1.125rem;
-}
-.workouts .workout-date {
-  font-size: var(--t-m);
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.035em;
-  line-height: 1.1;
-}
-.workouts h2#workout-title {
+.session-title p {
+  margin-top: 0.125rem;
   color: var(--muted-ink);
-  font-size: 1rem;
-  font-weight: 500;
-}
-.workout-tally {
-  display: flex;
-  gap: 1.25rem;
-  margin-top: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
-.workout-tally > span:not(.sr-only) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  color: var(--muted-ink);
-}
-.workout-tally strong {
-  color: var(--ink);
-  font-size: 1.25rem;
-  font-weight: 700;
-}
-.workouts article .workout-entries {
-  gap: 0;
-  margin-block: 1rem 0;
-}
-.workouts article .workout-entry {
-  display: grid;
-  grid-template-columns: minmax(10rem, 1fr) minmax(0, 2fr);
-  align-items: center;
-  gap: 0.5rem 1.5rem;
-  padding-block: 0.875rem;
-}
-.workouts article .workout-entry + .workout-entry {
-  border-top: 1px solid var(--line);
-}
-.workouts article .workout-entry > .workout-muted {
-  grid-column: 1;
-}
-.workouts article .workout-sets {
+.session-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex: none;
+  gap: 0.25rem;
+}
+.session-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(1.5rem, 3vw, 3rem);
+}
+.session[data-kind="logged"] .session-body,
+.session[data-kind="strap"][data-route="false"] .session-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+.session[data-kind="strap"][data-route="true"] .session-body {
+  align-items: stretch;
+}
+
+/* The same figures in both halves: a small label over a bold number. */
+.session-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  gap: 0.75rem clamp(1rem, 2vw, 1.5rem);
+  min-width: 0;
+}
+.session-strap-top .session-stats {
+  flex: 1;
+}
+.session-logged > .session-stats {
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 8rem));
+}
+.session-stats div {
+  display: grid;
+  gap: 0.125rem;
+}
+.session-stats dt {
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.session-stats dd {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.session-stats small {
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.session-logged,
+.session-strap,
+.session-trace {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  align-content: start;
+}
+.session-exercises {
+  display: grid;
+  gap: 1rem;
   margin: 0;
   padding: 0;
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  list-style: none;
+}
+.session[data-kind="logged"] .session-exercises {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+.session-exercises h4 {
+  margin-bottom: 0.375rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.workout-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .set-pill {
-  position: relative;
-  display: inline-flex !important;
-  align-items: baseline !important;
-  gap: 0.25rem !important;
-  min-width: 4.5rem;
-  padding: 0.5rem 0.875rem 0.75rem;
-  overflow: hidden;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  min-width: 4.25rem;
+  padding: 0.5rem 0.875rem;
   border-radius: 0.875rem;
   background: var(--ground);
   font-variant-numeric: tabular-nums;
@@ -1565,40 +1670,89 @@
   font-size: 0.875rem;
   font-weight: 600;
 }
-.set-pill-rpe {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--sun) calc(var(--rpe) * 100%),
-    transparent 0
-  );
-}
 .set-pill-note {
   flex-basis: 100%;
   color: var(--muted-ink);
   font-size: 0.75rem;
 }
+
+.session-strap-top {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+.session .score-ring {
+  flex: none;
+  width: 5.5rem;
+  gap: 0.25rem;
+}
+.session .score-ring circle {
+  stroke-width: 11;
+}
+.session .score-ring-figure span {
+  font-size: 1.5rem;
+}
+.session .score-ring figcaption {
+  font-size: 0.6875rem;
+}
+.session .hr-chart svg {
+  height: 7rem;
+}
+.session .zone-bar-track {
+  height: 0.75rem;
+}
+.session .zone-bar-legend li {
+  font-size: 1rem;
+}
+.session[data-kind="strap"][data-route="false"] .session-strap {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(1.5rem, 3vw, 3rem);
+}
+.session-map .noop-detail-map {
+  height: 100%;
+  min-height: 20rem;
+}
+.log-older {
+  justify-self: center;
+  margin-top: 0.75rem;
+}
+.workouts.log {
+  display: grid;
+}
 @media (max-width: 860px) {
-  .workouts .workout-layout {
+  .session-body,
+  .session[data-kind="strap"][data-route="false"] .session-strap {
     grid-template-columns: minmax(0, 1fr);
   }
-  .workouts .workout-history ul {
-    display: flex;
-    overflow-x: auto;
-    scrollbar-width: none;
+  .session[data-kind="strap"][data-route="false"] .session-strap {
+    gap: 1rem;
   }
-  .workouts .workout-history li {
-    flex: 0 0 10.5rem;
+  .session-map .noop-detail-map {
+    min-height: 16rem;
   }
-  .workouts article .workout-entry {
-    grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 700px) {
+  /* The keys drop below the name, so a long name and its time keep the width. */
+  .session-head {
+    flex-wrap: wrap;
   }
-  .workouts article .workout-sets {
-    grid-column: 1;
-    grid-row: auto;
+  .session-actions {
+    order: 3;
+    justify-content: flex-end;
+    width: 100%;
+    margin-top: -0.5rem;
+  }
+  /* The ring above its figures, which take the full width in two columns. */
+  .session-strap-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .session-strap-top .session-stats {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .session-logged > .session-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

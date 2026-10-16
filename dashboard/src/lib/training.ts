@@ -128,6 +128,9 @@ const noopSummary = noopSelection.extend({
   steps: nullableNumber,
 })
 
+/** One NOOP Workout as the Training Context lists it. */
+export type NoopSummary = z.infer<typeof noopSummary>
+
 /** Bounded Training Context, with separate logged and NOOP Workouts for every calendar day. */
 export const trainingContext = z.object({
   from_day: z.iso.date(),
