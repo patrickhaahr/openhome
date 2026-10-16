@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { watchlistFilters } from "@/lib/watchlist"
+import { PageHead } from "@/components/page-head"
 import { Watchlists } from "@/components/watchlists"
 import {
   loadWatchlists,
@@ -26,16 +27,8 @@ function WatchlistPage(): React.JSX.Element {
   const search = useServerFn(searchWatchlist)
 
   return (
-    <section className="focused-page watchlist-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / Watchlist</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          Watchlist
-        </h1>
-        <p className="feature-intro">
-          A good story for another evening. Everyone’s plans, together.
-        </p>
-      </header>
+    <section>
+      <PageHead title="Watchlist" />
       <Watchlists
         data={data}
         search={(input) => search({ data: input })}

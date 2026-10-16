@@ -1,4 +1,6 @@
 import { useRef, useState } from "react"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -47,13 +49,13 @@ function Observation({
   return (
     <div className="training-observation">
       <dt>{label}</dt>
-      <dd>
+      <dd data-gap={data.value === null}>
         {data.value === null
           ? covered
             ? "Not recorded"
             : "Not synced or unavailable"
           : value(data.value, data.unit)}
-        <small>
+        <small className="sr-only">
           {data.value === null
             ? `Unit: ${data.unit}`
             : `Source: ${data.source ?? "Not available"}`}
@@ -72,16 +74,22 @@ type SyncStatus = {
 function Sync({ data }: { readonly data: SyncStatus }): React.JSX.Element {
   return (
     <div className="training-sync">
-      <p>
-        Freshness: <strong>{data.freshness}</strong> · Last completed push:{" "}
+      <p className="training-sync-push" data-freshness={data.freshness}>
+        <span className="sr-only">Freshness: </span>
+        <strong>{data.freshness}</strong>
+        <span className="sr-only"> · Last completed push: </span>
+        <span aria-hidden="true"> · </span>
         {data.last_push_at === null ? "Not available" : at(data.last_push_at)}
       </p>
-      <p>
-        {Object.entries(data.coverage)
-          .map(([stream, state]) => `${stream.replaceAll("_", " ")}: ${state}`)
-          .join(" · ")}
-      </p>
-      <p>
+      <ul className="training-sync-streams">
+        {Object.entries(data.coverage).map(([stream, state]) => (
+          <li key={stream} data-coverage={state}>
+            {stream.replaceAll("_", " ")}
+            <span className="sr-only">: {state}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="sr-only">
         Covered means a missing row is a recorded absence. Unknown coverage may
         mean the phone has not synced. Freshness describes these streams, not
         the whole phone sync.
@@ -171,15 +179,23 @@ export function TrainingSummaries({
         <Button
           type="button"
           variant="outline"
+          size="key-icon"
+          title="Refresh training"
+          data-spinning={busy}
           disabled={busy}
           onClick={() => {
             void run(refresh)
           }}
         >
-          Refresh training
+          <ArrowClockwiseIcon size={20} aria-hidden="true" />
+          <span className="sr-only">Refresh training</span>
         </Button>
       </form>
-      <p className="workout-feedback" role="status">
+      <p
+        className="workout-feedback"
+        role="status"
+        data-failed={!busy && feedback !== "" ? true : undefined}
+      >
         {busy ? "Reading training data…" : feedback}
       </p>
       <div className="training-overview">
@@ -196,19 +212,22 @@ export function TrainingSummaries({
         >
           {data.detail.state === "none" ? (
             <Card>
-              <CardHeader>
-                <p className="page-eyebrow">NOOP workout detail</p>
-                <h2>Explore a recorded session</h2>
-              </CardHeader>
               <CardContent>
-                <p className="workout-muted">
-                  Choose a NOOP workout in the seven-day context below to
-                  inspect strap heart rate, zones and recovery.
-                </p>
-                <p className="workout-muted">
-                  Logged Workouts and NOOP Workouts are separate records.
-                  Sharing a day does not match them.
-                </p>
+                <div className="training-prompt">
+                  <HeartbeatIcon size={56} weight="light" aria-hidden="true" />
+                  <p className="sr-only">NOOP workout detail</p>
+                  <h2>Explore a recorded session</h2>
+                </div>
+                <div className="sr-only">
+                  <p>
+                    Choose a NOOP workout in the seven-day context below to
+                    inspect strap heart rate, zones and recovery.
+                  </p>
+                  <p>
+                    Logged Workouts and NOOP Workouts are separate records.
+                    Sharing a day does not match them.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -297,11 +316,11 @@ function Recovery({ data }: { readonly data: RecoveryDay }): React.JSX.Element {
 
   return (
     <Card>
-      <CardHeader>
-        <p className="page-eyebrow">Recovery day · {data.day}</p>
+      <div className="sr-only">
+        <p>Recovery day · {data.day}</p>
         <h2>The night waking on this day</h2>
-        <p className="workout-muted">{data.time_zone} · Shared fitness data</p>
-      </CardHeader>
+        <p>{data.time_zone} · Shared fitness data</p>
+      </div>
       <CardContent>
         <dl className="training-metrics">
           {observations.map(([label, observation]) => (
@@ -314,9 +333,7 @@ function Recovery({ data }: { readonly data: RecoveryDay }): React.JSX.Element {
           ))}
         </dl>
         <h3>NOOP derived scores</h3>
-        <p className="workout-muted">
-          Model outputs from NOOP, not measurements.
-        </p>
+        <p className="sr-only">Model outputs from NOOP, not measurements.</p>
         <dl className="training-metrics">
           <Observation
             label="Recovery"
@@ -392,7 +409,7 @@ function Recovery({ data }: { readonly data: RecoveryDay }): React.JSX.Element {
             </ul>
           )}
           <h3>Journal · {data.day}</h3>
-          <p className="workout-muted">Entries keep the day logged in NOOP.</p>
+          <p className="sr-only">Entries keep the day logged in NOOP.</p>
           {data.journal.length === 0 ? (
             <p>
               {data.noop.coverage.journal === "covered"
@@ -434,18 +451,18 @@ function Context({
 }): React.JSX.Element {
   return (
     <Card>
-      <CardHeader>
-        <p className="page-eyebrow">
+      <div className="sr-only">
+        <p>
           Training context · {data.from_day} — {data.to_day}
         </p>
         <h2>Seven days, every day included</h2>
-        <p className="workout-muted">
+        <p>
           {data.time_zone} · Logged and NOOP Workouts stay separate. Select a
           day to expand its summaries.
         </p>
-      </CardHeader>
+      </div>
       <CardContent>
-        <p className="training-source">
+        <p className="sr-only">
           NOOP sources: {data.noop.imported_device_id} /{" "}
           {data.noop.computed_device_id}
         </p>
@@ -626,12 +643,12 @@ function NoopDetail({
   return (
     <Card>
       <CardHeader>
-        <p className="page-eyebrow">NOOP workout detail</p>
+        <p className="sr-only">NOOP workout detail</p>
         <h2>{data.sport}</h2>
         <p>
           {at(data.start)} → {at(data.end)}
         </p>
-        <p className="training-source">
+        <p className="sr-only">
           Source: {data.source} · Origin: {data.origin.replaceAll("_", " ")}
         </p>
       </CardHeader>

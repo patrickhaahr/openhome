@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react"
 import { ExercisePicker } from "@/components/exercise-picker"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
@@ -136,12 +137,16 @@ export function ExerciseProgress({
           ) : null}
           <Button
             variant="outline"
+            size="key-icon"
+            title="Refresh progress"
+            data-spinning={busy}
             disabled={busy}
             onClick={() => {
               void run(refresh)
             }}
           >
-            Refresh progress
+            <ArrowClockwiseIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Refresh progress</span>
           </Button>
         </div>
       </div>
@@ -255,12 +260,12 @@ function ProgressView({
         <CardHeader>
           <div className="workout-detail-header">
             <div>
-              <p className="page-eyebrow">
+              <p className="sr-only">
                 {progressPeriods[period].label} · baseline = 100
               </p>
-              <h2>Exercise progress</h2>
+              <h2 className="sr-only">Exercise progress</h2>
             </div>
-            <p className="workout-muted">{summary}</p>
+            <p className="sr-only">{summary}</p>
           </div>
         </CardHeader>
         <CardContent>
@@ -306,14 +311,15 @@ function ProgressView({
                       <span className="progress-legend-name">
                         {line.exercise.name}
                       </span>
-                      <span className="workout-muted">
+                      <span className="sr-only">
                         {metricLabel(line)} · baseline{" "}
                         {rawValue(line, line.baseline.value)} on{" "}
                         {shortDay(line.baseline.date)}
                       </span>
                       {latest === undefined ? null : (
                         <span className="progress-legend-latest">
-                          Latest {rawValue(line, latest.value)} ·{" "}
+                          <span className="sr-only">Latest </span>
+                          {rawValue(line, latest.value)} ·{" "}
                           {indexValue(latest.index)}
                         </span>
                       )}
@@ -329,7 +335,7 @@ function ProgressView({
         {inspectedLine === undefined ? null : (
           <Card>
             <CardHeader>
-              <p className="page-eyebrow">Observed values</p>
+              <p className="sr-only">Observed values</p>
               <label htmlFor={selectId} className="sr-only">
                 Exercise to inspect
               </label>
@@ -362,14 +368,14 @@ function ProgressView({
               </div>
             </CardHeader>
             <CardContent>
-              <p className="workout-muted">
-                {metricPolicy[inspectedLine.metric]}
-              </p>
+              <p className="sr-only">{metricPolicy[inspectedLine.metric]}</p>
               {inspectedLine.omitted_dates.length > 0 ? (
                 <p className="workout-muted">
                   Not estimated:{" "}
-                  {inspectedLine.omitted_dates.map(shortDay).join(", ")}. No
-                  valid value for this measure; these days have no dot.
+                  {inspectedLine.omitted_dates.map(shortDay).join(", ")}
+                  <span className="sr-only">
+                    . No valid value for this measure; these days have no dot.
+                  </span>
                 </p>
               ) : null}
               <table className="body-history-table">
@@ -401,7 +407,7 @@ function ProgressView({
         {missing.length === 0 ? null : (
           <Card>
             <CardHeader>
-              <p className="page-eyebrow">No line</p>
+              <p className="sr-only">No line</p>
               <h2>Not charted</h2>
             </CardHeader>
             <CardContent>
@@ -533,7 +539,7 @@ function ProgressChart({
           </g>
         ))}
       </svg>
-      <figcaption className="workout-muted">
+      <figcaption className="sr-only">
         Each line is 100 on its baseline: the exercise’s first logged day in
         this period with a value above zero. Dots are logged days; dashed joins
         cross omitted estimates or more than two weeks without a log.

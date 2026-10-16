@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { PageHead } from "@/components/page-head"
 import { PhotoGallery } from "@/components/photo-gallery"
 import { getGallery } from "@/lib/photos.functions"
 import { photoSearch, unavailablePhotos } from "@/lib/photos"
@@ -17,7 +18,11 @@ export const Route = createFileRoute("/photos")({
   headers: () => ({ "Cache-Control": "no-store" }),
   head: () => ({ meta: [{ title: "Photos · OpenHome" }] }),
   component: PhotosPage,
-  pendingComponent: () => <p role="status">Loading photos…</p>,
+  pendingComponent: () => (
+    <p role="status" className="dir-pending">
+      Loading photos…
+    </p>
+  ),
 })
 
 function PhotosPage(): React.JSX.Element {
@@ -26,21 +31,8 @@ function PhotosPage(): React.JSX.Element {
   const router = useRouter()
 
   return (
-    <section className="focused-page photos-page">
-      <header className="photos-heading">
-        <div>
-          <p className="page-eyebrow">OpenHome / Photos</p>
-          <h1 id="page-heading" tabIndex={-1}>
-            Photos
-          </h1>
-          <p className="feature-intro">
-            Favourite places. Small moments. Photos worth coming back to.
-          </p>
-        </div>
-        <Link to="/" className="back-link">
-          Back to Home
-        </Link>
-      </header>
+    <section>
+      <PageHead title="Photos" />
       <PhotoGallery
         {...data}
         select={(album, page) =>

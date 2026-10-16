@@ -2,8 +2,8 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { z } from "zod"
 import { BodyProfile } from "@/components/body-profile"
+import { PageHead } from "@/components/page-head"
 import { ExerciseProgress } from "@/components/exercise-progress"
-import { buttonVariants } from "@/components/ui/button"
 import { Workouts } from "@/components/workouts"
 import { TrainingSummaries } from "@/components/training-summaries"
 import { trainingSearch } from "@/lib/training"
@@ -64,18 +64,9 @@ function WorkoutPage(): React.JSX.Element {
   const mutateBody = useServerFn(mutateBodyProfile)
 
   return (
-    <section className="focused-page workout-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / Workout</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          Workout
-        </h1>
-        <p className="feature-intro">
-          Log your training, compare exercise progress, explore NOOP recovery
-          and recorded sessions, and keep your profile up to date.
-        </p>
-      </header>
-      <nav className="workout-view-nav" aria-label="Workout views">
+    <section>
+      <PageHead title="Workout" />
+      <nav className="view-tabs" aria-label="Workout views">
         <Link
           to="/workout"
           search={(previous) => ({ ...previous, view: undefined })}
@@ -84,10 +75,8 @@ function WorkoutPage(): React.JSX.Element {
             includeSearch: true,
             explicitUndefined: true,
           }}
-          className={buttonVariants({
-            variant: data.view === "training" ? "secondary" : "ghost",
-            size: "lg",
-          })}
+          className="view-tab"
+          aria-current={data.view === "training" ? "page" : undefined}
         >
           Workouts
         </Link>
@@ -95,10 +84,8 @@ function WorkoutPage(): React.JSX.Element {
           to="/workout"
           search={(previous) => ({ ...previous, view: "progress" })}
           activeOptions={{ exact: true, includeSearch: true }}
-          className={buttonVariants({
-            variant: data.view === "progress" ? "secondary" : "ghost",
-            size: "lg",
-          })}
+          className="view-tab"
+          aria-current={data.view === "progress" ? "page" : undefined}
         >
           Progress
         </Link>
@@ -106,10 +93,8 @@ function WorkoutPage(): React.JSX.Element {
           to="/workout"
           search={(previous) => ({ ...previous, view: "recovery" })}
           activeOptions={{ exact: true, includeSearch: true }}
-          className={buttonVariants({
-            variant: data.view === "recovery" ? "secondary" : "ghost",
-            size: "lg",
-          })}
+          className="view-tab"
+          aria-current={data.view === "recovery" ? "page" : undefined}
         >
           Recovery & NOOP
         </Link>
@@ -117,10 +102,8 @@ function WorkoutPage(): React.JSX.Element {
           to="/workout"
           search={(previous) => ({ ...previous, view: "body" })}
           activeOptions={{ exact: true, includeSearch: true }}
-          className={buttonVariants({
-            variant: data.view === "body" ? "secondary" : "ghost",
-            size: "lg",
-          })}
+          className="view-tab"
+          aria-current={data.view === "body" ? "page" : undefined}
         >
           Profile & weight
         </Link>

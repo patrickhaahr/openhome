@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { WeatherOverview } from "@/components/weather-overview"
+import { PageHead } from "@/components/page-head"
+import {
+  WeatherFreshness,
+  WeatherOverview,
+} from "@/components/weather-overview"
 import { LiveWeather } from "@/components/live-weather"
 import { getWeather } from "@/lib/weather.functions"
 import { unavailableWeather } from "@/lib/weather"
@@ -13,20 +17,15 @@ export const Route = createFileRoute("/weather")({
 
 function WeatherPage(): React.JSX.Element {
   return (
-    <section className="focused-page weather-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / Weather</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          Weather
-        </h1>
-        <p className="feature-intro">
-          A look outside. Plan time outside with hourly conditions and the week
-          ahead.
-        </p>
-      </header>
-      <LiveWeather initial={Route.useLoaderData()} readWeather={getWeather}>
-        {(weather) => <WeatherOverview weather={weather} />}
-      </LiveWeather>
-    </section>
+    <LiveWeather initial={Route.useLoaderData()} readWeather={getWeather}>
+      {(weather) => (
+        <>
+          <PageHead title="Weather">
+            <WeatherFreshness weather={weather} />
+          </PageHead>
+          <WeatherOverview weather={weather} />
+        </>
+      )}
+    </LiveWeather>
   )
 }

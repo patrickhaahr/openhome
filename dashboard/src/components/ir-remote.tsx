@@ -3,13 +3,15 @@ import { Await, Link } from "@tanstack/react-router"
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import { CheckAgainButton } from "@/components/check-again-button"
+import { ControlAlert, OpenConnection } from "@/components/control-alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   connectionPausedMessages,
   type ControlLayout,
   type Device,
+  failureTag,
   isSetupFailure,
+  keyOutcome,
   setupFailureMessages,
 } from "@/lib/command-feedback"
 import type { ConnectionState } from "@/lib/connection"
@@ -24,7 +26,7 @@ import { type SingleCommand, useSingleCommand } from "@/lib/use-single-command"
 /** A labelled set of Remote Buttons; `kind` selects its touch layout. */
 export type CommandGroup<C extends string> = {
   label: string
-  kind: "quick" | "trio" | "row" | "dpad" | "keypad"
+  kind: "quick" | "trio" | "row" | "rocker" | "dpad" | "keypad"
   commands: C[]
 }
 
@@ -41,6 +43,8 @@ export type IrRemoteConfig<C extends string> = {
   primary: C
   labels: Record<C, string>
   commandIcons: Partial<Record<C, Icon>>
+  /** Commands whose glyph keeps its word on the full remote, where the glyph alone is unclear. */
+  worded: readonly C[]
   quickGroups: CommandGroup<C>[]
   fullGroups: CommandGroup<C>[]
   /** The device state OpenHome never reports, shown as "Not reported". */
@@ -117,11 +121,23 @@ export function IrRemote<C extends string>({
     <Await
       promise={remote}
       fallback={
-        <RemoteCard config={config} layout={props.layout}>
-          <p className="control-feedback" role="status" aria-live="polite">
-            Checking which {config.device} commands OpenHome reports…
-          </p>
-        </RemoteCard>
+        <RemoteCard
+          config={config}
+          layout={props.layout}
+          keys={
+            <span className="key-ghosts" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+            </span>
+          }
+          status={
+            <p role="status" aria-live="polite">
+              Checking which {config.device} commands OpenHome reports…
+            </p>
+          }
+        />
       }
     >
       {(discovered) => (
@@ -196,130 +212,187 @@ function RemoteControls<C extends string>({
 
   const discoveryFailed = remote.state === "unavailable"
 
+  const quick = layout === "quick"
+
   const status = (
-    <p
-      className="control-feedback"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      data-failed={failure !== undefined}
-    >
+    <p role="status" aria-live="polite" aria-atomic="true">
       {feedback}
     </p>
   )
 
-  return (
-    <RemoteCard config={config} layout={layout}>
-      {/* The full remote is long; keep its outcome beside the commands it describes. */}
-      {layout === "full" ? status : null}
-      {groups.length > 0 ? (
-        <div className="remote-groups" aria-busy={pending}>
-          {groups.map((group) => (
-            <div
-              key={group.label}
-              className="remote-group"
-              role="group"
-              aria-label={group.label}
-            >
-              {layout === "full" ? (
-                <h3 className="page-eyebrow">{group.label}</h3>
-              ) : null}
-              <div className="remote-buttons" data-kind={group.kind}>
-                {group.commands.map((command) => (
-                  <RemoteButton
-                    key={command}
-                    config={config}
-                    command={command}
-                    disabled={pending || !connected}
-                    onPress={(command) => void send(command)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+  const recovery = (
+    <>
+      {!connected ||
+      discoveryFailed ||
+      (failure !== undefined && recheckFailures.has(failure)) ? (
+        <CheckAgainButton compact />
       ) : null}
-      {layout === "quick" ? status : null}
-      <p className="control-explanation">{config.explanation}</p>
-      <div className="control-links">
-        {!connected ||
-        discoveryFailed ||
-        (failure !== undefined && recheckFailures.has(failure)) ? (
-          <CheckAgainButton />
-        ) : null}
-        {!connected || (failure !== undefined && isSetupFailure(failure)) ? (
-          <Link to="/connection" className="action-link">
-            Open Connection
-          </Link>
-        ) : null}
-        {layout === "quick" && !discoveryFailed ? (
-          <Link to="/controls" className="action-link">
-            Full remote <ArrowUpRightIcon size={18} aria-hidden="true" />
-          </Link>
-        ) : null}
+      {!connected || (failure !== undefined && isSetupFailure(failure)) ? (
+        <OpenConnection />
+      ) : null}
+    </>
+  )
+
+  const keys =
+    groups.length > 0 ? (
+      <div
+        className={quick ? "remote-groups remote-quick" : "remote-groups"}
+        aria-busy={pending}
+      >
+        {groups.map((group) => (
+          <div
+            key={group.label}
+            className="remote-group"
+            role="group"
+            aria-label={group.label}
+          >
+            {quick ? null : <h3 className="sr-only">{group.label}</h3>}
+            <div className="remote-buttons" data-kind={group.kind}>
+              {group.commands.map((command) => (
+                <RemoteButton
+                  key={command}
+                  config={config}
+                  command={command}
+                  compact={quick}
+                  outcome={keyOutcome(commandState, command)}
+                  disabled={pending || !connected}
+                  onPress={(command) => void send(command)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-    </RemoteCard>
+    ) : null
+
+  const tag =
+    failure !== undefined
+      ? failureTag(connected, failure)
+      : remote.state === "available" && groups.length === 0
+        ? "No keys"
+        : undefined
+
+  return (
+    <RemoteCard
+      config={config}
+      layout={layout}
+      alert={tag === undefined ? null : <ControlAlert tag={tag} />}
+      recovery={recovery}
+      keys={keys}
+      status={status}
+      go={quick && !discoveryFailed}
+    />
   )
 }
 
 function RemoteCard<C extends string>({
   config,
   layout,
-  children,
+  alert,
+  recovery,
+  keys,
+  status,
+  go = false,
 }: {
   config: IrRemoteConfig<C>
   layout: ControlLayout
-  children: React.ReactNode
+  alert?: React.ReactNode
+  recovery?: React.ReactNode
+  keys?: React.ReactNode
+  status: React.ReactNode
+  /** Home's row opens the focused Controls view. */
+  go?: boolean
 }): React.JSX.Element {
   const headingId = `${config.id}-heading`
+  const quick = layout === "quick"
 
   return (
-    <Card className="h-full" role="group" aria-labelledby={headingId}>
-      <CardHeader>
-        <div className="feature-card-top">
-          <config.icon size={28} aria-hidden="true" />
-          <span className="page-eyebrow">
-            {layout === "quick" ? "Home controls" : config.remoteName}
-          </span>
-        </div>
-        <h2 id={headingId} className="feature-card-title">
+    <div
+      className={quick ? "dir-row control-row" : "panel"}
+      data-remote={config.id}
+      role="group"
+      aria-labelledby={headingId}
+    >
+      <div className={quick ? "control-row-name" : "panel-head"}>
+        <h2 id={headingId} className={quick ? "dir-name" : "panel-title"}>
           {config.title}
         </h2>
-        <p className="control-observed">
+        {alert}
+      </div>
+      {quick ? (
+        <div className="control-row-actions">
+          {recovery}
+          {keys}
+        </div>
+      ) : (
+        <>
+          {recovery === undefined ? null : (
+            <div className="panel-recovery">{recovery}</div>
+          )}
+          {keys}
+        </>
+      )}
+      {go ? (
+        <Link to="/controls" className="dir-go" title="Full remote">
+          <ArrowUpRightIcon size={18} aria-hidden="true" />
+          <span className="sr-only">Full remote</span>
+        </Link>
+      ) : null}
+      <div className="sr-only">
+        {quick ? null : <p>{config.remoteName}</p>}
+        <p>
           {config.unobserved} <span>Not reported</span>
         </p>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+        {status}
+        <p>{config.explanation}</p>
+      </div>
+    </div>
   )
 }
 
 function RemoteButton<C extends string>({
   config,
   command,
+  compact,
+  outcome,
   disabled,
   onPress,
 }: {
   config: IrRemoteConfig<C>
   command: C
+  /** Home shows icon keys; the label stays the button's text for assistive technology. */
+  compact: boolean
+  outcome: ReturnType<typeof keyOutcome>
   disabled: boolean
   onPress: (command: C) => void
 }): React.JSX.Element {
   // Indexing a generic record does not resolve to a JSX component type without this annotation.
   const CommandIcon: Icon | undefined = config.commandIcons[command]
 
+  const label = config.labels[command]
+
+  const iconOnly =
+    CommandIcon !== undefined && (compact || !config.worded.includes(command))
+
   return (
     <Button
-      size="lg"
+      size={compact ? "key-icon" : iconOnly ? "key-round" : "key"}
       variant={command === config.primary ? "default" : "outline"}
       disabled={disabled}
       data-command={command}
+      data-icon-only={iconOnly}
+      data-outcome={outcome}
+      title={iconOnly ? label : undefined}
       onClick={() => onPress(command)}
     >
       {CommandIcon === undefined ? null : (
         <CommandIcon size={20} aria-hidden="true" />
       )}
-      {config.labels[command]}
+      {iconOnly ? (
+        <span className="sr-only">{label}</span>
+      ) : (
+        <span>{label}</span>
+      )}
     </Button>
   )
 }

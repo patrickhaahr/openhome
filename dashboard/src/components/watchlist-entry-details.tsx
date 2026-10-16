@@ -1,3 +1,4 @@
+import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { useId, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -74,7 +75,8 @@ export function WatchlistEntryDetails({
       <summary
         aria-label={`Edit status and dates for ${entry.title} in ${ownerName}’s watchlist`}
       >
-        Edit status &amp; dates
+        <PencilSimpleIcon size={18} aria-hidden="true" />
+        <span className="sr-only">Edit status &amp; dates</span>
       </summary>
       <form
         aria-label={`Edit ${entry.title} for ${ownerName}`}

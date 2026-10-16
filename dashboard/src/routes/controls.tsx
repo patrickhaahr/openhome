@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { PageHead } from "@/components/page-head"
 import { LightControls } from "@/components/light-controls"
 import { SpeakerRemote } from "@/components/speaker-remote"
 import { TvRemote } from "@/components/tv-remote"
@@ -21,14 +22,8 @@ function ControlsPage(): React.JSX.Element {
   const { health, tvRemote, speakerRemote } = Route.useLoaderData()
 
   return (
-    <section className="focused-page controls-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / {controls.label}</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          {controls.title}
-        </h1>
-        <p className="feature-intro">{controls.description}</p>
-      </header>
+    <section>
+      <PageHead title={controls.title} />
       <div className="controls-grid">
         <div className="controls-stack">
           <LightControls

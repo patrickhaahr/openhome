@@ -4,6 +4,8 @@ import { Link } from "@tanstack/react-router"
 import { FilmSlateIcon } from "@phosphor-icons/react/dist/csr/FilmSlate"
 import { TelevisionIcon } from "@phosphor-icons/react/dist/csr/Television"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { OpenConnection } from "@/components/control-alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,6 +28,7 @@ import {
 import { WatchlistEntryDetails } from "./watchlist-entry-details"
 import { createRequestId } from "@/lib/request-id"
 import {
+  titleHue,
   watchlistCommand,
   watchlistFailureMessage,
   watchlistFilters,
@@ -139,68 +142,86 @@ export function Watchlists({
   return (
     <div className="watchlists">
       <div className="wishlist-toolbar">
-        <p className="section-label">
+        <p className="sr-only">
           {data.state === "available"
             ? `${data.entries.filter((entry) => entry.status === "planned").length} planned · ${data.entries.filter((entry) => entry.status === "watching").length} watching · ${data.entries.filter((entry) => entry.status === "completed").length} completed`
             : "Shared household watchlists"}
         </p>
-        <Button variant="outline" disabled={busy} onClick={() => void reload()}>
-          {busy ? "Working…" : "Refresh watchlists"}
+        {data.state === "available" && data.owners.length > 0 ? (
+          <div className="watchlist-filters" aria-label="Watchlist filters">
+            <div>
+              <label htmlFor={`${filterId}-owner`} className="sr-only">
+                Household member
+              </label>
+              <NativeSelect
+                id={`${filterId}-owner`}
+                value={filters.owner_id ?? ""}
+                disabled={busy}
+                onChange={(event) =>
+                  filter({
+                    ...filters,
+                    owner_id: event.target.value || undefined,
+                  })
+                }
+              >
+                <NativeSelectOption value="">Everyone</NativeSelectOption>
+                {data.owners.map((owner) => (
+                  <NativeSelectOption key={owner.id} value={owner.id}>
+                    {owner.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <div>
+              <label htmlFor={`${filterId}-status`} className="sr-only">
+                Watch status
+              </label>
+              <NativeSelect
+                id={`${filterId}-status`}
+                value={filters.status ?? ""}
+                disabled={busy}
+                onChange={(event) =>
+                  filter(
+                    watchlistFilters.parse({
+                      ...filters,
+                      status: event.target.value || undefined,
+                    })
+                  )
+                }
+              >
+                <NativeSelectOption value="">All statuses</NativeSelectOption>
+                {Object.entries(watchStatusLabels).map(([value, label]) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            {filters.owner_id !== undefined || filters.status !== undefined ? (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => filter({})}
+              >
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+        <Button
+          variant="outline"
+          size="key-icon"
+          title="Refresh watchlists"
+          data-spinning={busy}
+          disabled={busy}
+          onClick={() => void reload()}
+        >
+          <ArrowClockwiseIcon size={20} aria-hidden="true" />
+          <span className="sr-only">
+            {busy ? "Working…" : "Refresh watchlists"}
+          </span>
         </Button>
       </div>
-      {data.state === "available" && data.owners.length > 0 ? (
-        <div className="watchlist-filters" aria-label="Watchlist filters">
-          <div>
-            <label htmlFor={`${filterId}-owner`}>Household member</label>
-            <NativeSelect
-              id={`${filterId}-owner`}
-              value={filters.owner_id ?? ""}
-              disabled={busy}
-              onChange={(event) =>
-                filter({
-                  ...filters,
-                  owner_id: event.target.value || undefined,
-                })
-              }
-            >
-              <NativeSelectOption value="">Everyone</NativeSelectOption>
-              {data.owners.map((owner) => (
-                <NativeSelectOption key={owner.id} value={owner.id}>
-                  {owner.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-          <div>
-            <label htmlFor={`${filterId}-status`}>Watch status</label>
-            <NativeSelect
-              id={`${filterId}-status`}
-              value={filters.status ?? ""}
-              disabled={busy}
-              onChange={(event) =>
-                filter(
-                  watchlistFilters.parse({
-                    ...filters,
-                    status: event.target.value || undefined,
-                  })
-                )
-              }
-            >
-              <NativeSelectOption value="">All statuses</NativeSelectOption>
-              {Object.entries(watchStatusLabels).map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-          {filters.owner_id !== undefined || filters.status !== undefined ? (
-            <Button variant="ghost" disabled={busy} onClick={() => filter({})}>
-              Clear filters
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
       <p
         className="wishlist-feedback"
         role="status"
@@ -212,9 +233,10 @@ export function Watchlists({
         <Card>
           <CardContent>
             <div className="watchlist-unavailable">
+              <FilmSlateIcon size={56} weight="light" aria-hidden="true" />
               <h2>Watchlists unavailable</h2>
-              <p>{watchlistFailureMessage[data.reason]}</p>
-              <Link to="/connection">Open Connection</Link>
+              <p className="sr-only">{watchlistFailureMessage[data.reason]}</p>
+              <OpenConnection />
             </div>
           </CardContent>
         </Card>
@@ -224,7 +246,7 @@ export function Watchlists({
             <div className="watchlist-unavailable">
               <FilmSlateIcon size={40} aria-hidden="true" />
               <h2>A place for everyone’s next story.</h2>
-              <p>
+              <p className="sr-only">
                 Add a household member in Wishlist to start their watchlist.
                 Members are shared across both views.
               </p>
@@ -262,9 +284,6 @@ export function Watchlists({
                   <CardHeader>
                     <div className="watchlist-owner-heading">
                       <div>
-                        <p className="section-label">
-                          Personal plans / Shared with everyone
-                        </p>
                         <CardTitle>
                           <h2>{owner.name}</h2>
                         </CardTitle>
@@ -273,7 +292,7 @@ export function Watchlists({
                         className="watchlist-total"
                         aria-label={`${entries.length} entries shown`}
                       >
-                        {entries.length.toString().padStart(2, "0")}
+                        {entries.length}
                       </span>
                     </div>
                   </CardHeader>
@@ -306,22 +325,42 @@ export function Watchlists({
                       >
                         {entries.map((entry) => (
                           <li key={entry.id}>
-                            {entry.poster_path !== null ? (
-                              <WatchlistPoster path={entry.poster_path} />
-                            ) : (
+                            <span
+                              className="watch-frame"
+                              data-status={entry.status}
+                              // SAFETY: CSSProperties omits custom properties; --hue is a degree value read by .watch-frame.
+                              style={
+                                {
+                                  "--hue": titleHue(entry.title),
+                                } as React.CSSProperties
+                              }
+                            >
+                              {/* Without artwork the title itself is the poster. */}
+                              <span className="watch-type" aria-hidden="true">
+                                {entry.title}
+                              </span>
+                              {entry.poster_path !== null ? (
+                                <WatchlistPoster path={entry.poster_path} />
+                              ) : null}
                               <span className="watchlist-kind-icon">
                                 {entry.kind === "movie" ? (
-                                  <FilmSlateIcon size={24} aria-hidden="true" />
+                                  <FilmSlateIcon size={18} aria-hidden="true" />
                                 ) : (
                                   <TelevisionIcon
-                                    size={24}
+                                    size={18}
                                     aria-hidden="true"
                                   />
                                 )}
                               </span>
-                            )}
+                            </span>
                             <div className="watchlist-entry-text">
-                              <h3>
+                              <h3
+                                className={
+                                  entry.poster_path === null
+                                    ? "sr-only"
+                                    : undefined
+                                }
+                              >
                                 {entry.title}
                                 {entry.release_date !== null ? (
                                   <span className="watchlist-release-year">
@@ -336,10 +375,12 @@ export function Watchlists({
                                 </p>
                               ) : null}
                               <p>
-                                {entry.kind === "movie"
-                                  ? "Movie"
-                                  : "Whole series"}
-                                <span aria-hidden="true"> · </span>
+                                <span className="sr-only">
+                                  {entry.kind === "movie"
+                                    ? "Movie"
+                                    : "Whole series"}{" "}
+                                  ·{" "}
+                                </span>
                                 <span
                                   className="watchlist-status"
                                   data-status={entry.status}
@@ -347,7 +388,7 @@ export function Watchlists({
                                   {watchStatusLabels[entry.status]}
                                 </span>
                               </p>
-                              <p>
+                              <p className="sr-only">
                                 Added{" "}
                                 <time dateTime={entry.date_added}>
                                   {entry.date_added}
@@ -361,24 +402,26 @@ export function Watchlists({
                                   </time>
                                 </p>
                               ) : null}
-                              <WatchlistMetadataDetails
-                                entry={entry}
-                                ownerName={owner.name}
-                                disabled={busy}
-                                search={search}
-                                save={save}
-                              />
-                              <WatchlistEntryDetails
-                                entry={entry}
-                                ownerName={owner.name}
-                                disabled={busy}
-                                save={save}
-                                failure={
-                                  feedback?.state === "failed"
-                                    ? feedback.text
-                                    : undefined
-                                }
-                              />
+                              <div className="watchlist-entry-tools">
+                                <WatchlistMetadataDetails
+                                  entry={entry}
+                                  ownerName={owner.name}
+                                  disabled={busy}
+                                  search={search}
+                                  save={save}
+                                />
+                                <WatchlistEntryDetails
+                                  entry={entry}
+                                  ownerName={owner.name}
+                                  disabled={busy}
+                                  save={save}
+                                  failure={
+                                    feedback?.state === "failed"
+                                      ? feedback.text
+                                      : undefined
+                                  }
+                                />
+                              </div>
                             </div>
                             <Button
                               variant="ghost"
@@ -562,7 +605,9 @@ function AddPlan({
       }}
     >
       <div>
-        <label htmlFor={`${id}-title`}>Title for {ownerName}</label>
+        <label htmlFor={`${id}-title`} className="sr-only">
+          Title for {ownerName}
+        </label>
         <Input
           id={`${id}-title`}
           name="title"
@@ -580,7 +625,9 @@ function AddPlan({
       </div>
       <div className="watchlist-add-actions">
         <div>
-          <label htmlFor={`${id}-kind`}>Type for {ownerName}</label>
+          <label htmlFor={`${id}-kind`} className="sr-only">
+            Type for {ownerName}
+          </label>
           <NativeSelect
             id={`${id}-kind`}
             name="kind"

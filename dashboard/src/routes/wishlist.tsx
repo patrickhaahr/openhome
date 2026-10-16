@@ -1,4 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { PageHead } from "@/components/page-head"
 import { Wishlists } from "@/components/wishlists"
 import {
   loadWishlists,
@@ -19,16 +20,8 @@ function WishlistPage(): React.JSX.Element {
   const router = useRouter()
 
   return (
-    <section className="focused-page wishlist-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / Wishlist</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          Wishlist
-        </h1>
-        <p className="feature-intro">
-          Everyone’s ideas. A shared place to keep the things you’d like.
-        </p>
-      </header>
+    <section>
+      <PageHead title="Wishlist" />
       <Wishlists
         data={data}
         change={(command) => mutateWishlist({ data: command })}

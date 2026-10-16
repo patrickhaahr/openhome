@@ -1,4 +1,10 @@
 import { useCallback, useState } from "react"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft"
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
+import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken"
+import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
+import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,7 +24,10 @@ type GalleryProps = {
   refresh: () => Promise<void>
 }
 
-/** Selected private albums, one bounded thumbnail page and a focus-managed full-screen viewer. */
+/**
+ * The album is the page: a mosaic, an album switch only when there is a choice, and a
+ * full-screen viewer. Names and counts stay for assistive technology.
+ */
 export function PhotoGallery({
   albums,
   page,
@@ -44,65 +53,81 @@ export function PhotoGallery({
     }
   }
 
+  const retryLabel = retrying ? "Refreshing…" : "Try again"
+
   const retryButton = (
     <Button
       variant="outline"
-      size="lg"
+      size="key-icon"
       disabled={retrying}
+      data-spinning={retrying}
+      title={retryLabel}
       onClick={() => void retry()}
     >
-      {retrying ? "Refreshing…" : "Try again"}
+      <ArrowClockwiseIcon size={20} aria-hidden="true" />
+      <span className="sr-only">{retryLabel}</span>
     </Button>
   )
+
+  const failed = retryFailed ? (
+    <p className="photo-failed" data-failed="true" role="status">
+      <span className="sr-only">Could not refresh. Try again.</span>
+    </p>
+  ) : null
 
   if (albums.state !== "ready")
     return (
       <div className="photo-empty" role="status">
-        <p className="page-eyebrow">Photos</p>
+        <ImagesIcon size={56} weight="light" aria-hidden="true" />
         <h2>
           {albums.reason === "missing-configuration"
             ? "Photo setup needed"
             : "Photo library unavailable"}
         </h2>
-        <p>
+        <p className="sr-only">
           {albums.reason === "missing-configuration"
             ? "No photo library is connected here. Choose albums in the private OpenHome API configuration."
             : "Check Connection or try again. Your other dashboard features are still available."}
         </p>
         {retryButton}
-        {retryFailed ? <p>Could not refresh. Try again.</p> : null}
+        {failed}
       </div>
     )
 
   return (
     <>
       <div className="photo-toolbar">
-        <nav className="photo-albums" aria-label="Photo albums">
-          {albums.albums.map((album) => (
-            <Button
-              key={album.id}
-              variant={selectedAlbum === album.id ? "default" : "outline"}
-              size="lg"
-              disabled={album.missing}
-              aria-pressed={selectedAlbum === album.id}
-              onClick={() => select(album.id, 0)}
-            >
-              <span className="photo-album-name">{album.name}</span>
-              <span className="photo-album-count">
-                {album.missing ? "Missing" : album.photo_count}
-              </span>
-            </Button>
-          ))}
-        </nav>
-        <div className="photo-refresh">
-          <Button
-            variant="ghost"
-            disabled={retrying}
-            onClick={() => void retry()}
-          >
+        {albums.albums.length > 1 ? (
+          <nav className="photo-albums" aria-label="Photo albums">
+            {albums.albums.map((album) => (
+              <Button
+                key={album.id}
+                variant={selectedAlbum === album.id ? "default" : "ghost"}
+                disabled={album.missing}
+                aria-pressed={selectedAlbum === album.id}
+                onClick={() => select(album.id, 0)}
+              >
+                {album.name}
+                <span className="sr-only">
+                  {album.missing ? "Missing" : `${album.photo_count} photos`}
+                </span>
+              </Button>
+            ))}
+          </nav>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="key-icon"
+          disabled={retrying}
+          data-spinning={retrying}
+          title={retrying ? "Refreshing…" : "Refresh photos"}
+          onClick={() => void retry()}
+        >
+          <ArrowClockwiseIcon size={20} aria-hidden="true" />
+          <span className="sr-only">
             {retrying ? "Refreshing…" : "Refresh photos"}
-          </Button>
-        </div>
+          </span>
+        </Button>
       </div>
       {page?.state === "ready" ? (
         <AlbumPhotos
@@ -112,12 +137,13 @@ export function PhotoGallery({
         />
       ) : (
         <div className="photo-empty" role="status">
+          <ImageBrokenIcon size={56} weight="light" aria-hidden="true" />
           <h2>
             {page?.reason === "invalid-page"
               ? "This page is unavailable"
               : "Album unavailable"}
           </h2>
-          <p>
+          <p className="sr-only">
             {page?.reason === "not-found"
               ? "This album was removed or is not selected for the dashboard. Choose an available album."
               : "Choose an available album or try again."}
@@ -135,7 +161,7 @@ export function PhotoGallery({
           {retryButton}
         </div>
       )}
-      {retryFailed ? <p role="status">Could not refresh. Try again.</p> : null}
+      {failed}
     </>
   )
 }
@@ -160,20 +186,17 @@ function AlbumPhotos({
 
   return (
     <>
-      <div className="photo-section-heading">
-        <div>
-          <p className="page-eyebrow">Selected album</p>
-          <h2>{photos.album.name}</h2>
-        </div>
+      <div className="sr-only">
+        <h2>{photos.album.name}</h2>
         <p>
-          {photos.album.photo_count} photos
-          <span> · Page {photos.page + 1}</span>
+          {photos.album.photo_count} photos · Page {photos.page + 1}
         </p>
       </div>
       {photos.assets.length === 0 ? (
         <div className="photo-empty">
+          <ImagesIcon size={56} weight="light" aria-hidden="true" />
           <h3>No photos here yet</h3>
-          <p>This album has no available still photos.</p>
+          <p className="sr-only">This album has no available still photos.</p>
         </div>
       ) : (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -191,9 +214,6 @@ function AlbumPhotos({
                   alt={`Photo ${photos.page * 60 + index + 1} from ${photos.album.name}`}
                   lazy
                 />
-                <span className="photo-tile-number" aria-hidden="true">
-                  {String(photos.page * 60 + index + 1).padStart(2, "0")}
-                </span>
               </DialogTrigger>
             ))}
           </div>
@@ -208,14 +228,21 @@ function AlbumPhotos({
             }}
           >
             <header className="photo-viewer-header">
-              <div>
+              <div className="sr-only">
                 <DialogTitle>{photos.album.name}</DialogTitle>
                 <DialogDescription>
                   Photo {position} of {photos.album.photo_count}
                 </DialogDescription>
               </div>
-              <DialogClose render={<Button variant="outline" size="lg" />}>
-                Close photo
+              <span className="photo-viewer-count" aria-hidden="true">
+                {position} / {photos.album.photo_count}
+              </span>
+              <DialogClose
+                render={<Button variant="outline" size="key-icon" />}
+                title="Close photo"
+              >
+                <XIcon size={20} aria-hidden="true" />
+                <span className="sr-only">Close photo</span>
               </DialogClose>
             </header>
             <div className="photo-viewer-image">
@@ -230,49 +257,60 @@ function AlbumPhotos({
             <footer className="photo-viewer-footer">
               <Button
                 variant="outline"
-                size="lg"
+                size="key-icon"
                 disabled={current === 0}
+                title="Previous photo"
                 onClick={() => go(-1)}
               >
-                ← Previous
+                <ArrowLeftIcon size={20} aria-hidden="true" />
+                <span className="sr-only">← Previous</span>
               </Button>
-              <span aria-live="polite">
+              <span className="sr-only" aria-live="polite">
                 {position} / {photos.album.photo_count}
               </span>
               <Button
                 variant="outline"
-                size="lg"
+                size="key-icon"
                 disabled={current === photos.assets.length - 1}
+                title="Next photo"
                 onClick={() => go(1)}
               >
-                Next →
+                <ArrowRightIcon size={20} aria-hidden="true" />
+                <span className="sr-only">Next →</span>
               </Button>
             </footer>
           </DialogContent>
         </Dialog>
       )}
-      <nav className="photo-pagination" aria-label="Photo pages">
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={photos.page === 0}
-          onClick={() => select(photos.album.id, photos.page - 1)}
-        >
-          Previous page
-        </Button>
-        <span>Page {photos.page + 1}</span>
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={photos.next_page === null}
-          onClick={() => {
-            if (photos.next_page !== null)
-              select(photos.album.id, photos.next_page)
-          }}
-        >
-          Next page
-        </Button>
-      </nav>
+      {photos.page === 0 && photos.next_page === null ? null : (
+        <nav className="photo-pagination" aria-label="Photo pages">
+          <Button
+            variant="outline"
+            size="key-icon"
+            disabled={photos.page === 0}
+            title="Previous page"
+            onClick={() => select(photos.album.id, photos.page - 1)}
+          >
+            <ArrowLeftIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Previous page</span>
+          </Button>
+          <span className="num">{photos.page + 1}</span>
+          <span className="sr-only">Page {photos.page + 1}</span>
+          <Button
+            variant="outline"
+            size="key-icon"
+            disabled={photos.next_page === null}
+            title="Next page"
+            onClick={() => {
+              if (photos.next_page !== null)
+                select(photos.album.id, photos.next_page)
+            }}
+          >
+            <ArrowRightIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Next page</span>
+          </Button>
+        </nav>
+      )}
     </>
   )
 }
@@ -299,17 +337,24 @@ function PhotoImage({
     <div className="photo-image" data-state={state}>
       {state === "failed" ? (
         <div className="photo-image-status" role="status">
-          <span>Photo unavailable</span>
+          <ImageBrokenIcon
+            size={lazy ? 28 : 48}
+            weight="light"
+            aria-hidden="true"
+          />
+          <span className="sr-only">Photo unavailable</span>
           {lazy ? null : (
             <Button
               variant="outline"
-              size="lg"
+              size="key-icon"
+              title="Retry photo"
               onClick={() => {
                 setAttempt((value) => value + 1)
                 setState("loading")
               }}
             >
-              Retry photo
+              <ArrowClockwiseIcon size={20} aria-hidden="true" />
+              <span className="sr-only">Retry photo</span>
             </Button>
           )}
         </div>
@@ -326,7 +371,9 @@ function PhotoImage({
             onError={() => setState("failed")}
           />
           {state === "loading" ? (
-            <span className="photo-image-status">Loading photo…</span>
+            <span className="photo-image-status">
+              <span className="sr-only">Loading photo…</span>
+            </span>
           ) : null}
         </>
       )}

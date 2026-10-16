@@ -64,3 +64,68 @@ const setupFailures = new Set<string>([
 export function isSetupFailure(reason: string): reason is SetupFailure {
   return setupFailures.has(reason)
 }
+
+/** How the last-pressed key shows its outcome; every other key stays at rest. */
+export type KeyOutcome = "pending" | "accepted" | "failed"
+
+/**
+ * The outcome to draw on one key: a press, then a flash for an acknowledgement or a shake for
+ * a failure. An acknowledgement is never drawn as device state.
+ *
+ * @param state - The surface's latest command state.
+ * @param command - The key's command.
+ * @returns The key's outcome, or undefined for keys that were not pressed last.
+ */
+export function keyOutcome<C extends string>(
+  state:
+    | { state: "idle" }
+    | { state: "pending"; command: C }
+    | { state: "result"; command: C; result: { state: string } },
+  command: C
+): KeyOutcome | undefined {
+  if (state.state === "idle" || state.command !== command) return undefined
+
+  if (state.state === "pending") return "pending"
+
+  return state.result.state === "accepted" ? "accepted" : "failed"
+}
+
+const connectionTags: Record<Exclude<ConnectionState, "connected">, string> = {
+  "missing-configuration": "Not set up",
+  "invalid-configuration": "Check setup",
+  "rejected-credential": "Key rejected",
+  unreachable: "Offline",
+  unavailable: "Not responding",
+}
+
+const commandTags = {
+  "missing-configuration": "Not set up",
+  "invalid-configuration": "Check setup",
+  "rejected-credential": "Key rejected",
+  "missing-device": "Not set up",
+  "unsupported-command": "Key gone",
+  unreachable: "No answer",
+  unavailable: "Not confirmed",
+} as const satisfies Record<string, string>
+
+/** Every failure a control can show: its connection's, or its last command's. */
+export type FailureReason = keyof typeof commandTags
+
+function isConnectionFailure(
+  reason: FailureReason
+): reason is Exclude<ConnectionState, "connected"> {
+  return reason in connectionTags
+}
+
+/**
+ * One or two visible words for a failure; the full sentence stays in the live region.
+ *
+ * @param connected - Whether the failure came from a command rather than the connection.
+ * @param reason - The failure reason.
+ * @returns A terse tag, never a claim about the device.
+ */
+export function failureTag(connected: boolean, reason: FailureReason): string {
+  return !connected && isConnectionFailure(reason)
+    ? connectionTags[reason]
+    : commandTags[reason]
+}

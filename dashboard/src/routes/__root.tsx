@@ -4,7 +4,10 @@ import {
   Scripts,
   createRootRoute,
 } from "@tanstack/react-router"
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House"
 import { DashboardShell } from "@/components/dashboard-shell"
+import { ThemeScript } from "@/components/daylight"
+import { daylight } from "@/lib/daylight"
 
 import appCss from "../styles.css?url"
 
@@ -19,8 +22,9 @@ export const Route = createRootRoute({
       },
       {
         name: "viewport",
-        content: "width=device-width, initial-scale=1",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
+      { name: "color-scheme", content: "light dark" },
       {
         title: "OpenHome",
       },
@@ -33,13 +37,17 @@ export const Route = createRootRoute({
     ],
   }),
   notFoundComponent: () => (
-    <section className="focused-page">
-      <h1 id="page-heading" tabIndex={-1}>
+    <section className="lost">
+      <p className="lost-code num" aria-hidden="true">
+        404
+      </p>
+      <h1 id="page-heading" tabIndex={-1} className="lost-title">
         Page not found
       </h1>
-      <p>The requested page could not be found.</p>
-      <Link to="/" className="action-link">
-        Back to Home
+      <p className="sr-only">There is no room by that name in this home.</p>
+      <Link to="/" className="dir-go lost-home" title="Back to Home">
+        <HouseIcon size={24} aria-hidden="true" />
+        <span className="sr-only">Back to Home</span>
       </Link>
     </section>
   ),
@@ -47,9 +55,12 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { openedAt } = Route.useLoaderData()
+
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <ThemeScript phase={daylight(new Date(openedAt)).phase} />
         <HeadContent />
       </head>
       <body>

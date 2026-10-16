@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useMinute } from "@/lib/use-minute"
 
-const timeFormat = new Intl.DateTimeFormat("da-DK", {
+export const timeFormat = new Intl.DateTimeFormat("da-DK", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
@@ -15,32 +15,18 @@ const dateFormat = new Intl.DateTimeFormat("da-DK", {
   timeZone: "Europe/Copenhagen",
 })
 
+const shortDate = new Intl.DateTimeFormat("da-DK", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "Europe/Copenhagen",
+})
+
 type LiveClockProps = { readonly initialTime: string }
 
-/** Hydrates from the rendered time, then follows minute boundaries while visible. */
+/** The Home clock: the time as the largest thing in the room, the day beneath it. */
 export function LiveClock({ initialTime }: LiveClockProps): React.JSX.Element {
-  const [now, setNow] = useState(() => new Date(initialTime))
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined
-
-    function refresh(): void {
-      clearTimeout(timer)
-
-      if (document.visibilityState === "hidden") return
-
-      setNow(new Date())
-      timer = setTimeout(refresh, 60_000 - (Date.now() % 60_000))
-    }
-
-    refresh()
-    document.addEventListener("visibilitychange", refresh)
-
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener("visibilitychange", refresh)
-    }
-  }, [])
+  const now = useMinute(initialTime)
 
   return (
     <div>
@@ -53,9 +39,12 @@ export function LiveClock({ initialTime }: LiveClockProps): React.JSX.Element {
         {timeFormat.format(now)}
       </time>
       <p className="clock-date" lang="da">
-        {dateFormat.format(now)}
+        <span aria-hidden="true">
+          {shortDate.format(now).replace(" den ", " ")}
+        </span>
+        <span className="sr-only">{dateFormat.format(now)}</span>
       </p>
-      <p className="clock-zone">Copenhagen time</p>
+      <p className="sr-only">Copenhagen time</p>
     </div>
   )
 }

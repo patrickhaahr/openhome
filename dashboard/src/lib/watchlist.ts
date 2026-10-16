@@ -146,3 +146,13 @@ export type MediaSearchResult =
 export function posterUrl(path: string): string {
   return `https://image.tmdb.org/t/p/w342${path}`
 }
+
+/** A stable hue per title, so each typographic poster keeps its colour between visits. */
+export function titleHue(title: string): number {
+  let hash = 0
+
+  for (const character of title)
+    hash = (hash * 31 + character.charCodeAt(0)) % 360
+
+  return hash
+}
