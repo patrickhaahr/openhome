@@ -1,0 +1,13 @@
+{
+  "current": { "weather_code": 2, "feels_like_offset_c": -2.1, "wind_ms": 4.6 },
+  "days": [
+    { "weather_code": 2, "high_c": 14.8, "low_c": 8.4, "precipitation_mm": 0.6, "wind_ms": 7.2 },
+    { "weather_code": 61, "high_c": 12.9, "low_c": 9.1, "precipitation_mm": 6.8, "wind_ms": 9.4 },
+    { "weather_code": 80, "high_c": 11.7, "low_c": 7.6, "precipitation_mm": 3.1, "wind_ms": 8.1 },
+    { "weather_code": 3, "high_c": 12.4, "low_c": 6.2, "precipitation_mm": 0.0, "wind_ms": 5.5 },
+    { "weather_code": 1, "high_c": 15.6, "low_c": 6.9, "precipitation_mm": 0.0, "wind_ms": 4.2 },
+    { "weather_code": 0, "high_c": 16.9, "low_c": 8.0, "precipitation_mm": 0.0, "wind_ms": 3.6 },
+    { "weather_code": 45, "high_c": 13.3, "low_c": 7.4, "precipitation_mm": 0.2, "wind_ms": 3.0 }
+  ],
+  "rain_hours_local": [14, 15, 16, 22, 3]
+}
