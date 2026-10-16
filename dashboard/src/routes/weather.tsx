@@ -1,9 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { PageHead } from "@/components/page-head"
-import {
-  WeatherFreshness,
-  WeatherOverview,
-} from "@/components/weather-overview"
+import { WeatherOverview } from "@/components/weather-overview"
 import { LiveWeather } from "@/components/live-weather"
 import { getWeather } from "@/lib/weather.functions"
 import { unavailableWeather } from "@/lib/weather"
@@ -20,9 +17,7 @@ function WeatherPage(): React.JSX.Element {
     <LiveWeather initial={Route.useLoaderData()} readWeather={getWeather}>
       {(weather) => (
         <>
-          <PageHead title="Weather">
-            <WeatherFreshness weather={weather} />
-          </PageHead>
+          <PageHead title="Weather" />
           <WeatherOverview weather={weather} />
         </>
       )}
