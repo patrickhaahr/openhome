@@ -1192,109 +1192,182 @@ a.dir-go:hover {
     grid-row: auto;
   }
 }
-/* ---------- Travel: the map is the page; the planner is a quiet column beside it ---------- */
+/* ---------- Travel: the map is the page; every control floats on it as a plate ---------- */
 
-.travel-map {
-  display: grid;
-  gap: 0.75rem;
+/* The map runs edge to edge from the top bar to the bottom of the screen. */
+.page:has(.travel) {
+  max-width: none;
+  padding: 0;
 }
-.travel-layout {
-  display: grid;
-  gap: 1.5rem;
-  align-items: start;
+/* The photo frame's Chrome 106 WebView predates svh and drops the second declaration;
+   the vh line before it keeps the map from collapsing to nothing. */
+.travel {
+  --travel-inset: clamp(1rem, 2vw, 1.5rem);
+  --dock-height: 0px;
+
+  position: relative;
+  height: calc(100vh - var(--bar));
+  height: calc(100svh - var(--bar));
+  min-height: 24rem;
+  margin: 0;
+  overflow: hidden;
 }
-@media (min-width: 960px) {
-  .travel-layout {
-    grid-template-columns: minmax(0, 1fr) 20rem;
-    gap: clamp(1.5rem, 3vw, 2.5rem);
-  }
-  .travel-map {
-    position: sticky;
-    top: calc(var(--bar) + 1rem);
-  }
+.travel-demo {
+  position: absolute;
+  top: var(--travel-inset);
+  left: var(--travel-inset);
+  z-index: 3;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--ground);
+  font-size: 0.875rem;
+  font-weight: 500;
 }
-.travel-map figcaption {
+
+/* The planner and its results dock bottom-left; only the plates take the pointer. */
+.loop-dock {
+  position: absolute;
+  bottom: var(--travel-inset);
+  left: var(--travel-inset);
+  z-index: 3;
   display: flex;
-  color: var(--muted-ink);
-  font-size: 0.8125rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  max-width: calc(100% - 2 * var(--travel-inset) - 20rem);
+  pointer-events: none;
 }
-.travel-map-origin {
-  display: inline-flex;
+.loop-dock > * {
+  pointer-events: auto;
+}
+.loop-bar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  color: var(--ink);
-  font-weight: 500;
+  max-width: 100%;
+  padding: 0.5rem;
+  border-radius: 2.25rem;
+  background: var(--ground);
 }
-.travel-map-origin > span {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 999px;
-  background: var(--sun);
-}
-.loop-planner-body {
-  display: grid;
-  gap: 1.25rem;
-}
-.loop-planner-form {
-  display: grid;
-  gap: 0.75rem;
-}
-.loop-planner-form fieldset {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 0;
-}
-.loop-planner-field {
-  display: grid;
-  gap: 0.375rem;
-}
-.loop-planner-field label {
-  color: var(--muted-ink);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-.loop-planner-step {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+.loop-bar fieldset {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  padding-inline: 0.25rem;
-  color: var(--muted-ink);
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
-.loop-planner-unit {
-  font-size: 0.9375rem;
-}
-/* Choices share the column so each stays a comfortable touch target. */
-.loop-planner-choices > [data-slot="toggle-group"],
-.workout-toolbar > [data-slot="toggle-group"] {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  width: 100%;
+/* Segments sit on a wash track; the chosen key is a full capsule in ink. */
+.loop-bar [data-slot="toggle-group"],
+.shared-map-perspective [data-slot="toggle-group"] {
   gap: 0;
   padding: 0.25rem;
   border-radius: 999px;
-  background: var(--wash-strong);
+  background: var(--wash);
 }
-.loop-planner-choices [data-slot="toggle-group-item"],
-.workout-toolbar > [data-slot="toggle-group"] [data-slot="toggle-group-item"] {
-  height: 2.75rem;
-  padding-inline: 0.5rem;
+.loop-bar [data-slot="toggle-group-item"],
+.shared-map-perspective [data-slot="toggle-group-item"] {
+  min-width: 3rem;
+  height: 3rem;
+  padding-inline: 1rem;
   border: 0;
   border-radius: 999px !important;
+  background: transparent;
+  color: var(--ink);
+  font-size: 1rem;
 }
-.loop-planner-choices [data-slot="toggle-group-item"][aria-pressed="true"],
-.workout-toolbar
-  > [data-slot="toggle-group"]
-  [data-slot="toggle-group-item"][aria-pressed="true"] {
-  border-color: transparent;
+.loop-bar [data-slot="toggle-group-item"][aria-pressed="true"],
+.shared-map-perspective [data-slot="toggle-group-item"][aria-pressed="true"] {
   background: var(--ink);
   color: var(--ground);
 }
-.loop-planner-form > [data-slot="button"] {
-  width: 100%;
+.loop-bar fieldset:first-child [data-slot="toggle-group-item"] {
+  width: 3rem;
+  padding-inline: 0;
 }
-.loop-planner-status:empty {
-  display: none;
+.loop-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 3.5rem;
+  padding-inline: 1rem;
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--muted-ink);
+}
+.loop-field:focus-within {
+  outline: 2px solid var(--ink);
+}
+.loop-field:has([aria-invalid="true"]) {
+  outline: 2px solid var(--danger);
+}
+.loop-field [data-slot="input"] {
+  width: 4.5rem;
+  height: 3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.loop-field-unit {
+  font-size: 0.9375rem;
+}
+.loop-bar > [data-slot="button"] {
+  height: 3.5rem;
+  padding-inline: 1.75rem;
+  font-size: 1.0625rem;
+}
+/* Ink keys stay ink under the hand: the sun is reserved for the route. */
+.loop-bar > [data-slot="button"]:hover,
+.loop-plate > [data-slot="button"]:hover {
+  background: var(--ink);
+}
+
+/* Results rise out of the dock as one plate; nothing is drawn while there is nothing to say. */
+.loop-plate {
+  display: grid;
+  gap: 0.5rem;
+  width: min(23rem, 100%);
+  padding: 0.5rem;
+  border-radius: 1.75rem;
+  background: var(--ground);
+}
+/* A lone message hugs its words; loops get the full plate. */
+.loop-plate:not(:has(.loop-alternatives)) {
+  width: fit-content;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .loop-plate {
+    animation: travel-plate-rise var(--t-mid) var(--ease) both;
+  }
+}
+@keyframes travel-plate-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.loop-plate > [data-slot="button"] {
+  width: 100%;
+  height: 3.5rem;
+}
+/* An empty status region stays for assistive technology without taking a row. */
+.loop-planner-status:not(:has(> :not(.sr-only))) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .loop-planner-failure h3,
 .loop-planner-problem {
@@ -1305,16 +1378,21 @@ a.dir-go:hover {
   font-size: 0.9375rem;
   font-weight: 600;
 }
+.loop-planner-status .loop-planner-problem,
+.loop-planner-failure h3 {
+  padding: 0.5rem 0.75rem;
+}
 .loop-active {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
+}
+.loop-active[data-state="none"] {
+  display: contents;
 }
 .loop-active[data-state="selected"] {
-  padding: 0.5rem 0.5rem 0.5rem 1rem;
-  border-radius: 999px;
-  background: var(--wash-strong);
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
 }
 .loop-active h3 {
   flex: 1;
@@ -1328,27 +1406,30 @@ a.dir-go:hover {
 }
 .loop-active-status {
   flex-basis: 100%;
+  padding-inline: 0.75rem;
   color: var(--muted-ink);
   font-size: 0.875rem;
 }
 .loop-active-status .loop-planner-problem {
+  padding: 0;
   color: var(--danger);
 }
 .loop-alternatives ul {
   display: grid;
-  gap: 0.375rem;
+  gap: 0.25rem;
 }
 .loop-alternative[data-slot="button"] {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 0.75rem auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
   width: 100%;
   min-height: 3.5rem;
   padding: 0.5rem 1rem;
   border: 0;
-  border-radius: 1rem;
+  border-radius: 999px;
   background: transparent;
+  color: var(--ink);
   text-align: left;
 }
 .loop-alternative[data-slot="button"]:hover {
@@ -1356,44 +1437,44 @@ a.dir-go:hover {
 }
 .loop-alternative[aria-pressed="true"],
 .loop-alternative[aria-pressed="true"]:hover {
-  background: var(--ink);
-  color: var(--ground);
+  background: var(--wash-strong);
+  color: var(--ink);
 }
 .loop-alternative-name {
-  color: inherit;
+  color: var(--muted-ink);
   font-size: 0.9375rem;
   font-weight: 500;
-  opacity: 0.7;
 }
 .loop-alternative-distance {
+  justify-self: end;
   font-size: 1.5rem;
   font-weight: 500;
   letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
 }
-/* Within tolerance: a sun dot. Outside: a hollow ring. */
-.loop-alternative-fit {
-  justify-self: end;
+/* The loop on the map wears the route's sun; the others a quiet hollow ring. */
+.loop-alternative-mark {
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--muted-ink);
+  opacity: 0.5;
+}
+.loop-alternative[aria-pressed="true"] .loop-alternative-mark {
   background: var(--sun);
+  box-shadow: none;
+  opacity: 1;
 }
-.loop-alternative[data-fit="outside"] .loop-alternative-fit {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px currentColor;
-  opacity: 0.6;
-}
-.loop-planner-attribution {
+/* Within tolerance: a check. Outside: an approximation sign. */
+.loop-alternative-fit {
+  display: inline-flex;
   color: var(--muted-ink);
-  font-size: 0.75rem;
-  line-height: 1.5;
 }
+
 .shared-map {
   position: relative;
-  height: clamp(22rem, calc(100svh - 22rem), 52rem);
+  height: 100%;
   overflow: hidden;
-  border-radius: var(--radius);
   background: var(--wash-strong);
 }
 .shared-map .shared-map-canvas {
@@ -1403,21 +1484,29 @@ a.dir-go:hover {
 .shared-map:not([data-map-state="ready"]) .shared-map-canvas {
   visibility: hidden;
 }
+/* One tall plate on the right edge, centred like Home's deck. */
 .shared-map-controls {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: 50%;
+  right: var(--travel-inset);
+  z-index: 2;
   display: grid;
+  justify-items: center;
   gap: 0.5rem;
-}
-.shared-map-controls [data-slot="button"] {
-  border: 0;
+  padding: 0.5rem;
+  border-radius: 1.75rem;
   background: var(--ground);
+  translate: 0 -50%;
+}
+.shared-map-controls > [data-slot="button"] {
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 0;
+  background: var(--wash);
   color: var(--ink);
 }
-.shared-map-controls [data-slot="button"]:hover {
-  background: var(--ink);
-  color: var(--ground);
+.shared-map-controls > [data-slot="button"]:hover {
+  background: var(--wash-strong);
 }
 .shared-map-message {
   position: absolute;
@@ -1439,37 +1528,17 @@ a.dir-go:hover {
 .shared-map-message p {
   max-width: 28rem;
 }
-.shared-map-perspective {
-  margin-bottom: 0.25rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--ground);
-}
-.shared-map-perspective [data-slot="toggle-group-item"] {
-  width: 2.75rem;
-  padding-inline: 0;
-  font-size: 0.875rem;
-  letter-spacing: 0;
-}
-.shared-map-perspective [data-slot="toggle-group-item"][aria-pressed="true"] {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
 /* MapLibre surfaces override the ring utilities; keep keyboard focus visible. */
 .shared-map-controls [data-slot="button"]:focus-visible,
 .shared-map-perspective [data-slot="toggle-group-item"]:focus-visible {
-  outline: 2px solid var(--foreground);
-  outline-offset: -5px;
-}
-.shared-map-perspective
-  [data-slot="toggle-group-item"][aria-pressed="true"]:focus-visible {
-  outline-color: var(--primary-foreground);
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 .shared-map-notices {
   position: absolute;
-  top: 1rem;
-  left: 1rem;
-  right: 5rem;
+  top: calc(var(--travel-inset) + 3rem);
+  left: var(--travel-inset);
+  right: calc(var(--travel-inset) + 5rem);
   display: grid;
   justify-items: start;
   gap: 0.5rem;
@@ -1483,21 +1552,30 @@ a.dir-go:hover {
   gap: 0.75rem 1rem;
   width: fit-content;
   padding: 0.75rem 1rem;
-  border-radius: var(--radius-lg);
+  border-radius: 1.75rem;
   background: var(--ground);
   font-size: 0.875rem;
 }
-/* MapLibre's attribution, restyled for the dark surface while staying legible. */
-.shared-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib {
+/* The attribution is licence-required: small and quiet in the corner, on a ground backing. */
+.shared-map .maplibregl-ctrl-bottom-right,
+.shared-map .leaflet-bottom.leaflet-right {
+  right: var(--travel-inset);
+  bottom: var(--travel-inset);
+}
+.shared-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib,
+.shared-map .leaflet-container .leaflet-control-attribution {
+  max-width: 19rem;
   margin: 0;
-  padding: 0.25rem 0.625rem;
-  border-top-left-radius: var(--radius-md);
-  background: var(--scrim);
+  padding: 0.375rem 0.75rem;
+  border-radius: 1rem;
+  background: var(--ground);
   color: var(--muted-foreground);
   font-size: 0.75rem;
-  line-height: 1.5;
+  line-height: 1.4;
+  text-align: right;
 }
-.shared-map .maplibregl-ctrl-attrib a {
+.shared-map .maplibregl-ctrl-attrib a,
+.shared-map .leaflet-control-attribution a {
   color: var(--foreground);
 }
 /* Leaflet's panes carry z-indexes up to 1000; contain them below the dashboard's controls. */
@@ -1510,18 +1588,108 @@ a.dir-go:hover {
 .shared-map[data-map-shade="night"] .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9);
 }
-.shared-map .leaflet-container .leaflet-control-attribution {
-  margin: 0;
-  padding: 0.25rem 0.625rem;
-  border-top-left-radius: var(--radius-md);
-  background: var(--scrim);
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  line-height: 1.5;
+
+/* Portrait and phone: the planner is a full-width plate along the bottom, results stack
+   above it, the controls move to the top of the right edge and the attribution rides
+   above the dock (its height is published as --dock-height). */
+@media (max-width: 900px) {
+  /* The top bar gains its navigation row (2.75rem) here. */
+  .travel {
+    height: calc(100vh - var(--bar) - 2.75rem);
+    height: calc(100svh - var(--bar) - 2.75rem);
+  }
+  .loop-dock {
+    right: var(--travel-inset);
+    max-width: none;
+  }
+  .loop-bar {
+    width: 100%;
+  }
+  .loop-bar > [data-slot="button"] {
+    margin-left: auto;
+  }
+  .shared-map-controls {
+    top: var(--travel-inset);
+    translate: none;
+  }
+  .shared-map .maplibregl-ctrl-bottom-right,
+  .shared-map .leaflet-bottom.leaflet-right {
+    bottom: calc(var(--travel-inset) + var(--dock-height) + 0.5rem);
+  }
 }
-.shared-map .leaflet-control-attribution a {
-  color: var(--foreground);
+
+/* Phone: 44px keys so the planner is two rows and the controls clear it. */
+@media (max-width: 640px) {
+  .loop-bar [data-slot="toggle-group-item"],
+  .shared-map-perspective [data-slot="toggle-group-item"] {
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding-inline: 0.5rem;
+    font-size: 0.9375rem;
+  }
+  .loop-bar fieldset:first-child [data-slot="toggle-group-item"] {
+    width: 2.75rem;
+  }
+  .loop-field,
+  .loop-bar > [data-slot="button"],
+  .loop-plate > [data-slot="button"] {
+    height: 3.25rem;
+  }
+  .loop-field [data-slot="input"] {
+    height: 2.75rem;
+  }
+  .loop-alternative[data-slot="button"] {
+    min-height: 3rem;
+  }
+  .shared-map-controls > [data-slot="button"] {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  /* The controls take the right edge, so the attribution moves to the top-left and the
+     demo chip rides above the dock. */
+  .shared-map .maplibregl-ctrl-bottom-right,
+  .shared-map .leaflet-bottom.leaflet-right {
+    inset: var(--travel-inset) auto auto var(--travel-inset);
+  }
+  .shared-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib,
+  .shared-map .leaflet-container .leaflet-control-attribution {
+    max-width: calc(100vw - 2 * var(--travel-inset) - 5.5rem);
+    text-align: left;
+  }
+  .travel-demo {
+    top: auto;
+    bottom: calc(var(--travel-inset) + var(--dock-height) + 0.5rem);
+  }
+  .shared-map-notices {
+    top: calc(var(--travel-inset) + 5rem);
+  }
 }
+
+/* Choices in a toolbar share the row so each stays a comfortable touch target. */
+.workout-toolbar > [data-slot="toggle-group"] {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  width: 100%;
+  gap: 0;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--wash-strong);
+}
+.workout-toolbar > [data-slot="toggle-group"] [data-slot="toggle-group-item"] {
+  height: 2.75rem;
+  padding-inline: 0.5rem;
+  border: 0;
+  border-radius: 999px !important;
+}
+.workout-toolbar
+  > [data-slot="toggle-group"]
+  [data-slot="toggle-group-item"][aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--ground);
+}
+
 @utility watchlists {
   button,
   input,
@@ -3859,18 +4027,10 @@ a.dir-go:hover {
   }
 }
 
-.shared-map {
-  height: clamp(24rem, calc(100svh - 14rem), 52rem);
-}
-
-/* The photo frame's Chrome 106 WebView predates svh and drops these declarations;
-   without a height the map and its status messages collapse to nothing. */
+/* The photo frame's Chrome 106 WebView predates svh and drops these declarations. */
 @supports not (height: 1svh) {
   .shell {
     min-height: 100vh;
-  }
-  .shared-map {
-    height: clamp(24rem, calc(100vh - 14rem), 52rem);
   }
 }
 

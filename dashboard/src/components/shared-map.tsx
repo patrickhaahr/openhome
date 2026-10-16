@@ -12,7 +12,12 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { RasterMap } from "@/components/raster-map"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { MapLine, MapOrigin, MapRoutes } from "@/lib/map"
+import {
+  routePadding,
+  type MapLine,
+  type MapOrigin,
+  type MapRoutes,
+} from "@/lib/map"
 
 /**
  * OpenFreeMap's free styles follow the dashboard's light: Positron by day, Dark at night.
@@ -53,9 +58,6 @@ const BUILDINGS_PITCH = 55
 const BUILDINGS_LAYER = "buildings-3d"
 
 const ROUTE_SOURCE = "route"
-
-/** Room around a fitted route, clearing the map controls on the right. */
-const ROUTE_PADDING = { top: 72, right: 96, bottom: 56, left: 56 }
 
 /** OpenFreeMap's vector source, which carries the OpenMapTiles building layer. */
 const BUILDINGS_SOURCE = "openmaptiles"
@@ -173,11 +175,14 @@ export function SharedMap({
   origin,
   routes,
   theme = "night",
+  credit,
 }: {
   origin: MapOrigin
   routes?: MapRoutes | undefined
   /** Recreates the map in the other palette when the dashboard turns. */
   theme?: MapTheme
+  /** An extra credit merged into the map's one attribution. */
+  credit?: string | undefined
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | undefined>(undefined)
@@ -281,7 +286,10 @@ export function SharedMap({
             dragRotate: false,
             pitchWithRotate: false,
             touchPitch: false,
-            attributionControl: { compact: false },
+            attributionControl: {
+              compact: false,
+              customAttribution: credit === undefined ? [] : [credit],
+            },
             fadeDuration: prefersReducedMotion() ? 0 : 300,
           })
         } catch {
@@ -454,7 +462,7 @@ export function SharedMap({
       instance?.remove()
       map.current = undefined
     }
-  }, [origin.latitude, origin.longitude, attempt, visible, theme])
+  }, [origin.latitude, origin.longitude, attempt, visible, theme, credit])
 
   const ready = view.state === "ready"
 
@@ -502,7 +510,10 @@ export function SharedMap({
 
     fittedLines.current = routes.lines
     current.fitBounds(routeBounds(routes.lines), {
-      padding: ROUTE_PADDING,
+      padding: routePadding(
+        current.getContainer().clientWidth,
+        current.getContainer().clientHeight
+      ),
       maxZoom: 16,
       pitch: current.getPitch(),
       duration: prefersReducedMotion() ? 0 : 600,
@@ -544,6 +555,7 @@ export function SharedMap({
         routes={routes}
         palette={mapThemes[theme]}
         shade={theme}
+        credit={credit}
       />
     )
 

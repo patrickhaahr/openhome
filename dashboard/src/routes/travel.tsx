@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/csr/MapTrifold"
 import { CheckAgainButton } from "@/components/check-again-button"
@@ -22,6 +22,9 @@ import {
 
 import mapCss from "maplibre-gl/dist/maplibre-gl.css?url"
 import rasterMapCss from "leaflet/dist/leaflet.css?url"
+
+/** Licence-required credit for the loops, merged into the map's own attribution. */
+const ROUTES_CREDIT = "Routes by openrouteservice"
 
 const travel = features[2] satisfies { id: "travel" }
 
@@ -71,6 +74,9 @@ function TravelContent({
 }): React.JSX.Element {
   const [routes, setRoutes] = useState<MapRoutes | undefined>(undefined)
   const theme = useMapTheme()
+  const travelRef = useRef<HTMLElement>(null)
+
+  useDockHeight(travelRef)
 
   const displayedRoutes =
     routes ??
@@ -80,27 +86,25 @@ function TravelContent({
     <section>
       <PageHead title={travel.title} />
       {read.state === "configured" ? (
-        <div className="travel-layout">
-          <figure className="travel-map">
-            <SharedMap
-              key={`${read.origin.latitude},${read.origin.longitude}`}
-              origin={read.origin}
-              routes={displayedRoutes}
-              theme={theme}
-            />
-            <figcaption>
-              <span className="travel-map-origin">
-                <span aria-hidden="true" />
-                {read.origin.source === "demo"
-                  ? "Demo origin · central Copenhagen"
-                  : "Private origin"}
-              </span>
-              <span className="sr-only">
-                {displayedRoutes?.label ??
-                  "Stops and live vehicles are not connected yet."}
-              </span>
-            </figcaption>
-          </figure>
+        <figure className="travel" ref={travelRef}>
+          <SharedMap
+            key={`${read.origin.latitude},${read.origin.longitude}`}
+            origin={read.origin}
+            routes={displayedRoutes}
+            theme={theme}
+            credit={ROUTES_CREDIT}
+          />
+          {read.origin.source === "demo" ? (
+            <p className="travel-demo">Demo origin</p>
+          ) : null}
+          <figcaption className="sr-only">
+            {read.origin.source === "demo"
+              ? "Demo origin · central Copenhagen"
+              : "Private origin"}
+            {" · "}
+            {displayedRoutes?.label ??
+              "Stops and live vehicles are not connected yet."}
+          </figcaption>
           <LoopPlanner
             plan={requestLoops}
             initialActive={active}
@@ -108,7 +112,7 @@ function TravelContent({
             reloadActive={loadActiveRoute}
             onRoutesChange={setRoutes}
           />
-        </div>
+        </figure>
       ) : (
         <MapSetup reason={read.reason} />
       )}
@@ -137,4 +141,27 @@ function MapSetup({
       <CheckAgainButton compact />
     </div>
   )
+}
+
+/**
+ * Publishes the planner dock's height as `--dock-height`, so the map's attribution can sit
+ * above a full-width dock on narrow screens instead of underneath it.
+ */
+function useDockHeight(travel: React.RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const element = travel.current
+    const dock = element?.querySelector(".loop-dock")
+
+    if (element === null || dock === null || dock === undefined) return
+
+    if (typeof ResizeObserver === "undefined") return
+
+    const observer = new ResizeObserver(() => {
+      element.style.setProperty("--dock-height", `${dock.clientHeight}px`)
+    })
+
+    observer.observe(dock)
+
+    return () => observer.disconnect()
+  }, [travel])
 }

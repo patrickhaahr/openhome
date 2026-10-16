@@ -91,6 +91,14 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   rain as columns beneath it, the nights as darker ground from the same sun model that turns
   the theme, and the sun on the line at this minute. Every hourly value stays in a table
   for assistive technology.
+- **Travel is the map**: full-bleed from the top bar to the bottom edge, with every control a
+  ground plate floating on it. The planner is one capsule docked bottom-left (walk and run
+  glyphs, 5 km, 10 km, Custom and Steps, the inline field, then the ink "Plan loops" key); the
+  loops rise above it as one plate of rows whose selected loop wears the route's sun mark;
+  2D/3D, zoom and locate are one tall plate centred on the right edge. The origin is the
+  marker (only the demo origin gets a chip), and the one small attribution sits bottom-right,
+  merged with the routing credit. In portrait the planner spans the bottom and the controls
+  move to the top of the right edge; on a phone the attribution moves to the top-left.
 - **Tap targets are at least 44 px** (key-icon 48 px, key-round 64 px, key-hero 96 px);
   inline attribution links are the only exception.
 - **Connection** is one word in display type beside a signal disc that pulses once (and
