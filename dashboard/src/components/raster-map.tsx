@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import type * as Leaflet from "leaflet"
 import type {
-  FitBoundsOptions,
   LatLngBoundsExpression,
   LayerGroup,
   Map as LeafletMap,
@@ -10,7 +9,12 @@ import { CrosshairSimpleIcon } from "@phosphor-icons/react/dist/csr/CrosshairSim
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
-import type { MapLine, MapOrigin, MapRoutes } from "@/lib/map"
+import {
+  routePadding,
+  type MapLine,
+  type MapOrigin,
+  type MapRoutes,
+} from "@/lib/map"
 
 /**
  * OpenStreetMap's own raster tiles: keyless under its tile policy for light use,
@@ -25,12 +29,6 @@ const LOCAL_ZOOM = 14
 
 /** A stalled tile server must not leave the view loading forever. */
 const LOAD_TIMEOUT_MS = 20_000
-
-/** Room around a fitted route, clearing the map controls on the right. */
-const ROUTE_PADDING: FitBoundsOptions = {
-  paddingTopLeft: [56, 72],
-  paddingBottomRight: [96, 56],
-}
 
 /** Overlay colors from the dashboard theme the map is drawn under. */
 export type RasterPalette = {
@@ -68,12 +66,15 @@ export function RasterMap({
   routes,
   palette,
   shade,
+  credit,
 }: {
   origin: MapOrigin
   routes: MapRoutes | undefined
   palette: RasterPalette
   /** Night darkens the light OSM tiles to sit in the night dashboard. */
   shade: "day" | "night"
+  /** An extra credit merged into the map's one attribution. */
+  credit?: string | undefined
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<LeafletMap | undefined>(undefined)
@@ -129,6 +130,9 @@ export function RasterMap({
         })
         instance.attributionControl.setPrefix(false)
 
+        if (credit !== undefined)
+          instance.attributionControl.addAttribution(credit)
+
         const tiles = L.tileLayer(TILE_URL, {
           maxZoom: 18,
           attribution: ATTRIBUTION,
@@ -176,7 +180,7 @@ export function RasterMap({
       map.current = undefined
       overlays.current = undefined
     }
-  }, [origin.latitude, origin.longitude, attempt])
+  }, [origin.latitude, origin.longitude, attempt, credit])
 
   useEffect(() => {
     const current = map.current
@@ -241,8 +245,15 @@ export function RasterMap({
       return
 
     fittedLines.current = routes.lines
+
+    const { top, right, bottom, left } = routePadding(
+      current.getContainer().clientWidth,
+      current.getContainer().clientHeight
+    )
+
     current.fitBounds(routeBounds(routes.lines), {
-      ...ROUTE_PADDING,
+      paddingTopLeft: [left, top],
+      paddingBottomRight: [right, bottom],
       maxZoom: 16,
       animate: !prefersReducedMotion(),
     })
