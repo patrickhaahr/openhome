@@ -17,6 +17,16 @@ export const getTraining = createServerFn({ method: "GET" })
     return readTraining(data)
   })
 
+/** Read today's Recovery Day using the server-held Axum credential. */
+export const getRecoveryToday = createServerFn({ method: "GET" }).handler(
+  async () => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { readRecoveryToday } = await import("./training.server")
+
+    return readRecoveryToday()
+  }
+)
+
 /** A dropped RPC becomes a recoverable view with no fictional empty wearable data. */
 export async function loadTraining(
   search: TrainingSearch

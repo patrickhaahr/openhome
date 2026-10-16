@@ -1,6 +1,5 @@
 import { useState } from "react"
-import { Await, Link } from "@tanstack/react-router"
-import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
+import { Await } from "@tanstack/react-router"
 import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { ControlAlert, OpenConnection } from "@/components/control-alert"
@@ -43,6 +42,10 @@ export type IrRemoteConfig<C extends string> = {
   primary: C
   labels: Record<C, string>
   commandIcons: Partial<Record<C, Icon>>
+  /** Home's glyph for a Command when its own icon would not say which device it drives. */
+  plateIcons: Partial<Record<C, Icon>>
+  /** Whether Home's plate shows the device glyph; keys that name the device need none. */
+  plateIdentity: boolean
   /** Commands whose glyph keeps its word on the full remote, where the glyph alone is unclear. */
   worded: readonly C[]
   quickGroups: CommandGroup<C>[]
@@ -235,10 +238,7 @@ function RemoteControls<C extends string>({
 
   const keys =
     groups.length > 0 ? (
-      <div
-        className={quick ? "remote-groups remote-quick" : "remote-groups"}
-        aria-busy={pending}
-      >
+      <div className="remote-groups" aria-busy={pending}>
         {groups.map((group) => (
           <div
             key={group.label}
@@ -280,7 +280,6 @@ function RemoteControls<C extends string>({
       recovery={recovery}
       keys={keys}
       status={status}
-      go={quick && !discoveryFailed}
     />
   )
 }
@@ -292,7 +291,6 @@ function RemoteCard<C extends string>({
   recovery,
   keys,
   status,
-  go = false,
 }: {
   config: IrRemoteConfig<C>
   layout: ControlLayout
@@ -300,27 +298,32 @@ function RemoteCard<C extends string>({
   recovery?: React.ReactNode
   keys?: React.ReactNode
   status: React.ReactNode
-  /** Home's row opens the focused Controls view. */
-  go?: boolean
 }): React.JSX.Element {
   const headingId = `${config.id}-heading`
   const quick = layout === "quick"
 
   return (
     <div
-      className={quick ? "dir-row control-row" : "panel"}
+      className={quick ? "plate" : "panel"}
       data-remote={config.id}
       role="group"
       aria-labelledby={headingId}
     >
-      <div className={quick ? "control-row-name" : "panel-head"}>
-        <h2 id={headingId} className={quick ? "dir-name" : "panel-title"}>
+      <div className={quick ? "plate-head" : "panel-head"}>
+        {quick && config.plateIdentity ? (
+          <config.icon
+            className="plate-identity"
+            size={30}
+            aria-hidden="true"
+          />
+        ) : null}
+        <h2 id={headingId} className={quick ? "sr-only" : "panel-title"}>
           {config.title}
         </h2>
         {alert}
       </div>
       {quick ? (
-        <div className="control-row-actions">
+        <div className="plate-keys">
           {recovery}
           {keys}
         </div>
@@ -332,12 +335,6 @@ function RemoteCard<C extends string>({
           {keys}
         </>
       )}
-      {go ? (
-        <Link to="/controls" className="dir-go" title="Full remote">
-          <ArrowUpRightIcon size={18} aria-hidden="true" />
-          <span className="sr-only">Full remote</span>
-        </Link>
-      ) : null}
       <div className="sr-only">
         {quick ? null : <p>{config.remoteName}</p>}
         <p>
@@ -367,7 +364,9 @@ function RemoteButton<C extends string>({
   onPress: (command: C) => void
 }): React.JSX.Element {
   // Indexing a generic record does not resolve to a JSX component type without this annotation.
-  const CommandIcon: Icon | undefined = config.commandIcons[command]
+  const CommandIcon: Icon | undefined =
+    (compact ? config.plateIcons[command] : undefined) ??
+    config.commandIcons[command]
 
   const label = config.labels[command]
 
@@ -376,7 +375,7 @@ function RemoteButton<C extends string>({
 
   return (
     <Button
-      size={compact ? "key-icon" : iconOnly ? "key-round" : "key"}
+      size={compact || iconOnly ? "key-round" : "key"}
       variant={command === config.primary ? "default" : "outline"}
       disabled={disabled}
       data-command={command}
@@ -386,7 +385,7 @@ function RemoteButton<C extends string>({
       onClick={() => onPress(command)}
     >
       {CommandIcon === undefined ? null : (
-        <CommandIcon size={20} aria-hidden="true" />
+        <CommandIcon size={compact ? 26 : 20} aria-hidden="true" />
       )}
       {iconOnly ? (
         <span className="sr-only">{label}</span>

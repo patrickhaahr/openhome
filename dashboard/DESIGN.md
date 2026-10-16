@@ -4,7 +4,7 @@
 
 A private, always-on household iPad in a Copenhagen home. It is read from across the room
 far more often than it is touched. The job: know the time, the weather and the state of the
-household lists at a glance, then reach any control in one tap. Danish formats, English copy.
+household lists at a glance, then reach any control in one tap. English copy and formats (en-GB dates and times).
 
 ## Concepts considered
 
@@ -62,8 +62,10 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   keys keep their label as an sr-only span, so their accessible name (and text content) is
   unchanged.
 - **Glances are visuals.** Home shows the clock, the sun's arc, the temperature with a
-  seven-day bar chart, live keys for lights, TV and speaker, workout bars, a heart count,
-  stacked posters, two photos and a route trace. Labels are the directory names only.
+  seven-day bar chart, a row of key plates (the keys name their device: a lit bulb, a TV
+  power key; only the speaker plate carries a glyph), today's Charge, Rest and Effort
+  rings on the bare paper (each named by a glyph), and a progress plate: four weeks of
+  exercise lines with three featured exercises in colour, named only by a legend.
 - **Control state is never claimed in text.** Keys show only commands the device reported.
   A sent command draws on the key itself: pending is a sun arc spinning round it, accepted
   is a small acknowledge bump with a sun ring rippling out; a failure shakes the key, rings

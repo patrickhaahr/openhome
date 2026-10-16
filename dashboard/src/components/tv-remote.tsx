@@ -48,12 +48,15 @@ const tvRemote: IrRemoteConfig<TvCommand> = {
     "channel-up": CaretDoubleUpIcon,
     "channel-down": CaretDoubleDownIcon,
   },
+  // Home's lone power key wears the TV, so the plate needs no other name.
+  plateIcons: { power: TelevisionSimpleIcon },
+  plateIdentity: false,
   worded: [],
   quickGroups: [
     {
-      label: "Common TV commands",
+      label: "TV power",
       kind: "quick",
-      commands: ["power", "mute", "volume-down", "volume-up"],
+      commands: ["power"],
     },
   ],
   fullGroups: [

@@ -23,7 +23,7 @@ import { getWeather } from "@/lib/weather.functions"
 
 const number = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 1 })
 
-const timestamp = new Intl.DateTimeFormat("da-DK", {
+const timestamp = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
   day: "numeric",
   month: "short",
@@ -31,14 +31,14 @@ const timestamp = new Intl.DateTimeFormat("da-DK", {
   minute: "2-digit",
 })
 
-const date = new Intl.DateTimeFormat("da-DK", {
+const date = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
   weekday: "short",
   day: "numeric",
   month: "short",
 })
 
-const hourTime = new Intl.DateTimeFormat("da-DK", {
+const hourTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
   hour: "2-digit",
   minute: "2-digit",
@@ -49,7 +49,7 @@ const hourOffset = new Intl.DateTimeFormat("en-GB", {
   timeZoneName: "shortOffset",
 })
 
-const weekday = new Intl.DateTimeFormat("da-DK", {
+const weekday = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
   weekday: "short",
 })
@@ -390,39 +390,36 @@ export function WeatherNow({
                 const { current, days } = read.forecast
 
                 return (
-                  <>
-                    <Link
-                      to="/weather"
-                      aria-label="Open Weather"
-                      className="weather-now-link"
-                      data-stale={read.state === "stale"}
-                    >
-                      <span className="weather-now-temp">
-                        {current?.temperature_c === null ||
-                        current?.temperature_c === undefined
-                          ? "–"
-                          : `${number.format(current.temperature_c)}°`}
-                      </span>
-                      <span className="weather-now-glyph">
+                  <Link
+                    to="/weather"
+                    aria-label="Open Weather"
+                    className="forecast"
+                    data-stale={read.state === "stale"}
+                  >
+                    <span className="forecast-now">
+                      <span className="forecast-now-glyph">
                         <WeatherGlyph
                           code={current?.weather_code ?? null}
-                          size={56}
+                          size={48}
                         />
                       </span>
-                      <span className="sr-only">
-                        {weatherDescription(current?.weather_code ?? null)}.{" "}
-                        {read.state === "stale" ? "Stale. " : ""}Feels{" "}
-                        {value(current?.feels_like_c, "°C")}, wind{" "}
-                        {value(current?.wind_ms, "m/s")}.
+                      <span className="forecast-now-temp">
+                        {degrees(current?.temperature_c)}
                       </span>
                       {read.state === "stale" ? (
-                        <span className="weather-now-stale" aria-hidden="true">
+                        <span className="forecast-now-stale" aria-hidden="true">
                           <ClockCounterClockwiseIcon size={18} weight="bold" />
                         </span>
                       ) : null}
-                    </Link>
-                    <WeekStrip days={days} />
-                  </>
+                    </span>
+                    <span className="sr-only">
+                      {weatherDescription(current?.weather_code ?? null)}.{" "}
+                      {read.state === "stale" ? "Stale. " : ""}Feels{" "}
+                      {value(current?.feels_like_c, "°C")}, wind{" "}
+                      {value(current?.wind_ms, "m/s")}.
+                    </span>
+                    <ForecastDays days={days} />
+                  </Link>
                 )
               }}
             </LiveWeather>
@@ -441,32 +438,30 @@ function OpenWeather(): React.JSX.Element {
   )
 }
 
-function WeekStrip({ days }: { days: Days }): React.JSX.Element {
-  const scale = weekScale(days)
+/** A whole-degree reading, or a dash when the forecast has none. */
+function degrees(celsius: number | null | undefined): string {
+  return celsius === null || celsius === undefined
+    ? "–"
+    : `${Math.round(celsius)}°`
+}
 
+/** Today and the days ahead: name, glyph and the day's high. Lows live on Weather. */
+function ForecastDays({ days }: { days: Days }): React.JSX.Element {
   return (
-    <ol className="week-strip" aria-label="Seven days">
-      {days.map((day) => (
+    <ol className="forecast-days" aria-label="Seven days">
+      {days.map((day, index) => (
         <li key={day.date}>
-          <span>{weekdayName(day.date)}</span>
-          <span className="week-bar" aria-hidden="true">
-            {day.low_c === null || day.high_c === null ? null : (
-              <span
-                // SAFETY: CSSProperties omits custom properties; --low and --high are unitless 0..1 shares of the week's temperature scale.
-                style={
-                  {
-                    "--low": scale(day.low_c),
-                    "--high": scale(day.high_c),
-                  } as React.CSSProperties
-                }
-              />
-            )}
+          <span className="forecast-day-name">
+            {index === 0 ? "Today" : weekdayName(day.date)}
           </span>
-          <b>
-            {day.high_c === null
-              ? "–"
-              : `${number.format(Math.round(day.high_c))}°`}
-          </b>
+          <WeatherGlyph code={day.weather_code} size={28} />
+          <span className="sr-only">
+            {weatherDescription(day.weather_code)}.
+          </span>
+          <span className="forecast-day-high">
+            <span className="sr-only">High </span>
+            {degrees(day.high_c)}
+          </span>
         </li>
       ))}
     </ol>
