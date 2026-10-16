@@ -111,6 +111,8 @@ pub struct NoopWorkoutSummary {
     pub avg_hr_bpm: Option<f64>,
     /// NOOP's derived 0-100 workout strain; a model output, not a measurement.
     pub strain_score: Option<f64>,
+    /// Steps the strap or phone counted over the workout.
+    pub steps: Option<i64>,
     /// The NOOP device namespace of the stored row.
     pub source: String,
 }
@@ -340,6 +342,7 @@ fn noop_workout(row: &WorkoutRow) -> Result<NoopWorkoutSummary> {
         duration_min: row.duration_s.map(|seconds| seconds / 60.0),
         avg_hr_bpm: row.avg_hr,
         strain_score: row.strain,
+        steps: row.steps,
         source: row.device_id.clone(),
     })
 }

@@ -103,6 +103,7 @@ export function implementedRoute(
   | "/watchlist"
   | "/photos"
   | "/workout"
+  | "/recovery"
   | undefined {
   switch (id) {
     case "controls":
@@ -119,6 +120,8 @@ export function implementedRoute(
       return "/photos"
     case "workout":
       return "/workout"
+    case "recovery":
+      return "/recovery"
     case "agent":
     case "server":
       return undefined

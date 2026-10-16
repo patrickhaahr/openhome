@@ -91,6 +91,14 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   rain as columns beneath it, the nights as darker ground from the same sun model that turns
   the theme, and the sun on the line at this minute. Every hourly value stays in a table
   for assistive technology.
+- **Recovery is the day's rings and its night**: Charge, Rest and Effort as three big rings on
+  the paper with the week of days (the cartwheel) beneath them, and the night on a plate beside
+  them as a hypnogram: bedtime to wake across, a lane per stage (awake, REM, light, deep) with its
+  total beside it, every stretch a solid bar in the stage's colour and alternate hours in a darker
+  tone instead of grid lines. Nothing says "refresh"; re-tapping the chosen day reads it again, and
+  a rewind mark with the last push shows only when the sync is not confirmed. Body signals, the
+  journal and the strap's workouts follow on scroll; logged workouts stay on Workout. Portrait and
+  phone stack rings, week and night. Without ordered stages the night falls back to its totals.
 - **Travel is the map**: full-bleed from the top bar to the bottom edge, with every control a
   ground plate floating on it. The planner is one capsule docked bottom-left (walk and run
   glyphs, 5 km, 10 km, Custom and Steps, the inline field, then the ink "Plan loops" key); the

@@ -106,17 +106,59 @@
   display: none;
 }
 
-.today-week {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+/* The first screen: the rings over their week on the paper, the night on a plate beside them. */
+.page:has(> .today) {
+  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
 }
-.today-days {
+.today-hero {
   display: grid;
-  flex: 1;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(1.5rem, 3vw, 3rem);
+  min-height: max(
+    calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem)),
+    32rem
+  );
+}
+.today-hero > * {
+  min-width: 0;
+}
+.today-glance {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1rem;
+}
+.today-glance > .today-failure {
+  align-self: center;
+}
+.today-week {
+  min-width: 0;
+}
+/* A strip of days: native horizontal scroll with snap points, no bar and no arrows. */
+.today-days {
+  display: flex;
   gap: 0.25rem;
-  max-width: 44rem;
+  overflow-x: auto;
+  padding: 0.25rem 1.5rem;
+  scroll-padding-inline: 1.5rem;
+  scroll-snap-type: x mandatory;
+  /* A quiet fade at both ends, so a day is never cut hard mid-ring. */
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.today-days::-webkit-scrollbar {
+  display: none;
+}
+.today-days > li {
+  flex: 0 0 4.25rem;
+  scroll-snap-align: start;
 }
 .today-day {
   display: grid;
@@ -184,41 +226,13 @@
 .day-rings [data-kind="effort"] .day-rings-arc {
   stroke: var(--effort);
 }
-.today-tools {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-left: auto;
-}
-.today-sync {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--muted-ink);
-  font-size: 0.8125rem;
-  font-variant-numeric: tabular-nums;
-}
-.today-sync-mark {
-  width: 0.625rem;
-  height: 0.625rem;
-  border: 2px solid var(--muted-ink);
-  border-radius: 50%;
-}
-.today-sync[data-freshness="confirmed"] .today-sync-mark {
-  border-color: var(--good);
-  background: var(--good);
-}
-.today-sync[data-freshness="partial"] .today-sync-mark {
-  border-color: var(--sun);
-}
-
 /* The three rings: the page's hero. */
 .today-rings {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 15rem));
+  align-self: center;
   justify-content: center;
-  gap: clamp(1rem, 5vw, 4.5rem);
-  padding-block: clamp(0.5rem, 2vw, 1.5rem);
+  gap: clamp(0.75rem, 2.5vw, 2.5rem);
 }
 .score-ring {
   position: relative;
@@ -275,7 +289,21 @@
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.score-ring-figure span {
+.today-rings .score-ring-figure {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding-top: 0;
+}
+.today-rings .score-ring figcaption {
+  display: none;
+}
+.score-ring-value {
+  display: inline-flex;
+  align-items: baseline;
+}
+.score-ring-value > span {
   font-size: clamp(2.25rem, 1.2rem + 3.6vw, 4rem);
   font-weight: 600;
   letter-spacing: -0.055em;
@@ -297,7 +325,8 @@
 /* ---------- The night ---------- */
 
 .today-night {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
   padding: clamp(1.25rem, 3vw, 2rem);
   border-radius: 1.75rem;
@@ -316,7 +345,8 @@
   display: grid;
   gap: 0.5rem;
 }
-.sleep-clock-times {
+.sleep-clock-times,
+.hypno-times {
   display: flex;
   justify-content: space-between;
   font-size: clamp(1.375rem, 1rem + 1.2vw, 1.875rem);
@@ -324,12 +354,14 @@
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
-.sleep-clock-times > span {
+.sleep-clock-times > span,
+.hypno-times > span {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
 }
-.sleep-clock-times svg {
+.sleep-clock-times svg,
+.hypno-times svg {
   color: var(--muted-ink);
 }
 .sleep-clock-track {
@@ -441,6 +473,97 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The hypnogram: a lane per stage, bedtime to wake across, alternate hours in a darker tone. */
+.hypno {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1;
+  gap: 0.5rem 1rem;
+  min-height: 15rem;
+  margin: 0;
+}
+.hypno-times {
+  grid-column: 1 / -1;
+}
+.hypno-labels,
+.hypno-plot {
+  display: grid;
+  grid-template-rows: repeat(4, minmax(2.25rem, 1fr));
+}
+.hypno-labels p {
+  display: grid;
+  grid-template-columns: 1rem auto;
+  align-content: center;
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+.hypno-labels p::before {
+  content: "";
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--stage);
+}
+.hypno-labels .num {
+  grid-column: 2;
+  color: var(--ink);
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+.hypno-plot {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+.hypno-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--from) * 100%);
+  width: calc(var(--length) * 100%);
+  background: var(--wash);
+}
+.hypno-lane {
+  position: relative;
+}
+.hypno-lane span {
+  position: absolute;
+  top: 16%;
+  bottom: 16%;
+  left: calc(var(--from) * 100%);
+  width: calc(var(--length) * 100%);
+  min-width: 3px;
+  border-radius: 0.375rem;
+  background: var(--stage);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hypno-lane span {
+    animation: stage-grow var(--t-slow) var(--ease) both;
+    transform-origin: left;
+  }
+}
+.hypno-axis {
+  position: relative;
+  grid-column: 2;
+  height: 1.25rem;
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.hypno-axis span {
+  position: absolute;
+  left: calc(var(--from) * 100%);
+  translate: -50% 0;
+}
+
 .night-history {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -454,15 +577,6 @@
   align-items: flex-end;
   gap: 3px;
   height: 4.5rem;
-}
-.night-history-bars::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: calc(var(--reference) * 100%);
-  left: 0;
-  border-top: 1.5px dashed var(--line-strong);
-  pointer-events: none;
 }
 .night-history-bars span {
   flex: 1;
@@ -492,37 +606,33 @@
 
 .today-vitals {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
 }
 .vital {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "label delta"
-    "value value"
-    "spark spark";
+    "icon delta"
+    "value value";
   align-items: center;
-  gap: 0.25rem;
-  padding: 1.125rem 1.25rem 1rem;
+  row-gap: 0.75rem;
+  min-height: 7.5rem;
+  padding: 1.125rem 1.25rem;
   border-radius: 1.5rem;
   background: var(--tile);
 }
-.vital-label {
-  grid-area: label;
+.vital-icon {
+  grid-area: icon;
   color: var(--muted-ink);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .vital-value {
   grid-area: value;
+  align-self: end;
   font-size: clamp(1.875rem, 1.2rem + 2vw, 2.5rem);
   font-weight: 600;
   letter-spacing: -0.045em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .vital-value small {
   margin-left: 0.2em;
@@ -542,7 +652,6 @@
   color: var(--band);
   font-size: 0.8125rem;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 .vital-delta span[aria-hidden="true"] {
   font-size: 0.625rem;
@@ -557,35 +666,6 @@
 }
 .vital[data-tone="poor"] {
   --band: var(--poor);
-}
-.vital .sparkline {
-  grid-area: spark;
-  width: 100%;
-  height: auto;
-  margin-top: 0.25rem;
-  overflow: visible;
-}
-.sparkline-line {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 2.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.7;
-}
-.sparkline-baseline {
-  stroke: var(--line-strong);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 5;
-}
-.sparkline-dot {
-  fill: var(--ink);
-  stroke: var(--ground);
-  stroke-width: 2;
-}
-.vital[data-tone="good"] .sparkline-dot,
-.vital[data-tone="poor"] .sparkline-dot {
-  fill: var(--band);
 }
 
 .today-journal {
@@ -726,35 +806,25 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.session-tile-effort::before {
-  content: "";
+.session-tile-effort svg {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--effort) calc(var(--share) * 1turn),
-    var(--wash-strong) 0
-  );
-  mask: radial-gradient(closest-side, transparent 78%, #000 80%);
+  width: 100%;
+  height: 100%;
+  rotate: -90deg;
+  overflow: visible;
 }
-.session-tile[data-kind="logged"] {
-  grid-template-areas:
-    "icon name name"
-    "icon meta meta";
+.session-tile-effort circle {
+  fill: none;
+  stroke-width: 9;
 }
-.session-tile-exercises {
-  grid-area: meta;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
-  color: var(--muted-ink);
-  font-size: 0.875rem;
+.effort-ring-track {
+  stroke: var(--wash-strong);
 }
-.session-tile-exercises small {
-  margin-left: 0.25rem;
-  font-weight: 700;
+.effort-ring-arc {
+  stroke: var(--effort);
+  stroke-linecap: round;
 }
-
 .today-detail {
   position: relative;
   scroll-margin-top: calc(var(--bar) + 1rem);
@@ -816,6 +886,37 @@
 }
 .noop-detail-head .score-ring figcaption {
   font-size: 0.6875rem;
+}
+.noop-detail-glance {
+  display: grid;
+  gap: 1.25rem;
+}
+.noop-detail-glance[data-route="true"] {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: stretch;
+}
+.noop-detail-glance[data-route="true"] .noop-detail-stats {
+  align-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.noop-detail-map {
+  min-height: 22rem;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--wash);
+}
+.noop-detail-map .shared-map {
+  min-height: inherit;
+}
+@media (max-width: 900px) {
+  .noop-detail-glance[data-route="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .noop-detail-map {
+    min-height: 18rem;
+  }
 }
 .noop-detail-stats {
   display: flex;
@@ -1280,24 +1381,29 @@
 
 /* ---------- Narrow screens ---------- */
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .today-vitals {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .today-hero {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .today-glance {
+    gap: 1.5rem;
   }
   .body-panels {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 700px) {
-  .today-week {
-    flex-wrap: wrap;
+  .today-vitals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .today-days {
-    order: 1;
-    flex-basis: 100%;
-  }
-  .today-week > button {
-    order: 0;
+  .vital:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
   .today-night-head {
     grid-template-columns: auto minmax(0, 1fr);
@@ -1305,10 +1411,14 @@
   .today-night-stats {
     grid-column: 1 / -1;
   }
+  /* A phone's plot is narrow: an hour label for every second hour, so none touch. */
+  .hypno-axis span:nth-child(even) {
+    display: none;
+  }
   .zone-bar-legend li {
     font-size: 0.9375rem;
   }
-  /* Four equal tabs, icon over word, so every view stays in reach on a phone. */
+  /* Equal tabs, icon over word, so every view stays in reach on a phone. */
   .view-tabs {
     width: 100%;
   }

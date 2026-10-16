@@ -10,6 +10,8 @@ use serde_json::{Value, json};
 
 const API_KEY: &str = "test-api-key";
 
+/// The source of values `OpenHome` derives from NOOP's data.
+const DERIVED: &str = "openhome-derived";
 /// The production installation and NOOP's strap namespaces.
 const SOURCE: &str = "81906e30-187d-4546-8f8a-9949b82d62fa";
 const OTHER_SOURCE: &str = "3a3486dd-5030-4e17-a00d-a781399890f9";
@@ -272,9 +274,12 @@ async fn reports_unknown_state_before_any_push() {
             "hrv_rmssd": absent("ms"),
             "skin_temp_deviation": absent("degC"),
             "respiratory_rate": absent("breaths/min"),
+            "spo2": absent("percent"),
+            "steps": absent("count"),
             "derived_scores": {
                 "recovery": absent("score_0_100"),
                 "strain": absent("score_0_100"),
+                "rest": absent("score_0_100"),
             },
             "journal": [],
             "noop": {
@@ -325,6 +330,15 @@ async fn returns_the_real_edited_sleep_night() {
                             "deep": 15.0 + 6.0 + 556.0 / 60.0,
                             "rem": 17.0,
                         },
+                        "stages": [
+                            {"start": "2026-09-14T23:58:00+02:00", "end": "2026-09-15T00:13:00+02:00", "stage": "deep"},
+                            {"start": "2026-09-15T00:13:00+02:00", "end": "2026-09-15T00:20:30+02:00", "stage": "light"},
+                            {"start": "2026-09-15T00:20:30+02:00", "end": "2026-09-15T00:26:30+02:00", "stage": "deep"},
+                            {"start": "2026-09-15T00:26:30+02:00", "end": "2026-09-15T00:46:30+02:00", "stage": "light"},
+                            {"start": "2026-09-15T00:46:30+02:00", "end": "2026-09-15T01:03:30+02:00", "stage": "rem"},
+                            {"start": "2026-09-15T01:03:30+02:00", "end": "2026-09-15T01:25:30+02:00", "stage": "light"},
+                            {"start": "2026-09-15T01:25:30+02:00", "end": "2026-09-15T01:34:46+02:00", "stage": "deep"},
+                        ],
                         "efficiency_fraction": 1.0,
                         "resting_hr_bpm": 47.0,
                         "hrv_rmssd_ms": 88.2272585751,
@@ -338,6 +352,17 @@ async fn returns_the_real_edited_sleep_night() {
                         "detected_start": "2026-09-15T01:23:00+02:00",
                         "duration_min": 457.0,
                         "stage_min": {"awake": 354.75, "light": 24.25, "deep": 36.5, "rem": 41.5},
+                        "stages": [
+                            {"start": "2026-09-15T01:23:00+02:00", "end": "2026-09-15T01:59:30+02:00", "stage": "deep"},
+                            {"start": "2026-09-15T01:59:30+02:00", "end": "2026-09-15T02:04:30+02:00", "stage": "light"},
+                            {"start": "2026-09-15T02:04:30+02:00", "end": "2026-09-15T02:34:30+02:00", "stage": "rem"},
+                            {"start": "2026-09-15T02:34:30+02:00", "end": "2026-09-15T02:41:30+02:00", "stage": "light"},
+                            {"start": "2026-09-15T02:41:30+02:00", "end": "2026-09-15T02:48:00+02:00", "stage": "rem"},
+                            {"start": "2026-09-15T02:48:00+02:00", "end": "2026-09-15T02:57:30+02:00", "stage": "light"},
+                            {"start": "2026-09-15T02:57:30+02:00", "end": "2026-09-15T03:02:30+02:00", "stage": "rem"},
+                            {"start": "2026-09-15T03:02:30+02:00", "end": "2026-09-15T03:05:15+02:00", "stage": "light"},
+                            {"start": "2026-09-15T03:05:15+02:00", "end": "2026-09-15T09:00:00+02:00", "stage": "awake"},
+                        ],
                         "efficiency_fraction": 1.0,
                         "resting_hr_bpm": 45.0,
                         "hrv_rmssd_ms": 103.6740725999,
@@ -351,9 +376,14 @@ async fn returns_the_real_edited_sleep_night() {
             "hrv_rmssd": absent("ms"),
             "skin_temp_deviation": absent("degC"),
             "respiratory_rate": absent("breaths/min"),
+            "spo2": absent("percent"),
+            "steps": absent("count"),
             "derived_scores": {
                 "recovery": absent("score_0_100"),
                 "strain": measured(json!(25.92), "score_0_100", COMPUTED),
+                // 102.25 min asleep of an 8 h need (10.65), efficiency 0.2237 (4.47), full
+                // restorative and deep shares (20), neutral consistency without history (5).
+                "rest": measured(json!(40.13), "score_0_100", DERIVED),
             },
             "journal": [],
             "noop": {
@@ -410,6 +440,7 @@ async fn imported_values_win_field_by_field_and_computed_values_fill_nulls() {
             "recovery": measured(json!(64.0), "score_0_100", COMPUTED),
             // A computed zero is a value, not a gap.
             "strain": measured(json!(0.0), "score_0_100", COMPUTED),
+            "rest": absent("score_0_100"),
         })
     );
 }
@@ -585,6 +616,76 @@ async fn a_scored_computed_night_replaces_a_bare_imported_sleep_total() {
     );
     assert_eq!(sleep["deep"], measured(json!(80.0), "min", COMPUTED));
     assert_eq!(sleep["disturbances"], measured(json!(6), "count", COMPUTED));
+}
+
+#[tokio::test]
+async fn rest_scores_the_night_against_the_need_and_regularity_of_the_nights_before() {
+    // Seven nights of exactly 8 h at efficiency 1 ending before 2026-09-20: need stays 8 h and
+    // the regularity is 1 (no spread), so the 10-point consistency term is full.
+    let history: Vec<Value> = (1..=7)
+        .map(|nights_ago| {
+            let start = SEP_20 - nights_ago * 86_400;
+            sleep(start, start + 8 * 3600, json!({"efficiency": 1.0}))
+        })
+        .collect();
+    let night = daily(
+        "2026-09-20",
+        json!({"totalSleepMin": 480.0, "efficiency": 1.0, "deepMin": 90.0, "remMin": 100.0}),
+    );
+    let body = covered_mirror(std::slice::from_ref(&night), &[], &history, &[])
+        .await
+        .recovery_day("2026-09-20")
+        .await;
+    // 50 duration + 20 efficiency + (190 / 480 / 0.5) x 20 = 15.83 restorative + 10 consistency.
+    assert_eq!(
+        body["derived_scores"]["rest"],
+        measured(json!(95.83), "score_0_100", DERIVED)
+    );
+
+    // Without the history the same night scores a neutral 0.5 consistency: 5 points.
+    let body = covered_mirror(&[night], &[], &[], &[])
+        .await
+        .recovery_day("2026-09-20")
+        .await;
+    assert_eq!(
+        body["derived_scores"]["rest"],
+        measured(json!(90.83), "score_0_100", DERIVED)
+    );
+}
+
+#[tokio::test]
+async fn sleep_stages_are_ordered_clamped_to_the_session_and_null_without_segments() {
+    // 22:00 → 23:00 on 2026-09-19 after an adjusted start of 22:10; the first segment begins
+    // before it and the last runs past the end. The segments arrive out of order.
+    let stages = r#"[{"start":1789850000,"end":1789851000,"stage":"wake"},{"start":1789848000,"end":1789848900,"stage":"light"},{"start":1789848900,"end":1789850000,"stage":"deep"},{"start":1789851000,"end":1789853000,"stage":"rem"}]"#;
+    let adjusted = sleep(
+        1_789_848_000,
+        1_789_851_600,
+        json!({"stagesJSON": stages, "startTsAdjusted": 1_789_848_600}),
+    );
+    let minutes_only = sleep(
+        1_789_851_700,
+        1_789_852_700,
+        json!({"stagesJSON": r#"{"awake":1,"light":2,"deep":3,"rem":4}"#}),
+    );
+    let unstaged = sleep(1_789_852_800, 1_789_854_000, json!({}));
+    let body = covered_mirror(&[], &[], &[adjusted, minutes_only, unstaged], &[])
+        .await
+        .recovery_day("2026-09-19")
+        .await;
+    let sessions = body["sleep"]["sessions"].as_array().unwrap();
+
+    assert_eq!(
+        sessions[0]["stages"],
+        json!([
+            {"start": "2026-09-19T22:10:00+02:00", "end": "2026-09-19T22:15:00+02:00", "stage": "light"},
+            {"start": "2026-09-19T22:15:00+02:00", "end": "2026-09-19T22:33:20+02:00", "stage": "deep"},
+            {"start": "2026-09-19T22:33:20+02:00", "end": "2026-09-19T22:50:00+02:00", "stage": "awake"},
+            {"start": "2026-09-19T22:50:00+02:00", "end": "2026-09-19T23:00:00+02:00", "stage": "rem"},
+        ])
+    );
+    assert_eq!(sessions[1]["stages"], Value::Null);
+    assert_eq!(sessions[2]["stages"], Value::Null);
 }
 
 #[tokio::test]
@@ -880,6 +981,7 @@ async fn freshness_follows_the_older_namespace_push() {
         json!({
             "recovery": measured(json!(58.0), "score_0_100", COMPUTED),
             "strain": measured(json!(5.2), "score_0_100", IMPORTED),
+            "rest": absent("score_0_100"),
         })
     );
     assert_eq!(

@@ -57,6 +57,15 @@ export const recoveryDay = z.object({
             rem: z.number(),
           })
           .nullable(),
+        // Time-ordered segments clamped to the session; null when it has none.
+        stages: z
+          .object({
+            start: timestamp,
+            end: timestamp,
+            stage: z.enum(["awake", "light", "deep", "rem"]),
+          })
+          .array()
+          .nullable(),
         efficiency_fraction: nullableNumber,
         resting_hr_bpm: nullableNumber,
         hrv_rmssd_ms: nullableNumber,
@@ -71,7 +80,13 @@ export const recoveryDay = z.object({
   hrv_rmssd: measurement,
   skin_temp_deviation: measurement,
   respiratory_rate: measurement,
-  derived_scores: z.object({ recovery: measurement, strain: measurement }),
+  spo2: measurement,
+  steps: measurement,
+  derived_scores: z.object({
+    recovery: measurement,
+    strain: measurement,
+    rest: measurement,
+  }),
   journal: z
     .object({
       question: z.string(),
@@ -110,6 +125,7 @@ const noopSummary = noopSelection.extend({
   duration_min: nullableNumber,
   avg_hr_bpm: nullableNumber,
   strain_score: nullableNumber,
+  steps: nullableNumber,
 })
 
 /** Bounded Training Context, with separate logged and NOOP Workouts for every calendar day. */
@@ -176,6 +192,13 @@ const recoveryMark = z
 export const noopWorkoutDetail = noopSummary.omit({ avg_hr_bpm: true }).extend({
   distance_m: nullableNumber,
   energy_kcal: nullableNumber,
+  has_route: z.boolean(),
+  /** `[latitude, longitude]` degrees in order; only present when the read asked for it. */
+  route: z
+    .tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)])
+    .array()
+    .max(300)
+    .optional(),
   avg_pace_s_per_km: nullableNumber,
   hr: z.object({
     basis: z.enum(["strap_samples", "workout_row"]).nullable(),
@@ -253,6 +276,9 @@ export function shiftDay(day: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+/** Recovery Days the day strip loads at a time. */
+export const stripDays = 28
+
 /** Days in a trend read, ending on the selected day. */
 export const trendDays = 30
 
@@ -286,7 +312,7 @@ export type TrainingState = {
   /** The current Training Day when the read was made; later days cannot be selected. */
   readonly today: string
   readonly recovery: TrainingRead<RecoveryDay>
-  /** Seven Recovery Days, oldest first, ending with the selected day's read. */
+  /** Recovery Days around the selected one, oldest first; the day strip starts from these. */
   readonly week: ReadonlyArray<{
     readonly day: string
     readonly recovery: TrainingRead<RecoveryDay>

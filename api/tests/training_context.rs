@@ -280,7 +280,7 @@ async fn aligns_logged_training_body_weight_and_recovery_by_day() {
             "noop_workouts": [{
                 "start": "2026-09-30T00:30:00+02:00", "end": "2026-09-30T01:30:00+02:00",
                 "sport": "Calisthenics", "origin": "manual", "duration_min": 60.0,
-                "avg_hr_bpm": 90.0, "strain_score": 12.0, "source": IMPORTED,
+                "avg_hr_bpm": 90.0, "strain_score": 12.0, "steps": null, "source": IMPORTED,
             }],
             "body_weight": measurement(None, "kg", None),
             "sleep_duration": measurement(Some(330.0), "min", Some(COMPUTED)),

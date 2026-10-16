@@ -92,8 +92,7 @@ type ProfileDraft = {
 /** Text inputs retain exact stored numbers until a user changes them. */
 export function profileDraft(value: Profile): ProfileDraft {
   return {
-    height:
-      value.height_cm === null ? "" : String(value.height_cm).replace(".", ","),
+    height: value.height_cm === null ? "" : String(value.height_cm),
     sex: value.sex ?? "",
     heartRate: value.hr_max_bpm?.toString() ?? "",
   }
