@@ -4,7 +4,7 @@ import type { RecoveryDay } from "./training"
 import { getRecoveryToday } from "./training.functions"
 
 /** Quiet lines Home draws behind the featured ones; Axum orders them most recent first. */
-const quietLines = 5
+const quietLines = 2
 
 /**
  * Exercises Home names in colour, matched by name. Unmatched slots go to the biggest gains,

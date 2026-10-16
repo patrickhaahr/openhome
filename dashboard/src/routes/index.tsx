@@ -62,8 +62,8 @@ function HomePage(): React.JSX.Element {
       </h1>
       <section className="home-now" aria-label="Today">
         <LiveClock initialTime={openedAt} />
-        <SunDay />
         <WeatherNow weather={weather} />
+        <SunDay />
       </section>
       <section className="home-body" aria-label="Training">
         <RecoveryGlance glance={glance} />
