@@ -149,7 +149,9 @@ test("guides the installer when private configuration is missing", async () => {
   expect(html).toContain("API_KEY")
   const home = await page(await dashboard(), "/")
   expect(home).toContain("Connect OpenHome before sending a light command.")
-  expect(home).toMatch(/<button[^>]*\sdisabled[^>]*>Turn on<\/button>/)
+  expect(home).toMatch(
+    /<button[^>]*\sdisabled[^>]*>(?:(?!<\/button>).)*<span class="sr-only">Turn on<\/span><\/button>/
+  )
 })
 
 test("renders authenticated health from the real Axum route without exposing configuration", async () => {
@@ -162,7 +164,6 @@ test("renders authenticated health from the real Axum route without exposing con
 test("renders Home and a focused deep link without treating healthy Axum as connected integrations", async () => {
   const url = await dashboard({ url: axumUrl, key: apiKey })
   const home = await page(url, "/")
-  expect(home).toContain("Home connected")
   expect(home).toContain("Current time")
   expect(home).toContain("Copenhagen time")
   expect(home).toContain("Weather unavailable")
@@ -174,7 +175,6 @@ test("renders Home and a focused deep link without treating healthy Axum as conn
   const photos = await page(url, "/photos")
   expect(photos).toContain("Photo setup needed")
   expect(photos).toContain("No photo library is connected here")
-  expect(photos).toContain("Back to Home")
 })
 
 test("opens the map at the explicit demo origin served by the real Axum route", async () => {
@@ -429,9 +429,9 @@ test("renders current, hourly and seven-day weather through the private server b
   const privateUrl = await listen(upstream)
   const url = await dashboard({ url: privateUrl, key: apiKey })
   const home = await page(url, "/")
-  expect(home).toContain("9,3 °C")
+  expect(home).toContain("9,3°")
   expect(home).toContain("Overcast")
-  expect(home).toContain("Hourly &amp; seven-day forecast")
+  expect(home).toContain('aria-label="Open Weather"')
   expect(home).toContain("Turn on")
   const weather = await page(url, "/weather")
   expect(weather).toContain("Fresh forecast")

@@ -1,5 +1,7 @@
 import { useId, useRef, useState } from "react"
 import { z } from "zod"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -124,11 +126,14 @@ export function BodyProfile({
   return (
     <div className="body-profile workouts" aria-busy={busy}>
       <div className="workout-toolbar">
-        <p className="workout-muted">
+        <p className="sr-only">
           Shared fitness data · one profile, one weight record per date
         </p>
         <Button
           variant="outline"
+          size="key-icon"
+          title="Refresh profile & weight"
+          data-spinning={busy}
           disabled={
             busy || (editing !== undefined && data.state === "available")
           }
@@ -136,7 +141,8 @@ export function BodyProfile({
             void read(refresh)
           }}
         >
-          Refresh profile & weight
+          <ArrowClockwiseIcon size={20} aria-hidden="true" />
+          <span className="sr-only">Refresh profile & weight</span>
         </Button>
       </div>
       {data.state === "unavailable" ? (
@@ -159,12 +165,14 @@ export function BodyProfile({
               <CardHeader>
                 <div className="workout-detail-header">
                   <div>
-                    <p className="page-eyebrow">Training configuration</p>
+                    <p className="sr-only">Training configuration</p>
                     <h2>Profile</h2>
                   </div>
                   {editing !== undefined ? null : (
                     <Button
                       variant="outline"
+                      size="key-icon"
+                      title="Edit profile"
                       disabled={busy}
                       onClick={() => {
                         setFeedback(undefined)
@@ -172,7 +180,8 @@ export function BodyProfile({
                         setEditing({ original, draft: original })
                       }}
                     >
-                      Edit profile
+                      <PencilSimpleIcon size={20} aria-hidden="true" />
+                      <span className="sr-only">Edit profile</span>
                     </Button>
                   )}
                 </div>
@@ -206,7 +215,7 @@ export function BodyProfile({
                     <dl className="body-profile-values">
                       <div>
                         <dt>Height</dt>
-                        <dd>
+                        <dd data-gap={data.profile.height_cm === null}>
                           {data.profile.height_cm === null
                             ? "Not configured"
                             : `${numberFormat.format(data.profile.height_cm)} cm`}
@@ -214,18 +223,20 @@ export function BodyProfile({
                       </div>
                       <div>
                         <dt>Sex</dt>
-                        <dd>{data.profile.sex ?? "Not configured"}</dd>
+                        <dd data-gap={data.profile.sex === null}>
+                          {data.profile.sex ?? "Not configured"}
+                        </dd>
                       </div>
                       <div>
                         <dt>Maximum heart rate</dt>
-                        <dd>
+                        <dd data-gap={data.profile.hr_max_bpm === null}>
                           {data.profile.hr_max_bpm === null
                             ? "Not configured"
                             : `${data.profile.hr_max_bpm} bpm`}
                         </dd>
                       </div>
                     </dl>
-                    <p className="workout-muted">
+                    <p className="sr-only">
                       Maximum heart rate defines the NOOP heart rate zones. It
                       is set by you, never inferred from recorded workouts.
                     </p>
@@ -240,7 +251,7 @@ export function BodyProfile({
             </Card>
             <Card>
               <CardHeader>
-                <p className="page-eyebrow">Daily record</p>
+                <p className="sr-only">Daily record</p>
                 <h2>Log body weight</h2>
               </CardHeader>
               <CardContent>
@@ -248,7 +259,7 @@ export function BodyProfile({
                 <FeedbackMessage
                   feedback={feedback?.area === "weight" ? feedback : undefined}
                 />
-                <p className="workout-muted">
+                <p className="sr-only">
                   Each date can be recorded once. Existing entries cannot be
                   edited or replaced.
                 </p>
@@ -257,7 +268,7 @@ export function BodyProfile({
           </div>
           <Card>
             <CardHeader>
-              <p className="page-eyebrow">Recorded values · kg</p>
+              <p className="sr-only">Recorded values · kg</p>
               <h2>Body-weight history</h2>
             </CardHeader>
             <CardContent>
@@ -267,7 +278,7 @@ export function BodyProfile({
                 disabled={busy || editing !== undefined}
                 filter={(next) => read(() => filter(next))}
               />
-              <p className="workout-muted">
+              <p className="sr-only">
                 Oldest first. Up to 500 records per date range; leave either
                 date empty for an open range.
               </p>
@@ -406,7 +417,7 @@ function ProfileEditor({
         void save(patch)
       }}
     >
-      <p className="workout-muted">
+      <p className="sr-only">
         Leave a field empty to clear it. Unchanged fields keep their stored
         values.
       </p>

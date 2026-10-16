@@ -28,6 +28,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
     "volume-down": MinusIcon,
     "volume-up": PlusIcon,
   },
+  // Inputs are named on the full remote; a waveform alone does not say "optical".
+  worded: ["bluetooth", "optical"],
   // Choosing the input and adjusting volume are the everyday speaker actions.
   quickGroups: [
     {

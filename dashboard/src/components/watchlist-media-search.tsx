@@ -1,4 +1,5 @@
 import { WatchlistPoster } from "./watchlist-poster"
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -78,7 +79,9 @@ export function WatchlistMediaSearch({
       >
         {busy ? "Searching TMDB…" : "Search TMDB"}
       </Button>
-      <p>Find a poster and description, or keep your own title.</p>
+      <p className="sr-only">
+        Find a poster and description, or keep your own title.
+      </p>
       <div role="status" aria-live="polite">
         {current?.state === "unavailable" ? (
           <p>TMDB is unavailable. You can still add a plan manually.</p>
@@ -149,7 +152,10 @@ export function WatchlistMetadataDetails({
 
   return (
     <details className="watchlist-metadata-details">
-      <summary>Find title details</summary>
+      <summary>
+        <MagnifyingGlassIcon size={18} aria-hidden="true" />
+        <span className="sr-only">Find title details</span>
+      </summary>
       <p>
         Choose metadata for {ownerName}’s{" "}
         {entry.kind === "movie" ? "movie" : "whole series"}. Your status and

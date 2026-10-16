@@ -1,8 +1,12 @@
 import { useId, useRef, useState } from "react"
 import { PersonSimpleRunIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleRun"
 import { PersonSimpleWalkIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleWalk"
+import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile"
+import { FootprintsIcon } from "@phosphor-icons/react/dist/csr/Footprints"
+import { MapPinAreaIcon } from "@phosphor-icons/react/dist/csr/MapPinArea"
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { MapLine, MapRoutes } from "@/lib/map"
@@ -214,18 +218,8 @@ export function LoopPlanner({
 
   return (
     <Card aria-busy={busy}>
-      <CardHeader>
-        <p className="loop-planner-eyebrow">
-          {form.activity === "running" ? (
-            <PersonSimpleRunIcon size={20} aria-hidden="true" />
-          ) : (
-            <PersonSimpleWalkIcon size={20} aria-hidden="true" />
-          )}
-          Loop planner
-        </p>
-        <h2>Walk or run from the origin</h2>
-      </CardHeader>
       <CardContent>
+        <h2 className="sr-only">Walk or run from here</h2>
         <div className="loop-planner-body">
           <ActiveSelection
             active={active}
@@ -244,7 +238,7 @@ export function LoopPlanner({
             }}
           >
             <fieldset disabled={busy}>
-              <legend>Activity</legend>
+              <legend className="sr-only">Activity</legend>
               <div className="loop-planner-choices">
                 <ToggleGroup
                   variant="outline"
@@ -257,15 +251,17 @@ export function LoopPlanner({
                 >
                   <ToggleGroupItem value="walking" size="lg">
                     Walk
+                    <PersonSimpleWalkIcon size={20} aria-hidden="true" />
                   </ToggleGroupItem>
                   <ToggleGroupItem value="running" size="lg">
                     Run
+                    <PersonSimpleRunIcon size={20} aria-hidden="true" />
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </fieldset>
             <fieldset disabled={busy}>
-              <legend>Target</legend>
+              <legend className="sr-only">Target</legend>
               <div className="loop-planner-choices">
                 <ToggleGroup
                   variant="outline"
@@ -320,11 +316,12 @@ export function LoopPlanner({
                 </div>
               ) : null}
             </fieldset>
-            <div className="loop-planner-field">
-              <label htmlFor={`${id}-step-length`}>
+            <div className="loop-planner-field loop-planner-step">
+              <label htmlFor={`${id}-step-length`} className="sr-only">
                 {form.activity === "running" ? "Running" : "Walking"} step
                 length in cm
               </label>
+              <FootprintsIcon size={22} aria-hidden="true" />
               <Input
                 id={`${id}-step-length`}
                 inputMode="numeric"
@@ -342,7 +339,10 @@ export function LoopPlanner({
                   })
                 }
               />
-              <p id={`${id}-step-length-hint`} className="loop-planner-hint">
+              <span className="loop-planner-unit" aria-hidden="true">
+                cm
+              </span>
+              <p id={`${id}-step-length-hint`} className="sr-only">
                 Converts steps to distance. Step counts are estimates.
               </p>
             </div>
@@ -378,7 +378,7 @@ export function LoopPlanner({
                       ? "Active route selected"
                       : `Select Loop ${LETTERS[shown.focused] ?? shown.focused + 1}`}
               </Button>
-              <p className="loop-planner-hint">
+              <p className="sr-only">
                 Comparing loops does not change the route selected for your
                 phone.
               </p>
@@ -425,39 +425,55 @@ function ActiveSelection({
   onShow: () => void
 }): React.JSX.Element {
   return (
-    <section className="loop-active" aria-label="Active route">
-      <p className="loop-planner-eyebrow">Active route</p>
+    <section
+      className="loop-active"
+      aria-label="Active route"
+      data-state={active.state}
+    >
       {active.state === "selected" ? (
         <>
+          <DeviceMobileIcon size={22} aria-hidden="true" />
           <h3>
             {formatKilometers(active.route.distance_meters)}{" "}
-            {active.route.activity} loop
+            <span className="sr-only">{active.route.activity} loop</span>
           </h3>
-          <p className="loop-planner-hint">
-            Target: {describeTarget(active.route.target)} · About{" "}
-            {describeCount(active.route.estimated_steps, "step")}, estimated
-            from a {active.route.step_length_cm} cm step.
-          </p>
-          <p className="loop-planner-hint">
-            Selected for your phone. A walk or run starts on the phone.
-          </p>
+          <div className="sr-only">
+            <p>
+              Target: {describeTarget(active.route.target)} · About{" "}
+              {describeCount(active.route.estimated_steps, "step")}, estimated
+              from a {active.route.step_length_cm} cm step.
+            </p>
+            <p>Selected for your phone. A walk or run starts on the phone.</p>
+          </div>
           <Button
             type="button"
             variant="outline"
+            size="key-icon"
             disabled={busy}
+            title="Show active route on map"
             onClick={onShow}
           >
-            Show active route on map
+            <MapPinAreaIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Show active route on map</span>
           </Button>
         </>
       ) : (
-        <p className="loop-planner-hint">
-          {active.state === "none"
-            ? "No route selected yet. Compare loops, then select one for your phone."
-            : "Could not read the selected route. An earlier selection may still be saved on OpenHome."}
+        <p
+          className={
+            active.state === "none" ? "sr-only" : "loop-planner-problem"
+          }
+        >
+          {active.state === "none" ? null : (
+            <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+          )}
+          <span className={active.state === "none" ? undefined : "sr-only"}>
+            {active.state === "none"
+              ? "No route selected yet. Compare loops, then select one for your phone."
+              : "Could not read the selected route. An earlier selection may still be saved on OpenHome."}
+          </span>
         </p>
       )}
-      <div role="status" aria-live="polite">
+      <div className="loop-active-status" role="status" aria-live="polite">
         {status.state === "saving" ? <p>Saving the selected loop…</p> : null}
         {status.state === "checking" ? (
           <p>Checking the selected route…</p>
@@ -568,15 +584,15 @@ function StatusMessage({
   switch (status.state) {
     case "idle":
       return (
-        <p className="loop-planner-hint">
+        <p className="sr-only">
           Up to three loops on footways and streets that return to the origin.
         </p>
       )
     case "planning":
-      return <p className="loop-planner-hint">Looking for loops…</p>
+      return <p className="sr-only">Looking for loops…</p>
     case "planned":
       return shown === undefined ? null : (
-        <p className="loop-planner-hint">
+        <p className="sr-only">
           Found {describeCount(shown.plan.loops.length, "loop")}. Shown on the
           map; each starts and ends near the origin.
           <ShortfallAnnouncement plan={shown.plan} />
@@ -593,10 +609,13 @@ function StatusMessage({
 
       return (
         <div className="loop-planner-failure">
-          <h3>{title}</h3>
-          <p className="loop-planner-hint">{detail}</p>
+          <h3>
+            <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
+            {title}
+          </h3>
+          <p className="sr-only">{detail}</p>
           {shown === undefined ? null : (
-            <p className="loop-planner-hint">
+            <p className="sr-only">
               Still showing the earlier {describePlan(shown.plan)}.
             </p>
           )}
@@ -606,7 +625,7 @@ function StatusMessage({
   }
 }
 
-/** Announces a shortfall with the result; it is shown visibly beside the loops. */
+/** Announces a shortfall with the result; each loop also marks its own fit. */
 function ShortfallAnnouncement({
   plan,
 }: {
@@ -630,14 +649,12 @@ function LoopAlternatives({
 }): React.JSX.Element {
   const id = useId()
   const { plan } = shown
-  const shortfall = describeShortfall(plan)
 
   return (
     <section className="loop-alternatives" aria-labelledby={id}>
-      <h3 id={id}>{capitalize(describePlan(plan))}</h3>
-      {shortfall === undefined ? null : (
-        <p className="loop-planner-shortfall">{shortfall}</p>
-      )}
+      <h3 id={id} className="sr-only">
+        {capitalize(describePlan(plan))}
+      </h3>
       <ul>
         {plan.loops.map((route, index) => (
           <li key={route.id}>
@@ -656,10 +673,11 @@ function LoopAlternatives({
               <span className="loop-alternative-distance">
                 {formatKilometers(route.distance_meters)}
               </span>
-              <span className="loop-alternative-fit">
+              <span className="loop-alternative-fit" aria-hidden="true" />
+              <span className="sr-only">
                 {describeDeviation({ route, plan })}
               </span>
-              <span className="loop-alternative-steps">
+              <span className="sr-only">
                 {describeEstimatedSteps({ route, plan })}
               </span>
             </Button>

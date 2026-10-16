@@ -52,9 +52,13 @@ test("keeps retry disabled and announces checking until the refreshed health arr
     await act(async () => {
       root.render(createElement(RouterProvider, { router }))
     })
-    const button = document.querySelector("button")
 
-    if (button === null) throw new Error("Expected a rendered retry button")
+    const button = [...document.querySelectorAll("button")].find((element) =>
+      element.textContent?.includes("Check again")
+    )
+
+    if (button === undefined)
+      throw new Error("Expected a rendered retry button")
 
     expect(document.querySelector("[role=status]")?.textContent).toContain(
       "Connected"

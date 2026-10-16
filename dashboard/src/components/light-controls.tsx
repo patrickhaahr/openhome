@@ -1,13 +1,16 @@
 import { Link } from "@tanstack/react-router"
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb"
+import { LightbulbFilamentIcon } from "@phosphor-icons/react/dist/csr/LightbulbFilament"
 import { CheckAgainButton } from "@/components/check-again-button"
+import { ControlAlert, OpenConnection } from "@/components/control-alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   connectionPausedMessages,
   type ControlLayout,
+  failureTag,
   isSetupFailure,
+  keyOutcome,
   setupFailureMessages,
 } from "@/lib/command-feedback"
 import type { ConnectionState } from "@/lib/connection"
@@ -42,7 +45,16 @@ const failureMessages: Record<LightFailure, string> = {
     "Command not confirmed. Check the lights and OpenHome’s SwitchBot connection before trying again.",
 }
 
-/** Light commands and their acknowledgements stay separate from unknown observed power. */
+const keys = [
+  { command: "on", label: "Turn on", Icon: LightbulbFilamentIcon },
+  { command: "off", label: "Turn off", Icon: LightbulbIcon },
+] as const
+
+/**
+ * Two keys, a lit bulb and a dark one. The press answers on the key itself; the sentence
+ * stays in the live region. OpenHome never reports the lights' power, so nothing on screen
+ * claims it.
+ */
 export function LightControls({
   layout,
   connectionState,
@@ -75,70 +87,72 @@ export function LightControls({
     }
   }
 
+  const quick = layout === "quick"
+  const disabled = pending || !connected
+
   return (
-    <Card className="h-full" role="group" aria-labelledby="lights-heading">
-      <CardHeader>
-        <div className="feature-card-top">
-          <LightbulbIcon size={28} aria-hidden="true" />
-          <span className="page-eyebrow">Home controls</span>
-        </div>
-        <h2 id="lights-heading" className="feature-card-title">
+    <div
+      className={quick ? "dir-row control-row" : "panel"}
+      data-device="lights"
+      role="group"
+      aria-labelledby="lights-heading"
+    >
+      <div className={quick ? "control-row-name" : "panel-head"}>
+        <h2 id="lights-heading" className={quick ? "dir-name" : "panel-title"}>
           Lights
         </h2>
-        <p className="control-observed">
+        {failure === undefined ? null : (
+          <ControlAlert tag={failureTag(connected, failure)} />
+        )}
+      </div>
+      <div
+        className={quick ? "control-row-actions" : "panel-keys"}
+        role="group"
+        aria-label="Light commands"
+        aria-busy={pending}
+      >
+        {connected ? null : <CheckAgainButton compact />}
+        {!connected || (failure !== undefined && isSetupFailure(failure)) ? (
+          <OpenConnection />
+        ) : null}
+        {keys.map(({ command, label, Icon }) => (
+          <Button
+            key={command}
+            size={quick ? "key-icon" : "key-hero"}
+            variant={command === "on" ? "default" : "outline"}
+            disabled={disabled}
+            data-command={command}
+            data-outcome={keyOutcome(commandState, command)}
+            title={label}
+            onClick={() => void send(command)}
+          >
+            <Icon
+              size={quick ? 22 : 40}
+              weight={command === "on" ? "fill" : "regular"}
+              aria-hidden="true"
+            />
+            <span className="sr-only">{label}</span>
+          </Button>
+        ))}
+      </div>
+      {quick ? (
+        <Link to="/controls" className="dir-go" title="All controls">
+          <ArrowUpRightIcon size={18} aria-hidden="true" />
+          <span className="sr-only">All controls</span>
+        </Link>
+      ) : null}
+      <div className="sr-only">
+        <p>
           Observed state <span>Unknown</span>
         </p>
-      </CardHeader>
-      <CardContent>
-        <div
-          className="control-actions"
-          role="group"
-          aria-label="Light commands"
-          aria-busy={pending}
-        >
-          <Button
-            size="lg"
-            disabled={pending || !connected}
-            onClick={() => void send("on")}
-          >
-            Turn on
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            disabled={pending || !connected}
-            onClick={() => void send("off")}
-          >
-            Turn off
-          </Button>
-        </div>
-        <p
-          className="control-feedback"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          data-failed={failure !== undefined}
-        >
+        <p role="status" aria-live="polite" aria-atomic="true">
           {feedback}
         </p>
-        <p className="control-explanation">
+        <p>
           Commands control the configured lights. OpenHome does not report their
           current power state.
         </p>
-        <div className="control-links">
-          {connected ? null : <CheckAgainButton />}
-          {!connected || (failure !== undefined && isSetupFailure(failure)) ? (
-            <Link to="/connection" className="action-link">
-              Open Connection
-            </Link>
-          ) : null}
-          {layout === "quick" ? (
-            <Link to="/controls" className="action-link">
-              All controls <ArrowUpRightIcon size={18} aria-hidden="true" />
-            </Link>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

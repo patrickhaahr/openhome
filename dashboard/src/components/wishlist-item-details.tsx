@@ -9,9 +9,13 @@ export function ItemDetails({
   return (
     <div className="wishlist-item-title">
       <strong>{item.title}</strong>
+      <span className="wishlist-item-priority" data-priority={item.priority}>
+        <span className="sr-only">{item.priority} priority</span>
+      </span>
       <div className="wishlist-item-meta">
-        <span>Qty {item.quantity}</span>
-        <span data-priority={item.priority}>{item.priority} priority</span>
+        <span className={item.quantity === 1 ? "sr-only" : undefined}>
+          Qty {item.quantity}
+        </span>
         {item.price !== null ? <span>{item.price}</span> : null}
       </div>
       {item.notes !== null ? (
