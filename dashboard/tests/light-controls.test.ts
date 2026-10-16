@@ -217,13 +217,3 @@ test("pauses commands while disconnected without suggesting the lights changed, 
   expect(button("Turn on").disabled).toBe(false)
   expect(container.textContent).not.toContain("Check again")
 })
-
-test("keeps the focused controls view reachable from Home", async () => {
-  await renderLights("connected")
-
-  const link = Array.from(container.querySelectorAll("a")).find(
-    (element) => element.textContent.trim() === "All controls"
-  )
-
-  expect(link?.getAttribute("href")).toBe("/controls")
-})

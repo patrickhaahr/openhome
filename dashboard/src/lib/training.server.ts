@@ -9,6 +9,7 @@ import {
   shiftDay,
   trainingContext,
   trendDays,
+  type RecoveryDay,
   type TrendMetric,
   type TrainingRead,
   type TrainingSearch,
@@ -108,4 +109,12 @@ export async function readTraining(
     context,
     detail: selectedDetail,
   }
+}
+
+/** Today's Recovery Day alone, for Home's glance. */
+export async function readRecoveryToday(): Promise<TrainingRead<RecoveryDay>> {
+  return read(
+    `/api/training/days/${trainingDayOn(new Date())}/recovery`,
+    recoveryDay
+  )
 }

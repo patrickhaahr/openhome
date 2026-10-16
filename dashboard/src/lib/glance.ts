@@ -1,177 +1,80 @@
-import { getGallery } from "./photos.functions"
-import { loadActiveRoute } from "./route-loop.functions"
-import { titleHue } from "./watchlist"
-import { loadWatchlists } from "./watchlist.functions"
-import { loadWishlists } from "./wishlist.functions"
-import { loadWorkouts } from "./workout.functions"
+import type { ChartedLine } from "./exercise-progress"
+import { getProgress } from "./exercise-progress.functions"
+import type { RecoveryDay } from "./training"
+import { getRecoveryToday } from "./training.functions"
 
-/** Household wishes at a glance. */
-export type WishlistGlance = {
-  readonly wishes: number
-  readonly lists: number
-  readonly people: number
+/** Quiet lines Home draws behind the featured ones; Axum orders them most recent first. */
+const quietLines = 5
+
+/**
+ * Exercises Home names in colour, matched by name. Unmatched slots go to the biggest gains,
+ * so a renamed or skipped exercise never leaves the chart without colour.
+ */
+const featuredNames = ["back row", "pull-up", "chest press", "dip"] as const
+
+/** The last four weeks of exercise progress, only lines with a trend to draw. */
+export type ProgressGlance = {
+  readonly from: string
+  readonly to: string
+  /** Up to four lines drawn in colour and named in the legend. */
+  readonly featured: readonly ChartedLine[]
+  readonly others: readonly ChartedLine[]
 }
 
-/** What is being watched or planned next, the next few as posters. */
-export type WatchlistGlance = {
-  readonly planned: number
-  readonly watching: number
-  readonly next: string | null
-  readonly posters: readonly {
-    readonly id: string
-    readonly title: string
-    readonly hue: number
-    readonly poster: string | null
-  }[]
+function gain(line: ChartedLine): number {
+  return (line.samples.at(-1)?.index ?? 100) - 100
 }
 
-/** The selected loop as a drawable outline, or nothing selected. */
-export type TravelGlance = {
-  /** An SVG path in a 0..100 box; null when no route is selected. */
-  readonly path: string | null
-  readonly meters: number | null
-}
+function feature(lines: readonly ChartedLine[]): ChartedLine[] {
+  const named = featuredNames.flatMap((name) => {
+    const match = lines.find((line) =>
+      line.exercise.name.toLowerCase().includes(name)
+    )
 
-/** Logged sessions in each of the last eight Copenhagen weeks, oldest first. */
-export type WorkoutGlance = {
-  readonly last: string | null
-  readonly weeks: readonly number[]
-}
+    return match === undefined ? [] : [match]
+  })
 
-/** Album covers for the Home row. */
-export type PhotosGlance = {
-  readonly photos: number
-  readonly covers: readonly { readonly album: string; readonly asset: string }[]
+  const rest = lines
+    .filter((line) => !named.includes(line))
+    .sort((a, b) => gain(b) - gain(a))
+
+  return [...named, ...rest].slice(0, featuredNames.length)
 }
 
 /**
- * One line of live value per Home directory row, each deferred and independent, so no read
- * delays the clock or the controls. `null` means the value could not be read, never "empty".
+ * Home's live values, each deferred and independent, so no read delays the clock or the
+ * controls. `null` means the value could not be read, never "empty".
  */
 export type Glance = {
-  readonly wishlist: Promise<WishlistGlance | null>
-  readonly watchlist: Promise<WatchlistGlance | null>
-  readonly workout: Promise<WorkoutGlance | null>
-  readonly photos: Promise<PhotosGlance | null>
-  readonly travel: Promise<TravelGlance | null>
+  readonly progress: Promise<ProgressGlance | null>
+  readonly recovery: Promise<RecoveryDay | null>
 }
 
-const day = 86_400_000
-
-export function loadGlance(now: Date): Glance {
+export function loadGlance(): Glance {
   return {
-    wishlist: loadWishlists()
-      .then((read) =>
-        read.state === "available"
-          ? {
-              wishes: read.items.length,
-              lists: read.lists.length,
-              people: read.owners.length,
-            }
-          : null
-      )
-      .catch(() => null),
-    watchlist: loadWatchlists()
+    progress: getProgress({ data: { period: "4w" } })
       .then((read) => {
         if (read.state !== "available") return null
 
-        const open = read.entries.filter(
-          (entry) => entry.status !== "completed"
+        const lines = read.progress.exercises.filter(
+          (line): line is ChartedLine =>
+            line.status === "charted" && line.samples.length > 1
         )
 
-        const watching = open.filter((entry) => entry.status === "watching")
-
-        const upcoming = [
-          ...watching,
-          ...open.filter((entry) => entry.status !== "watching"),
-        ]
+        const featured = feature(lines)
 
         return {
-          planned: open.length - watching.length,
-          watching: watching.length,
-          next: upcoming[0]?.title ?? null,
-          posters: upcoming.slice(0, 3).map((entry) => ({
-            id: entry.id,
-            title: entry.title,
-            hue: titleHue(entry.title),
-            poster: entry.poster_path,
-          })),
+          from: read.progress.from,
+          to: read.progress.to,
+          featured,
+          others: lines
+            .filter((line) => !featured.includes(line))
+            .slice(0, quietLines),
         }
       })
       .catch(() => null),
-    workout: loadWorkouts({})
-      .then((read) => {
-        if (read.state !== "available") return null
-
-        const weeks = Array.from({ length: 8 }, () => 0)
-
-        for (const workout of read.history) {
-          const age = Math.floor(
-            (now.getTime() - Date.parse(`${workout.date}T12:00:00Z`)) / day
-          )
-
-          const week = 7 - Math.floor(age / 7)
-
-          if (week >= 0 && week < 8) weeks[week] = (weeks[week] ?? 0) + 1
-        }
-
-        return { last: read.history[0]?.date ?? null, weeks }
-      })
-      .catch(() => null),
-    photos: getGallery({ data: {} })
-      .then(({ albums }) =>
-        albums.state === "ready"
-          ? {
-              photos: albums.albums.reduce(
-                (sum, album) => sum + album.photo_count,
-                0
-              ),
-              covers: albums.albums.flatMap((album) =>
-                album.cover_id === null || album.missing
-                  ? []
-                  : [{ album: album.id, asset: album.cover_id }]
-              ),
-            }
-          : null
-      )
-      .catch(() => null),
-    travel: loadActiveRoute()
-      .then((read) => {
-        if (read.state === "unavailable") return null
-
-        if (read.state === "none") return { path: null, meters: null }
-
-        return {
-          path: outline(read.route.geometry.coordinates),
-          meters: read.route.distance_meters,
-        }
-      })
+    recovery: getRecoveryToday()
+      .then((read) => (read.state === "available" ? read.data : null))
       .catch(() => null),
   }
-}
-
-/**
- * A route's outline fitted into a 0..100 box, longitude scaled by latitude so the loop keeps
- * its outline. Only the outline leaves the server's map; no coordinate is drawn.
- */
-function outline(coordinates: readonly (readonly [number, number])[]): string {
-  const middle =
-    coordinates.reduce((sum, [, latitude]) => sum + latitude, 0) /
-    coordinates.length
-
-  const scale = Math.cos((middle * Math.PI) / 180)
-  const xs = coordinates.map(([longitude]) => longitude * scale)
-  const ys = coordinates.map(([, latitude]) => -latitude)
-  const left = Math.min(...xs)
-  const top = Math.min(...ys)
-  const span = Math.max(Math.max(...xs) - left, Math.max(...ys) - top) || 1
-  const offsetX = (100 - ((Math.max(...xs) - left) / span) * 100) / 2
-  const offsetY = (100 - ((Math.max(...ys) - top) / span) * 100) / 2
-
-  return coordinates
-    .map(
-      (_, index) =>
-        `${index === 0 ? "M" : "L"}${(offsetX + (((xs[index] ?? 0) - left) / span) * 100).toFixed(1)},${(offsetY + (((ys[index] ?? 0) - top) / span) * 100).toFixed(1)}`
-    )
-    .join(" ")
 }

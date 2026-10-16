@@ -1,13 +1,13 @@
 import { useMinute } from "@/lib/use-minute"
 
-export const timeFormat = new Intl.DateTimeFormat("da-DK", {
+export const timeFormat = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
   timeZone: "Europe/Copenhagen",
 })
 
-const dateFormat = new Intl.DateTimeFormat("da-DK", {
+const dateFormat = new Intl.DateTimeFormat("en-GB", {
   weekday: "long",
   day: "numeric",
   month: "long",
@@ -15,7 +15,7 @@ const dateFormat = new Intl.DateTimeFormat("da-DK", {
   timeZone: "Europe/Copenhagen",
 })
 
-const shortDate = new Intl.DateTimeFormat("da-DK", {
+const shortDate = new Intl.DateTimeFormat("en-GB", {
   weekday: "long",
   day: "numeric",
   month: "long",
@@ -34,14 +34,11 @@ export function LiveClock({ initialTime }: LiveClockProps): React.JSX.Element {
         className="clock-time"
         dateTime={now.toISOString()}
         aria-label="Current time"
-        lang="da"
       >
         {timeFormat.format(now)}
       </time>
-      <p className="clock-date" lang="da">
-        <span aria-hidden="true">
-          {shortDate.format(now).replace(" den ", " ")}
-        </span>
+      <p className="clock-date">
+        <span aria-hidden="true">{shortDate.format(now)}</span>
         <span className="sr-only">{dateFormat.format(now)}</span>
       </p>
       <p className="sr-only">Copenhagen time</p>

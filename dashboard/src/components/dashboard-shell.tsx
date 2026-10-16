@@ -74,7 +74,7 @@ function TopbarClock(): React.JSX.Element {
   const { now } = useDaylight()
 
   return (
-    <time className="topbar-clock" dateTime={now.toISOString()} lang="da">
+    <time className="topbar-clock" dateTime={now.toISOString()}>
       {timeFormat.format(now)}
     </time>
   )

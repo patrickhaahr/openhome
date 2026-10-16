@@ -1,5 +1,3 @@
-import { Link } from "@tanstack/react-router"
-import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb"
 import { LightbulbFilamentIcon } from "@phosphor-icons/react/dist/csr/LightbulbFilament"
 import { CheckAgainButton } from "@/components/check-again-button"
@@ -23,7 +21,7 @@ import { useSingleCommand } from "@/lib/use-single-command"
 
 type LightControlsProps = {
   connectionState: ConnectionState
-  /** Only Home links to the focused Controls view. */
+  /** Home's plate or the focused Controls panel. */
   layout: ControlLayout
   sendCommand: (options: {
     data: LightCommand
@@ -92,13 +90,13 @@ export function LightControls({
 
   return (
     <div
-      className={quick ? "dir-row control-row" : "panel"}
+      className={quick ? "plate" : "panel"}
       data-device="lights"
       role="group"
       aria-labelledby="lights-heading"
     >
-      <div className={quick ? "control-row-name" : "panel-head"}>
-        <h2 id="lights-heading" className={quick ? "dir-name" : "panel-title"}>
+      <div className={quick ? "plate-head" : "panel-head"}>
+        <h2 id="lights-heading" className={quick ? "sr-only" : "panel-title"}>
           Lights
         </h2>
         {failure === undefined ? null : (
@@ -106,7 +104,7 @@ export function LightControls({
         )}
       </div>
       <div
-        className={quick ? "control-row-actions" : "panel-keys"}
+        className={quick ? "plate-keys" : "panel-keys"}
         role="group"
         aria-label="Light commands"
         aria-busy={pending}
@@ -118,7 +116,7 @@ export function LightControls({
         {keys.map(({ command, label, Icon }) => (
           <Button
             key={command}
-            size={quick ? "key-icon" : "key-hero"}
+            size={quick ? "key-round" : "key-hero"}
             variant={command === "on" ? "default" : "outline"}
             disabled={disabled}
             data-command={command}
@@ -127,7 +125,7 @@ export function LightControls({
             onClick={() => void send(command)}
           >
             <Icon
-              size={quick ? 22 : 40}
+              size={quick ? 28 : 40}
               weight={command === "on" ? "fill" : "regular"}
               aria-hidden="true"
             />
@@ -135,12 +133,6 @@ export function LightControls({
           </Button>
         ))}
       </div>
-      {quick ? (
-        <Link to="/controls" className="dir-go" title="All controls">
-          <ArrowUpRightIcon size={18} aria-hidden="true" />
-          <span className="sr-only">All controls</span>
-        </Link>
-      ) : null}
       <div className="sr-only">
         <p>
           Observed state <span>Unknown</span>

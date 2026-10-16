@@ -28,6 +28,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
     "volume-down": MinusIcon,
     "volume-up": PlusIcon,
   },
+  plateIcons: {},
+  plateIdentity: true,
   // Inputs are named on the full remote; a waveform alone does not say "optical".
   worded: ["bluetooth", "optical"],
   // Choosing the input and adjusting volume are the everyday speaker actions.
@@ -35,7 +37,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
     {
       label: "Common speaker commands",
       kind: "quick",
-      commands: ["bluetooth", "optical", "volume-down", "volume-up"],
+      // Volume up sits above volume down in Home's vertical plate.
+      commands: ["bluetooth", "optical", "volume-up", "volume-down"],
     },
   ],
   // Three stacked buttons per row fit the speaker's narrow column on Controls.

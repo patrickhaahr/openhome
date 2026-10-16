@@ -210,7 +210,7 @@ export function ThemeToggle(): React.JSX.Element {
   )
 }
 
-const sunTime = new Intl.DateTimeFormat("da-DK", {
+const sunTime = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
