@@ -173,3 +173,33 @@ Public screenshots and fixtures must use anonymous synthetic data. The shell
 implements #91; its browser evidence and outstanding physical checks are in
 [the shell verification record](docs/home-frame/README.md). Feature integrations
 and the release tracked by issues #70 and #69 remain incomplete.
+
+## Synthetic preview for UI work
+
+Design work never uses the real household API. Run:
+
+```sh
+just dashboard-synthetic
+```
+
+It builds and starts a synthetic Axum API (`api/examples/dashboard_preview`, on
+`127.0.0.1:3101`, override with `OPENHOME_PREVIEW_API_PORT`) and the dashboard
+dev server on <http://localhost:3001/>, wired to it with a synthetic key. Ctrl-C
+stops both. `just dashboard-synthetic-api` runs the API alone.
+
+The API runs the production routes, migrations and authentication over
+in-memory databases, so responses always match the real contract. Loopback
+stand-ins replace every upstream: openrouteservice, TMDB, Open-Meteo (central
+Copenhagen demo location), Immich (generated landscapes, no photographs), the IR
+bridge (full TV and speaker command sets) and the SwitchBot bridge. Every page
+renders populated: about 40 days of recovery, sleep stages, journal, naps and NOOP
+workouts with heart rate ending today, five weeks of logged workouts, body
+weight, Wishlists and the Watchlist. Dates are generated relative to today.
+
+The invented values live in `api/examples/dashboard_preview/seed/*.json`
+(`training`, `workouts`, `body`, `household`, `weather`, `photos`, `controls`);
+edit them and restart. Sleep stage segments are generated in 90-minute cycles
+in `noop.rs`, and daily totals are computed from them.
+
+**Screenshots for pull requests and public evidence must come from this
+synthetic preview**, never from the household API.
