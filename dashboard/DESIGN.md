@@ -79,8 +79,14 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   under 20 % are quiet (sr-only) so rain stands out.
 - **Provenance as marks.** Training sync shows a freshness ring (filled sun when confirmed)
   and one chip per stream (filled dot when covered); the full sentence is sr-only.
-- **Refresh lives top right** as a round key on every data page (Weather, Photos, Wishlist,
-  Watchlist, Profile & weight).
+- **Refresh lives top right** as a round key on every data page (Photos, Wishlist,
+  Watchlist, Profile & weight). Weather has none: it refreshes itself on the forecast's
+  validity, and a stale read shows a rewind mark beside the current figures.
+- **Weather is one screen**: the figures on the left (now, then the week as rows whose ranges
+  share one scale), and the next 24 hours as a horizon on the right: the temperature line,
+  rain as columns beneath it, the nights as darker ground from the same sun model that turns
+  the theme, and the sun on the line at this minute. Every hourly value stays in a table
+  for assistive technology.
 - **Tap targets are at least 44 px** (key-icon 48 px, key-round 64 px, key-hero 96 px);
   inline attribution links are the only exception.
 - **Connection** is one word in display type beside a signal disc that pulses once (and
