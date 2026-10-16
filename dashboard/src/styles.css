@@ -2983,46 +2983,64 @@ a.dir-go:hover {
   margin-left: 0.04em;
 }
 
-/* ---------- Controls: the lights and the speaker beside the TV, drawn as a real remote ---------- */
+/* ---------- Controls: three plates filling the screen, keys on paper inside them ---------- */
 
-.controls-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
-  gap: clamp(2rem, 4vw, 4rem) clamp(2rem, 5vw, 5rem);
-  align-items: start;
+.page:has(> .controls) {
+  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
 }
-.controls-stack {
+.controls {
   display: grid;
-  gap: clamp(2rem, 6vh, 3.5rem);
+  grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr) minmax(12rem, 15rem);
+  gap: clamp(1rem, 2vw, 1.5rem);
+  min-height: max(
+    calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem)),
+    32rem
+  );
 }
 .panel {
   position: relative;
-  display: grid;
-  justify-items: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 1.25rem;
+  min-width: 0;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border-radius: 2rem;
+  background: var(--wash);
 }
 .panel-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
-.panel-title {
-  font-size: var(--t-l);
-  font-weight: 500;
-  line-height: 0.95;
-  letter-spacing: -0.05em;
+.panel-identity {
+  color: var(--muted-ink);
 }
 .panel-keys {
   justify-content: flex-start;
   gap: 1rem;
 }
 .panel-recovery {
-  justify-content: flex-start;
+  justify-content: center;
+}
+/* Keys sit on the paper inside the plate's tone; the hand still floods them with ink. */
+.panel
+  [data-slot="button"].bg-secondary:not(
+    :hover,
+    :disabled,
+    [data-command="ok"]
+  ) {
+  background: var(--ground);
 }
 .panel .remote-groups {
-  display: grid;
-  gap: 1rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 1.25rem;
+  width: 100%;
 }
 .remote-buttons {
   display: flex;
@@ -3033,17 +3051,61 @@ a.dir-go:hover {
   width: 1.5rem;
   height: 1.5rem;
 }
-.panel-keys [data-slot="button"] svg {
-  width: 2.5rem;
-  height: 2.5rem;
+
+/* Lights: a wall switch. One plate, the lit bulb on the upper half, the dark one below. */
+[data-device="lights"] {
+  padding: 0.5rem;
+  border-radius: 999px;
 }
-/* Lights: a lit bulb on ink, a dark bulb on the ground's tone. */
+[data-device="lights"] .panel-head:not(:has(.control-alert)) {
+  display: contents;
+}
+[data-device="lights"] .panel-keys {
+  flex: 1;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 0.5rem;
+}
+[data-device="lights"] .panel-keys [data-slot="button"] {
+  flex: 1;
+  width: 100%;
+  height: auto;
+}
+[data-device="lights"] .panel-keys [data-command="on"] {
+  border-radius: 999px 999px 1.25rem 1.25rem;
+}
+[data-device="lights"] .panel-keys [data-command="off"] {
+  border-radius: 1.25rem 1.25rem 999px 999px;
+}
+.panel-keys [data-slot="button"] svg {
+  width: 3rem;
+  height: 3rem;
+}
 [data-device="lights"] .panel-keys [data-command="on"] svg {
   color: var(--sun);
+}
+
+/* The speaker: power over the two inputs, then the volume rocker. */
+[data-remote="speaker"] .remote-group {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 .remote-buttons[data-kind="trio"] {
   display: flex;
   gap: 0.625rem;
+}
+[data-remote="speaker"] .remote-buttons[data-kind="trio"] {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.75rem;
+}
+[data-remote="speaker"]
+  .remote-buttons[data-kind="trio"]
+  [data-command="power"] {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-bottom: 0.5rem;
 }
 /* Rockers: a pill-shaped track with the keys stacked inside, like a remote's volume rocker. */
 .remote-buttons[data-kind="rocker"] {
@@ -3052,7 +3114,7 @@ a.dir-go:hover {
   gap: 0.25rem;
   padding: 0.25rem;
   border-radius: 999px;
-  background: var(--wash);
+  background: var(--ground);
 }
 .remote-buttons[data-kind="rocker"] [data-slot="button"] {
   width: 3.5rem;
@@ -3088,7 +3150,7 @@ a.dir-go:hover {
   width: max-content;
   padding: 0.5rem;
   border-radius: 50%;
-  background: var(--wash);
+  background: var(--ground);
 }
 .remote-buttons[data-kind="dpad"] [data-slot="button"] {
   width: 3.75rem;
@@ -3120,16 +3182,48 @@ a.dir-go:hover {
 .remote-buttons[data-kind="dpad"] [data-command="down"] {
   grid-area: 3 / 2;
 }
-/* The TV remote: inputs across the top, the d-pad beside two rockers, menus and numbers below. */
+/* The TV remote: inputs across the top, the d-pad centred between volume (left) and
+   channels (right), then the menus over the numbers. Both lower rows share one width and one
+   key size, so their edges line up. */
+[data-remote="tv"] {
+  --tv-key: 3.25rem;
+  --tv-gap: 0.5rem;
+  --tv-row: calc(6 * var(--tv-key) + 5 * var(--tv-gap));
+
+  padding-block: 1rem;
+}
+/* The glyph stays level with the speaker's despite the tighter plate. */
+[data-remote="tv"] .panel-identity {
+  margin-top: 0.5rem;
+}
+[data-remote="tv"] .remote-buttons[data-kind="dpad"] {
+  grid-template-columns: repeat(3, 3.5rem);
+  grid-template-rows: repeat(3, 3.5rem);
+}
+[data-remote="tv"] .remote-buttons[data-kind="dpad"] [data-slot="button"] {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+[data-remote="tv"] .remote-buttons[data-kind="dpad"] [data-command="ok"] {
+  width: 4.25rem;
+  height: 4.25rem;
+}
 [data-remote="tv"] .remote-groups {
-  grid-template-columns: auto auto auto minmax(0, 1fr);
+  display: grid;
+  grid-template-columns: auto auto auto;
   grid-template-areas:
-    "power power power power"
-    "nav vol ch num"
-    "menus menus menus menus";
-  column-gap: 1.25rem;
-  row-gap: 1.25rem;
+    "power power power"
+    "vol nav ch"
+    "menus menus menus"
+    "num num num";
+  justify-content: center;
+  align-content: space-evenly;
+  column-gap: clamp(1rem, 2.5vw, 2rem);
+  row-gap: 0.75rem;
   align-items: center;
+}
+[data-remote="tv"] .remote-group {
+  justify-self: center;
 }
 [data-remote="tv"] .remote-group[aria-label="Power and input"] {
   grid-area: power;
@@ -3146,40 +3240,36 @@ a.dir-go:hover {
 [data-remote="tv"] .remote-group[aria-label="Menus"] {
   grid-area: menus;
 }
+/* Both rockers run the d-pad's full height, their keys spread from end to end. */
+[data-remote="tv"]
+  .remote-group:is([aria-label="Volume"], [aria-label="Channels"]) {
+  display: flex;
+  align-self: stretch;
+}
+[data-remote="tv"] .remote-buttons[data-kind="rocker"] {
+  justify-content: space-between;
+}
 [data-remote="tv"] .remote-group[aria-label="Numbers"] {
   grid-area: num;
-  justify-self: end;
+}
+[data-remote="tv"] .remote-buttons[data-kind="row"] {
+  justify-content: center;
+  gap: var(--tv-gap);
+}
+[data-remote="tv"] .remote-group[aria-label="Menus"] .remote-buttons {
+  width: var(--tv-row);
+  justify-content: space-between;
+}
+[data-remote="tv"] .remote-buttons[data-kind="row"] [data-icon-only="true"],
+[data-remote="tv"] .remote-buttons[data-kind="keypad"] [data-slot="button"] {
+  width: var(--tv-key);
+  height: var(--tv-key);
 }
 [data-remote="tv"] .remote-buttons[data-kind="keypad"] {
-  grid-template-columns: repeat(3, 3.25rem);
-}
-[data-remote="tv"] .remote-buttons[data-kind="keypad"] [data-slot="button"] {
-  width: 3.25rem;
-  height: 3.25rem;
-}
-/* Zero sits under the eight, as on a phone keypad. */
-[data-remote="tv"] .remote-buttons[data-kind="keypad"] [data-command="0"] {
-  grid-column: 2;
-}
-
-@media (max-width: 1100px) {
-  [data-remote="tv"] .remote-groups {
-    grid-template-columns: auto auto auto;
-    grid-template-areas:
-      "power power power"
-      "nav vol ch"
-      "menus menus menus"
-      "num num num";
-  }
-  [data-remote="tv"] .remote-group[aria-label="Numbers"] {
-    justify-self: start;
-  }
-  [data-remote="tv"] .remote-buttons[data-kind="keypad"] {
-    grid-template-columns: repeat(5, 3.25rem);
-  }
-  [data-remote="tv"] .remote-buttons[data-kind="keypad"] [data-command="0"] {
-    grid-column: auto;
-  }
+  grid-template-columns: repeat(5, var(--tv-key));
+  justify-content: space-between;
+  gap: var(--tv-gap);
+  width: var(--tv-row);
 }
 
 /* ---------- Weather: the figure, the day as a shape, the week as bars. Words stay for AT. ---------- */
@@ -3696,8 +3786,22 @@ a.dir-go:hover {
 }
 
 @media (max-width: 900px) {
-  .controls-grid {
-    grid-template-columns: minmax(0, 1fr);
+  /* Portrait: the switch beside the speaker, the TV remote across the width beneath. */
+  .controls {
+    grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr);
+    grid-template-areas:
+      "lights speaker"
+      "tv tv";
+    min-height: 0;
+  }
+  .controls > [data-device="lights"] {
+    grid-area: lights;
+  }
+  .controls > [data-remote="tv"] {
+    grid-area: tv;
+  }
+  .controls > [data-remote="speaker"] {
+    grid-area: speaker;
   }
   .link-page {
     grid-template-columns: minmax(0, 1fr);
@@ -3706,20 +3810,52 @@ a.dir-go:hover {
   }
 }
 @media (max-width: 640px) {
-  [data-remote="tv"] .remote-groups {
-    grid-template-columns: auto auto;
+  /* Phone: one column, the switch lies on its side. */
+  .controls {
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "power power"
-      "nav vol"
-      "menus menus"
-      "num ch";
-    justify-content: start;
+      "lights"
+      "tv"
+      "speaker";
   }
-  [data-remote="tv"] .remote-buttons[data-kind="keypad"] {
+  [data-device="lights"] {
+    border-radius: 2rem;
+  }
+  [data-device="lights"] .panel-keys {
+    flex: none;
+    flex-direction: row;
+    align-items: stretch;
+    height: 7rem;
+  }
+  [data-device="lights"] .panel-keys [data-command="on"] {
+    border-radius: 999px 1.25rem 1.25rem 999px;
+  }
+  [data-device="lights"] .panel-keys [data-command="off"] {
+    border-radius: 1.25rem 999px 999px 1.25rem;
+  }
+  /* A narrower remote: the same layout with smaller keys, still 44px or more. */
+  [data-remote="tv"] {
+    --tv-key: 2.75rem;
+    --tv-gap: 0.375rem;
+  }
+  [data-remote="tv"] .remote-groups {
+    column-gap: 0.625rem;
+  }
+  [data-remote="tv"] .remote-buttons[data-kind="dpad"] {
     grid-template-columns: repeat(3, 3.25rem);
+    grid-template-rows: repeat(3, 3.25rem);
   }
-  [data-remote="tv"] .remote-buttons[data-kind="keypad"] [data-command="0"] {
-    grid-column: 2;
+  [data-remote="tv"] .remote-buttons[data-kind="dpad"] [data-slot="button"] {
+    width: 3rem;
+    height: 3rem;
+  }
+  [data-remote="tv"] .remote-buttons[data-kind="dpad"] [data-command="ok"] {
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+  [data-remote="tv"] .remote-buttons[data-kind="rocker"] [data-slot="button"] {
+    width: 3rem;
+    height: 3rem;
   }
 }
 
