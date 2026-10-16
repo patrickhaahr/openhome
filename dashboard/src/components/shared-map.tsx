@@ -9,6 +9,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"
 import { CrosshairSimpleIcon } from "@phosphor-icons/react/dist/csr/CrosshairSimple"
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
+import { RasterMap } from "@/components/raster-map"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { MapLine, MapOrigin, MapRoutes } from "@/lib/map"
@@ -105,6 +106,18 @@ function presentation(mode: Perspective["mode"]): {
     : { pitch: 0, buildings: "none" }
 }
 
+/**
+ * Whether MapLibre can render here. The probe's context is released at once;
+ * GPUs limited to OpenGL ES 2.0, like the photo frame's Mali-400, offer none.
+ */
+function supportsWebGL2(): boolean {
+  const context = document.createElement("canvas").getContext("webgl2")
+
+  context?.getExtension("WEBGL_lose_context")?.loseContext()
+
+  return context !== null
+}
+
 function prefersReducedMotion(): boolean {
   return matchMedia("(prefers-reduced-motion: reduce)").matches
 }
@@ -153,7 +166,8 @@ function routeBounds(lines: ReadonlyArray<MapLine>): LngLatBoundsLike {
  * Supplied routes are drawn above the buildings, the focused one highlighted,
  * and fitted into view once per set of alternatives.
  * MapLibre loads only after mount and is removed on unmount, releasing its
- * WebGL context when the view closes.
+ * WebGL context when the view closes. Browsers without WebGL2 get the flat
+ * image-tile `RasterMap` instead.
  */
 export function SharedMap({
   origin,
@@ -170,6 +184,8 @@ export function SharedMap({
   const [view, setView] = useState<MapView>({ state: "loading" })
   const [attempt, setAttempt] = useState(0)
   const [visible, setVisible] = useState(true)
+  // Without WebGL2 the image-tile map stands in, and MapLibre is never loaded.
+  const [renderer, setRenderer] = useState<"vector" | "raster">("vector")
 
   const [perspective, setPerspective] = useState<Perspective>({
     mode: "2d",
@@ -207,6 +223,13 @@ export function SharedMap({
     const element = container.current
 
     if (element === null || !visible || document.hidden) return
+
+    if (!supportsWebGL2()) {
+      // eslint-disable-next-line react/set-state-in-effect -- WebGL2 can only be probed in the browser after hydration; SSR has no canvas.
+      setRenderer("raster")
+
+      return
+    }
 
     setView({ state: "loading" })
     // A recreated map measures its own buildings; never show the last map's notice.
@@ -513,6 +536,16 @@ export function SharedMap({
       duration: prefersReducedMotion() ? 0 : 400,
     })
   }
+
+  if (renderer === "raster")
+    return (
+      <RasterMap
+        origin={origin}
+        routes={routes}
+        palette={mapThemes[theme]}
+        shade={theme}
+      />
+    )
 
   return (
     <div className="shared-map" data-map-state={view.state}>

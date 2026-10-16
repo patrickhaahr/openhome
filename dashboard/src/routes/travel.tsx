@@ -21,6 +21,7 @@ import {
 } from "@/lib/route-loop.functions"
 
 import mapCss from "maplibre-gl/dist/maplibre-gl.css?url"
+import rasterMapCss from "leaflet/dist/leaflet.css?url"
 
 const travel = features[2] satisfies { id: "travel" }
 
@@ -28,7 +29,10 @@ const travel = features[2] satisfies { id: "travel" }
 export const Route = createFileRoute("/travel")({
   head: () => ({
     meta: [{ title: `${travel.title} · OpenHome` }],
-    links: [{ rel: "stylesheet", href: mapCss }],
+    links: [
+      { rel: "stylesheet", href: mapCss },
+      { rel: "stylesheet", href: rasterMapCss },
+    ],
   }),
   loader: async () => {
     const [map, active] = await Promise.all([
