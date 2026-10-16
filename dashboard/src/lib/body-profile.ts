@@ -73,13 +73,13 @@ export const bodyFailureMessage: Record<BodyFailure, string> = {
   "invalid-configuration": "Check the private OpenHome setup in Connection.",
   "rejected-credential": "OpenHome rejected the API key. Check Connection.",
   unreachable:
-    "The response was lost. Refresh to check whether the change saved before trying again.",
+    "The response was lost. Reload to check whether the change saved before trying again.",
   unavailable:
-    "OpenHome could not confirm the result. Refresh before trying again.",
+    "OpenHome could not confirm the result. Reload before trying again.",
   invalid:
     "OpenHome rejected the values. Check the date, positive height or weight, and a whole maximum heart rate from 100 to 240 bpm.",
   "duplicate-date":
-    "Body weight is already recorded for this date. Refresh history to review it, or choose another date. The existing record has not been replaced.",
+    "Body weight is already recorded for this date. Reload to review it, or choose another date. The existing record has not been replaced.",
 }
 
 /** Editable Profile fields, preserving exact stored number text. */

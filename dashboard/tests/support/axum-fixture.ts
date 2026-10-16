@@ -10,7 +10,9 @@ export async function startAxumFixture(): Promise<{
   const child = spawn(
     resolve("../api/target/debug/examples/dashboard_health"),
     [],
-    { stdio: ["ignore", "pipe", "pipe"] }
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+    }
   )
 
   async function stop(): Promise<void> {

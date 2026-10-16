@@ -8,7 +8,6 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import { TrainingSummaries } from "@/components/training-summaries"
 import { trainingSearch, type TrainingSearch } from "@/lib/training"
 import { readRecoveryDays, readTraining } from "@/lib/training.server"
-import { writeWorkout } from "@/lib/workout.server"
 import { writeBodyProfile } from "@/lib/body-profile.server"
 import { startAxumFixture } from "./support/axum-fixture"
 
@@ -122,31 +121,37 @@ async function closeDetail(): Promise<void> {
 }
 
 test("draws the selected day as rings, a week of days, its night and body, and its own sessions", async () => {
-  const stored = await writeWorkout({
-    kind: "create",
-    date: "2026-09-30",
-    name: "Synthetic pull",
-    notes: null,
-    exercises: [
-      {
-        exercise_id: 11,
-        order_index: 0,
-        notes: null,
-        sets: [
-          {
-            set_number: 1,
-            reps: 5,
-            weight_kg: null,
-            duration_seconds: null,
-            rpe: 8,
-            notes: null,
-          },
-        ],
-      },
-    ],
+  const stored = await fetch(`${fixture.url}/api/workouts`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer synthetic-dashboard-api-key",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      date: "2026-09-30",
+      name: "Synthetic pull",
+      notes: null,
+      exercises: [
+        {
+          exercise_id: 11,
+          order_index: 0,
+          notes: null,
+          sets: [
+            {
+              set_number: 1,
+              reps: 5,
+              weight_kg: null,
+              duration_seconds: null,
+              rpe: 8,
+              notes: null,
+            },
+          ],
+        },
+      ],
+    }),
   })
 
-  expect(stored.state).toBe("saved")
+  expect(stored.status).toBe(201)
   await render()
 
   expect(ring("Charge")).toBe("Charge: 78 % recovery")
@@ -386,7 +391,10 @@ test("a missing or rejected detail and a failed context leave independent recove
 
   expect(
     trainingSearch.parse({ day: "2026-02-30", noop: { source: "my-whoop" } })
-  ).toEqual({ day: undefined, noop: undefined })
+  ).toEqual({
+    day: undefined,
+    noop: undefined,
+  })
 })
 
 test("closing a detail restores its session button, falling back to the selected day when it is gone", async () => {

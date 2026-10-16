@@ -1,5 +1,5 @@
 import { z } from "zod"
-import type { Exercise, WorkoutFailure } from "./workout"
+import type { WorkoutFailure } from "./workout"
 
 const id = z.number().int()
 
@@ -89,13 +89,33 @@ export const combinedProgress = z.object({
 /** A complete combined progress read. */
 export type CombinedProgress = z.infer<typeof combinedProgress>
 
+/**
+ * Order lines from the exercise trained most recently to the one trained longest ago.
+ *
+ * A line's recency is its last observed day; lines without one follow, and ties go alphabetically.
+ *
+ * @param lines - The requested lines in any order.
+ * @returns A new array, newest session first.
+ */
+export function byLatestTrained(
+  lines: ReadonlyArray<ProgressLine>
+): ProgressLine[] {
+  const latest = (line: ProgressLine): string =>
+    line.status === "charted" ? (line.samples.at(-1)?.date ?? "") : ""
+
+  return [...lines].sort(
+    (a, b) =>
+      latest(b).localeCompare(latest(a)) ||
+      a.exercise.name.localeCompare(b.exercise.name)
+  )
+}
+
 /** A complete chart read, or an outcome that must never look like an empty chart. */
 export type ProgressState =
   | {
       readonly state: "available"
       readonly period: ProgressPeriod
       readonly progress: CombinedProgress
-      readonly library: ReadonlyArray<Exercise>
       /** The explicitly compared Exercise ids still in the library; empty means most recent. */
       readonly compared: ReadonlyArray<number>
     }
@@ -107,13 +127,13 @@ export const progressFailureMessage: Record<WorkoutFailure, string> = {
     "Connect OpenHome in Connection before opening progress.",
   "invalid-configuration": "Check the private OpenHome setup in Connection.",
   "rejected-credential": "OpenHome rejected the API key. Check Connection.",
-  unreachable: "OpenHome is unreachable. Refresh when the connection returns.",
-  unavailable: "OpenHome could not read progress. Refresh to try again.",
+  unreachable: "OpenHome is unreachable. Reload when the connection returns.",
+  unavailable: "OpenHome could not read progress. Reload to try again.",
   invalid: "OpenHome rejected the progress request. Choose another period.",
   "missing-exercise":
-    "A compared exercise is no longer in the library. Refresh to update the chart.",
+    "A compared exercise is no longer in the library. Reload to update the chart.",
   "not-found":
-    "A compared exercise is no longer in the library. Refresh to update the chart.",
+    "A compared exercise is no longer in the library. Reload to update the chart.",
 }
 
 /** Why an Exercise has no line, in the household's words. */
@@ -212,8 +232,8 @@ export function periodBounds({
 
 /** Chart drawing area in SVG user units. */
 export const plot = {
-  width: 720,
-  height: 300,
+  width: 960,
+  height: 290,
   left: 48,
   right: 12,
   top: 12,
@@ -243,8 +263,11 @@ export function chartScale({
   from,
   to,
   lines,
+  size = plot,
 }: PeriodBounds & {
   readonly lines: ReadonlyArray<ChartedLine>
+  /** The drawn size in chart units; defaults to the nominal plot. */
+  readonly size?: { readonly width: number; readonly height: number }
 }): ChartScale {
   const indexes = lines.flatMap((line) =>
     line.samples.map((sample) => sample.index)
@@ -285,8 +308,8 @@ export function chartScale({
 
   const first = dayNumber(from)
   const span = Math.max(1, dayNumber(to) - first)
-  const width = plot.width - plot.left - plot.right
-  const height = plot.height - plot.top - plot.bottom
+  const width = size.width - plot.left - plot.right
+  const height = size.height - plot.top - plot.bottom
 
   return {
     x: (day) => plot.left + ((dayNumber(day) - first) / span) * width,

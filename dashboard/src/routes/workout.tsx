@@ -54,7 +54,6 @@ export const Route = createFileRoute("/workout")({
     view: search.view,
     from: search.from,
     to: search.to,
-    workout: search.workout,
     shown: search.shown,
     period: search.period,
     compare: search.compare,
@@ -90,32 +89,34 @@ function WorkoutPage(): React.JSX.Element {
   const mutate = useServerFn(mutateWorkout)
   const mutateBody = useServerFn(mutateBodyProfile)
 
+  const switcher = (
+    <nav className="view-tabs" aria-label="Workout views">
+      {views.map((view) => (
+        <Link
+          key={view.label}
+          to="/workout"
+          search={(previous) => ({ ...previous, view: view.view })}
+          activeOptions={{
+            exact: true,
+            includeSearch: true,
+            explicitUndefined: true,
+          }}
+          className="view-tab"
+          aria-current={data.view === (view.view ?? "log") ? "page" : undefined}
+        >
+          <view.Icon size={20} weight="bold" aria-hidden="true" />
+          {view.label}
+        </Link>
+      ))}
+    </nav>
+  )
+
   return (
     <section>
       <PageHead title="Workout" />
-      <nav className="view-tabs" aria-label="Workout views">
-        {views.map((view) => (
-          <Link
-            key={view.label}
-            to="/workout"
-            search={(previous) => ({ ...previous, view: view.view })}
-            activeOptions={{
-              exact: true,
-              includeSearch: true,
-              explicitUndefined: true,
-            }}
-            className="view-tab"
-            aria-current={
-              data.view === (view.view ?? "log") ? "page" : undefined
-            }
-          >
-            <view.Icon size={20} weight="bold" aria-hidden="true" />
-            {view.label}
-          </Link>
-        ))}
-      </nav>
       {data.view === "progress" ? (
         <ExerciseProgress
+          lead={switcher}
           data={data.data}
           choosePeriod={(period) =>
             navigate({
@@ -132,15 +133,15 @@ function WorkoutPage(): React.JSX.Element {
               resetScroll: false,
             })
           }
-          refresh={() => router.invalidate({ sync: true })}
         />
       ) : null}
       {data.view === "body" ? (
         <BodyProfile
+          lead={switcher}
           data={data.data}
           range={{ from: search.from, to: search.to }}
           change={(command) => mutateBody({ data: command })}
-          refresh={() => router.invalidate({ sync: true })}
+          reload={() => router.invalidate({ sync: true })}
           filter={async (range) => {
             if (range.from === search.from && range.to === search.to)
               await router.invalidate({ sync: true })
@@ -154,19 +155,10 @@ function WorkoutPage(): React.JSX.Element {
       ) : null}
       {data.view === "log" ? (
         <Workouts
+          lead={switcher}
           data={data.data}
           change={(command) => mutate({ data: command })}
-          open={async (workout) => {
-            // A changed selection reloads through loaderDeps; the same one needs a fresh read.
-            if (workout === search.workout)
-              await router.invalidate({ sync: true })
-            else
-              await navigate({
-                search: (previous) => ({ ...previous, workout }),
-                resetScroll: false,
-              })
-          }}
-          refresh={() => router.invalidate({ sync: true })}
+          reload={() => router.invalidate({ sync: true })}
           showOlder={() =>
             navigate({
               search: (previous) => ({

@@ -150,33 +150,35 @@ export function Hypnogram({
           </span>
         ))}
       </p>
-      <table className="sr-only">
-        <caption>
-          Sleep stages in order, asleep {clock.format(from)}, awake{" "}
-          {clock.format(to)}
-          {asleep === null ? "" : `, ${spokenDuration(asleep)} slept`}
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Stage</th>
-            <th scope="col">From</th>
-            <th scope="col">To</th>
-            <th scope="col">Length</th>
-          </tr>
-        </thead>
-        <tbody>
-          {segments.map((segment) => (
-            <tr key={segment.start}>
-              <th scope="row">{laneNames[segment.stage]}</th>
-              <td>{clock.format(segment.begin)}</td>
-              <td>{clock.format(segment.finish)}</td>
-              <td>
-                {spokenDuration((segment.finish - segment.begin) / 60_000)}
-              </td>
+      <div className="sr-only">
+        <table>
+          <caption>
+            Sleep stages in order, asleep {clock.format(from)}, awake{" "}
+            {clock.format(to)}
+            {asleep === null ? "" : `, ${spokenDuration(asleep)} slept`}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">From</th>
+              <th scope="col">To</th>
+              <th scope="col">Length</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {segments.map((segment) => (
+              <tr key={segment.start}>
+                <th scope="row">{laneNames[segment.stage]}</th>
+                <td>{clock.format(segment.begin)}</td>
+                <td>{clock.format(segment.finish)}</td>
+                <td>
+                  {spokenDuration((segment.finish - segment.begin) / 60_000)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   )
 }

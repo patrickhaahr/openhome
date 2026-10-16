@@ -806,6 +806,63 @@
    ]
   },
   {
+   "days_ago": 4,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 37.5,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 42.5,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 42.5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 14,
+       "rpe": 8
+      },
+      {
+       "reps": 13,
+       "rpe": 9
+      },
+      {
+       "reps": 11,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 25,
+       "rpe": 7
+      },
+      {
+       "reps": 20,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
    "days_ago": 3,
    "name": "Pull day",
    "notes": null,
@@ -858,63 +915,6 @@
       {
        "reps": 10,
        "weight_kg": 60.0,
-       "rpe": 8
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "days_ago": 1,
-   "name": "Push day",
-   "notes": null,
-   "exercises": [
-    {
-     "exercise": "Incline Chest Press Machine",
-     "sets": [
-      {
-       "reps": 10,
-       "weight_kg": 37.5,
-       "rpe": 6
-      },
-      {
-       "reps": 9,
-       "weight_kg": 42.5,
-       "rpe": 8
-      },
-      {
-       "reps": 7,
-       "weight_kg": 42.5,
-       "rpe": 9
-      }
-     ]
-    },
-    {
-     "exercise": "Dip",
-     "sets": [
-      {
-       "reps": 14,
-       "rpe": 8
-      },
-      {
-       "reps": 13,
-       "rpe": 9
-      },
-      {
-       "reps": 11,
-       "rpe": 9
-      }
-     ]
-    },
-    {
-     "exercise": "Push-up",
-     "sets": [
-      {
-       "reps": 25,
-       "rpe": 7
-      },
-      {
-       "reps": 20,
        "rpe": 8
       }
      ]

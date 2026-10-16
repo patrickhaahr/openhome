@@ -1,86 +1,70 @@
 import { useRef, useState } from "react"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
+import { Link } from "@tanstack/react-router"
+import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
+import { BicycleIcon } from "@phosphor-icons/react/dist/csr/Bicycle"
+import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
-import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
-import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack"
-import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { PersonSimpleRunIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleRun"
+import { PersonSimpleWalkIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleWalk"
 import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  HeartRateChart,
+  noopStats,
+  RouteMap,
+  StatList,
+  ZoneBar,
+} from "@/components/noop-detail"
+import { ScoreRing } from "@/components/score-ring"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { WorkoutEditor } from "@/components/workout-editor"
+import { formatWhole } from "@/lib/number-format"
 import { createRequestId } from "@/lib/request-id"
+import { ringShare, shortDuration } from "@/lib/recovery-score"
+import {
+  clockTime,
+  dayLabel,
+  sportKind,
+  type SportKind,
+} from "@/lib/session-format"
 import {
   describeSet,
   draftFromWorkout,
   setFigures,
-  trainingDayOn,
   workoutFailureMessage,
+  type LogSession,
+  type Strap,
   type WorkoutCommand,
   type WorkoutDetail,
   type WorkoutMutation,
   type WorkoutState,
 } from "@/lib/workout"
 
-const longDate = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-})
-
-const shortDate = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-})
-
-/** Training Days are calendar dates; formatting them at UTC midnight never shifts the day. */
-function formatDay(day: string, format: Intl.DateTimeFormat): string {
-  const date = new Date(`${day}T00:00:00Z`)
-
-  return Number.isNaN(date.getTime()) ? day : format.format(date)
-}
-
-function entryCount(count: number): string {
-  return `${count} ${count === 1 ? "exercise" : "exercises"}`
-}
-
-type Editing =
-  | { readonly kind: "create"; readonly today: string }
-  | { readonly kind: "replace"; readonly workoutId: number }
+type Editing = { readonly workoutId: number }
 
 type WorkoutsProps = {
   readonly data: WorkoutState
   readonly change: (command: WorkoutCommand) => Promise<WorkoutMutation>
-  /** Show a Workout (or the newest when undefined) from freshly read history. */
-  readonly open: (workoutId: number | undefined) => Promise<void>
-  /** Re-read the current view from Axum. */
-  readonly refresh: () => Promise<void>
+  /** Read the Log again from Axum. */
+  readonly reload: () => Promise<void>
   /** List another page of older Workouts. */
   readonly showOlder: () => Promise<void>
+  /** The view switcher, which sits at the start of the toolbar. */
+  readonly lead?: React.ReactNode
 }
 
-/** Logged Workout history and editing, kept apart from NOOP Workouts recorded by the strap. */
+/**
+ * The training Log: one plate per session, newest first. A logged Workout and the strap's
+ * recording of the same session share a plate; the rest stand alone.
+ */
 export function Workouts({
   data,
   change,
-  open,
-  refresh,
+  reload,
   showOlder,
+  lead,
 }: WorkoutsProps): React.JSX.Element {
   const [editing, setEditing] = useState<Editing>()
-  const [removal, setRemoval] = useState<WorkoutDetail>()
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const [feedback, setFeedback] = useState<{ failed: boolean; text: string }>()
@@ -125,14 +109,10 @@ export function Workouts({
 
       saved = true
       setEditing(undefined)
-      setRemoval(undefined)
-      await open(result.state === "saved" ? result.workoutId : undefined)
+      await reload()
       setFeedback({
         failed: false,
-        text:
-          result.state === "saved"
-            ? "Workout saved to OpenHome."
-            : "Workout removed from OpenHome.",
+        text: "Workout saved to OpenHome.",
       })
 
       return true
@@ -140,7 +120,7 @@ export function Workouts({
       setFeedback({
         failed: true,
         text: saved
-          ? "Saved to OpenHome, but the view could not refresh. Refresh history to see the change."
+          ? "Saved to OpenHome, but the log could not update. Reopen the page to see the change."
           : workoutFailureMessage.unreachable,
       })
 
@@ -151,105 +131,54 @@ export function Workouts({
     }
   }
 
-  const selected =
-    data.state === "available" && data.selected.state === "found"
-      ? data.selected.workout
-      : undefined
+  const workouts =
+    data.state === "available"
+      ? data.sessions.flatMap((session) =>
+          session.workout === undefined ? [] : [session.workout]
+        )
+      : []
 
   // An edit drafts from the freshly read Workout; once it is gone the editor closes.
   const active =
-    editing?.kind === "replace" && selected?.id !== editing.workoutId
+    editing !== undefined &&
+    !workouts.some((workout) => workout.id === editing.workoutId)
       ? undefined
       : editing
 
   // Failures belong beside the control that caused them, not above a long editor.
   const toolbarFeedback =
-    feedback?.failed === true && (active !== undefined || removal !== undefined)
-      ? undefined
-      : feedback
+    feedback?.failed === true && active !== undefined ? undefined : feedback
 
   function editorFor(current: Editing): React.JSX.Element | null {
     if (data.state !== "available") return null
 
-    const shared = {
-      exercises: data.exercises,
-      disabled: busy,
-      failure: feedback?.failed === true ? feedback.text : undefined,
-      cancel: () => {
-        setEditing(undefined)
-        setFeedback(undefined)
-      },
-    }
+    const workout = workouts.find((item) => item.id === current.workoutId)
 
-    switch (current.kind) {
-      case "create":
-        return (
-          <WorkoutEditor
-            {...shared}
-            key="new"
-            title="Log a workout"
-            submitLabel="Save workout"
-            initial={{ date: current.today, name: "", notes: "", entries: [] }}
-            save={(input) => save({ kind: "create", ...input })}
-          />
-        )
-      case "replace":
-        if (selected === undefined) return null
+    if (workout === undefined) return null
 
-        return (
-          <WorkoutEditor
-            {...shared}
-            key={selected.id}
-            title="Edit workout"
-            submitLabel="Save changes"
-            initial={draftFromWorkout(selected, createRequestId)}
-            save={(input) =>
-              save({
-                kind: "replace",
-                workout_id: selected.id,
-                ...input,
-              })
-            }
-          />
-        )
-    }
+    return (
+      <WorkoutEditor
+        key={workout.id}
+        exercises={data.exercises}
+        disabled={busy}
+        failure={feedback?.failed === true ? feedback.text : undefined}
+        cancel={() => {
+          setEditing(undefined)
+          setFeedback(undefined)
+        }}
+        title="Edit workout"
+        submitLabel="Save changes"
+        initial={draftFromWorkout(workout, createRequestId)}
+        save={(input) =>
+          save({ kind: "replace", workout_id: workout.id, ...input })
+        }
+      />
+    )
   }
 
   return (
-    <div className="workouts" aria-busy={busy}>
-      <div className="workout-toolbar">
-        <p className="sr-only">Logged in OpenHome</p>
-        <div className="workout-toolbar-actions">
-          <Button
-            variant="outline"
-            size="key-icon"
-            title="Refresh history"
-            data-spinning={busy}
-            disabled={busy || active !== undefined}
-            onClick={() => {
-              void run(async () => {
-                await refresh()
-                setFeedback({ failed: false, text: "History refreshed." })
-              }, "Could not refresh. Try again when OpenHome returns.")
-            }}
-          >
-            <ArrowClockwiseIcon size={20} aria-hidden="true" />
-            <span className="sr-only">Refresh history</span>
-          </Button>
-          {data.state === "available" ? (
-            <Button
-              disabled={busy || active !== undefined}
-              onClick={() => {
-                setFeedback(undefined)
-                setEditing({ kind: "create", today: trainingDayOn(new Date()) })
-              }}
-            >
-              <PlusIcon aria-hidden="true" />
-              Log workout
-            </Button>
-          ) : null}
-        </div>
-      </div>
+    <div className="log workouts" aria-busy={busy}>
+      <div className="view-bar">{lead}</div>
       <p
         className="workout-feedback"
         role="status"
@@ -265,56 +194,56 @@ export function Workouts({
           <CardContent>
             <p>
               {data.reason === "unreachable"
-                ? "OpenHome is unreachable. Refresh history when the connection returns."
+                ? "OpenHome is unreachable. Open the page again when the connection returns."
                 : workoutFailureMessage[data.reason]}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="workout-layout">
-          <aside className="workout-history" aria-label="Workout history">
-            <div className="sr-only">
-              <h2>History</h2>
-              <p>
-                Workouts logged here. NOOP strap workouts are separate records
-                and are never matched to them.
-              </p>
+        <>
+          <h2 className="sr-only">Sessions</h2>
+          {data.strap === "unavailable" ? (
+            <p className="workout-feedback" data-failed="true" role="status">
+              The strap is unreachable, so only logged workouts show.
+            </p>
+          ) : null}
+          {data.sessions.length === 0 ? (
+            <div className="workout-empty">
+              <BarbellIcon size={40} aria-hidden="true" />
+              <h2>Ready when you are.</h2>
+              <p>Workouts you log appear here with the strap's recording.</p>
             </div>
-            {data.history.length === 0 ? (
-              <p className="workout-muted">No workouts logged yet.</p>
-            ) : (
-              <ul>
-                {data.history.map((workout) => (
-                  <li key={workout.id}>
-                    <Button
-                      variant="ghost"
-                      aria-pressed={selected?.id === workout.id}
-                      disabled={busy || active !== undefined}
-                      onClick={() => {
-                        setFeedback(undefined)
-                        void run(
-                          () => open(workout.id),
-                          "Could not open that workout. Refresh history and try again."
-                        )
-                      }}
-                    >
-                      <span className="workout-history-day" aria-hidden="true">
-                        {Number(workout.date.slice(8, 10))}
-                      </span>
-                      <span className="workout-history-date">
-                        {formatDay(workout.date, shortDate)}
-                      </span>
-                      <span className="workout-history-name">
-                        {workout.name ?? "Workout"}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {data.hasOlder ? (
+          ) : (
+            <ol className="log-list" aria-label="Sessions, newest first">
+              {data.sessions.map((session) => (
+                <li key={session.key}>
+                  <Session
+                    session={session}
+                    disabled={busy}
+                    locked={active !== undefined}
+                    editor={
+                      active !== undefined &&
+                      active.workoutId === session.workout?.id
+                        ? editorFor(active)
+                        : undefined
+                    }
+                    edit={(workout) => {
+                      // Another device may have changed it since this page read it.
+                      void run(async () => {
+                        await reload()
+                        setEditing({ workoutId: workout.id })
+                      }, "Could not read the latest version of this workout. Try again when OpenHome returns.")
+                    }}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+          {data.hasOlder ? (
+            <div className="log-older">
               <Button
                 variant="outline"
+                size="lg"
                 disabled={busy || active !== undefined}
                 onClick={() => {
                   void run(
@@ -325,171 +254,193 @@ export function Workouts({
               >
                 Show older workouts
               </Button>
-            ) : null}
-          </aside>
-          <Card>
-            <CardContent>
-              {active === undefined ? (
-                <WorkoutView
-                  data={data}
-                  disabled={busy}
-                  edit={(workout) => {
-                    // Another device may have changed it since this page read it.
-                    void run(async () => {
-                      await open(workout.id)
-                      setEditing({ kind: "replace", workoutId: workout.id })
-                    }, "Could not read the latest version of this workout. Refresh history and try again.")
-                  }}
-                  remove={setRemoval}
-                />
-              ) : (
-                editorFor(active)
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      <AlertDialog
-        open={removal !== undefined}
-        onOpenChange={(next) => {
-          if (!next && !busy) setRemoval(undefined)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove this workout?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {removal === undefined
-                ? ""
-                : `Remove ${removal.name ?? "the workout"} from ${formatDay(removal.date, longDate)} with ${entryCount(removal.exercises.length)}? NOOP records are not affected. This cannot be undone.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {feedback?.failed === true ? (
-            <p role="alert" className="workout-feedback" data-failed="true">
-              {feedback.text}
-            </p>
+            </div>
           ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel size="lg" disabled={busy}>
-              Keep it
-            </AlertDialogCancel>
-            <Button
-              variant="destructive"
-              size="lg"
-              disabled={busy}
-              onClick={() => {
-                if (removal !== undefined)
-                  void save({ kind: "remove", workout_id: removal.id })
-              }}
-            >
-              Remove permanently
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        </>
+      )}
     </div>
   )
 }
 
-type WorkoutViewProps = {
-  readonly data: Extract<WorkoutState, { state: "available" }>
-  readonly disabled: boolean
-  readonly edit: (workout: WorkoutDetail) => void
-  readonly remove: (workout: WorkoutDetail) => void
+function SessionGlyph({
+  kind,
+}: {
+  readonly kind: SportKind | "logged"
+}): React.JSX.Element {
+  switch (kind) {
+    case "run":
+      return <PersonSimpleRunIcon size={28} aria-hidden="true" />
+    case "walk":
+      return <PersonSimpleWalkIcon size={28} aria-hidden="true" />
+    case "ride":
+      return <BicycleIcon size={28} aria-hidden="true" />
+    case "strength":
+    case "logged":
+      return <BarbellIcon size={28} aria-hidden="true" />
+    case "other":
+      return <HeartbeatIcon size={28} aria-hidden="true" />
+  }
 }
 
-function WorkoutView({
-  data,
-  disabled,
-  edit,
-  remove,
-}: WorkoutViewProps): React.JSX.Element {
-  switch (data.selected.state) {
-    case "none":
-      return (
-        <div className="workout-empty">
-          <BarbellIcon size={40} aria-hidden="true" />
-          <h2>Ready when you are.</h2>
-          <p>Log a workout to keep its exercises and sets here.</p>
-        </div>
-      )
-    case "missing":
-      return (
-        <div className="workout-empty">
-          <BarbellIcon size={40} aria-hidden="true" />
-          <h2>Workout not found</h2>
-          <p>{workoutFailureMessage["not-found"]}</p>
-        </div>
-      )
-    case "found":
-      break
-  }
+type SessionProps = {
+  readonly session: LogSession
+  readonly disabled: boolean
+  /** Another session is being edited; this one's actions wait. */
+  readonly locked: boolean
+  readonly editor: React.JSX.Element | null | undefined
+  readonly edit: (workout: WorkoutDetail) => void
+}
 
-  const workout = data.selected.workout
+/**
+ * One session on one plate. The header names it; beneath, the logged exercises and the strap's
+ * recording sit side by side in the same type, or the strap's map when it is a route.
+ */
+function Session({
+  session,
+  disabled,
+  locked,
+  editor,
+  edit,
+}: SessionProps): React.JSX.Element {
+  const { workout, strap } = session
+
+  const kind: SportKind | "logged" =
+    workout !== undefined || strap === undefined
+      ? "logged"
+      : sportKind(strap.summary.sport)
+
+  const title = workout?.name ?? strap?.summary.sport ?? "Workout"
+
+  const route =
+    workout === undefined &&
+    strap?.detail?.route !== undefined &&
+    strap.detail.route.length > 1
+      ? strap.detail.route
+      : undefined
+
+  const layout =
+    workout !== undefined && strap !== undefined
+      ? "paired"
+      : workout === undefined
+        ? "strap"
+        : "logged"
 
   return (
-    <article aria-labelledby="workout-title">
-      <header className="workout-detail-header">
-        <div>
-          <p className="workout-date">{formatDay(workout.date, longDate)}</p>
-          <h2 id="workout-title">{workout.name ?? "Workout"}</h2>
-          <p className="workout-tally">
-            <span>
-              <strong>{workout.exercises.length}</strong>{" "}
-              <span className="sr-only">
-                {workout.exercises.length === 1 ? "exercise" : "exercises"}
-              </span>
-              <BarbellIcon size={18} aria-hidden="true" />
-            </span>
-            <span className="sr-only"> · </span>
-            <span>
-              <strong>
-                {workout.exercises.reduce(
-                  (total, entry) => total + entry.sets.length,
-                  0
+    <article
+      className="session"
+      data-kind={layout}
+      data-route={route !== undefined}
+      aria-labelledby={`session-${session.key}`}
+    >
+      <header className="session-head">
+        <span className="session-glyph" aria-hidden="true">
+          <SessionGlyph kind={kind} />
+        </span>
+        <div className="session-title">
+          <h3 id={`session-${session.key}`}>{title}</h3>
+          <p>
+            <time dateTime={session.day}>{dayLabel(session.day)}</time>
+            {strap === undefined ? null : (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span className="num">
+                  {clockTime(strap.summary.start)}
+                  <span aria-hidden="true">–</span>
+                  <span className="sr-only"> to </span>
+                  {clockTime(strap.summary.end)}
+                </span>
+                {workout === undefined ? null : (
+                  <span className="sr-only"> · {strap.summary.sport}</span>
                 )}
-              </strong>{" "}
-              <span className="sr-only">sets</span>
-              <StackIcon size={18} aria-hidden="true" />
-            </span>
+              </>
+            )}
           </p>
         </div>
-        <div className="workout-detail-actions">
-          <Button
-            variant="outline"
-            size="key-icon"
-            title="Edit"
-            disabled={disabled}
-            onClick={() => edit(workout)}
-          >
-            <PencilSimpleIcon size={20} aria-hidden="true" />
-            <span className="sr-only">Edit</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="key-icon"
-            title="Remove"
-            disabled={disabled}
-            onClick={() => remove(workout)}
-          >
-            <TrashIcon size={20} aria-hidden="true" />
-            <span className="sr-only">Remove</span>
-          </Button>
+        <div className="session-actions">
+          {strap === undefined ? null : (
+            <Link
+              to="/recovery"
+              search={{
+                day: session.day,
+                noop: {
+                  source: strap.summary.source,
+                  start: strap.summary.start,
+                  sport: strap.summary.sport,
+                },
+              }}
+              className={buttonVariants({
+                variant: "ghost",
+                size: "key-icon",
+              })}
+              title="Open in Recovery"
+            >
+              <ArrowUpRightIcon size={20} aria-hidden="true" />
+              <span className="sr-only">Open {title} in Recovery</span>
+            </Link>
+          )}
+          {workout === undefined || editor !== undefined ? null : (
+            <>
+              <Button
+                variant="ghost"
+                size="key-icon"
+                title="Edit"
+                disabled={disabled || locked}
+                onClick={() => edit(workout)}
+              >
+                <PencilSimpleIcon size={20} aria-hidden="true" />
+                <span className="sr-only">Edit {title}</span>
+              </Button>
+            </>
+          )}
         </div>
       </header>
+      {editor === undefined ? (
+        <div className="session-body">
+          {workout === undefined ? null : <Exercises workout={workout} />}
+          {strap === undefined ? null : (
+            <StrapPane strap={strap} route={route} />
+          )}
+        </div>
+      ) : (
+        editor
+      )}
+    </article>
+  )
+}
+
+/** The logged half: its figures in the strap's style, then each exercise with its sets as pills. */
+function Exercises({
+  workout,
+}: {
+  readonly workout: WorkoutDetail
+}): React.JSX.Element {
+  const sets = workout.exercises.reduce(
+    (total, entry) => total + entry.sets.length,
+    0
+  )
+
+  return (
+    <div className="session-logged">
+      <StatList
+        className="session-stats"
+        stats={[
+          ["Exercises", String(workout.exercises.length), ""],
+          ["Sets", String(sets), ""],
+        ]}
+      />
       {workout.notes === null ? null : (
         <p className="workout-notes">{workout.notes}</p>
       )}
       {workout.exercises.length === 0 ? (
         <p className="workout-muted">No exercises were logged.</p>
       ) : null}
-      <ol className="workout-entries" aria-label="Exercises">
+      <ol className="session-exercises" aria-label="Exercises">
         {workout.exercises.map((entry) => (
-          <li key={entry.id} className="workout-entry">
-            <div className="workout-entry-heading">
-              <h3>{entry.exercise.name}</h3>
-              <span className="sr-only">{entry.exercise.category}</span>
-            </div>
+          <li key={entry.id}>
+            <h4>
+              {entry.exercise.name}
+              <span className="sr-only"> ({entry.exercise.category})</span>
+            </h4>
             {entry.notes === null ? null : (
               <p className="workout-muted">{entry.notes}</p>
             )}
@@ -504,7 +455,6 @@ function WorkoutView({
                     <li
                       key={set.id}
                       className="set-pill"
-                      data-rpe={set.rpe ?? undefined}
                       title={set.notes ?? undefined}
                     >
                       <span className="sr-only">
@@ -516,16 +466,6 @@ function WorkoutView({
                       <span className="set-pill-load" aria-hidden="true">
                         {figures.load ?? "BW"}
                       </span>
-                      {set.rpe === null ? null : (
-                        <span
-                          className="set-pill-rpe"
-                          aria-hidden="true"
-                          // SAFETY: CSSProperties omits custom properties; --rpe is a 0..1 heat read by .set-pill-rpe.
-                          style={
-                            { "--rpe": set.rpe / 10 } as React.CSSProperties
-                          }
-                        />
-                      )}
                       {set.notes === null ? null : (
                         <span className="set-pill-note">{set.notes}</span>
                       )}
@@ -537,6 +477,90 @@ function WorkoutView({
           </li>
         ))}
       </ol>
-    </article>
+    </div>
+  )
+}
+
+type Route = NonNullable<NonNullable<Strap["detail"]>["route"]>
+
+/** The strap's half: effort and figures, the heart-rate trace on its zones, and the route if there is one. */
+function StrapPane({
+  strap,
+  route,
+}: {
+  readonly strap: Strap
+  readonly route: Route | undefined
+}): React.JSX.Element {
+  const { summary, detail } = strap
+  const effort = detail?.strain_score ?? summary.strain_score
+
+  const stats =
+    detail === undefined
+      ? ([
+          [
+            "Duration",
+            summary.duration_min === null
+              ? null
+              : shortDuration(summary.duration_min),
+            "",
+          ],
+          [
+            "Average HR",
+            summary.avg_hr_bpm === null
+              ? null
+              : String(Math.round(summary.avg_hr_bpm)),
+            "bpm",
+          ],
+          [
+            "Steps",
+            summary.steps === null ? null : formatWhole(summary.steps),
+            "",
+          ],
+        ] as const)
+      : noopStats(detail)
+
+  const trace = (
+    <div className="session-trace">
+      {detail?.hr_series === null || detail === undefined ? null : (
+        <HeartRateChart
+          series={detail.hr_series}
+          zones={detail.hr_zones}
+          durationS={
+            (Date.parse(summary.end) - Date.parse(summary.start)) / 1000
+          }
+        />
+      )}
+      {detail?.hr_zones === null || detail === undefined ? null : (
+        <ZoneBar zones={detail.hr_zones} />
+      )}
+    </div>
+  )
+
+  return (
+    <>
+      <div className="session-strap">
+        <div className="session-strap-top">
+          <ScoreRing
+            kind="effort"
+            share={ringShare(effort, 100)}
+            band={effort === null ? "none" : "fair"}
+            figure={effort === null ? null : String(Math.round(effort))}
+            label="Effort"
+            spoken={
+              effort === null
+                ? "Not available"
+                : `strain ${Math.round(effort)} of 100`
+            }
+          />
+          <StatList className="session-stats" stats={stats} />
+        </div>
+        {trace}
+      </div>
+      {route === undefined ? null : (
+        <div className="session-map">
+          <RouteMap route={route} />
+        </div>
+      )}
+    </>
   )
 }

@@ -185,7 +185,10 @@ test.each([
 
     expect(
       await dispatchIrCommand({ remote: "edifier", command: "power" })
-    ).toEqual({ state: "failed", reason })
+    ).toEqual({
+      state: "failed",
+      reason,
+    })
   }
 )
 

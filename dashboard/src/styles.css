@@ -1665,31 +1665,6 @@ a.dir-go:hover {
   }
 }
 
-/* Choices in a toolbar share the row so each stays a comfortable touch target. */
-.workout-toolbar > [data-slot="toggle-group"] {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  width: 100%;
-  gap: 0;
-  padding: 0.25rem;
-  border-radius: 999px;
-  background: var(--wash-strong);
-}
-.workout-toolbar > [data-slot="toggle-group"] [data-slot="toggle-group-item"] {
-  height: 2.75rem;
-  padding-inline: 0.5rem;
-  border: 0;
-  border-radius: 999px !important;
-}
-.workout-toolbar
-  > [data-slot="toggle-group"]
-  [data-slot="toggle-group-item"][aria-pressed="true"] {
-  border-color: transparent;
-  background: var(--ink);
-  color: var(--ground);
-}
-
 @utility watchlists {
   button,
   input,
@@ -2570,27 +2545,6 @@ a.dir-go:hover {
     overflow-wrap: anywhere;
   }
 }
-@utility body-history-filter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  margin-bottom: 1rem;
-  gap: 1rem;
-  input {
-    min-height: 3rem;
-    font-size: 1rem;
-  }
-  > .workout-field {
-    flex: 1 1 12rem;
-    min-width: 0;
-  }
-  button {
-    min-height: 3rem;
-  }
-  > .workout-problem {
-    flex-basis: 100%;
-  }
-}
 @utility body-history-table {
   width: 100%;
   margin-top: 1rem;
@@ -2625,18 +2579,6 @@ a.dir-go:hover {
     touch-action: manipulation;
   }
 }
-@utility workout-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-@utility workout-toolbar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
 /* Progress and success are acknowledged by the controls themselves; the words stay for
    assistive technology. Failures stay visible. */
 @utility workout-feedback {
@@ -2668,66 +2610,6 @@ a.dir-go:hover {
   &:empty {
     display: none;
   }
-}
-@utility workout-layout {
-  display: grid;
-  grid-template-columns: minmax(13rem, 1fr) minmax(0, 3fr);
-  gap: 2rem;
-  margin-top: 1.5rem;
-  align-items: start;
-  > [data-slot="card"] {
-    min-width: 0;
-  }
-  @media (max-width: 860px) {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-}
-@utility workout-history {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 0;
-  h2 {
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-    margin-left: 0.75rem;
-  }
-  > p {
-    margin-inline: 0.75rem;
-  }
-  ul {
-    display: grid;
-    gap: 0.25rem;
-    @media (max-width: 860px) {
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
-    }
-  }
-  li button {
-    width: 100%;
-    height: auto;
-    display: grid;
-    justify-content: start;
-    justify-items: start;
-    gap: 0.125rem;
-    padding: 0.75rem;
-    white-space: normal;
-    text-align: left;
-  }
-  li button[aria-pressed="true"] {
-    border-radius: 0.875rem;
-    background: var(--primary);
-    color: var(--primary-foreground);
-    .workout-history-date {
-      color: inherit;
-      opacity: 0.7;
-    }
-  }
-}
-@utility workout-history-date {
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
-  font-weight: 500;
 }
 @utility workout-muted {
   color: var(--muted-foreground);
@@ -2762,11 +2644,6 @@ a.dir-go:hover {
     margin-top: 0.25rem;
     overflow-wrap: anywhere;
   }
-}
-@utility workout-detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 @utility workout-notes {
   margin-top: 1rem;
@@ -3023,15 +2900,13 @@ a.dir-go:hover {
     font-variant-numeric: tabular-nums;
     font-size: 14px;
   }
-  .progress-grid {
-    stroke: var(--border);
-    stroke-width: 1;
+  .progress-band[data-dark="true"] {
+    fill: var(--wash);
   }
-  [data-baseline="true"] .progress-grid {
-    stroke: var(--muted-foreground);
-    stroke-dasharray: 4 4;
+  .progress-band[data-dark="false"] {
+    fill: transparent;
   }
-  [data-baseline="true"] text {
+  text[data-baseline="true"] {
     fill: var(--foreground);
   }
   .progress-line line {
@@ -4462,10 +4337,6 @@ a.dir-go:hover {
 
 /* ---------- Workout: values first; labels and explanations stay for assistive technology ---------- */
 
-.workout-date {
-  color: var(--muted-ink);
-  font-size: 0.9375rem;
-}
 .training-prompt {
   display: grid;
   justify-items: start;
@@ -4489,7 +4360,4 @@ a.dir-go:hover {
 .workouts dd[data-gap="true"] small,
 .training-summaries dd[data-gap="true"] small {
   font-size: 0.75rem;
-}
-.body-profile > .workout-toolbar {
-  justify-content: flex-end;
 }

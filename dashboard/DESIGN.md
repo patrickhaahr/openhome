@@ -80,8 +80,17 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
 - **Provenance as marks.** Training sync shows a freshness ring (filled sun when confirmed)
   and one chip per stream (filled dot when covered); the full sentence is sr-only.
 - **Refresh lives top right** as a round key on every data page (Photos, Wishlist,
-  Watchlist, Profile & weight). Weather has none: it refreshes itself on the forecast's
+  Watchlist). Workout and Recovery have none (see below). Weather has none: it refreshes itself on the forecast's
   validity, and a stale read shows a rewind mark beside the current figures.
+- **Workout is Log, Progress and Body** behind one segmented switcher (wash track, ink pill) that
+  every segmented control on the page shares, with the period choice on the right. There is no
+  refresh key: changes reload the view themselves. Log is one plate per training session. A logged
+  Workout and a strap session on the same Copenhagen day become one plate (exercises left; effort
+  ring, stats, heart-rate trace and zone bar right) under `lib/session-log.ts`; a strap session
+  alone shows its own stats, and a map only when it has a route; a logged Workout alone shows
+  its exercises. Progress opens on 4 weeks, tone bands instead of grid lines. Body leads with the
+  current weight large, the delta over the range, one calm chart of alternating tone bands, and the
+  profile values as quiet plates with a pencil key; it fits 1280x720.
 - **Controls is three plates on one screen**, the same tone as Home's deck: the lights as a
   tall wall switch (lit bulb on ink above, dark bulb on paper below), the TV remote in the
   middle and the speaker's narrow remote on the right. The device glyph names each remote;

@@ -21,15 +21,21 @@ import { read } from "./workout.server"
 export async function readProgress(
   search: ProgressSearch
 ): Promise<ProgressState> {
-  const period = search.period ?? "3m"
-  const library = await read("/api/exercises", exercise.array())
+  const period = search.period ?? "4w"
+  const requested = search.compare ?? []
 
-  if (library.state !== "read")
+  // The library is only needed to drop compared ids that were removed from it.
+  const library =
+    requested.length === 0
+      ? undefined
+      : await read("/api/exercises", exercise.array())
+
+  if (library !== undefined && library.state !== "read")
     return { state: "unavailable", reason: library.reason }
 
-  const known = new Set(library.data.map((entry) => entry.id))
+  const known = new Set(library?.data.map((entry) => entry.id))
 
-  const compared = (search.compare ?? []).filter((id) => known.has(id))
+  const compared = requested.filter((id) => known.has(id))
 
   const bounds = periodBounds({ period, today: trainingDayOn(new Date()) })
 
@@ -51,7 +57,6 @@ export async function readProgress(
     state: "available",
     period,
     progress: progress.data,
-    library: library.data,
     compared,
   }
 }
