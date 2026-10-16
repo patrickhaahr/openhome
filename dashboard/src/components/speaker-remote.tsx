@@ -30,8 +30,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
   },
   plateIcons: {},
   plateIdentity: true,
-  // Inputs are named on the full remote; a waveform alone does not say "optical".
-  worded: ["bluetooth", "optical"],
+  // Glyphs only, as on Home; each key keeps its name for assistive technology.
+  worded: [],
   // Choosing the input and adjusting volume are the everyday speaker actions.
   quickGroups: [
     {
@@ -41,7 +41,7 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
       commands: ["bluetooth", "optical", "volume-up", "volume-down"],
     },
   ],
-  // Three stacked buttons per row fit the speaker's narrow column on Controls.
+  // The speaker's narrow plate on Controls: power over its inputs, then a rocker like the TV's.
   fullGroups: [
     {
       label: "Power and input",
@@ -50,8 +50,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
     },
     {
       label: "Volume",
-      kind: "trio",
-      commands: ["volume-down", "mute", "volume-up"],
+      kind: "rocker",
+      commands: ["volume-up", "mute", "volume-down"],
     },
   ],
   // Input matters most for the speaker, so the label covers every unreported state.

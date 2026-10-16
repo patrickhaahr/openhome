@@ -96,7 +96,7 @@ export function LightControls({
       aria-labelledby="lights-heading"
     >
       <div className={quick ? "plate-head" : "panel-head"}>
-        <h2 id="lights-heading" className={quick ? "sr-only" : "panel-title"}>
+        <h2 id="lights-heading" className="sr-only">
           Lights
         </h2>
         {failure === undefined ? null : (

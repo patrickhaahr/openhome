@@ -310,14 +310,15 @@ function RemoteCard<C extends string>({
       aria-labelledby={headingId}
     >
       <div className={quick ? "plate-head" : "panel-head"}>
-        {quick && config.plateIdentity ? (
+        {/* The device's glyph names the remote; the word stays for assistive technology. */}
+        {!quick || config.plateIdentity ? (
           <config.icon
-            className="plate-identity"
-            size={30}
+            className={quick ? "plate-identity" : "panel-identity"}
+            size={quick ? 30 : 32}
             aria-hidden="true"
           />
         ) : null}
-        <h2 id={headingId} className={quick ? "sr-only" : "panel-title"}>
+        <h2 id={headingId} className="sr-only">
           {config.title}
         </h2>
         {alert}

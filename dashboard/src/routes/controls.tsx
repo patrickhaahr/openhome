@@ -10,7 +10,10 @@ import { sendSpeakerCommand, sendTvCommand } from "@/lib/ir.functions"
 
 const controls = features[1] satisfies { id: "controls" }
 
-/** The focused Controls view: every home control, including the full TV and speaker remotes. */
+/**
+ * The focused Controls view: three plates filling the screen. The lights as a wall switch,
+ * the TV remote in the middle, the speaker's narrow remote on the right.
+ */
 export const Route = createFileRoute("/controls")({
   head: () => ({ meta: [{ title: `${controls.title} · OpenHome` }] }),
   loader: loadControls,
@@ -22,29 +25,25 @@ function ControlsPage(): React.JSX.Element {
   const { health, tvRemote, speakerRemote } = Route.useLoaderData()
 
   return (
-    <section>
+    <section className="controls">
       <PageHead title={controls.title} />
-      <div className="controls-grid">
-        <div className="controls-stack">
-          <LightControls
-            layout="full"
-            connectionState={health.state}
-            sendCommand={sendLightCommand}
-          />
-          <SpeakerRemote
-            layout="full"
-            connectionState={health.state}
-            remote={speakerRemote}
-            sendCommand={sendSpeakerCommand}
-          />
-        </div>
-        <TvRemote
-          layout="full"
-          connectionState={health.state}
-          remote={tvRemote}
-          sendCommand={sendTvCommand}
-        />
-      </div>
+      <LightControls
+        layout="full"
+        connectionState={health.state}
+        sendCommand={sendLightCommand}
+      />
+      <TvRemote
+        layout="full"
+        connectionState={health.state}
+        remote={tvRemote}
+        sendCommand={sendTvCommand}
+      />
+      <SpeakerRemote
+        layout="full"
+        connectionState={health.state}
+        remote={speakerRemote}
+        sendCommand={sendSpeakerCommand}
+      />
     </section>
   )
 }
