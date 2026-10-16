@@ -10,6 +10,7 @@ import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
 import {
+  evenPadding,
   routePadding,
   type MapLine,
   type MapOrigin,
@@ -67,6 +68,7 @@ export function RasterMap({
   palette,
   shade,
   credit,
+  controls = true,
 }: {
   origin: MapOrigin
   routes: MapRoutes | undefined
@@ -75,6 +77,8 @@ export function RasterMap({
   shade: "day" | "night"
   /** An extra credit merged into the map's one attribution. */
   credit?: string | undefined
+  /** The zoom and recentre plate; a map that only shows a route can go without. */
+  controls?: boolean
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<LeafletMap | undefined>(undefined)
@@ -219,6 +223,17 @@ export function RasterMap({
 
     const center: [number, number] = [origin.latitude, origin.longitude]
 
+    if (routes?.endpoint !== undefined)
+      L.circleMarker([routes.endpoint[1], routes.endpoint[0]], {
+        radius: 12,
+        color: palette.origin,
+        weight: 3,
+        opacity: 1,
+        fillColor: palette.casing,
+        fillOpacity: 1,
+        interactive: false,
+      }).addTo(group)
+
     L.circleMarker(center, {
       radius: 18,
       stroke: false,
@@ -246,10 +261,13 @@ export function RasterMap({
 
     fittedLines.current = routes.lines
 
-    const { top, right, bottom, left } = routePadding(
-      current.getContainer().clientWidth,
-      current.getContainer().clientHeight
-    )
+    const { top, right, bottom, left } =
+      routes.framing === "even"
+        ? evenPadding
+        : routePadding(
+            current.getContainer().clientWidth,
+            current.getContainer().clientHeight
+          )
 
     current.fitBounds(routeBounds(routes.lines), {
       paddingTopLeft: [left, top],
@@ -294,7 +312,7 @@ export function RasterMap({
             : "Map of the local area"
         }
       />
-      {view.state === "ready" ? (
+      {view.state === "ready" && controls ? (
         <div className="shared-map-controls">
           <Button
             size="icon-lg"

@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { BodyWeight } from "@/lib/body-profile"
 
-const kilograms = new Intl.NumberFormat("da-DK", {
+const kilograms = new Intl.NumberFormat("en-GB", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 })

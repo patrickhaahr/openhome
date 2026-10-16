@@ -71,6 +71,8 @@ struct Workout {
     strain: f64,
     distance_m: Option<f64>,
     steps: Option<i64>,
+    /// Whether the session carries a GPS route: a loop from the public demo origin.
+    route: bool,
     shape: String,
     notes: Option<String>,
 }
@@ -361,14 +363,18 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
             .filter(|w| w.days_ago == night.days_ago)
             .count();
         let in_bed = totals.asleep() + totals.wake;
+        // A steady 95 to 98 percent, and a day of walking that varies with the date.
+        let mut vitals = Lcg(night.days_ago.wrapping_mul(7919).wrapping_add(11));
+        let spo2 = (vitals.between(95.0, 98.4) * 10.0).round() / 10.0;
+        let steps = vitals.between(5200.0, 12400.0).round() as i64;
         daily.push(json!({
             "type": "record", "key": { "day": wake_day.to_string() }, "data": {
                 "totalSleepMin": round1(totals.asleep()), "efficiency": (totals.asleep() / in_bed * 1000.0).round() / 1000.0,
                 "deepMin": round1(totals.deep), "remMin": round1(totals.rem), "lightMin": round1(totals.light),
                 "disturbances": totals.wakes, "restingHr": night.resting_hr, "avgHrv": night.hrv_rmssd,
                 "recovery": night.recovery, "strain": night.strain, "exerciseCount": workouts_today,
-                "spo2Pct": null, "skinTempDevC": night.skin_temp_dev_c, "respRateBpm": night.resp_rate_bpm,
-                "steps": null, "activeKcalEst": null, "spo2Red": null, "spo2Ir": null,
+                "spo2Pct": spo2, "steps": steps, "skinTempDevC": night.skin_temp_dev_c, "respRateBpm": night.resp_rate_bpm,
+                "activeKcalEst": null, "spo2Red": null, "spo2Ir": null,
             }
         }));
     }
@@ -397,7 +403,7 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
                 "endTs": end, "source": workout.source, "durationS": duration as f64,
                 "energyKcal": workout.kcal, "avgHr": workout.avg_hr, "maxHr": workout.max_hr,
                 "strain": workout.strain, "distanceM": workout.distance_m, "zonesJSON": null,
-                "notes": workout.notes, "routePolyline": null, "steps": workout.steps,
+                "notes": workout.notes, "routePolyline": workout.route.then(|| loop_route(workout.distance_m.unwrap_or(5000.0), index as u64)), "steps": workout.steps,
             }
         }));
     }
@@ -443,4 +449,63 @@ fn session(start: i64, end: i64, night: &Night, segments: &[Segment], totals: To
             "startTsAdjusted": null, "motionJSON": null, "sleepStateJSON": null, "stagingSparse": false,
         }
     })
+}
+
+/// The public demonstration origin the loop starts and ends at: central Copenhagen.
+const ORIGIN: (f64, f64) = (55.6869, 12.5692);
+
+/// A smooth loop of about `length_m` that starts and ends at the demo origin, as a precision-5
+/// encoded polyline like NOOP stores. The shape is an ellipse with a slow wobble, so it reads as a
+/// run round a few blocks and a park rather than a perfect circle.
+fn loop_route(length_m: f64, seed: u64) -> String {
+    const POINTS: usize = 240;
+    let mut rng = Lcg(seed.wrapping_mul(0x51_7c_c1_b7).wrapping_add(3));
+    let tilt = rng.between(0.0, std::f64::consts::PI);
+    let phase = [
+        rng.between(0.0, std::f64::consts::TAU),
+        rng.between(0.0, std::f64::consts::TAU),
+    ];
+    // Local metres east and north of the ellipse centre, which sits one radius from the origin so
+    // that angle zero is the origin itself.
+    let shape = |angle: f64| {
+        let wobble =
+            1.0 + 0.07 * (2.0 * angle + phase[0]).sin() + 0.04 * (3.0 * angle + phase[1]).sin();
+        let (x, y) = (1.35 * angle.cos() * wobble, 0.85 * angle.sin() * wobble);
+        (
+            x * tilt.cos() - y * tilt.sin(),
+            x * tilt.sin() + y * tilt.cos(),
+        )
+    };
+    let raw: Vec<(f64, f64)> = (0..=POINTS)
+        .map(|i| shape(std::f64::consts::TAU * i as f64 / POINTS as f64))
+        .collect();
+    let perimeter: f64 = raw
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1))
+        .sum();
+    let scale = length_m / perimeter;
+    let (start_x, start_y) = raw[0];
+    let metres_per_degree_lat = 111_320.0;
+    let metres_per_degree_lon = metres_per_degree_lat * ORIGIN.0.to_radians().cos();
+    let mut encoded = String::new();
+    let (mut previous_lat, mut previous_lon) = (0_i64, 0_i64);
+    for (x, y) in raw {
+        let lat = ORIGIN.0 + (y - start_y) * scale / metres_per_degree_lat;
+        let lon = ORIGIN.1 + (x - start_x) * scale / metres_per_degree_lon;
+        let (lat, lon) = ((lat * 1e5).round() as i64, (lon * 1e5).round() as i64);
+        encode_signed(lat - previous_lat, &mut encoded);
+        encode_signed(lon - previous_lon, &mut encoded);
+        (previous_lat, previous_lon) = (lat, lon);
+    }
+    encoded
+}
+
+/// One zigzag varint of the Google Encoded Polyline format.
+fn encode_signed(value: i64, out: &mut String) {
+    let mut value = if value < 0 { !(value << 1) } else { value << 1 };
+    while value >= 0x20 {
+        out.push(char::from(((0x20 | (value & 0x1f)) + 63) as u8));
+        value >>= 5;
+    }
+    out.push(char::from((value + 63) as u8));
 }

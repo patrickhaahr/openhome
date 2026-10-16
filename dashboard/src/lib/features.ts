@@ -4,6 +4,7 @@ import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
 import { FilmSlateIcon } from "@phosphor-icons/react/dist/csr/FilmSlate"
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart"
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
+import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
 import { PathIcon } from "@phosphor-icons/react/dist/csr/Path"
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHorizontal"
 import { HardDrivesIcon } from "@phosphor-icons/react/dist/csr/HardDrives"
@@ -42,9 +43,18 @@ export const features = [
     label: "Workout",
     title: "Workout",
     icon: BarbellIcon,
-    description: "Training, recovery and exercise progress.",
+    description: "Logged training, exercise progress and body weight.",
     unavailable:
-      "Workout features have not been added to this dashboard. Training records, recovery and progress are unavailable.",
+      "Workout features have not been added to this dashboard. Training records and progress are unavailable.",
+  },
+  {
+    id: "recovery",
+    label: "Recovery",
+    title: "Recovery",
+    icon: MoonIcon,
+    description: "Charge, rest and effort, with the night in order.",
+    unavailable:
+      "Recovery has not been added to this dashboard. Sleep, recovery scores and strap workouts are unavailable.",
   },
   {
     id: "wishlist",

@@ -21,6 +21,7 @@ use super::noop_source::{
     self, COMPUTED_DEVICE_ID, Coverage, DaySync, IMPORTED_DEVICE_ID, Installation, NoopSync, Rows,
     Stream,
 };
+use super::rest;
 
 /// Sessions one Sleep Night may hold. A larger night is rejected rather than truncated.
 pub const MAX_SLEEP_SESSIONS: usize = 24;
@@ -43,6 +44,10 @@ pub struct RecoveryDay {
     /// Nightly skin temperature as a deviation from the user's baseline, not an absolute temperature.
     pub skin_temp_deviation: Measurement<f64>,
     pub respiratory_rate: Measurement<f64>,
+    /// Nightly blood-oxygen saturation, in percent.
+    pub spo2: Measurement<f64>,
+    /// Steps NOOP counted over the day.
+    pub steps: Measurement<i64>,
     pub derived_scores: DerivedScores,
     /// The Journal Entries logged against the day, by question.
     pub journal: Vec<JournalEntry>,
@@ -117,6 +122,14 @@ pub struct Sleep {
     pub sessions: Vec<SleepSession>,
 }
 
+/// One stretch of a sleep session in a single stage (`awake`, `light`, `deep` or `rem`).
+#[derive(Debug, Serialize)]
+pub struct SleepStage {
+    pub start: String,
+    pub end: String,
+    pub stage: &'static str,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SleepSession {
     /// The start NOOP shows: the user's adjusted start when edited, else the detected start.
@@ -125,6 +138,9 @@ pub struct SleepSession {
     pub detected_start: String,
     pub duration_min: f64,
     pub stage_min: Option<StageMinutes>,
+    /// The stage segments in time order, clamped to `start..end`; `None` when the session has no
+    /// time-ordered staging.
+    pub stages: Option<Vec<SleepStage>>,
     pub efficiency_fraction: Option<f64>,
     pub resting_hr_bpm: Option<f64>,
     pub hrv_rmssd_ms: Option<f64>,
@@ -138,6 +154,9 @@ pub struct SleepSession {
 pub struct DerivedScores {
     pub recovery: Measurement<f64>,
     pub strain: Measurement<f64>,
+    /// Sleep score, derived by `OpenHome` from NOOP's published Rest formula (see [`rest`]) because
+    /// NOOP does not push it. Its source is [`REST_SOURCE`], not a NOOP namespace.
+    pub rest: Measurement<f64>,
 }
 
 /// One answer the user logged in NOOP against the day; never shifted to another day.
@@ -184,6 +203,9 @@ pub(super) const MILLISECONDS: &str = "ms";
 const SCORE: &str = "score_0_100";
 const DEGREES_CELSIUS: &str = "degC";
 const BREATHS_PER_MINUTE: &str = "breaths/min";
+const PERCENT: &str = "percent";
+/// The `source` of a value `OpenHome` computes from NOOP's data rather than reads from a NOOP namespace.
+pub const REST_SOURCE: &str = "openhome-derived";
 
 /// The streams a Recovery Day reads; their watermark is the Recovery Day's `last_push_at`.
 pub(super) const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
@@ -202,6 +224,10 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         ),
         None => (Vec::new(), Coverage::Unknown),
     };
+    let rest = match &installation {
+        Some(installation) => rest::rest_score(pool, installation, day, &daily).await?,
+        None => None,
+    };
     Ok(RecoveryDay {
         day: day.to_string(),
         time_zone: TIME_ZONE_NAME,
@@ -212,9 +238,16 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
         hrv_rmssd: Measurement::new(daily.avg_hrv, MILLISECONDS),
         skin_temp_deviation: Measurement::new(daily.skin_temp_dev_c, DEGREES_CELSIUS),
         respiratory_rate: Measurement::new(daily.resp_rate_bpm, BREATHS_PER_MINUTE),
+        spo2: Measurement::new(daily.spo2_pct, PERCENT),
+        steps: Measurement::new(daily.steps, COUNT),
         derived_scores: DerivedScores {
             recovery: Measurement::new(daily.recovery, SCORE),
             strain: Measurement::new(daily.strain, SCORE),
+            rest: Measurement {
+                value: rest,
+                unit: SCORE,
+                source: rest.map(|_| REST_SOURCE),
+            },
         },
         journal,
         noop: noop.map_coverage(|night| RecoveryCoverage {
@@ -355,7 +388,7 @@ async fn daily_metrics(
     let records: Vec<Record> = sqlx::query_as(
         "SELECT device_id, total_sleep_min, efficiency, deep_min, rem_min, light_min, \
                 disturbances, resting_hr, avg_hrv, recovery, strain, skin_temp_dev_c, \
-                resp_rate_bpm \
+                resp_rate_bpm, spo2_pct, steps \
          FROM daily_metric WHERE source_id = ? AND device_id IN (?, ?) AND day = ?",
     )
     .bind(&installation.source_id)
@@ -482,6 +515,7 @@ fn sleep_session(session: &SessionRow) -> Result<SleepSession> {
             .stages_json
             .as_deref()
             .and_then(noop_merge::stage_minutes),
+        stages: sleep_stages(session, start)?,
         efficiency_fraction: session.efficiency,
         resting_hr_bpm: session.resting_hr,
         hrv_rmssd_ms: session.avg_hrv,
@@ -489,4 +523,25 @@ fn sleep_session(session: &SessionRow) -> Result<SleepSession> {
         staging_sparse: session.staging_sparse,
         source: session.namespace.device_id(),
     })
+}
+
+fn sleep_stages(session: &SessionRow, start: i64) -> Result<Option<Vec<SleepStage>>> {
+    let Some(segments) = session
+        .stages_json
+        .as_deref()
+        .and_then(|json| noop_merge::stage_segments(json, start, session.end_ts))
+    else {
+        return Ok(None);
+    };
+    segments
+        .into_iter()
+        .map(|segment| {
+            Ok(SleepStage {
+                start: calendar::iso_from_unix(segment.start)?,
+                end: calendar::iso_from_unix(segment.end)?,
+                stage: segment.stage,
+            })
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Some)
 }

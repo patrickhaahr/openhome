@@ -1,19 +1,25 @@
 import { useRef, useState } from "react"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
 import { BedIcon } from "@phosphor-icons/react/dist/csr/Bed"
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
+import { HourglassMediumIcon } from "@phosphor-icons/react/dist/csr/HourglassMedium"
+import { FootprintsIcon } from "@phosphor-icons/react/dist/csr/Footprints"
+import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart"
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
+import { LightningIcon } from "@phosphor-icons/react/dist/csr/Lightning"
 import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
-import { NotebookIcon } from "@phosphor-icons/react/dist/csr/Notebook"
 import { PersonSimpleRunIcon } from "@phosphor-icons/react/dist/csr/PersonSimpleRun"
 import { SunIcon } from "@phosphor-icons/react/dist/csr/Sun"
+import { ThermometerIcon } from "@phosphor-icons/react/dist/csr/Thermometer"
+import { WaveSineIcon } from "@phosphor-icons/react/dist/csr/WaveSine"
+import { WindIcon } from "@phosphor-icons/react/dist/csr/Wind"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
+import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import { Button } from "@/components/ui/button"
+import { formatDecimal, formatSigned, formatWhole } from "@/lib/number-format"
+import { Hypnogram } from "@/components/hypnogram"
 import { NoopDetail } from "@/components/noop-detail"
-import { DayRings, ScoreRing } from "@/components/score-ring"
-import { Sparkline } from "@/components/sparkline"
+import { DayStrip } from "@/components/day-strip"
+import { ScoreRing } from "@/components/score-ring"
 import {
   chargeBand,
   clockDuration,
@@ -25,7 +31,6 @@ import {
   type Band,
 } from "@/lib/recovery-score"
 import {
-  shiftDay,
   trainingFailureMessage,
   type MetricTrend,
   type NoopSelection,
@@ -36,8 +41,6 @@ import {
   type TrainingState,
 } from "@/lib/training"
 
-const decimal = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 1 })
-
 const clock = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
   hour: "2-digit",
@@ -45,67 +48,25 @@ const clock = new Intl.DateTimeFormat("en-GB", {
   hourCycle: "h23",
 })
 
-const weekday = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  weekday: "narrow",
-})
-
-const dayLabel = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-})
-
-/** Training Days are calendar dates; formatting them at UTC midnight never shifts the day. */
-function calendar(day: string, format: Intl.DateTimeFormat): string {
-  return format.format(new Date(`${day}T00:00:00Z`))
-}
-
 function noopButtonId(selection: NoopSelection): string {
   return `noop-workout-${JSON.stringify([selection.source, selection.start, selection.sport])}`
 }
 
-/** One day's three readings, ready to draw as rings. */
-type DayReadings = {
-  readonly charge: number | null
-  readonly rest: number | null
-  readonly effort: number | null
-}
-
-function readings(read: TrainingRead<RecoveryDay>): DayReadings {
-  if (read.state === "unavailable")
-    return { charge: null, rest: null, effort: null }
-
-  return {
-    charge: read.data.derived_scores.recovery.value,
-    rest: read.data.sleep.total.value,
-    effort: read.data.derived_scores.strain.value,
-  }
-}
-
-function spokenReadings(values: DayReadings): string {
-  return [
-    `Charge ${values.charge === null ? "not recorded" : `${Math.round(values.charge)} %`}`,
-    `Rest ${values.rest === null ? "not recorded" : spokenDuration(values.rest)}`,
-    `Effort ${values.effort === null ? "not recorded" : Math.round(values.effort)}`,
-  ].join(", ")
-}
-
-/** The selected day as rings, then its night, its body and its sessions. Words stay for AT. */
+/** The selected day as rings over its week, beside its night; then its body and its strap sessions. Words stay for AT. */
 export function TrainingSummaries({
   data,
   selectDay,
   open,
-  openLogged,
   refresh,
+  loadDays,
 }: {
   readonly data: TrainingState
   readonly selectDay: (day: string) => Promise<void>
   readonly open: (selection: TrainingSearch["noop"]) => Promise<void>
-  /** Show a logged Workout in the log view. */
-  readonly openLogged: (workoutId: number) => Promise<void>
   readonly refresh: () => Promise<void>
+  readonly loadDays?:
+    | ((from: string, to: string) => Promise<TrainingState["week"]>)
+    | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
@@ -139,99 +100,18 @@ export function TrainingSummaries({
   const selected =
     data.detail.state === "available" ? data.detail.data : undefined
 
+  const recovery =
+    data.recovery.state === "available" ? data.recovery.data : undefined
+
+  const covered =
+    recovery?.noop.coverage.daily_metrics === "covered" &&
+    recovery.noop.coverage.sleep_sessions === "covered"
+
+  const missing = covered ? "Not recorded" : "Not synced or unavailable"
+
   return (
     <div className="today" aria-busy={busy}>
       <h2 className="sr-only">Recovery day · {data.day}</h2>
-      <div className="today-week">
-        <Button
-          variant="ghost"
-          size="key-icon"
-          title="Previous week"
-          disabled={busy}
-          onClick={() => void run(() => selectDay(shiftDay(data.day, -7)))}
-        >
-          <CaretLeftIcon size={22} aria-hidden="true" />
-          <span className="sr-only">Previous week</span>
-        </Button>
-        <ol className="today-days" aria-label="Training days">
-          {data.week.map((entry) => {
-            const values = readings(entry.recovery)
-            const current = entry.day === data.day
-
-            return (
-              <li key={entry.day}>
-                <button
-                  ref={current ? dayButton : undefined}
-                  type="button"
-                  className="today-day"
-                  aria-pressed={current}
-                  data-today={entry.day === today}
-                  disabled={busy}
-                  aria-label={`${calendar(entry.day, dayLabel)}: ${spokenReadings(values)}`}
-                  onClick={() =>
-                    void run(() => (current ? refresh() : selectDay(entry.day)))
-                  }
-                >
-                  <span className="today-day-name" aria-hidden="true">
-                    {calendar(entry.day, weekday)}
-                  </span>
-                  <DayRings
-                    charge={{
-                      share: ringShare(values.charge, 100),
-                      band: chargeBand(values.charge),
-                    }}
-                    rest={{
-                      share: ringShare(values.rest, restReferenceMin),
-                      band: restBand(values.rest),
-                    }}
-                    effort={{ share: ringShare(values.effort, 100) }}
-                  />
-                  <span className="today-day-date" aria-hidden="true">
-                    {Number(entry.day.slice(8))}
-                  </span>
-                </button>
-              </li>
-            )
-          })}
-        </ol>
-        <Button
-          variant="ghost"
-          size="key-icon"
-          title="Next week"
-          disabled={busy || data.day >= today}
-          onClick={() =>
-            void run(() => {
-              const next = shiftDay(data.day, 7)
-
-              return selectDay(next > today ? today : next)
-            })
-          }
-        >
-          <CaretRightIcon size={22} aria-hidden="true" />
-          <span className="sr-only">Next week</span>
-        </Button>
-        <div className="today-tools">
-          {data.recovery.state === "available" ? (
-            <SyncMark
-              freshness={data.recovery.data.noop.freshness}
-              lastPush={data.recovery.data.noop.last_push_at}
-              coverage={data.recovery.data.noop.coverage}
-            />
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="key-icon"
-            title="Refresh training"
-            data-spinning={busy}
-            disabled={busy}
-            onClick={() => void run(refresh)}
-          >
-            <ArrowClockwiseIcon size={20} aria-hidden="true" />
-            <span className="sr-only">Refresh training</span>
-          </Button>
-        </div>
-      </div>
       <p
         className="workout-feedback"
         role="status"
@@ -239,14 +119,45 @@ export function TrainingSummaries({
       >
         {busy ? "Reading training data…" : feedback}
       </p>
-      {data.recovery.state === "available" ? (
-        <Recovery
-          data={data.recovery.data}
+      <div className="today-hero">
+        <div className="today-glance">
+          {data.recovery.state === "available" ? (
+            <>
+              <Sync data={data.recovery.data.noop} />
+              <Rings data={data.recovery.data} missing={missing} />
+            </>
+          ) : (
+            <ReadFailure title="Recovery day" data={data.recovery} />
+          )}
+          <div className="today-week">
+            <DayStrip
+              initial={data.week}
+              selected={data.day}
+              today={today}
+              disabled={busy}
+              selectedRef={dayButton}
+              loadDays={loadDays}
+              choose={(day, current) =>
+                void run(() => (current ? refresh() : selectDay(day)))
+              }
+            />
+          </div>
+        </div>
+        {recovery === undefined ? null : (
+          <Night
+            data={recovery}
+            trend={data.trends.sleep_duration}
+            missing={missing}
+          />
+        )}
+      </div>
+      {recovery === undefined ? null : (
+        <Body
+          data={recovery}
           week={data.week}
           trends={data.trends}
+          missing={missing}
         />
-      ) : (
-        <ReadFailure title="Recovery day" data={data.recovery} />
       )}
       <section className="today-sessions" aria-label="Sessions">
         {data.context.state === "unavailable" ? (
@@ -256,7 +167,6 @@ export function TrainingSummaries({
             day={contextDay}
             selected={selected}
             disabled={busy}
-            openLogged={(workoutId) => void run(() => openLogged(workoutId))}
             open={(selection) => {
               detailSelection.current = selection
               void run(async () => {
@@ -342,103 +252,98 @@ function ReadFailure({
   )
 }
 
-const freshnessWords: Record<RecoveryDay["noop"]["freshness"], string> = {
-  confirmed: "Confirmed",
-  partial: "Partly synced",
-  unconfirmed: "Not yet confirmed",
-  unknown: "Unknown",
-}
-
-/** Provenance as a mark: a filled ring is a confirmed sync, a hollow one is not yet. */
-function SyncMark({
-  freshness,
-  lastPush,
-  coverage,
+/** Provenance for assistive technology; a stale sync draws no mark on the page. */
+function Sync({
+  data,
 }: {
-  readonly freshness: RecoveryDay["noop"]["freshness"]
-  readonly lastPush: string | null
-  readonly coverage: Readonly<Record<string, string>>
+  readonly data: RecoveryDay["noop"]
 }): React.JSX.Element {
   return (
-    <p className="today-sync" data-freshness={freshness}>
-      <span className="today-sync-mark" aria-hidden="true" />
-      <span className="sr-only">Freshness: {freshness} · </span>
-      <span title={freshnessWords[freshness]}>
-        {lastPush === null ? "–" : clock.format(new Date(lastPush))}
-      </span>
-      <span className="sr-only">
-        {Object.entries(coverage)
-          .map(
-            ([stream, state]) => ` · ${stream.replaceAll("_", " ")}: ${state}`
-          )
-          .join("")}
-      </span>
+    <p className="sr-only" role="status">
+      Freshness: {data.freshness}
+      {Object.entries(data.coverage)
+        .map(([stream, state]) => ` · ${stream.replaceAll("_", " ")}: ${state}`)
+        .join("")}
     </p>
   )
 }
 
-function Recovery({
+/** Charge, Rest and Effort for the selected day; a glyph names each ring, the words stay for AT. */
+function Rings({
+  data,
+  missing,
+}: {
+  readonly data: RecoveryDay
+  readonly missing: string
+}): React.JSX.Element {
+  const charge = data.derived_scores.recovery.value
+  const rest = data.derived_scores.rest.value
+  const effort = data.derived_scores.strain.value
+
+  return (
+    <div className="today-rings">
+      <ScoreRing
+        kind="charge"
+        icon={LightningIcon}
+        share={ringShare(charge, 100)}
+        band={chargeBand(charge)}
+        figure={charge === null ? null : String(Math.round(charge))}
+        label="Charge"
+        spoken={charge === null ? missing : `${Math.round(charge)} % recovery`}
+      />
+      <ScoreRing
+        kind="rest"
+        icon={MoonIcon}
+        share={ringShare(rest, 100)}
+        band={chargeBand(rest)}
+        figure={rest === null ? null : String(Math.round(rest))}
+        label="Rest"
+        spoken={rest === null ? missing : `${Math.round(rest)} % rest`}
+      />
+      <ScoreRing
+        kind="effort"
+        icon={HeartbeatIcon}
+        share={ringShare(effort, 100)}
+        band={effort === null ? "none" : "fair"}
+        figure={effort === null ? null : String(Math.round(effort))}
+        label="Effort"
+        spoken={
+          effort === null ? missing : `strain ${Math.round(effort)} of 100`
+        }
+      />
+    </div>
+  )
+}
+
+/** The body signals and journal for the selected day. */
+function Body({
   data,
   week,
   trends,
+  missing,
 }: {
   readonly data: RecoveryDay
   readonly week: TrainingState["week"]
   readonly trends: TrainingState["trends"]
+  readonly missing: string
 }): React.JSX.Element {
-  const charge = data.derived_scores.recovery.value
-  const rest = data.sleep.total.value
-  const effort = data.derived_scores.strain.value
-
-  const covered =
-    data.noop.coverage.daily_metrics === "covered" &&
-    data.noop.coverage.sleep_sessions === "covered"
-
-  const missing = covered ? "Not recorded" : "Not synced or unavailable"
-
+  // Days up to the selected one, oldest first: the baseline never looks ahead of the day shown.
   const weekly = (pick: (day: RecoveryDay) => number | null) =>
-    week.map((entry) => ({
-      day: entry.day,
-      value:
-        entry.recovery.state === "available" ? pick(entry.recovery.data) : null,
-    }))
+    week
+      .filter((entry) => entry.day <= data.day)
+      .map((entry) => ({
+        day: entry.day,
+        value:
+          entry.recovery.state === "available"
+            ? pick(entry.recovery.data)
+            : null,
+      }))
 
   return (
     <>
-      <div className="today-rings">
-        <ScoreRing
-          kind="charge"
-          share={ringShare(charge, 100)}
-          band={chargeBand(charge)}
-          figure={charge === null ? null : String(Math.round(charge))}
-          unit="%"
-          label="Charge"
-          spoken={
-            charge === null ? missing : `${Math.round(charge)} % recovery`
-          }
-        />
-        <ScoreRing
-          kind="rest"
-          share={ringShare(rest, restReferenceMin)}
-          band={restBand(rest)}
-          figure={rest === null ? null : clockDuration(rest)}
-          label="Rest"
-          spoken={rest === null ? missing : `${spokenDuration(rest)} asleep`}
-        />
-        <ScoreRing
-          kind="effort"
-          share={ringShare(effort, 100)}
-          band={effort === null ? "none" : "fair"}
-          figure={effort === null ? null : String(Math.round(effort))}
-          label="Effort"
-          spoken={
-            effort === null ? missing : `strain ${Math.round(effort)} of 100`
-          }
-        />
-      </div>
-      <Night data={data} trend={trends.sleep_duration} missing={missing} />
       <section className="today-vitals" aria-label="Body">
         <Vital
+          icon={WaveSineIcon}
           label="HRV"
           unit="ms"
           value={data.hrv_rmssd.value}
@@ -447,6 +352,7 @@ function Recovery({
           missing={missing}
         />
         <Vital
+          icon={HeartIcon}
           label="Resting HR"
           unit="bpm"
           value={data.resting_hr.value}
@@ -455,6 +361,7 @@ function Recovery({
           missing={missing}
         />
         <Vital
+          icon={WindIcon}
           label="Breathing"
           unit="/min"
           value={data.respiratory_rate.value}
@@ -463,12 +370,23 @@ function Recovery({
           missing={missing}
         />
         <Vital
+          icon={ThermometerIcon}
           label="Skin temp"
           unit="°C"
           value={data.skin_temp_deviation.value}
           points={weekly((day) => day.skin_temp_deviation.value)}
           better="neither"
           signed
+          missing={missing}
+        />
+        <Vital
+          icon={FootprintsIcon}
+          label="Steps"
+          unit=""
+          value={data.steps.value}
+          points={weekly((day) => day.steps.value)}
+          better="neither"
+          grouped
           missing={missing}
         />
       </section>
@@ -484,7 +402,7 @@ function Recovery({
                 </span>
               </span>
               {entry.numeric_value === null ? null : (
-                <strong>{decimal.format(entry.numeric_value)}</strong>
+                <strong>{formatDecimal(entry.numeric_value)}</strong>
               )}
               {entry.notes === null ? null : <em>{entry.notes}</em>}
             </li>
@@ -510,7 +428,7 @@ const stageNames: Record<(typeof stageOrder)[number], string> = {
   awake: "Awake",
 }
 
-/** The night: when it happened on a clock axis, what it was made of, and the month behind it. */
+/** The night: when it happened and what it was made of in time order, and the month behind it. */
 function Night({
   data,
   trend,
@@ -521,6 +439,17 @@ function Night({
   readonly missing: string
 }): React.JSX.Element {
   const sessions = data.sleep.sessions
+
+  // The longest night with ordered stages is drawn as a hypnogram; without one the totals stand in.
+  const staged = sessions
+    .filter((session) => session.stages !== null && session.stages.length > 0)
+    .reduce<(typeof sessions)[number] | undefined>(
+      (longest, session) =>
+        longest === undefined || session.duration_min > longest.duration_min
+          ? session
+          : longest,
+      undefined
+    )
 
   const awake = sessions.reduce(
     (sum, session) => sum + (session.stage_min?.awake ?? 0),
@@ -536,10 +465,7 @@ function Night({
       : null,
   }
 
-  const staged = stageOrder.reduce(
-    (sum, stage) => sum + (stages[stage] ?? 0),
-    0
-  )
+  const total = stageOrder.reduce((sum, stage) => sum + (stages[stage] ?? 0), 0)
 
   const efficiency = data.sleep.efficiency.value
   const disturbances = data.sleep.disturbances.value
@@ -548,7 +474,7 @@ function Night({
     <section className="today-night" aria-label="Sleep">
       <div className="today-night-head">
         <MoonIcon size={22} weight="fill" aria-hidden="true" />
-        {sessions.length === 0 ? (
+        {staged !== undefined ? null : sessions.length === 0 ? (
           <p data-gap="true">
             <span className="sr-only">
               {data.noop.coverage.sleep_sessions === "covered"
@@ -557,7 +483,7 @@ function Night({
             </span>
           </p>
         ) : (
-          <SleepClock sessions={sessions} />
+          <SleepClock sessions={sessions} asleep={data.sleep.total.value} />
         )}
         <dl className="today-night-stats">
           <div>
@@ -576,7 +502,12 @@ function Night({
           </div>
         </dl>
       </div>
-      {staged === 0 ? null : (
+      {staged !== undefined ? (
+        <>
+          <Hypnogram session={staged} asleep={data.sleep.total.value} />
+          <SleepSessionList sessions={sessions} />
+        </>
+      ) : total === 0 ? null : (
         <>
           <div className="today-stages" aria-hidden="true">
             {stageOrder.map((stage) =>
@@ -615,11 +546,34 @@ function Night({
   )
 }
 
-/** Each sleep session on a shared clock axis: bedtime, wake and naps where they really fell. */
-function SleepClock({
+/** Every sleep session's times for AT, as the hypnogram draws only the longest staged one. */
+function SleepSessionList({
   sessions,
 }: {
   readonly sessions: RecoveryDay["sleep"]["sessions"]
+}): React.JSX.Element {
+  return (
+    <ul className="sr-only">
+      {sessions.map((session) => (
+        <li key={`${session.source}/${session.start}`}>
+          {clock.format(new Date(session.start))} to{" "}
+          {clock.format(new Date(session.end))},{" "}
+          {spokenDuration(session.duration_min)}
+          {session.user_edited ? " · User edited" : ""}
+          {session.staging_sparse === true ? " · Sparse staging" : ""}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Each sleep session on a shared clock axis: bedtime, wake and naps where they really fell. */
+function SleepClock({
+  sessions,
+  asleep,
+}: {
+  readonly sessions: RecoveryDay["sleep"]["sessions"]
+  readonly asleep: number | null
 }): React.JSX.Element {
   const hour = 3_600_000
   const starts = sessions.map((session) => Date.parse(session.start))
@@ -640,6 +594,13 @@ function SleepClock({
           <span className="sr-only">Asleep </span>
           {clock.format(new Date(main.start))}
         </span>
+        {asleep === null ? null : (
+          <span>
+            <HourglassMediumIcon size={18} aria-hidden="true" />
+            <span className="sr-only">Slept </span>
+            {clockDuration(asleep)}
+          </span>
+        )}
         <span>
           <SunIcon size={18} aria-hidden="true" />
           <span className="sr-only">Awake </span>
@@ -670,17 +631,7 @@ function SleepClock({
         <span>{clock.format(new Date(from))}</span>
         <span>{clock.format(new Date(to))}</span>
       </p>
-      <ul className="sr-only">
-        {sessions.map((session) => (
-          <li key={`${session.source}/${session.start}`}>
-            {clock.format(new Date(session.start))} to{" "}
-            {clock.format(new Date(session.end))},{" "}
-            {spokenDuration(session.duration_min)}
-            {session.user_edited ? " · User edited" : ""}
-            {session.staging_sparse === true ? " · Sparse staging" : ""}
-          </li>
-        ))}
-      </ul>
+      <SleepSessionList sessions={sessions} />
     </div>
   )
 }
@@ -709,12 +660,7 @@ function NightHistory({
 
   return (
     <figure className="night-history">
-      <div
-        className="night-history-bars"
-        // SAFETY: CSSProperties omits custom properties; --reference is a 0..1 height read by the reference line.
-        style={{ "--reference": restReferenceMin / top } as React.CSSProperties}
-        aria-hidden="true"
-      >
+      <div className="night-history-bars" aria-hidden="true">
         {trend.daily_points.map((point) => (
           <span
             key={point.day}
@@ -744,16 +690,19 @@ function NightHistory({
   )
 }
 
-/** One body signal: today's figure, how it sits against its own recent days, and their shape. */
+/** One body signal: a glyph, today's figure, and how far it sits from its own recent days. */
 function Vital({
+  icon: VitalIcon,
   label,
   unit,
   value,
   points,
   better,
   signed = false,
+  grouped = false,
   missing,
 }: {
+  readonly icon: Icon
   readonly label: string
   readonly unit: string
   readonly value: number | null
@@ -763,6 +712,7 @@ function Vital({
   }>
   readonly better: "higher" | "lower" | "neither"
   readonly signed?: boolean
+  readonly grouped?: boolean
   readonly missing: string
 }): React.JSX.Element {
   const earlier = points
@@ -776,29 +726,30 @@ function Vital({
 
   const delta = value === null || baseline === null ? null : value - baseline
   const tone = toneOf(delta, better, baseline)
+  const format = grouped ? formatWhole : formatDecimal
 
   const figure =
-    value === null
-      ? missing
-      : `${signed && value > 0 ? "+" : ""}${decimal.format(value)}`
+    value === null ? missing : signed ? formatSigned(value) : format(value)
 
   return (
     <div className="vital" data-tone={tone}>
-      <p className="vital-label">{label}</p>
-      <p className="vital-value">
+      <VitalIcon className="vital-icon" size={22} aria-hidden="true" />
+      <p className="sr-only">{label}</p>
+      <p className="vital-value num">
         <span data-gap={value === null}>{figure}</span>
-        {value === null ? null : <small>{unit}</small>}
+        {value === null || unit === "" ? null : <small>{unit}</small>}
       </p>
       {delta === null ? null : (
-        <p className="vital-delta">
+        <p className="vital-delta num">
           <span aria-hidden="true">{delta >= 0 ? "▲" : "▼"}</span>
           <span className="sr-only">
             {delta >= 0 ? "Above" : "Below"} its recent average by{" "}
           </span>
-          {decimal.format(Math.abs(delta))}
+          {signed
+            ? formatSigned(Math.abs(delta)).replace("+", "")
+            : format(Math.abs(delta))}
         </p>
       )}
-      <Sparkline points={points} baseline={baseline} />
     </div>
   )
 }
@@ -816,6 +767,8 @@ function toneOf(
   return delta > 0 === (better === "higher") ? "good" : "poor"
 }
 
+const effortRing = 2 * Math.PI * 52
+
 function sportIcon(sport: string): React.JSX.Element {
   const name = sport.toLowerCase()
 
@@ -828,30 +781,28 @@ function sportIcon(sport: string): React.JSX.Element {
   return <HeartbeatIcon size={26} aria-hidden="true" />
 }
 
-/** The day's sessions: strap recordings open in place; logged Workouts open in the log. */
+/** The day's strap recordings, opened in place; logged Workouts live in Workout › Log. */
 function Sessions({
   day,
   selected,
   disabled,
   open,
-  openLogged,
 }: {
   readonly day: TrainingContext["days"][number] | undefined
   readonly selected: NoopSelection | undefined
   readonly disabled: boolean
   readonly open: (selection: NoopSelection) => void
-  readonly openLogged: (workoutId: number) => void
 }): React.JSX.Element {
   if (day === undefined) return <></>
 
-  if (day.noop_workouts.length === 0 && day.workouts.length === 0)
+  if (day.noop_workouts.length === 0)
     return (
       <p className="today-rest-day">
         <BedIcon size={22} aria-hidden="true" />
         <span className="sr-only">
           {day.noop.workouts.coverage.workouts === "covered"
-            ? "No workouts logged and no NOOP workouts recorded on this day."
-            : "No workouts logged. NOOP workouts have unknown coverage; they may not have synced."}
+            ? "No NOOP workouts recorded on this day."
+            : "NOOP workouts have unknown coverage; they may not have synced."}
         </span>
       </p>
     )
@@ -898,6 +849,17 @@ function Sessions({
                     {shortDuration(workout.duration_min)}
                   </span>
                 )}
+                {workout.steps === null ? null : (
+                  <span>
+                    <FootprintsIcon
+                      size={14}
+                      weight="fill"
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">Steps </span>
+                    {formatWhole(workout.steps)}
+                  </span>
+                )}
                 {workout.avg_hr_bpm === null ? null : (
                   <span>
                     <HeartbeatIcon size={14} weight="fill" aria-hidden="true" />
@@ -906,50 +868,33 @@ function Sessions({
                   </span>
                 )}
               </span>
-              <span
-                className="session-tile-effort"
-                // SAFETY: CSSProperties omits custom properties; --share is a 0..1 fill read by the conic ring.
-                style={
-                  { "--share": ringShare(strain, 100) } as React.CSSProperties
-                }
-              >
+              <span className="session-tile-effort">
+                <svg viewBox="0 0 120 120" aria-hidden="true">
+                  <circle
+                    className="effort-ring-track"
+                    cx="60"
+                    cy="60"
+                    r="52"
+                  />
+                  {strain === null || strain <= 0 ? null : (
+                    <circle
+                      className="effort-ring-arc"
+                      cx="60"
+                      cy="60"
+                      r="52"
+                      strokeDasharray={`${effortRing * ringShare(strain, 100)} ${effortRing}`}
+                    />
+                  )}
+                </svg>
                 <span className="sr-only">Effort </span>
-                {strain === null ? "–" : Math.round(strain)}
+                <span aria-hidden={strain === null}>
+                  {strain === null ? "–" : Math.round(strain)}
+                </span>
               </span>
             </button>
           </li>
         )
       })}
-      {day.workouts.map((workout) => (
-        <li key={workout.id}>
-          <button
-            type="button"
-            className="session-tile"
-            data-kind="logged"
-            disabled={disabled}
-            onClick={() => openLogged(workout.id)}
-          >
-            <span className="sr-only">Open logged </span>
-            <span className="session-tile-icon">
-              <NotebookIcon size={26} aria-hidden="true" />
-            </span>
-            <span className="session-tile-name">
-              {workout.name ?? "Workout"}
-            </span>
-            <span className="session-tile-exercises">
-              {workout.exercises.map((exercise, index) => (
-                <span key={`${exercise.exercise}/${index}`}>
-                  {exercise.exercise}
-                  <small>
-                    <span className="sr-only">, sets: </span>
-                    {exercise.sets}×
-                  </small>
-                </span>
-              ))}
-            </span>
-          </button>
-        </li>
-      ))}
     </ul>
   )
 }

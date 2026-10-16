@@ -3,10 +3,11 @@
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::get,
 };
 use chrono::{DateTime, Utc};
+use serde::Deserialize;
 
 use crate::error::{AppError, Result};
 use crate::services::training::{
@@ -103,18 +104,27 @@ async fn workouts_on_day(
     ))
 }
 
+/// Query of the NOOP Workout detail: the route is private, so it is only returned when asked for.
+#[derive(Deserialize)]
+struct DetailQuery {
+    #[serde(default)]
+    route: bool,
+}
+
 async fn noop_workout_detail(
     State(state): State<crate::AppState>,
     Path((source, start)): Path<(String, String)>,
+    Query(query): Query<DetailQuery>,
 ) -> Result<Json<NoopWorkoutDetail>> {
-    read_noop_workout_detail(&state, &source, &start, None).await
+    read_noop_workout_detail(&state, &source, &start, None, query.route).await
 }
 
 async fn noop_workout_detail_of_sport(
     State(state): State<crate::AppState>,
     Path((source, start, sport)): Path<(String, String, String)>,
+    Query(query): Query<DetailQuery>,
 ) -> Result<Json<NoopWorkoutDetail>> {
-    read_noop_workout_detail(&state, &source, &start, Some(&sport)).await
+    read_noop_workout_detail(&state, &source, &start, Some(&sport), query.route).await
 }
 
 /// Validates the NOOP Workout's listed `source`, `start` and optional `sport`, then reads it.
@@ -123,6 +133,7 @@ async fn read_noop_workout_detail(
     source: &str,
     start: &str,
     sport: Option<&str>,
+    include_route: bool,
 ) -> Result<Json<NoopWorkoutDetail>> {
     let malformed = |value: &str| value.is_empty() || value.chars().any(char::is_control);
     if malformed(source) {
@@ -144,7 +155,15 @@ async fn read_noop_workout_detail(
         })?
         .with_timezone(&Utc);
     Ok(Json(
-        training::noop_workout_detail(&state.db, &state.noop_db, source, start, sport).await?,
+        training::noop_workout_detail(
+            &state.db,
+            &state.noop_db,
+            source,
+            start,
+            sport,
+            include_route,
+        )
+        .await?,
     ))
 }
 

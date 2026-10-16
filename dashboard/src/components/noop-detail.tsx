@@ -1,12 +1,14 @@
+import { useMemo } from "react"
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
 import { ScoreRing } from "@/components/score-ring"
+import { useMapTheme } from "@/components/daylight"
+import { SharedMap } from "@/components/shared-map"
+import { formatDecimal, formatWhole } from "@/lib/number-format"
 import { ringShare, shortDuration } from "@/lib/recovery-score"
 import {
   detailUnavailableMessage,
   type NoopWorkoutDetail,
 } from "@/lib/training"
-
-const decimal = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 1 })
 
 const clock = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
@@ -46,6 +48,9 @@ export function NoopDetail({
       : detailUnavailableMessage[code]
   }
 
+  const route =
+    data.route !== undefined && data.route.length > 1 ? data.route : undefined
+
   const stats: Array<readonly [string, string | null, string]> = [
     [
       "Duration",
@@ -69,7 +74,7 @@ export function NoopDetail({
     ],
     [
       "Distance",
-      data.distance_m === null ? null : decimal.format(data.distance_m / 1000),
+      data.distance_m === null ? null : formatDecimal(data.distance_m / 1000),
       "km",
     ],
     [
@@ -77,6 +82,7 @@ export function NoopDetail({
       data.avg_pace_s_per_km === null ? null : pace(data.avg_pace_s_per_km),
       "/km",
     ],
+    ["Steps", data.steps === null ? null : formatWhole(data.steps), ""],
   ]
 
   return (
@@ -113,21 +119,24 @@ export function NoopDetail({
           }
         />
       </header>
-      <dl className="noop-detail-stats">
-        {stats.flatMap(([label, figure, unit]) =>
-          figure === null
-            ? []
-            : [
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>
-                    {figure}
-                    {unit === "" ? null : <small> {unit}</small>}
-                  </dd>
-                </div>,
-              ]
-        )}
-      </dl>
+      <div className="noop-detail-glance" data-route={route !== undefined}>
+        <dl className="noop-detail-stats">
+          {stats.flatMap(([label, figure, unit]) =>
+            figure === null
+              ? []
+              : [
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>
+                      {figure}
+                      {unit === "" ? null : <small> {unit}</small>}
+                    </dd>
+                  </div>,
+                ]
+          )}
+        </dl>
+        {route === undefined ? null : <RouteMap route={route} />}
+      </div>
       {data.hr_series === null ? (
         <p className="noop-detail-missing">
           <HeartbeatIcon size={18} aria-hidden="true" />
@@ -246,7 +255,7 @@ function ZoneBar({ zones }: { readonly zones: Zones }): React.JSX.Element {
     <div className="zone-bar">
       <p className="sr-only">
         Profile maximum: {zones.hrmax_used} beats/min · Below zone 1:{" "}
-        {decimal.format(zones.below_zone_min)} min
+        {formatDecimal(zones.below_zone_min)} min
       </p>
       <div className="zone-bar-track" aria-hidden="true">
         {zones.zones.map((zone) =>
@@ -344,5 +353,50 @@ function HeartRateRecovery({
         ))}
       </ol>
     </div>
+  )
+}
+
+type Route = NonNullable<NoopWorkoutDetail["route"]>
+
+/** The captured route on the shared map: a sun line from its start to its end. */
+function RouteMap({ route }: { readonly route: Route }): React.JSX.Element {
+  const theme = useMapTheme()
+  const first = route[0] ?? [0, 0]
+  const last = route.at(-1) ?? first
+
+  // One stable object per route, so the map frames it once instead of on every render.
+  const routes = useMemo(
+    () => ({
+      lines: [
+        {
+          type: "LineString" as const,
+          coordinates: route.map(
+            ([latitude, longitude]): readonly [number, number] => [
+              longitude,
+              latitude,
+            ]
+          ),
+        },
+      ],
+      focused: 0,
+      endpoint: [last[1], last[0]] as const,
+      framing: "even" as const,
+    }),
+    [route, last]
+  )
+
+  return (
+    <figure className="noop-detail-map">
+      <SharedMap
+        key={`${first[0]},${first[1]}`}
+        origin={{ latitude: first[0], longitude: first[1], source: "private" }}
+        routes={routes}
+        theme={theme}
+        controls={false}
+      />
+      <figcaption className="sr-only">
+        Route map, {route.length} points from start to finish
+      </figcaption>
+    </figure>
   )
 }

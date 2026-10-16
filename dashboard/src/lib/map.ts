@@ -42,6 +42,10 @@ export type MapRoutes = {
   readonly lines: ReadonlyArray<MapLine>
   /** Index into `lines` of the highlighted line. */
   readonly focused: number
+  /** Where the route ends, as `[longitude, latitude]`; drawn as a ring round the start. */
+  readonly endpoint?: readonly [number, number]
+  /** `even` frames the route with equal margins, for a map with no floating plates. */
+  readonly framing?: "even"
 }
 
 /**
@@ -61,3 +65,6 @@ export function routePadding(
         left: 40,
       }
 }
+
+/** Equal margins for a route framed on a map with no floating plates. */
+export const evenPadding = { top: 36, right: 36, bottom: 36, left: 36 }

@@ -723,9 +723,10 @@
    "kcal": 312,
    "strain": 29.4,
    "distance_m": null,
-   "steps": null,
+   "steps": 1628,
    "shape": "sets",
-   "notes": "Pull and dip day."
+   "notes": "Pull and dip day.",
+   "route": false
   },
   {
    "days_ago": 1,
@@ -740,7 +741,8 @@
    "distance_m": 6120,
    "steps": 5480,
    "shape": "steady",
-   "notes": null
+   "notes": null,
+   "route": true
   },
   {
    "days_ago": 2,
@@ -755,7 +757,8 @@
    "distance_m": 3450,
    "steps": 4720,
    "shape": "easy",
-   "notes": null
+   "notes": null,
+   "route": false
   },
   {
    "days_ago": 4,
@@ -768,9 +771,10 @@
    "kcal": 366,
    "strain": 33.1,
    "distance_m": null,
-   "steps": null,
+   "steps": 1782,
    "shape": "sets",
-   "notes": null
+   "notes": null,
+   "route": false
   },
   {
    "days_ago": 6,
@@ -785,7 +789,8 @@
    "distance_m": 8340,
    "steps": 7390,
    "shape": "steady",
-   "notes": "Long easy loop."
+   "notes": "Long easy loop.",
+   "route": true
   },
   {
    "days_ago": 9,
@@ -800,7 +805,8 @@
    "distance_m": 4610,
    "steps": 6310,
    "shape": "easy",
-   "notes": null
+   "notes": null,
+   "route": false
   },
   {
    "days_ago": 11,
@@ -813,9 +819,10 @@
    "kcal": 329,
    "strain": 28.0,
    "distance_m": null,
-   "steps": null,
+   "steps": 1712,
    "shape": "sets",
-   "notes": null
+   "notes": null,
+   "route": false
   },
   {
    "days_ago": 15,
@@ -830,7 +837,8 @@
    "distance_m": 7010,
    "steps": 6240,
    "shape": "steady",
-   "notes": null
+   "notes": null,
+   "route": true
   },
   {
    "days_ago": 22,
@@ -845,7 +853,8 @@
    "distance_m": 3980,
    "steps": 5420,
    "shape": "easy",
-   "notes": null
+   "notes": null,
+   "route": false
   },
   {
    "days_ago": 28,
@@ -858,9 +867,10 @@
    "kcal": 340,
    "strain": 30.6,
    "distance_m": null,
-   "steps": null,
+   "steps": 1740,
    "shape": "sets",
-   "notes": null
+   "notes": null,
+   "route": false
   }
  ]
 }

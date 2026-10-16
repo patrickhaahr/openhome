@@ -14,6 +14,7 @@ import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
 import { Route as PhotosRouteImport } from './routes/photos'
+import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as TravelRouteImport } from './routes/travel'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as WeatherRouteImport } from './routes/weather'
@@ -44,6 +45,11 @@ const ControlsRoute = ControlsRouteImport.update({
 const PhotosRoute = PhotosRouteImport.update({
   id: '/photos',
   path: '/photos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecoveryRoute = RecoveryRouteImport.update({
+  id: '/recovery',
+  path: '/recovery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TravelRoute = TravelRouteImport.update({
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/photos': typeof PhotosRoute
+  '/recovery': typeof RecoveryRoute
   '/travel': typeof TravelRoute
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/photos': typeof PhotosRoute
+  '/recovery': typeof RecoveryRoute
   '/travel': typeof TravelRoute
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/photos': typeof PhotosRoute
+  '/recovery': typeof RecoveryRoute
   '/travel': typeof TravelRoute
   '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/connection'
     | '/controls'
     | '/photos'
+    | '/recovery'
     | '/travel'
     | '/watchlist'
     | '/weather'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/connection'
     | '/controls'
     | '/photos'
+    | '/recovery'
     | '/travel'
     | '/watchlist'
     | '/weather'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/connection'
     | '/controls'
     | '/photos'
+    | '/recovery'
     | '/travel'
     | '/watchlist'
     | '/weather'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
   PhotosRoute: typeof PhotosRoute
+  RecoveryRoute: typeof RecoveryRoute
   TravelRoute: typeof TravelRoute
   WatchlistRoute: typeof WatchlistRoute
   WeatherRoute: typeof WeatherRoute
@@ -209,6 +222,13 @@ declare module '@tanstack/react-router' {
       path: '/photos'
       fullPath: '/photos'
       preLoaderRoute: typeof PhotosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recovery': {
+      id: '/recovery'
+      path: '/recovery'
+      fullPath: '/recovery'
+      preLoaderRoute: typeof RecoveryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/travel': {
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
   PhotosRoute: PhotosRoute,
+  RecoveryRoute: RecoveryRoute,
   TravelRoute: TravelRoute,
   WatchlistRoute: WatchlistRoute,
   WeatherRoute: WeatherRoute,
