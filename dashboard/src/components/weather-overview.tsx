@@ -9,19 +9,18 @@ import { CloudLightningIcon } from "@phosphor-icons/react/dist/csr/CloudLightnin
 import { CloudRainIcon } from "@phosphor-icons/react/dist/csr/CloudRain"
 import { CloudSnowIcon } from "@phosphor-icons/react/dist/csr/CloudSnow"
 import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
-import { DropIcon } from "@phosphor-icons/react/dist/csr/Drop"
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question"
 import { SunIcon } from "@phosphor-icons/react/dist/csr/Sun"
 import { ThermometerSimpleIcon } from "@phosphor-icons/react/dist/csr/ThermometerSimple"
-import { UmbrellaIcon } from "@phosphor-icons/react/dist/csr/Umbrella"
 import { WindIcon } from "@phosphor-icons/react/dist/csr/Wind"
 import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import { CheckAgainButton } from "./check-again-button"
 import { LiveWeather } from "./live-weather"
+import { DaySky } from "./weather-sky"
 import { weatherDescription, type WeatherRead } from "@/lib/weather"
 import { getWeather } from "@/lib/weather.functions"
 
-const number = new Intl.NumberFormat("da-DK", { maximumFractionDigits: 1 })
+const number = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 })
 
 const timestamp = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
@@ -60,7 +59,7 @@ function value(amount: number | null | undefined, unit: string): string {
     : `${number.format(amount)} ${unit}`
 }
 
-/** A figure with its unit set smaller; the text still reads "12,4 °C". */
+/** A figure with its unit set smaller; the text still reads "12.4 °C". */
 function Measure({
   amount,
   unit,
@@ -151,44 +150,14 @@ function WeatherFailure({
   )
 }
 
-/** A reading, or a dash drawn over the word "Unavailable" that assistive technology still reads. */
-function Reading({
-  amount,
-  unit,
-  quiet = false,
-}: {
-  amount: number | null | undefined
-  unit: string
-  /** Drawn only for assistive technology, such as a dry hour's 0 mm. */
-  quiet?: boolean
-}): React.JSX.Element {
-  if (amount === null || amount === undefined)
-    return <span data-gap="true">Unavailable</span>
-
-  return (
-    <span className={quiet ? "sr-only" : undefined}>{value(amount, unit)}</span>
-  )
-}
-
+/** Every hour's values for assistive technology; the sky beside it draws them. */
 function HourlyForecast({
   hours,
 }: {
   hours: Extract<WeatherRead, { state: "fresh" }>["forecast"]["hourly"]
 }): React.JSX.Element {
-  const peak = Math.max(1, ...hours.map((hour) => hour.precipitation_mm ?? 0))
-
-  const temperatures = hours
-    .map((hour) => hour.temperature_c)
-    .filter((amount) => amount !== null)
-
-  const coldest = Math.min(...temperatures)
-  const warmest = Math.max(...temperatures)
-
-  const lift = (celsius: number): number =>
-    warmest === coldest ? 0.5 : (celsius - coldest) / (warmest - coldest)
-
   return (
-    <section aria-labelledby="hourly-heading">
+    <section className="wx-sky-area" aria-labelledby="hourly-heading">
       <div className="sr-only">
         <h2 id="hourly-heading">Next 24 hours</h2>
         <p>Walking or running?</p>
@@ -200,156 +169,50 @@ function HourlyForecast({
         </p>
       ) : (
         <>
-          <p id="hourly-help" className="sr-only">
-            Compare temperature, precipitation and wind before heading out.
-            Scroll across for later hours. Missing values are unavailable.
-          </p>
-          <div
-            className="weather-hourly-scroll"
-            role="region"
-            aria-label="Hourly conditions"
-            aria-describedby="hourly-help"
-            tabIndex={0}
-          >
-            <table className="weather-hourly-table">
-              <caption className="sr-only">
-                Temperature and wind at the start of each hour. Precipitation
-                amount and chance cover the following hour, including rain,
-                showers and snow. Bars compare amounts on the same scale.
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">
-                    <span className="sr-only">Hour starting</span>
-                  </th>
-                  {hours.map((hour, index) => (
-                    <th
-                      scope="col"
-                      key={hour.starts_at}
-                      data-upcoming={index < 3}
-                    >
-                      <span className="weather-hour-day">
-                        {date.format(new Date(hour.starts_at))}
-                      </span>
-                      <time dateTime={hour.starts_at}>
-                        {hourTime.format(new Date(hour.starts_at))}
-                      </time>
-                      <span className="weather-hour-zone">
-                        {
-                          hourOffset
-                            .formatToParts(new Date(hour.starts_at))
-                            .find((part) => part.type === "timeZoneName")?.value
-                        }
-                      </span>
-                      {hour.temperature_c === null &&
-                      hour.wind_ms === null &&
-                      hour.precipitation_mm === null &&
-                      hour.precipitation_probability_percent === null ? (
-                        <span className="sr-only">
-                          Hourly conditions unavailable
-                        </span>
-                      ) : null}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="weather-hour-temperature">
+          <DaySky hours={hours} />
+          <table className="sr-only">
+            <caption>
+              Temperature and wind at the start of each hour. Precipitation
+              amount and chance cover the following hour, including rain,
+              showers and snow. Missing values are unavailable.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Hour starting</th>
+                <th scope="col">Temperature</th>
+                <th scope="col">Precipitation</th>
+                <th scope="col">Chance of precipitation</th>
+                <th scope="col">Wind</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hours.map((hour) => (
+                <tr key={hour.starts_at}>
                   <th scope="row">
-                    <ThermometerSimpleIcon size={20} aria-hidden="true" />
-                    <span className="sr-only">Temperature</span>
+                    {date.format(new Date(hour.starts_at))}{" "}
+                    <time dateTime={hour.starts_at}>
+                      {hourTime.format(new Date(hour.starts_at))}
+                    </time>{" "}
+                    {
+                      hourOffset
+                        .formatToParts(new Date(hour.starts_at))
+                        .find((part) => part.type === "timeZoneName")?.value
+                    }
+                    {hour.temperature_c === null &&
+                    hour.wind_ms === null &&
+                    hour.precipitation_mm === null &&
+                    hour.precipitation_probability_percent === null
+                      ? " Hourly conditions unavailable"
+                      : null}
                   </th>
-                  {hours.map((hour) => (
-                    <td key={hour.starts_at}>
-                      <span
-                        className="weather-hour-lift"
-                        data-gap={hour.temperature_c === null}
-                        // SAFETY: CSSProperties omits custom properties; --lift is a unitless 0..1 temperature height read by .weather-hour-lift.
-                        style={
-                          {
-                            "--lift":
-                              hour.temperature_c === null
-                                ? 0
-                                : lift(hour.temperature_c),
-                          } as React.CSSProperties
-                        }
-                      >
-                        {value(hour.temperature_c, "°C")}
-                      </span>
-                    </td>
-                  ))}
+                  <td>{value(hour.temperature_c, "°C")}</td>
+                  <td>{value(hour.precipitation_mm, "mm")}</td>
+                  <td>{value(hour.precipitation_probability_percent, "%")}</td>
+                  <td>{value(hour.wind_ms, "m/s")}</td>
                 </tr>
-                <tr className="weather-hour-rain">
-                  <th scope="row">
-                    <DropIcon size={20} aria-hidden="true" />
-                    <span className="sr-only">
-                      Precipitation <span>Over this hour</span>
-                    </span>
-                  </th>
-                  {hours.map((hour) => (
-                    <td key={hour.starts_at}>
-                      <div
-                        className="weather-rain-track"
-                        aria-hidden="true"
-                        data-missing={hour.precipitation_mm === null}
-                      >
-                        {hour.precipitation_mm !== null ? (
-                          <svg
-                            className="weather-rain-bar"
-                            viewBox="0 0 24 48"
-                            aria-hidden="true"
-                          >
-                            <rect
-                              x="0"
-                              y={48 - (hour.precipitation_mm / peak) * 48}
-                              width="24"
-                              height={(hour.precipitation_mm / peak) * 48}
-                              rx="3"
-                            />
-                          </svg>
-                        ) : null}
-                      </div>
-                      <Reading
-                        amount={hour.precipitation_mm}
-                        unit="mm"
-                        quiet={hour.precipitation_mm === 0}
-                      />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="weather-hour-quiet">
-                  <th scope="row">
-                    <UmbrellaIcon size={20} aria-hidden="true" />
-                    <span className="sr-only">
-                      Chance <span>Of precipitation</span>
-                    </span>
-                  </th>
-                  {hours.map((hour) => (
-                    <td key={hour.starts_at}>
-                      <Reading
-                        amount={hour.precipitation_probability_percent}
-                        unit="%"
-                        quiet={
-                          (hour.precipitation_probability_percent ?? 100) < 20
-                        }
-                      />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="weather-hour-quiet">
-                  <th scope="row">
-                    <WindIcon size={20} aria-hidden="true" />
-                    <span className="sr-only">Wind</span>
-                  </th>
-                  {hours.map((hour) => (
-                    <td key={hour.starts_at}>
-                      <Reading amount={hour.wind_ms} unit="m/s" />
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
     </section>
@@ -468,14 +331,13 @@ function ForecastDays({ days }: { days: Days }): React.JSX.Element {
   )
 }
 
-/** Whether the forecast still holds: nothing to see while fresh, a rewind mark when stale. */
-export function WeatherFreshness({
+/** Whether the forecast still holds: nothing to see while fresh, a rewind mark when stale. The
+ * page refreshes itself, so there is no manual check. */
+function WeatherFreshness({
   weather,
 }: {
-  weather: WeatherRead
-}): React.JSX.Element | null {
-  if (weather.state === "unavailable") return null
-
+  weather: Extract<WeatherRead, { state: "fresh" | "stale" }>
+}): React.JSX.Element {
   const stale = weather.state === "stale"
   const fetched = new Date(weather.forecast.fetched_at)
 
@@ -494,12 +356,14 @@ export function WeatherFreshness({
         {timestamp.format(fetched)} · Valid until{" "}
         {timestamp.format(new Date(weather.forecast.valid_until))}
       </span>
-      <CheckAgainButton compact />
     </div>
   )
 }
 
-/** Current conditions, the next day by the hour and seven days, from one cached forecast. */
+/**
+ * The numbers on the left (now, then the week as ranges on one scale), the next day as a
+ * horizon filling the right.
+ */
 export function WeatherOverview({
   weather,
 }: {
@@ -524,10 +388,11 @@ export function WeatherOverview({
           Current conditions
         </h2>
         <p className="wx-temp">
-          <Measure amount={current?.temperature_c} unit="°C" />
+          <span aria-hidden="true">{degrees(current?.temperature_c)}</span>
+          <span className="sr-only">{value(current?.temperature_c, "°C")}</span>
         </p>
         <p className="wx-condition">
-          <WeatherGlyph code={current?.weather_code ?? null} size={112} />
+          <WeatherGlyph code={current?.weather_code ?? null} size={96} />
           <span className="sr-only">
             {weatherDescription(current?.weather_code ?? null)}
           </span>
@@ -539,7 +404,10 @@ export function WeatherOverview({
               <span className="sr-only">Feels like</span>
             </dt>
             <dd>
-              <Reading amount={current?.feels_like_c} unit="°C" />
+              <span aria-hidden="true">{degrees(current?.feels_like_c)}</span>
+              <span className="sr-only">
+                {value(current?.feels_like_c, "°C")}
+              </span>
             </dd>
           </div>
           <div>
@@ -548,10 +416,11 @@ export function WeatherOverview({
               <span className="sr-only">Wind</span>
             </dt>
             <dd>
-              <Reading amount={current?.wind_ms} unit="m/s" />
+              <Measure amount={current?.wind_ms} unit="m/s" />
             </dd>
           </div>
         </dl>
+        <WeatherFreshness weather={weather} />
         <p className="sr-only">
           {current === null
             ? "Current conditions unavailable"
@@ -559,31 +428,36 @@ export function WeatherOverview({
         </p>
       </section>
       <HourlyForecast hours={forecast.hourly} />
-      <section aria-labelledby="forecast-heading">
+      <section className="wx-week" aria-labelledby="forecast-heading">
         <h2 id="forecast-heading" className="sr-only">
           Seven days
         </h2>
-        <ol className="wx-days">
-          {forecast.days.map((day) => (
-            <li key={day.date} className="wx-day">
+        <ol>
+          {forecast.days.map((day, index) => (
+            <li key={day.date} className="wx-day" data-today={index === 0}>
               <h3>
                 <time dateTime={day.date}>
-                  <span aria-hidden="true">{weekdayName(day.date)}</span>
+                  <span aria-hidden="true">
+                    {index === 0 ? "Today" : weekdayName(day.date)}
+                  </span>
                   <span className="sr-only">
                     {date.format(new Date(`${day.date}T12:00:00Z`))}
                   </span>
                 </time>
               </h3>
               <p className="wx-day-condition">
-                <WeatherGlyph code={day.weather_code} size={30} />
+                <WeatherGlyph code={day.weather_code} size={26} />
                 <span className="sr-only">
                   {weatherDescription(day.weather_code)}
                 </span>
               </p>
               <dl>
-                <div className="wx-day-high" data-gap={day.high_c === null}>
-                  <dt className="sr-only">High</dt>
-                  <dd>{value(day.high_c, "°C")}</dd>
+                <div className="wx-day-low" data-gap={day.low_c === null}>
+                  <dt className="sr-only">Low</dt>
+                  <dd>
+                    <span aria-hidden="true">{degrees(day.low_c)}</span>
+                    <span className="sr-only">{value(day.low_c, "°C")}</span>
+                  </dd>
                 </div>
                 <div className="wx-range" aria-hidden="true">
                   {day.low_c === null || day.high_c === null ? null : (
@@ -598,9 +472,12 @@ export function WeatherOverview({
                     />
                   )}
                 </div>
-                <div className="wx-day-low" data-gap={day.low_c === null}>
-                  <dt className="sr-only">Low</dt>
-                  <dd>{value(day.low_c, "°C")}</dd>
+                <div className="wx-day-high" data-gap={day.high_c === null}>
+                  <dt className="sr-only">High</dt>
+                  <dd>
+                    <span aria-hidden="true">{degrees(day.high_c)}</span>
+                    <span className="sr-only">{value(day.high_c, "°C")}</span>
+                  </dd>
                 </div>
                 <div
                   className="wx-day-rain"
@@ -610,8 +487,8 @@ export function WeatherOverview({
                   <dt className="sr-only">Precipitation</dt>
                   <dd>{value(day.precipitation_mm, "mm")}</dd>
                 </div>
-                <div className="wx-day-wind" data-gap={day.wind_ms === null}>
-                  <dt className="sr-only">Max wind</dt>
+                <div className="sr-only" data-gap={day.wind_ms === null}>
+                  <dt>Max wind</dt>
                   <dd>{value(day.wind_ms, "m/s")}</dd>
                 </div>
               </dl>
