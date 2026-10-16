@@ -88,6 +88,8 @@ pub struct DailyRow {
     pub strain: Option<f64>,
     pub skin_temp_dev_c: Option<f64>,
     pub resp_rate_bpm: Option<f64>,
+    pub spo2_pct: Option<f64>,
+    pub steps: Option<i64>,
 }
 
 impl DailyRow {
@@ -116,6 +118,8 @@ pub struct ResolvedDaily {
     pub strain: Sourced<f64>,
     pub skin_temp_dev_c: Sourced<f64>,
     pub resp_rate_bpm: Sourced<f64>,
+    pub spo2_pct: Sourced<f64>,
+    pub steps: Sourced<i64>,
 }
 
 /// Resolves one day's imported and computed rows. `sleep_edited` is whether a computed session
@@ -149,6 +153,8 @@ pub fn merge_daily(
         strain: pick(imported, computed, |row| row.strain),
         skin_temp_dev_c: pick(imported, computed, |row| row.skin_temp_dev_c),
         resp_rate_bpm: pick(imported, computed, |row| row.resp_rate_bpm),
+        spo2_pct: pick(imported, computed, |row| row.spo2_pct),
+        steps: pick(imported, computed, |row| row.steps),
     };
 
     if let (Some(imported), Some(computed)) = (imported, computed) {
@@ -305,6 +311,43 @@ pub fn stage_minutes(stages_json: &str) -> Option<StageMinutes> {
     }
     let in_bed = totals.awake + totals.light + totals.deep + totals.rem;
     (in_bed > 0.0).then_some(totals)
+}
+
+/// One ordered stage segment of a sleep session, in Unix seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StageSegment {
+    pub start: i64,
+    pub end: i64,
+    pub stage: &'static str,
+}
+
+/// Decodes `{start, end, stage}` segments (Unix seconds) in time order, clamped to
+/// `[from, to]`. `wake` is reported as `awake`, as in `stage_minutes`. Segments that are
+/// unreadable, of an unknown stage or empty after clamping are dropped. `None` when the JSON
+/// holds no such segment, as for the minutes-object and `{stage, min}` shapes.
+pub fn stage_segments(stages_json: &str, from: i64, to: i64) -> Option<Vec<StageSegment>> {
+    let Value::Array(entries) = serde_json::from_str::<Value>(stages_json).ok()? else {
+        return None;
+    };
+    let mut segments: Vec<StageSegment> = entries
+        .iter()
+        .filter_map(Value::as_object)
+        .filter_map(|entry| {
+            let bound = |key: &str| entry.get(key).and_then(Value::as_f64);
+            let stage = match entry.get("stage").and_then(Value::as_str)? {
+                "wake" | "awake" => "awake",
+                "light" => "light",
+                "deep" => "deep",
+                "rem" => "rem",
+                _ => return None,
+            };
+            let start = (bound("start")?.round() as i64).max(from);
+            let end = (bound("end")?.round() as i64).min(to);
+            (end > start).then_some(StageSegment { start, end, stage })
+        })
+        .collect();
+    segments.sort_by_key(|segment| (segment.start, segment.end));
+    (!segments.is_empty()).then_some(segments)
 }
 
 /// Where NOOP says a workout row came from, classified from its stored `source` like NOOP's
@@ -618,6 +661,32 @@ mod tests {
         // Unmeasurable coverage (minutes object, stray values) still counts as full staging.
         assert_eq!(rank(Some(r#"{"deep":30}"#)), 2);
         assert_eq!(rank(Some(r#"[{"start":0,"end":50,"stage":"deep"},1]"#)), 2);
+    }
+
+    #[test]
+    fn stage_segments_are_ordered_clamped_and_named_like_stage_minutes() {
+        let segments = r#"[{"start":600,"end":900,"stage":"wake"},{"start":0,"end":600,"stage":"deep"},
+            {"start":900,"end":900,"stage":"rem"},{"start":900,"end":2000,"stage":"light"},
+            {"start":10,"end":20,"stage":"mystery"},"noise"]"#;
+        let segment = |start, end, stage| StageSegment { start, end, stage };
+        assert_eq!(
+            stage_segments(segments, 100, 1000),
+            Some(vec![
+                segment(100, 600, "deep"),
+                segment(600, 900, "awake"),
+                segment(900, 1000, "light"),
+            ])
+        );
+        assert_eq!(stage_segments(segments, 5000, 6000), None);
+        assert_eq!(
+            stage_segments(r#"[{"stage":"light","min":12.5}]"#, 0, 100),
+            None
+        );
+        assert_eq!(
+            stage_segments(r#"{"awake":1,"light":2,"deep":3,"rem":4}"#, 0, 100),
+            None
+        );
+        assert_eq!(stage_segments("not json", 0, 100), None);
     }
 
     #[test]

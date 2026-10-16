@@ -21,6 +21,8 @@ mod noop_merge;
 mod noop_source;
 pub mod noop_workout_detail;
 pub mod recovery;
+mod rest;
+mod route;
 pub mod sleep_recent;
 pub mod trend;
 pub mod workouts;

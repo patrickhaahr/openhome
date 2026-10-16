@@ -92,14 +92,14 @@ function HomePage(): React.JSX.Element {
   )
 }
 
-/** Today's three rings on the paper; tapping them opens the day on Workout. */
+/** Today's three rings on the paper; tapping them opens the day on Recovery. */
 function RecoveryGlance({
   glance,
 }: {
   glance: Glance | undefined
 }): React.JSX.Element {
   return (
-    <Link to="/workout" className="recovery-glance">
+    <Link to="/recovery" className="recovery-glance">
       <h2 className="sr-only">Recovery today</h2>
       <Deferred promise={glance?.recovery} ghosts={3}>
         {(recovery) => <TodayRings data={recovery} />}

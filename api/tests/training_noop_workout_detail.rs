@@ -100,6 +100,9 @@ async fn the_reference_run_reports_heart_rate_from_the_strap_samples() {
             "distance_m": 7169.41850045851,
             "energy_kcal": 817.170682229156,
             "strain_score": 58.45,
+            "steps": null,
+            // The stored stand-in is not a polyline, so no route exists.
+            "has_route": false,
             "avg_pace_s_per_km": null,
             "hr": {"basis": "strap_samples", "avg_bpm": null, "min_bpm": 84.0, "max_bpm": 185.0},
             "hr_series": null,
@@ -224,7 +227,7 @@ async fn repeats_the_listed_workout_and_its_training_day_sync() {
         assert_eq!(body[field], listed[field], "{field}");
     }
     assert_eq!(body["noop"], day["noop"]);
-    // The route stays in the database.
+    // The stored text is never echoed.
     assert!(!body.to_string().contains("route-stand-in"), "{body}");
 }
 
@@ -1087,4 +1090,73 @@ async fn the_5_minute_mark_reads_samples_until_315_s_after_the_end() {
 
     let (recovery, _) = recovery_of(&samples).await;
     assert_eq!(recovery["at_5_min"], json!({"hr_bpm": 131, "drop_bpm": 19}));
+}
+
+#[tokio::test]
+async fn a_captured_route_is_decoded_to_latitude_longitude_pairs_with_the_steps() {
+    // The Google documentation's example polyline: (38.5, -120.2), (40.7, -120.95).
+    let run = noop_workout(
+        1_790_438_400,
+        1_790_442_000,
+        "Running",
+        "manual",
+        json!({"durationS": 3600.0, "steps": 5812, "routePolyline": "_p~iF~ps|U_ulLnnqC"}),
+    );
+    let mut mirror = Mirror::empty().await;
+    mirror
+        .push(
+            SOURCE,
+            IMPORTED,
+            WORKOUT_WINDOW,
+            std::slice::from_ref(&run),
+            PUSHED_AT,
+        )
+        .await;
+    mirror
+        .push(SOURCE, COMPUTED, WORKOUT_WINDOW, &[], PUSHED_AT)
+        .await;
+    let app = app(&mirror).await;
+    let day = workouts_on(&app, "2026-09-26").await;
+    let listed = &day["noop_workouts"][0];
+    assert_eq!(listed["steps"], 5812);
+
+    let body = detail_of(
+        &app,
+        listed["source"].as_str().unwrap(),
+        listed["start"].as_str().unwrap(),
+    )
+    .await;
+
+    assert_eq!(body["steps"], 5812);
+    assert_eq!(body["has_route"], true);
+    // The route is private: it is only returned when asked for.
+    assert!(body.get("route").is_none(), "{body}");
+    let (status, with_route) = common::send_request(
+        app.clone(),
+        &format!(
+            "/api/training/noop-workouts/{}/{}/Running?route=true",
+            listed["source"].as_str().unwrap(),
+            listed["start"].as_str().unwrap()
+        ),
+        Some(API_KEY),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{with_route}");
+    assert_eq!(
+        with_route["route"],
+        json!([[38.5, -120.2], [40.7, -120.95]])
+    );
+    // Without a key neither the detail nor its route is served.
+    let (status, body) = common::send_request(
+        app.clone(),
+        &format!(
+            "/api/training/noop-workouts/{}/{}/Running?route=true",
+            listed["source"].as_str().unwrap(),
+            listed["start"].as_str().unwrap()
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(!body.to_string().contains("38.5"), "{body}");
 }

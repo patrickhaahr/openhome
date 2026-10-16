@@ -43,12 +43,12 @@ type ProfileEditing = {
   readonly draft: ReturnType<typeof profileDraft>
 }
 
-const numberFormat = new Intl.NumberFormat("da-DK", {
+const numberFormat = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 3,
   useGrouping: false,
 })
 
-const oneDecimal = new Intl.NumberFormat("da-DK", {
+const oneDecimal = new Intl.NumberFormat("en-GB", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 })

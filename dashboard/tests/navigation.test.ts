@@ -12,6 +12,7 @@ import { Route as HomeRoute } from "@/routes/index"
 import { Route as WeatherRoute } from "@/routes/weather"
 import { Route as WishlistRoute } from "@/routes/wishlist"
 import { Route as WatchlistRoute } from "@/routes/watchlist"
+import { Route as RecoveryRoute } from "@/routes/recovery"
 import { Route as WorkoutRoute } from "@/routes/workout"
 import { unavailableWeather } from "@/lib/weather"
 import { routeTree } from "@/routeTree.gen"
@@ -23,6 +24,7 @@ test("opens focused views through persistent navigation, restores browser histor
   const originalWishlistLoader = WishlistRoute.options.loader
   const originalWatchlistLoader = WatchlistRoute.options.loader
   const originalWorkoutLoader = WorkoutRoute.options.loader
+  const originalRecoveryLoader = RecoveryRoute.options.loader
   const unavailable = { state: "unavailable", reason: "unreachable" } as const
   WorkoutRoute.options.loader = ({ deps }) =>
     deps.view === "body"
@@ -34,22 +36,20 @@ test("opens focused views through persistent navigation, restores browser histor
             history: [],
           },
         }
-      : {
-          view: "today",
-          data: {
-            day: "2026-01-15",
-            today: "2026-01-15",
-            recovery: unavailable,
-            week: [],
-            trends: {
-              hrv: unavailable,
-              resting_heart_rate: unavailable,
-              sleep_duration: unavailable,
-            },
-            context: unavailable,
-            detail: { state: "none" },
-          },
-        }
+      : { view: "log", data: unavailable }
+  RecoveryRoute.options.loader = ({ deps }) => ({
+    day: deps.day ?? "2026-01-15",
+    today: "2026-01-15",
+    recovery: unavailable,
+    week: [],
+    trends: {
+      hrv: unavailable,
+      resting_heart_rate: unavailable,
+      sleep_duration: unavailable,
+    },
+    context: unavailable,
+    detail: { state: "none" },
+  })
   WatchlistRoute.options.loader = () => ({
     state: "available",
     owners: [],
@@ -161,6 +161,24 @@ test("opens focused views through persistent navigation, restores browser histor
       "Weather unavailable"
     )
 
+    const recovery = document.querySelector<HTMLAnchorElement>(
+      'nav a[href="/recovery"]'
+    )
+
+    if (recovery === null) throw new Error("Expected Recovery navigation")
+
+    await act(async () => {
+      recovery.click()
+      await router.load()
+    })
+    expect(document.querySelector("h1")?.textContent).toBe("Recovery")
+    expect(
+      document.querySelector('nav a[aria-current="page"]')?.textContent
+    ).toBe("Recovery")
+    expect(document.querySelector("main")?.textContent).toContain(
+      "Recovery day unavailable"
+    )
+
     const workout = document.querySelector<HTMLAnchorElement>(
       'nav a[href="/workout"]'
     )
@@ -175,8 +193,13 @@ test("opens focused views through persistent navigation, restores browser histor
     expect(
       document.querySelector('nav a[aria-current="page"]')?.textContent
     ).toBe("Workout")
+    expect(
+      document.querySelector(
+        'nav[aria-label="Workout views"] a[aria-current="page"]'
+      )?.textContent
+    ).toBe("Log")
     expect(document.querySelector("main")?.textContent).toContain(
-      "Recovery day unavailable"
+      "Workouts unavailable"
     )
 
     const body = document.querySelector<HTMLAnchorElement>(
@@ -204,8 +227,23 @@ test("opens focused views through persistent navigation, restores browser histor
       await router.load()
     })
     expect(document.querySelector("main")?.textContent).toContain(
-      "Recovery day unavailable"
+      "Workouts unavailable"
     )
+
+    // The retired Today view and old day links land on Recovery, keeping the day.
+    await act(async () => {
+      await router.navigate({
+        to: "/workout",
+        search: { view: "today", day: "2026-01-12" },
+      })
+    })
+    expect(router.state.location.pathname).toBe("/recovery")
+    expect(router.state.location.search).toEqual({ day: "2026-01-12" })
+    await act(async () => {
+      await router.navigate({ to: "/workout", search: { day: "2026-01-11" } })
+    })
+    expect(router.state.location.pathname).toBe("/recovery")
+    expect(router.state.location.search).toEqual({ day: "2026-01-11" })
   } finally {
     await act(async () => {
       root.unmount()
@@ -225,5 +263,8 @@ test("opens focused views through persistent navigation, restores browser histor
 
     if (originalWorkoutLoader !== undefined)
       WorkoutRoute.options.loader = originalWorkoutLoader
+
+    if (originalRecoveryLoader !== undefined)
+      RecoveryRoute.options.loader = originalRecoveryLoader
   }
 })

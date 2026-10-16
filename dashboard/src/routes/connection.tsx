@@ -55,7 +55,7 @@ const outcomes: Record<
   },
 }
 
-const checkTime = new Intl.DateTimeFormat("da-DK", {
+const checkTime = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
   timeStyle: "medium",
   timeZone: "Europe/Copenhagen",

@@ -217,9 +217,9 @@ test("logs decimal-comma Body Weight, rejects duplicates without replacing store
     Array.from(container.querySelectorAll("tbody tr")).map(
       (row) => row.textContent
     )
-  ).toEqual([`${old}74,5 kg`, `${recent}75,125 kg`, `${latest}74,2 kg`])
+  ).toEqual([`${old}74.5 kg`, `${recent}75.125 kg`, `${latest}74.2 kg`])
   expect(container.querySelector(".body-figure")?.textContent).toBe(
-    `Latest body weight, ${latest}: 74,2kg▼ Change since ${old}: 0,3`
+    `Latest body weight, ${latest}: 74.2kg▼ Change since ${old}: 0.3`
   )
   expect(container.querySelectorAll(".weight-chart-dot")).toHaveLength(3)
   await type("Body weight (kg)", "73")
@@ -240,7 +240,7 @@ test("logs decimal-comma Body Weight, rejects duplicates without replacing store
 
   await click("1M")
   expect(range).toEqual({ from: shiftDay(today, -30), to: undefined })
-  expect(container.querySelector("tbody")?.textContent).toBe(`${latest}74,2 kg`)
+  expect(container.querySelector("tbody")?.textContent).toBe(`${latest}74.2 kg`)
   expect(
     container.querySelector('.body-range[aria-pressed="true"]')?.textContent
   ).toBe("1M")

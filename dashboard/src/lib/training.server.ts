@@ -8,6 +8,7 @@ import {
   recoveryDay,
   shiftDay,
   trainingContext,
+  stripDays,
   trendDays,
   type RecoveryDay,
   type TrendMetric,
@@ -18,9 +19,15 @@ import {
 
 async function read<T>(
   path: `/api/${string}`,
-  schema: z.ZodType<T>
+  schema: z.ZodType<T>,
+  query?: Record<string, string>
 ): Promise<TrainingRead<T>> {
-  const result = await requestOpenHome({ path, method: "GET", timeoutMs: 5000 })
+  const result = await requestOpenHome({
+    path,
+    method: "GET",
+    timeoutMs: 5000,
+    query,
+  })
 
   if (result.state !== "received")
     return { state: "unavailable", reason: result.state }
@@ -50,6 +57,34 @@ async function read<T>(
   }
 }
 
+/** The earlier of two Training Days. */
+function minDay(a: string, b: string): string {
+  return a < b ? a : b
+}
+
+/** Recovery Days from `from` through `to`, oldest first, leaving out `skip` (read by the caller). */
+export async function readRecoveryDays(
+  from: string,
+  to: string,
+  skip?: string
+): Promise<TrainingState["week"]> {
+  const days: string[] = []
+
+  for (
+    let next = from;
+    next <= to && days.length < 90;
+    next = shiftDay(next, 1)
+  )
+    if (next !== skip) days.push(next)
+
+  return Promise.all(
+    days.map(async (day) => ({
+      day,
+      recovery: await read(`/api/training/days/${day}/recovery`, recoveryDay),
+    }))
+  )
+}
+
 /** Read existing Axum training models in parallel; selection and wearable interpretation remain in Axum. */
 export async function readTraining(
   search: TrainingSearch
@@ -57,6 +92,9 @@ export async function readTraining(
   const today = trainingDayOn(new Date())
   const day = search.day ?? today
   const from = shiftDay(day, -6)
+  // The day strip opens on a month around the selected day and fills toward today and the past.
+  const weekEnd = day >= today ? day : minDay(today, shiftDay(day, 13))
+  const weekStart = shiftDay(weekEnd, 1 - stripDays)
   const selected = search.noop
 
   // Literal dot segments are normalized even when URL-encoded; never let them change the API path.
@@ -71,7 +109,8 @@ export async function readTraining(
         ? Promise.resolve({ state: "unavailable", reason: "invalid" } as const)
         : read(
             `/api/training/noop-workouts/${encodeURIComponent(selected.source)}/${encodeURIComponent(selected.start)}/${encodeURIComponent(selected.sport)}`,
-            noopWorkoutDetail
+            noopWorkoutDetail,
+            { route: "true" }
           )
 
   const trendFrom = shiftDay(day, 1 - trendDays)
@@ -82,16 +121,10 @@ export async function readTraining(
   const trend = (metric: TrendMetric) =>
     read(`/api/training/trends/${metric}/${trendFrom}/${day}`, metricTrend)
 
-  // Axum scores one Recovery Day per read; the week strip reads the six before the selected day.
-  const [earlier, recovery, hrv, restingHr, sleep, context, selectedDetail] =
+  // Axum scores one Recovery Day per read; the strip reads the days around the selected one.
+  const [others, recovery, hrv, restingHr, sleep, context, selectedDetail] =
     await Promise.all([
-      Promise.all(
-        Array.from({ length: 6 }, async (_, index) => {
-          const weekDay = shiftDay(from, index)
-
-          return { day: weekDay, recovery: await recoveryOn(weekDay) }
-        })
-      ),
+      readRecoveryDays(weekStart, weekEnd, day),
       recoveryOn(day),
       trend("hrv"),
       trend("resting_heart_rate"),
@@ -104,7 +137,9 @@ export async function readTraining(
     day,
     today,
     recovery,
-    week: [...earlier, { day, recovery }],
+    week: [...others, { day, recovery }].sort((a, b) =>
+      a.day.localeCompare(b.day)
+    ),
     trends: { hrv, resting_heart_rate: restingHr, sleep_duration: sleep },
     context,
     detail: selectedDetail,

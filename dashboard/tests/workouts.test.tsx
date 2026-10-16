@@ -374,7 +374,7 @@ test("a rejected edit keeps the draft and the stored workout, and saves once cor
     duration_seconds: 40,
     notes: "Strict form",
   })
-  expect(container.textContent).toContain("7 reps in 40 s · +12,35 kg")
+  expect(container.textContent).toContain("7 reps in 40 s · +12.35 kg")
 })
 
 test("removes a workout only after confirmation and then shows the next newest", async () => {

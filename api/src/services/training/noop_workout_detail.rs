@@ -11,8 +11,9 @@
 //! Heart Rate Recovery ports the NOOP app's `HeartRateRecovery` so the API reports the drops the
 //! app shows. It needs the Profile's Max Heart Rate, which is never inferred.
 //!
-//! The route, raw samples and RR intervals never leave the API; only values computed from the
-//! samples are returned.
+//! Raw samples and RR intervals never leave the API; only values computed from the samples are
+//! returned. The route is returned decoded and thinned (see `route`), to authenticated clients
+//! only; it is private household data and is never logged.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -23,6 +24,7 @@ use crate::error::{AppError, Result};
 use super::calendar::{self, CalendarDay};
 use super::noop_merge::{self, WorkoutOrigin, WorkoutRow};
 use super::noop_source::{self, HrSample, NoopSync};
+use super::route;
 use super::workouts::{self, WORKOUT_STREAMS, WorkoutCoverage};
 
 /// The longest NOOP Workout whose heart rate is read. A longer one is rejected rather than
@@ -66,8 +68,17 @@ pub struct NoopWorkoutDetail {
     pub duration_min: Option<f64>,
     pub distance_m: Option<f64>,
     pub energy_kcal: Option<f64>,
+    /// Steps counted over the workout.
+    pub steps: Option<i64>,
     /// NOOP's derived 0-100 workout strain; a model output, not a measurement.
     pub strain_score: Option<f64>,
+    /// Whether a usable GPS route was captured.
+    pub has_route: bool,
+    /// The captured GPS route as `[latitude, longitude]` degrees in order, thinned to at most 300
+    /// points with the first and last kept. Only present when the read asked for it with
+    /// `?route=true` and a route exists. Private data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route: Option<Vec<[f64; 2]>>,
     /// Recorded duration over distance; null without a positive distance.
     pub avg_pace_s_per_km: Option<f64>,
     pub hr: HeartRate,
@@ -197,6 +208,7 @@ pub async fn noop_workout_detail(
     source: &str,
     start: DateTime<Utc>,
     sport: Option<&str>,
+    include_route: bool,
 ) -> Result<NoopWorkoutDetail> {
     let not_found = || {
         let sport = sport.map(|sport| format!("{sport} ")).unwrap_or_default();
@@ -276,6 +288,7 @@ pub async fn noop_workout_detail(
         hr_zones: hr_zones.as_ref().err().copied(),
         hr_recovery: hr_recovery.as_ref().err().copied(),
     };
+    let route = stored_route(pool, &installation, &workout).await?;
     Ok(NoopWorkoutDetail {
         start: calendar::iso_from_unix(workout.start_ts)?,
         end: calendar::iso_from_unix(workout.end_ts)?,
@@ -292,8 +305,35 @@ pub async fn noop_workout_detail(
         duration_min: workout.duration_s.map(|seconds| seconds / 60.0),
         distance_m: workout.distance_m,
         energy_kcal: workout.energy_kcal,
+        steps: workout.steps,
         strain_score: workout.strain,
+        has_route: route.is_some(),
+        route: route.filter(|_| include_route),
     })
+}
+
+/// The workout row's decoded and thinned route. Nothing about it is logged.
+async fn stored_route(
+    pool: &SqlitePool,
+    installation: &noop_source::Installation,
+    workout: &WorkoutRow,
+) -> Result<Option<Vec<[f64; 2]>>> {
+    let encoded: Option<String> = sqlx::query_scalar(
+        "SELECT route_polyline FROM workout \
+         WHERE source_id = ? AND device_id = ? AND start_ts = ? AND sport = ?",
+    )
+    .bind(&installation.source_id)
+    .bind(&workout.device_id)
+    .bind(workout.start_ts)
+    .bind(&workout.sport)
+    .fetch_optional(pool)
+    .await
+    .map_err(anyhow::Error::from)?
+    .flatten();
+    Ok(encoded
+        .as_deref()
+        .and_then(route::decode)
+        .map(|fixes| route::downsample(fixes, route::MAX_ROUTE_POINTS)))
 }
 
 /// Seconds per km over the recorded duration; `None` without a positive distance.

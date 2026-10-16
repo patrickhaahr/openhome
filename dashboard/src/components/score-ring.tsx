@@ -68,8 +68,10 @@ export function ScoreRing({
         {RingIcon === undefined ? null : (
           <RingIcon className="score-ring-icon" weight="fill" />
         )}
-        <span data-gap={figure === null}>{figure ?? "–"}</span>
-        {figure !== null && unit !== undefined ? <small>{unit}</small> : null}
+        <span className="score-ring-value">
+          <span data-gap={figure === null}>{figure ?? "–"}</span>
+          {figure !== null && unit !== undefined ? <small>{unit}</small> : null}
+        </span>
       </div>
       <figcaption aria-hidden="true">{label}</figcaption>
     </figure>

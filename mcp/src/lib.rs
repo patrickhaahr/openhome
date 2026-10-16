@@ -61,10 +61,12 @@ synced; check each result's freshness and coverage before treating a gap as real
 
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
-sessions ending that day. Every value has a unit (sleep in minutes, efficiency as a 0-1 fraction, \
+sessions ending that day; each session has `stage_min` totals and, when staged, `stages`: its \
+awake/light/deep/rem segments in time order. Every value has a unit (sleep in minutes, efficiency as a 0-1 fraction, \
 resting heart rate in beats/min, HRV as RMSSD in ms, skin temperature as a deviation in degC from the user's baseline rather than an \
-absolute temperature, respiratory rate in breaths/min) and names the NOOP namespace it was selected \
-from. `derived_scores` are NOOP's own 0-100 recovery and strain scores: model outputs, not \
+absolute temperature, respiratory rate in breaths/min, SpO2 in percent, steps as a count) and names the NOOP namespace it was selected \
+from. `derived_scores` are 0-100 recovery and strain scores from NOOP and a rest score OpenHome derives \
+from NOOP's sleep data (source openhome-derived): model outputs, not \
 measurements or diagnoses. `journal` lists the Journal Entries the user logged in NOOP against \
 `day` (felt recovered, alcohol, illness, stress, supplements, ...), one per question with its yes/no \
 answer, numeric value, notes and source; entries logged on `day` often explain the Sleep Night waking \
@@ -75,7 +77,8 @@ rows may be missing; `coverage.journal` is the journal's).";
 
 const SLEEP_RECENT: &str = "The most recent 1-14 Europe/Copenhagen Sleep Nights, newest wake day \
 first. Each entry includes NOOP sleep duration and stages in minutes, efficiency as a 0-1 \
-fraction, session start and end timestamps with offsets, per-value source, and freshness and \
+fraction, session start and end timestamps with offsets, ordered stage segments (`stages`), \
+per-value source, and freshness and \
 coverage. Missing nights remain in the list with null values; check `noop.coverage` to distinguish \
 recorded gaps from unsynced data.";
 
@@ -97,7 +100,9 @@ const NOOP_WORKOUT_DETAIL: &str = "One NOOP Workout in detail. Pass its `source`
 `sport` exactly as workouts_on_day lists them; `start` is matched as an instant, so any UTC \
 offset names the same workout. `sport` may be left out when no other workout from that source \
 starts at the same instant; otherwise leaving it out is a 409 error naming the sports. Returns the workout's start and end, sport, origin, source, NOOP's recorded \
-duration in minutes, distance in m, energy in kcal and NOOP's derived 0-100 strain score, plus \
+duration in minutes, distance in m, energy in kcal, steps and NOOP's derived 0-100 strain score, \
+whether a GPS route was captured (`has_route`; the route's coordinates are private and are not \
+returned here), plus \
 the average pace in seconds per km (null without a positive distance). `hr` is the average, min \
 and max heart rate in beats/min, always from the strap's samples whatever source recorded the \
 workout: `hr.basis` is `strap_samples`, or `workout_row` when the strap has no samples in the \

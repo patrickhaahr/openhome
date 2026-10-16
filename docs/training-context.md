@@ -65,7 +65,7 @@ The example shows one day for brevity; the response has an entry for each day in
 
 - **Two lists, never paired.** `workouts` and `noop_workouts` follow the [Workouts on a Training Day](#workouts-on-a-training-day) rules: logged Workouts carry their date, and NOOP Workouts belong to the local day their start falls on, after NOOP's cross-source deduplication. Nothing asserts that a NOOP Workout is a particular logged Workout.
 - **`workouts`**: in creation order, with Exercise entries in logged order; repeated entries of one Exercise stay separate. Each entry reduces its Sets to counts and bests: `sets` (count), `best_reps`, `best_added_weight_kg` (null when every Set was bodyweight), `best_hold_duration_s` (longest Timed Hold), `best_rpe`, and `volume_kg`. `volume_kg` follows the Volume rule in `CONTEXT.md`: reps times Added Weight, bodyweight Sets add zero, and it is null for an entry without Sets. For a weighted Timed Hold it is hold seconds times kg, as in the Progress Series. Exact Sets come from `exercise_history` or `workouts_on_day`.
-- **`noop_workouts`**: by start, with `start`, `end`, `sport`, `origin`, `duration_min`, `avg_hr_bpm`, `strain_score` and `source`. Other stored metrics, HR zones and routes are left to `workouts_on_day`.
+- **`noop_workouts`**: by start, with `start`, `end`, `sport`, `origin`, `duration_min`, `avg_hr_bpm`, `strain_score`, `steps` and `source`. Other stored metrics, HR zones and routes are left to `workouts_on_day` and the NOOP workout detail.
 - **`body_weight`**: only the daily Body Weight log. Its `source` is `body_weight` when a record exists; it has no freshness because it is entered directly.
 - **`sleep_duration`, `resting_hr`, `hrv_rmssd`**: the [Recovery Day](#recovery-day) values for the Sleep Night waking on the day, with the same precedence, including edited sleep. Sleep sessions are left to `recovery_on_day`.
 - **`noop`**: each day has one block per NOOP read. `noop.recovery` is the Recovery Day's `freshness` and `coverage` for that day, and applies to `sleep_duration`, `resting_hr` and `hrv_rmssd`. `noop.workouts` is Workouts on a Training Day's, and applies to `noop_workouts`. The top-level `last_push_at.recovery` and `last_push_at.workouts` are those reads' watermarks. Before any strap push, every NOOP value is null or empty, and freshness and coverage are `unknown`.
@@ -164,6 +164,11 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
         "detected_start": "2026-09-14T23:58:00+02:00",
         "duration_min": 96.76666666666667,
         "stage_min": { "awake": 0.0, "light": 49.5, "deep": 30.266666666666666, "rem": 17.0 },
+        "stages": [
+          { "start": "2026-09-14T23:58:00+02:00", "end": "2026-09-15T00:13:00+02:00", "stage": "deep" },
+          { "start": "2026-09-15T00:13:00+02:00", "end": "2026-09-15T00:20:30+02:00", "stage": "light" },
+          "..."
+        ],
         "efficiency_fraction": 1.0,
         "resting_hr_bpm": 47.0,
         "hrv_rmssd_ms": 88.2272585751,
@@ -177,6 +182,10 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
         "detected_start": "2026-09-15T01:23:00+02:00",
         "duration_min": 457.0,
         "stage_min": { "awake": 354.75, "light": 24.25, "deep": 36.5, "rem": 41.5 },
+        "stages": [
+          { "start": "2026-09-15T01:23:00+02:00", "end": "2026-09-15T01:59:30+02:00", "stage": "deep" },
+          "..."
+        ],
         "efficiency_fraction": 1.0,
         "resting_hr_bpm": 45.0,
         "hrv_rmssd_ms": 103.6740725999,
@@ -190,9 +199,12 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
   "hrv_rmssd": { "value": null, "unit": "ms", "source": null },
   "skin_temp_deviation": { "value": null, "unit": "degC", "source": null },
   "respiratory_rate": { "value": null, "unit": "breaths/min", "source": null },
+  "spo2": { "value": null, "unit": "percent", "source": null },
+  "steps": { "value": null, "unit": "count", "source": null },
   "derived_scores": {
     "recovery": { "value": null, "unit": "score_0_100", "source": null },
-    "strain": { "value": 25.92, "unit": "score_0_100", "source": "my-whoop-noop" }
+    "strain": { "value": 25.92, "unit": "score_0_100", "source": "my-whoop-noop" },
+    "rest": { "value": 40.13, "unit": "score_0_100", "source": "openhome-derived" }
   },
   "journal": [
     { "question": "Alcohol", "answered_yes": true, "numeric_value": 2.0, "notes": null, "source": "noop-journal" },
@@ -220,16 +232,21 @@ This example is the 2026-09-15 night. The user edited the second session in NOOP
   - `start` is the user's adjusted start if the session was edited, else `detected_start`.
   - `duration_min` is measured from `start`.
   - `stage_min` is null when the session has no staging.
+  - `stages` is the session's stage segments in time order: `[{start, end, stage}]` with the same timestamp format as `start`, and `stage` one of `awake`, `light`, `deep` or `rem` (NOOP's `wake` is reported as `awake`). Segments are clamped to the session's `start` to `end`, so none begins before an edited start or runs past the end; empty ones are dropped. It is null when the session has no time-ordered staging (none stored, or only per-stage minutes), and then `stage_min` is all there is.
 - **`hrv_rmssd`**: NOOP's nightly RMSSD.
 - **`skin_temp_deviation`**: the night's skin temperature as a deviation from the user's baseline, in °C. It is not an absolute temperature.
 - **`respiratory_rate`**: the night's respiratory rate, in breaths per minute.
-- **`derived_scores`**: NOOP's own model outputs, not measurements.
+- **`spo2`**: the day's blood oxygen saturation, in percent.
+- **`steps`**: the day's step count.
+- **`derived_scores`**: model outputs, not measurements.
+  - `recovery` and `strain` are NOOP's own scores.
+  - `rest` is NOOP's Rest composite (`sleep_performance`, 0-100) computed by OpenHome from the night's totals and the preceding sessions, so its source is `openhome-derived`. It weighs sleep against a personal need (50 %), efficiency (20 %), restorative sleep, the share of REM and deep (20 %), and the regularity of the last 28 nights (10 %). It is null when the day has no sleep or no efficiency. Where OpenHome lacks an input it follows NOOP's fallbacks: a need of 8 h under 7 nights of history, a neutral regularity of 0.5 under 3 nights, and an efficiency of 0.9 for a history night without one.
 - **`journal`**: the Journal Entries the user logged in NOOP against `day` (felt recovered, alcohol, illness, stress, supplements, ...), sorted by `question`.
   - Each entry is `{question, answered_yes, numeric_value, notes, source}`. `source` is the namespace the entry was read from.
   - An entry keeps the day it was logged against and is never shifted. Entries logged against `day` often explain the Sleep Night that wakes on the next day, so read that day's Recovery Day beside them.
   - Entries are read from every namespace of the active installation with journal rows or journal replacement windows (today `my-whoop`, `my-whoop-noop`, `noop-app` and `noop-journal`). One entry is kept per question: `noop-journal` first, then `my-whoop`, then `my-whoop-noop`, then other namespaces alphabetically.
   - Check `noop.coverage.journal` before reading an empty list as "nothing logged". Journal pushes never change `last_push_at` or `freshness`.
-- **Excluded data**: raw streams, motion data, stage segments and sync bookkeeping are never returned.
+- **Excluded data**: raw streams, motion data and sync bookkeeping are never returned.
 
 ## Workouts on a Training Day
 
@@ -323,7 +340,7 @@ This example is 2026-09-26: the user logged a Workout that day and timed a sessi
   - `origin` is NOOP's classification of the row's `source`: `manual` (logged in NOOP), `detected` (a bout NOOP's detector derived from heart rate), `whoop` (WHOOP export), `health_import` (Apple Health or Health Connect, and NOOP's fallback for unknown sources), `lifting` (Hevy or Liftosaur) or `activity_file` (GPX, TCX or FIT).
   - `source` is the device namespace of the stored row.
   - A NOOP Workout's `source`, `start` and `sport` open its [NOOP Workout Detail](#noop-workout-detail), with heart rate from the strap's samples, Heart Rate Zones, Heart Rate Recovery and the average pace.
-  - Stored HR zones, routes and raw streams are never returned.
+  - Stored HR zones and raw streams are never returned; routes only come with `?route=true` on the NOOP workout detail.
 - **An empty `noop_workouts` never means the user did not train.** With `coverage.workouts: covered`, NOOP recorded no workout starting that day. With `unknown`, rows may not have been pushed yet.
 
 ## NOOP Workout Detail
@@ -362,6 +379,8 @@ This example is the reference run of 2026-09-27, with a Max Heart Rate of 193 on
   "distance_m": 7169.41850045851,
   "energy_kcal": 817.170682229156,
   "strain_score": 58.45,
+  "steps": null,
+  "has_route": false,
   "avg_pace_s_per_km": 382.12053039235946,
   "hr": { "basis": "strap_samples", "avg_bpm": 166.07591240875914, "min_bpm": 84.0, "max_bpm": 185.0 },
   "hr_series": { "bucket_s": 15, "points": [{ "t_s": 0, "bpm": 86.6 }, { "t_s": 15, "bpm": 85.4 }] },
@@ -395,6 +414,12 @@ This example is the reference run of 2026-09-27, with a Max Heart Rate of 193 on
 ```
 
 - **Summary**: `start`, `end`, `sport`, `origin`, `source`, `duration_min`, `distance_m`, `energy_kcal` and `strain_score` have the same values and meanings as in `noop_workouts`.
+- **`steps`**: the steps counted over the workout; null when none were recorded. `noop_workouts` carries the same value.
+- **`has_route`**: whether a usable GPS route was captured.
+- **`route`**: the route as `[[latitude, longitude], ...]` in degrees, in order. It is only present when the request carries `?route=true` and a route exists; otherwise the key is absent.
+  - NOOP stores the route as a Google Encoded Polyline with precision 5 (`RouteMath` in the NOOP app). The API decodes it, keeps what parses, drops points off the globe, and reports `has_route: false` when nothing usable remains.
+  - A route longer than 300 points is thinned to 300 evenly by index, keeping the first and last point.
+  - Coordinates are private household data: only authenticated clients receive them, they are never logged, and the MCP adapter does not ask for them.
 - **`avg_pace_s_per_km`**: NOOP's recorded duration in seconds divided by the distance in km. It is null when the distance is null, zero or negative, or the duration is null.
 - **`hr`**: heart rate in beats/min over the workout window `[start, end)`.
   - Heart rate always comes from the strap: samples in the strap's imported namespace `my-whoop` of the active installation. This holds whatever namespace recorded the NOOP Workout, because the strap is the user's only heart rate sensor.
@@ -419,7 +444,7 @@ This example is the reference run of 2026-09-27, with a Max Heart Rate of 193 on
   - `hr_recovery` is null, with the reason in `unavailable.hr_recovery`, when there is no Max Heart Rate on the Profile (`hr_max_not_configured`, checked first), the workout window has no strap samples (`no_strap_samples`), eligibility is not met (`not_sustained`), or the final 30 seconds have fewer than 3 samples (`no_end_samples`).
 - **`unavailable`**: names why a null block of the detail is null, keyed by the block. A key is present only for a null block: `{}` when strap samples and a Max Heart Rate provide everything, `{"hr_zones": "hr_max_not_configured", "hr_recovery": "hr_max_not_configured"}` without a Max Heart Rate, or `{"hr_series": "no_strap_samples", "hr_zones": "no_strap_samples", "hr_recovery": "no_strap_samples"}` without strap samples. `hr_recovery` can also be the only null block (`not_sustained`, `no_end_samples`).
 - **`noop`**: the same block as Workouts on the Training Day the workout starts on. The strap's heart rate stream is append-only and has no replacement windows, so the protocol gives no coverage signal for samples. Sample sufficiency shows in `hr.basis` instead.
-- **Excluded data**: the route, raw samples, RR intervals and coordinates are never returned or logged.
+- **Excluded data**: raw samples and RR intervals are never returned. The route is only returned by an explicit `?route=true` read of the detail, and coordinates are never logged.
 
 ## Exercise Set history
 

@@ -13,6 +13,7 @@ import { RasterMap } from "@/components/raster-map"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
+  evenPadding,
   routePadding,
   type MapLine,
   type MapOrigin,
@@ -176,6 +177,7 @@ export function SharedMap({
   routes,
   theme = "night",
   credit,
+  controls = true,
 }: {
   origin: MapOrigin
   routes?: MapRoutes | undefined
@@ -183,6 +185,8 @@ export function SharedMap({
   theme?: MapTheme
   /** An extra credit merged into the map's one attribution. */
   credit?: string | undefined
+  /** The zoom, perspective and recentre plate; a map that only shows a route can go without. */
+  controls?: boolean
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | undefined>(undefined)
@@ -304,6 +308,10 @@ export function SharedMap({
         resume.current = undefined
         let loaded = false
 
+        // A route framed on its own is fitted again on a map made for the other palette.
+        if (shownRoutes.current?.framing === "even")
+          fittedLines.current = undefined
+
         map.current = created
         created.touchZoomRotate.disableRotation()
         created.keyboard.disableRotation()
@@ -374,6 +382,31 @@ export function SharedMap({
               "line-opacity": ["case", ["get", "focused"], 1, 0.75],
             },
           })
+
+          const endpoint = shownRoutes.current?.endpoint
+
+          if (endpoint !== undefined) {
+            created.addSource("endpoint", {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "Point", coordinates: [...endpoint] },
+              },
+            })
+            // A disc under the start's dot, so a loop reads as start and finish in one place.
+            created.addLayer({
+              id: "endpoint",
+              type: "circle",
+              source: "endpoint",
+              paint: {
+                "circle-radius": 12,
+                "circle-color": mapThemes[theme].casing,
+                "circle-stroke-width": 3,
+                "circle-stroke-color": mapThemes[theme].origin,
+              },
+            })
+          }
 
           created.addSource("origin", {
             type: "geojson",
@@ -510,10 +543,13 @@ export function SharedMap({
 
     fittedLines.current = routes.lines
     current.fitBounds(routeBounds(routes.lines), {
-      padding: routePadding(
-        current.getContainer().clientWidth,
-        current.getContainer().clientHeight
-      ),
+      padding:
+        routes.framing === "even"
+          ? evenPadding
+          : routePadding(
+              current.getContainer().clientWidth,
+              current.getContainer().clientHeight
+            ),
       maxZoom: 16,
       pitch: current.getPitch(),
       duration: prefersReducedMotion() ? 0 : 600,
@@ -556,6 +592,7 @@ export function SharedMap({
         palette={mapThemes[theme]}
         shade={theme}
         credit={credit}
+        controls={controls}
       />
     )
 
@@ -570,7 +607,7 @@ export function SharedMap({
             : "Map of the local area"
         }
       />
-      {view.state === "ready" ? (
+      {view.state === "ready" && controls ? (
         <div className="shared-map-controls">
           <div className="shared-map-perspective">
             <ToggleGroup

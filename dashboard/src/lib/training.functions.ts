@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
+import { z } from "zod"
 import {
   trainingSearch,
   type TrainingSearch,
@@ -15,6 +16,16 @@ export const getTraining = createServerFn({ method: "GET" })
     const { readTraining } = await import("./training.server")
 
     return readTraining(data)
+  })
+
+/** Read a run of Recovery Days for the day strip; at most 90 days, oldest first. */
+export const getRecoveryDays = createServerFn({ method: "GET" })
+  .validator(z.object({ from: z.iso.date(), to: z.iso.date() }))
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { readRecoveryDays } = await import("./training.server")
+
+    return readRecoveryDays(data.from, data.to)
   })
 
 /** Read today's Recovery Day using the server-held Axum credential. */

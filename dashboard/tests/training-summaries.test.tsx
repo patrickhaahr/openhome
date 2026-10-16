@@ -7,7 +7,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import { TrainingSummaries } from "@/components/training-summaries"
 import { trainingSearch, type TrainingSearch } from "@/lib/training"
-import { readTraining } from "@/lib/training.server"
+import { readRecoveryDays, readTraining } from "@/lib/training.server"
 import { writeWorkout } from "@/lib/workout.server"
 import { writeBodyProfile } from "@/lib/body-profile.server"
 import { startAxumFixture } from "./support/axum-fixture"
@@ -22,8 +22,6 @@ let search: TrainingSearch
 
 let pending: Promise<void>
 
-let opened: number | undefined
-
 beforeEach(async () => {
   fixture = await startAxumFixture()
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
@@ -34,7 +32,6 @@ beforeEach(async () => {
   root = createRoot(container)
   search = { day: "2026-09-30" }
   pending = Promise.resolve()
-  opened = undefined
 })
 
 afterEach(async () => {
@@ -65,11 +62,6 @@ async function render(): Promise<void> {
 
           return pending
         }}
-        openLogged={(workoutId) => {
-          opened = workoutId
-
-          return Promise.resolve()
-        }}
         refresh={() => {
           pending = render()
 
@@ -96,6 +88,20 @@ async function click(text: string): Promise<void> {
   const button = buttonNamed(text)
   await act(async () => {
     button.click()
+    await pending
+  })
+}
+
+/** Re-selecting the pressed day reads it again, as the refresh key once did. */
+async function refresh(): Promise<void> {
+  const current = container.querySelector<HTMLButtonElement>(
+    '.today-day[aria-pressed="true"]'
+  )
+
+  if (current === null) throw new Error("Missing selected day")
+
+  await act(async () => {
+    current.click()
     await pending
   })
 }
@@ -144,9 +150,12 @@ test("draws the selected day as rings, a week of days, its night and body, and i
   await render()
 
   expect(ring("Charge")).toBe("Charge: 78 % recovery")
-  expect(ring("Rest")).toBe("Rest: 7 hours 30 minutes asleep")
+  expect(ring("Rest")).toBe("Rest: 87 % rest")
   expect(ring("Effort")).toBe("Effort: strain 35 of 100")
-  expect(container.querySelectorAll(".today-day")).toHaveLength(7)
+  // A strip of days, not a week with arrows.
+  expect(container.querySelectorAll(".today-day")).toHaveLength(28)
+  expect(container.textContent).not.toContain("Previous week")
+  expect(container.textContent).not.toContain("Next week")
   expect(
     container
       .querySelector('.today-day[aria-pressed="true"]')
@@ -162,6 +171,44 @@ test("draws the selected day as rings, a week of days, its night and body, and i
   expect(vitals.some((text) => text.startsWith("Skin tempNot recorded"))).toBe(
     true
   )
+  expect(vitals).toContain("StepsNot recorded")
+  // The night in time order: lanes awake to deep, segments clamped to the edited 23:05 start.
+  expect(
+    Array.from(container.querySelectorAll(".hypno-lane")).map((lane) => [
+      lane.getAttribute("data-stage"),
+      lane.children.length,
+    ])
+  ).toEqual([
+    ["awake", 0],
+    ["rem", 2],
+    ["light", 2],
+    ["deep", 2],
+  ])
+  expect(
+    Array.from(container.querySelectorAll(".hypno-labels p")).map(
+      (label) => label.textContent
+    )
+  ).toEqual(["Awake0:00", "REM1:40", "Light4:15", "Deep1:30"])
+  // Bedtime, the night's sleep, then wake.
+  expect(container.querySelector(".hypno-times")?.textContent).toBe(
+    "23:057:3006:30"
+  )
+  expect(container.querySelector(".hypno-axis")?.textContent).toBe(
+    "00:0001:0002:0003:0004:0005:0006:00"
+  )
+  expect(container.querySelector(".today-stages")).toBeNull()
+  expect(
+    Array.from(container.querySelectorAll(".hypno tbody tr")).map(
+      (row) => row.textContent
+    )
+  ).toEqual([
+    "Light23:0501:102 hours 5 minutes",
+    "Deep01:1001:5545 minutes",
+    "REM01:5502:4550 minutes",
+    "Light02:4504:552 hours 10 minutes",
+    "Deep04:5505:4045 minutes",
+    "REM05:4006:3050 minutes",
+  ])
   expect(container.textContent).toContain("Freshness: confirmed")
   expect(container.textContent).toContain("daily metrics: covered")
   expect(container.textContent).toContain("User edited")
@@ -171,13 +218,15 @@ test("draws the selected day as rings, a week of days, its night and body, and i
     30
   )
   expect(buttonNamed("Open Run / walk")).toBeDefined()
-  await click("Open logged Synthetic pull")
-  expect(opened).toBe(stored.state === "saved" ? stored.workoutId : undefined)
+  // Logged Workouts live in Workout › Log, not beside the strap's recordings.
+  expect(container.textContent).not.toContain("Synthetic pull")
+  expect(container.textContent).not.toContain("Open logged")
+  expect(container.textContent).not.toContain("Refresh training")
 
   await click("Tue 29 Sept")
   expect(search.day).toBe("2026-09-29")
   expect(container.textContent).toContain(
-    "No workouts logged and no NOOP workouts recorded on this day."
+    "No NOOP workouts recorded on this day."
   )
 })
 
@@ -195,7 +244,7 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
     "Set Maximum heart rate in Body to enable this read."
   )
   await writeBodyProfile({ kind: "profile", hr_max_bpm: 190 })
-  await click("Refresh training")
+  await refresh()
   expect(container.textContent).toContain("Profile maximum: 190 beats/min")
   expect(container.textContent).toContain("End heart rate: 165 bpm")
   expect(container.textContent).toContain("120 beats/min · Drop: 45")
@@ -234,7 +283,6 @@ test("day selection distinguishes no sync from recorded absence and allows refre
   expect(container.textContent).toContain("Freshness: unknown")
   expect(ring("Rest")).toBe("Rest: Not synced or unavailable")
   expect(container.textContent).toContain("NOOP workouts have unknown coverage")
-  expect(buttonNamed("Next week").disabled).toBe(false)
   await click("Tue 29 Sept")
   expect(container.textContent).toContain("Recovery day · 2026-09-29")
   expect(ring("Rest")).toBe("Rest: Not recorded")
@@ -242,16 +290,58 @@ test("day selection distinguishes no sync from recorded absence and allows refre
     "No sleep sessions recorded for this night."
   )
   vi.stubEnv("API_KEY", "wrong-private-credential")
-  await click("Refresh training")
+  await refresh()
   expect(container.textContent).toContain("Recovery day unavailable")
   expect(container.textContent).toContain("Training context unavailable")
   expect(container.textContent).toContain("OpenHome rejected the API key")
   expect(container.textContent).not.toContain("wrong-private-credential")
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-  await click("Refresh training")
+  await refresh()
   expect(container.textContent).toContain("Recovery day · 2026-09-29")
-  await click("Previous week")
-  expect(search.day).toBe("2026-09-22")
+})
+
+test("the day strip reaches into older days as it is scrolled and keeps every day a button", async () => {
+  const loadDays = vi.fn(readRecoveryDays)
+  search = { day: "2026-09-30" }
+  const data = await readTraining(search)
+  await act(async () => {
+    root.render(
+      <TrainingSummaries
+        key={data.day}
+        data={data}
+        selectDay={async () => {}}
+        open={async () => {}}
+        refresh={async () => {}}
+        loadDays={loadDays}
+      />
+    )
+  })
+
+  // Days after the selected one fill in toward today first.
+  await act(async () => {
+    await vi.waitFor(() => expect(loadDays).toHaveBeenCalledTimes(1))
+    await new Promise<void>((resolve) => setTimeout(resolve, 300))
+  })
+
+  const strip = container.querySelector(".today-days")
+  const before = container.querySelectorAll("button.today-day").length
+
+  if (strip === null) throw new Error("Missing day strip")
+  expect(strip.querySelectorAll("li > button")).toHaveLength(before)
+  await act(async () => {
+    strip.dispatchEvent(new Event("scroll"))
+    await new Promise<void>((resolve) => setTimeout(resolve, 300))
+  })
+  expect(container.querySelectorAll("button.today-day").length).toBeGreaterThan(
+    before
+  )
+
+  const firstDay = container
+    .querySelector("button.today-day")
+    ?.getAttribute("aria-label")
+
+  expect(firstDay).toContain("Rest")
+  expect(loadDays).toHaveBeenCalledTimes(2)
 })
 
 test("a missing or rejected detail and a failed context leave independent recovery data visible", async () => {
@@ -264,7 +354,7 @@ test("a missing or rejected detail and a failed context leave independent recove
   expect(container.textContent).toContain(
     "This NOOP workout is no longer available"
   )
-  expect(ring("Rest")).toBe("Rest: 7 hours 30 minutes asleep")
+  expect(ring("Rest")).toBe("Rest: 87 % rest")
   const realFetch = globalThis.fetch
   vi.spyOn(globalThis, "fetch").mockImplementation((input, options) =>
     (input instanceof Request ? input.url : input.toString()).includes(
@@ -278,12 +368,12 @@ test("a missing or rejected detail and a failed context leave independent recove
         )
       : realFetch(input, options)
   )
-  await click("Refresh training")
+  await refresh()
   expect(container.textContent).toContain(
     "This read exceeds OpenHome's data limit"
   )
   expect(container.textContent).not.toContain("private-diagnostic")
-  expect(ring("Rest")).toBe("Rest: 7 hours 30 minutes asleep")
+  expect(ring("Rest")).toBe("Rest: 87 % rest")
 
   for (const source of [".", "..", "\u0000"]) {
     const data = await readTraining({
@@ -326,16 +416,16 @@ test("closing a detail restores its session button, falling back to the selected
         : realFetch(input, options)
     )
 
-  await click("Refresh training")
+  await refresh()
   expect(container.textContent).toContain("Training context unavailable")
   failedContext.mockRestore()
-  await click("Refresh training")
+  await refresh()
   await closeDetail()
   expect(document.activeElement).toBe(buttonNamed("Open Cycling"))
 
   await click("Open Mobility")
   vi.stubEnv("API_KEY", "wrong-private-credential")
-  await click("Refresh training")
+  await refresh()
   await closeDetail()
   expect(document.activeElement?.className).toBe("today-day")
 })

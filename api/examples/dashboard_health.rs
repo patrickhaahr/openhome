@@ -101,10 +101,24 @@ async fn seed_training(db: &sqlx::SqlitePool) -> anyhow::Result<()> {
                 "activeKcalEst": null, "spo2Red": null, "spo2Ir": null,
             }
         });
+        // Ordered segments totalling light 260, deep 90 and rem 100 minutes.
+        let stages = serde_json::to_string(
+            &[
+                (0, 130, "light"),
+                (130, 175, "deep"),
+                (175, 225, "rem"),
+                (225, 355, "light"),
+                (355, 400, "deep"),
+                (400, 450, "rem"),
+            ]
+            .map(|(from, to, stage)| {
+                json!({"start": sleep_start + from * 60, "end": sleep_start + to * 60, "stage": stage})
+            }),
+        )?;
         let sleep = json!({
             "type": "record", "key": { "startTs": sleep_start }, "data": {
                 "endTs": sleep_start + 27000, "efficiency": 0.9, "restingHr": 50.0,
-                "avgHrv": 62.0, "stagesJSON": if computed { Some("{\"awake\":0,\"light\":260,\"deep\":90,\"rem\":100}") } else { None }, "userEdited": computed,
+                "avgHrv": 62.0, "stagesJSON": if computed { Some(stages.clone()) } else { None }, "userEdited": computed,
                 "startTsAdjusted": if computed { Some(sleep_start + 300) } else { None },
                 "motionJSON": null, "sleepStateJSON": null, "stagingSparse": null,
             }

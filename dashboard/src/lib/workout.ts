@@ -277,8 +277,7 @@ export function draftFromWorkout(
         seconds:
           set.duration_seconds === null ? "" : formatHold(set.duration_seconds),
         // Exact text, so an unrelated edit never rounds a stored weight.
-        weight:
-          set.weight_kg === null ? "" : String(set.weight_kg).replace(".", ","),
+        weight: set.weight_kg === null ? "" : String(set.weight_kg),
         rpe: set.rpe?.toString() ?? "",
         notes: set.notes,
         heldSeconds: set.reps === null ? null : set.duration_seconds,
@@ -414,7 +413,7 @@ export function parseDraft(
   }
 }
 
-const number = new Intl.NumberFormat("da-DK", {
+const number = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 2,
   useGrouping: false,
 })
