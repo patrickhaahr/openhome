@@ -524,6 +524,7 @@
   gap: clamp(1.5rem, 3.5vw, 3.5rem);
   min-height: max(var(--home-height), 32rem);
 }
+/* The time on top, the weather in the middle, the sun's day on the bottom edge. */
 .home-now {
   display: flex;
   flex-direction: column;
@@ -533,15 +534,15 @@
 .clock-time {
   display: block;
   margin-left: -0.07em;
-  font-size: clamp(6rem, 1rem + 13vw, 13.5rem);
+  font-size: clamp(6rem, 1rem + 15.5vw, 15rem);
   font-weight: 500;
   line-height: 0.8;
   letter-spacing: -0.07em;
   font-variant-numeric: tabular-nums;
 }
 .clock-date {
-  margin-top: 1rem;
-  font-size: var(--t-m);
+  margin-top: 1.25rem;
+  font-size: clamp(1.5rem, 0.5rem + 2.2vw, 2.5rem);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -766,8 +767,8 @@ a.dir-go:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(1.25rem, 3vw, 2.5rem);
-  min-height: 7.5rem;
+  gap: clamp(1.5rem, 3.5vw, 3rem);
+  min-height: 9rem;
   margin-top: 0.25rem;
   color: inherit;
   text-decoration: none;
@@ -780,10 +781,10 @@ a.dir-go:hover {
   scale: 0.99;
 }
 .recovery-glance .score-ring {
-  width: 7.5rem;
+  width: 9rem;
 }
 .recovery-glance .score-ring circle {
-  stroke-width: 10;
+  stroke-width: 9;
 }
 .recovery-glance .score-ring-figure {
   flex-direction: column;
@@ -793,15 +794,15 @@ a.dir-go:hover {
   padding-top: 0;
 }
 .recovery-glance .score-ring-figure span {
-  font-size: 1.875rem;
+  font-size: 2.25rem;
   letter-spacing: -0.05em;
 }
 .recovery-glance .score-ring figcaption {
   display: none;
 }
 .score-ring .score-ring-icon {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.75rem;
+  height: 1.75rem;
   rotate: none;
   color: var(--band);
 }
@@ -809,7 +810,7 @@ a.dir-go:hover {
   color: var(--effort);
 }
 .recovery-ghost {
-  width: 7.5rem;
+  width: 9rem;
   aspect-ratio: 1;
   border: 10px solid var(--wash);
   border-radius: 50%;
