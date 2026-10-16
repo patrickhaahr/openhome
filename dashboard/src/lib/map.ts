@@ -43,3 +43,21 @@ export type MapRoutes = {
   /** Index into `lines` of the highlighted line. */
   readonly focused: number
 }
+
+/**
+ * Room a fitted route keeps clear of the floating plates. Wide maps keep the planner's
+ * results on the left and the controls on the right; narrow ones stack the planner below.
+ */
+export function routePadding(
+  width: number,
+  height: number
+): { top: number; right: number; bottom: number; left: number } {
+  return width > 900
+    ? { top: 72, right: 112, bottom: 96, left: 416 }
+    : {
+        top: 72,
+        right: 96,
+        bottom: Math.min(440, Math.round(height * 0.55)),
+        left: 40,
+      }
+}
