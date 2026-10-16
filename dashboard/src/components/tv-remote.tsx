@@ -1,11 +1,19 @@
+import { ArrowUUpLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowUUpLeft"
+import { CaretDoubleDownIcon } from "@phosphor-icons/react/dist/csr/CaretDoubleDown"
+import { CaretDoubleUpIcon } from "@phosphor-icons/react/dist/csr/CaretDoubleUp"
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp"
+import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix"
+import { HouseIcon } from "@phosphor-icons/react/dist/csr/House"
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info"
+import { ListBulletsIcon } from "@phosphor-icons/react/dist/csr/ListBullets"
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { PowerIcon } from "@phosphor-icons/react/dist/csr/Power"
 import { SpeakerSimpleSlashIcon } from "@phosphor-icons/react/dist/csr/SpeakerSimpleSlash"
+import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut"
 import { TelevisionSimpleIcon } from "@phosphor-icons/react/dist/csr/TelevisionSimple"
 import {
   IrRemote,
@@ -31,7 +39,16 @@ const tvRemote: IrRemoteConfig<TvCommand> = {
     down: CaretDownIcon,
     left: CaretLeftIcon,
     right: CaretRightIcon,
+    back: ArrowUUpLeftIcon,
+    home: HouseIcon,
+    exit: SignOutIcon,
+    settings: GearSixIcon,
+    info: InfoIcon,
+    guide: ListBulletsIcon,
+    "channel-up": CaretDoubleUpIcon,
+    "channel-down": CaretDoubleDownIcon,
   },
+  worded: [],
   quickGroups: [
     {
       label: "Common TV commands",
@@ -47,8 +64,8 @@ const tvRemote: IrRemoteConfig<TvCommand> = {
     },
     {
       label: "Volume",
-      kind: "row",
-      commands: ["volume-down", "mute", "volume-up"],
+      kind: "rocker",
+      commands: ["volume-up", "mute", "volume-down"],
     },
     {
       label: "Navigation",
@@ -62,8 +79,8 @@ const tvRemote: IrRemoteConfig<TvCommand> = {
     },
     {
       label: "Channels",
-      kind: "row",
-      commands: ["channel-down", "channel-up"],
+      kind: "rocker",
+      commands: ["channel-up", "channel-down"],
     },
     {
       label: "Numbers",

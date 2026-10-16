@@ -3,6 +3,7 @@ import { createRequestId } from "@/lib/request-id"
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -218,15 +219,19 @@ export function Wishlists({
   return (
     <div className="wishlists" aria-busy={busy}>
       <div className="wishlist-toolbar">
-        <p className="page-eyebrow">Shared with your household</p>
+        <p className="sr-only">Shared with your household</p>
         <Button
           variant="outline"
+          size="key-icon"
+          title="Refresh lists"
+          data-spinning={busy}
           disabled={busy}
           onClick={() => {
             void reload()
           }}
         >
-          Refresh lists
+          <ArrowClockwiseIcon size={20} aria-hidden="true" />
+          <span className="sr-only">Refresh lists</span>
         </Button>
       </div>
       <p
@@ -289,13 +294,13 @@ export function Wishlists({
                           }}
                         >
                           <span>{list.name}</span>
-                          <span className="wishlist-count">
-                            {wishCount(
+                          <WishTally
+                            count={
                               data.items.filter(
                                 (item) => item.list_id === list.id
                               ).length
-                            )}
-                          </span>
+                            }
+                          />
                         </Button>
                       ))}
                     </div>
@@ -325,24 +330,30 @@ export function Wishlists({
                   <CardHeader>
                     <div className="wishlist-detail-header">
                       <div>
-                        <p className="page-eyebrow">
+                        <p className="sr-only">
                           {selectedOwner.name}’s wishlist
                         </p>
                         <h2>{selected.name}</h2>
                       </div>
-                      <HeartIcon size={32} aria-hidden="true" />
+                      <span className="wishlist-heart" aria-hidden="true">
+                        <HeartIcon size={28} weight="fill" />
+                      </span>
                     </div>
                     <div className="wishlist-actions">
                       <Button
                         variant="outline"
+                        size="key-icon"
+                        title="Rename list"
                         disabled={busy}
                         onClick={() => setEditing(`list-${selected.id}`)}
                       >
-                        <PencilSimpleIcon aria-hidden="true" />
-                        Rename list
+                        <PencilSimpleIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">Rename list</span>
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
+                        size="key-icon"
+                        title="Remove list"
                         disabled={busy}
                         onClick={() =>
                           setRemoval({
@@ -356,8 +367,8 @@ export function Wishlists({
                           })
                         }
                       >
-                        <TrashIcon aria-hidden="true" />
-                        Remove list
+                        <TrashIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">Remove list</span>
                       </Button>
                     </div>
                   </CardHeader>
@@ -393,7 +404,7 @@ export function Wishlists({
                       <div className="wishlist-empty-detail">
                         <HeartIcon size={40} aria-hidden="true" />
                         <h3>A place for ideas.</h3>
-                        <p>
+                        <p className="sr-only">
                           Add something you’d like. A simple title is enough.
                         </p>
                       </div>
@@ -402,7 +413,7 @@ export function Wishlists({
                       className="wishlist-items"
                       aria-label={`Wishes in ${selected.name}`}
                     >
-                      {selectedItems.map((item, index) => (
+                      {selectedItems.map((item) => (
                         <li key={item.id}>
                           {editing === `item-${item.id}` ? (
                             <ItemForm
@@ -450,12 +461,6 @@ export function Wishlists({
                             />
                           ) : (
                             <>
-                              <span
-                                className="wishlist-item-number"
-                                aria-hidden="true"
-                              >
-                                {String(index + 1).padStart(2, "0")}
-                              </span>
                               <ItemDetails item={item} />
                               <div className="wishlist-item-actions">
                                 <Button
@@ -677,5 +682,15 @@ function AddWish({
         return saved
       }}
     />
+  )
+}
+
+/** A list's size as a figure; the words stay for assistive technology. */
+function WishTally({ count }: { count: number }): React.JSX.Element {
+  return (
+    <span className="wishlist-count">
+      {count}
+      <span className="sr-only"> {count === 1 ? "wish" : "wishes"}</span>
+    </span>
   )
 }

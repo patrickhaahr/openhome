@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
@@ -215,10 +216,13 @@ export function Workouts({
   return (
     <div className="workouts" aria-busy={busy}>
       <div className="workout-toolbar">
-        <p className="page-eyebrow">Logged in OpenHome</p>
+        <p className="sr-only">Logged in OpenHome</p>
         <div className="workout-toolbar-actions">
           <Button
             variant="outline"
+            size="key-icon"
+            title="Refresh history"
+            data-spinning={busy}
             disabled={busy || active !== undefined}
             onClick={() => {
               void run(async () => {
@@ -227,7 +231,8 @@ export function Workouts({
               }, "Could not refresh. Try again when OpenHome returns.")
             }}
           >
-            Refresh history
+            <ArrowClockwiseIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Refresh history</span>
           </Button>
           {data.state === "available" ? (
             <Button
@@ -266,11 +271,13 @@ export function Workouts({
       ) : (
         <div className="workout-layout">
           <aside className="workout-history" aria-label="Workout history">
-            <h2>History</h2>
-            <p className="workout-muted">
-              Workouts logged here. NOOP strap workouts are separate records and
-              are never matched to them.
-            </p>
+            <div className="sr-only">
+              <h2>History</h2>
+              <p>
+                Workouts logged here. NOOP strap workouts are separate records
+                and are never matched to them.
+              </p>
+            </div>
             {data.history.length === 0 ? (
               <p className="workout-muted">No workouts logged yet.</p>
             ) : (
@@ -417,9 +424,9 @@ function WorkoutView({
     <article aria-labelledby="workout-title">
       <header className="workout-detail-header">
         <div>
-          <p className="page-eyebrow">{formatDay(workout.date, longDate)}</p>
+          <p className="workout-date">{formatDay(workout.date, longDate)}</p>
           <h2 id="workout-title">{workout.name ?? "Workout"}</h2>
-          <p className="workout-muted">
+          <p className="sr-only">
             {entryCount(workout.exercises.length)} ·{" "}
             {workout.exercises.reduce(
               (total, entry) => total + entry.sets.length,
@@ -431,19 +438,23 @@ function WorkoutView({
         <div className="workout-detail-actions">
           <Button
             variant="outline"
+            size="key-icon"
+            title="Edit"
             disabled={disabled}
             onClick={() => edit(workout)}
           >
-            <PencilSimpleIcon aria-hidden="true" />
-            Edit
+            <PencilSimpleIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Edit</span>
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
+            size="key-icon"
+            title="Remove"
             disabled={disabled}
             onClick={() => remove(workout)}
           >
-            <TrashIcon aria-hidden="true" />
-            Remove
+            <TrashIcon size={20} aria-hidden="true" />
+            <span className="sr-only">Remove</span>
           </Button>
         </div>
       </header>
@@ -454,14 +465,11 @@ function WorkoutView({
         <p className="workout-muted">No exercises were logged.</p>
       ) : null}
       <ol className="workout-entries" aria-label="Exercises">
-        {workout.exercises.map((entry, index) => (
+        {workout.exercises.map((entry) => (
           <li key={entry.id} className="workout-entry">
             <div className="workout-entry-heading">
-              <span className="workout-entry-number" aria-hidden="true">
-                {String(index + 1).padStart(2, "0")}
-              </span>
               <h3>{entry.exercise.name}</h3>
-              <span className="workout-tag">{entry.exercise.category}</span>
+              <span className="sr-only">{entry.exercise.category}</span>
             </div>
             {entry.notes === null ? null : (
               <p className="workout-muted">{entry.notes}</p>
@@ -473,7 +481,8 @@ function WorkoutView({
                 {entry.sets.map((set, setIndex) => (
                   <li key={set.id}>
                     <span className="workout-set-number">
-                      Set {setIndex + 1}
+                      <span className="sr-only">Set </span>
+                      {setIndex + 1}
                     </span>
                     <span>{describeSet(set)}</span>
                     {set.notes === null ? null : (

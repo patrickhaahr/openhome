@@ -168,11 +168,14 @@ export function ItemForm({
         })
       }}
     >
-      <label htmlFor={`${id}-title`}>{label}</label>
+      <label htmlFor={`${id}-title`} className="sr-only">
+        {label}
+      </label>
       <div className="wishlist-form-row">
         <Input
           id={`${id}-title`}
           name="title"
+          placeholder={label}
           value={draft.values.title}
           onChange={(event) => edit("title", event.target.value)}
           required
@@ -195,7 +198,9 @@ export function ItemForm({
         ) : null}
       </div>
       <div className="wishlist-url-assistance">
-        <label htmlFor={`${id}-url`}>Product URL</label>
+        <label htmlFor={`${id}-url`} className="sr-only">
+          Product URL
+        </label>
         <div className="wishlist-form-row">
           <Input
             id={`${id}-url`}
@@ -224,7 +229,14 @@ export function ItemForm({
           ) : null}
         </div>
         {loadMetadata ? (
-          <p className="wishlist-metadata-status" role="status">
+          <p
+            className={
+              preview?.message === undefined
+                ? "sr-only"
+                : "wishlist-metadata-status"
+            }
+            role="status"
+          >
             {preview?.message ??
               "Paste a product link for editable suggestions, or add your own idea above."}
           </p>
@@ -235,7 +247,8 @@ export function ItemForm({
         className="wishlist-item-fields"
       >
         <summary>
-          Item details <span>Links, notes, quantity and priority</span>
+          Item details{" "}
+          <span className="sr-only">Links, notes, quantity and priority</span>
         </summary>
         <div className="wishlist-field-grid">
           <div>

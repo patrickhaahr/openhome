@@ -1,12 +1,21 @@
-import { Link, Outlet, useRouter } from "@tanstack/react-router"
+import { getRouteApi, Link, Outlet, useRouter } from "@tanstack/react-router"
 import { useEffect } from "react"
-import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple"
-import { PlugsConnectedIcon } from "@phosphor-icons/react/dist/csr/PlugsConnected"
+import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug"
+import {
+  DaylightProvider,
+  Horizon,
+  ThemeToggle,
+  useDaylight,
+} from "@/components/daylight"
+import { timeFormat } from "@/components/live-clock"
 import { features, type Feature } from "@/lib/features"
 
-/** Persistent navigation with one content landmark and focus after rendered navigation. */
+const rootRoute = getRouteApi("__root__")
+
+/** A top bar on the horizon line, one content landmark, and focus after rendered navigation. */
 export function DashboardShell(): React.JSX.Element {
   const router = useRouter()
+  const { openedAt } = rootRoute.useLoaderData()
 
   useEffect(
     () =>
@@ -20,65 +29,71 @@ export function DashboardShell(): React.JSX.Element {
   )
 
   return (
-    <div className="dashboard-shell">
-      <a className="skip-link" href="#page-content">
-        Skip to page content
-      </a>
-      <aside className="sidebar">
-        <div className="sidebar-brand" aria-label="OpenHome">
-          OH<span aria-hidden="true">.</span>
-        </div>
-        <nav className="sidebar-nav" aria-label="Main navigation">
-          <Link to="/" className="nav-link" activeOptions={{ exact: true }}>
-            <HouseSimpleIcon size={24} aria-hidden="true" />
-            <span>Home</span>
+    <DaylightProvider initialTime={openedAt}>
+      <div className="shell">
+        <a className="skip-link" href="#page-content">
+          Skip to page content
+        </a>
+        <header className="topbar">
+          <Link to="/" className="wordmark" aria-label="OpenHome, Home">
+            openhome
+            <i aria-hidden="true" />
           </Link>
-          {features.map((feature) => {
-            const content = (
-              <>
-                <feature.icon size={24} aria-hidden="true" />
-                <span>{feature.label}</span>
-              </>
-            )
-
-            const to = implementedRoute(feature.id)
-
-            // Implemented features use their own typed routes; the rest share the placeholder.
-            return to === undefined ? (
-              <Link
-                key={feature.id}
-                to="/$feature"
-                params={{ feature: feature.id }}
-                className="nav-link"
-              >
-                {content}
-              </Link>
-            ) : (
-              <Link key={feature.id} to={to} className="nav-link">
-                {content}
-              </Link>
-            )
-          })}
-          <Link to="/connection" className="nav-link connection-link">
-            <PlugsConnectedIcon size={24} aria-hidden="true" />
-            <span>Connection</span>
-          </Link>
-        </nav>
-      </aside>
-      <div className="dashboard-workspace">
-        <main id="page-content" tabIndex={-1} className="page-content">
+          <nav className="topnav" aria-label="Main navigation">
+            <ul>
+              {features.map((feature) => (
+                <li key={feature.id}>
+                  <FeatureLink feature={feature} />
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div className="topbar-end">
+            <TopbarClock />
+            <Link
+              to="/connection"
+              className="icon-link"
+              aria-label="Connection"
+              title="Connection"
+            >
+              <PlugIcon size={20} aria-hidden="true" />
+            </Link>
+            <ThemeToggle />
+          </div>
+          <Horizon />
+        </header>
+        <main id="page-content" tabIndex={-1} className="page">
           <Outlet />
         </main>
-        <footer className="page-footer">
-          <span>OpenHome</span>
-          <span>Private household display</span>
-        </footer>
       </div>
-    </div>
+    </DaylightProvider>
   )
 }
 
-function implementedRoute(
+function TopbarClock(): React.JSX.Element {
+  const { now } = useDaylight()
+
+  return (
+    <time className="topbar-clock" dateTime={now.toISOString()} lang="da">
+      {timeFormat.format(now)}
+    </time>
+  )
+}
+
+function FeatureLink({ feature }: { feature: Feature }): React.JSX.Element {
+  const to = implementedRoute(feature.id)
+
+  // Implemented features use their own typed routes; the rest share the placeholder.
+  return to === undefined ? (
+    <Link to="/$feature" params={{ feature: feature.id }} data-soon="">
+      {feature.label}
+    </Link>
+  ) : (
+    <Link to={to}>{feature.label}</Link>
+  )
+}
+
+export function implementedRoute(
   id: Feature["id"]
 ):
   | "/controls"

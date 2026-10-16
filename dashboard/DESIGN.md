@@ -1,0 +1,92 @@
+# Dashboard design
+
+## Brief
+
+A private, always-on household iPad in a Copenhagen home. It is read from across the room
+far more often than it is touched. The job: know the time, the weather and the state of the
+household lists at a glance, then reach any control in one tap. Danish formats, English copy.
+
+## Concepts considered
+
+|             | Idea                                                                                                   | Anchor                                                                      | Signature                                               | O/F/Fe/P      |
+| ----------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------- | ------------- |
+| A. Formal   | The house is a directory: one typeset list where every line is a part of the home with its live value  | Dashboard Home is defined as an overview where selecting a feature opens it | the selected line becomes the page title                | 3 / 5 / 5 / 3 |
+| B. Place    | The screen is lit by the Copenhagen sun: paper by day, ink by night, a horizon line with the sun on it | an always-on display in a Copenhagen room; every time is Europe/Copenhagen  | the sun travels the horizon, the whole UI turns at dusk | 4 / 5 / 4 / 2 |
+| C. Material | A wall of light switches: every feature is a physical plate                                            | the home controls                                                           | plates depress on touch                                 | 2 / 3 / 4 / 4 |
+
+Picked **A + B**: a directory of the home, lit by the Copenhagen sun. A gives structure
+and the mkdir.directory reference; B gives the idle life and a reason for two themes.
+
+## Concept card
+
+```
+Idea:        The home as a directory, lit by the Copenhagen sun.
+Metaphor:    A printed index on a wall that daylight falls across.
+Signature:   The horizon: a hairline across every page with the sun at its true position
+             between sunrise and sunset. The theme follows it (paper by day, ink at night).
+             Opening a line morphs its name into the page title (view transition).
+Emotion:     Calm, legible, quietly alive. Like a good clock.
+Motion verb: Rise. Things come up from a baseline; hovers lift; the sun climbs.
+Screenshot:  Home at night: giant clock, the sun below the horizon as a hollow ring,
+             the directory of the house in large type with live values on the right.
+```
+
+## System
+
+- **Palette (day / night)**: ground `#F4F4F0` / `#0B0C0E`; ink `#121418` / `#ECECE6`;
+  muted `#5A5F69` / `#9A9EA6` (5.8:1 and 7.3:1 on the ground); wash and wash-strong are ink
+  at 5 % / 9 % (night 6 % / 11 %). Sun `#FF5B1F`, used only as a fill: the sun disc, the
+  wordmark dot, today, the current hour, high priority, the lit bulb, a chart series.
+  Never body text. Errors `#B42318` / `#FF8A7A`.
+- **Type**: Familjen Grotesk for everything, including numerals (tabular figures). No mono.
+  Display tracking -0.045em to -0.06em, leading 0.86 to 0.95. Body 16 to 18 px.
+- **Grid**: 12 columns, `clamp(1.25rem, 3.2vw, 2.5rem)` outer margin. The shell column is
+  `minmax(0, 1fr)` so no page can push the viewport wider than the phone.
+- **Shape**: keys are circles or capsules; media are 0.5rem to 0.75rem. Separation is
+  whitespace and tone steps (ground, wash, wash-strong, ink). No hairlines inside pages
+  (the horizon is the only line), no shadows, no glows, no blur, no gradients.
+- **Motion**: one ease `cubic-bezier(.2,.7,.1,1)`; 180 ms small, 420 ms panels, 700 ms page.
+  Things rise from a baseline. Press: 0.97 scale. Reduced motion: no transitions.
+- **Idle**: the sun on the horizon (minute clock) and the clock. Nothing else moves at rest.
+
+## Round 2: say it with the thing itself
+
+Owner feedback: Home should be visuals, not sentences; no text for control state; no
+"Home connected"; Photos is only the album; less text everywhere.
+
+- **One h1 per page, usually sr-only.** The top bar already says where you are, so pages
+  carry no visible title, eyebrow or "Back to Home". Section headings that only repeat
+  what the content shows are sr-only too.
+- **Removed words move to assistive technology, not away.** Explanations, units already
+  shown by an icon, counts and captions become `sr-only` spans or `aria-label`s. Icon-only
+  keys keep their label as an sr-only span, so their accessible name (and text content) is
+  unchanged.
+- **Glances are visuals.** Home shows the clock, the sun's arc, the temperature with a
+  seven-day bar chart, live keys for lights, TV and speaker, workout bars, a heart count,
+  stacked posters, two photos and a route trace. Labels are the directory names only.
+- **Control state is never claimed in text.** Keys show only commands the device reported.
+  A sent command draws on the key itself: pending is a sun arc spinning round it, accepted
+  is a small acknowledge bump with a sun ring rippling out; a failure shakes the key, rings
+  it red and shows a terse tag ("No answer", "Key rejected") from `command-feedback.ts`.
+  Nothing says "on" or "off".
+- **Success is a visual acknowledgement; failure stays visible.** Saves, refreshes and
+  confirmations are announced in an sr-only status region; the control itself acknowledges
+  (spinner on refresh keys, pressed tone). Failures show a red dot plus one short line.
+- **Missing data is a dash.** `data-gap="true"` draws an en dash while assistive technology
+  still reads "Unavailable". Weather never invents a value; dry hours (0 mm) and chances
+  under 20 % are quiet (sr-only) so rain stands out.
+- **Provenance as marks.** Training sync shows a freshness ring (filled sun when confirmed)
+  and one chip per stream (filled dot when covered); the full sentence is sr-only.
+- **Refresh lives top right** as a round key on every data page (Weather, Photos, Wishlist,
+  Watchlist, Profile & weight).
+- **Tap targets are at least 44 px** (key-icon 48 px, key-round 64 px, key-hero 96 px);
+  inline attribution links are the only exception.
+- **Connection** is one word in display type beside a signal disc that pulses once (and
+  shakes when not connected), a big check-again key and "Key stays on the server".
+  The top bar shows a neutral plug glyph, never a state.
+
+## Genericness test
+
+A generic model would ship a dark dashboard of rounded cards with a yellow accent (the old
+design). Changed: no cards, a light theme by day, an index list as the home, one orange used
+only as the sun, a real astronomical sun position as the identity element.

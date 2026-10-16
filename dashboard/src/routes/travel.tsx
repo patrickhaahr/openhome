@@ -4,7 +4,8 @@ import { MapTrifoldIcon } from "@phosphor-icons/react/dist/csr/MapTrifold"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { SharedMap } from "@/components/shared-map"
 import { LoopPlanner } from "@/components/loop-planner"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { useMapTheme } from "@/components/daylight"
+import { PageHead } from "@/components/page-head"
 import { features } from "@/lib/features"
 import {
   unavailableMapOrigin,
@@ -65,24 +66,15 @@ function TravelContent({
   active: ActiveRouteRead
 }): React.JSX.Element {
   const [routes, setRoutes] = useState<MapRoutes | undefined>(undefined)
+  const theme = useMapTheme()
 
   const displayedRoutes =
     routes ??
     (active.state === "selected" ? activeRouteMap(active.route) : undefined)
 
   return (
-    <section className="focused-page travel-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / {travel.label}</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          {travel.title}
-        </h1>
-        <p className="feature-intro">
-          Plan walking or running loops from the origin and explore the local
-          area. Departures and live vehicles will appear on this map as they are
-          added.
-        </p>
-      </header>
+    <section>
+      <PageHead title={travel.title} />
       {read.state === "configured" ? (
         <div className="travel-layout">
           <figure className="travel-map">
@@ -90,6 +82,7 @@ function TravelContent({
               key={`${read.origin.latitude},${read.origin.longitude}`}
               origin={read.origin}
               routes={displayedRoutes}
+              theme={theme}
             />
             <figcaption>
               <span className="travel-map-origin">
@@ -98,7 +91,7 @@ function TravelContent({
                   ? "Demo origin · central Copenhagen"
                   : "Private origin"}
               </span>
-              <span>
+              <span className="sr-only">
                 {displayedRoutes?.label ??
                   "Stops and live vehicles are not connected yet."}
               </span>
@@ -125,29 +118,19 @@ function MapSetup({
   reason: Extract<MapOriginRead, { state: "unavailable" }>["reason"]
 }): React.JSX.Element {
   return (
-    <Card>
-      <CardHeader>
-        <MapTrifoldIcon
-          size={40}
-          aria-hidden="true"
-          className="text-muted-foreground"
-        />
-        <h2>
-          {reason === "missing-configuration"
-            ? "Map setup needed"
-            : "Map unavailable"}
-        </h2>
-      </CardHeader>
-      <CardContent>
-        <div className="travel-setup">
-          <p role="status">
-            {reason === "missing-configuration"
-              ? "Set the private map origin on OpenHome to show the local area. There is no default location."
-              : "OpenHome could not provide the map origin. Check Connection or try again."}
-          </p>
-          <CheckAgainButton />
-        </div>
-      </CardContent>
-    </Card>
+    <div className="state-note" data-failed="true">
+      <MapTrifoldIcon size={56} weight="light" aria-hidden="true" />
+      <h2>
+        {reason === "missing-configuration"
+          ? "Map setup needed"
+          : "Map unavailable"}
+      </h2>
+      <p role="status" className="sr-only">
+        {reason === "missing-configuration"
+          ? "Set the private map origin on OpenHome to show the local area. There is no default location."
+          : "OpenHome could not provide the map origin. Check Connection or try again."}
+      </p>
+      <CheckAgainButton compact />
+    </div>
   )
 }

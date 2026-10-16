@@ -13,16 +13,35 @@ import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { MapLine, MapOrigin, MapRoutes } from "@/lib/map"
 
-/** OpenFreeMap's free Fiord style; it needs no key and carries its own attribution. */
-const STYLE_URL = "https://tiles.openfreemap.org/styles/fiord"
+/**
+ * OpenFreeMap's free styles follow the dashboard's light: Positron by day, Dark at night.
+ * Neither needs a key and both carry their own attribution. MapLibre cannot read CSS tokens,
+ * so the dashboard's sun and ink are repeated here.
+ */
+const mapThemes = {
+  day: {
+    style: "https://tiles.openfreemap.org/styles/positron",
+    origin: "#ff5b1f",
+    casing: "#ffffff",
+    alternative: "#5a5f69",
+    buildings: "#d9d9d2",
+  },
+  night: {
+    style: "https://tiles.openfreemap.org/styles/dark",
+    origin: "#ff6a2e",
+    casing: "#0b0c0e",
+    alternative: "#9a9ea6",
+    buildings: "#2a2c31",
+  },
+} as const
+
+/** The map's palette, matching the dashboard theme it was created under. */
+export type MapTheme = keyof typeof mapThemes
 
 const LOCAL_ZOOM = 14
 
 /** A stalled style or tile request must not leave the view loading forever. */
 const LOAD_TIMEOUT_MS = 20_000
-
-/** The dark theme's primary accent; MapLibre cannot read CSS oklch tokens. */
-const ORIGIN_COLOR = "#ecca6c"
 
 /** OpenMapTiles carries building heights from this zoom; lower zooms stay flat. */
 const BUILDINGS_MIN_ZOOM = 14
@@ -34,29 +53,27 @@ const BUILDINGS_LAYER = "buildings-3d"
 
 const ROUTE_SOURCE = "route"
 
-/** Alternatives stay readable on the dark style without competing with the highlighted line. */
-const ALTERNATIVE_COLOR = "#9aa6c4"
-
 /** Room around a fitted route, clearing the map controls on the right. */
 const ROUTE_PADDING = { top: 72, right: 96, bottom: 56, left: 56 }
 
 /** OpenFreeMap's vector source, which carries the OpenMapTiles building layer. */
 const BUILDINGS_SOURCE = "openmaptiles"
 
-const buildingsLayer = {
-  id: BUILDINGS_LAYER,
-  type: "fill-extrusion",
-  source: BUILDINGS_SOURCE,
-  "source-layer": "building",
-  minzoom: BUILDINGS_MIN_ZOOM,
-  filter: ["!=", ["get", "hide_3d"], true],
-  paint: {
-    "fill-extrusion-color": "#3d4a6b",
-    "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
-    "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-    "fill-extrusion-opacity": 0.9,
-  },
-} satisfies Omit<FillExtrusionLayerSpecification, "layout">
+const buildingsLayer = (theme: MapTheme) =>
+  ({
+    id: BUILDINGS_LAYER,
+    type: "fill-extrusion",
+    source: BUILDINGS_SOURCE,
+    "source-layer": "building",
+    minzoom: BUILDINGS_MIN_ZOOM,
+    filter: ["!=", ["get", "hide_3d"], true],
+    paint: {
+      "fill-extrusion-color": mapThemes[theme].buildings,
+      "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
+      "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+      "fill-extrusion-opacity": 0.9,
+    },
+  }) satisfies Omit<FillExtrusionLayerSpecification, "layout">
 
 type MapView =
   | { state: "loading" }
@@ -141,9 +158,12 @@ function routeBounds(lines: ReadonlyArray<MapLine>): LngLatBoundsLike {
 export function SharedMap({
   origin,
   routes,
+  theme = "night",
 }: {
   origin: MapOrigin
   routes?: MapRoutes | undefined
+  /** Recreates the map in the other palette when the dashboard turns. */
+  theme?: MapTheme
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | undefined>(undefined)
@@ -224,7 +244,7 @@ export function SharedMap({
           setWorkerUrl(workerUrl)
           instance = new Map({
             container: element,
-            style: STYLE_URL,
+            style: mapThemes[theme].style,
             center: resume.current?.center ?? [
               origin.longitude,
               origin.latitude,
@@ -275,7 +295,7 @@ export function SharedMap({
 
             created.addLayer(
               {
-                ...buildingsLayer,
+                ...buildingsLayer(theme),
                 layout: { visibility: presentation(mode.current).buildings },
               },
               firstLabel
@@ -299,7 +319,7 @@ export function SharedMap({
               "line-sort-key": ["case", ["get", "focused"], 1, 0],
             },
             paint: {
-              "line-color": "#141414",
+              "line-color": mapThemes[theme].casing,
               "line-width": ["case", ["get", "focused"], 9, 6],
             },
           })
@@ -316,8 +336,8 @@ export function SharedMap({
               "line-color": [
                 "case",
                 ["get", "focused"],
-                ORIGIN_COLOR,
-                ALTERNATIVE_COLOR,
+                mapThemes[theme].origin,
+                mapThemes[theme].alternative,
               ],
               "line-width": ["case", ["get", "focused"], 5, 3],
               "line-opacity": ["case", ["get", "focused"], 1, 0.75],
@@ -341,7 +361,7 @@ export function SharedMap({
             source: "origin",
             paint: {
               "circle-radius": 18,
-              "circle-color": ORIGIN_COLOR,
+              "circle-color": mapThemes[theme].origin,
               "circle-opacity": 0.18,
             },
           })
@@ -351,9 +371,9 @@ export function SharedMap({
             source: "origin",
             paint: {
               "circle-radius": 7,
-              "circle-color": ORIGIN_COLOR,
+              "circle-color": mapThemes[theme].origin,
               "circle-stroke-width": 3,
-              "circle-stroke-color": "#141414",
+              "circle-stroke-color": mapThemes[theme].casing,
             },
           })
 
@@ -411,7 +431,7 @@ export function SharedMap({
       instance?.remove()
       map.current = undefined
     }
-  }, [origin.latitude, origin.longitude, attempt, visible])
+  }, [origin.latitude, origin.longitude, attempt, visible, theme])
 
   const ready = view.state === "ready"
 

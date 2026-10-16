@@ -1,6 +1,5 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router"
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { createFileRoute, notFound } from "@tanstack/react-router"
+import { PageHead } from "@/components/page-head"
 import { features, type Feature } from "@/lib/features"
 
 export const Route = createFileRoute("/$feature")({
@@ -19,35 +18,17 @@ function FeaturePage(): React.JSX.Element {
   const feature = getFeature(Route.useLoaderData())
 
   return (
-    <section className="focused-page">
-      <header>
-        <p className="page-eyebrow">OpenHome / {feature.label}</p>
-        <h1 id="page-heading" tabIndex={-1}>
-          {feature.title}
-        </h1>
-        <p className="feature-intro">{feature.description}</p>
-      </header>
-      <Card>
-        <CardHeader>
-          <feature.icon
-            size={40}
-            aria-hidden="true"
-            className="text-muted-foreground"
-          />
-          <h2>Not available yet</h2>
-        </CardHeader>
-        <CardContent>
-          <p>{feature.unavailable}</p>
-          <p className="feature-help">
-            Checking the home connection will not enable this feature. It will
-            become available when its integration is added.
-          </p>
-          <Link to="/" className="action-link">
-            <ArrowLeftIcon size={20} aria-hidden="true" />
-            Back to Home
-          </Link>
-        </CardContent>
-      </Card>
+    <section className="soon">
+      <PageHead title={feature.title} />
+      <feature.icon className="soon-glyph" weight="thin" aria-hidden="true" />
+      <h2 className="soon-title">Not available yet</h2>
+      <div className="sr-only">
+        <p>{feature.unavailable}</p>
+        <p>
+          Checking the home connection will not enable this feature. It will
+          become available when its integration is added.
+        </p>
+      </div>
     </section>
   )
 }
