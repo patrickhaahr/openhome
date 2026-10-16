@@ -1,0 +1,54 @@
+{
+  "users": [
+    {
+      "name": "Alex",
+      "wishlists": [
+        {
+          "name": "Birthday",
+          "items": [
+            { "title": "Merino hiking socks", "price": "180 kr", "priority": "high", "quantity": 2, "notes": "Medium weight, size 43-46.", "url": "https://shop.example.com/merino-socks" },
+            { "title": "Compact travel tripod", "price": "649 kr", "priority": "normal", "quantity": 1, "notes": "Under 1 kg when folded.", "url": "https://shop.example.com/travel-tripod" },
+            { "title": "Cast iron skillet", "price": "425 kr", "priority": "low", "quantity": 1, "notes": null, "url": null }
+          ]
+        },
+        {
+          "name": "Home and kitchen",
+          "items": [
+            { "title": "Ceramic pour-over set", "price": "389 kr", "priority": "normal", "quantity": 1, "notes": "Matte grey if they have it.", "url": "https://shop.example.com/pour-over" },
+            { "title": "Linen tea towels", "price": "129 kr", "priority": "low", "quantity": 4, "notes": null, "url": null }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sam",
+      "wishlists": [
+        {
+          "name": "Books",
+          "items": [
+            { "title": "An atlas of quiet places", "price": "299 kr", "priority": "high", "quantity": 1, "notes": "Hardback edition.", "url": "https://books.example.com/atlas-of-quiet-places" },
+            { "title": "The Harbour Almanac", "price": "175 kr", "priority": "normal", "quantity": 1, "notes": null, "url": null },
+            { "title": "Field notes on birdsong", "price": "210 kr", "priority": "low", "quantity": 1, "notes": "Paperback is fine.", "url": null }
+          ]
+        },
+        {
+          "name": "Workshop",
+          "items": [
+            { "title": "Japanese pull saw", "price": "340 kr", "priority": "normal", "quantity": 1, "notes": null, "url": "https://tools.example.com/pull-saw" },
+            { "title": "Waxed canvas apron", "price": "550 kr", "priority": "high", "quantity": 1, "notes": "Olive green.", "url": null }
+          ]
+        }
+      ]
+    }
+  ],
+  "watchlist": [
+    { "owner": "Alex", "kind": "movie", "title": "A Quiet Orbit", "status": "planned", "added_days_ago": 2 },
+    { "owner": "Alex", "kind": "series", "title": "The Lighthouse Journey", "status": "watching", "added_days_ago": 12 },
+    { "owner": "Alex", "kind": "movie", "title": "Paper Cities", "status": "completed", "added_days_ago": 40, "completed_days_ago": 6 },
+    { "owner": "Alex", "kind": "series", "title": "Salt and Signal", "status": "planned", "added_days_ago": 5 },
+    { "owner": "Sam", "kind": "movie", "title": "The Cartographer's Winter", "status": "planned", "added_days_ago": 9 },
+    { "owner": "Sam", "kind": "series", "title": "Harbour Lights", "status": "watching", "added_days_ago": 21 },
+    { "owner": "Sam", "kind": "movie", "title": "Seven Small Rivers", "status": "completed", "added_days_ago": 60, "completed_days_ago": 14 },
+    { "owner": "Sam", "kind": "series", "title": "Midnight Greenhouse", "status": "completed", "added_days_ago": 90, "completed_days_ago": 30 }
+  ]
+}

@@ -428,6 +428,47 @@ dashboard-health-fixture-build:
 dashboard-health-fixture-run: dashboard-health-fixture-build
     target/debug/examples/dashboard_health
 
+# Build the synthetic API behind the dashboard preview
+[group('dashboard')]
+[working-directory: 'api']
+dashboard-synthetic-build:
+    cargo build --locked --example dashboard_preview
+
+# Serve only the synthetic preview API on 127.0.0.1:3101 (override with OPENHOME_PREVIEW_API_PORT)
+[group('dashboard')]
+[working-directory: 'api']
+dashboard-synthetic-api: dashboard-synthetic-build
+    target/debug/examples/dashboard_preview
+
+# Preview every dashboard page at http://localhost:3001/ on invented, deterministic data (Ctrl-C stops both)
+[group('dashboard')]
+dashboard-synthetic: dashboard-synthetic-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    port="${OPENHOME_PREVIEW_API_PORT:-3101}"
+    api_url="http://127.0.0.1:$port"
+    api_key=synthetic-dashboard-api-key
+    pids=()
+    stop() {
+        trap - EXIT INT TERM
+        for pid in "${pids[@]}"; do pkill -TERM -P "$pid" 2>/dev/null || true; kill "$pid" 2>/dev/null || true; done
+        wait 2>/dev/null || true
+    }
+    trap stop EXIT
+    trap 'exit 130' INT TERM
+    OPENHOME_PREVIEW_API_PORT="$port" api/target/debug/examples/dashboard_preview &
+    pids+=($!)
+    for _ in $(seq 1 100); do
+        curl -fsS -H "Authorization: Bearer $api_key" "$api_url/api/health" >/dev/null 2>&1 && break
+        kill -0 "${pids[0]}" 2>/dev/null || { echo "Synthetic API exited during startup" >&2; exit 1; }
+        sleep 0.2
+    done
+    echo "Synthetic API ready at $api_url; dashboard at http://localhost:3001/"
+    # Explicit values override anything inherited, so the preview can never reach a real API.
+    (cd dashboard && OPENHOME_API_URL="$api_url" API_KEY="$api_key" exec bunx vite dev --port 3001 --strictPort) &
+    pids+=($!)
+    wait -n
+
 # Watch dashboard tests
 [group('dashboard')]
 [working-directory: 'dashboard']

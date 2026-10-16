@@ -1,0 +1,7 @@
+{
+  "albums": [
+    { "name": "Coastal walks", "photos": 18, "hue": 205 },
+    { "name": "Autumn markets", "photos": 12, "hue": 28 },
+    { "name": "Garden in bloom", "photos": 15, "hue": 120 }
+  ]
+}

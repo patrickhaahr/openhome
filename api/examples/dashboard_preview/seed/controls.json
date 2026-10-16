@@ -1,0 +1,4 @@
+{
+  "lgtv": ["power", "input", "volume-up", "volume-down", "mute", "home", "settings", "up", "down", "left", "right", "ok", "back", "exit", "channel-up", "channel-down", "guide", "info", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "hdmi-1", "hdmi-2", "hdmi-3"],
+  "edifier": ["power", "bluetooth", "optical", "volume-down", "mute", "volume-up"]
+}

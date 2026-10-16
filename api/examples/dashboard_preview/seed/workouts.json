@@ -1,0 +1,960 @@
+{
+ "exercises": [
+  {
+   "name": "Cable Back Rows",
+   "category": "gym",
+   "muscle_group": "back",
+   "equipment": "cable machine"
+  },
+  {
+   "name": "Pull-up",
+   "category": "calisthenics",
+   "muscle_group": "back",
+   "equipment": "pull-up bar"
+  },
+  {
+   "name": "Incline Chest Press Machine",
+   "category": "gym",
+   "muscle_group": "chest",
+   "equipment": "machine"
+  },
+  {
+   "name": "Dip",
+   "category": "calisthenics",
+   "muscle_group": "chest",
+   "equipment": "parallel bars"
+  },
+  {
+   "name": "Goblet Squat",
+   "category": "gym",
+   "muscle_group": "legs",
+   "equipment": "dumbbell"
+  },
+  {
+   "name": "Plank",
+   "category": "calisthenics",
+   "muscle_group": "core",
+   "equipment": null
+  },
+  {
+   "name": "Lat Pulldown",
+   "category": "gym",
+   "muscle_group": "back",
+   "equipment": "cable machine"
+  },
+  {
+   "name": "Push-up",
+   "category": "calisthenics",
+   "muscle_group": "chest",
+   "equipment": null
+  }
+ ],
+ "sessions": [
+  {
+   "days_ago": 38,
+   "name": "Pull day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Cable Back Rows",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 35.0,
+       "rpe": 6
+      },
+      {
+       "reps": 10,
+       "weight_kg": 40.0,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "weight_kg": 40.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Pull-up",
+     "sets": [
+      {
+       "reps": 5,
+       "rpe": 8
+      },
+      {
+       "reps": 4,
+       "rpe": 9
+      },
+      {
+       "reps": 3,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Lat Pulldown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 45.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 50.0,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 36,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 22.5,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 27.5,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 27.5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 7,
+       "rpe": 8
+      },
+      {
+       "reps": 6,
+       "rpe": 9
+      },
+      {
+       "reps": 4,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 18,
+       "rpe": 7
+      },
+      {
+       "reps": 15,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 33,
+   "name": "Legs and core",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Goblet Squat",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 16,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 20,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Plank",
+     "sets": [
+      {
+       "duration_seconds": 48,
+       "rpe": 7
+      },
+      {
+       "duration_seconds": 43,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 31,
+   "name": "Pull day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Cable Back Rows",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 40.0,
+       "rpe": 6
+      },
+      {
+       "reps": 10,
+       "weight_kg": 45.0,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "weight_kg": 45.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Pull-up",
+     "sets": [
+      {
+       "reps": 7,
+       "rpe": 8
+      },
+      {
+       "reps": 6,
+       "rpe": 9
+      },
+      {
+       "reps": 5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Lat Pulldown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 47.5,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 52.5,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 29,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 25.0,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 30.0,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 30.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 9,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "rpe": 9
+      },
+      {
+       "reps": 6,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 19,
+       "rpe": 7
+      },
+      {
+       "reps": 16,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 26,
+   "name": "Legs and core",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Goblet Squat",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 16,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 20,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Plank",
+     "sets": [
+      {
+       "duration_seconds": 53,
+       "rpe": 7
+      },
+      {
+       "duration_seconds": 48,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 24,
+   "name": "Pull day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Cable Back Rows",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 40.0,
+       "rpe": 6
+      },
+      {
+       "reps": 10,
+       "weight_kg": 45.0,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "weight_kg": 45.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Pull-up",
+     "sets": [
+      {
+       "reps": 7,
+       "rpe": 8
+      },
+      {
+       "reps": 6,
+       "rpe": 9
+      },
+      {
+       "reps": 5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Lat Pulldown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 47.5,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 52.5,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 22,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 27.5,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 32.5,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 32.5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 10,
+       "rpe": 8
+      },
+      {
+       "reps": 9,
+       "rpe": 9
+      },
+      {
+       "reps": 7,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 21,
+       "rpe": 7
+      },
+      {
+       "reps": 17,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 19,
+   "name": "Legs and core",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Goblet Squat",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 16,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 20,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Plank",
+     "sets": [
+      {
+       "duration_seconds": 59,
+       "rpe": 7
+      },
+      {
+       "duration_seconds": 53,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 17,
+   "name": "Pull day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Cable Back Rows",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 45.0,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 50.0,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "weight_kg": 50.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Pull-up",
+     "sets": [
+      {
+       "reps": 9,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "rpe": 9
+      },
+      {
+       "reps": 7,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Lat Pulldown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 50.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 55.0,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 15,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 32.5,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 37.5,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 37.5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 11,
+       "rpe": 8
+      },
+      {
+       "reps": 10,
+       "rpe": 9
+      },
+      {
+       "reps": 8,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 22,
+       "rpe": 7
+      },
+      {
+       "reps": 18,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 12,
+   "name": "Legs and core",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Goblet Squat",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 20,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 24,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Plank",
+     "sets": [
+      {
+       "duration_seconds": 64,
+       "rpe": 7
+      },
+      {
+       "duration_seconds": 58,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 10,
+   "name": "Pull day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Cable Back Rows",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 45.0,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 50.0,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "weight_kg": 50.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Pull-up",
+     "sets": [
+      {
+       "reps": 9,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "rpe": 9
+      },
+      {
+       "reps": 7,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Lat Pulldown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 52.5,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 57.5,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 8,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 35.0,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 40.0,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 40.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 10,
+       "rpe": 8
+      },
+      {
+       "reps": 9,
+       "rpe": 9
+      },
+      {
+       "reps": 7,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 24,
+       "rpe": 7
+      },
+      {
+       "reps": 19,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 5,
+   "name": "Legs and core",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Goblet Squat",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 20,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 24,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Plank",
+     "sets": [
+      {
+       "duration_seconds": 69,
+       "rpe": 7
+      },
+      {
+       "duration_seconds": 63,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 3,
+   "name": "Pull day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Cable Back Rows",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 50.0,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 55.0,
+       "rpe": 8
+      },
+      {
+       "reps": 8,
+       "weight_kg": 55.0,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Pull-up",
+     "sets": [
+      {
+       "reps": 10,
+       "rpe": 8
+      },
+      {
+       "reps": 9,
+       "rpe": 9
+      },
+      {
+       "reps": 8,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Lat Pulldown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 55.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 60.0,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 1,
+   "name": "Push day",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Incline Chest Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 37.5,
+       "rpe": 6
+      },
+      {
+       "reps": 9,
+       "weight_kg": 42.5,
+       "rpe": 8
+      },
+      {
+       "reps": 7,
+       "weight_kg": 42.5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Dip",
+     "sets": [
+      {
+       "reps": 14,
+       "rpe": 8
+      },
+      {
+       "reps": 13,
+       "rpe": 9
+      },
+      {
+       "reps": 11,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Push-up",
+     "sets": [
+      {
+       "reps": 25,
+       "rpe": 7
+      },
+      {
+       "reps": 20,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "days_ago": 0,
+   "name": "Legs and core",
+   "notes": null,
+   "exercises": [
+    {
+     "exercise": "Goblet Squat",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 20,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 24,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Plank",
+     "sets": [
+      {
+       "duration_seconds": 75,
+       "rpe": 7
+      },
+      {
+       "duration_seconds": 68,
+       "rpe": 8
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
