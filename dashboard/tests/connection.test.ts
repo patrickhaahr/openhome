@@ -429,13 +429,13 @@ test("renders current, hourly and seven-day weather through the private server b
   const privateUrl = await listen(upstream)
   const url = await dashboard({ url: privateUrl, key: apiKey })
   const home = await page(url, "/")
-  expect(home).toContain("9,3°")
+  expect(home).toContain("9°")
   expect(home).toContain("Overcast")
   expect(home).toContain('aria-label="Open Weather"')
   expect(home).toContain("Turn on")
   const weather = await page(url, "/weather")
   expect(weather).toContain("Fresh forecast")
-  expect(weather).toMatch(/11\. okt\.[, ]+12[.:]00/)
+  expect(weather).toMatch(/11 Oct[, ]+12:00/)
   expect(weather).toContain("6,6 °C")
   expect(weather).toContain("3,3 m/s")
   expect(weather).toContain("0,9 mm")
@@ -494,7 +494,7 @@ test.each([
         Date.parse(start) + index * 3_600_000
       ).toISOString()
 
-      expect(html).toContain(`<time dateTime="${instant}">${label}.00</time>`)
+      expect(html).toContain(`<time dateTime="${instant}">${label}:00</time>`)
     }
 
     expect(html).toContain("GMT+1")
@@ -547,7 +547,7 @@ test.each([
       expect(weather).toContain("Hourly forecast unavailable")
       expect(weather).toContain("conditions may have changed")
       expect(weather).toContain("Fetched")
-      expect(weather).toMatch(/11\. okt\.[, ]+12[.:]00/)
+      expect(weather).toMatch(/11 Oct[, ]+12:00/)
       expect(weather).toContain("Precipitation</dt><dd>Unavailable")
       expect(weather).not.toContain("0 mm")
     }

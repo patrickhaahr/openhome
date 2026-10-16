@@ -168,19 +168,14 @@ async function tap(label: string): Promise<void> {
   })
 }
 
-test("Home shows only reported common commands and links to the full remote", async () => {
+test("Home shows only the TV power key", async () => {
   await renderRemote(TvRemote, "quick", {
     connection: "connected",
     remote: synthetic,
   })
 
-  expect(buttonLabels()).toEqual(["Power", "Volume up"])
+  expect(buttonLabels()).toEqual(["Power"])
   expect(status()).toBe("Ready to send a command.")
-  expect(
-    Array.from(container.querySelectorAll("a"))
-      .find((link) => link.textContent.trim() === "Full remote")
-      ?.getAttribute("href")
-  ).toBe("/controls")
 })
 
 test("the full remote groups every reported command and omits unreported ones", async () => {
@@ -204,11 +199,10 @@ test("the full remote groups every reported command and omits unreported ones", 
     { label: "Navigation", buttons: ["Up", "OK"] },
     { label: "Numbers", buttons: ["1", "0"] },
   ])
-  expect(linkTexts()).not.toContain("Full remote")
 })
 
 test("sends one command for queued and pending taps and never claims TV power or volume", async () => {
-  const tv = await renderRemote(TvRemote, "quick", {
+  const tv = await renderRemote(TvRemote, "full", {
     connection: "connected",
     remote: synthetic,
   })
@@ -259,7 +253,7 @@ test("recovers from failed commands and keeps private RPC errors out of the page
 test("refreshes stale discovery after the remote rejects a command, without reloading", async () => {
   const tv = await renderRemote(
     TvRemote,
-    "quick",
+    "full",
     { connection: "connected", remote: synthetic },
     {
       connection: "connected",
@@ -292,11 +286,10 @@ test("explains a missing TV remote without offering buttons, then recovers on a 
   expect(status()).not.toContain("may have responded")
   expect(buttonLabels()).toEqual(["Check again"])
   expect(linkTexts()).not.toContain("Open Connection")
-  expect(linkTexts()).not.toContain("Full remote")
 
   await tap("Check again")
   expect(tv.checks()).toBe(2)
-  expect(buttonLabels()).toEqual(["Power", "Volume up"])
+  expect(buttonLabels()).toEqual(["Power"])
 })
 
 test("explains when OpenHome reports no supported TV commands", async () => {
@@ -326,7 +319,7 @@ test("pauses commands while disconnected and links to Connection", async () => {
 test("keeps a pending command guarded when the page re-checks before it settles", async () => {
   const tv = await renderRemote(
     TvRemote,
-    "quick",
+    "full",
     { connection: "connected", remote: synthetic },
     { connection: "connected", remote: synthetic }
   )
@@ -355,7 +348,6 @@ test("the speaker shows reported input and volume commands on Home and groups th
     remote: syntheticSpeaker,
   })
   expect(buttonLabels()).toEqual(["Bluetooth", "Optical", "Volume up"])
-  expect(linkTexts()).toContain("Full remote")
 
   await renderRemote(SpeakerRemote, "full", {
     connection: "connected",
@@ -415,5 +407,4 @@ test("explains a missing speaker remote without offering buttons", async () => {
 
   expect(status()).toContain("The speaker remote is not configured.")
   expect(buttonLabels()).toEqual(["Check again"])
-  expect(linkTexts()).not.toContain("Full remote")
 })

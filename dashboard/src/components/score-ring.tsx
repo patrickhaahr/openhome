@@ -1,3 +1,4 @@
+import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import type { Band } from "@/lib/recovery-score"
 
 /** Which measurement a ring draws; each has its own colour family. */
@@ -17,6 +18,8 @@ type ScoreRingProps = {
   readonly label: string
   /** The full reading for assistive technology. */
   readonly spoken: string
+  /** A glyph above the figure that names the ring without a word. */
+  readonly icon?: Icon
 }
 
 const radius = 52
@@ -32,6 +35,7 @@ export function ScoreRing({
   unit,
   label,
   spoken,
+  icon: RingIcon,
 }: ScoreRingProps): React.JSX.Element {
   return (
     <figure
@@ -61,6 +65,9 @@ export function ScoreRing({
         ) : null}
       </svg>
       <div className="score-ring-figure" aria-hidden="true">
+        {RingIcon === undefined ? null : (
+          <RingIcon className="score-ring-icon" weight="fill" />
+        )}
         <span data-gap={figure === null}>{figure ?? "–"}</span>
         {figure !== null && unit !== undefined ? <small>{unit}</small> : null}
       </div>
