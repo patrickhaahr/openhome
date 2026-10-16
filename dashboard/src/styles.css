@@ -1431,6 +1431,28 @@ a.dir-row:hover .dir-poster:nth-child(3) {
 .shared-map .maplibregl-ctrl-attrib a {
   color: var(--foreground);
 }
+/* Leaflet's panes carry z-indexes up to 1000; contain them below the dashboard's controls. */
+.shared-map[data-map-renderer="raster"] .shared-map-canvas {
+  z-index: 0;
+  background: var(--wash-strong);
+  font: inherit;
+}
+/* OSM only publishes light tiles; one filter on the pane darkens them for night. */
+.shared-map[data-map-shade="night"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9);
+}
+.shared-map .leaflet-container .leaflet-control-attribution {
+  margin: 0;
+  padding: 0.25rem 0.625rem;
+  border-top-left-radius: var(--radius-md);
+  background: var(--scrim);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.shared-map .leaflet-control-attribution a {
+  color: var(--foreground);
+}
 @utility watchlists {
   button,
   input,
@@ -3644,6 +3666,17 @@ a.dir-row:hover .dir-poster:nth-child(3) {
 
 .shared-map {
   height: clamp(24rem, calc(100svh - 14rem), 52rem);
+}
+
+/* The photo frame's Chrome 106 WebView predates svh and drops these declarations;
+   without a height the map and its status messages collapse to nothing. */
+@supports not (height: 1svh) {
+  .shell {
+    min-height: 100vh;
+  }
+  .shared-map {
+    height: clamp(24rem, calc(100vh - 14rem), 52rem);
+  }
 }
 
 /* ---------- Watchlist: each plan is a poster; without artwork the title is the poster ---------- */

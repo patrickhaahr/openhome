@@ -43,3 +43,15 @@ without a key, registration or paid plan. Its built-in OpenMapTiles and
 OpenStreetMap attribution remains visible. Tiles load directly from the public
 provider; its requests describe the displayed area. Availability is not
 guaranteed, so the provider fallback remains necessary.
+
+Browsers without WebGL2 cannot run MapLibre at all; the photo frame's Mali-400
+WebView offers only WebGL1. The shared map probes for WebGL2 before importing
+MapLibre and otherwise draws a flat Leaflet map of OpenStreetMap image tiles
+with the same origin, routes and zoom/recenter controls, but no 3D. Image tiles
+need no GPU parsing, which also suits the frame's 512 MB of memory. MapLibre 4
+(WebGL1) was rejected as a second bundled major that still parses vector tiles;
+CARTO's matching Positron raster now requires an API key. OpenStreetMap's
+[tile policy](https://operations.osmfoundation.org/policies/tiles/), checked
+2026-10-16, permits keyless light use with visible attribution and the browser's
+Referer intact; the dashboard sets no restrictive Referrer-Policy. Night mode
+darkens the light tiles with one CSS filter on the tile pane.
