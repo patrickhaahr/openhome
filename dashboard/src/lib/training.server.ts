@@ -3,9 +3,13 @@ import { z } from "zod"
 import { requestOpenHome } from "./openhome.server"
 import { trainingDayOn } from "./workout"
 import {
+  metricTrend,
   noopWorkoutDetail,
   recoveryDay,
+  shiftDay,
   trainingContext,
+  trendDays,
+  type TrendMetric,
   type TrainingRead,
   type TrainingSearch,
   type TrainingState,
@@ -49,10 +53,9 @@ async function read<T>(
 export async function readTraining(
   search: TrainingSearch
 ): Promise<TrainingState> {
-  const day = search.day ?? trainingDayOn(new Date())
-  // Calendar arithmetic for a seven-day UI window, not elapsed local hours across DST.
-  const from = new Date(`${day}T00:00:00Z`)
-  from.setUTCDate(from.getUTCDate() - 6)
+  const today = trainingDayOn(new Date())
+  const day = search.day ?? today
+  const from = shiftDay(day, -6)
   const selected = search.noop
 
   // Literal dot segments are normalized even when URL-encoded; never let them change the API path.
@@ -70,14 +73,39 @@ export async function readTraining(
             noopWorkoutDetail
           )
 
-  const [recovery, context, selectedDetail] = await Promise.all([
-    read(`/api/training/days/${day}/recovery`, recoveryDay),
-    read(
-      `/api/training/context/${from.toISOString().slice(0, 10)}/${day}`,
-      trainingContext
-    ),
-    detail,
-  ])
+  const trendFrom = shiftDay(day, 1 - trendDays)
 
-  return { day, recovery, context, detail: selectedDetail }
+  const recoveryOn = (weekDay: string) =>
+    read(`/api/training/days/${weekDay}/recovery`, recoveryDay)
+
+  const trend = (metric: TrendMetric) =>
+    read(`/api/training/trends/${metric}/${trendFrom}/${day}`, metricTrend)
+
+  // Axum scores one Recovery Day per read; the week strip reads the six before the selected day.
+  const [earlier, recovery, hrv, restingHr, sleep, context, selectedDetail] =
+    await Promise.all([
+      Promise.all(
+        Array.from({ length: 6 }, async (_, index) => {
+          const weekDay = shiftDay(from, index)
+
+          return { day: weekDay, recovery: await recoveryOn(weekDay) }
+        })
+      ),
+      recoveryOn(day),
+      trend("hrv"),
+      trend("resting_heart_rate"),
+      trend("sleep_duration"),
+      read(`/api/training/context/${from}/${day}`, trainingContext),
+      detail,
+    ])
+
+  return {
+    day,
+    today,
+    recovery,
+    week: [...earlier, { day, recovery }],
+    trends: { hrv, resting_heart_rate: restingHr, sleep_duration: sleep },
+    context,
+    detail: selectedDetail,
+  }
 }

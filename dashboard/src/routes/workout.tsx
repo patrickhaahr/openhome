@@ -1,5 +1,9 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
+import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
+import { ChartLineUpIcon } from "@phosphor-icons/react/dist/csr/ChartLineUp"
+import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales"
+import { TargetIcon } from "@phosphor-icons/react/dist/csr/Target"
 import { z } from "zod"
 import { BodyProfile } from "@/components/body-profile"
 import { PageHead } from "@/components/page-head"
@@ -18,11 +22,11 @@ import { loadProgress } from "@/lib/exercise-progress.functions"
 import { historyStep, maxHistory, workoutSearch } from "@/lib/workout"
 import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
 
-/** Logged Workouts and the exercise library, read and written through Axum. */
+/** Workout views: today's recovery first, then the log, exercise progress and body weight. */
 export const Route = createFileRoute("/workout")({
   head: () => ({ meta: [{ title: "Workout · OpenHome" }] }),
   validateSearch: workoutSearch.extend({
-    view: z.enum(["body", "progress", "recovery"]).optional().catch(undefined),
+    view: z.enum(["log", "progress", "body"]).optional().catch(undefined),
     ...bodyRange.shape,
     ...progressSearch.shape,
     ...trainingSearch.shape,
@@ -44,16 +48,23 @@ export const Route = createFileRoute("/workout")({
         return { view: "body" as const, data: await loadBodyProfile(deps) }
       case "progress":
         return { view: "progress" as const, data: await loadProgress(deps) }
-      case "recovery":
-        return { view: "recovery" as const, data: await loadTraining(deps) }
+      case "log":
+        return { view: "log" as const, data: await loadWorkouts(deps) }
       case undefined:
-        return { view: "training" as const, data: await loadWorkouts(deps) }
+        return { view: "today" as const, data: await loadTraining(deps) }
     }
   },
   staleTime: 0,
   headers: () => ({ "Cache-Control": "no-store" }),
   component: WorkoutPage,
 })
+
+const views = [
+  { view: undefined, label: "Today", Icon: TargetIcon },
+  { view: "log", label: "Log", Icon: BarbellIcon },
+  { view: "progress", label: "Progress", Icon: ChartLineUpIcon },
+  { view: "body", label: "Body", Icon: ScalesIcon },
+] as const
 
 function WorkoutPage(): React.JSX.Element {
   const data = Route.useLoaderData()
@@ -67,46 +78,25 @@ function WorkoutPage(): React.JSX.Element {
     <section>
       <PageHead title="Workout" />
       <nav className="view-tabs" aria-label="Workout views">
-        <Link
-          to="/workout"
-          search={(previous) => ({ ...previous, view: undefined })}
-          activeOptions={{
-            exact: true,
-            includeSearch: true,
-            explicitUndefined: true,
-          }}
-          className="view-tab"
-          aria-current={data.view === "training" ? "page" : undefined}
-        >
-          Workouts
-        </Link>
-        <Link
-          to="/workout"
-          search={(previous) => ({ ...previous, view: "progress" })}
-          activeOptions={{ exact: true, includeSearch: true }}
-          className="view-tab"
-          aria-current={data.view === "progress" ? "page" : undefined}
-        >
-          Progress
-        </Link>
-        <Link
-          to="/workout"
-          search={(previous) => ({ ...previous, view: "recovery" })}
-          activeOptions={{ exact: true, includeSearch: true }}
-          className="view-tab"
-          aria-current={data.view === "recovery" ? "page" : undefined}
-        >
-          Recovery & NOOP
-        </Link>
-        <Link
-          to="/workout"
-          search={(previous) => ({ ...previous, view: "body" })}
-          activeOptions={{ exact: true, includeSearch: true }}
-          className="view-tab"
-          aria-current={data.view === "body" ? "page" : undefined}
-        >
-          Profile & weight
-        </Link>
+        {views.map((view) => (
+          <Link
+            key={view.label}
+            to="/workout"
+            search={(previous) => ({ ...previous, view: view.view })}
+            activeOptions={{
+              exact: true,
+              includeSearch: true,
+              explicitUndefined: true,
+            }}
+            className="view-tab"
+            aria-current={
+              data.view === (view.view ?? "today") ? "page" : undefined
+            }
+          >
+            <view.Icon size={20} weight="bold" aria-hidden="true" />
+            {view.label}
+          </Link>
+        ))}
       </nav>
       {data.view === "progress" ? (
         <ExerciseProgress
@@ -146,7 +136,7 @@ function WorkoutPage(): React.JSX.Element {
           }}
         />
       ) : null}
-      {data.view === "recovery" ? (
+      {data.view === "today" ? (
         <TrainingSummaries
           key={data.data.day}
           data={data.data}
@@ -160,6 +150,9 @@ function WorkoutPage(): React.JSX.Element {
                 resetScroll: false,
               })
           }}
+          openLogged={(workout) =>
+            navigate({ search: { view: "log", workout } })
+          }
           open={async (noop) => {
             if (
               noop?.source === search.noop?.source &&
@@ -175,7 +168,7 @@ function WorkoutPage(): React.JSX.Element {
           }}
         />
       ) : null}
-      {data.view === "training" ? (
+      {data.view === "log" ? (
         <Workouts
           data={data.data}
           change={(command) => mutate({ data: command })}

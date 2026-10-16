@@ -23,6 +23,7 @@ test("opens focused views through persistent navigation, restores browser histor
   const originalWishlistLoader = WishlistRoute.options.loader
   const originalWatchlistLoader = WatchlistRoute.options.loader
   const originalWorkoutLoader = WorkoutRoute.options.loader
+  const unavailable = { state: "unavailable", reason: "unreachable" } as const
   WorkoutRoute.options.loader = ({ deps }) =>
     deps.view === "body"
       ? {
@@ -34,8 +35,20 @@ test("opens focused views through persistent navigation, restores browser histor
           },
         }
       : {
-          view: "training",
-          data: { state: "unavailable", reason: "unavailable" },
+          view: "today",
+          data: {
+            day: "2026-01-15",
+            today: "2026-01-15",
+            recovery: unavailable,
+            week: [],
+            trends: {
+              hrv: unavailable,
+              resting_heart_rate: unavailable,
+              sleep_duration: unavailable,
+            },
+            context: unavailable,
+            detail: { state: "none" },
+          },
         }
   WatchlistRoute.options.loader = () => ({
     state: "available",
@@ -163,14 +176,14 @@ test("opens focused views through persistent navigation, restores browser histor
       document.querySelector('nav a[aria-current="page"]')?.textContent
     ).toBe("Workout")
     expect(document.querySelector("main")?.textContent).toContain(
-      "Workouts unavailable"
+      "Recovery day unavailable"
     )
 
     const body = document.querySelector<HTMLAnchorElement>(
       'nav[aria-label="Workout views"] a[href*="view=body"]'
     )
 
-    if (body === null) throw new Error("Expected Profile & weight navigation")
+    if (body === null) throw new Error("Expected Body navigation")
 
     await act(async () => {
       body.click()
@@ -181,7 +194,7 @@ test("opens focused views through persistent navigation, restores browser histor
       document.querySelector(
         'nav[aria-label="Workout views"] a[aria-current="page"]'
       )?.textContent
-    ).toBe("Profile & weight")
+    ).toBe("Body")
     expect(document.querySelector("main")?.textContent).toContain(
       "No body weight recorded in this date range."
     )
@@ -191,7 +204,7 @@ test("opens focused views through persistent navigation, restores browser histor
       await router.load()
     })
     expect(document.querySelector("main")?.textContent).toContain(
-      "Workouts unavailable"
+      "Recovery day unavailable"
     )
   } finally {
     await act(async () => {
