@@ -82,6 +82,10 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
 - **Refresh lives top right** as a round key on every data page (Photos, Wishlist,
   Watchlist, Profile & weight). Weather has none: it refreshes itself on the forecast's
   validity, and a stale read shows a rewind mark beside the current figures.
+- **Controls is three plates on one screen**, the same tone as Home's deck: the lights as a
+  tall wall switch (lit bulb on ink above, dark bulb on paper below), the TV remote in the
+  middle and the speaker's narrow remote on the right. The device glyph names each remote;
+  keys sit on paper inside the plate, and both volume rockers put + on top.
 - **Weather is one screen**: the figures on the left (now, then the week as rows whose ranges
   share one scale), and the next 24 hours as a horizon on the right: the temperature line,
   rain as columns beneath it, the nights as darker ground from the same sun model that turns
