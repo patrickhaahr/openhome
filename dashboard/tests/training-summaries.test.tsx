@@ -22,6 +22,8 @@ let search: TrainingSearch
 
 let pending: Promise<void>
 
+let opened: number | undefined
+
 beforeEach(async () => {
   fixture = await startAxumFixture()
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
@@ -32,6 +34,7 @@ beforeEach(async () => {
   root = createRoot(container)
   search = { day: "2026-09-30" }
   pending = Promise.resolve()
+  opened = undefined
 })
 
 afterEach(async () => {
@@ -62,6 +65,11 @@ async function render(): Promise<void> {
 
           return pending
         }}
+        openLogged={(workoutId) => {
+          opened = workoutId
+
+          return Promise.resolve()
+        }}
         refresh={() => {
           pending = render()
 
@@ -72,19 +80,42 @@ async function render(): Promise<void> {
   })
 }
 
-async function click(text: string): Promise<void> {
+function buttonNamed(text: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll("button")).find(
-    (element) => element.textContent?.startsWith(text)
+    (element) =>
+      element.textContent.startsWith(text) ||
+      element.getAttribute("aria-label")?.startsWith(text) === true
   )
 
   if (button === undefined) throw new Error(`Missing button: ${text}`)
+
+  return button
+}
+
+async function click(text: string): Promise<void> {
+  const button = buttonNamed(text)
   await act(async () => {
     button.click()
     await pending
   })
 }
 
-test("renders API-resolved recovery sources and date-aligned logged/NOOP summaries without pairing them", async () => {
+function ring(label: string): string | null | undefined {
+  return Array.from(container.querySelectorAll(".score-ring"))
+    .map((element) => element.getAttribute("aria-label"))
+    .find((name) => name?.startsWith(`${label}:`) === true)
+}
+
+async function closeDetail(): Promise<void> {
+  const close = buttonNamed("Close NOOP detail")
+  close.focus()
+  await click("Close NOOP detail")
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  })
+}
+
+test("draws the selected day as rings, a week of days, its night and body, and its own sessions", async () => {
   const stored = await writeWorkout({
     kind: "create",
     date: "2026-09-30",
@@ -112,42 +143,42 @@ test("renders API-resolved recovery sources and date-aligned logged/NOOP summari
   expect(stored.state).toBe("saved")
   await render()
 
-  const observations = Array.from(container.querySelectorAll("dl > div")).map(
+  expect(ring("Charge")).toBe("Charge: 78 % recovery")
+  expect(ring("Rest")).toBe("Rest: 7 hours 30 minutes asleep")
+  expect(ring("Effort")).toBe("Effort: strain 35 of 100")
+  expect(container.querySelectorAll(".today-day")).toHaveLength(7)
+  expect(
+    container
+      .querySelector('.today-day[aria-pressed="true"]')
+      ?.getAttribute("aria-label")
+  ).toContain("Charge 78 %")
+
+  const vitals = Array.from(container.querySelectorAll(".vital")).map(
     (element) => element.textContent
   )
 
-  expect(observations).toContain("Sleep duration450 minSource: my-whoop-noop")
-  expect(observations).toContain(
-    "Resting heart rate50 beats/minSource: my-whoop"
-  )
-  expect(observations).toContain(
-    "HRV · nightly RMSSD62 msSource: my-whoop-noop"
+  expect(vitals).toContain("Resting HR50bpm")
+  expect(vitals).toContain("HRV62ms")
+  expect(vitals.some((text) => text.startsWith("Skin tempNot recorded"))).toBe(
+    true
   )
   expect(container.textContent).toContain("Freshness: confirmed")
   expect(container.textContent).toContain("daily metrics: covered")
   expect(container.textContent).toContain("User edited")
-  expect(container.textContent).toContain(
-    "Skin temperature deviationNot recordedUnit: degC"
-  )
   expect(container.textContent).toContain("Felt recovered: No")
   expect(container.textContent).toContain("Synthetic journal note")
-  expect(
-    container.querySelectorAll(
-      ".training-disclosure > summary span:first-child"
-    )
-  ).toHaveLength(7)
-  expect(
-    container.querySelector('section[aria-label="Logged Workouts 2026-09-30"]')
-      ?.textContent
-  ).toContain("Synthetic pull")
-  expect(
-    container.querySelector('section[aria-label="NOOP Workouts 2026-09-30"]')
-      ?.textContent
-  ).toContain("Open Run / walk")
-  expect(
-    container.querySelector('section[aria-label="NOOP Workouts 2026-09-29"]')
-      ?.textContent
-  ).toContain("No NOOP workouts recorded")
+  expect(container.querySelectorAll(".night-history-bars span")).toHaveLength(
+    30
+  )
+  expect(buttonNamed("Open Run / walk")).toBeDefined()
+  await click("Open logged Synthetic pull")
+  expect(opened).toBe(stored.state === "saved" ? stored.workoutId : undefined)
+
+  await click("Tue 29 Sept")
+  expect(search.day).toBe("2026-09-29")
+  expect(container.textContent).toContain(
+    "No workouts logged and no NOOP workouts recorded on this day."
+  )
 })
 
 test("opens the exact sport at a colliding start, shows strap detail and Profile-dependent zones/recovery", async () => {
@@ -156,22 +187,20 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
   expect(document.activeElement?.getAttribute("aria-label")).toBe(
     "NOOP workout detail"
   )
-  expect(container.textContent).toContain("Average pace300 s/km")
+  expect(container.textContent).toContain("Average pace5:00 /km")
   expect(container.textContent).toContain(
     "Heart rate basis: strap samples (my-whoop)"
   )
   expect(container.textContent).toContain(
-    "Set Maximum heart rate in Profile & weight"
+    "Set Maximum heart rate in Body to enable this read."
   )
   await writeBodyProfile({ kind: "profile", hr_max_bpm: 190 })
   await click("Refresh training")
   expect(container.textContent).toContain("Profile maximum: 190 beats/min")
-  expect(container.textContent).toContain("End heart rate: 165 beats/min")
+  expect(container.textContent).toContain("End heart rate: 165 bpm")
+  expect(container.textContent).toContain("120 beats/min · Drop: 45")
   expect(container.textContent).toContain(
-    "1 min: 120 beats/min · Drop: 45 beats/min"
-  )
-  expect(container.textContent).toContain(
-    "5 min: Too few strap samples; not interpolated."
+    "Too few strap samples; not interpolated."
   )
   expect(container.querySelectorAll("meter")).toHaveLength(5)
 
@@ -183,7 +212,9 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
   expect(points).not.toContain("+90 s: 150 beats/min")
   expect(points).toContain("+150 s: 150 beats/min")
   await click("Open Cycling")
-  expect(container.querySelectorAll("h2")[1]?.textContent).toBe("Cycling")
+  expect(container.querySelector(".noop-detail h2")?.textContent).toBe(
+    "Cycling"
+  )
   expect(search.noop?.sport).toBe("Cycling")
   await click("Open Mobility")
   expect(container.textContent).toContain(
@@ -192,39 +223,21 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
   expect(container.textContent).toContain(
     "No strap heart rate samples are available"
   )
-  await click("Close NOOP detail")
-  await act(async () => {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  })
-  expect(document.activeElement).toBe(
-    Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.startsWith("Open Mobility")
-    )
-  )
-  expect(container.textContent).toContain("Explore a recorded session")
+  await closeDetail()
+  expect(document.activeElement).toBe(buttonNamed("Open Mobility"))
+  expect(container.querySelector(".noop-detail")).toBeNull()
 })
 
-test("date selection distinguishes no sync from recorded absence and allows refresh after an authorization failure", async () => {
+test("day selection distinguishes no sync from recorded absence and allows refresh after an authorization failure", async () => {
   search = { day: "2026-10-03" }
   await render()
   expect(container.textContent).toContain("Freshness: unknown")
-  expect(container.textContent).toContain(
-    "Sleep durationNot synced or unavailableUnit: min"
-  )
+  expect(ring("Rest")).toBe("Rest: Not synced or unavailable")
   expect(container.textContent).toContain("NOOP workouts have unknown coverage")
-  const input = container.querySelector("input")
-
-  if (input === null) throw new Error("Missing Training day")
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value"
-    )?.set?.call(input, "2026-09-29")
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-  await click("Show day")
+  expect(buttonNamed("Next week").disabled).toBe(false)
+  await click("Tue 29 Sept")
   expect(container.textContent).toContain("Recovery day · 2026-09-29")
-  expect(container.textContent).toContain("Sleep durationNot recordedUnit: min")
+  expect(ring("Rest")).toBe("Rest: Not recorded")
   expect(container.textContent).toContain(
     "No sleep sessions recorded for this night."
   )
@@ -237,6 +250,8 @@ test("date selection distinguishes no sync from recorded absence and allows refr
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   await click("Refresh training")
   expect(container.textContent).toContain("Recovery day · 2026-09-29")
+  await click("Previous week")
+  expect(search.day).toBe("2026-09-22")
 })
 
 test("a missing or rejected detail and a failed context leave independent recovery data visible", async () => {
@@ -249,7 +264,7 @@ test("a missing or rejected detail and a failed context leave independent recove
   expect(container.textContent).toContain(
     "This NOOP workout is no longer available"
   )
-  expect(container.textContent).toContain("Sleep duration450 min")
+  expect(ring("Rest")).toBe("Rest: 7 hours 30 minutes asleep")
   const realFetch = globalThis.fetch
   vi.spyOn(globalThis, "fetch").mockImplementation((input, options) =>
     (input instanceof Request ? input.url : input.toString()).includes(
@@ -268,7 +283,7 @@ test("a missing or rejected detail and a failed context leave independent recove
     "This read exceeds OpenHome's data limit"
   )
   expect(container.textContent).not.toContain("private-diagnostic")
-  expect(container.textContent).toContain("Sleep duration450 min")
+  expect(ring("Rest")).toBe("Rest: 7 hours 30 minutes asleep")
 
   for (const source of [".", "..", "\u0000"]) {
     const data = await readTraining({
@@ -284,7 +299,7 @@ test("a missing or rejected detail and a failed context leave independent recove
   ).toEqual({ day: undefined, noop: undefined })
 })
 
-test("closing a deep-linked or refreshed detail restores a current button, with a toolbar fallback when context is unavailable", async () => {
+test("closing a detail restores its session button, falling back to the selected day when it is gone", async () => {
   search.day = "2026-10-01"
   search.noop = {
     source: "my-whoop",
@@ -292,30 +307,12 @@ test("closing a deep-linked or refreshed detail restores a current button, with 
     sport: "Run / walk",
   }
   await render()
+  // A deep link to another day's session has no button on this day.
+  await closeDetail()
+  expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true")
+  expect(document.activeElement?.className).toBe("today-day")
 
-  async function closeFromKeyboard(): Promise<void> {
-    const close = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Close NOOP detail"
-    )
-
-    if (close === undefined) throw new Error("Missing close button")
-    close.focus()
-    await click("Close NOOP detail")
-    await act(async () => {
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve())
-      )
-    })
-  }
-
-  await closeFromKeyboard()
-  expect(document.activeElement).toBe(
-    Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.startsWith("Open Run / walk")
-    )
-  )
-  expect(document.activeElement?.closest("details")?.open).toBe(true)
-
+  await click("Wed 30 Sept")
   await click("Open Cycling")
   const realFetch = globalThis.fetch
 
@@ -333,16 +330,12 @@ test("closing a deep-linked or refreshed detail restores a current button, with 
   expect(container.textContent).toContain("Training context unavailable")
   failedContext.mockRestore()
   await click("Refresh training")
-  await closeFromKeyboard()
-  expect(document.activeElement).toBe(
-    Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.startsWith("Open Cycling")
-    )
-  )
+  await closeDetail()
+  expect(document.activeElement).toBe(buttonNamed("Open Cycling"))
 
   await click("Open Mobility")
   vi.stubEnv("API_KEY", "wrong-private-credential")
   await click("Refresh training")
-  await closeFromKeyboard()
-  expect(document.activeElement?.textContent).toBe("Show day")
+  await closeDetail()
+  expect(document.activeElement?.className).toBe("today-day")
 })

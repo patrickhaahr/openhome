@@ -447,6 +447,26 @@ export function holdLabel(seconds: number | null): string {
   return seconds < 60 ? `${seconds} s` : formatHold(seconds)
 }
 
+/** A Set's glanceable figures; `load` is null for bodyweight. */
+export type SetFigures = {
+  readonly effort: string
+  readonly load: string | null
+}
+
+/**
+ * The two figures a Set is read by at a glance: its effort and its Added Weight.
+ *
+ * @param set - A stored Set.
+ * @returns Reps (`8`) or a hold (`1:05`), and `+20` or null for bodyweight.
+ */
+export function setFigures(set: LoggedSet): SetFigures {
+  return {
+    effort:
+      set.reps === null ? holdLabel(set.duration_seconds) : String(set.reps),
+    load: set.weight_kg === null ? null : `+${formatNumber(set.weight_kg)}`,
+  }
+}
+
 /**
  * Describe one stored Set in words, keeping bodyweight distinct from zero load.
  *

@@ -3,6 +3,7 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwis
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
+import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -20,6 +21,7 @@ import { createRequestId } from "@/lib/request-id"
 import {
   describeSet,
   draftFromWorkout,
+  setFigures,
   trainingDayOn,
   workoutFailureMessage,
   type WorkoutCommand,
@@ -296,10 +298,15 @@ export function Workouts({
                         )
                       }}
                     >
+                      <span className="workout-history-day" aria-hidden="true">
+                        {Number(workout.date.slice(8, 10))}
+                      </span>
                       <span className="workout-history-date">
                         {formatDay(workout.date, shortDate)}
                       </span>
-                      <span>{workout.name ?? "Workout"}</span>
+                      <span className="workout-history-name">
+                        {workout.name ?? "Workout"}
+                      </span>
                     </Button>
                   </li>
                 ))}
@@ -426,13 +433,25 @@ function WorkoutView({
         <div>
           <p className="workout-date">{formatDay(workout.date, longDate)}</p>
           <h2 id="workout-title">{workout.name ?? "Workout"}</h2>
-          <p className="sr-only">
-            {entryCount(workout.exercises.length)} ·{" "}
-            {workout.exercises.reduce(
-              (total, entry) => total + entry.sets.length,
-              0
-            )}{" "}
-            sets
+          <p className="workout-tally">
+            <span>
+              <strong>{workout.exercises.length}</strong>{" "}
+              <span className="sr-only">
+                {workout.exercises.length === 1 ? "exercise" : "exercises"}
+              </span>
+              <BarbellIcon size={18} aria-hidden="true" />
+            </span>
+            <span className="sr-only"> · </span>
+            <span>
+              <strong>
+                {workout.exercises.reduce(
+                  (total, entry) => total + entry.sets.length,
+                  0
+                )}
+              </strong>{" "}
+              <span className="sr-only">sets</span>
+              <StackIcon size={18} aria-hidden="true" />
+            </span>
           </p>
         </div>
         <div className="workout-detail-actions">
@@ -478,18 +497,41 @@ function WorkoutView({
               <p className="workout-muted">No sets logged.</p>
             ) : (
               <ol className="workout-sets">
-                {entry.sets.map((set, setIndex) => (
-                  <li key={set.id}>
-                    <span className="workout-set-number">
-                      <span className="sr-only">Set </span>
-                      {setIndex + 1}
-                    </span>
-                    <span>{describeSet(set)}</span>
-                    {set.notes === null ? null : (
-                      <span className="workout-muted">{set.notes}</span>
-                    )}
-                  </li>
-                ))}
+                {entry.sets.map((set, setIndex) => {
+                  const figures = setFigures(set)
+
+                  return (
+                    <li
+                      key={set.id}
+                      className="set-pill"
+                      data-rpe={set.rpe ?? undefined}
+                      title={set.notes ?? undefined}
+                    >
+                      <span className="sr-only">
+                        Set {setIndex + 1}: {describeSet(set)}
+                      </span>
+                      <span className="set-pill-effort" aria-hidden="true">
+                        {figures.effort}
+                      </span>
+                      <span className="set-pill-load" aria-hidden="true">
+                        {figures.load ?? "BW"}
+                      </span>
+                      {set.rpe === null ? null : (
+                        <span
+                          className="set-pill-rpe"
+                          aria-hidden="true"
+                          // SAFETY: CSSProperties omits custom properties; --rpe is a 0..1 heat read by .set-pill-rpe.
+                          style={
+                            { "--rpe": set.rpe / 10 } as React.CSSProperties
+                          }
+                        />
+                      )}
+                      {set.notes === null ? null : (
+                        <span className="set-pill-note">{set.notes}</span>
+                      )}
+                    </li>
+                  )
+                })}
               </ol>
             )}
           </li>
