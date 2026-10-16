@@ -384,7 +384,9 @@ test("a dropped accepted addition retains owner, whole-series kind and request I
   expect(plans).toHaveLength(2)
   expect(
     plans.find((entry) => entry.title === "The Lighthouse Journey")
-  ).toMatchObject({ kind: "series" })
+  ).toMatchObject({
+    kind: "series",
+  })
   expect(container.textContent).toContain("Plan saved to OpenHome")
 })
 

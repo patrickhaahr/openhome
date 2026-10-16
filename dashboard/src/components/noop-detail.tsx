@@ -10,18 +10,7 @@ import {
   type NoopWorkoutDetail,
 } from "@/lib/training"
 
-const clock = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/Copenhagen",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-})
-
-function pace(secondsPerKm: number): string {
-  const rounded = Math.round(secondsPerKm)
-
-  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}`
-}
+import { clockTime, pace } from "@/lib/session-format"
 
 function basis(data: NoopWorkoutDetail): string {
   switch (data.hr.basis) {
@@ -35,23 +24,11 @@ function basis(data: NoopWorkoutDetail): string {
 }
 
 /** One strap session: its figures, heart rate over time on its zones, zone time and recovery. */
-export function NoopDetail({
-  data,
-}: {
-  readonly data: NoopWorkoutDetail
-}): React.JSX.Element {
-  const unavailable = (block: keyof NoopWorkoutDetail["unavailable"]) => {
-    const code = data.unavailable[block]
-
-    return code === undefined
-      ? "Not available."
-      : detailUnavailableMessage[code]
-  }
-
-  const route =
-    data.route !== undefined && data.route.length > 1 ? data.route : undefined
-
-  const stats: Array<readonly [string, string | null, string]> = [
+/** The figures of one strap session, each as a label, its value and unit; missing ones are null. */
+export function noopStats(
+  data: NoopWorkoutDetail
+): Array<readonly [string, string | null, string]> {
+  return [
     [
       "Duration",
       data.duration_min === null ? null : shortDuration(data.duration_min),
@@ -84,6 +61,50 @@ export function NoopDetail({
     ],
     ["Steps", data.steps === null ? null : formatWhole(data.steps), ""],
   ]
+}
+
+/** Labelled figures in one grid; figures that were not recorded are left out. */
+export function StatList({
+  stats,
+  className,
+}: {
+  readonly stats: ReadonlyArray<readonly [string, string | null, string]>
+  readonly className: string
+}): React.JSX.Element {
+  return (
+    <dl className={className}>
+      {stats.flatMap(([label, figure, unit]) =>
+        figure === null
+          ? []
+          : [
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>
+                  {figure}
+                  {unit === "" ? null : <small> {unit}</small>}
+                </dd>
+              </div>,
+            ]
+      )}
+    </dl>
+  )
+}
+
+export function NoopDetail({
+  data,
+}: {
+  readonly data: NoopWorkoutDetail
+}): React.JSX.Element {
+  const unavailable = (block: keyof NoopWorkoutDetail["unavailable"]) => {
+    const code = data.unavailable[block]
+
+    return code === undefined
+      ? "Not available."
+      : detailUnavailableMessage[code]
+  }
+
+  const route =
+    data.route !== undefined && data.route.length > 1 ? data.route : undefined
 
   return (
     <article className="noop-detail">
@@ -92,10 +113,10 @@ export function NoopDetail({
           <p className="sr-only">NOOP workout detail</p>
           <h2>{data.sport}</h2>
           <p className="noop-detail-time">
-            {clock.format(new Date(data.start))}
+            {clockTime(data.start)}
             <span aria-hidden="true"> – </span>
             <span className="sr-only"> to </span>
-            {clock.format(new Date(data.end))}
+            {clockTime(data.end)}
           </p>
           <p className="sr-only">
             Source: {data.source} · Origin: {data.origin.replaceAll("_", " ")} ·
@@ -120,21 +141,7 @@ export function NoopDetail({
         />
       </header>
       <div className="noop-detail-glance" data-route={route !== undefined}>
-        <dl className="noop-detail-stats">
-          {stats.flatMap(([label, figure, unit]) =>
-            figure === null
-              ? []
-              : [
-                  <div key={label}>
-                    <dt>{label}</dt>
-                    <dd>
-                      {figure}
-                      {unit === "" ? null : <small> {unit}</small>}
-                    </dd>
-                  </div>,
-                ]
-          )}
-        </dl>
+        <StatList className="noop-detail-stats" stats={noopStats(data)} />
         {route === undefined ? null : <RouteMap route={route} />}
       </div>
       {data.hr_series === null ? (
@@ -163,12 +170,12 @@ export function NoopDetail({
   )
 }
 
-type Series = NonNullable<NoopWorkoutDetail["hr_series"]>
+export type Series = NonNullable<NoopWorkoutDetail["hr_series"]>
 
-type Zones = NonNullable<NoopWorkoutDetail["hr_zones"]>
+export type Zones = NonNullable<NoopWorkoutDetail["hr_zones"]>
 
 /** Strap heart rate as a line over its zone bands; a missing bucket stays a gap. */
-function HeartRateChart({
+export function HeartRateChart({
   series,
   zones,
   durationS,
@@ -250,7 +257,11 @@ function HeartRateChart({
 }
 
 /** Time in each zone as one bar, widest zone longest; minutes beneath. */
-function ZoneBar({ zones }: { readonly zones: Zones }): React.JSX.Element {
+export function ZoneBar({
+  zones,
+}: {
+  readonly zones: Zones
+}): React.JSX.Element {
   return (
     <div className="zone-bar">
       <p className="sr-only">
@@ -359,7 +370,11 @@ function HeartRateRecovery({
 type Route = NonNullable<NoopWorkoutDetail["route"]>
 
 /** The captured route on the shared map: a sun line from its start to its end. */
-function RouteMap({ route }: { readonly route: Route }): React.JSX.Element {
+export function RouteMap({
+  route,
+}: {
+  readonly route: Route
+}): React.JSX.Element {
   const theme = useMapTheme()
   const first = route[0] ?? [0, 0]
   const last = route.at(-1) ?? first

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { BodyWeight } from "@/lib/body-profile"
 
 const kilograms = new Intl.NumberFormat("en-GB", {
@@ -17,11 +17,11 @@ const monthName = new Intl.DateTimeFormat("en-GB", {
   month: "short",
 })
 
-const width = 1000
+/** The width drawn before the figure is measured, and the narrowest drawn at all. */
+const defaultWidth = 840
 
-const height = 300
-
-const pad = { top: 24, right: 56, bottom: 34, left: 8 }
+/** Room for the kilogram labels at the right edge. */
+const pad = { top: 28, right: 64, bottom: 36, left: 24 }
 
 const day = 86_400_000
 
@@ -73,16 +73,43 @@ function tickStep(range: number): number {
   return range > 3 ? 1 : 0.5
 }
 
-/** Body weight as weigh-in dots under a smoothed trend; touch a day to read its value. */
+/** A drawing as tall as the figure is wide allows: lower on a phone, taller on the wall. */
+function heightFor(width: number): number {
+  return width < 520 ? 250 : 340
+}
+
+/**
+ * Body weight as weigh-in dots under a smoothed trend, on bands of alternating tone instead of
+ * gridlines; touch a day to read its value.
+ */
 export function WeightChart({
   history,
 }: {
   readonly history: ReadonlyArray<BodyWeight>
 }): React.JSX.Element | null {
   const [focus, setFocus] = useState<number>()
+  const [width, setWidth] = useState(defaultWidth)
+  const figure = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const element = figure.current
+
+    if (element === null) return
+
+    const measure = () => {
+      if (element.clientWidth > 0) setWidth(Math.round(element.clientWidth))
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [])
 
   if (history.length === 0) return null
 
+  const height = heightFor(width)
   const first = time(history[0]?.date ?? "")
   const last = time(history.at(-1)?.date ?? "")
   const span = Math.max(day, last - first)
@@ -111,16 +138,19 @@ export function WeightChart({
     points.map((point) => ({ x: point.x, y: y(point.trend) }))
   )
 
-  const area =
-    points.length < 2
-      ? ""
-      : `${trendLine}L${points.at(-1)?.x ?? 0} ${height - pad.bottom}L${points[0]?.x ?? 0} ${height - pad.bottom}Z`
-
   const step = tickStep(high - low)
   const ticks: number[] = []
 
   for (let kg = Math.ceil(low / step) * step; kg <= high; kg += step)
     ticks.push(kg)
+
+  // A band is the stretch between two ticks; every second one is a darker tone.
+  const bands = ticks.map((kg, index) => ({
+    kg,
+    top: y(Math.min(high, kg + step)),
+    bottom: y(Math.max(low, kg)),
+    dark: index % 2 === 0,
+  }))
 
   const months: Array<{ at: number; label: string }> = []
   const cursor = new Date(first)
@@ -141,8 +171,10 @@ export function WeightChart({
   const shown = focus === undefined ? undefined : points[focus]
 
   return (
-    <figure className="weight-chart">
+    <figure className="weight-chart" ref={figure}>
       <svg
+        width={width}
+        height={height}
         viewBox={`0 0 ${width} ${height}`}
         aria-hidden="true"
         onPointerMove={(event) => {
@@ -160,25 +192,37 @@ export function WeightChart({
         }}
         onPointerLeave={() => setFocus(undefined)}
       >
+        {bands.map((band) => (
+          <rect
+            key={band.kg}
+            className="weight-chart-band"
+            data-dark={band.dark}
+            x="0"
+            width={width}
+            y={band.top}
+            height={Math.max(0, band.bottom - band.top)}
+          />
+        ))}
         {ticks.map((kg) => (
-          <g key={kg} className="weight-chart-tick">
-            <line x1={pad.left} x2={width - pad.right} y1={y(kg)} y2={y(kg)} />
-            <text x={width - pad.right + 12} y={y(kg) + 5}>
-              {kilograms.format(kg)}
-            </text>
-          </g>
+          <text
+            key={kg}
+            className="weight-chart-tick"
+            x={width - 16}
+            y={y(kg) - 8}
+          >
+            {kilograms.format(kg)}
+          </text>
         ))}
         {months.map((month) => (
           <text
             key={month.at}
             className="weight-chart-month"
             x={x(month.at)}
-            y={height - 8}
+            y={height - 12}
           >
             {month.label}
           </text>
         ))}
-        <path className="weight-chart-area" d={area} />
         <path className="weight-chart-trend" d={trendLine} />
         {points.map((point) => (
           <circle
@@ -186,7 +230,7 @@ export function WeightChart({
             className="weight-chart-dot"
             cx={point.x}
             cy={point.y}
-            r="4"
+            r="3.5"
           />
         ))}
         {points.length > 2 ? (
@@ -206,15 +250,12 @@ export function WeightChart({
           />
         )}
         {shown === undefined ? null : (
-          <g className="weight-chart-focus">
-            <line
-              x1={shown.x}
-              x2={shown.x}
-              y1={pad.top}
-              y2={height - pad.bottom}
-            />
-            <circle cx={shown.x} cy={shown.y} r="7" />
-          </g>
+          <circle
+            className="weight-chart-focus"
+            cx={shown.x}
+            cy={shown.y}
+            r="7"
+          />
         )}
       </svg>
       <figcaption className="weight-chart-readout" aria-hidden="true">

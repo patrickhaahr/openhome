@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { NoopSummary, NoopWorkoutDetail } from "./training"
 
 const id = z.number().int()
 
@@ -68,9 +69,8 @@ export const historyStep = 20
 /** The longest history view; the last page offers no older rows. */
 export const maxHistory = 480
 
-/** Selected history entry and history length; invalid values fall back to the newest view. */
+/** How many logged Workouts the Log lists; invalid values fall back to the first page. */
 export const workoutSearch = z.object({
-  workout: id.positive().optional().catch(undefined),
   shown: z
     .number()
     .int()
@@ -94,20 +94,31 @@ export type WorkoutFailure =
   | "missing-exercise"
   | "not-found"
 
-/** The Workout shown beside history: none logged yet, read, or no longer stored. */
-export type SelectedWorkout =
-  | { readonly state: "none" }
-  | { readonly state: "found"; readonly workout: WorkoutDetail }
-  | { readonly state: "missing" }
+/** A NOOP Workout in the Log: the summary Axum lists, and its detail when that read succeeded. */
+export type Strap = {
+  readonly summary: NoopSummary
+  readonly detail: NoopWorkoutDetail | undefined
+}
+
+/** One Log entry: a logged Workout, a strap session, or the two as one session. */
+export type LogSession = {
+  /** Stable across reads: the Workout id, else the strap identity. */
+  readonly key: string
+  /** The Copenhagen Training Day the entry sits on. */
+  readonly day: string
+  readonly workout: WorkoutDetail | undefined
+  readonly strap: Strap | undefined
+}
 
 /** Complete training read, or an outcome that must never look like an empty history. */
 export type WorkoutState =
   | {
       readonly state: "available"
       readonly exercises: Exercise[]
-      readonly history: WorkoutSummary[]
+      readonly sessions: LogSession[]
       readonly hasOlder: boolean
-      readonly selected: SelectedWorkout
+      /** Whether the strap's sessions could be read; without them the Log shows logged Workouts alone. */
+      readonly strap: "read" | "unavailable"
     }
   | { readonly state: "unavailable"; readonly reason: WorkoutFailure }
 
@@ -138,20 +149,18 @@ export const workoutInput = z.object({
 /** The body Axum stores for a new or replaced Workout. */
 export type WorkoutInput = z.infer<typeof workoutInput>
 
-/** Every write names its stored Workout; edits replace all entries in one transaction. */
-export const workoutCommand = z.discriminatedUnion("kind", [
-  workoutInput.extend({ kind: z.literal("create") }),
-  workoutInput.extend({ kind: z.literal("replace"), workout_id: id }),
-  z.object({ kind: z.literal("remove"), workout_id: id }),
-])
+/** The web client only edits stored Workouts, replacing all entries in one transaction. */
+export const workoutCommand = workoutInput.extend({
+  kind: z.literal("replace"),
+  workout_id: id,
+})
 
-/** A Workout create, full edit or removal. */
+/** A full edit of one stored Workout. */
 export type WorkoutCommand = z.infer<typeof workoutCommand>
 
 /** Only a parsed Axum receipt confirms persistence. */
 export type WorkoutMutation =
   | { readonly state: "saved"; readonly workoutId: number }
-  | { readonly state: "removed" }
   | { readonly state: "failed"; readonly reason: WorkoutFailure }
 
 /** Actionable static copy, safe for public failure evidence. */
@@ -161,15 +170,15 @@ export const workoutFailureMessage: Record<WorkoutFailure, string> = {
   "invalid-configuration": "Check the private OpenHome setup in Connection.",
   "rejected-credential": "OpenHome rejected the API key. Check Connection.",
   unreachable:
-    "The response was lost. Refresh history to check whether the change saved before trying again.",
+    "The response was lost. Reload to check whether the change saved before trying again.",
   unavailable:
-    "OpenHome could not confirm the result. Refresh history before trying again.",
+    "OpenHome could not confirm the result. Reload before trying again.",
   invalid:
     "OpenHome rejected the workout. Check the date, each set’s reps or hold time, and RPE from 1 to 10.",
   "missing-exercise":
     "An exercise in this workout is no longer in the library. Remove it or choose another, then save again.",
   "not-found":
-    "This workout is no longer stored. Refresh history to see current workouts.",
+    "This workout is no longer stored. Reload to see current workouts.",
 }
 
 /** How a Set is performed: repetitions, or a duration-only Timed Hold. */
