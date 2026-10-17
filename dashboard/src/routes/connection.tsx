@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useTransition } from "react"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { ShieldCheckIcon } from "@phosphor-icons/react/dist/csr/ShieldCheck"
+import { NavLayoutSwitch } from "@/components/nav-layout"
 import { Button } from "@/components/ui/button"
 import type { ConnectionState } from "@/lib/connection"
 import { getConnectionHealth } from "@/lib/connection.functions"
@@ -121,6 +122,12 @@ function ConnectionPage() {
           </span>
         </p>
       </div>
+      <section aria-labelledby="layout-heading">
+        <h2 id="layout-heading" className="sr-only">
+          Navigation layout
+        </h2>
+        <NavLayoutSwitch />
+      </section>
       {health.state === "missing-configuration" ? <SetupInstructions /> : null}
     </div>
   )
