@@ -6,31 +6,19 @@ import {
   Link,
 } from "@tanstack/react-router"
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
-import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
-import { LightningIcon } from "@phosphor-icons/react/dist/csr/Lightning"
-import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { SunDay } from "@/components/daylight"
 import { WeatherNow } from "@/components/weather-overview"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
-import { ScoreRing } from "@/components/score-ring"
 import { SpeakerRemote } from "@/components/speaker-remote"
+import { RecoveryRings } from "@/components/training-summaries"
 import { TvRemote } from "@/components/tv-remote"
 import { loadControls } from "@/lib/controls-loader"
 import type { ChartedLine } from "@/lib/exercise-progress"
 import { loadGlance, type Glance, type ProgressGlance } from "@/lib/glance"
 import { sendLightCommand } from "@/lib/lights.functions"
 import { sendSpeakerCommand, sendTvCommand } from "@/lib/ir.functions"
-import {
-  chargeBand,
-  clockDuration,
-  restBand,
-  restReferenceMin,
-  ringShare,
-  spokenDuration,
-} from "@/lib/recovery-score"
-import type { RecoveryDay } from "@/lib/training"
 import { getWeather } from "@/lib/weather.functions"
 import { unavailableWeather } from "@/lib/weather"
 
@@ -102,7 +90,7 @@ function RecoveryGlance({
     <Link to="/recovery" className="recovery-glance">
       <h2 className="sr-only">Recovery today</h2>
       <Deferred promise={glance?.recovery} ghosts={3}>
-        {(recovery) => <TodayRings data={recovery} />}
+        {(recovery) => <RecoveryRings data={recovery} missing="Not recorded" />}
       </Deferred>
     </Link>
   )
@@ -125,48 +113,6 @@ function ProgressGlanceCard({
         {(progress) => <ProgressGlanceChart progress={progress} />}
       </Deferred>
     </Link>
-  )
-}
-
-/** Charge, Rest and Effort for today; a glyph names each ring, the words stay for AT. */
-function TodayRings({ data }: { data: RecoveryDay }): React.JSX.Element {
-  const charge = data.derived_scores.recovery.value
-  const rest = data.sleep.total.value
-  const effort = data.derived_scores.strain.value
-  const missing = "Not recorded"
-
-  return (
-    <>
-      <ScoreRing
-        kind="charge"
-        icon={LightningIcon}
-        share={ringShare(charge, 100)}
-        band={chargeBand(charge)}
-        figure={charge === null ? null : String(Math.round(charge))}
-        label="Charge"
-        spoken={charge === null ? missing : `${Math.round(charge)} % recovery`}
-      />
-      <ScoreRing
-        kind="rest"
-        icon={MoonIcon}
-        share={ringShare(rest, restReferenceMin)}
-        band={restBand(rest)}
-        figure={rest === null ? null : clockDuration(rest)}
-        label="Rest"
-        spoken={rest === null ? missing : `${spokenDuration(rest)} asleep`}
-      />
-      <ScoreRing
-        kind="effort"
-        icon={HeartbeatIcon}
-        share={ringShare(effort, 100)}
-        band={effort === null ? "none" : "fair"}
-        figure={effort === null ? null : String(Math.round(effort))}
-        label="Effort"
-        spoken={
-          effort === null ? missing : `strain ${Math.round(effort)} of 100`
-        }
-      />
-    </>
   )
 }
 
