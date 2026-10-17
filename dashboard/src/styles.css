@@ -5,6 +5,7 @@
 @import "@fontsource-variable/familjen-grotesk";
 @import "./workout.css";
 @import "./lists.css";
+@import "./sidebar.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -1103,6 +1104,7 @@ a.dir-go:hover {
   /* Portrait: the clock and the weather share a row; the sun's day spans beneath them. */
   .home-now {
     position: static;
+    display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     align-items: end;
     column-gap: 2rem;
@@ -1157,6 +1159,16 @@ a.dir-go:hover {
   .home-now .sun-day {
     grid-column: auto;
     grid-row: auto;
+  }
+  /* Three rings share the phone's width instead of pushing the page wider. */
+  .recovery-glance {
+    gap: 0.75rem;
+  }
+  .recovery-glance .score-ring {
+    width: min(9rem, calc((100% - 1.5rem) / 3));
+  }
+  .recovery-glance .score-ring-figure span {
+    font-size: 1.75rem;
   }
 }
 /* ---------- Travel: the map is the page; every control floats on it as a plate ---------- */

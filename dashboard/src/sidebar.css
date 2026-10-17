@@ -1,0 +1,389 @@
+/* ---------- The sidebar of tabs: the other navigation layout (double-tap the logo) ---------- */
+
+/* The logo takes a double tap: no zoom, no selection flash. */
+.wordmark,
+.rail-mark {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* The rail takes a column; nothing sits above the page, so full-height pages lose no bar. */
+.shell[data-nav="side"] {
+  --rail: 4rem;
+  --bar: 0px;
+
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.shell[data-nav="side"] > .page {
+  grid-column: 2;
+  grid-row: 1;
+}
+.shell[data-nav="side"] .travel {
+  height: calc(100vh - var(--bar));
+  height: calc(100svh - var(--bar));
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  height: 100svh;
+  padding-block: 0.75rem;
+  background: var(--ground);
+}
+.rail-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.rail-mark i {
+  display: inline-block;
+  width: 0.36em;
+  height: 0.36em;
+  margin-left: 0.08em;
+  border-radius: 50%;
+  background: var(--sun);
+  translate: 0 0.32em;
+  transition: translate var(--t-mid) var(--ease);
+}
+.rail-mark:hover i {
+  translate: 0 -0.05em;
+}
+
+.rail-nav {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.rail-nav::-webkit-scrollbar {
+  display: none;
+}
+.rail-nav ul {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding-block: 0.75rem;
+}
+
+/* A tab: the glyph on a capsule, the word beneath. The capsule is the tone-step plate. */
+.rail-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1875rem;
+  width: 4.75rem;
+  min-height: 3.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-ink);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  transition: color var(--t-fast) var(--ease);
+}
+.tab-plate {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 2rem;
+  border-radius: 999px;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    scale var(--t-fast) var(--ease);
+}
+.tab-plate > svg {
+  grid-area: 1 / 1;
+}
+.tab-glyph-on {
+  visibility: hidden;
+}
+.rail-tab:hover {
+  color: var(--ink);
+}
+.rail-tab:hover .tab-plate {
+  background: var(--wash);
+}
+.rail-tab:active .tab-plate {
+  scale: 0.94;
+}
+.rail-tab[aria-current="page"],
+.rail-tab[data-active="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rail-tab[aria-current="page"] .tab-plate,
+.rail-tab[data-active="true"] .tab-plate {
+  background: var(--wash-strong);
+}
+.rail-tab[aria-current="page"] .tab-glyph,
+.rail-tab[data-active="true"] .tab-glyph {
+  visibility: hidden;
+}
+.rail-tab[aria-current="page"] .tab-glyph-on,
+.rail-tab[data-active="true"] .tab-glyph-on {
+  visibility: visible;
+}
+.rail-tab[data-soon] {
+  font-weight: 400;
+}
+
+.rail-end {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.rail-keys {
+  display: flex;
+  flex-direction: column;
+}
+.rail-clock {
+  padding: 0;
+  font-size: 0.9375rem;
+}
+
+/* The rail is glyphs only: each word stays as the tab's accessible name. */
+.rail .rail-tab {
+  width: 3.5rem;
+  min-height: 3rem;
+}
+.rail .tab-plate {
+  width: 3rem;
+  height: 2.5rem;
+}
+.rail .tab-label,
+.shell[data-labels="icons"] .topnav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The top bar's tabs: words (the default), glyphs, or a glyph beside each word. */
+.topnav .tab-glyph,
+.topnav .tab-glyph-on,
+.shell[data-labels] .topnav a:not([aria-current="page"]) .tab-glyph-on,
+.shell[data-labels] .topnav a[aria-current="page"] .tab-glyph {
+  display: none;
+}
+.shell[data-labels="icons"] .topnav .tab-glyph,
+.shell[data-labels="both"] .topnav .tab-glyph,
+.shell[data-labels="icons"] .topnav .tab-glyph-on,
+.shell[data-labels="both"] .topnav .tab-glyph-on {
+  display: block;
+  flex: none;
+}
+.topnav .tab-glyph-on {
+  visibility: visible;
+}
+.shell[data-labels="both"] .topnav a {
+  gap: 0.375rem;
+}
+/* Portrait: the glyph-and-word row tightens to fit the width without scrolling. */
+@media (max-width: 900px) {
+  .shell[data-labels="both"] .topnav a {
+    gap: 0.25rem;
+    padding-inline: 0.3125rem;
+  }
+  .shell[data-labels="both"] .topnav a::after {
+    left: 0.3125rem;
+    right: 0.3125rem;
+  }
+}
+.shell[data-labels="icons"] .topnav a {
+  justify-content: center;
+  min-width: 2.75rem;
+}
+
+/* The horizon stood on end: the rail's inner edge, sunrise at the top, sunset at the foot. */
+.horizon[data-axis="vertical"] {
+  top: 1.5rem;
+  right: 0;
+  bottom: 1.5rem;
+  left: auto;
+  width: 1px;
+  height: auto;
+}
+.horizon[data-axis="vertical"] .horizon-sun {
+  top: calc(var(--sun-x) * 100%);
+  left: 0;
+  margin: -0.3125rem 0 0 -0.3125rem;
+  transition: top 60s linear;
+}
+.horizon[data-axis="vertical"] .horizon-sun[data-below="true"] {
+  translate: -0.5rem 0;
+}
+.horizon[data-axis="vertical"] .horizon-trail {
+  top: 0;
+  left: -0.5px;
+  width: 2px;
+  height: calc(var(--sun-x) * 100%);
+}
+
+.tabbar {
+  display: none;
+}
+
+/* A short landscape screen packs the glyphs closer. */
+@media (min-width: 641px) and (max-height: 680px) {
+  .rail .rail-tab {
+    min-height: 2.75rem;
+  }
+}
+
+/* Phone, in either layout: no top bar or rail; a tab bar along the bottom with the
+   horizon as its top edge. */
+@media (max-width: 640px) {
+  .shell[data-nav] {
+    --bar: calc(4.25rem + env(safe-area-inset-bottom));
+
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .shell[data-nav] > .page {
+    grid-column: 1;
+    grid-row: 1;
+    padding-bottom: calc(4rem + var(--bar));
+  }
+  .shell[data-nav] > .page:has(.travel) {
+    padding-bottom: 0;
+  }
+  .shell[data-nav] .travel {
+    height: calc(100vh - var(--bar));
+    height: calc(100svh - var(--bar));
+  }
+  .shell[data-nav] .topbar,
+  .shell[data-nav] .rail {
+    display: none;
+  }
+  .tabbar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    display: block;
+    height: var(--bar);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--ground);
+  }
+  .tabbar .horizon {
+    top: 0;
+    bottom: auto;
+  }
+  .tabbar ul {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: 100%;
+    padding-inline: 0.25rem;
+  }
+  .tabbar .rail-tab {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* "More" on a phone: the other pages rise from the bottom on a plate one tone step up. */
+.more-sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 51;
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: color-mix(in srgb, var(--ink) 7%, var(--ground));
+  color: var(--ink);
+  outline: none;
+  transition: translate var(--t-mid) var(--ease);
+}
+.more-sheet[data-starting-style],
+.more-sheet[data-ending-style] {
+  translate: 0 100%;
+}
+.more-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.more-clock {
+  margin-right: auto;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem 0.25rem;
+}
+.more-grid .more-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 4.5rem;
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.more-grid .more-tile .tab-plate {
+  width: 3.5rem;
+  height: 2.25rem;
+}
+.more-grid .more-tile[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.more-grid .more-tile[aria-current="page"] .tab-plate {
+  background: var(--ground);
+}
+.more-grid .more-tile[aria-current="page"] .tab-glyph {
+  visibility: hidden;
+}
+.more-grid .more-tile[aria-current="page"] .tab-glyph-on {
+  visibility: visible;
+}
+
+/* The plain layout switch on the Connection page. */
+.nav-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+.nav-switches .segments {
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 0;
+}
