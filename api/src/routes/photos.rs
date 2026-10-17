@@ -15,6 +15,7 @@ use uuid::Uuid;
 pub fn router(service: Option<PhotoService>) -> Router<crate::AppState> {
     Router::new()
         .route("/api/photos/albums", get(list))
+        .route("/api/photos/all", get(merged))
         .route("/api/photos/albums/{album}", get(page))
         .route(
             "/api/photos/albums/{album}/assets/{asset}/{size}",
@@ -58,6 +59,14 @@ async fn page(
 ) -> Result<Json<serde_json::Value>, PhotoError> {
     Ok(Json(
         json!({"state":"ready", "photos": configured(service.as_ref())?.page(album, query.page).await?}),
+    ))
+}
+async fn merged(
+    State(service): State<Option<PhotoService>>,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<serde_json::Value>, PhotoError> {
+    Ok(Json(
+        json!({"state":"ready", "photos": configured(service.as_ref())?.merged(query.page).await?}),
     ))
 }
 async fn image(

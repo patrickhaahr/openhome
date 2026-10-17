@@ -1,8 +1,9 @@
 //! Selected-album Immich reads. No originals, shared links or EXIF cross this boundary.
+use chrono::{DateTime, Datelike, NaiveDateTime};
 use reqwest::{Client, StatusCode, header};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -12,6 +13,9 @@ use uuid::Uuid;
 
 /// Maximum photos returned per gallery page.
 pub const PAGE_SIZE: usize = 60;
+/// Maximum albums in the `IMMICH_ALBUM_IDS` allowlist.
+pub const MAX_ALBUMS: usize = 24;
+const ASSET_LIMIT: usize = 20_000;
 const METADATA_LIMIT: usize = 8 * 1024 * 1024;
 const CACHE_TTL: Duration = Duration::from_secs(30);
 
@@ -36,13 +40,16 @@ pub enum PhotoError {
     InvalidPage,
 }
 
-/// Safe album metadata without provider identities, locations or paths.
+/// Safe album metadata without provider identities, locations or paths. The span is only the
+/// first and last month (`YYYY-MM`) a photo was taken; no day, time or place leaves Axum.
 #[derive(Clone, Serialize)]
 pub struct AlbumSummary {
     pub id: Uuid,
     pub name: String,
     pub photo_count: usize,
     pub cover_id: Option<Uuid>,
+    pub first_month: Option<String>,
+    pub last_month: Option<String>,
     pub missing: bool,
 }
 
@@ -55,11 +62,29 @@ pub struct AlbumPage {
     pub next_page: Option<usize>,
 }
 
+/// One photo in the merged view, named by the selected album that grants access to it.
+#[derive(Serialize)]
+pub struct MergedPhoto {
+    pub album: Uuid,
+    pub asset: Uuid,
+}
+
+/// One bounded page across every selected album, newest first; capture times stay in Axum.
+#[derive(Serialize)]
+pub struct MergedPage {
+    pub photo_count: usize,
+    pub items: Vec<MergedPhoto>,
+    pub page: usize,
+    pub next_page: Option<usize>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProviderAlbum {
     id: Uuid,
     album_name: String,
+    #[serde(default)]
+    album_thumbnail_asset_id: Option<Uuid>,
     assets: Vec<ProviderAsset>,
 }
 #[derive(Deserialize)]
@@ -72,11 +97,25 @@ struct ProviderAsset {
     is_trashed: bool,
     #[serde(default)]
     is_offline: bool,
+    /// Wall-clock capture time; read only to order photos and bound the album's months.
+    #[serde(default)]
+    local_date_time: Option<String>,
 }
 struct CachedAlbum {
     fetched: Instant,
     summary: AlbumSummary,
     assets: Vec<Uuid>,
+    taken: Vec<Option<NaiveDateTime>>,
+}
+
+fn taken_at(value: Option<&str>) -> Option<NaiveDateTime> {
+    DateTime::parse_from_rfc3339(value?)
+        .ok()
+        .map(|time| time.naive_utc())
+}
+
+fn month(time: NaiveDateTime) -> String {
+    format!("{:04}-{:02}", time.year(), time.month())
 }
 
 /// One shared client with bounded album metadata and four concurrent image reads.
@@ -112,20 +151,22 @@ impl PhotoService {
     }
 
     /// An installer-supplied server root and explicit album allowlist; no runtime library discovery.
-    pub fn new(mut base_url: Url, key: &str, selected: Vec<Uuid>) -> anyhow::Result<Self> {
+    pub fn new(mut base_url: Url, key: &str, mut selected: Vec<Uuid>) -> anyhow::Result<Self> {
         if !matches!(base_url.scheme(), "https" | "http")
             || !base_url.username().is_empty()
             || base_url.password().is_some()
             || base_url.query().is_some()
             || base_url.fragment().is_some()
             || selected.is_empty()
-            || selected.len() > 8
+            || selected.len() > MAX_ALBUMS
             || key.trim().is_empty()
         {
             anyhow::bail!(
-                "Invalid Immich configuration (server root, key and 1–8 album IDs required)"
+                "Invalid Immich configuration (server root, key and 1–{MAX_ALBUMS} album IDs required)"
             );
         }
+        let mut seen = HashSet::new();
+        selected.retain(|id| seen.insert(*id));
         base_url.set_path(&format!("{}/api/", base_url.path().trim_end_matches('/')));
         let mut credential = header::HeaderValue::from_str(key.trim())
             .map_err(|_| anyhow::anyhow!("Invalid IMMICH_API_KEY"))?;
@@ -188,21 +229,28 @@ impl PhotoService {
             || album.album_name.trim().is_empty()
             || album.album_name.chars().count() > 200
             || album.album_name.chars().any(char::is_control)
-            || album.assets.len() > 20_000
+            || album.assets.len() > ASSET_LIMIT
         {
             return Err(PhotoError::ProviderUnavailable);
         }
-        let assets: Vec<_> = album
+        let (assets, taken): (Vec<_>, Vec<_>) = album
             .assets
             .into_iter()
             .filter(|asset| asset.kind == "IMAGE" && !asset.is_trashed && !asset.is_offline)
-            .map(|asset| asset.id)
-            .collect();
+            .map(|asset| (asset.id, taken_at(asset.local_date_time.as_deref())))
+            .unzip();
+        // The owner's chosen cover when it is a served still, else the first photo.
+        let cover_id = album
+            .album_thumbnail_asset_id
+            .filter(|cover| assets.contains(cover))
+            .or_else(|| assets.first().copied());
         let summary = AlbumSummary {
             id,
             name: album.album_name,
             photo_count: assets.len(),
-            cover_id: assets.first().copied(),
+            cover_id,
+            first_month: taken.iter().flatten().min().copied().map(month),
+            last_month: taken.iter().flatten().max().copied().map(month),
             missing: false,
         };
         cache.insert(
@@ -211,6 +259,7 @@ impl PhotoService {
                 fetched: Instant::now(),
                 summary,
                 assets,
+                taken,
             },
         );
         Ok(cache)
@@ -227,6 +276,8 @@ impl PhotoService {
                     name: "Unavailable album".into(),
                     photo_count: 0,
                     cover_id: None,
+                    first_month: None,
+                    last_month: None,
                     missing: true,
                 }),
                 Err(error) => return Err(error),
@@ -254,6 +305,43 @@ impl PhotoService {
                 .collect(),
             page,
             next_page: (start + PAGE_SIZE < album.assets.len()).then_some(page + 1),
+        })
+    }
+
+    /// Every selected album's photos merged newest first, de-duplicated by asset; undated photos
+    /// follow, in album order. Removed albums drop out; access still goes through each album.
+    pub async fn merged(&self, page: usize) -> Result<MergedPage, PhotoError> {
+        let start = page.checked_mul(PAGE_SIZE).ok_or(PhotoError::InvalidPage)?;
+        let mut seen = HashSet::new();
+        let mut photos = Vec::new();
+        for &id in self.selected.iter() {
+            let cache = match self.album(id).await {
+                Ok(cache) => cache,
+                Err(PhotoError::NotFound) => continue,
+                Err(error) => return Err(error),
+            };
+            let album = &cache[&id];
+            for (&asset, &taken) in album.assets.iter().zip(&album.taken) {
+                if seen.insert(asset) {
+                    photos.push((taken, id, asset));
+                }
+            }
+        }
+        // Stable, so equal times keep album order.
+        photos.sort_by_key(|photo| std::cmp::Reverse(photo.0));
+        if start >= photos.len() && page != 0 {
+            return Err(PhotoError::InvalidPage);
+        }
+        Ok(MergedPage {
+            photo_count: photos.len(),
+            items: photos
+                .iter()
+                .skip(start)
+                .take(PAGE_SIZE)
+                .map(|&(_, album, asset)| MergedPhoto { album, asset })
+                .collect(),
+            page,
+            next_page: (start + PAGE_SIZE < photos.len()).then_some(page + 1),
         })
     }
 
