@@ -79,3 +79,10 @@ The shared [Compose stack](api/compose.yml) runs the API, MCP and Bun dashboard
 from their `latest` images, using a private `.env` beside the Compose file.
 See the [dashboard deployment guide](dashboard/README.md#docker-deployment) for
 image publishing, Raspberry Pi updates and Caddy routing on the existing hostname.
+
+## Deployment
+
+Run `devenv shell -- just deploy` to patch-bump, check, build locally for amd64 and
+arm64, publish, deploy to the Pi and verify the release. See the
+[deployment skill](.agents/skills/deploy/SKILL.md) for agent operation and the
+[deployment guide](dashboard/README.md#docker-deployment) for setup and recovery.

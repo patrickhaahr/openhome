@@ -25,6 +25,7 @@
     # Repo tooling
     just
     git
+    python3
   ];
 
   # https://devenv.sh/integrations/android/
