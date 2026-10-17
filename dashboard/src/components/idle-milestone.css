@@ -1,0 +1,20 @@
+.idle-milestone {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  max-width: 58rem;
+  color: inherit;
+}
+.idle-milestone-figure {
+  font-size: clamp(2.5rem, 5.5vw, 6rem);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.idle-milestone-title {
+  font-size: clamp(1.125rem, 1.8vw, 2rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}

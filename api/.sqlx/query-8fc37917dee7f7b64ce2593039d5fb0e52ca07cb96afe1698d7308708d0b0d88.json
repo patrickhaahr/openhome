@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT date_id, title, date, kind AS \"kind: DateKind\", person_ids, show_when_idle AS \"show_when_idle: bool\"\n        FROM important_date_addition_receipts WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "date_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "date",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "kind: DateKind",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "person_ids",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "show_when_idle: bool",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8fc37917dee7f7b64ce2593039d5fb0e52ca07cb96afe1698d7308708d0b0d88"
+}

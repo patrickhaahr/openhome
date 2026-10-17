@@ -2,6 +2,7 @@ pub mod adguard;
 pub mod docker;
 pub mod exercise_progress;
 pub mod feed;
+pub mod important_dates;
 pub mod ir;
 pub mod map;
 pub mod noop_push;

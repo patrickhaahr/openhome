@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM important_date_people WHERE date_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "57ab3bc34d1a50a770e8c91256fd2d178dfbe71caf1e0d6b4f63a4394bb5bdf9"
+}

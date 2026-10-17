@@ -1,6 +1,7 @@
 //! A loopback Immich whose albums hold drawn scenes: no photographs, no people, no places.
 //! Every photo has its own aspect ratio and capture time, so the gallery's justified rows,
-//! album date spans and the merged newest-first view are all exercised.
+//! album date spans and the merged newest-first view are all exercised. A few more photos fall
+//! on fixed month-days in earlier years, including today's, so "on this day" always has matches.
 
 use std::{collections::HashMap, f64::consts::TAU, io::Write};
 
@@ -11,7 +12,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use chrono::{Duration, NaiveDate};
+use chrono::{Datelike, Duration, NaiveDate};
 use serde::Deserialize;
 use serde_json::json;
 use url::Url;
@@ -20,6 +21,17 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 struct PhotoSeed {
     albums: Vec<AlbumSeed>,
+    on_this_day: Vec<DaySeed>,
+}
+
+/// Photos taken on one month-day in earlier years, spread over the albums.
+#[derive(Deserialize)]
+struct DaySeed {
+    /// `MM-DD`, or `today` for the household's date when the preview starts.
+    day: String,
+    years_ago: Vec<i32>,
+    /// Photos for each of those years.
+    photos: u32,
 }
 
 #[derive(Deserialize, Clone)]
@@ -109,6 +121,41 @@ fn taken(album: &AlbumSeed, key: u64, photo: u32) -> String {
     format!("{}.000Z", time.format("%Y-%m-%dT%H:%M:%S"))
 }
 
+/// Each album's anniversary photos, numbered after its regular ones, as (number, capture time).
+/// Noon UTC keeps every one on its day in Copenhagen.
+fn dated_photos(seed: &PhotoSeed, album: usize) -> Vec<(u32, String)> {
+    let today = openhome_api::services::photos::copenhagen_today(chrono::Utc::now());
+    let mut next = seed.albums[album].photos;
+    let mut slot = 0usize;
+    let mut photos = Vec::new();
+    for entry in &seed.on_this_day {
+        let day = if entry.day == "today" {
+            today
+        } else {
+            NaiveDate::parse_from_str(&format!("2000-{}", entry.day), "%Y-%m-%d")
+                .expect("on_this_day days are MM-DD")
+        };
+        for &ago in &entry.years_ago {
+            let year = today.year() - ago;
+            // 29 February in a common year is kept on the 28th, where "on this day" finds it.
+            let Some(date) = day
+                .with_year(year)
+                .or_else(|| NaiveDate::from_ymd_opt(year, 2, 28))
+            else {
+                continue;
+            };
+            for _ in 0..entry.photos {
+                if slot % seed.albums.len() == album {
+                    photos.push((next, format!("{}T12:00:00.000Z", date.format("%Y-%m-%d"))));
+                    next += 1;
+                }
+                slot += 1;
+            }
+        }
+    }
+    photos
+}
+
 pub async fn immich() -> anyhow::Result<Url> {
     let router = Router::new()
         .route(
@@ -128,10 +175,12 @@ pub async fn immich() -> anyhow::Result<Url> {
                     "albumName": album.name,
                     "albumThumbnailAssetId": album.cover.map(|photo| asset_id(index, photo)),
                     "assets": (0..album.photos)
-                        .map(|photo| json!({
+                        .map(|photo| (photo, taken(album, photo_key(index, photo), photo)))
+                        .chain(dated_photos(&seed, index))
+                        .map(|(photo, taken)| json!({
                             "id": asset_id(index, photo),
                             "type": "IMAGE",
-                            "localDateTime": taken(album, photo_key(index, photo), photo),
+                            "localDateTime": taken,
                         }))
                         .collect::<Vec<_>>(),
                 }))

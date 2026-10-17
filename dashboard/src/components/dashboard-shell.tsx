@@ -1,5 +1,5 @@
 import { getRouteApi, Link, Outlet, useRouter } from "@tanstack/react-router"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug"
 import {
   DaylightProvider,
@@ -8,6 +8,10 @@ import {
   useDaylight,
 } from "@/components/daylight"
 import { FeatureLink } from "@/components/feature-link"
+import { IdleDates } from "@/components/idle-dates"
+import { IdleMilestone } from "@/components/idle-milestone"
+import { IdleProvider } from "@/components/idle"
+import { useIdlePhase } from "@/components/idle-block"
 import { timeFormat } from "@/components/live-clock"
 import {
   logoHintId,
@@ -17,13 +21,16 @@ import {
 } from "@/components/nav-layout"
 import { Rail, TabBar, TabGlyphs } from "@/components/side-nav"
 import { features } from "@/lib/features"
+import { defaultIdleSettings } from "@/lib/idle"
 
 const rootRoute = getRouteApi("__root__")
 
 /** A top bar on the horizon line, one content landmark, and focus after rendered navigation. */
 export function DashboardShell(): React.JSX.Element {
   const router = useRouter()
-  const { openedAt, nav } = rootRoute.useLoaderData()
+  const { openedAt, nav, idle } = rootRoute.useLoaderData()
+  // The server's settings arrive with the first page; client navigations carry none.
+  const [idleSettings] = useState(() => idle ?? defaultIdleSettings)
 
   useEffect(
     () =>
@@ -39,7 +46,14 @@ export function DashboardShell(): React.JSX.Element {
   return (
     <DaylightProvider initialTime={openedAt}>
       <NavLayoutProvider initial={nav}>
-        <Shell />
+        <IdleProvider
+          settings={idleSettings}
+          overlay={
+            <IdleDates lead={(dates) => <IdleMilestone dates={dates} />} />
+          }
+        >
+          <Shell />
+        </IdleProvider>
       </NavLayoutProvider>
     </DaylightProvider>
   )
@@ -48,9 +62,17 @@ export function DashboardShell(): React.JSX.Element {
 /** The chosen layout from 641 px up; a phone always gets the bottom tab bar. */
 function Shell(): React.JSX.Element {
   const { layout, labels } = useNavLayout()
+  // Under the Idle Slideshow the page stays mounted, exactly as it was, but out of reach.
+  const asleep = useIdlePhase() !== "awake"
 
   return (
-    <div className="shell" data-nav={layout} data-labels={labels}>
+    <div
+      className="shell"
+      data-nav={layout}
+      data-labels={labels}
+      inert={asleep}
+      aria-hidden={asleep ? true : undefined}
+    >
       <a className="skip-link" href="#page-content">
         Skip to page content
       </a>

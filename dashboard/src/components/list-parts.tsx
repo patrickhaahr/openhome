@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 import { Dialog } from "@base-ui/react/dialog"
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
+import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import { initial, type ListFeedback } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
@@ -93,6 +94,9 @@ export function ListSheet({
   titleHidden?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  // An open sheet holds a detail, an edit or an add flow: never hide it behind the slideshow.
+  useIdleBlock(open)
+
   return (
     <Dialog.Root
       open={open}

@@ -6,6 +6,8 @@
 @import "./workout.css";
 @import "./lists.css";
 @import "./sidebar.css";
+@import "./idle.css";
+@import "./components/idle-milestone.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -3233,6 +3235,19 @@ a.dir-go:hover {
   grid-template-columns: 3fr 2fr;
 }
 .photo-album[data-kind="all"]
+  .photo-album-cover[data-count="3"]
+  img:first-child {
+  grid-row: span 2;
+}
+/* On this day keeps an album's plate size; its cover is a small mosaic of the day's photos. */
+.photo-album[data-kind="on-this-day"]
+  .photo-album-cover:is([data-count="2"], [data-count="4"]) {
+  grid-template-columns: 1fr 1fr;
+}
+.photo-album[data-kind="on-this-day"] .photo-album-cover[data-count="3"] {
+  grid-template-columns: 3fr 2fr;
+}
+.photo-album[data-kind="on-this-day"]
   .photo-album-cover[data-count="3"]
   img:first-child {
   grid-row: span 2;

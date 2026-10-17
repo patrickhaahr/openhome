@@ -1,0 +1,12 @@
+{
+  "dates": [
+    {"title": "Together", "date": "2019-02-14", "kind": "since", "people": ["Alex", "Robin"], "show_when_idle": true},
+    {"title": "Moved in", "days_ago": 1000, "kind": "since", "people": ["Alex", "Robin"], "show_when_idle": true},
+    {"title": "Started at the workshop", "date": "2021-09-01", "kind": "since", "people": ["Sam"], "show_when_idle": false},
+    {"title": "First date", "date": "2018-06-03", "kind": "yearly", "people": ["Alex", "Robin"], "show_when_idle": true},
+    {"title": "Alex's birthday", "date": "1992-11-04", "kind": "yearly", "people": ["Alex"], "show_when_idle": true},
+    {"title": "Robin's birthday", "date": "1994-03-21", "kind": "yearly", "people": ["Robin"], "show_when_idle": true},
+    {"title": "Sam's birthday", "date": "1990-07-09", "kind": "yearly", "people": ["Sam"], "show_when_idle": false},
+    {"title": "A friend's birthday", "date": "1996-02-29", "kind": "yearly", "people": [], "show_when_idle": false}
+  ]
+}

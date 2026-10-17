@@ -175,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
                 .ok()
                 .filter(|id| !id.trim().is_empty()),
         ))
+        .merge(routes::important_dates::router())
         .merge(routes::weather::router(weather_service))
         .merge(routes::photos::router(photo_service))
         .with_state(state.clone())

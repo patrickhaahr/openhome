@@ -14,6 +14,7 @@ export const Route = createFileRoute("/photos")({
       albums: unavailablePhotos,
       view: null,
       wall: null,
+      onThisDay: null,
     })),
   // Entering the page or choosing an album always reads again (gcTime 0); staying never does.
   staleTime: Number.POSITIVE_INFINITY,

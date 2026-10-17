@@ -6,6 +6,7 @@ import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { RulerIcon } from "@phosphor-icons/react/dist/csr/Ruler"
 import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales"
+import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { WeightChart } from "@/components/weight-chart"
@@ -69,6 +70,8 @@ export function BodyProfile({
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const [feedback, setFeedback] = useState<Feedback>()
+  // An open profile edit or a save in flight holds the slideshow off.
+  useIdleBlock(editing !== undefined || busy)
 
   async function save(command: BodyCommand): Promise<boolean> {
     if (locked.current) return false
@@ -562,6 +565,8 @@ function WeightEditor({
 }): React.JSX.Element {
   const [date, setDate] = useState(() => trainingDayOn(new Date()))
   const [weight, setWeight] = useState("")
+  // A typed weight is a draft.
+  useIdleBlock(weight !== "")
 
   const [problem, setProblem] = useState<{
     field: "date" | "weight"

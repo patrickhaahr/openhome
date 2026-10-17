@@ -123,8 +123,24 @@ the rest. An accepted Command acknowledges the request only; it never
 establishes the device's power, input or volume.
 _Avoid_: Unavailable Remote Button, device state panel
 
+**Idle Slideshow**:
+A full-screen show of photos from the selected Immich albums that covers the
+Dashboard after a configured spell of inactivity, with the time, date and
+today's weather and Show When Idle dates on one plate. Since dates count elapsed
+time, yearly dates rotate nearest first, and the figures re-read at Copenhagen
+midnight. Photos from earlier years on this day lead the slideshow and show their
+age quietly on the same plate. The first touch or key only wakes it and returns
+to the page and state that were showing; it never reaches a control beneath.
+_Avoid_: Screensaver, photo gallery, Photos page
+
+**Idle Block**:
+A declared reason the Dashboard must not enter the Idle Slideshow: an open
+sheet or dialog, an unsaved draft, a save in flight or a conversation.
+_Avoid_: Wake lock, busy flag
+
 **Household User**:
-A configured person who owns Wishlists and Watchlists. The shared Dashboard
+A configured person who owns Wishlists and Watchlists and can be tagged on
+Important Dates. The shared Dashboard
 shows household members together within these list views, without separate
 passwords or private lists.
 _Avoid_: Fitness Profile, authenticated account
@@ -175,6 +191,35 @@ _Avoid_: Wishlist, viewing history import
 One movie or whole series on a Household User's Watchlist, with a planned,
 watching or completed status and addition/completion dates.
 _Avoid_: Episode log, Wishlist Item
+
+**Important Date**:
+A household-shared date the household counts from or towards, with a title and
+a kind (Since or Yearly). It is never owned: it tags the Household Users it
+concerns, both members for a shared anniversary and none for a friend's
+birthday. Axum computes its figures for a Europe/Copenhagen day.
+_Avoid_: Reminder, calendar event, owned date
+
+**Since**:
+An Important Date kind that counts up from the date: whole years, months and
+days elapsed, plus the total in days.
+_Avoid_: Countdown, age
+
+**Yearly**:
+An Important Date kind that counts down to the date's next anniversary. In a
+common year, 29 February falls back to 28 February.
+_Avoid_: Recurring reminder, repeat rule
+
+**Milestone**:
+An Axum-computed celebration on an Important Date's Copenhagen day: a Since
+anniversary, 100 or 500 days, each thousand days, or a Yearly occurrence.
+Anniversaries take precedence over round day counts. Only dates with Show When
+Idle enabled may supply the idle screen's leading Milestone.
+_Avoid_: Reminder, client-computed celebration, notification
+
+**Show When Idle**:
+An Important Date's switch allowing the shared idle photo screen, which anyone
+in the room can see, to show it. Off by default.
+_Avoid_: Private date, pinned date
 
 **Shared Viewing Progress**:
 Viewing state reported by the household's shared Jellyfin account, without

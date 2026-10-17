@@ -27,6 +27,7 @@ const unavailable = z.object({
     "provider-unavailable",
     "not-found",
     "invalid-page",
+    "invalid-date",
   ]),
 })
 
@@ -72,13 +73,72 @@ export const mergedRead = z.discriminatedUnion("state", [
   unavailable,
 ])
 
+/** A calendar month and day without a year, `MM-DD`; 29 February included. */
+export const monthDay = z
+  .string()
+  .regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/)
+  // A leap year, so 02-29 is a day and 02-30 is not.
+  .refine((value) => {
+    const [month = 0, day = 0] = value.split("-").map(Number)
+
+    return new Date(Date.UTC(2000, month - 1, day)).getUTCDate() === day
+  })
+
+/** One bounded page of photos taken on a month-day in earlier years, newest year first. */
+export const onThisDayRead = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("ready"),
+    photos: z.object({
+      date: monthDay,
+      photo_count: z.number().int().nonnegative(),
+      items: z
+        .array(
+          z.object({
+            album: z.uuid(),
+            asset: z.uuid(),
+            year: z.number().int(),
+            years_ago: z.number().int().positive(),
+          })
+        )
+        .max(PAGE_SIZE),
+      ...pageBounds,
+    }),
+  }),
+  unavailable,
+])
+
 /** Selected albums or a sanitized failure. */
 export type AlbumRead = z.infer<typeof albumRead>
 
 export type Album = z.infer<typeof album>
 
-/** A photo and the selected album that grants access to it. */
-export type WallItem = { album: string; asset: string }
+/** A photo and the selected album that grants access to it; the year it was taken on this day. */
+export type WallItem = { album: string; asset: string; year?: number }
+
+/**
+ * A photo taken on the month-day in an earlier year. Show it with
+ * `photoUrl(album, asset, size)`, which goes through the album's membership check.
+ */
+export type OnThisDayPhoto = {
+  album: string
+  asset: string
+  year: number
+  yearsAgo: number
+}
+
+/** One loaded page of photos taken on `date` (`MM-DD`) in earlier years, newest year first. */
+export type OnThisDay = {
+  date: string
+  items: OnThisDayPhoto[]
+  page: number
+  next: number | null
+  total: number
+}
+
+/** Photos on this day, or a sanitized failure; a failure never means there are none. */
+export type OnThisDayResult =
+  | { state: "ready"; onThisDay: OnThisDay }
+  | z.infer<typeof unavailable>
 
 /** One loaded page of the photo wall, from one album or from all of them. */
 export type Wall = {
@@ -125,10 +185,64 @@ export function mergedWall(read: z.infer<typeof mergedRead>): WallRead {
   }
 }
 
+/** Axum's page as the dashboard reads it. */
+export function onThisDayResult(
+  read: z.infer<typeof onThisDayRead>
+): OnThisDayResult {
+  if (read.state !== "ready") return read
+  const { date, items, page, next_page, photo_count } = read.photos
+
+  return {
+    state: "ready",
+    onThisDay: {
+      date,
+      items: items.map(({ album, asset, year, years_ago }) => ({
+        album,
+        asset,
+        year,
+        yearsAgo: years_ago,
+      })),
+      page,
+      next: next_page,
+      total: photo_count,
+    },
+  }
+}
+
+/** Photos on this day as the wall reads them. */
+export function onThisDayWall(read: OnThisDayResult): WallRead {
+  if (read.state !== "ready") return read
+  const { items, page, next, total } = read.onThisDay
+
+  return {
+    state: "ready",
+    wall: {
+      items: items.map(({ album, asset, year }) => ({ album, asset, year })),
+      page,
+      next,
+      total,
+    },
+  }
+}
+
+const dayFormat = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+})
+
+/** A month-day as the dashboard writes it: "14 Feb". */
+export function formatMonthDay(date: string): string {
+  return dayFormat.format(new Date(`2000-${date}T00:00:00Z`))
+}
+
 /** Every selected album at once. */
 export const ALL_PHOTOS = "all"
 
-const view = z.union([z.literal(ALL_PHOTOS), z.uuid()])
+/** Today's photos from earlier years, across every selected album. */
+export const ON_THIS_DAY = "on-this-day"
+
+const view = z.union([z.literal(ALL_PHOTOS), z.literal(ON_THIS_DAY), z.uuid()])
 
 /**
  * The open album (or all photos) and the open photo live in the URL. Without an album the page
@@ -153,6 +267,12 @@ export function chooseView(
 
 /** The first page of the chosen view; the server falls back to the only album. */
 export const galleryInput = z.object({ album: view.optional() })
+
+/** A month-day (today in Copenhagen when omitted) and a page of its photos. */
+export const onThisDayInput = z.object({
+  date: monthDay.optional(),
+  page: z.number().int().min(0).max(MAX_PAGE).default(0),
+})
 
 /** A later page, loaded as the wall scrolls. */
 export const wallInput = z.object({

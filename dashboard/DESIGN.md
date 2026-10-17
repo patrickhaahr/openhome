@@ -48,6 +48,12 @@ Screenshot:  Home at night: giant clock, the sun below the horizon as a hollow r
 - **Motion**: one ease `cubic-bezier(.2,.7,.1,1)`; 180 ms small, 420 ms panels, 700 ms page.
   Things rise from a baseline. Press: 0.97 scale. Reduced motion: no transitions.
 - **Idle**: the sun on the horizon (minute clock) and the clock. Nothing else moves at rest.
+  Left untouched, the **Idle Slideshow** covers the page: the selected photos on the night
+  ground, crossfading slowly with a gentle drift (crossfade only with reduced motion), and
+  one solid night-ground tone plate in the bottom-left corner holding a large clock, the
+  date and today's weather. No gradient, shadow, blur or glass behind the text. Later idle
+  content (important dates) joins the same plate. Without photos the plate sits on the
+  bare ground. The first touch only wakes.
 
 ## Round 2: say it with the thing itself
 
@@ -128,6 +134,12 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   marker (only the demo origin gets a chip), and the one small attribution sits bottom-right,
   merged with the routing credit. In portrait the planner spans the bottom and the controls
   move to the top of the right edge; on a phone the attribution moves to the top-left.
+- **Lists Dates is plates of figures**: since dates first, each figure large and tabular
+  ("7 years · 8 months · 3 days", wrapping only between its parts), then the yearly dates
+  as a row of countdowns in the order they come round. A quiet glyph names the kind; the
+  date and its people's discs sit beneath and beside it, and a sun disc marks today. A plate
+  opens a sheet with Edit, a Show when idle switch and Delete; one "Add a date" key adds.
+  No per-plate keys and no refresh: the view re-reads when the Copenhagen day turns.
 - **Tap targets are at least 44 px** (key-icon 48 px, key-round 64 px, key-hero 96 px);
   inline attribution links are the only exception.
 - **Connection** is one word in display type beside a signal disc that pulses once (and

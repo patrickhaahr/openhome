@@ -25,13 +25,31 @@ fetching and provider failure cannot serve it stale.
 Four provider image reads run at once, with a five-second queue timeout and a
 five-second provider timeout. There is no image cache; responses use `no-store`.
 
-Capture times (Immich `localDateTime`) never leave Axum. They order an **All photos** view
+Full capture times (Immich `localDateTime`) never leave Axum. They order an **All photos** view
 that merges the selected albums newest first, 60 identities per page, de-duplicated by
 asset; each item names the selected album that grants access, so media reads keep the
 same membership check. An album exposes only the first and last month (`YYYY-MM`) of its
 photos, and the owner's chosen cover when it is a served still. The gallery loads further
 pages as it scrolls; the full-screen dialog renders one preview at a time, steps across
 loaded photos and reads the next page when stepping past the last.
+
+Capture dates are the one exception, and only as a year and a month-day. "On this day"
+(#197) needs to say which year a photo was taken in, and the idle slideshow favours
+photos from the same month-day in earlier years, so `GET /api/photos/on-this-day?date=MM-DD`
+returns, for one month-day, the photos captured on it in years before the current one:
+each item's granting album, asset and capture year (with `years_ago`), newest year first.
+Anyone who can read the endpoint can therefore learn the capture date of a photo it
+returns, by asking day by day; the household approved this, since the dashboard is already
+a trusted, private surface (ADR 0003) and the pictures themselves show far more. The time
+of day, zone, EXIF, filenames, people and places still stay in Axum.
+
+The capture day is local: the photo's own wall clock when Immich knows its zone (it then
+writes that clock in `localDateTime`), otherwise the UTC instant read in Europe/Copenhagen,
+where Immich writes the instant and a photo at 23:30 UTC in winter belongs to the next day.
+The same local times order **All photos** and bound album months. A 29 February photo also
+comes round on 28 February in common years. The endpoint reads the same cached album
+metadata as the gallery and keeps its bounds: the selected albums only, 60 items per page,
+no page past the last; malformed or impossible dates are rejected.
 
 An explicitly enabled loopback preview can use albums approved for public evidence,
 without connecting household databases or importing any other library content.

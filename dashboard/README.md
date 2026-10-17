@@ -41,7 +41,16 @@ Set these environment variables **on the dashboard server at runtime**:
 | `OPENHOME_API_URL` | Your Axum API's HTTP(S) base URL, optionally including a deployment path prefix. |
 | `API_KEY`          | The same bearer API key configured on Axum.                                      |
 
-Neither variable has a default. Do not prefix them with `VITE_`, put them in
+Optional, same place:
+
+| Variable               | Value                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `IDLE_TIMEOUT_SECONDS` | Seconds without a touch or key before the idle photo slideshow (10–86400; `0` turns it off). Default `300`. |
+| `IDLE_PREVIEW`         | `true` only in synthetic previews: lets `?idle=now` open the slideshow at once. Leave unset in production.  |
+
+See [the idle slideshow](../docs/photos.md#idle-slideshow) for what holds it off and how waking works.
+
+Neither of the first two variables has a default. Do not prefix them with `VITE_`, put them in
 browser storage or commit their values. Supply them using the private deployment's
 environment or process manager, and restart the dashboard after changes.
 Development and preview recipes inherit the invoking process's environment;
