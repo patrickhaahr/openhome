@@ -153,14 +153,22 @@ function storeMode(next: ThemeMode): void {
 const sunPosition = (progress: number): number =>
   Math.min(1, Math.max(0, progress))
 
-/** The shell's baseline, with the sun at its place between sunrise and sunset. */
-export function Horizon(): React.JSX.Element {
+/**
+ * The shell's baseline, with the sun at its place between sunrise and sunset. Stood on end
+ * ("vertical") it is the sidebar's edge: sunrise at the top, sunset at the bottom.
+ */
+export function Horizon({
+  axis = "horizontal",
+}: {
+  axis?: "horizontal" | "vertical"
+}): React.JSX.Element {
   const { sky } = useDaylight()
   const below = sky.progress < 0 || sky.progress > 1
 
   return (
     <div
       className="horizon"
+      data-axis={axis}
       aria-hidden="true"
       // SAFETY: CSSProperties omits custom properties; --sun-x is a unitless 0..1 horizon position read by .horizon.
       style={
