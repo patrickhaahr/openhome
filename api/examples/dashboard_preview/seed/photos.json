@@ -9,5 +9,10 @@
     { "name": "Forest trails", "photos": 9, "hue": 95, "scene": "forest", "from": "2024-10", "months": 1 },
     { "name": "Mountain week", "photos": 52, "hue": 15, "scene": "hills", "from": "2023-08", "months": 1 },
     { "name": "Harbour mornings", "photos": 17, "hue": 35, "scene": "sea", "from": "2026-07", "months": 3 }
+  ],
+  "on_this_day": [
+    { "day": "today", "years_ago": [1, 2, 4, 7], "photos": 3 },
+    { "day": "02-14", "years_ago": [1, 3, 6], "photos": 2 },
+    { "day": "06-03", "years_ago": [2, 5], "photos": 2 }
   ]
 }

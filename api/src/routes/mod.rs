@@ -3,6 +3,7 @@ pub mod docker;
 pub mod feeds;
 pub mod fitness;
 pub mod health;
+pub mod important_dates;
 pub mod ir;
 pub mod map;
 pub mod noop_push;

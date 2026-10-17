@@ -1,5 +1,5 @@
 //! Seeds the main database through the production HTTP routes: profile, body weight, logged
-//! workouts, Household Users, Wishlists and the Watchlist. Wish images point at the preview's own
+//! workouts, Household Users, Wishlists, the Watchlist and Important Dates. Wish images point at the preview's own
 //! artwork routes (`media.rs`); Watchlist posters are static TMDB paths from the catalogue.
 
 use std::collections::HashMap;
@@ -75,7 +75,8 @@ pub async fn household(base: &str, key: &str, db: &sqlx::SqlitePool) -> anyhow::
     };
     body(&api).await?;
     workouts(&api).await?;
-    household_lists(&api, db).await
+    household_lists(&api, db).await?;
+    important_dates(&api).await
 }
 
 #[derive(Deserialize)]
@@ -284,6 +285,61 @@ async fn household_lists(api: &Api, db: &sqlx::SqlitePool) -> anyhow::Result<()>
         api.patch(
             &format!("/api/household-users/{owner_id}/watchlist/entries/{entry_id}"),
             edit,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct Dates {
+    dates: Vec<SeedDate>,
+}
+
+/// A fixed date, or `days_ago` for one that must stay close to a round milestone.
+#[derive(Deserialize)]
+struct SeedDate {
+    title: String,
+    date: Option<String>,
+    days_ago: Option<u64>,
+    kind: String,
+    people: Vec<String>,
+    show_when_idle: bool,
+}
+
+async fn important_dates(api: &Api) -> anyhow::Result<()> {
+    let seed: Dates = serde_json::from_str(include_str!("seed/dates.json"))?;
+    let users = api.get("/api/household-users").await?;
+    let id_for = |name: &str| {
+        users
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|user| user["name"] == name)
+            .and_then(|user| user["id"].as_str())
+            .ok_or_else(|| anyhow::anyhow!("unknown Important Date person {name}"))
+    };
+    for (index, date) in seed.dates.iter().enumerate() {
+        let day = match (&date.date, date.days_ago) {
+            (Some(day), None) => day.clone(),
+            (None, Some(days)) => days_ago(days),
+            _ => anyhow::bail!("{} needs exactly one of date or days_ago", date.title),
+        };
+        let person_ids = date
+            .people
+            .iter()
+            .map(|name| id_for(name))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        api.post(
+            "/api/important-dates",
+            json!({
+                "title": date.title,
+                "date": day,
+                "kind": date.kind,
+                "person_ids": person_ids,
+                "show_when_idle": date.show_when_idle,
+                "request_id": format!("preview-date-{index}"),
+            }),
         )
         .await?;
     }

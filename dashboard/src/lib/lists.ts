@@ -10,7 +10,7 @@ export const wishSearch = personSearch.extend({ list: id })
 
 /** The Lists page: which list kind is showing (wishes when absent), with one shared person filter. */
 export const listsSearch = wishSearch.extend({
-  tab: z.enum(["wish", "watch"]).optional().catch(undefined),
+  tab: z.enum(["wish", "watch", "dates"]).optional().catch(undefined),
 })
 
 export type PersonSearch = z.infer<typeof personSearch>

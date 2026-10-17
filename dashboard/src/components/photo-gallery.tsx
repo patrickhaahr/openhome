@@ -7,6 +7,7 @@ import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken"
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
+import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,12 +19,15 @@ import {
 import { formatWhole } from "@/lib/number-format"
 import {
   ALL_PHOTOS,
+  ON_THIS_DAY,
+  formatMonthDay,
   librarySpan,
   monthSpan,
   photoUrl,
   unavailablePhotos,
   type Album,
   type AlbumRead,
+  type OnThisDayResult,
   type Wall,
   type WallItem,
   type WallRead,
@@ -34,6 +38,8 @@ type GalleryProps = {
   /** The open album id, all photos, or null for the albums. */
   view: string | null
   wall: WallRead | null
+  /** Today's photos from earlier years, offered with the albums. */
+  onThisDay?: OnThisDayResult | null
   /** The open photo, from the URL. */
   photo: string | undefined
   open: (album: string | undefined) => void
@@ -51,6 +57,7 @@ export function PhotoGallery({
   albums,
   view,
   wall,
+  onThisDay = null,
   photo,
   open,
   show,
@@ -73,20 +80,29 @@ export function PhotoGallery({
     )
 
   if (view === null || wall === null)
-    return <AlbumIndex albums={albums.albums} open={open} />
+    return (
+      <AlbumIndex albums={albums.albums} onThisDay={onThisDay} open={open} />
+    )
 
   const available = albums.albums.filter((album) => !album.missing)
   const source = albums.albums.find((album) => album.id === view)
   const all = view === ALL_PHOTOS
+  const today = view === ON_THIS_DAY
   const back = albums.albums.length > 1 ? () => open(undefined) : undefined
 
   const head = {
-    title: all ? "All photos" : (source?.name ?? "Album"),
-    span: all
-      ? librarySpan(available)
-      : source === undefined
-        ? null
-        : monthSpan(source.first_month, source.last_month),
+    title: today
+      ? "On this day"
+      : all
+        ? "All photos"
+        : (source?.name ?? "Album"),
+    span: today
+      ? null
+      : all
+        ? librarySpan(available)
+        : source === undefined
+          ? null
+          : monthSpan(source.first_month, source.last_month),
     back,
   }
 
@@ -197,9 +213,11 @@ function AlbumMeta({
 
 function AlbumIndex({
   albums,
+  onThisDay,
   open,
 }: {
   albums: Album[]
+  onThisDay: OnThisDayResult | null
   open: (album: string) => void
 }): React.JSX.Element {
   const available = albums.filter((album) => !album.missing)
@@ -207,6 +225,11 @@ function AlbumIndex({
   const covers = available.flatMap((album) =>
     album.cover_id === null ? [] : [{ album: album.id, asset: album.cover_id }]
   )
+
+  const today =
+    onThisDay?.state === "ready" && onThisDay.onThisDay.total > 0
+      ? onThisDay.onThisDay
+      : null
 
   return (
     <>
@@ -232,6 +255,30 @@ function AlbumIndex({
             </button>
           </li>
         ) : null}
+        {today === null ? null : (
+          <li className="photo-album" data-kind="on-this-day">
+            <button type="button" onClick={() => open(ON_THIS_DAY)}>
+              <span
+                className="photo-album-cover"
+                data-count={Math.min(today.items.length, 4)}
+              >
+                {today.items.slice(0, 4).map((cover) => (
+                  <Cover
+                    key={cover.asset}
+                    album={cover.album}
+                    asset={cover.asset}
+                  />
+                ))}
+              </span>
+              <span className="photo-album-name">On this day</span>
+              <AlbumMeta
+                count={today.total}
+                span={formatMonthDay(today.date)}
+                unit="photos"
+              />
+            </button>
+          </li>
+        )}
         {albums.map((album) => (
           <li key={album.id} className="photo-album">
             <button
@@ -375,6 +422,9 @@ function PhotoWall({
 
   const current = index === -1 ? undefined : items[index]
 
+  // Someone is looking at a photo; the slideshow waits until it is closed.
+  useIdleBlock(current !== undefined)
+
   // Focus returns to the last photo shown, even after stepping away from the one opened.
   useEffect(() => {
     if (current !== undefined) shown.current = current.asset
@@ -439,7 +489,9 @@ function PhotoWall({
   }
 
   const position = index + 1
-  const albumName = (item: WallItem): string => names.get(item.album) ?? "album"
+
+  const albumName = (item: WallItem): string =>
+    `${names.get(item.album) ?? "album"}${item.year === undefined ? "" : `, ${item.year}`}`
 
   return (
     <>
@@ -552,6 +604,9 @@ function PhotoWall({
                 {view === ALL_PHOTOS && current !== undefined ? (
                   <span>{albumName(current)}</span>
                 ) : null}
+                {current?.year === undefined ? null : (
+                  <span className="num">{current.year}</span>
+                )}
               </span>
               <DialogClose
                 render={<Button variant="outline" size="key-icon" />}

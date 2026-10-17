@@ -92,7 +92,7 @@ const glyphs: readonly (readonly [from: number, to: number, glyph: Icon])[] = [
 ]
 
 /** A WMO code as a glyph. */
-function WeatherGlyph({
+export function WeatherGlyph({
   code,
   size,
 }: {
@@ -306,7 +306,7 @@ function OpenWeather(): React.JSX.Element {
 }
 
 /** A whole-degree reading, or a dash when the forecast has none. */
-function degrees(celsius: number | null | undefined): string {
+export function degrees(celsius: number | null | undefined): string {
   return celsius === null || celsius === undefined
     ? "–"
     : `${Math.round(celsius)}°`

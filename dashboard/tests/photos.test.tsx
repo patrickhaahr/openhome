@@ -5,10 +5,16 @@ import { expect, test, vi } from "vitest"
 import { PhotoGallery } from "@/components/photo-gallery"
 import {
   chooseView,
+  formatMonthDay,
   monthSpan,
+  onThisDayInput,
+  onThisDayRead,
+  onThisDayResult,
+  onThisDayWall,
   photoSearch,
   type Album,
   type AlbumRead,
+  type OnThisDayResult,
   type WallRead,
 } from "@/lib/photos"
 
@@ -85,6 +91,7 @@ type Data = {
   albums: AlbumRead
   view: string | null
   wall: WallRead | null
+  onThisDay?: OnThisDayResult | null
   photo?: string
 }
 
@@ -115,6 +122,7 @@ async function setup(
         albums={data.albums}
         view={data.view}
         wall={data.wall}
+        onThisDay={data.onThisDay ?? null}
         photo={photo}
         open={open}
         show={(next) => {
@@ -381,5 +389,89 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     await act(async () => root.unmount())
     container.remove()
     vi.unstubAllGlobals()
+  }
+})
+
+test("photos from this day in earlier years are a plate when there are any", async () => {
+  const read = onThisDayRead.parse({
+    state: "ready",
+    photos: {
+      date: "02-14",
+      photo_count: 2,
+      items: [
+        { album: otherId, asset: second, year: 2025, years_ago: 1 },
+        { album: albumId, asset: first, year: 2023, years_ago: 3 },
+      ],
+      page: 0,
+      next_page: null,
+    },
+  })
+
+  const today = onThisDayResult(read)
+  expect(today).toEqual({
+    state: "ready",
+    onThisDay: {
+      date: "02-14",
+      items: [
+        { album: otherId, asset: second, year: 2025, yearsAgo: 1 },
+        { album: albumId, asset: first, year: 2023, yearsAgo: 3 },
+      ],
+      page: 0,
+      next: null,
+      total: 2,
+    },
+  })
+  expect(onThisDayWall(today)).toMatchObject({
+    wall: {
+      total: 2,
+      items: [{ album: otherId, asset: second, year: 2025 }, {}],
+    },
+  })
+  expect(formatMonthDay("02-29")).toBe("29 Feb")
+
+  for (const date of ["02-30", "04-31", "2-14", "13-01"])
+    expect(onThisDayInput.safeParse({ date }).success).toBe(false)
+  expect(onThisDayInput.parse({ date: "02-29" })).toEqual({
+    date: "02-29",
+    page: 0,
+  })
+
+  const view = await setup({
+    albums,
+    view: null,
+    wall: null,
+    onThisDay: today,
+  })
+
+  try {
+    const plate = view.button("On this day")
+    expect(plate.textContent).toContain("2 photos")
+    expect(plate.textContent).toContain("14 Feb")
+    expect(
+      [...plate.querySelectorAll("img")].map((img) => img.getAttribute("src"))
+    ).toEqual([
+      `/photo-media/${otherId}/${second}/thumbnail`,
+      `/photo-media/${albumId}/${first}/thumbnail`,
+    ])
+    await act(async () => plate.click())
+    expect(view.open).toHaveBeenLastCalledWith("on-this-day")
+  } finally {
+    await view.cleanup()
+  }
+
+  const none = await setup({
+    albums,
+    view: null,
+    wall: null,
+    onThisDay: {
+      state: "ready",
+      onThisDay: { date: "02-14", items: [], page: 0, next: null, total: 0 },
+    },
+  })
+
+  try {
+    expect(none.container.textContent).not.toContain("On this day")
+  } finally {
+    await none.cleanup()
   }
 })

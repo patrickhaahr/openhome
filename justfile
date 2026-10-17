@@ -445,12 +445,14 @@ dashboard-synthetic-api: dashboard-synthetic-build
     if [ -z "${TMDB_READ_ACCESS_TOKEN:-}" ] && [ -r "$token_file" ]; then TMDB_READ_ACCESS_TOKEN="$(cat "$token_file")"; fi
     TMDB_READ_ACCESS_TOKEN="${TMDB_READ_ACCESS_TOKEN:-}" exec target/debug/examples/dashboard_preview
 
-# Preview every dashboard page at http://localhost:3001/ on invented, deterministic data (Ctrl-C stops both)
+# Preview every dashboard page at http://localhost:3001/ on invented, deterministic data (Ctrl-C stops both;
+# override the ports with OPENHOME_PREVIEW_API_PORT and OPENHOME_PREVIEW_DASHBOARD_PORT)
 [group('dashboard')]
 dashboard-synthetic: dashboard-synthetic-build
     #!/usr/bin/env bash
     set -euo pipefail
     port="${OPENHOME_PREVIEW_API_PORT:-3101}"
+    dashboard_port="${OPENHOME_PREVIEW_DASHBOARD_PORT:-3001}"
     api_url="http://127.0.0.1:$port"
     api_key=synthetic-dashboard-api-key
     pids=()
@@ -471,9 +473,10 @@ dashboard-synthetic: dashboard-synthetic-build
         kill -0 "${pids[0]}" 2>/dev/null || { echo "Synthetic API exited during startup" >&2; exit 1; }
         sleep 0.2
     done
-    echo "Synthetic API ready at $api_url; dashboard at http://localhost:3001/"
+    echo "Synthetic API ready at $api_url; dashboard at http://localhost:$dashboard_port/"
     # Explicit values override anything inherited, so the preview can never reach a real API.
-    (cd dashboard && OPENHOME_API_URL="$api_url" API_KEY="$api_key" exec bunx vite dev --port 3001 --strictPort) &
+    # IDLE_PREVIEW lets ?idle=now open the Idle Slideshow at once; production never sets it.
+    (cd dashboard && OPENHOME_API_URL="$api_url" API_KEY="$api_key" IDLE_PREVIEW=true exec bunx vite dev --port "$dashboard_port" --strictPort) &
     pids+=($!)
     wait -n
 

@@ -153,6 +153,7 @@ fn test_app_with_pools(
         .merge(training_router())
         .merge(openhome_api::routes::wishlist::router(None))
         .merge(openhome_api::routes::watchlist::router(None))
+        .merge(openhome_api::routes::important_dates::router())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             auth_middleware(req, next, api_key_clone.clone())

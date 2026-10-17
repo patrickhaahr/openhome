@@ -60,9 +60,10 @@ export const features = [
     label: "Lists",
     title: "Lists",
     icon: ListHeartIcon,
-    description: "Wishes and watching together, for everyone in the household.",
+    description:
+      "Wishes, watching and important dates, for everyone in the household.",
     unavailable:
-      "Lists are unavailable. Household wishlists and watchlists cannot be read.",
+      "Lists are unavailable. Household wishlists, watchlists and dates cannot be read.",
   },
   {
     id: "photos",

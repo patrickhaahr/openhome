@@ -3,13 +3,18 @@ import { z } from "zod"
 import { requestOpenHome } from "./openhome.server"
 import {
   ALL_PHOTOS,
+  ON_THIS_DAY,
   albumRead,
   albumWall,
   mergedRead,
   mergedWall,
+  onThisDayRead,
+  onThisDayResult,
+  onThisDayWall,
   photoRead,
   unavailablePhotos,
   type AlbumRead,
+  type OnThisDayResult,
   type WallRead,
 } from "./photos"
 
@@ -39,8 +44,32 @@ export async function readAlbums(): Promise<AlbumRead> {
   )
 }
 
-/** One page of one album, or of every album merged; Axum alone checks scope and bounds. */
+/** Photos taken on `date` (`MM-DD`, else today in Copenhagen) in earlier years. */
+export async function readOnThisDay(
+  date: string | undefined,
+  page: number
+): Promise<OnThisDayResult> {
+  const query =
+    date === undefined ? { page: String(page) } : { date, page: String(page) }
+
+  const read = await readJson(
+    {
+      path: "/api/photos/on-this-day",
+      method: "GET",
+      timeoutMs: 45000,
+      query,
+    },
+    onThisDayRead
+  )
+
+  return onThisDayResult(read)
+}
+
+/** One page of one album, of every album merged or of today's photos; Axum checks scope and bounds. */
 export async function readWall(album: string, page: number): Promise<WallRead> {
+  if (album === ON_THIS_DAY)
+    return onThisDayWall(await readOnThisDay(undefined, page))
+
   if (album === ALL_PHOTOS) {
     const read = await readJson(
       {

@@ -1024,3 +1024,229 @@
     padding-left: 0;
   }
 }
+
+/* ---------- Important Dates ---------- */
+
+.dates {
+  display: grid;
+  gap: clamp(1.25rem, 2.4vw, 2rem);
+}
+.dates-group {
+  display: grid;
+  gap: 0.875rem;
+}
+.date-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(13.5rem, 100%), 1fr));
+  gap: clamp(0.75rem, 1.4vw, 1.125rem);
+}
+.dates-group[data-kind="since"] .date-plates {
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+}
+.date-plates > li {
+  display: grid;
+}
+.date-plate {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 9.5rem;
+  padding: 0.875rem 1.125rem 1rem;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--wash);
+  color: inherit;
+  text-align: left;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    scale var(--t-fast) var(--ease);
+}
+.dates-group[data-kind="since"] .date-plate {
+  min-height: 11.5rem;
+}
+.date-plate:hover {
+  background: var(--wash-strong);
+}
+.date-plate:active {
+  scale: 0.98;
+}
+.date-plate-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--muted-ink);
+}
+.date-plate-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1.0625rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Today: one sun disc. */
+.date-mark {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--sun);
+}
+.date-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: end;
+  column-gap: 0.3em;
+  font-size: clamp(1.5rem, 1.1rem + 1.1vw, 2.125rem);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.dates-group[data-kind="since"] .date-figure {
+  font-size: clamp(1.5rem, 0.95rem + 1.05vw, 2.125rem);
+}
+.date-figure-part {
+  display: inline-flex;
+  gap: 0.3em;
+  white-space: nowrap;
+}
+.date-figure-part > [aria-hidden="true"] {
+  color: var(--muted-ink);
+}
+.date-figure-large {
+  font-size: clamp(1.875rem, 1.4rem + 1.2vw, 2.5rem);
+}
+.date-figure[data-milestone="true"],
+.dates-group[data-kind="since"] .date-figure[data-milestone="true"] {
+  font-size: clamp(2rem, 1.3rem + 1.8vw, 3rem);
+}
+.date-figure[data-milestone="true"] .date-figure-part {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.date-plate-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.date-plate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+}
+.date-plate-people {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+.date-plate-head:not(:has(.date-plate-people)) .date-mark {
+  margin-left: auto;
+}
+.date-plate-people .person-disc {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.8125rem;
+}
+.date-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sheet-owner .date-person + .date-person {
+  margin-left: 0.5rem;
+}
+.date-days {
+  flex-wrap: wrap;
+  gap: 0.75rem 1.75rem;
+}
+.date-years {
+  color: var(--muted-ink);
+}
+.date-form {
+  gap: 1rem;
+}
+.date-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.date-people .person-key {
+  background: var(--wash-strong);
+  color: var(--ink);
+}
+.date-people .person-key[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ground);
+}
+.field-hint {
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+}
+.idle-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.625rem 0.875rem 0.625rem 1.125rem;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--wash-strong);
+  color: var(--ink);
+  text-align: left;
+  transition: background-color var(--t-fast) var(--ease);
+}
+.idle-switch:disabled {
+  opacity: 0.5;
+}
+.idle-switch-text {
+  display: grid;
+  gap: 0.125rem;
+  font-weight: 500;
+}
+.idle-switch-hint {
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+.idle-switch-track {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 3.25rem;
+  height: 2rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--wash-strong);
+  transition: background-color var(--t-fast) var(--ease);
+}
+.idle-switch-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--muted-ink);
+  transition:
+    translate var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
+}
+.idle-switch[aria-checked="true"] .idle-switch-track {
+  background: var(--ink);
+}
+.idle-switch[aria-checked="true"] .idle-switch-thumb {
+  background: var(--ground);
+  translate: 1.25rem 0;
+}
+
+@media (max-width: 640px) {
+  .date-plate,
+  .dates-group[data-kind="since"] .date-plate {
+    min-height: 0;
+  }
+}

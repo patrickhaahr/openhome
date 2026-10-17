@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE important_dates SET title = COALESCE(?, title), date = COALESCE(?, date), kind = COALESCE(?, kind), show_when_idle = COALESCE(?, show_when_idle) WHERE id = ? RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5ae680d8e5eee36dbf7d112cad752ad2737919fd4eb24489a5bbd9417b716251"
+}
