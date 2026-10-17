@@ -2002,50 +2002,6 @@ a.dir-go:hover {
   white-space: pre-wrap;
   color: var(--muted-foreground);
 }
-@utility workout-entries {
-  display: grid;
-  gap: 0.5rem;
-  margin-block: 1.5rem;
-}
-@utility workout-entry {
-  padding-block: 1rem;
-}
-@utility workout-entry-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  h3 {
-    flex: 1;
-    min-width: 0;
-    font-size: 1.125rem;
-    font-weight: 550;
-    overflow-wrap: anywhere;
-  }
-}
-@utility workout-entry-number {
-  font-variant-numeric: tabular-nums;
-  color: var(--primary);
-  font-size: 0.75rem;
-}
-@utility workout-sets {
-  display: grid;
-  gap: 0.25rem;
-  margin-top: 0.75rem;
-  padding-left: 1.75rem;
-  li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 1rem;
-    font-variant-numeric: tabular-nums;
-  }
-}
-@utility workout-set-number {
-  min-width: 1.5rem;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
-}
 @utility workout-editor {
   display: grid;
   gap: 1.25rem;
@@ -2055,11 +2011,6 @@ a.dir-go:hover {
     font-size: 1rem;
   }
 }
-@utility workout-editor-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  gap: 1rem 1.5rem;
-}
 @utility workout-field {
   display: grid;
   gap: 0.25rem;
@@ -2068,111 +2019,10 @@ a.dir-go:hover {
     color: var(--muted-foreground);
   }
 }
-@utility workout-entry-editor {
-  padding: 1rem;
-  border-radius: var(--radius-lg);
-  background: var(--wash);
-}
-@utility workout-entry-actions {
-  display: flex;
-  flex-shrink: 0;
-}
-@utility workout-set-rows {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-@utility workout-set-row {
-  display: grid;
-  grid-template-columns:
-    auto auto minmax(4.5rem, 0.7fr) minmax(8.5rem, 1fr)
-    minmax(7.5rem, auto) auto;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  > [data-slot="native-select-wrapper"] {
-    width: 100%;
-  }
-  /* Narrow rows keep type and removal on top and the three values aligned below. */
-  @media (max-width: 1100px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-    > [data-slot="toggle-group"] {
-      grid-area: 1 / 2 / 2 / 4;
-      justify-self: start;
-    }
-    > [data-slot="button"] {
-      grid-area: 1 / 4;
-    }
-  }
-}
-@utility workout-unit {
-  position: relative;
-  min-width: 0;
-  input {
-    padding-right: 2rem;
-  }
-  > span {
-    position: absolute;
-    right: 0.25rem;
-    top: 50%;
-    translate: 0 -50%;
-    color: var(--muted-foreground);
-    font-size: 0.875rem;
-    pointer-events: none;
-  }
-}
-@utility workout-choice {
-  [data-slot="toggle-group-item"][aria-pressed="true"] {
-    background: var(--primary);
-    color: var(--primary-foreground);
-  }
-}
-@utility workout-entry-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  margin-top: 0.5rem;
-  input {
-    flex: 1 1 14rem;
-  }
-}
 @utility workout-editor-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-}
-@utility exercise-picker-filters {
-  display: grid;
-  gap: 0.75rem;
-  input {
-    min-height: 3rem;
-    font-size: 1rem;
-  }
-}
-@utility exercise-picker-results {
-  max-height: min(28rem, 55svh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  display: grid;
-  gap: 1rem;
-  h3 {
-    margin: 0 0 0.25rem 0.75rem;
-    color: var(--muted-foreground);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  button {
-    width: 100%;
-    min-height: 3rem;
-    height: auto;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.75rem;
-    white-space: normal;
-    text-align: left;
-  }
 }
 @utility exercise-progress {
   /* Twelve hues at similar lightness so no line dominates on dark cards; the first is the accent. */
