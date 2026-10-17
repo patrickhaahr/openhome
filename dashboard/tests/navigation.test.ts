@@ -10,8 +10,7 @@ import {
 import { expect, test, vi } from "vitest"
 import { Route as HomeRoute } from "@/routes/index"
 import { Route as WeatherRoute } from "@/routes/weather"
-import { Route as WishlistRoute } from "@/routes/wishlist"
-import { Route as WatchlistRoute } from "@/routes/watchlist"
+import { Route as ListsRoute } from "@/routes/lists"
 import { Route as RecoveryRoute } from "@/routes/recovery"
 import { Route as WorkoutRoute } from "@/routes/workout"
 import { unavailableWeather } from "@/lib/weather"
@@ -21,8 +20,7 @@ test("opens focused views through persistent navigation, restores browser histor
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   const originalLoader = HomeRoute.options.loader
   const originalWeatherLoader = WeatherRoute.options.loader
-  const originalWishlistLoader = WishlistRoute.options.loader
-  const originalWatchlistLoader = WatchlistRoute.options.loader
+  const originalListsLoader = ListsRoute.options.loader
   const originalWorkoutLoader = WorkoutRoute.options.loader
   const originalRecoveryLoader = RecoveryRoute.options.loader
   const unavailable = { state: "unavailable", reason: "unreachable" } as const
@@ -50,15 +48,13 @@ test("opens focused views through persistent navigation, restores browser histor
     context: unavailable,
     detail: { state: "none" },
   })
-  WatchlistRoute.options.loader = () => ({
-    state: "available",
-    owners: [],
-    entries: [],
-  })
-  WishlistRoute.options.loader = () => ({
-    state: "unavailable",
-    reason: "unavailable",
-  })
+  ListsRoute.options.loader = ({ deps }) =>
+    deps.tab === "watch"
+      ? {
+          tab: "watch",
+          data: { state: "available", owners: [], entries: [] },
+        }
+      : { tab: "wish", data: { state: "unavailable", reason: "unavailable" } }
   WeatherRoute.options.loader = () => unavailableWeather
 
   HomeRoute.options.loader = () => ({
@@ -77,22 +73,26 @@ test("opens focused views through persistent navigation, restores browser histor
       root.render(createElement(RouterProvider, { router }))
     })
 
-    const wishlist = document.querySelector<HTMLAnchorElement>(
-      'nav a[href="/wishlist"]'
+    // Wishes and watching share one destination; the old pages are not in the navigation.
+    expect(document.querySelector('nav a[href="/wishlist"]')).toBeNull()
+    expect(document.querySelector('nav a[href="/watchlist"]')).toBeNull()
+
+    const lists = document.querySelector<HTMLAnchorElement>(
+      'nav a[href="/lists"]'
     )
 
-    if (wishlist === null) throw new Error("Expected Wishlist navigation")
+    if (lists === null) throw new Error("Expected Lists navigation")
 
     await act(async () => {
-      wishlist.click()
+      lists.click()
       await router.load()
     })
-    expect(router.state.location.pathname).toBe("/wishlist")
-    expect(document.querySelector("h1")?.textContent).toBe("Wishlist")
+    expect(router.state.location.pathname).toBe("/lists")
+    expect(document.querySelector("h1")?.textContent).toBe("Lists")
     expect(document.activeElement).toBe(document.querySelector("h1"))
     expect(
       document.querySelector('nav a[aria-current="page"]')?.textContent
-    ).toBe("Wishlist")
+    ).toBe("Lists")
     expect(document.querySelector("main")?.textContent).toContain(
       "Wishlists unavailable"
     )
@@ -114,37 +114,32 @@ test("opens focused views through persistent navigation, restores browser histor
       history.back()
       await router.load()
     })
-    expect(document.querySelector("h1")?.textContent).toBe("Wishlist")
+    expect(document.querySelector("h1")?.textContent).toBe("Lists")
     expect(document.activeElement).toBe(document.querySelector("h1"))
 
+    const watch = document.querySelector<HTMLAnchorElement>(
+      'nav[aria-label="Lists"] a[href*="tab=watch"]'
+    )
+
+    if (watch === null) throw new Error("Expected the Watch tab")
+
     await act(async () => {
-      history.back()
+      watch.click()
       await router.load()
+    })
+    expect(router.state.location.search).toMatchObject({ tab: "watch" })
+    expect(
+      document.querySelector('nav[aria-label="Lists"] a[aria-current="page"]')
+        ?.textContent
+    ).toBe("Watch")
+    expect(document.querySelector("main")?.textContent).toContain(
+      "Household members are added under Wish."
+    )
+
+    await act(async () => {
+      await router.navigate({ to: "/" })
     })
     expect(document.querySelector("h1")?.textContent).toBe("Home")
-
-    const watchlist = document.querySelector<HTMLAnchorElement>(
-      'nav a[href="/watchlist"]'
-    )
-
-    if (watchlist === null) throw new Error("Expected Watchlist navigation")
-
-    await act(async () => {
-      watchlist.click()
-      await router.load()
-    })
-    expect(document.querySelector("h1")?.textContent).toBe("Watchlist")
-    expect(document.activeElement).toBe(document.querySelector("h1"))
-    expect(
-      document.querySelector('nav a[aria-current="page"]')?.textContent
-    ).toBe("Watchlist")
-    expect(document.querySelector("main")?.textContent).toContain(
-      "Add a household member in Wishlist"
-    )
-    await act(async () => {
-      history.back()
-      await router.load()
-    })
 
     const weather = document.querySelector<HTMLAnchorElement>(
       'a[aria-label="Open Weather"]'
@@ -252,14 +247,11 @@ test("opens focused views through persistent navigation, restores browser histor
 
     if (originalLoader !== undefined) HomeRoute.options.loader = originalLoader
 
-    if (originalWatchlistLoader !== undefined)
-      WatchlistRoute.options.loader = originalWatchlistLoader
+    if (originalListsLoader !== undefined)
+      ListsRoute.options.loader = originalListsLoader
 
     if (originalWeatherLoader !== undefined)
       WeatherRoute.options.loader = originalWeatherLoader
-
-    if (originalWishlistLoader !== undefined)
-      WishlistRoute.options.loader = originalWishlistLoader
 
     if (originalWorkoutLoader !== undefined)
       WorkoutRoute.options.loader = originalWorkoutLoader

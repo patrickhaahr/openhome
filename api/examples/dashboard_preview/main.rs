@@ -13,8 +13,9 @@
 )]
 
 //! Serves the production routes, migrations and authentication over isolated in-memory databases,
-//! with loopback stand-ins for every upstream (openrouteservice, TMDB, `Open-Meteo`, Immich, the IR
-//! bridge and the `SwitchBot` bridge). All data is invented and readable in `seed/*.json`; it is
+//! with loopback stand-ins for every upstream (openrouteservice, `Open-Meteo`, Immich, the IR
+//! bridge and the `SwitchBot` bridge). TMDB is the real service when `TMDB_READ_ACCESS_TOKEN` is
+//! set, otherwise a loopback catalogue. All data is invented and readable in `seed/*.json`; it is
 //! generated relative to today so the current day is always populated. The household API,
 //! credentials and coordinates are never touched: the map and weather use the public Copenhagen
 //! demo origin.
@@ -38,9 +39,12 @@ use openhome_api::{
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::net::TcpListener;
 
+// Shared with `dashboard_health`; this preview uses only the route provider (TMDB is `media`).
 #[path = "../support/providers.rs"]
+#[allow(dead_code)]
 mod providers;
 
+mod media;
 mod noop;
 mod seed;
 mod stubs;
@@ -77,8 +81,10 @@ async fn main() -> anyhow::Result<()> {
     )?;
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
-    let tmdb = providers::synthetic_tmdb().await?;
+    let tmdb = media::tmdb().await?;
 
+    let seed_db = db.clone();
+    let picture_db = db.clone();
     let state = AppState {
         db,
         noop_db,
@@ -101,6 +107,10 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::fitness::router())
         .merge(routes::training::router())
         .with_state(state)
+        // Inside the key layer, so the stand-in is authenticated like the route it answers for.
+        .layer(axum::middleware::from_fn(move |request, next| {
+            media::wish_picture(picture_db.clone(), request, next)
+        }))
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, key.clone())
         }));
@@ -110,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move { axum::serve(listener, app).await });
 
     // Household records are seeded through the public routes, so they always match the contract.
-    seed::household(&url, API_KEY).await?;
+    seed::household(&url, API_KEY, &seed_db).await?;
     println!("{url}");
     tokio::signal::ctrl_c().await?;
     Ok(())

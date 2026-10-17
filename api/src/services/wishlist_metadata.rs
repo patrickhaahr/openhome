@@ -1,4 +1,5 @@
-//! Non-persistent product URL assistance. Untrusted pages supply editable suggestions only.
+//! Non-persistent product URL assistance and stored product pictures. Untrusted pages supply
+//! editable suggestions only; pictures are fetched here so browsers never contact the shop.
 
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
@@ -11,8 +12,18 @@ use url::{Host, Url};
 use super::wishlist::WishlistError;
 
 const MAX_BYTES: usize = 1024 * 1024;
+const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 const MAX_REDIRECTS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(8);
+
+/// Raster formats only: SVG is a document that can carry script, so it is never relayed.
+const IMAGE_TYPES: [&str; 5] = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -50,9 +61,79 @@ pub struct MetadataService {
     timeout: Option<Duration>,
 }
 
-enum FetchError {
+#[derive(Debug, PartialEq, Eq)]
+pub enum FetchError {
+    /// The address is not a public HTTP(S) destination.
     Blocked,
+    /// The destination did not answer with what was asked for, in time and within size.
     Unavailable,
+}
+
+/// A stored product picture, re-served by Axum with its verified raster type.
+#[derive(Debug)]
+pub struct ProductImage {
+    pub content_type: &'static str,
+    pub body: Vec<u8>,
+}
+
+/// What a page or a picture must be for a fetch to keep it.
+struct Wanted {
+    accept: &'static str,
+    max_bytes: usize,
+    types: &'static [&'static str],
+}
+
+const PAGE: Wanted = Wanted {
+    accept: "text/html, application/xhtml+xml",
+    max_bytes: MAX_BYTES,
+    types: &["text/html", "application/xhtml+xml"],
+};
+
+const PICTURE: Wanted = Wanted {
+    accept: "image/avif, image/webp, image/png, image/jpeg, image/gif",
+    max_bytes: MAX_IMAGE_BYTES,
+    types: &IMAGE_TYPES,
+};
+
+/// The declared type must match the bytes, so a mislabelled document is never relayed.
+fn image_type(declared: &str, body: &[u8]) -> Option<&'static str> {
+    let detected = match body {
+        [0xff, 0xd8, 0xff, ..] => "image/jpeg",
+        [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, ..] => "image/png",
+        [b'G', b'I', b'F', b'8', ..] => "image/gif",
+        [
+            b'R',
+            b'I',
+            b'F',
+            b'F',
+            _,
+            _,
+            _,
+            _,
+            b'W',
+            b'E',
+            b'B',
+            b'P',
+            ..,
+        ] => "image/webp",
+        [
+            _,
+            _,
+            _,
+            _,
+            b'f',
+            b't',
+            b'y',
+            b'p',
+            b'a',
+            b'v',
+            b'i',
+            b'f' | b's',
+            ..,
+        ] => "image/avif",
+        _ => return None,
+    };
+    (detected == declared).then_some(detected)
 }
 
 fn blocked() -> WishlistError {
@@ -128,8 +209,10 @@ impl MetadataService {
         let timeout = TIMEOUT;
         #[cfg(test)]
         let timeout = self.timeout.unwrap_or(timeout);
-        match tokio::time::timeout(timeout, self.fetch(url.clone())).await {
-            Ok(Ok((final_url, html))) => Ok(extract(&final_url, &html)),
+        match tokio::time::timeout(timeout, self.fetch(url.clone(), &PAGE)).await {
+            Ok(Ok((final_url, _, body))) => {
+                Ok(extract(&final_url, &String::from_utf8_lossy(&body)))
+            }
             Ok(Err(FetchError::Blocked)) => Err(blocked()),
             Ok(Err(FetchError::Unavailable)) | Err(_) => Ok(MetadataPreview {
                 status: MetadataStatus::Unavailable,
@@ -139,6 +222,20 @@ impl MetadataService {
                 price: None,
             }),
         }
+    }
+
+    /// Fetch a stored picture with the same public-destination rules as page previews.
+    /// The caller passes only an item's stored `image_url`, never a URL from a request.
+    pub async fn image(&self, value: &str) -> Result<ProductImage, FetchError> {
+        let url = public_url(value)?;
+        let timeout = TIMEOUT;
+        #[cfg(test)]
+        let timeout = self.timeout.unwrap_or(timeout);
+        let (_, declared, body) = tokio::time::timeout(timeout, self.fetch(url, &PICTURE))
+            .await
+            .map_err(|_| FetchError::Unavailable)??;
+        let content_type = image_type(&declared, &body).ok_or(FetchError::Unavailable)?;
+        Ok(ProductImage { content_type, body })
     }
 
     async fn addresses(&self, url: &Url) -> Result<Vec<SocketAddr>, FetchError> {
@@ -161,7 +258,11 @@ impl MetadataService {
             .map_err(|_| FetchError::Unavailable)
     }
 
-    async fn fetch(&self, mut url: Url) -> Result<(Url, String), FetchError> {
+    async fn fetch(
+        &self,
+        mut url: Url,
+        wanted: &Wanted,
+    ) -> Result<(Url, String, Vec<u8>), FetchError> {
         for hop in 0..=MAX_REDIRECTS {
             let addresses = self.addresses(&url).await?;
             if addresses.is_empty() {
@@ -189,7 +290,7 @@ impl MetadataService {
                 .map_err(|_| FetchError::Unavailable)?;
             let mut response = client
                 .get(url.clone())
-                .header("Accept", "text/html, application/xhtml+xml")
+                .header("Accept", wanted.accept)
                 .header("Accept-Encoding", "identity")
                 .header("User-Agent", "OpenHome-Wishlist/1.0")
                 .send()
@@ -221,12 +322,13 @@ impl MetadataService {
                 .headers()
                 .get(reqwest::header::CONTENT_ENCODING)
                 .is_some_and(|value| value != "identity");
+            let content_type = content_type.to_ascii_lowercase();
             if !response.status().is_success()
-                || !matches!(content_type, "text/html" | "application/xhtml+xml")
+                || !wanted.types.contains(&content_type.as_str())
                 || encoded
                 || response
                     .content_length()
-                    .is_some_and(|length| length > MAX_BYTES as u64)
+                    .is_some_and(|length| length > wanted.max_bytes as u64)
             {
                 return Err(FetchError::Unavailable);
             }
@@ -236,12 +338,12 @@ impl MetadataService {
                 .await
                 .map_err(|_| FetchError::Unavailable)?
             {
-                if chunk.len() > MAX_BYTES - body.len() {
+                if chunk.len() > wanted.max_bytes - body.len() {
                     return Err(FetchError::Unavailable);
                 }
                 body.extend_from_slice(&chunk);
             }
-            return Ok((url, String::from_utf8_lossy(&body).into_owned()));
+            return Ok((url, content_type, body));
         }
         Err(FetchError::Unavailable)
     }

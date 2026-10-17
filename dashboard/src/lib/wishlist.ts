@@ -139,3 +139,24 @@ export const wishlistFailureMessage: Record<WishlistFailure, string> = {
   "not-found":
     "This owner, list or wish is no longer available. Refresh to see the current lists.",
 }
+
+/**
+ * The wish's picture, relayed through the dashboard so the API key stays on the server and the
+ * shop is never contacted by the browser. The version changes when the stored address does.
+ */
+export function wishImageUrl(
+  ownerId: string,
+  item: WishlistItem
+): string | null {
+  if (item.image_url === null) return null
+  let hash = 0x811c9dc5
+
+  for (const character of item.image_url) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 0x01000193)
+  }
+
+  const version = (hash >>> 0).toString(36)
+
+  return `/wish-image/${ownerId}/${item.list_id}/${item.id}?v=${version}`
+}
