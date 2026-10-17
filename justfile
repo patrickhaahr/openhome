@@ -2,7 +2,7 @@ default:
     @just --list
 
 # Full gate across repos
-check: check-api check-mcp check-mobile check-firmware check-cli check-dashboard
+check: check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
 
 # Show this help grouped by area
 groups:
@@ -78,13 +78,13 @@ mcp-lint:
 
 # Build the MCP image for amd64 + arm64 (Raspberry Pi) locally
 [group('mcp')]
-mcp-docker-build version:
-    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f mcp/Dockerfile -t patrickhaahr/openhome-mcp:{{version}} -t patrickhaahr/openhome-mcp:latest .
+mcp-docker-build version: docker-builder
+    docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -f mcp/Dockerfile --output type=oci,dest=.devenv/openhome-mcp.tar -t patrickhaahr/openhome-mcp:{{version}} -t patrickhaahr/openhome-mcp:latest .
 
 # Build the MCP image for amd64 + arm64 and push it to Docker Hub
 [group('mcp')]
-mcp-docker-push version:
-    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f mcp/Dockerfile -t patrickhaahr/openhome-mcp:{{version}} -t patrickhaahr/openhome-mcp:latest --push .
+mcp-docker-push version: docker-builder
+    docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -f mcp/Dockerfile -t patrickhaahr/openhome-mcp:{{version}} -t patrickhaahr/openhome-mcp:latest --push .
 
 # Test, format, and lint the MCP adapter in one pass
 [group('mcp')]
@@ -194,14 +194,14 @@ api-noop-migrate:
 # Build the API image for amd64 + arm64 (Raspberry Pi) locally
 [group('api')]
 [working-directory: 'api']
-api-docker-build version:
-    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest .
+api-docker-build version: docker-builder
+    docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 --output type=oci,dest=../.devenv/openhome-api.tar -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest .
 
 # Build the API image for amd64 + arm64 and push it to Docker Hub
 [group('api')]
 [working-directory: 'api']
-api-docker-push version:
-    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest --push .
+api-docker-push version: docker-builder
+    docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -t patrickhaahr/openhome-api:{{version}} -t patrickhaahr/openhome-api:latest --push .
 
 # Format, typecheck, lint, and test the Expo client in one pass
 [group('expo')]
@@ -387,13 +387,13 @@ dashboard-start:
 
 # Build the dashboard image for amd64 + arm64 (Raspberry Pi) locally
 [group('dashboard')]
-dashboard-docker-build version:
-    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest dashboard
+dashboard-docker-build version: docker-builder
+    docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile --output type=oci,dest=.devenv/openhome-dashboard.tar -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest dashboard
 
 # Build the dashboard image for amd64 + arm64 and push it to Docker Hub
 [group('dashboard')]
-dashboard-docker-push version:
-    docker buildx build --builder openhome-publisher --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest --push dashboard
+dashboard-docker-push version: docker-builder
+    docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest --push dashboard
 
 # Verify a dashboard image's rendered page, static assets and private configuration
 [group('dashboard')]
@@ -405,10 +405,10 @@ dashboard-docker-smoke image='patrickhaahr/openhome-dashboard:latest':
     docker cp dashboard/tests/docker-smoke.ts "$container:/tmp/openhome-docker-smoke.ts"
     docker exec "$container" bun /tmp/openhome-docker-smoke.ts
 
-# Pull the published API, MCP and dashboard images and wait for healthy containers
+# Stop the stack, pull the published API, MCP and dashboard images, and wait for healthy containers
 [group('deployment')]
 openhome-deploy:
-    ssh pi 'cd ~/d/openhome && docker compose pull && docker compose up -d --wait --wait-timeout 180'
+    python3 scripts/deploy.py activate
 
 # Run dashboard tests
 [group('dashboard')]
@@ -552,3 +552,29 @@ dashboard-check: dashboard-format dashboard-lint dashboard-typecheck dashboard-t
 [working-directory: 'api']
 dashboard-photos-preview:
     cargo run --locked --example photos_preview
+
+# Create/verify a local-only builder and enable ARM64 emulation for runtime image steps
+[group('deployment')]
+docker-builder:
+    python3 scripts/deploy.py builder
+
+# Patch-bump API/MCP/dashboard, check, publish both platforms, back up, deploy, and verify
+[group('deployment')]
+deploy:
+    python3 scripts/deploy.py deploy
+
+# Retry the current versions after fixing an interrupted release
+[group('deployment')]
+deploy-current:
+    python3 scripts/deploy.py current
+
+# Verify deployed versions, container health, API/MCP calls, HTTPS and dashboard assets
+[group('deployment')]
+openhome-verify:
+    python3 scripts/deploy.py verify
+
+# Check release automation without publishing images or restarting services
+[group('deployment')]
+deployment-check:
+    python3 -m unittest discover -s scripts -p 'test_*.py'
+    node --check scripts/deploy-smoke.mjs

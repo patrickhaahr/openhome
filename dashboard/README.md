@@ -124,39 +124,38 @@ by the API, MCP and dashboard; Compose passes only that key and the internal
 into the image or mounted into the container. The Docker build context excludes
 all environment files.
 
-Build and publish alongside the other services:
+Release the API, MCP and dashboard together from the repository root:
 
 ```sh
-devenv shell -- just dashboard-docker-push 0.1.1
-devenv shell -- just api-docker-push 0.6.0
-devenv shell -- just mcp-docker-push 0.3.0
+devenv shell -- just deploy
 ```
 
-These use the existing `openhome-publisher` Buildx builder, which needs both
-amd64 and arm64 support (native builder nodes or binfmt emulation). Each command
-publishes the version tag and `latest`. `dashboard-docker-build` builds without
-pushing, matching the API/MCP recipes; `dashboard-start` serves a local
-production build.
+This patch-bumps all three versions and their lockfiles, runs their checks,
+builds and publishes version tags plus `latest` for amd64 and arm64, then smoke-tests
+the dashboard image. Builds use the single-node local `openhome-local` builder.
+Rust cross-compiles with `cargo build --release --locked` on the current host;
+ARM64 emulation handles target-platform runtime image steps. The Pi performs no
+build work. Cargo caches persist across version bumps.
 
-Run `devenv shell -- just dashboard-docker-smoke <image>` against a locally
-loaded or published image before deployment. It starts an isolated container
-with synthetic credentials and an offline API, then checks rendered HTML and
-every referenced CSS/JavaScript asset. Development-server tests cannot verify
-the packaged production assets. Tailwind scans only `src`, so generated output
-cannot change its stylesheet between the client and SSR builds.
+The command then connects through `ssh pi` to `~/d/openhome`, verifies SQLite
+online backups of both databases, records the previous image IDs and Compose file,
+and runs `docker compose down`, `pull` and `up -d --wait`. It verifies the running
+images against their release tags, healthy containers with zero restarts,
+authenticated API/MCP reads, the dashboard's connected state and HTTPS CSS/JS assets.
 
-On the Pi, install `api/compose.yml` as `~/d/openhome/compose.yml`, retaining its
-private `.env` and `data/`. The stack uses `latest`; after publishing updates:
+After fixing a failed release, run `devenv shell -- just deploy-current` to retry
+the current versions. `just openhome-verify` rechecks the live installation without
+restarting it; `just openhome-deploy` activates already-published current versions.
+Run every command through `devenv shell --`.
 
-```sh
-devenv shell -- just openhome-deploy
-```
+The individual `*-docker-build <version>` recipes export both platforms into
+`.devenv/openhome-<area>.tar` without publishing; `*-docker-push <version>` publishes
+them. Builder setup is automatic and checks that its only node uses the local
+Docker socket. It installs ARM64 binfmt support when needed.
 
-The recipe pulls all three images and waits for healthy containers. Before API
-upgrades, back up both SQLite databases using SQLite's online backup mechanism
-or stop the API before copying the full data directory. Keep the previous image
-digests and Compose file for rollback; database migrations may require restoring
-the matching backup.
+Install `api/compose.yml` as `~/d/openhome/compose.yml` on the Pi, retaining its
+private `.env` and `data/`. Backups live under `~/d/openhome/backups/pre-release-*`;
+database migrations may require the matching backup during recovery.
 
 Caddy can serve the dashboard on the API's existing hostname. Keep `/api/*`
 routed to `openhome-api:8000` and `/mcp*` to `openhome-mcp:8001`, then route
