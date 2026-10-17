@@ -2453,7 +2453,7 @@ a.dir-go:hover {
   width: 4.25rem;
   height: 4.25rem;
 }
-[data-remote="tv"] .remote-groups {
+.panel[data-remote="tv"] .remote-groups {
   display: grid;
   grid-template-columns: auto auto auto;
   grid-template-areas:
@@ -3083,7 +3083,7 @@ a.dir-go:hover {
     --tv-key: 2.75rem;
     --tv-gap: 0.375rem;
   }
-  [data-remote="tv"] .remote-groups {
+  .panel[data-remote="tv"] .remote-groups {
     column-gap: 0.625rem;
   }
   [data-remote="tv"] .remote-buttons[data-kind="dpad"] {
