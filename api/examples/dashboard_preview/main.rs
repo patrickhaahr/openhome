@@ -46,6 +46,7 @@ mod providers;
 
 mod media;
 mod noop;
+mod photos;
 mod seed;
 mod stubs;
 
@@ -75,9 +76,9 @@ async fn main() -> anyhow::Result<()> {
         stubs::open_meteo().await?,
     )?;
     let photos = PhotoService::new(
-        stubs::immich().await?,
+        photos::immich().await?,
         "synthetic-photo-key",
-        stubs::album_ids(),
+        photos::album_ids(),
     )?;
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;

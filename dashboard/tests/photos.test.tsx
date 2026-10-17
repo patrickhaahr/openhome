@@ -1,39 +1,99 @@
 // @vitest-environment happy-dom
-import { act } from "react"
+import { act, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { expect, test, vi } from "vitest"
 import { PhotoGallery } from "@/components/photo-gallery"
-import type { AlbumRead, PhotoRead } from "@/lib/photos"
+import {
+  chooseView,
+  monthSpan,
+  photoSearch,
+  type Album,
+  type AlbumRead,
+  type WallRead,
+} from "@/lib/photos"
 
 const albumId = "00000000-0000-4000-8000-000000000001"
+
+const otherId = "00000000-0000-4000-8000-000000000004"
+
+const goneId = "00000000-0000-4000-8000-000000000005"
 
 const first = "00000000-0000-4000-8000-000000000002"
 
 const second = "00000000-0000-4000-8000-000000000003"
 
-const album = {
+const third = "00000000-0000-4000-8000-000000000006"
+
+const album: Album = {
   id: albumId,
   name: "Demo places",
   photo_count: 62,
   cover_id: first,
+  first_month: "2025-06",
+  last_month: "2025-08",
   missing: false,
 }
 
 const albums: AlbumRead = {
   state: "ready",
-  albums: [album, { ...album, id: second, name: "Other places" }],
+  albums: [
+    album,
+    {
+      ...album,
+      id: otherId,
+      name: "Other places",
+      first_month: "2024-12",
+      last_month: "2025-02",
+    },
+    {
+      ...album,
+      id: goneId,
+      name: "Unavailable album",
+      photo_count: 0,
+      cover_id: null,
+      first_month: null,
+      last_month: null,
+      missing: true,
+    },
+  ],
 }
 
-const page: PhotoRead = {
+const wall: WallRead = {
   state: "ready",
-  photos: { album, assets: [first, second], page: 0, next_page: 1 },
+  wall: {
+    items: [
+      { album: albumId, asset: first },
+      { album: albumId, asset: second },
+    ],
+    page: 0,
+    next: 1,
+    total: 62,
+  },
 }
 
-async function setup(data: {
+const nextPage: WallRead = {
+  state: "ready",
+  wall: {
+    items: [{ album: albumId, asset: third }],
+    page: 1,
+    next: null,
+    total: 62,
+  },
+}
+
+type Data = {
   albums: AlbumRead
-  page: PhotoRead | null
-  selectedAlbum?: string
-}) {
+  view: string | null
+  wall: WallRead | null
+  photo?: string
+}
+
+/** The gallery with its open photo held like the URL holds it. */
+async function setup(
+  data: Data,
+  more: (album: string, page: number) => Promise<WallRead> = async () =>
+    nextPage
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
 
   const completion = vi
@@ -43,18 +103,31 @@ async function setup(data: {
   const container = document.createElement("div")
   document.body.append(container)
   const root = createRoot(container)
-  const select = vi.fn()
-  const refresh = vi.fn(async () => {})
-  await act(async () =>
-    root.render(
+  const open = vi.fn()
+  const shown = vi.fn()
+  const load = vi.fn(more)
+
+  function Harness(): React.JSX.Element {
+    const [photo, setPhoto] = useState(data.photo)
+
+    return (
       <PhotoGallery
-        {...data}
-        selectedAlbum={data.selectedAlbum ?? albumId}
-        select={select}
-        refresh={refresh}
+        albums={data.albums}
+        view={data.view}
+        wall={data.wall}
+        photo={photo}
+        open={open}
+        show={(next) => {
+          shown(next)
+          setPhoto(next)
+        }}
+        more={load}
+        retry={async () => {}}
       />
     )
-  )
+  }
+
+  await act(async () => root.render(<Harness />))
 
   const button = (text: string): HTMLButtonElement => {
     const found = [...document.querySelectorAll("button")].find((item) =>
@@ -66,12 +139,16 @@ async function setup(data: {
     return found
   }
 
+  const preview = (): string | null | undefined =>
+    document.querySelector('[role="dialog"] img')?.getAttribute("src")
+
   return {
     container,
-    root,
-    select,
-    refresh,
+    open,
+    shown,
+    load,
     button,
+    preview,
     async cleanup() {
       await act(async () => root.unmount())
       container.remove()
@@ -81,62 +158,112 @@ async function setup(data: {
   }
 }
 
-test("album/page navigation bounds thumbnails and the viewer loads only the selected resized photo", async () => {
-  const view = await setup({ albums, page })
+test("the albums are cover plates with counts and months, led by all photos", async () => {
+  const view = await setup({ albums, view: null, wall: null })
 
   try {
-    const thumbnails = [...view.container.querySelectorAll("img")]
-    expect(thumbnails).toHaveLength(2)
+    const covers = [...view.container.querySelectorAll("img")]
     expect(
-      thumbnails.every(
+      covers.every(
         (img) =>
           img.loading === "lazy" &&
           img.getAttribute("src")?.endsWith("/thumbnail") === true
       )
     ).toBe(true)
+    expect(view.button("Demo places").textContent).toContain("62 photos")
+    expect(view.button("Demo places").textContent).toContain("Jun – Aug 2025")
+    expect(view.button("Other places").textContent).toContain(
+      "Dec 2024 – Feb 2025"
+    )
+    expect(view.button("All photos").textContent).toContain("2 albums")
+    expect(view.button("Unavailable album").disabled).toBe(true)
     await act(async () => view.button("Other places").click())
-    expect(view.select).toHaveBeenLastCalledWith(second, 0)
-    await act(async () => view.button("Next page").click())
-    expect(view.select).toHaveBeenLastCalledWith(albumId, 1)
-
-    const trigger = view.container.querySelector<HTMLButtonElement>(
-      '[aria-label="Open photo 1"]'
-    )
-
-    if (!trigger) throw new Error("Missing photo trigger")
-    await act(async () => trigger.click())
-    const dialog = document.querySelector('[role="dialog"]')
-    expect(dialog?.textContent).toContain("Photo 1 of 62")
-    expect(dialog?.querySelector("img")?.getAttribute("src")).toBe(
-      `/photo-media/${albumId}/${first}/preview`
-    )
-    await act(async () => view.button("Next →").click())
-    expect(
-      document.querySelector('[role="dialog"] img')?.getAttribute("src")
-    ).toBe(`/photo-media/${albumId}/${second}/preview`)
-    expect(view.button("Next →").disabled).toBe(true)
-    await act(async () => view.button("Close photo").click())
-    await vi.waitFor(() =>
-      expect(document.querySelector('[role="dialog"]')).toBeNull()
-    )
-    expect(
-      view.container.querySelectorAll('img[src$="/preview"]')
-    ).toHaveLength(0)
+    expect(view.open).toHaveBeenLastCalledWith(otherId)
+    await act(async () => view.button("All photos").click())
+    expect(view.open).toHaveBeenLastCalledWith("all")
   } finally {
     await view.cleanup()
   }
 })
 
-test("missing media can retry and changing photos clears its failed image state", async () => {
-  const view = await setup({ albums, page })
+test("one configured album opens directly; a chosen view always wins", () => {
+  expect(chooseView([album], undefined)).toBe(albumId)
+  expect(chooseView([album, album], undefined)).toBeUndefined()
+  expect(chooseView([album, album], "all")).toBe("all")
+  expect(photoSearch.parse({ album: "nope", photo: "x" })).toEqual({})
+  expect(photoSearch.parse({ album: "all", photo: first })).toEqual({
+    album: "all",
+    photo: first,
+  })
+})
+
+test("months read as one month, a span within a year or across years", () => {
+  expect(monthSpan("2025-06", "2025-06")).toBe("Jun 2025")
+  expect(monthSpan("2025-06", "2025-08")).toBe("Jun – Aug 2025")
+  expect(monthSpan("2024-12", "2025-02")).toBe("Dec 2024 – Feb 2025")
+  expect(monthSpan(null, null)).toBeNull()
+})
+
+test("the wall loads more on request and the viewer steps across pages with one preview", async () => {
+  const view = await setup({ albums, view: albumId, wall })
 
   try {
+    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+    await act(async () => view.button("All albums").click())
+    expect(view.open).toHaveBeenLastCalledWith(undefined)
+
     const trigger = view.container.querySelector<HTMLButtonElement>(
-      '[aria-label="Open photo 1"]'
+      '[aria-label="Open photo 2"]'
     )
 
     if (!trigger) throw new Error("Missing photo trigger")
     await act(async () => trigger.click())
+    expect(view.shown).toHaveBeenLastCalledWith(second)
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain("Photo 2 of 62")
+    expect(document.querySelectorAll('[role="dialog"] img')).toHaveLength(1)
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${second}/preview`)
+
+    // The last loaded photo's next reads the following page, then shows its first photo.
+    await act(async () => view.button("Next →").click())
+    expect(view.load).toHaveBeenCalledWith(albumId, 1)
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${third}/preview`)
+    expect(view.button("Next →").disabled).toBe(true)
+    await act(async () => view.button("← Previous").click())
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${second}/preview`)
+    await act(async () => view.button("Close photo").click())
+    expect(view.shown).toHaveBeenLastCalledWith(undefined)
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="dialog"]')).toBeNull()
+    )
+    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(3)
+    expect(view.container.querySelector(".photo-more button")).toBeNull()
+  } finally {
+    await view.cleanup()
+  }
+})
+
+test("a failed page keeps what loaded and offers to try again", async () => {
+  const view = await setup({ albums, view: "all", wall }, async () => ({
+    state: "unavailable",
+    reason: "provider-unavailable",
+  }))
+
+  try {
+    expect(view.container.textContent).toContain("All photos")
+    await act(async () => view.button("Load more").click())
+    expect(view.load).toHaveBeenCalledWith("all", 1)
+    expect(view.button("Try again").disabled).toBe(false)
+    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+  } finally {
+    await view.cleanup()
+  }
+})
+
+test("a photo opened from the URL can retry its preview, and stepping clears the failure", async () => {
+  const view = await setup({ albums, view: albumId, wall, photo: first })
+
+  try {
     const image = document.querySelector('[role="dialog"] img')
 
     if (!image) throw new Error("Missing preview")
@@ -145,13 +272,9 @@ test("missing media can retry and changing photos clears its failed image state"
       "Photo unavailable"
     )
     await act(async () => view.button("Retry photo").click())
-    expect(
-      document.querySelector('[role="dialog"] img')?.getAttribute("src")
-    ).toContain("?retry=1")
+    expect(view.preview()).toContain("?retry=1")
     await act(async () => view.button("Next →").click())
-    expect(
-      document.querySelector('[role="dialog"] img')?.getAttribute("src")
-    ).toBe(`/photo-media/${albumId}/${second}/preview`)
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${second}/preview`)
     expect(
       document.querySelector('[role="dialog"]')?.textContent
     ).not.toContain("Photo unavailable")
@@ -163,40 +286,49 @@ test("missing media can retry and changing photos clears its failed image state"
 test.each([
   {
     albums: { state: "unavailable", reason: "missing-configuration" } as const,
-    page: null,
+    view: null,
+    wall: null,
     expected: "Photo setup needed",
   },
   {
     albums: { state: "unavailable", reason: "provider-unavailable" } as const,
-    page: null,
+    view: null,
+    wall: null,
     expected: "Photo library unavailable",
   },
   {
     albums,
-    page: { state: "unavailable", reason: "not-found" } as const,
+    view: albumId,
+    wall: { state: "unavailable", reason: "not-found" } as const,
     expected: "Album unavailable",
   },
   {
     albums,
-    page: {
+    view: albumId,
+    wall: {
       state: "ready",
-      photos: {
-        album: { ...album, photo_count: 0 },
-        assets: [],
-        page: 0,
-        next_page: null,
-      },
-    } satisfies PhotoRead,
+      wall: { items: [], page: 0, next: null, total: 0 },
+    } satisfies WallRead,
     expected: "No photos here yet",
   },
 ])(
   "renders $expected honestly without loading photos",
-  async ({ albums: inputAlbums, page: inputPage, expected }) => {
-    const view = await setup({ albums: inputAlbums, page: inputPage })
+  async ({
+    albums: inputAlbums,
+    view: inputView,
+    wall: inputWall,
+    expected,
+  }) => {
+    const view = await setup({
+      albums: inputAlbums,
+      view: inputView,
+      wall: inputWall,
+    })
 
     try {
       expect(view.container.textContent).toContain(expected)
       expect(view.container.querySelector("img")).toBeNull()
+      expect(view.container.textContent).not.toContain("Refresh")
     } finally {
       await view.cleanup()
     }
@@ -212,10 +344,13 @@ test("photos loaded before hydration do not remain behind loading placeholders",
   const content = (
     <PhotoGallery
       albums={albums}
-      page={page}
-      selectedAlbum={albumId}
-      select={() => {}}
-      refresh={async () => {}}
+      view={albumId}
+      wall={wall}
+      photo={undefined}
+      open={() => {}}
+      show={() => {}}
+      more={async () => nextPage}
+      retry={async () => {}}
     />
   )
 
@@ -226,6 +361,7 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     Object.defineProperties(image, {
       complete: { value: true },
       naturalWidth: { value: 400 },
+      naturalHeight: { value: 600 },
     })
   }
 
@@ -235,24 +371,15 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     await act(async () => {})
     expect(container.textContent).not.toContain("Loading photo…")
     expect(container.querySelectorAll('[data-state="loaded"]')).toHaveLength(2)
+    // Portrait thumbnails take a portrait cell once their frame is known.
+    expect(
+      container
+        .querySelector<HTMLElement>(".photo-cell")
+        ?.style.getPropertyValue("--ratio")
+    ).toBe(String(400 / 600))
   } finally {
     await act(async () => root.unmount())
     container.remove()
     vi.unstubAllGlobals()
-  }
-})
-
-test("an unavailable later page returns to the selected album's first page", async () => {
-  const view = await setup({
-    albums,
-    page: { state: "unavailable", reason: "invalid-page" },
-    selectedAlbum: second,
-  })
-
-  try {
-    await act(async () => view.button("First page").click())
-    expect(view.select).toHaveBeenCalledWith(second, 0)
-  } finally {
-    await view.cleanup()
   }
 })

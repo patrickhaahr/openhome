@@ -2,25 +2,27 @@ import "@tanstack/react-start/server-only"
 import { z } from "zod"
 import { requestOpenHome } from "./openhome.server"
 import {
+  ALL_PHOTOS,
   albumRead,
+  albumWall,
+  mergedRead,
+  mergedWall,
   photoRead,
   unavailablePhotos,
   type AlbumRead,
-  type PhotoRead,
+  type WallRead,
 } from "./photos"
 
-/** Selected album metadata through the existing server-held OpenHome credential. */
-export async function readAlbums(): Promise<AlbumRead> {
-  const result = await requestOpenHome({
-    path: "/api/photos/albums",
-    method: "GET",
-    timeoutMs: 45000,
-  })
+async function readJson<T>(
+  request: Parameters<typeof requestOpenHome>[0],
+  schema: z.ZodType<T>
+): Promise<T | typeof unavailablePhotos> {
+  const result = await requestOpenHome(request)
 
   if (result.state !== "received") return unavailablePhotos
 
   try {
-    const parsed = albumRead.safeParse(await result.response.json())
+    const parsed = schema.safeParse(await result.response.json())
 
     return parsed.success ? parsed.data : unavailablePhotos
   } catch {
@@ -28,27 +30,42 @@ export async function readAlbums(): Promise<AlbumRead> {
   }
 }
 
-/** Axum alone checks album scope and pagination. */
-export async function readPhotos(
-  album: string,
-  page: number
-): Promise<PhotoRead> {
-  const result = await requestOpenHome({
-    path: `/api/photos/albums/${encodeURIComponent(album)}`,
-    method: "GET",
-    timeoutMs: 7000,
-    query: { page: String(page) },
-  })
+/** Selected album metadata through the existing server-held OpenHome credential. */
+export async function readAlbums(): Promise<AlbumRead> {
+  // Each selected album's metadata is read in turn on a cold cache.
+  return readJson(
+    { path: "/api/photos/albums", method: "GET", timeoutMs: 45000 },
+    albumRead
+  )
+}
 
-  if (result.state !== "received") return unavailablePhotos
+/** One page of one album, or of every album merged; Axum alone checks scope and bounds. */
+export async function readWall(album: string, page: number): Promise<WallRead> {
+  if (album === ALL_PHOTOS) {
+    const read = await readJson(
+      {
+        path: "/api/photos/all",
+        method: "GET",
+        timeoutMs: 45000,
+        query: { page: String(page) },
+      },
+      mergedRead
+    )
 
-  try {
-    const parsed = photoRead.safeParse(await result.response.json())
-
-    return parsed.success ? parsed.data : unavailablePhotos
-  } catch {
-    return unavailablePhotos
+    return mergedWall(read)
   }
+
+  const read = await readJson(
+    {
+      path: `/api/photos/albums/${encodeURIComponent(album)}`,
+      method: "GET",
+      timeoutMs: 7000,
+      query: { page: String(page) },
+    },
+    photoRead
+  )
+
+  return albumWall(read)
 }
 
 const mediaInput = z.object({

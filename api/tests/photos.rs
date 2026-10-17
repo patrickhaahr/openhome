@@ -7,7 +7,7 @@ use axum::{
 use openhome_api::{
     auth::{ApiKey, auth_middleware},
     routes,
-    services::photos::{PAGE_SIZE, PhotoService},
+    services::photos::{MAX_ALBUMS, PAGE_SIZE, PhotoService},
 };
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -19,13 +19,17 @@ use wiremock::{
 const ALBUM: &str = "00000000-0000-4000-8000-000000000001";
 const ASSET: &str = "00000000-0000-4000-8000-000000000002";
 const OTHER: &str = "00000000-0000-4000-8000-000000000003";
+const SECOND: &str = "00000000-0000-4000-8000-000000000004";
 async fn app(server: Option<&MockServer>) -> Router {
+    app_with(server, &[ALBUM]).await
+}
+async fn app_with(server: Option<&MockServer>, albums: &[&str]) -> Router {
     let (_, state) = common::test_app_with_db().await;
     let service = server.map(|server| {
         PhotoService::new(
             server.uri().parse().unwrap(),
             "private-immich-key",
-            vec![ALBUM.parse().unwrap()],
+            albums.iter().map(|id| id.parse().unwrap()).collect(),
         )
         .unwrap()
     });
@@ -121,12 +125,101 @@ async fn selected_albums_paginate_and_strip_private_provider_metadata() {
         "parallel gallery/media consumers share bounded metadata"
     );
 }
+fn dated(id: &str, taken: &str) -> Value {
+    json!({"id":id,"type":"IMAGE","localDateTime":taken,"fileCreatedAt":taken,"originalFileName":"private-name.jpg","exifInfo":{"city":"private-city"}})
+}
+async fn mount(server: &MockServer, id: &str, value: Value) {
+    Mock::given(method("GET"))
+        .and(path(format!("/api/albums/{id}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(value))
+        .mount(server)
+        .await;
+}
+#[tokio::test]
+async fn albums_carry_their_cover_and_months_and_merge_newest_first() {
+    let server = MockServer::start().await;
+    let app = app_with(Some(&server), &[ALBUM, SECOND, OTHER]).await;
+    let shared = Uuid::from_u128(7).to_string();
+    let newest = Uuid::from_u128(8).to_string();
+    let undated = Uuid::from_u128(9).to_string();
+    mount(
+        &server,
+        ALBUM,
+        json!({"id":ALBUM,"albumName":"Coast","albumThumbnailAssetId":shared,"assets":[
+            dated(ASSET, "2024-06-02T09:00:00.000Z"),
+            dated(&shared, "2025-08-30T18:00:00.000Z"),
+            {"id":undated,"type":"IMAGE"},
+        ]}),
+    )
+    .await;
+    mount(
+        &server,
+        SECOND,
+        json!({"id":SECOND,"albumName":"Garden","albumThumbnailAssetId":OTHER,"assets":[
+            dated(&shared, "2025-08-30T18:00:00.000Z"),
+            dated(&newest, "2026-01-04T08:00:00.000Z"),
+        ]}),
+    )
+    .await;
+    // The third selected album was removed from Immich; it drops out of the merged view.
+    let (_, _, body) = request(&app, "/api/photos/albums", true).await;
+    let data: Value = serde_json::from_slice(&body).unwrap();
+    let coast = &data["albums"][0];
+    assert_eq!(coast["cover_id"], shared);
+    assert_eq!(coast["first_month"], "2024-06");
+    assert_eq!(coast["last_month"], "2025-08");
+    assert_eq!(
+        data["albums"][1]["cover_id"], shared,
+        "a cover that is not a served still falls back to the first photo"
+    );
+    assert_eq!(data["albums"][2]["missing"], true);
+    let (status, headers, body) = request(&app, "/api/photos/all?page=0", true).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers["cache-control"], "no-store");
+    let text = String::from_utf8(body.clone()).unwrap();
+    for secret in [
+        "private-name",
+        "private-city",
+        "2025-08-30",
+        "localDateTime",
+    ] {
+        assert!(!text.contains(secret));
+    }
+    let merged: Value = serde_json::from_slice(&body).unwrap();
+    let order: Vec<_> = merged["photos"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| {
+            (
+                item["album"].as_str().unwrap().to_owned(),
+                item["asset"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        order,
+        [
+            (SECOND.to_owned(), newest),
+            (ALBUM.to_owned(), shared),
+            (ALBUM.to_owned(), ASSET.to_owned()),
+            (ALBUM.to_owned(), undated),
+        ]
+    );
+    assert_eq!(merged["photos"]["photo_count"], 4);
+    assert_eq!(merged["photos"]["next_page"], Value::Null);
+    assert_eq!(
+        request(&app, "/api/photos/all?page=1", true).await.0,
+        StatusCode::BAD_REQUEST
+    );
+}
 #[tokio::test]
 async fn media_requires_auth_and_album_membership_and_never_serves_originals() {
     let server = MockServer::start().await;
     let app = app(Some(&server)).await;
     for url in [
         "/api/photos/albums".to_string(),
+        "/api/photos/all".to_string(),
         format!("/api/photos/albums/{ALBUM}"),
         format!("/api/photos/albums/{ALBUM}/assets/{ASSET}/preview"),
     ] {
@@ -297,4 +390,25 @@ fn partial_or_unsafe_configuration_cannot_enable_a_library() {
     ] {
         assert!(PhotoService::configure(url, key, albums).is_err());
     }
+    let ids = |count: u128| {
+        (1..=count)
+            .map(|i| Uuid::from_u128(i).to_string())
+            .collect::<Vec<_>>()
+            .join(" , ")
+    };
+    let most = ids(MAX_ALBUMS as u128);
+    assert!(
+        PhotoService::configure(Some("https://private.invalid"), Some("key"), Some(&most))
+            .unwrap()
+            .is_some()
+    );
+    let too_many = ids(MAX_ALBUMS as u128 + 1);
+    assert!(
+        PhotoService::configure(
+            Some("https://private.invalid"),
+            Some("key"),
+            Some(&too_many)
+        )
+        .is_err()
+    );
 }
