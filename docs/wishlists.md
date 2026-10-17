@@ -88,12 +88,24 @@ update so rejected edits never alter stored values. Every item edit/read/delete
 checks the complete stable owner/list/item destination.
 
 The dashboard's Item details panel supports these fields for both addition and
-editing. Product and image links open only when selected, with no referrer; remote
-images are not automatically fetched from a private household display.
+editing. Product links open only when selected, with no referrer. The browser
+never loads a remote image directly: the Dashboard's Start server relays a saved
+wish's picture from the authenticated Axum picture operation below, carrying the
+API key server-side. Unsaved image links are not fetched while adding.
+
+`GET /api/household-users/{owner_id}/wishlists/{list_id}/items/{item_id}/image`
+fetches only that item's stored `image_url` through the same SSRF-guarded fetcher
+as URL assistance (public addresses only, pinned DNS, at most 3 redirects, an
+8-second timeout, a 5 MiB cap). It relays JPEG, PNG, WebP, GIF or AVIF bytes whose
+signature matches the declared type, with `Cache-Control: private, max-age=3600`,
+`X-Content-Type-Options: nosniff` and a sandboxing CSP. SVG, documents and
+mislabelled bytes are refused. Unknown items or items without a picture return
+404, refused addresses 422, and unreachable or unusable pictures 503. Picture
+addresses are never logged.
 
 ## Dashboard management
 
-Open Wishlist on the private Dashboard. All household members and their named
+Open Lists (the Wish tab) on the private Dashboard. All household members and their named
 lists are visible together. Select a list inside its owner's group; additions,
 item edits and removals carry that owner's stable ID and the explicit list ID.
 Use **Manage household members** to add, rename or remove members. This is shared

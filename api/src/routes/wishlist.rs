@@ -1,7 +1,7 @@
 use axum::{
     Extension, Json, Router,
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, patch},
 };
@@ -11,7 +11,7 @@ use crate::{
     AppState,
     error::AppError,
     services::wishlist::{self, AddItem, CreateHouseholdUser, CreateWishlist, WishlistError},
-    services::wishlist_metadata::{MetadataPreview, MetadataRequest, MetadataService},
+    services::wishlist_metadata::{FetchError, MetadataPreview, MetadataRequest, MetadataService},
 };
 
 #[derive(Clone)]
@@ -39,6 +39,10 @@ pub(crate) fn router_with_metadata(
             "/api/household-users/{owner_id}/wishlists/{list_id}/items/{id}",
             get(item).patch(edit_item).delete(remove_item),
         )
+        .route(
+            "/api/household-users/{owner_id}/wishlists/{list_id}/items/{id}/image",
+            get(item_image),
+        )
         .route("/api/wishlists", get(lists).post(create_list))
         .route("/api/wishlists/{id}/items", get(items))
         .route("/api/wishlist/items", axum::routing::post(add_item))
@@ -57,6 +61,50 @@ async fn url_metadata(
 ) -> Result<Json<MetadataPreview>, WishlistError> {
     wishlist::require_list_owner(&state.db, &request.owner_id, &request.list_id).await?;
     Ok(Json(metadata.preview(&request.url).await?))
+}
+
+/// The stored picture of one item, fetched by Axum so the browser never contacts the shop.
+/// Only the item's own `image_url` is fetched; the address is never logged or echoed.
+async fn item_image(
+    State(state): State<AppState>,
+    Extension(metadata): Extension<MetadataService>,
+    Path((owner_id, list_id, id)): Path<(String, String, String)>,
+) -> Result<Response, WishlistError> {
+    let item = wishlist::item(&state.db, &owner_id, &list_id, &id).await?;
+    let Some(image_url) = item.image_url else {
+        return Err(WishlistError::NotFound(
+            "This Wishlist Item has no picture".into(),
+        ));
+    };
+    let image = match metadata.image(&image_url).await {
+        Ok(image) => image,
+        Err(FetchError::Blocked) => {
+            return Ok(AppError::Unprocessable(
+                "The picture address is not a public HTTP(S) destination".into(),
+            )
+            .into_response());
+        }
+        Err(FetchError::Unavailable) => {
+            return Ok(AppError::ServiceUnavailable(
+                "The picture could not be loaded as a raster image within limits".into(),
+            )
+            .into_response());
+        }
+    };
+    Ok((
+        [
+            (header::CONTENT_TYPE, image.content_type),
+            // Private: the picture belongs to a household list behind the API key.
+            (header::CACHE_CONTROL, "private, max-age=3600"),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; sandbox",
+            ),
+        ],
+        image.body,
+    )
+        .into_response())
 }
 
 async fn rename_owner(

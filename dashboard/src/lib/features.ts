@@ -1,8 +1,7 @@
 import { AtomIcon } from "@phosphor-icons/react/dist/csr/Atom"
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
 import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
-import { FilmSlateIcon } from "@phosphor-icons/react/dist/csr/FilmSlate"
-import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart"
+import { ListHeartIcon } from "@phosphor-icons/react/dist/csr/ListHeart"
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
 import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
 import { PathIcon } from "@phosphor-icons/react/dist/csr/Path"
@@ -57,22 +56,13 @@ export const features = [
       "Recovery has not been added to this dashboard. Sleep, recovery scores and strap workouts are unavailable.",
   },
   {
-    id: "wishlist",
-    label: "Wishlist",
-    title: "Wishlist",
-    icon: HeartIcon,
-    description: "Everyone’s wishlists, in a shared household view.",
+    id: "lists",
+    label: "Lists",
+    title: "Lists",
+    icon: ListHeartIcon,
+    description: "Wishes and watching together, for everyone in the household.",
     unavailable:
-      "Wishlists have not been added to this dashboard. Household users and their lists are unavailable.",
-  },
-  {
-    id: "watchlist",
-    label: "Watchlist",
-    title: "Watchlist",
-    icon: FilmSlateIcon,
-    description: "Movies and series, with everyone’s lists together.",
-    unavailable:
-      "Watchlists are unavailable. Refresh to read the household’s current plans.",
+      "Lists are unavailable. Household wishlists and watchlists cannot be read.",
   },
   {
     id: "photos",

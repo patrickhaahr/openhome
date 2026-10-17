@@ -13,14 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
+import { Route as ListsRouteImport } from './routes/lists'
 import { Route as PhotosRouteImport } from './routes/photos'
 import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as TravelRouteImport } from './routes/travel'
-import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as WeatherRouteImport } from './routes/weather'
-import { Route as WishlistRouteImport } from './routes/wishlist'
 import { Route as WorkoutRouteImport } from './routes/workout'
 import { Route as PhotoMediaAlbumAssetSizeRouteImport } from './routes/photo-media.$album.$asset.$size'
+import { Route as WishImageOwnerListItemRouteImport } from './routes/wish-image.$owner.$list.$item'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -42,6 +42,11 @@ const ControlsRoute = ControlsRouteImport.update({
   path: '/controls',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ListsRoute = ListsRouteImport.update({
+  id: '/lists',
+  path: '/lists',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PhotosRoute = PhotosRouteImport.update({
   id: '/photos',
   path: '/photos',
@@ -57,19 +62,9 @@ const TravelRoute = TravelRouteImport.update({
   path: '/travel',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WatchlistRoute = WatchlistRouteImport.update({
-  id: '/watchlist',
-  path: '/watchlist',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const WeatherRoute = WeatherRouteImport.update({
   id: '/weather',
   path: '/weather',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WishlistRoute = WishlistRouteImport.update({
-  id: '/wishlist',
-  path: '/wishlist',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorkoutRoute = WorkoutRouteImport.update({
@@ -83,34 +78,39 @@ const PhotoMediaAlbumAssetSizeRoute =
     path: '/photo-media/$album/$asset/$size',
     getParentRoute: () => rootRouteImport,
   } as any)
+const WishImageOwnerListItemRoute = WishImageOwnerListItemRouteImport.update({
+  id: '/wish-image/$owner/$list/$item',
+  path: '/wish-image/$owner/$list/$item',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/lists': typeof ListsRoute
   '/photos': typeof PhotosRoute
   '/recovery': typeof RecoveryRoute
   '/travel': typeof TravelRoute
-  '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
-  '/wishlist': typeof WishlistRoute
   '/workout': typeof WorkoutRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
+  '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/lists': typeof ListsRoute
   '/photos': typeof PhotosRoute
   '/recovery': typeof RecoveryRoute
   '/travel': typeof TravelRoute
-  '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
-  '/wishlist': typeof WishlistRoute
   '/workout': typeof WorkoutRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
+  '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -118,14 +118,14 @@ export interface FileRoutesById {
   '/$feature': typeof FeatureRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/lists': typeof ListsRoute
   '/photos': typeof PhotosRoute
   '/recovery': typeof RecoveryRoute
   '/travel': typeof TravelRoute
-  '/watchlist': typeof WatchlistRoute
   '/weather': typeof WeatherRoute
-  '/wishlist': typeof WishlistRoute
   '/workout': typeof WorkoutRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
+  '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -134,42 +134,42 @@ export interface FileRouteTypes {
     | '/$feature'
     | '/connection'
     | '/controls'
+    | '/lists'
     | '/photos'
     | '/recovery'
     | '/travel'
-    | '/watchlist'
     | '/weather'
-    | '/wishlist'
     | '/workout'
     | '/photo-media/$album/$asset/$size'
+    | '/wish-image/$owner/$list/$item'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$feature'
     | '/connection'
     | '/controls'
+    | '/lists'
     | '/photos'
     | '/recovery'
     | '/travel'
-    | '/watchlist'
     | '/weather'
-    | '/wishlist'
     | '/workout'
     | '/photo-media/$album/$asset/$size'
+    | '/wish-image/$owner/$list/$item'
   id:
     | '__root__'
     | '/'
     | '/$feature'
     | '/connection'
     | '/controls'
+    | '/lists'
     | '/photos'
     | '/recovery'
     | '/travel'
-    | '/watchlist'
     | '/weather'
-    | '/wishlist'
     | '/workout'
     | '/photo-media/$album/$asset/$size'
+    | '/wish-image/$owner/$list/$item'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -177,14 +177,14 @@ export interface RootRouteChildren {
   FeatureRoute: typeof FeatureRoute
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
+  ListsRoute: typeof ListsRoute
   PhotosRoute: typeof PhotosRoute
   RecoveryRoute: typeof RecoveryRoute
   TravelRoute: typeof TravelRoute
-  WatchlistRoute: typeof WatchlistRoute
   WeatherRoute: typeof WeatherRoute
-  WishlistRoute: typeof WishlistRoute
   WorkoutRoute: typeof WorkoutRoute
   PhotoMediaAlbumAssetSizeRoute: typeof PhotoMediaAlbumAssetSizeRoute
+  WishImageOwnerListItemRoute: typeof WishImageOwnerListItemRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -217,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ControlsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lists': {
+      id: '/lists'
+      path: '/lists'
+      fullPath: '/lists'
+      preLoaderRoute: typeof ListsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/photos': {
       id: '/photos'
       path: '/photos'
@@ -238,25 +245,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TravelRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/watchlist': {
-      id: '/watchlist'
-      path: '/watchlist'
-      fullPath: '/watchlist'
-      preLoaderRoute: typeof WatchlistRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/weather': {
       id: '/weather'
       path: '/weather'
       fullPath: '/weather'
       preLoaderRoute: typeof WeatherRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/wishlist': {
-      id: '/wishlist'
-      path: '/wishlist'
-      fullPath: '/wishlist'
-      preLoaderRoute: typeof WishlistRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workout': {
@@ -273,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PhotoMediaAlbumAssetSizeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wish-image/$owner/$list/$item': {
+      id: '/wish-image/$owner/$list/$item'
+      path: '/wish-image/$owner/$list/$item'
+      fullPath: '/wish-image/$owner/$list/$item'
+      preLoaderRoute: typeof WishImageOwnerListItemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -281,14 +281,14 @@ const rootRouteChildren: RootRouteChildren = {
   FeatureRoute: FeatureRoute,
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
+  ListsRoute: ListsRoute,
   PhotosRoute: PhotosRoute,
   RecoveryRoute: RecoveryRoute,
   TravelRoute: TravelRoute,
-  WatchlistRoute: WatchlistRoute,
   WeatherRoute: WeatherRoute,
-  WishlistRoute: WishlistRoute,
   WorkoutRoute: WorkoutRoute,
   PhotoMediaAlbumAssetSizeRoute: PhotoMediaAlbumAssetSizeRoute,
+  WishImageOwnerListItemRoute: WishImageOwnerListItemRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

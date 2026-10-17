@@ -890,17 +890,6 @@
   border-radius: 1.75rem;
   background: var(--tile);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .noop-detail {
-    animation: rise var(--t-mid) var(--ease) both;
-  }
-}
-@keyframes rise {
-  from {
-    opacity: 0;
-    translate: 0 0.75rem;
-  }
-}
 .noop-detail-head {
   display: flex;
   align-items: center;
@@ -1275,10 +1264,11 @@
 @media (prefers-reduced-motion: no-preference) {
   .weight-chart-trend {
     stroke-dasharray: 4000;
-    animation: draw 1.4s var(--ease) both;
+    animation: trend-draw 1.4s var(--ease) both;
   }
 }
-@keyframes draw {
+/* Its own name: the Home sparkline's draw reveals by clipping, this one traces the stroke. */
+@keyframes trend-draw {
   from {
     stroke-dashoffset: 4000;
   }
@@ -1522,11 +1512,6 @@
   padding: clamp(1.25rem, 2.4vw, 1.75rem);
   border-radius: 1.75rem;
   background: var(--tile);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .session {
-    animation: rise var(--t-mid) var(--ease) both;
-  }
 }
 .session-head {
   display: flex;

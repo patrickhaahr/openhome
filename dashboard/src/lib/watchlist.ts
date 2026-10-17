@@ -19,20 +19,6 @@ export const watchlistEntry = z.object({
   release_date: z.iso.date().nullable(),
 })
 
-/** URL filters keep the household view recoverable after navigation and refresh. */
-export const watchlistFilters = z.object({
-  owner_id: z.uuid().optional().catch(undefined),
-  status: watchlistEntry.shape.status.optional().catch(undefined),
-})
-
-export type WatchlistFilters = z.infer<typeof watchlistFilters>
-
-export const watchStatusLabels: Record<WatchlistEntry["status"], string> = {
-  planned: "Planned",
-  watching: "Watching",
-  completed: "Completed",
-}
-
 /** Stored entry returned by authenticated Axum. */
 export type WatchlistEntry = z.infer<typeof watchlistEntry>
 
@@ -112,7 +98,7 @@ export const watchlistFailureMessage: Record<WatchlistFailure, string> = {
   conflict:
     "This request conflicts with a saved change or its entry was removed. Refresh to check the list before retrying.",
   "tmdb-unavailable":
-    "TMDB could not load the title. Choose Add manually to keep planning without it.",
+    "TMDB could not load the title. Choose Another title, then add it by hand as a movie or series.",
   "not-found":
     "This member or plan is no longer available. Refresh to see the current watchlists.",
 }
@@ -145,14 +131,4 @@ export type MediaSearchResult =
 /** Build an image URL only from Axum's validated provider filename. */
 export function posterUrl(path: string): string {
   return `https://image.tmdb.org/t/p/w342${path}`
-}
-
-/** A stable hue per title, so each typographic poster keeps its colour between visits. */
-export function titleHue(title: string): number {
-  let hash = 0
-
-  for (const character of title)
-    hash = (hash * 31 + character.charCodeAt(0)) % 360
-
-  return hash
 }

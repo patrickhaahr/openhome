@@ -15,6 +15,10 @@ const OWNER: &str = "member-a";
 const LIST: &str = "ideas-a";
 
 async fn app(service: MetadataService) -> Router {
+    app_with_db(service).await.0
+}
+
+async fn app_with_db(service: MetadataService) -> (Router, sqlx::SqlitePool) {
     let db = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")
@@ -33,7 +37,7 @@ async fn app(service: MetadataService) -> Router {
         .await
         .unwrap();
     let state = crate::AppState {
-        db,
+        db: db.clone(),
         noop_db: sqlx::SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
         adguard_service: None,
         docker_service: None,
@@ -42,11 +46,12 @@ async fn app(service: MetadataService) -> Router {
         docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(crate::DockerCache::default())),
     };
     let key = crate::auth::ApiKey::new("test-api-key".into());
-    crate::routes::wishlist::router_with_metadata(None, service)
+    let router = crate::routes::wishlist::router_with_metadata(None, service)
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             crate::auth::auth_middleware(request, next, key.clone())
-        }))
+        }));
+    (router, db)
 }
 
 async fn request(app: &Router, payload: Value, key: &str) -> (StatusCode, Value) {
@@ -314,4 +319,174 @@ async fn authentication_and_explicit_ownership_precede_external_fetches() {
         StatusCode::CONFLICT
     );
     assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+// ---------- Stored product pictures ----------
+
+const PNG: &[u8] = &[
+    0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d,
+];
+
+/// One item whose stored picture address is `image_url`, written straight to the database.
+async fn picture_app(service: MetadataService, image_url: Option<&str>) -> Router {
+    let (app, db) = app_with_db(service).await;
+    sqlx::query(
+        "INSERT INTO wishlist_items (id, list_id, title, image_url, request_id) VALUES ('item-a', ?, 'A coat', ?, 'picture-request')",
+    )
+    .bind(LIST)
+    .bind(image_url)
+    .execute(&db)
+    .await
+    .unwrap();
+    app
+}
+
+async fn picture(app: &Router, item: &str, key: Option<&str>) -> axum::response::Response {
+    let mut request = Request::builder().uri(format!(
+        "/api/household-users/{OWNER}/wishlists/{LIST}/items/{item}/image"
+    ));
+    if let Some(key) = key {
+        request = request.header("Authorization", format!("Bearer {key}"));
+    }
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn serves_a_stored_raster_picture_with_private_caching_and_no_sniffing() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/coat.png"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(PNG, "image/png"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let app = picture_app(controlled(&server), Some(&shop(&server, "/coat.png"))).await;
+    let response = picture(&app, "item-a", Some("test-api-key")).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers();
+    assert_eq!(headers["content-type"], "image/png");
+    assert_eq!(headers["cache-control"], "private, max-age=3600");
+    assert_eq!(headers["x-content-type-options"], "nosniff");
+    assert_eq!(
+        headers["content-security-policy"],
+        "default-src 'none'; sandbox"
+    );
+    assert_eq!(
+        to_bytes(response.into_body(), MAX_IMAGE_BYTES)
+            .await
+            .unwrap(),
+        PNG
+    );
+}
+
+#[tokio::test]
+async fn pictures_require_the_api_key_before_any_fetch() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(PNG, "image/png"))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let app = picture_app(controlled(&server), Some(&shop(&server, "/coat.png"))).await;
+    assert_eq!(
+        picture(&app, "item-a", None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        picture(&app, "item-a", Some("wrong-key")).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn unknown_items_and_items_without_pictures_are_not_found() {
+    let app = picture_app(MetadataService::default(), None).await;
+    assert_eq!(
+        picture(&app, "item-b", Some("test-api-key")).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        picture(&app, "item-a", Some("test-api-key")).await.status(),
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn private_and_internal_picture_addresses_are_refused_before_contact() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(PNG, "image/png"))
+        .expect(0)
+        .mount(&server)
+        .await;
+    for address in [
+        "http://127.0.0.1/coat.png".to_string(),
+        "http://192.168.1.10/coat.png".into(),
+        "http://[::1]/coat.png".into(),
+        "file:///etc/passwd".into(),
+        format!(
+            "http://internal.example.com:{}/coat.png",
+            server.address().port()
+        ),
+    ] {
+        let app = picture_app(controlled(&server), Some(&address)).await;
+        let response = picture(&app, "item-a", Some("test-api-key")).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{address}"
+        );
+        let body = to_bytes(response.into_body(), MAX_BYTES).await.unwrap();
+        assert!(!String::from_utf8_lossy(&body).contains(&address));
+    }
+}
+
+#[tokio::test]
+async fn documents_svg_and_mislabelled_bytes_are_never_relayed() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/page"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<html></html>", "text/html"))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/drawing.svg"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            "<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>",
+            "image/svg+xml",
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/disguised.png"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<html></html>", "image/png"))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/huge.png"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw([PNG, &vec![0; MAX_IMAGE_BYTES]].concat(), "image/png"),
+        )
+        .mount(&server)
+        .await;
+    for resource in [
+        "/page",
+        "/drawing.svg",
+        "/disguised.png",
+        "/huge.png",
+        "/missing.png",
+    ] {
+        let app = picture_app(controlled(&server), Some(&shop(&server, resource))).await;
+        let response = picture(&app, "item-a", Some("test-api-key")).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "{resource}"
+        );
+        assert_ne!(response.headers()["content-type"], "image/svg+xml");
+    }
 }

@@ -1,5 +1,6 @@
 //! Seeds the main database through the production HTTP routes: profile, body weight, logged
-//! workouts, Household Users, Wishlists and the Watchlist.
+//! workouts, Household Users, Wishlists and the Watchlist. Wish images point at the preview's own
+//! artwork routes (`media.rs`); Watchlist posters are static TMDB paths from the catalogue.
 
 use std::collections::HashMap;
 
@@ -66,7 +67,7 @@ fn id_of(value: &Value) -> anyhow::Result<&str> {
         .ok_or_else(|| anyhow::anyhow!("response has no id: {value}"))
 }
 
-pub async fn household(base: &str, key: &str) -> anyhow::Result<()> {
+pub async fn household(base: &str, key: &str, db: &sqlx::SqlitePool) -> anyhow::Result<()> {
     let api = Api {
         client: Client::new(),
         base: base.to_string(),
@@ -74,7 +75,7 @@ pub async fn household(base: &str, key: &str) -> anyhow::Result<()> {
     };
     body(&api).await?;
     workouts(&api).await?;
-    household_lists(&api).await
+    household_lists(&api, db).await
 }
 
 #[derive(Deserialize)]
@@ -206,12 +207,14 @@ struct Watch {
     kind: String,
     title: String,
     status: String,
+    tmdb_id: Option<i64>,
     added_days_ago: u64,
     completed_days_ago: Option<u64>,
 }
 
-async fn household_lists(api: &Api) -> anyhow::Result<()> {
+async fn household_lists(api: &Api, db: &sqlx::SqlitePool) -> anyhow::Result<()> {
     let seed: Household = serde_json::from_str(include_str!("seed/household.json"))?;
+    let catalogue = crate::media::catalogue();
     let mut owners = HashMap::new();
     let mut request = 0;
     for user in &seed.users {
@@ -230,6 +233,14 @@ async fn household_lists(api: &Api) -> anyhow::Result<()> {
             for item in &list.items {
                 request += 1;
                 let mut item = item.clone();
+                // `art` names a drawing served by the preview itself; it is not an API field.
+                if let Some(art) = item
+                    .as_object_mut()
+                    .and_then(|fields| fields.remove("art"))
+                    .and_then(|art| art.as_str().map(str::to_string))
+                {
+                    item["image_url"] = json!(format!("{}/preview-art/wish/{art}.svg", api.base));
+                }
                 item["owner_id"] = json!(owner_id);
                 item["list_id"] = json!(list_id);
                 item["request_id"] = json!(format!("preview-wish-{request}"));
@@ -242,27 +253,36 @@ async fn household_lists(api: &Api) -> anyhow::Result<()> {
         let owner_id = owners
             .get(&watch.owner)
             .ok_or_else(|| anyhow::anyhow!("unknown watchlist owner {}", watch.owner))?;
-        let created = api
-            .post(
-                "/api/watchlist/entries",
-                json!({
-                    "owner_id": owner_id,
-                    "kind": watch.kind,
-                    "title": watch.title,
-                    "request_id": format!("preview-watch-{index}"),
-                }),
-            )
-            .await?;
+        let entry = json!({
+            "owner_id": owner_id,
+            "kind": watch.kind,
+            "title": watch.title,
+            "request_id": format!("preview-watch-{index}"),
+        });
+        let created = api.post("/api/watchlist/entries", entry).await?;
+        let entry_id = id_of(&created["entry"])?.to_string();
+        // Static catalogue metadata goes straight into the row: adding with a TMDB id would
+        // make the API call TMDB for every seeded entry at startup.
+        if let Some(title) = watch
+            .tmdb_id
+            .and_then(|id| catalogue.iter().find(|title| title.id == id))
+        {
+            sqlx::query("UPDATE watchlist_entries SET tmdb_id = ?, overview = ?, poster_path = ?, release_date = ? WHERE id = ?")
+                .bind(title.id)
+                .bind(&title.overview)
+                .bind(&title.poster_path)
+                .bind(&title.date)
+                .bind(&entry_id)
+                .execute(db)
+                .await?;
+        }
         let mut edit =
             json!({ "status": watch.status, "date_added": days_ago(watch.added_days_ago) });
         if let Some(completed) = watch.completed_days_ago {
             edit["completion_date"] = json!(days_ago(completed));
         }
         api.patch(
-            &format!(
-                "/api/household-users/{owner_id}/watchlist/entries/{}",
-                id_of(&created["entry"])?
-            ),
+            &format!("/api/household-users/{owner_id}/watchlist/entries/{entry_id}"),
             edit,
         )
         .await?;

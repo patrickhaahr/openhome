@@ -216,3 +216,99 @@ export async function writeWishlist(
 
   return { state: "failed", reason: "unavailable" }
 }
+
+const wishImageInput = z.object({
+  owner: z.uuid(),
+  list: z.uuid(),
+  item: z.uuid(),
+})
+
+// SVG only ever comes from the synthetic preview; Axum relays raster pictures alone.
+const wishImageTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "image/svg+xml",
+]
+
+const wishImageLimit = 5 * 1024 * 1024
+
+/** Relay one stored wish picture as bounded bytes, never provider headers or error bodies. */
+export async function readWishImage(input: {
+  owner: string
+  list: string
+  item: string
+}): Promise<Response> {
+  const headers = {
+    "Cache-Control": "private, max-age=3600",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy":
+      "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  }
+
+  const failed = (status: number): Response =>
+    new Response(null, {
+      status,
+      headers: { ...headers, "Cache-Control": "no-store" },
+    })
+
+  const parsed = wishImageInput.safeParse(input)
+
+  if (!parsed.success) return failed(404)
+  const { owner, list, item } = parsed.data
+
+  const result = await requestOpenHome({
+    path: `/api/household-users/${owner}/wishlists/${list}/items/${item}/image`,
+    method: "GET",
+    timeoutMs: 12000,
+  })
+
+  if (result.state !== "received") return failed(503)
+  const response = result.response
+  const contentType = response.headers.get("content-type") ?? ""
+
+  if (!response.ok || !wishImageTypes.includes(contentType)) {
+    await response.body?.cancel()
+
+    return failed(response.status === 404 ? 404 : 503)
+  }
+
+  const reader = response.body?.getReader()
+
+  if (reader === undefined) return failed(503)
+  const chunks: Uint8Array[] = []
+  let length = 0
+
+  try {
+    for (;;) {
+      const chunk = await reader.read()
+
+      if (chunk.done) break
+      length += chunk.value.byteLength
+
+      if (length > wishImageLimit) {
+        await reader.cancel()
+
+        return failed(503)
+      }
+
+      chunks.push(chunk.value)
+    }
+  } catch {
+    return failed(503)
+  }
+
+  const body = new Uint8Array(length)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return new Response(body, {
+    headers: { ...headers, "Content-Type": contentType },
+  })
+}

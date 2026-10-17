@@ -438,7 +438,12 @@ dashboard-synthetic-build:
 [group('dashboard')]
 [working-directory: 'api']
 dashboard-synthetic-api: dashboard-synthetic-build
-    target/debug/examples/dashboard_preview
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Live TMDB search when a read token is available; the value is passed through, never printed.
+    token_file="$HOME/.config/openhome/tmdb-read-access-token"
+    if [ -z "${TMDB_READ_ACCESS_TOKEN:-}" ] && [ -r "$token_file" ]; then TMDB_READ_ACCESS_TOKEN="$(cat "$token_file")"; fi
+    TMDB_READ_ACCESS_TOKEN="${TMDB_READ_ACCESS_TOKEN:-}" exec target/debug/examples/dashboard_preview
 
 # Preview every dashboard page at http://localhost:3001/ on invented, deterministic data (Ctrl-C stops both)
 [group('dashboard')]
@@ -456,7 +461,10 @@ dashboard-synthetic: dashboard-synthetic-build
     }
     trap stop EXIT
     trap 'exit 130' INT TERM
-    OPENHOME_PREVIEW_API_PORT="$port" api/target/debug/examples/dashboard_preview &
+    # Live TMDB search when a read token is available; the value is passed through, never printed.
+    token_file="$HOME/.config/openhome/tmdb-read-access-token"
+    if [ -z "${TMDB_READ_ACCESS_TOKEN:-}" ] && [ -r "$token_file" ]; then TMDB_READ_ACCESS_TOKEN="$(cat "$token_file")"; fi
+    TMDB_READ_ACCESS_TOKEN="${TMDB_READ_ACCESS_TOKEN:-}" OPENHOME_PREVIEW_API_PORT="$port" api/target/debug/examples/dashboard_preview &
     pids+=($!)
     for _ in $(seq 1 100); do
         curl -fsS -H "Authorization: Bearer $api_key" "$api_url/api/health" >/dev/null 2>&1 && break

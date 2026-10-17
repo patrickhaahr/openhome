@@ -12,8 +12,9 @@ privately on the API. See [weather verification and setup](docs/weather/README.m
 ## Shell and navigation
 
 The persistent icon-above-label rail opens Home, Weather, Controls, Travel,
-Workout, Wishlist, Watchlist, Photos, Server, Agent and Connection. These are
-URL-backed routes with browser history and deep links. On smaller or zoomed
+Workout, Lists, Photos, Server, Agent and Connection. These are
+URL-backed routes with browser history and deep links. Lists holds the Wish and
+Watch tabs (`/lists?tab=wish|watch`). On smaller or zoomed
 viewports the rail becomes a horizontally scrollable top bar; the content
 remains vertically scrollable. Navigation moves focus to the rendered page
 heading, and a skip link goes directly to the content.
@@ -189,12 +190,18 @@ stops both. `just dashboard-synthetic-api` runs the API alone.
 
 The API runs the production routes, migrations and authentication over
 in-memory databases, so responses always match the real contract. Loopback
-stand-ins replace every upstream: openrouteservice, TMDB, Open-Meteo (central
+stand-ins replace the upstreams: openrouteservice, Open-Meteo (central
 Copenhagen demo location), Immich (generated landscapes, no photographs), the IR
-bridge (full TV and speaker command sets) and the SwitchBot bridge. Every page
+bridge (full TV and speaker command sets) and the SwitchBot bridge. TMDB is the
+exception: when `TMDB_READ_ACCESS_TOKEN` is set, or a token file exists at
+`~/.config/openhome/tmdb-read-access-token`, Watchlist search uses the real TMDB;
+otherwise a loopback catalogue of the seeded titles answers. Every page
 renders populated: about 40 days of recovery, sleep stages, journal, naps and NOOP
 workouts with heart rate ending today, five weeks of logged workouts, body
 weight, Wishlists and the Watchlist. Dates are generated relative to today.
+Wish pictures are drawn in `media.rs` and answered by a preview stand-in for the
+authenticated wish picture route, because the production fetcher refuses
+loopback addresses.
 
 The invented values live in `api/examples/dashboard_preview/seed/*.json`
 (`training`, `workouts`, `body`, `household`, `weather`, `photos`, `controls`);
