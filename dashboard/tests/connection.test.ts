@@ -602,6 +602,8 @@ test("gallery SSR and media HTTP routes keep private configuration and upstream 
     name: "Demo places",
     photo_count: 1,
     cover_id: asset,
+    first_month: "2025-06",
+    last_month: "2025-06",
     missing: false,
   }
 
@@ -650,7 +652,9 @@ test("gallery SSR and media HTTP routes keep private configuration and upstream 
 
   const url = await dashboard({ url: await listen(upstream), key: apiKey })
   const html = await page(url, "/photos")
+  // One selected album opens directly, with its month.
   expect(html).toContain("Demo places")
+  expect(html).toContain("Jun 2025")
   expect(html).toContain(`/photo-media/${album}/${asset}/thumbnail`)
   expect(html).not.toContain("synthetic-private-key")
   expect(html).not.toContain("private.invalid")
