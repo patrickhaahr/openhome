@@ -1545,15 +1545,31 @@
   color: var(--muted-ink);
   font-variant-numeric: tabular-nums;
 }
-.session-actions {
+
+/* What was logged, as two figures at the end of the header. */
+.session-counts {
   display: flex;
   flex: none;
-  gap: 0.25rem;
+  align-items: baseline;
+  gap: 1.25rem;
 }
+.session-counts dd {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.session-counts small {
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
 .session-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  align-items: start;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: stretch;
   gap: clamp(1.5rem, 3vw, 3rem);
 }
 .session[data-kind="logged"] .session-body,
@@ -1561,21 +1577,18 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .session[data-kind="strap"][data-route="true"] .session-body {
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-/* The same figures in both halves: a small label over a bold number. */
+/* The strap's figures: a small label over a bold number. */
 .session-stats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
-  gap: 0.75rem clamp(1rem, 2vw, 1.5rem);
+  gap: 0.875rem 1rem;
   min-width: 0;
 }
 .session-strap-top .session-stats {
   flex: 1;
-}
-.session-logged > .session-stats {
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 8rem));
 }
 .session-stats div {
   display: grid;
@@ -1589,9 +1602,10 @@
   text-transform: uppercase;
 }
 .session-stats dd {
-  font-size: 1.375rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 .session-stats small {
@@ -1601,43 +1615,74 @@
   letter-spacing: 0;
 }
 
-.session-logged,
-.session-strap,
-.session-trace {
+.session-logged {
   display: grid;
   gap: 1rem;
   min-width: 0;
   align-content: start;
 }
+
+/* One grid for every exercise: the name, then set columns of one width, so set n of every
+   exercise sits in the same column and each row's figures share the name's baseline. */
 .session-exercises {
+  --set-gap: 0.5rem;
+  --set-width: minmax(5.75rem, 7.5rem);
   display: grid;
-  gap: 1rem;
+  gap: var(--set-gap);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.session[data-kind="logged"] .session-exercises {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+.session-exercises > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(
+      var(--set-columns),
+      var(--set-width)
+    );
+  align-items: baseline;
+  gap: var(--set-gap);
 }
 .session-exercises h4 {
-  margin-bottom: 0.375rem;
-  font-size: 1rem;
+  min-width: 0;
+  font-size: 1.0625rem;
   font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.session-exercises > li > .workout-muted {
+  grid-column: 2 / -1;
+}
+.session-exercises > li > .session-exercise-note {
+  grid-column: 1 / -1;
 }
 .workout-sets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: repeat(var(--set-columns), var(--set-width));
+  gap: var(--set-gap);
   margin: 0;
   padding: 0;
   list-style: none;
 }
+/* A logged session alone spreads its rows over two columns that read top to bottom. */
+.session[data-kind="logged"] .session-exercises {
+  display: block;
+  columns: 2 28rem;
+  column-gap: clamp(1.5rem, 3vw, 3rem);
+}
+.session[data-kind="logged"] .session-exercises > li {
+  margin-bottom: var(--set-gap);
+  break-inside: avoid;
+}
 .set-pill {
-  display: inline-flex;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.25rem;
-  min-width: 4.25rem;
-  padding: 0.5rem 0.875rem;
+  gap: 0 0.3125rem;
+  min-width: 0;
+  padding: 0.5rem 0.75rem 0.75rem;
+  overflow: hidden;
   border-radius: 0.875rem;
   background: var(--ground);
   font-variant-numeric: tabular-nums;
@@ -1646,14 +1691,24 @@
   background: var(--wash-strong);
 }
 .set-pill-effort {
-  font-size: 1.375rem;
+  font-size: 1.625rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
+  line-height: 1;
 }
 .set-pill-load {
   color: var(--muted-ink);
   font-size: 0.875rem;
   font-weight: 600;
+}
+/* RPE as a sun underline: the longer it runs, the harder the set. */
+.set-pill-rpe {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--rpe) * 100%);
+  height: 4px;
+  background: var(--sun);
 }
 .set-pill-note {
   flex-basis: 100%;
@@ -1661,37 +1716,58 @@
   font-size: 0.75rem;
 }
 
+/* The strap's half grows to the height of the exercises; the heart-rate trace takes the room. */
+.session-strap {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1.25rem;
+  min-width: 0;
+}
+.session-trace {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1rem;
+  min-width: 0;
+}
 .session-strap-top {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 .session .score-ring {
   flex: none;
-  width: 5.5rem;
+  width: 6.75rem;
   gap: 0.25rem;
 }
 .session .score-ring circle {
   stroke-width: 11;
 }
 .session .score-ring-figure span {
-  font-size: 1.5rem;
+  font-size: 2rem;
 }
 .session .score-ring figcaption {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
+}
+.session .hr-chart {
+  min-height: 8rem;
 }
 .session .hr-chart svg {
-  height: 7rem;
+  height: 100%;
+  min-height: 8rem;
 }
 .session .zone-bar-track {
-  height: 0.75rem;
+  height: 1rem;
 }
 .session .zone-bar-legend li {
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 .session[data-kind="strap"][data-route="false"] .session-strap {
+  grid-template-rows: auto;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(1.5rem, 3vw, 3rem);
+}
+.session[data-kind="strap"][data-route="false"] .hr-chart svg {
+  height: 9rem;
 }
 .session-map .noop-detail-map {
   height: 100%;
@@ -1706,38 +1782,54 @@
 }
 @media (max-width: 860px) {
   .session-body,
+  .session[data-kind="strap"][data-route="true"] .session-body,
   .session[data-kind="strap"][data-route="false"] .session-strap {
     grid-template-columns: minmax(0, 1fr);
   }
   .session[data-kind="strap"][data-route="false"] .session-strap {
     gap: 1rem;
   }
+  .session .hr-chart svg {
+    height: 9rem;
+  }
   .session-map .noop-detail-map {
     min-height: 16rem;
   }
 }
 @media (max-width: 700px) {
-  /* The keys drop below the name, so a long name and its time keep the width. */
+  /* The counts drop below the name, so a long name and its time keep the width. */
   .session-head {
     flex-wrap: wrap;
   }
-  .session-actions {
+  .session-counts {
     order: 3;
-    justify-content: flex-end;
     width: 100%;
-    margin-top: -0.5rem;
+    padding-left: 4rem;
   }
   /* The ring above its figures, which take the full width in two columns. */
   .session-strap-top {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.75rem;
+    gap: 1rem;
   }
   .session-strap-top .session-stats {
     width: 100%;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .session-logged > .session-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  /* The name above its sets, which share the full width in equal columns. */
+  .session-exercises > li,
+  .workout-sets {
+    grid-template-columns: repeat(var(--set-columns), minmax(0, 1fr));
+  }
+  .session-exercises h4,
+  .workout-sets,
+  .session-exercises > li > .workout-muted {
+    grid-column: 1 / -1;
+  }
+  .session-exercises > li {
+    row-gap: 0.375rem;
+    margin-bottom: 0.5rem;
   }
 }

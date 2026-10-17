@@ -88,7 +88,9 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   Workout and a strap session on the same Copenhagen day become one plate (exercises left; effort
   ring, stats, heart-rate trace and zone bar right) under `lib/session-log.ts`; a strap session
   alone shows its own stats, and a map only when it has a route; a logged Workout alone shows
-  its exercises. Progress opens on 4 weeks, tone bands instead of grid lines. Body leads with the
+  its exercises. The exercises share one grid (name, then set columns of one width) whose chips
+  carry RPE as a sun underline; the counts sit in the header, and a plate has no keys (no edit,
+  no way out to Recovery). Progress opens on 4 weeks, tone bands instead of grid lines. Body leads with the
   current weight large, the delta over the range, one calm chart of alternating tone bands, and the
   profile values as quiet plates with a pencil key; it fits 1280x720.
 - **Controls is three plates on one screen**, the same tone as Home's deck: the lights as a

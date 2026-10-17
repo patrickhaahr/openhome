@@ -1,11 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
-import {
-  workoutCommand,
-  workoutSearch,
-  type WorkoutSearch,
-  type WorkoutState,
-} from "./workout"
+import { workoutSearch, type WorkoutSearch, type WorkoutState } from "./workout"
 
 /** Read the shared exercise library and logged Workouts through the server-held Axum credential. */
 export const getWorkouts = createServerFn({ method: "GET" })
@@ -15,16 +10,6 @@ export const getWorkouts = createServerFn({ method: "GET" })
     const { readWorkouts } = await import("./workout.server")
 
     return readWorkouts(data)
-  })
-
-/** Persist one Workout change through Axum, keeping credentials server-side. */
-export const mutateWorkout = createServerFn({ method: "POST" })
-  .validator(workoutCommand)
-  .handler(async ({ data }) => {
-    setResponseHeader("Cache-Control", "no-store")
-    const { writeWorkout } = await import("./workout.server")
-
-    return writeWorkout(data)
   })
 
 /**
