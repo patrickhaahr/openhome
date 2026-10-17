@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO important_dates (id, title, date, kind, show_when_idle) VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "abc39ed3c39ae2282a4900e03b25185b75892fcf2d55cd9f91047cc20311c8e3"
+}

@@ -57,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(Some(tmdb)))
+        .merge(routes::important_dates::router())
         .merge(routes::map::router(demo_origin))
         .merge(routes::route_loop::router(planner))
         .merge(routes::photos::router(None))

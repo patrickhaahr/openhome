@@ -1,5 +1,5 @@
 //! Selected-album Immich reads. No originals, shared links or EXIF cross this boundary.
-use chrono::{DateTime, Datelike, NaiveDateTime};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Utc};
 use reqwest::{Client, StatusCode, header};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -38,6 +38,65 @@ pub enum PhotoError {
     ProviderUnavailable,
     #[error("Invalid photo page")]
     InvalidPage,
+    #[error("Invalid month and day; write MM-DD")]
+    InvalidDate,
+}
+
+/// A calendar month and day without a year, written `MM-DD`; 29 February is a valid day.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MonthDay {
+    month: u32,
+    day: u32,
+}
+
+impl MonthDay {
+    /// `MM-DD` with two digits each, checked against a leap year so `02-29` is accepted.
+    pub fn parse(value: &str) -> Result<Self, PhotoError> {
+        let (month, day) = value.split_once('-').ok_or(PhotoError::InvalidDate)?;
+        if month.len() != 2
+            || day.len() != 2
+            || !month.bytes().chain(day.bytes()).all(|b| b.is_ascii_digit())
+        {
+            return Err(PhotoError::InvalidDate);
+        }
+        let month = month.parse().map_err(|_| PhotoError::InvalidDate)?;
+        let day = day.parse().map_err(|_| PhotoError::InvalidDate)?;
+        NaiveDate::from_ymd_opt(2000, month, day).ok_or(PhotoError::InvalidDate)?;
+        Ok(Self { month, day })
+    }
+
+    /// The month and day of a calendar date.
+    #[must_use]
+    pub fn of(date: NaiveDate) -> Self {
+        Self {
+            month: date.month(),
+            day: date.day(),
+        }
+    }
+
+    /// Whether a capture date falls on this month and day. In a year without 29 February,
+    /// 28 February also gathers the leap-day photos so they still come round.
+    fn matches(self, date: NaiveDate, year: i32) -> bool {
+        let leap_day = date.month() == 2 && date.day() == 29;
+        Self::of(date) == self || (leap_day && self.month == 2 && self.day == 28 && !is_leap(year))
+    }
+}
+
+impl std::fmt::Display for MonthDay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:02}-{:02}", self.month, self.day)
+    }
+}
+
+fn is_leap(year: i32) -> bool {
+    NaiveDate::from_ymd_opt(year, 2, 29).is_some()
+}
+
+/// The household's calendar date at an instant: Europe/Copenhagen, as every `OpenHome` day.
+#[must_use]
+pub fn copenhagen_today(now: DateTime<Utc>) -> NaiveDate {
+    now.with_timezone(&chrono_tz::Europe::Copenhagen)
+        .date_naive()
 }
 
 /// Safe album metadata without provider identities, locations or paths. The span is only the
@@ -78,6 +137,26 @@ pub struct MergedPage {
     pub next_page: Option<usize>,
 }
 
+/// A photo taken on the requested month and day in an earlier year. Only the capture year
+/// leaves Axum with it; the time of day, EXIF and the provider's timestamps stay here.
+#[derive(Serialize)]
+pub struct OnThisDayPhoto {
+    pub album: Uuid,
+    pub asset: Uuid,
+    pub year: i32,
+    pub years_ago: i32,
+}
+
+/// One bounded page of photos taken on `date` (`MM-DD`) in earlier years, newest year first.
+#[derive(Serialize)]
+pub struct OnThisDayPage {
+    pub date: String,
+    pub photo_count: usize,
+    pub items: Vec<OnThisDayPhoto>,
+    pub page: usize,
+    pub next_page: Option<usize>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProviderAlbum {
@@ -97,9 +176,19 @@ struct ProviderAsset {
     is_trashed: bool,
     #[serde(default)]
     is_offline: bool,
-    /// Wall-clock capture time; read only to order photos and bound the album's months.
+    /// Capture time written with a `Z`. When Immich knows the photo's zone these are the
+    /// digits of that zone's wall clock; otherwise they are the UTC instant.
     #[serde(default)]
     local_date_time: Option<String>,
+    /// Read only for whether Immich knows the capture zone; nothing else of EXIF is kept.
+    #[serde(default)]
+    exif_info: Option<ProviderExif>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderExif {
+    #[serde(default)]
+    time_zone: Option<String>,
 }
 struct CachedAlbum {
     fetched: Instant,
@@ -108,10 +197,21 @@ struct CachedAlbum {
     taken: Vec<Option<NaiveDateTime>>,
 }
 
-fn taken_at(value: Option<&str>) -> Option<NaiveDateTime> {
-    DateTime::parse_from_rfc3339(value?)
-        .ok()
-        .map(|time| time.naive_utc())
+/// The local wall-clock capture time: the photo's own zone when Immich knows it, else the
+/// instant in Europe/Copenhagen, so a photo at 23:30 UTC in winter falls on the next day.
+fn taken_at(asset: &ProviderAsset) -> Option<NaiveDateTime> {
+    let time = DateTime::parse_from_rfc3339(asset.local_date_time.as_deref()?).ok()?;
+    let zoned = asset
+        .exif_info
+        .as_ref()
+        .and_then(|exif| exif.time_zone.as_deref())
+        .is_some_and(|zone| !zone.trim().is_empty());
+    Some(if zoned {
+        time.naive_utc()
+    } else {
+        time.with_timezone(&chrono_tz::Europe::Copenhagen)
+            .naive_local()
+    })
 }
 
 fn month(time: NaiveDateTime) -> String {
@@ -237,7 +337,7 @@ impl PhotoService {
             .assets
             .into_iter()
             .filter(|asset| asset.kind == "IMAGE" && !asset.is_trashed && !asset.is_offline)
-            .map(|asset| (asset.id, taken_at(asset.local_date_time.as_deref())))
+            .map(|asset| (asset.id, taken_at(&asset)))
             .unzip();
         // The owner's chosen cover when it is a served still, else the first photo.
         let cover_id = album
@@ -308,10 +408,9 @@ impl PhotoService {
         })
     }
 
-    /// Every selected album's photos merged newest first, de-duplicated by asset; undated photos
-    /// follow, in album order. Removed albums drop out; access still goes through each album.
-    pub async fn merged(&self, page: usize) -> Result<MergedPage, PhotoError> {
-        let start = page.checked_mul(PAGE_SIZE).ok_or(PhotoError::InvalidPage)?;
+    /// Every selected album's photos, de-duplicated by asset in album order and sorted newest
+    /// first; undated photos follow. Removed albums drop out; access still goes through each album.
+    async fn newest_first(&self) -> Result<Vec<(Option<NaiveDateTime>, Uuid, Uuid)>, PhotoError> {
         let mut seen = HashSet::new();
         let mut photos = Vec::new();
         for &id in self.selected.iter() {
@@ -329,6 +428,13 @@ impl PhotoService {
         }
         // Stable, so equal times keep album order.
         photos.sort_by_key(|photo| std::cmp::Reverse(photo.0));
+        Ok(photos)
+    }
+
+    /// Every selected album's photos merged newest first, 60 to a page.
+    pub async fn merged(&self, page: usize) -> Result<MergedPage, PhotoError> {
+        let start = page.checked_mul(PAGE_SIZE).ok_or(PhotoError::InvalidPage)?;
+        let photos = self.newest_first().await?;
         if start >= photos.len() && page != 0 {
             return Err(PhotoError::InvalidPage);
         }
@@ -342,6 +448,43 @@ impl PhotoService {
                 .collect(),
             page,
             next_page: (start + PAGE_SIZE < photos.len()).then_some(page + 1),
+        })
+    }
+
+    /// Photos taken on `day` in years before `today`'s, newest first, 60 to a page. The day is
+    /// the photo's local capture date (see `taken_at`); `today` is the household's date.
+    pub async fn on_this_day(
+        &self,
+        day: MonthDay,
+        today: NaiveDate,
+        page: usize,
+    ) -> Result<OnThisDayPage, PhotoError> {
+        let start = page.checked_mul(PAGE_SIZE).ok_or(PhotoError::InvalidPage)?;
+        let year = today.year();
+        let photos: Vec<_> = self
+            .newest_first()
+            .await?
+            .into_iter()
+            .filter_map(|(taken, album, asset)| {
+                let date = taken?.date();
+                (date.year() < year && day.matches(date, year)).then_some(OnThisDayPhoto {
+                    album,
+                    asset,
+                    year: date.year(),
+                    years_ago: year - date.year(),
+                })
+            })
+            .collect();
+        if start >= photos.len() && page != 0 {
+            return Err(PhotoError::InvalidPage);
+        }
+        let next_page = (start + PAGE_SIZE < photos.len()).then_some(page + 1);
+        Ok(OnThisDayPage {
+            date: day.to_string(),
+            photo_count: photos.len(),
+            items: photos.into_iter().skip(start).take(PAGE_SIZE).collect(),
+            page,
+            next_page,
         })
     }
 

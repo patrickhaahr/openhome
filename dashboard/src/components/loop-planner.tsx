@@ -7,6 +7,7 @@ import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile"
 import { FootprintsIcon } from "@phosphor-icons/react/dist/csr/Footprints"
 import { MapPinAreaIcon } from "@phosphor-icons/react/dist/csr/MapPinArea"
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
+import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -105,6 +106,12 @@ export function LoopPlanner({
   const [form, setForm] = useState<Form>(INITIAL_FORM)
   const [status, setStatus] = useState<Status>({ state: "idle" })
   const [shown, setShown] = useState<Shown | undefined>(undefined)
+  // Planning or saving the Active Route is declared busy.
+  useIdleBlock(
+    status.state === "planning" ||
+      selection.state === "saving" ||
+      selection.state === "checking"
+  )
 
   async function planLoops(): Promise<void> {
     const read = readForm(form)

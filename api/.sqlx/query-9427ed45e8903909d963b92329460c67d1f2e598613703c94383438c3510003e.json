@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT d.id AS \"id!\", d.title, d.date, d.kind AS \"kind: DateKind\", d.show_when_idle AS \"show_when_idle: bool\",\n        (SELECT group_concat(person_id, ',') FROM (SELECT p.person_id FROM important_date_people p\n            JOIN household_users u ON u.id = p.person_id WHERE p.date_id = d.id ORDER BY u.name, u.id)) AS \"person_ids?: String\"\n        FROM important_dates d WHERE (? IS NULL OR d.id = ?)",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "date",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "kind: DateKind",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "show_when_idle: bool",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "person_ids?: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9427ed45e8903909d963b92329460c67d1f2e598613703c94383438c3510003e"
+}

@@ -8,6 +8,7 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { Horizon, ThemeToggle, useDaylight } from "@/components/daylight"
 import { timeFormat } from "@/components/live-clock"
 import { FeatureLink } from "@/components/feature-link"
+import { useIdleBlock } from "@/components/idle-block"
 import { logoHintId, useLogoTaps } from "@/components/nav-layout"
 import { Button } from "@/components/ui/button"
 import { features, type Feature } from "@/lib/features"
@@ -127,6 +128,7 @@ function TabFace({
 /** The phone's navigation in either layout: four destinations and "More" along the bottom. */
 export function TabBar(): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  useIdleBlock(open)
   const { pathname } = useLocation()
   const rest = features.filter((feature) => !isBarFeature(feature))
 

@@ -1,5 +1,5 @@
 //! Authenticated gallery metadata and resized media, scoped by the integration service.
-use crate::services::photos::{PhotoError, PhotoService, PhotoSize};
+use crate::services::photos::{MonthDay, PhotoError, PhotoService, PhotoSize, copenhagen_today};
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
@@ -16,6 +16,7 @@ pub fn router(service: Option<PhotoService>) -> Router<crate::AppState> {
     Router::new()
         .route("/api/photos/albums", get(list))
         .route("/api/photos/all", get(merged))
+        .route("/api/photos/on-this-day", get(on_this_day))
         .route("/api/photos/albums/{album}", get(page))
         .route(
             "/api/photos/albums/{album}/assets/{asset}/{size}",
@@ -69,6 +70,27 @@ async fn merged(
         json!({"state":"ready", "photos": configured(service.as_ref())?.merged(query.page).await?}),
     ))
 }
+#[derive(Deserialize, Default)]
+struct OnThisDayQuery {
+    /// `MM-DD`; today in Europe/Copenhagen when omitted.
+    date: Option<String>,
+    #[serde(default)]
+    page: usize,
+}
+async fn on_this_day(
+    State(service): State<Option<PhotoService>>,
+    Query(query): Query<OnThisDayQuery>,
+) -> Result<Json<serde_json::Value>, PhotoError> {
+    let service = configured(service.as_ref())?;
+    let today = copenhagen_today(chrono::Utc::now());
+    let day = match query.date.as_deref() {
+        Some(value) => MonthDay::parse(value)?,
+        None => MonthDay::of(today),
+    };
+    Ok(Json(
+        json!({"state":"ready", "photos": service.on_this_day(day, today, query.page).await?}),
+    ))
+}
 async fn image(
     State(service): State<Option<PhotoService>>,
     Path((album, asset, size)): Path<(Uuid, Uuid, PhotoSize)>,
@@ -87,6 +109,7 @@ impl IntoResponse for PhotoError {
             Self::NotFound => (StatusCode::NOT_FOUND, "not-found"),
             Self::ProviderUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "provider-unavailable"),
             Self::InvalidPage => (StatusCode::BAD_REQUEST, "invalid-page"),
+            Self::InvalidDate => (StatusCode::BAD_REQUEST, "invalid-date"),
         };
         (
             status,
