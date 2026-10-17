@@ -99,8 +99,7 @@ export function implementedRoute(
   | "/controls"
   | "/weather"
   | "/travel"
-  | "/wishlist"
-  | "/watchlist"
+  | "/lists"
   | "/photos"
   | "/workout"
   | "/recovery"
@@ -112,10 +111,8 @@ export function implementedRoute(
       return "/weather"
     case "travel":
       return "/travel"
-    case "wishlist":
-      return "/wishlist"
-    case "watchlist":
-      return "/watchlist"
+    case "lists":
+      return "/lists"
     case "photos":
       return "/photos"
     case "workout":

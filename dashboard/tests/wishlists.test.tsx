@@ -10,6 +10,12 @@ import {
   type ServerResponse,
 } from "node:http"
 import { act } from "react"
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router"
 import { createRoot, type Root } from "react-dom/client"
 import {
   afterAll,
@@ -21,7 +27,8 @@ import {
   vi,
 } from "vitest"
 import { z } from "zod"
-import { Wishlists } from "@/components/wishlists"
+import { GiftBoard } from "@/components/gift-board"
+import type { WishSearch } from "@/lib/lists"
 import {
   readWishlists,
   writeWishlist,
@@ -32,9 +39,9 @@ import type {
   WishlistMutation,
   WishlistMetadataLoader,
 } from "@/lib/wishlist"
-
-import { startAxumFixture } from "./support/axum-fixture"
 import { readWatchlists, writeWatchlist } from "@/lib/watchlist.server"
+import { startAxumFixture } from "./support/axum-fixture"
+import { button, field, settle, sheet, type } from "./support/lists-dom"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
@@ -54,6 +61,10 @@ let refreshWork: Promise<void> = Promise.resolve()
 
 let metadataWork: Promise<unknown> = Promise.resolve()
 
+let search: WishSearch = {}
+
+let metadata: WishlistMetadataLoader = previewWishlistUrl
+
 beforeAll(async () => {
   fixture = await startAxumFixture()
   apiUrl = fixture.url
@@ -68,6 +79,8 @@ beforeEach(() => {
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   sessionStorage.clear()
+  search = {}
+  metadata = previewWishlistUrl
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -105,100 +118,108 @@ afterEach(async () => {
     })
 })
 
-async function render(
-  metadata: WishlistMetadataLoader = previewWishlistUrl
-): Promise<void> {
+async function render(): Promise<void> {
   const data = await readWishlists()
+
+  const router = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory(),
+    isServer: false,
+  })
 
   await act(async () => {
     root.render(
-      <Wishlists
-        data={data}
-        change={(command) => {
-          mutationWork = writeWishlist(command)
+      <RouterContextProvider router={router}>
+        <GiftBoard
+          data={data}
+          search={search}
+          choose={(next) => {
+            search = next
+            refreshWork = render()
+          }}
+          change={(command) => {
+            mutationWork = writeWishlist(command)
 
-          return mutationWork
-        }}
-        refresh={() => {
-          refreshWork = render()
+            return mutationWork
+          }}
+          refresh={() => {
+            refreshWork = render()
 
-          return refreshWork
-        }}
-        metadata={(request) => {
-          const work = metadata(request)
-          metadataWork = work
+            return refreshWork
+          }}
+          metadata={(request) => {
+            const work = metadata(request)
+            metadataWork = work
 
-          return work
-        }}
-      />
+            return work
+          }}
+        />
+      </RouterContextProvider>
     )
   })
 }
 
-function button(name: string, scope: ParentNode = document): HTMLButtonElement {
-  const match = Array.from(scope.querySelectorAll("button")).find(
-    (element) =>
-      (element.getAttribute("aria-label") ?? element.textContent) === name
-  )
-
-  if (match === undefined) throw new Error(`Missing button: ${name}`)
-
-  return match
-}
-
-async function click(name: string): Promise<void> {
-  await clickButton(button(name))
-}
-
-async function clickButton(element: HTMLButtonElement): Promise<void> {
+async function press(element: HTMLButtonElement): Promise<void> {
   await act(async () => {
     element.click()
     await mutationWork
     await refreshWork
     await metadataWork
   })
+  await settle()
 }
 
-function field(label: string): HTMLInputElement {
-  const scope =
-    container.querySelector('form[aria-label="Save wish"]') ?? container
+async function click(
+  name: string | RegExp,
+  scope: ParentNode = document
+): Promise<void> {
+  await press(button(name, scope))
+}
 
-  const fieldLabel = Array.from(scope.querySelectorAll("label")).find(
-    (element) => element.textContent === label
+/** Wait out the link debounce, then the read it started. */
+async function debounced(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await metadataWork
+  })
+  await settle()
+}
+
+/** An input in the open sheet, found by its current value. */
+function valued(value: string, scope: ParentNode = sheet()): HTMLInputElement {
+  const input = Array.from(scope.querySelectorAll("input")).find(
+    (element) => element.value === value
   )
 
-  const input = document.getElementById(fieldLabel?.htmlFor ?? "")
-
-  if (!(input instanceof HTMLInputElement))
-    throw new Error(`Missing field: ${label}`)
+  if (input === undefined) throw new Error(`Missing input ${value}`)
 
   return input
 }
 
-async function type(label: string, value: string): Promise<void> {
-  const input = field(label)
+function section(label: string, scope: ParentNode = sheet()): HTMLElement {
+  const element = scope.querySelector<HTMLElement>(
+    `section[aria-label="${label}"]`
+  )
 
-  await act(async () => {
-    // Native setter represents typing rather than replacing React's tracked value.
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value"
-    )?.set?.call(input, value)
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-  })
+  if (element === null) throw new Error(`Missing section ${label}`)
+
+  return element
 }
 
-async function submit(label: string, value: string): Promise<void> {
-  await type(label, value)
-  const input = field(label)
+async function plate(title: string): Promise<void> {
+  const match = Array.from(
+    container.querySelectorAll<HTMLButtonElement>(".wish-plate")
+  ).find((element) => element.textContent?.includes(title))
 
-  const form = input.closest("form")
-  const submitButton = form?.querySelector("button")
+  if (match === undefined) throw new Error(`Missing plate ${title}`)
+  await press(match)
+}
 
-  if (submitButton === null || submitButton === undefined)
-    throw new Error("Expected form submit")
-
-  await clickButton(submitButton)
+function titles(scope: ParentNode = container): string[] {
+  return Array.from(
+    scope.querySelectorAll(".wish-title"),
+    (element) => element.textContent ?? ""
+  )
 }
 
 async function available(): Promise<
@@ -212,59 +233,123 @@ async function available(): Promise<
   return data
 }
 
-test("renders owner-aware CRUD, failed edits and confirmation against migrated authenticated Axum", async () => {
-  await render()
-  expect(container.textContent).toContain("Add a household member")
-  await submit("New household member", "Member A")
-  await submit("New household member", "Member B")
-  await submit("List name for Member A", "Ideas")
-  await submit("List name for Member A", "Outdoors")
-  await submit("List name for Member B", "Ideas")
-  expect(container.textContent).toContain("Member A")
-  expect(container.textContent).toContain("Member B")
+/** A person with named lists, made through the API. */
+async function household(people: Record<string, string[]>) {
+  for (const [name, lists] of Object.entries(people)) {
+    await writeWishlist({ kind: "create-owner", name })
+    const owner = (await available()).owners.find((item) => item.name === name)
 
-  const memberLists = container.querySelector(
-    'section[aria-label="Member A’s lists"]'
-  )
+    if (owner === undefined) throw new Error("Expected owner")
 
-  if (memberLists === null) throw new Error("Expected Member A’s lists")
+    for (const list of lists)
+      await writeWishlist({
+        kind: "create-list",
+        owner_id: owner.id,
+        name: list,
+      })
+  }
 
-  await clickButton(button("Ideas0 wishes", memberLists))
-  await submit("Something you’d like", "A warm jacket")
-  await click("Edit A warm jacket")
-  await submit("Wish title", "A waterproof jacket")
-  expect(container.textContent).toContain("A waterproof jacket")
-  await click("Rename list")
-  await submit("List name", "Outdoors")
-  expect(container.textContent).toContain(
-    "This name or request is already in use"
-  )
-  expect(
-    container.querySelector<HTMLInputElement>('input[value="Outdoors"]')?.value
-  ).toBe("Outdoors")
-  await submit("List name", "Clothes")
-  await click("Remove list")
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-    "all 1 wish"
-  )
-  await click("Keep it")
-  expect((await available()).items).toHaveLength(1)
-  await click("Remove list")
-  await click("Remove permanently")
-  expect(container.textContent).not.toContain("A waterproof jacket")
   const data = await available()
 
-  expect(data.items).toEqual([])
+  return {
+    owner: (name: string) => {
+      const owner = data.owners.find((item) => item.name === name)
+
+      if (owner === undefined) throw new Error(`Missing owner ${name}`)
+
+      return owner
+    },
+    list: (ownerName: string, name: string) => {
+      const owner = data.owners.find((item) => item.name === ownerName)
+
+      const list = data.lists.find(
+        (item) => item.owner_id === owner?.id && item.name === name
+      )
+
+      if (list === undefined) throw new Error(`Missing list ${name}`)
+
+      return list
+    },
+  }
+}
+
+async function wish(
+  list: { id: string; owner_id: string },
+  title: string,
+  extra: {
+    priority?: "low" | "normal" | "high"
+    price?: string
+    quantity?: number
+  } = {}
+): Promise<void> {
+  const saved = await writeWishlist({
+    kind: "add-item",
+    owner_id: list.owner_id,
+    list_id: list.id,
+    title,
+    request_id: crypto.randomUUID(),
+    ...extra,
+  })
+
+  expect(saved.state).toBe("saved")
+}
+
+test("the household sheet adds, renames and removes people and lists, confirming every removal", async () => {
+  await render()
+  expect(container.textContent).toContain("No one here yet")
+  await click("Add a household member", container)
+  await type(field("New household member", sheet()), "Member A")
+  await click("New household member", sheet())
+  await type(field("New household member", sheet()), "Member B")
+  await click("New household member", sheet())
+  expect(field("New household member", sheet()).value).toBe("")
+
+  for (const [owner, list] of [
+    ["Member A", "Ideas"],
+    ["Member A", "Outdoors"],
+    ["Member B", "Ideas"],
+  ] as const) {
+    await type(field(`New list for ${owner}`, sheet()), list)
+    await click(`New list for ${owner}`, sheet())
+  }
+
+  const memberA = section("Member A")
+  const ideas = valued("Ideas", memberA)
+  await type(ideas, "Outdoors")
+  await click("Save list name", memberA)
+  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
+    "This name or request is already in use"
+  )
+  expect(ideas.value).toBe("Outdoors")
+  await type(ideas, "Clothes")
+  await click("Save list name", memberA)
+
+  const data = await available()
+  const clothes = data.lists.find((list) => list.name === "Clothes")
+
+  if (clothes === undefined) throw new Error("Expected renamed list")
   expect(data.lists.map((list) => list.name).sort()).toEqual([
+    "Clothes",
     "Ideas",
     "Outdoors",
   ])
-  await submit("Name for Member A", "Member C")
-  expect(container.textContent).toContain("Member C")
-  expect(container.textContent).not.toContain("Member A")
+
+  await wish(clothes, "A waterproof jacket")
   await render()
-  expect(container.textContent).toContain("Member C")
-  expect(container.textContent).toContain("Member B")
+  await click("Remove Clothes", section("Member A"))
+  expect(
+    section("Member A").querySelector('[aria-label="Remove Clothes"]')
+      ?.textContent
+  ).toContain("the 1 wish in it")
+  await click("Keep", section("Member A"))
+  expect((await available()).items).toHaveLength(1)
+  await click("Remove Clothes", section("Member A"))
+  await click("Remove for good", section("Member A"))
+  expect((await available()).items).toEqual([])
+
+  await type(valued("Member A"), "Member C")
+  await click("Save name", section("Member A"))
+  expect(sheet().textContent).toContain("Member C")
 
   const member = (await available()).owners.find(
     (owner) => owner.name === "Member C"
@@ -279,18 +364,21 @@ test("renders owner-aware CRUD, failed edits and confirmation against migrated a
     title: "A Quiet Orbit",
     request_id: crypto.randomUUID(),
   })
-  await click("Remove Member C")
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-    "wishlists, wishes and watchlist entries"
-  )
-  await click("Keep it")
+  await click("Remove Member C", section("Member C"))
+  expect(
+    section("Member C").querySelector('[aria-label="Remove Member C"]')
+      ?.textContent
+  ).toContain("wishlists, wishes and watchlist entries")
+  await click("Keep", section("Member C"))
+
   const retained = await readWatchlists()
 
   expect(
     retained.state === "available" ? retained.entries.length : undefined
   ).toBe(1)
-  await click("Remove Member C")
-  await click("Remove permanently")
+  await click("Remove Member C", section("Member C"))
+  await click("Remove for good", section("Member C"))
+
   const remaining = await readWatchlists()
 
   expect(
@@ -301,54 +389,170 @@ test("renders owner-aware CRUD, failed edits and confirmation against migrated a
   ])
 })
 
-test("URL suggestions remain editable and only save on explicit addition", async () => {
+test("plates group by person and list, the keys filter them, and the detail plate edits and deletes", async () => {
+  const home = await household({
+    "Member A": ["Ideas", "Outdoors"],
+    "Member B": ["Ideas"],
+  })
+
+  await wish(home.list("Member A", "Ideas"), "A scarf")
+  await wish(home.list("Member A", "Ideas"), "A warm jacket", {
+    priority: "high",
+    price: "DKK 199.95",
+    quantity: 2,
+  })
+  await wish(home.list("Member A", "Outdoors"), "A tent")
+  await wish(home.list("Member B", "Ideas"), "A book")
   await render()
-  await submit("New household member", "Member A")
-  await submit("List name for Member A", "Ideas")
-  const list = (await available()).lists[0]
 
-  if (!list) throw new Error("Expected list")
+  // Everyone: one group per person, high priority first, each plate captioned by its list.
+  expect(titles(section("Member A", container))).toEqual([
+    "A warm jacket",
+    "A scarf",
+    "A tent",
+  ])
+  expect(titles(section("Member B", container))).toEqual(["A book"])
+  expect(section("Member A", container).textContent).toContain("Outdoors")
+  expect(section("Member A", container).textContent).toContain("×2")
 
-  // A protocol fixture exercises UI review, not extraction (owned by authenticated Axum tests).
-  await render(async (request) => {
+  await click(/^Member A/, container)
+  expect(search).toEqual({ person: home.owner("Member A").id, list: undefined })
+  expect(titles()).not.toContain("A book")
+  expect(titles(section("Outdoors", container))).toEqual(["A tent"])
+  await click(
+    /^Outdoors/,
+    container.querySelector('[aria-label="Member A’s lists"]') ?? container
+  )
+  expect(search.list).toBe(home.list("Member A", "Outdoors").id)
+  expect(titles()).toEqual(["A tent"])
+
+  await plate("A tent")
+  await click("Edit", sheet())
+  await type(field("Title", sheet()), "A bigger tent")
+  await type(field("Price", sheet()), "DKK 999")
+  await type(field("Link", sheet()), "https://example.com/tent")
+  await type(field("Notes", sheet()), "For summer")
+  await click("High", sheet())
+  await click("One more", sheet())
+  await click("Save", sheet())
+
+  const item = (await available()).items.find(
+    (entry) => entry.title === "A bigger tent"
+  )
+
+  expect(item).toMatchObject({
+    url: "https://example.com/tent",
+    notes: "For summer",
+    price: "DKK 999",
+    quantity: 2,
+    priority: "high",
+  })
+  expect(
+    sheet().querySelector('a[href="https://example.com/tent"]')?.textContent
+  ).toContain("example.com")
+
+  await click("Edit", sheet())
+  await type(field("Link", sheet()), "javascript:alert(1)")
+  // Dispatch at the form seam so Axum validation runs even where native URL checks would stop it.
+  await act(async () => {
+    sheet()
+      .querySelector("form")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    await mutationWork
+    await refreshWork
+  })
+  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
+    "Check the fields"
+  )
+  expect(field("Link", sheet()).value).toBe("javascript:alert(1)")
+  expect(
+    (await available()).items.find((entry) => entry.id === item?.id)
+  ).toEqual(item)
+  await type(field("Link", sheet()), "")
+  await type(field("Price", sheet()), "")
+  await click("Save", sheet())
+  expect(
+    (await available()).items.find((entry) => entry.id === item?.id)
+  ).toMatchObject({
+    url: null,
+    price: null,
+    notes: "For summer",
+    quantity: 2,
+    priority: "high",
+  })
+
+  await click("Delete", sheet())
+  expect(
+    sheet().querySelector('[aria-label="Delete wish"]')?.textContent
+  ).toContain("Outdoors")
+  await click("Keep it", sheet())
+  expect((await available()).items).toHaveLength(4)
+  await click("Delete", sheet())
+  await click("Delete for good", sheet())
+  expect((await available()).items).toHaveLength(3)
+  expect(titles()).toEqual([])
+  expect(container.textContent).toContain("Add the first wish")
+
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await render()
+  expect(container.textContent).toContain("Wishlists unavailable")
+  expect(container.textContent).not.toContain("synthetic-rejected-key")
+})
+
+test("a pasted link fills editable fields for the chosen list, and nothing saves before Add wish", async () => {
+  const home = await household({ "Member A": ["Ideas"] })
+  const list = home.list("Member A", "Ideas")
+
+  // A protocol fixture exercises review in the UI; extraction is owned by the Axum tests.
+  metadata = async (request) => {
     const { url, ...destination } = request
 
-    expect(destination).toEqual({
-      owner_id: list.owner_id,
-      list_id: list.id,
-    })
+    expect(destination).toEqual({ owner_id: list.owner_id, list_id: list.id })
     expect(url).toMatch(/^https:\/\/example\.com\/(product|another-product)$/)
 
     return {
       state: "preview",
       data: {
         status: "ready",
-        title: request.url.endsWith("another-product")
+        title: url.endsWith("another-product")
           ? "Suggested hat"
           : "Suggested coat",
-        url: request.url,
+        url,
         image_url: "https://example.com/coat.png",
         price: "DKK 199.95",
       },
     }
-  })
-  await type("Product URL", "https://example.com/product")
-  await click("Read product details")
-  expect(field("Something you’d like").value).toBe("Suggested coat")
-  expect(field("Image URL").value).toBe("https://example.com/coat.png")
-  expect(field("Price (include currency)").value).toBe("DKK 199.95")
+  }
+
+  search = { person: list.owner_id, list: list.id }
+  await render()
+  await click("Add a wish", container)
+  expect(button("Ideas", sheet()).getAttribute("aria-pressed")).toBe("true")
+  await type(field("Paste a link", sheet()), "https://example.com/product")
+  await debounced()
+  expect(field("Title", sheet()).value).toBe("Suggested coat")
+  expect(field("Image link", sheet()).value).toBe(
+    "https://example.com/coat.png"
+  )
+  expect(field("Price", sheet()).value).toBe("DKK 199.95")
+  expect(sheet().textContent).toContain("Read from the link")
+  expect(sheet().querySelector("img")).toBeNull()
   expect((await available()).items).toEqual([])
-  await type("Product URL", "https://example.com/another-product")
-  expect(field("Something you’d like").value).toBe("")
-  expect(field("Image URL").value).toBe("")
-  expect(field("Price (include currency)").value).toBe("")
-  await click("Read product details")
-  expect(field("Something you’d like").value).toBe("Suggested hat")
-  await type("Product URL", "https://example.com/product")
-  await click("Read product details")
-  await type("Image URL", "https://example.com/reviewed.png")
-  await type("Price (include currency)", "DKK 179.95")
-  await submit("Something you’d like", "My coat")
+
+  await type(
+    field("Paste a link", sheet()),
+    "https://example.com/another-product"
+  )
+  expect(field("Title", sheet()).value).toBe("")
+  expect(field("Price", sheet()).value).toBe("")
+  await debounced()
+  expect(field("Title", sheet()).value).toBe("Suggested hat")
+  await type(field("Paste a link", sheet()), "https://example.com/product")
+  await debounced()
+  await type(field("Image link", sheet()), "https://example.com/reviewed.png")
+  await type(field("Price", sheet()), "DKK 179.95")
+  await type(field("Title", sheet()), "My coat")
+  await click("Add wish", sheet())
   expect((await available()).items[0]).toMatchObject({
     title: "My coat",
     list_id: list.id,
@@ -356,7 +560,17 @@ test("URL suggestions remain editable and only save on explicit addition", async
     image_url: "https://example.com/reviewed.png",
     price: "DKK 179.95",
   })
-  await render(async () => ({
+  const [saved] = (await available()).items
+  // The browser never loads the shop: the picture travels through the dashboard's relay.
+  expect(
+    container.querySelector(".wish-plate img")?.getAttribute("src")
+  ).toMatch(
+    new RegExp(
+      `^/wish-image/${list.owner_id}/${list.id}/${saved?.id}\\?v=\\w+$`
+    )
+  )
+
+  metadata = async () => ({
     state: "preview",
     data: {
       status: "partial",
@@ -365,63 +579,40 @@ test("URL suggestions remain editable and only save on explicit addition", async
       image_url: null,
       price: null,
     },
-  }))
-  await type("Something you’d like", "My own idea")
-  await type("Product URL", "https://example.com/other")
-  await click("Read product details")
-  expect(field("Something you’d like").value).toBe("My own idea")
-  await submit("Something you’d like", "My own idea")
+  })
+  await click("Add a wish", container)
+  await type(field("Title", sheet()), "My own idea")
+  await type(field("Paste a link", sheet()), "https://example.com/other")
+  await debounced()
+  expect(sheet().textContent).toContain("Partly read from the link")
+  expect(field("Title", sheet()).value).toBe("My own idea")
+  await click("Add wish", sheet())
   expect((await available()).items).toHaveLength(2)
 })
 
-test("rejected URL assistance keeps the manual draft and can still add a wish", async () => {
+test("an unreadable link keeps the manual draft, and the link is only read once a list is chosen", async () => {
+  const home = await household({ "Member A": ["Ideas"] })
   await render()
-  await submit("New household member", "Member A")
-  await submit("List name for Member A", "Ideas")
-  await type("Product URL", "http://127.0.0.1/product")
-  await click("Read product details")
-  expect(container.textContent).toContain("enter the details manually")
-  expect(field("Product URL").value).toBe("http://127.0.0.1/product")
+  await click("Add a wish", container)
+  await type(field("Paste a link", sheet()), "http://127.0.0.1/product")
+  await debounced()
+  expect(sheet().textContent).toContain("Choose who it is for")
+  await click("Member A", sheet())
+  await click("Ideas", sheet())
+  await debounced()
+  expect(sheet().textContent).toContain("Could not read this link")
+  expect(field("Paste a link", sheet()).value).toBe("http://127.0.0.1/product")
   expect((await available()).items).toEqual([])
-  await type("Product URL", "https://example.com/product")
-  await submit("Something you’d like", "A manually described coat")
+  // Tests never reach the internet: the next link is read by a stub that cannot answer.
+  metadata = () => Promise.reject(new Error("Synthetic outage"))
+  await type(field("Paste a link", sheet()), "https://example.com/product")
+  await type(field("Title", sheet()), "A manually described coat")
+  await click("Add wish", sheet())
   expect((await available()).items[0]).toMatchObject({
     title: "A manually described coat",
+    list_id: home.list("Member A", "Ideas").id,
     url: "https://example.com/product",
   })
-})
-
-test("refresh updates untouched member names and preserves edited drafts", async () => {
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
-  const member = (await available()).owners[0]
-
-  if (member === undefined) throw new Error("Expected owner")
-
-  await render()
-  await writeWishlist({
-    kind: "rename-owner",
-    owner_id: member.id,
-    name: "Member B",
-  })
-  await click("Refresh lists")
-  expect(field("Name for Member B").value).toBe("Member B")
-  await type("Name for Member B", "My draft")
-  await writeWishlist({
-    kind: "rename-owner",
-    owner_id: member.id,
-    name: "Member C",
-  })
-  await click("Refresh lists")
-  expect(field("Name for Member C").value).toBe("My draft")
-  await submit("Name for Member C", "My draft")
-  expect((await available()).owners[0]?.name).toBe("My draft")
-  await writeWishlist({
-    kind: "rename-owner",
-    owner_id: member.id,
-    name: "Member D",
-  })
-  await click("Refresh lists")
-  expect(field("Name for Member D").value).toBe("Member D")
 })
 
 test.each([
@@ -454,25 +645,17 @@ test.each([
     rich: false,
   },
   {
-    title: "\uFEFFA book\uFEFF",
+    title: "﻿A book﻿",
     retry: "A book",
-    expected: ["A book", "\uFEFFA book\uFEFF"],
+    expected: ["A book", "﻿A book﻿"],
     legacy: false,
     rich: false,
   },
 ])(
   "a lost addition respects API title identity after remount ($title), and auth failures retain the draft",
   async ({ title, retry, expected, legacy, rich }) => {
-    await writeWishlist({ kind: "create-owner", name: "Member A" })
-    const member = (await available()).owners[0]
-
-    if (member === undefined) throw new Error("Expected owner")
-
-    await writeWishlist({
-      kind: "create-list",
-      owner_id: member.id,
-      name: "Ideas",
-    })
+    const home = await household({ "Member A": ["Ideas"] })
+    const list = home.list("Member A", "Ideas")
     let loseAddition = true
 
     async function forward(
@@ -520,20 +703,20 @@ test.each([
     const address = z.object({ port: z.number() }).parse(proxy.address())
 
     vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
+    search = { person: list.owner_id, list: list.id }
     await render()
+    await click("Add a wish", container)
 
     if (rich) {
-      await type("Price (include currency)", "DKK 199.95")
-      await type("Quantity", "2")
+      await type(field("Price", sheet()), "DKK 199.95")
+      await click("One more", sheet())
     }
 
-    await submit("Something you’d like", title)
-    expect(container.textContent).toContain("The response was lost")
+    await type(field("Title", sheet()), title)
+    await click("Add wish", sheet())
+    expect(sheet().textContent).toContain("The response was lost")
 
     if (legacy) {
-      const list = (await available()).lists[0]
-
-      if (!list) throw new Error("Expected list")
       const key = `openhome.pending-wish.${list.id}`
 
       const prior = z
@@ -546,150 +729,31 @@ test.each([
     await act(async () => root.unmount())
     root = createRoot(container)
     await render()
+    await click("Add a wish", container)
 
     if (rich) {
-      expect(field("Price (include currency)").value).toBe("DKK 199.95")
-      expect(field("Quantity").value).toBe("2")
+      expect(field("Price", sheet()).value).toBe("DKK 199.95")
+      expect(sheet().querySelector(".stepper output")?.textContent).toBe("2")
     }
 
-    await submit("Something you’d like", retry)
+    await type(field("Title", sheet()), retry)
+    await click("Add wish", sheet())
     expect((await available()).items.map((item) => item.title).sort()).toEqual(
       expected
     )
-    expect(container.textContent).toContain("Saved to OpenHome")
+    expect(document.querySelector(".sheet")).toBeNull()
+
+    await click("Add a wish", container)
     vi.stubEnv("API_KEY", "synthetic-rejected-key")
-    await submit("Something you’d like", "A rain hat")
-    expect(container.textContent).toContain("OpenHome rejected the API key")
-    expect(container.textContent).not.toContain("synthetic-rejected-key")
-    expect(field("Something you’d like").value).toBe("A rain hat")
+    await type(field("Title", sheet()), "A rain hat")
+    await click("Add wish", sheet())
+    expect(sheet().textContent).toContain("OpenHome rejected the API key")
+    expect(sheet().textContent).not.toContain("synthetic-rejected-key")
+    expect(field("Title", sheet()).value).toBe("A rain hat")
     vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-    await click("Refresh lists")
-    await submit("Something you’d like", "A rain hat")
+    await click("Add wish", sheet())
     expect((await available()).items.map((item) => item.title).sort()).toEqual(
       [...expected, "A rain hat"].sort()
     )
   }
 )
-
-test("rich edits persist fields, preserve failed drafts, and clear optional context", async () => {
-  await render()
-  await submit("New household member", "Member A")
-  await submit("List name for Member A", "Ideas")
-  await submit("Something you’d like", "A warm jacket")
-  await click("Edit A warm jacket")
-  await type("Product URL", "https://example.com/jacket")
-  await type("Image URL", "https://example.com/jacket.png")
-  await type("Price (include currency)", "DKK 199.95")
-  await type("Quantity", "2")
-
-  const notes = container.querySelector<HTMLTextAreaElement>(
-    'form[aria-label="Save wish"] textarea[name="notes"]'
-  )
-
-  const priority = container.querySelector<HTMLSelectElement>(
-    'form[aria-label="Save wish"] select[name="priority"]'
-  )
-
-  if (!notes || !priority) throw new Error("Expected rich edit controls")
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value"
-    )?.set?.call(notes, "For winter")
-    notes.dispatchEvent(new Event("input", { bubbles: true }))
-    priority.value = "high"
-    priority.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  await submit("Wish title", "A waterproof jacket")
-  const item = (await available()).items[0]
-  expect(item).toMatchObject({
-    title: "A waterproof jacket",
-    url: "https://example.com/jacket",
-    image_url: "https://example.com/jacket.png",
-    notes: "For winter",
-    price: "DKK 199.95",
-    quantity: 2,
-    priority: "high",
-  })
-  expect(container.textContent).toContain("high priority")
-  expect(
-    container.querySelector('a[href="https://example.com/jacket"]')?.textContent
-  ).toContain("Product link")
-  await render()
-  await click("Edit A waterproof jacket")
-  await type("Product URL", "javascript:alert(1)")
-  // Dispatch at the form seam so Axum validation is exercised even when native URL validation would stop submission.
-  await act(async () => {
-    field("Wish title")
-      .closest("form")
-      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
-    await mutationWork
-    await refreshWork
-  })
-  expect(container.textContent).toContain("Check the fields")
-  expect(field("Product URL").value).toBe("javascript:alert(1)")
-  expect((await available()).items[0]).toEqual(item)
-  await type("Product URL", "")
-  await type("Image URL", "")
-  await type("Price (include currency)", "")
-  await submit("Wish title", "A waterproof jacket")
-  expect((await available()).items[0]).toMatchObject({
-    url: null,
-    image_url: null,
-    price: null,
-    notes: "For winter",
-    quantity: 2,
-    priority: "high",
-  })
-})
-
-test("refresh merges untouched rich fields while preserving edited drafts and partial saves", async () => {
-  await render()
-  await submit("New household member", "Member A")
-  await submit("List name for Member A", "Ideas")
-  await submit("Something you’d like", "A jacket")
-  const item = (await available()).items[0]
-  const list = (await available()).lists[0]
-
-  if (item === undefined || list === undefined) throw new Error("Expected wish")
-
-  await click("Edit A jacket")
-  await type("Wish title", "My draft jacket")
-  await writeWishlist({
-    kind: "edit-item",
-    owner_id: list.owner_id,
-    list_id: list.id,
-    item_id: item.id,
-    quantity: 3,
-    priority: "high",
-    notes: "Updated through API",
-  })
-  await click("Refresh lists")
-  expect(field("Quantity").value).toBe("3")
-  expect(field("Wish title").value).toBe("My draft jacket")
-  expect(
-    container.querySelector<HTMLSelectElement>(
-      'form[aria-label="Save wish"] select[name="priority"]'
-    )?.value
-  ).toBe("high")
-  expect(
-    container.querySelector<HTMLTextAreaElement>(
-      'form[aria-label="Save wish"] textarea[name="notes"]'
-    )?.value
-  ).toBe("Updated through API")
-  // A concurrent change without another refresh also stays intact when only the title was edited.
-  await writeWishlist({
-    kind: "edit-item",
-    owner_id: list.owner_id,
-    list_id: list.id,
-    item_id: item.id,
-    quantity: 4,
-  })
-  await submit("Wish title", "My draft jacket")
-  expect((await available()).items[0]).toMatchObject({
-    title: "My draft jacket",
-    quantity: 4,
-    priority: "high",
-    notes: "Updated through API",
-  })
-})

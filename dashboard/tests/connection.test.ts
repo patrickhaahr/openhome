@@ -285,15 +285,14 @@ test("renders shared Wishlists through Start SSR and authenticated Axum without 
     }),
   })
 
-  const html = await page(
-    await dashboard({ url: axumUrl, key: apiKey }),
-    "/wishlist"
-  )
+  const url = await dashboard({ url: axumUrl, key: apiKey })
+
+  const html = await page(url, "/lists")
 
   expect(html).toContain("Member A")
   expect(html).toContain("Outdoors")
   expect(html).toContain("A warm jacket")
-  expect(html).toContain("Something you’d like")
+  expect(html).toContain("Add a wish")
   expect(html).not.toContain("Not available yet")
 })
 
@@ -673,5 +672,60 @@ test("gallery SSR and media HTTP routes keep private configuration and upstream 
   mediaStatus = 404
   const missing = await fetch(`${url}/photo-media/${album}/${asset}/preview`)
   expect(missing.status).toBe(404)
+  expect(await missing.text()).toBe("")
+})
+
+test("wish pictures are relayed as bounded image bytes without upstream headers", async () => {
+  const owner = "00000000-0000-4000-8000-000000000011"
+  const list = "00000000-0000-4000-8000-000000000012"
+  const item = "00000000-0000-4000-8000-000000000013"
+  const requests: string[] = []
+  let status = 200
+  let type = "image/png"
+
+  const upstream = createServer((request, response) => {
+    expect(request.headers.authorization).toBe(`Bearer ${apiKey}`)
+    requests.push(request.url ?? "")
+    response.writeHead(status, {
+      "Content-Type": type,
+      "X-Provider-Key": "synthetic-private-key",
+      Location: "https://private.invalid/image",
+    })
+    response.end(
+      status === 200 ? Buffer.from([1, 2, 3]) : "synthetic-private-key"
+    )
+  })
+
+  const url = await dashboard({ url: await listen(upstream), key: apiKey })
+  const path = `/wish-image/${owner}/${list}/${item}?v=1`
+  const image = await fetch(`${url}${path}`)
+
+  expect(image.status).toBe(200)
+  expect(requests).toEqual([
+    `/api/household-users/${owner}/wishlists/${list}/items/${item}/image`,
+  ])
+  expect(image.headers.get("content-type")).toBe("image/png")
+  expect(image.headers.get("cache-control")).toBe("private, max-age=3600")
+  expect(image.headers.get("x-content-type-options")).toBe("nosniff")
+  expect(image.headers.get("content-security-policy")).toContain("sandbox")
+  expect(image.headers.get("x-provider-key")).toBeNull()
+  expect(image.headers.get("location")).toBeNull()
+  expect([...new Uint8Array(await image.arrayBuffer())]).toEqual([1, 2, 3])
+
+  expect(
+    (await fetch(`${url}/wish-image/not-an-id/${list}/${item}`)).status
+  ).toBe(404)
+  expect(requests).toHaveLength(1)
+
+  type = "text/html"
+  const shop = await fetch(`${url}${path}`)
+  expect(shop.status).toBe(503)
+  expect(await shop.text()).toBe("")
+
+  status = 404
+  type = "application/json"
+  const missing = await fetch(`${url}${path}`)
+  expect(missing.status).toBe(404)
+  expect(missing.headers.get("cache-control")).toBe("no-store")
   expect(await missing.text()).toBe("")
 })

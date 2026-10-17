@@ -6,16 +6,18 @@
         {
           "name": "Birthday",
           "items": [
-            { "title": "Merino hiking socks", "price": "180 kr", "priority": "high", "quantity": 2, "notes": "Medium weight, size 43-46.", "url": "https://shop.example.com/merino-socks" },
-            { "title": "Compact travel tripod", "price": "649 kr", "priority": "normal", "quantity": 1, "notes": "Under 1 kg when folded.", "url": "https://shop.example.com/travel-tripod" },
-            { "title": "Cast iron skillet", "price": "425 kr", "priority": "low", "quantity": 1, "notes": null, "url": null }
+            {"title": "Merino hiking socks", "price": "180 kr", "priority": "high", "quantity": 2, "notes": "Medium weight, size 43-46.", "url": "https://shop.example.com/merino-socks", "art": "socks"},
+            {"title": "Compact travel tripod", "price": "649 kr", "priority": "normal", "quantity": 1, "notes": "Under 1 kg when folded.", "url": "https://shop.example.com/travel-tripod", "art": "tripod"},
+            {"title": "Over-ear headphones", "price": "1.299 kr", "priority": "high", "quantity": 1, "notes": "Closed back, for the train. Any colour but white.", "url": "https://shop.example.com/headphones", "art": "headphones"},
+            {"title": "Cast iron skillet", "price": "425 kr", "priority": "low", "quantity": 1, "notes": null, "url": null, "art": "skillet"}
           ]
         },
         {
           "name": "Home and kitchen",
           "items": [
-            { "title": "Ceramic pour-over set", "price": "389 kr", "priority": "normal", "quantity": 1, "notes": "Matte grey if they have it.", "url": "https://shop.example.com/pour-over" },
-            { "title": "Linen tea towels", "price": "129 kr", "priority": "low", "quantity": 4, "notes": null, "url": null }
+            {"title": "Ceramic pour-over set", "price": "389 kr", "priority": "normal", "quantity": 1, "notes": "Matte grey if they have it.", "url": "https://shop.example.com/pour-over", "art": "pourover"},
+            {"title": "Linen tea towels", "price": "129 kr", "priority": "low", "quantity": 4, "notes": null, "url": null, "art": "towels"},
+            {"title": "Reading lamp", "price": "799 kr", "priority": "normal", "quantity": 1, "notes": "Warm light, for the corner by the window.", "url": "https://shop.example.com/reading-lamp", "art": "lamp"}
           ]
         }
       ]
@@ -26,29 +28,69 @@
         {
           "name": "Books",
           "items": [
-            { "title": "An atlas of quiet places", "price": "299 kr", "priority": "high", "quantity": 1, "notes": "Hardback edition.", "url": "https://books.example.com/atlas-of-quiet-places" },
-            { "title": "The Harbour Almanac", "price": "175 kr", "priority": "normal", "quantity": 1, "notes": null, "url": null },
-            { "title": "Field notes on birdsong", "price": "210 kr", "priority": "low", "quantity": 1, "notes": "Paperback is fine.", "url": null }
+            {"title": "An atlas of quiet places", "price": "299 kr", "priority": "high", "quantity": 1, "notes": "Hardback edition.", "url": "https://books.example.com/atlas-of-quiet-places", "art": "atlas"},
+            {"title": "The Harbour Almanac", "price": "175 kr", "priority": "normal", "quantity": 1, "notes": null, "url": null, "art": "almanac"},
+            {"title": "Field notes on birdsong", "price": "210 kr", "priority": "low", "quantity": 1, "notes": "Paperback is fine.", "url": null, "art": null}
           ]
         },
         {
           "name": "Workshop",
           "items": [
-            { "title": "Japanese pull saw", "price": "340 kr", "priority": "normal", "quantity": 1, "notes": null, "url": "https://tools.example.com/pull-saw" },
-            { "title": "Waxed canvas apron", "price": "550 kr", "priority": "high", "quantity": 1, "notes": "Olive green.", "url": null }
+            {"title": "Japanese pull saw", "price": "340 kr", "priority": "normal", "quantity": 1, "notes": null, "url": "https://tools.example.com/pull-saw", "art": "saw"},
+            {"title": "Waxed canvas apron", "price": "550 kr", "priority": "high", "quantity": 1, "notes": "Olive green.", "url": null, "art": "apron"},
+            {"title": "Low-angle block plane", "price": "1.150 kr", "priority": "normal", "quantity": 1, "notes": "The small one, for end grain.", "url": "https://tools.example.com/block-plane", "art": "plane"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Robin",
+      "wishlists": [
+        {
+          "name": "Christmas",
+          "items": [
+            {"title": "Wool scarf", "price": "450 kr", "priority": "high", "quantity": 1, "notes": "Long, in a deep blue.", "url": "https://shop.example.com/wool-scarf", "art": "scarf"},
+            {"title": "Enamel camping mugs", "price": "95 kr", "priority": "normal", "quantity": 2, "notes": null, "url": "https://shop.example.com/enamel-mug", "art": "mug"},
+            {"title": "Rain jacket", "price": "1.495 kr", "priority": "normal", "quantity": 1, "notes": "Size M. Something that packs small.", "url": "https://shop.example.com/rain-jacket", "art": "jacket"},
+            {"title": "Terracotta plant pot", "price": "160 kr", "priority": "low", "quantity": 1, "notes": "About 20 cm across.", "url": null, "art": "plant"},
+            {"title": "A surprise", "price": null, "priority": "low", "quantity": 1, "notes": "Anything small and handmade.", "url": null, "art": null}
           ]
         }
       ]
     }
   ],
+  "catalogue": [
+    {"id": 129, "kind": "movie", "title": "Spirited Away", "date": "2001-07-20", "poster_path": "/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg", "overview": "A girl wanders into a spirit world and works in a bathhouse to free her parents."},
+    {"id": 278, "kind": "movie", "title": "The Shawshank Redemption", "date": "1994-09-23", "poster_path": "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg", "overview": "Two prisoners build a friendship over decades behind the walls."},
+    {"id": 238, "kind": "movie", "title": "The Godfather", "date": "1972-03-14", "poster_path": "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg", "overview": "A crime family's ageing head hands his empire to a reluctant son."},
+    {"id": 155, "kind": "movie", "title": "The Dark Knight", "date": "2008-07-16", "poster_path": "/qJ2tW6WMUDux911r6m7haRef0WH.jpg", "overview": "Batman faces an agent of chaos who wants to watch Gotham burn."},
+    {"id": 389, "kind": "movie", "title": "12 Angry Men", "date": "1957-04-10", "poster_path": "/zhG3vKWyDRaZYoaww1UVAi29T9h.jpg", "overview": "One juror holds out, and a closed room reconsiders a verdict."},
+    {"id": 122, "kind": "movie", "title": "The Lord of the Rings: The Return of the King", "date": "2003-12-17", "poster_path": "/rCzpDGLbOoPwLjy3OAm5NUPOTrC.jpg", "overview": "The last march on Mordor, while two hobbits climb towards the fire."},
+    {"id": 687163, "kind": "movie", "title": "Project Hail Mary", "date": "2026-03-15", "poster_path": "/iOb2fjXLbpJgyQXe46n1WtGCnaa.jpg", "overview": "A teacher wakes alone on a spaceship with a star-sized problem to solve."},
+    {"id": 497, "kind": "movie", "title": "The Green Mile", "date": "1999-12-10", "poster_path": "/8VG8fDNiy50H4FedGwdSVUPoaJe.jpg", "overview": "A death-row guard meets an inmate with an extraordinary gift."},
+    {"id": 1396, "kind": "series", "title": "Breaking Bad", "date": "2008-01-20", "poster_path": "/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg", "overview": "A chemistry teacher turns to making drugs, one bad choice at a time."},
+    {"id": 94605, "kind": "series", "title": "Arcane", "date": "2021-11-06", "poster_path": "/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg", "overview": "Two sisters end up on opposite sides of a city split between rich and poor."},
+    {"id": 246, "kind": "series", "title": "Avatar: The Last Airbender", "date": "2005-02-21", "poster_path": "/yaGt4GIutpbXHsv48tWceWg6s56.jpg", "overview": "A boy who can bend all four elements must end a hundred-year war."},
+    {"id": 250307, "kind": "series", "title": "The Pitt", "date": "2025-01-09", "poster_path": "/kvFSpESyBZMjaeOJDx7RS3P1jey.jpg", "overview": "One emergency-room shift, hour by hour."},
+    {"id": 209867, "kind": "series", "title": "Frieren: Beyond Journey's End", "date": "2023-09-29", "poster_path": "/dqZENchTd7lp5zht7BdlqM7RBhD.jpg", "overview": "An elf mage retraces an old quest and learns what her friends meant to her."},
+    {"id": 64010, "kind": "series", "title": "Reply 1988", "date": "2015-11-06", "poster_path": "/655MownSWwplhvVlXERRJ4OSOG2.jpg", "overview": "Five families on one Seoul alley grow up together in 1988."}
+  ],
   "watchlist": [
-    { "owner": "Alex", "kind": "movie", "title": "A Quiet Orbit", "status": "planned", "added_days_ago": 2 },
-    { "owner": "Alex", "kind": "series", "title": "The Lighthouse Journey", "status": "watching", "added_days_ago": 12 },
-    { "owner": "Alex", "kind": "movie", "title": "Paper Cities", "status": "completed", "added_days_ago": 40, "completed_days_ago": 6 },
-    { "owner": "Alex", "kind": "series", "title": "Salt and Signal", "status": "planned", "added_days_ago": 5 },
-    { "owner": "Sam", "kind": "movie", "title": "The Cartographer's Winter", "status": "planned", "added_days_ago": 9 },
-    { "owner": "Sam", "kind": "series", "title": "Harbour Lights", "status": "watching", "added_days_ago": 21 },
-    { "owner": "Sam", "kind": "movie", "title": "Seven Small Rivers", "status": "completed", "added_days_ago": 60, "completed_days_ago": 14 },
-    { "owner": "Sam", "kind": "series", "title": "Midnight Greenhouse", "status": "completed", "added_days_ago": 90, "completed_days_ago": 30 }
+    {"owner": "Alex", "kind": "series", "title": "Breaking Bad", "tmdb_id": 1396, "status": "watching", "added_days_ago": 12},
+    {"owner": "Alex", "kind": "movie", "title": "Project Hail Mary", "tmdb_id": 687163, "status": "watching", "added_days_ago": 4},
+    {"owner": "Alex", "kind": "movie", "title": "Spirited Away", "tmdb_id": 129, "status": "planned", "added_days_ago": 2},
+    {"owner": "Alex", "kind": "series", "title": "Arcane", "tmdb_id": 94605, "status": "planned", "added_days_ago": 5},
+    {"owner": "Alex", "kind": "movie", "title": "12 Angry Men", "tmdb_id": 389, "status": "planned", "added_days_ago": 8},
+    {"owner": "Alex", "kind": "movie", "title": "The Shawshank Redemption", "tmdb_id": 278, "status": "completed", "added_days_ago": 40, "completed_days_ago": 6},
+    {"owner": "Alex", "kind": "movie", "title": "The Green Mile", "tmdb_id": 497, "status": "completed", "added_days_ago": 50, "completed_days_ago": 21},
+    {"owner": "Sam", "kind": "series", "title": "The Pitt", "tmdb_id": 250307, "status": "watching", "added_days_ago": 21},
+    {"owner": "Sam", "kind": "movie", "title": "The Godfather", "tmdb_id": 238, "status": "planned", "added_days_ago": 9},
+    {"owner": "Sam", "kind": "series", "title": "Frieren: Beyond Journey's End", "tmdb_id": 209867, "status": "planned", "added_days_ago": 3},
+    {"owner": "Sam", "kind": "movie", "title": "The Dark Knight", "tmdb_id": 155, "status": "completed", "added_days_ago": 60, "completed_days_ago": 14},
+    {"owner": "Sam", "kind": "series", "title": "Reply 1988", "tmdb_id": 64010, "status": "completed", "added_days_ago": 90, "completed_days_ago": 30},
+    {"owner": "Robin", "kind": "series", "title": "Avatar: The Last Airbender", "tmdb_id": 246, "status": "watching", "added_days_ago": 15},
+    {"owner": "Robin", "kind": "movie", "title": "The Lord of the Rings: The Return of the King", "tmdb_id": 122, "status": "planned", "added_days_ago": 6},
+    {"owner": "Robin", "kind": "movie", "title": "The film from book club", "status": "planned", "added_days_ago": 1},
+    {"owner": "Robin", "kind": "movie", "title": "Spirited Away", "tmdb_id": 129, "status": "completed", "added_days_ago": 30, "completed_days_ago": 3}
   ]
 }

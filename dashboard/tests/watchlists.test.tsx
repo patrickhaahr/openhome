@@ -26,20 +26,19 @@ import {
   test,
   vi,
 } from "vitest"
-import { Watchlists } from "@/components/watchlists"
+import { Programme } from "@/components/programme"
+import type { PersonSearch } from "@/lib/lists"
 import {
   readWatchlists,
   writeWatchlist,
   searchWatchlistMedia,
 } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
+import type { WatchlistMutation, MediaSearchResult } from "@/lib/watchlist"
 import { startAxumFixture } from "./support/axum-fixture"
-import type {
-  WatchlistFilters,
-  WatchlistMutation,
-  MediaSearchResult,
-} from "@/lib/watchlist"
+import { button, field, settle, sheet, type } from "./support/lists-dom"
 
+// TMDB is the fixture's loopback stub: it knows "A Quiet Orbit" and "The Lighthouse Journey".
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
 let root: Root
@@ -54,7 +53,7 @@ let searchWork: Promise<MediaSearchResult> = Promise.resolve({
 
 let refreshWork: Promise<void> = Promise.resolve()
 
-let filters: WatchlistFilters = {}
+let search: PersonSearch = {}
 
 let proxy: Server | undefined
 
@@ -71,7 +70,7 @@ beforeEach(() => {
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   sessionStorage.clear()
-  filters = {}
+  search = {}
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -115,17 +114,17 @@ async function render(): Promise<void> {
   await act(async () =>
     root.render(
       <RouterContextProvider router={router}>
-        <Watchlists
+        <Programme
           data={data}
-          search={(input) => {
+          search={search}
+          choose={(next) => {
+            search = next
+            refreshWork = render()
+          }}
+          find={(input) => {
             searchWork = searchWatchlistMedia(input)
 
             return searchWork
-          }}
-          filters={filters}
-          filter={(next) => {
-            filters = next
-            refreshWork = render()
           }}
           change={(command) => {
             work = writeWatchlist(command)
@@ -143,65 +142,47 @@ async function render(): Promise<void> {
   )
 }
 
-function field(label: string): HTMLInputElement | HTMLSelectElement {
-  const matched = Array.from(container.querySelectorAll("label")).find(
-    (item) => item.textContent === label
-  )
-
-  const input = document.getElementById(matched?.htmlFor ?? "")
-
-  if (
-    !(input instanceof HTMLInputElement) &&
-    !(input instanceof HTMLSelectElement)
-  )
-    throw new Error(`Missing field ${label}`)
-
-  return input
-}
-
-async function type(label: string, value: string): Promise<void> {
-  const input = field(label)
+async function press(element: HTMLButtonElement): Promise<void> {
   await act(async () => {
-    const prototype =
-      input instanceof HTMLSelectElement
-        ? HTMLSelectElement.prototype
-        : HTMLInputElement.prototype
-
-    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, value)
-    input.dispatchEvent(
-      new Event(input instanceof HTMLSelectElement ? "change" : "input", {
-        bubbles: true,
-      })
-    )
-  })
-}
-
-async function click(
-  name: string,
-  scope: ParentNode = document
-): Promise<void> {
-  const button = Array.from(scope.querySelectorAll("button")).find(
-    (item) => (item.getAttribute("aria-label") ?? item.textContent) === name
-  )
-
-  if (!button) throw new Error(`Missing button ${name}`)
-  await act(async () => {
-    button.click()
+    element.click()
     await searchWork
     await work
     await refreshWork
   })
+  await settle()
 }
 
-async function add(owner: string, title: string): Promise<void> {
-  await type(`Title for ${owner}`, title)
+async function click(
+  name: string | RegExp,
+  scope: ParentNode = document
+): Promise<void> {
+  await press(button(name, scope))
+}
 
-  const form = container.querySelector(
-    `form[aria-label="Add plan for ${owner}"]`
-  )
+/** Open the add plate and search; the lookup waits for typing to pause. */
+async function find(query: string, expected: string | RegExp): Promise<void> {
+  await click("Add a title", container)
+  await type(field("Find a movie or series", sheet()), query)
+  await debounced()
+  expect(sheet().textContent).toMatch(expected)
+}
 
-  if (!form) throw new Error("Expected owner form")
-  await click("Add plan", form)
+/** Wait out the search debounce, then the lookup it started. */
+async function debounced(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    await searchWork
+  })
+  await settle()
+}
+
+async function open(title: string): Promise<void> {
+  const plate = Array.from(
+    container.querySelectorAll<HTMLButtonElement>(".programme-title")
+  ).find((element) => element.textContent?.includes(title))
+
+  if (plate === undefined) throw new Error(`Missing title ${title}`)
+  await press(plate)
 }
 
 async function available() {
@@ -213,71 +194,162 @@ async function available() {
   return data
 }
 
-test("renders all owners and persists movie/whole-series additions and confirmed owner-specific removals", async () => {
-  await render()
-  expect(container.textContent).toContain("Add a household member in Wishlist")
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
-  await writeWishlist({ kind: "create-owner", name: "Member B" })
-  await render()
-  expect(container.querySelectorAll("form")).toHaveLength(2)
-  await add("Member A", "A Quiet Orbit")
-  await type("Type for Member B", "series")
-  await add("Member B", "The Lighthouse Journey")
-  await render()
-  const data = await available()
-  expect(data.entries).toHaveLength(2)
+async function owners(...names: string[]) {
+  for (const name of names) await writeWishlist({ kind: "create-owner", name })
 
-  const series = data.entries.find(
-    (entry) => entry.title === "The Lighthouse Journey"
-  )
+  return (await available()).owners
+}
 
-  expect(series).toMatchObject({ kind: "series", status: "planned" })
-  expect(container.textContent).toContain("Whole series")
-  expect(container.querySelector("time")?.dateTime).toMatch(
-    /^\d{4}-\d{2}-\d{2}$/
+test("adds a TMDB title and a hand-written one for the chosen person, and deletes only after confirmation", async () => {
+  await render()
+  expect(container.textContent).toContain(
+    "Household members are added under Wish."
   )
-  await click("Remove A Quiet Orbit from Member A’s watchlist")
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-    "Member A’s watchlist"
-  )
-  await click("Keep plan")
+  await owners("Member A", "Member B")
+  await render()
+
+  await find("Orbit", "1 title found")
+  await click(/^A Quiet Orbit/, sheet())
+  expect(sheet().textContent).toContain("For whom?")
+  await click("Member A", sheet())
+
+  await find("A Paper Garden", "Nothing found on TMDB")
+  await click("Series", sheet())
+  await click("Member B", sheet())
+
+  const entries = (await available()).entries
+
+  expect(entries).toHaveLength(2)
+
+  const orbit = entries.find((entry) => entry.title === "A Quiet Orbit")
+  const garden = entries.find((entry) => entry.title === "A Paper Garden")
+
+  expect(orbit).toMatchObject({
+    kind: "movie",
+    tmdb_id: 42,
+    status: "planned",
+    release_date: "2020-02-29",
+  })
+  expect(garden).toMatchObject({
+    kind: "series",
+    tmdb_id: null,
+    status: "planned",
+  })
+  expect(
+    container.querySelector('section[aria-label="Planned"]')?.textContent
+  ).toContain("A Paper Garden")
+  expect(
+    container
+      .querySelector<HTMLImageElement>(".programme-title img")
+      ?.getAttribute("src")
+  ).toBe("https://image.tmdb.org/t/p/w342/synthetic.jpg")
+  expect(
+    container.querySelector('[aria-label="TMDB credits"]')?.textContent
+  ).toContain("not endorsed or certified by TMDB")
+
+  await open("A Quiet Orbit")
+  await click("Delete", sheet())
+  expect(
+    sheet().querySelector('[aria-label="Delete entry"]')?.textContent
+  ).toContain("Member A’s watchlist")
+  await click("Keep it", sheet())
   expect((await available()).entries).toHaveLength(2)
-  await click("Remove A Quiet Orbit from Member A’s watchlist")
-  await click("Remove permanently")
-  await render()
-  expect(container.textContent).not.toContain("A Quiet Orbit")
-  expect((await available()).entries).toEqual([series])
+  await click("Delete", sheet())
+  await click("Delete for good", sheet())
+  expect(
+    Array.from(
+      container.querySelectorAll(".programme-name"),
+      (name) => name.textContent
+    )
+  ).toEqual(["A Paper Garden"])
+  expect((await available()).entries).toEqual([garden])
 })
 
-test("failed additions retain drafts, refresh recovers auth, and unavailable reads cannot look empty", async () => {
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
+test("status keys and date corrections persist, failures say so, and the person keys narrow the programme", async () => {
+  const [memberA, memberB] = await owners("Member A", "Member B")
+
+  if (memberA === undefined || memberB === undefined)
+    throw new Error("Expected owners")
+
+  await writeWatchlist({
+    action: "add",
+    owner_id: memberA.id,
+    kind: "series",
+    title: "A Quiet Orbit",
+    request_id: crypto.randomUUID(),
+  })
+  await writeWatchlist({
+    action: "add",
+    owner_id: memberB.id,
+    kind: "movie",
+    title: "The Lighthouse Journey",
+    request_id: crypto.randomUUID(),
+  })
   await render()
+  await open("A Quiet Orbit")
+  await click("Watching", sheet())
+  expect(
+    container.querySelector('section[aria-label="Watching now"]')?.textContent
+  ).toContain("A Quiet Orbit")
+
+  const watching = (await available()).entries.find(
+    (entry) => entry.title === "A Quiet Orbit"
+  )
+
+  expect(watching).toMatchObject({ status: "watching", completion_date: null })
+  await click("Completed", sheet())
+  expect(
+    (await available()).entries.find((entry) => entry.id === watching?.id)
+      ?.completion_date
+  ).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+
+  await click("Change dates", sheet())
+  await type(field("Added", sheet()), "2024-02-28")
+  await type(field("Completed", sheet()), "2024-02-29")
+  await click("Save dates", sheet())
+  expect(
+    (await available()).entries.find((entry) => entry.id === watching?.id)
+  ).toMatchObject({
+    status: "completed",
+    kind: "series",
+    date_added: "2024-02-28",
+    completion_date: "2024-02-29",
+  })
+  expect(
+    container.querySelector('section[aria-label="Completed"]')?.textContent
+  ).toContain("29 Feb 2024")
+
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
-  await add("Member A", "A Quiet Orbit")
-  expect(container.textContent).toContain("OpenHome rejected the API key")
-  expect(field("Title for Member A").value).toBe("A Quiet Orbit")
-  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-  await click("Refresh watchlists")
-  await add("Member A", "A Quiet Orbit")
-  vi.stubEnv("API_KEY", "synthetic-rejected-key")
-  await click("Remove A Quiet Orbit from Member A’s watchlist")
-  await click("Remove permanently")
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+  await click("Planned", sheet())
+  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
     "OpenHome rejected the API key"
   )
-  await click("Keep plan")
+  expect(sheet().textContent).not.toContain("synthetic-rejected-key")
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  expect(
+    (await available()).entries.find((entry) => entry.id === watching?.id)
+      ?.status
+  ).toBe("completed")
+  await click("Close", sheet())
+
+  await click(/^Member B/, container)
+  expect(search).toEqual({ person: memberB.id })
+  expect(button(/^Member B/, container).getAttribute("aria-pressed")).toBe(
+    "true"
+  )
+  expect(container.textContent).toContain("The Lighthouse Journey")
+  expect(container.textContent).not.toContain("A Quiet Orbit")
+  await click("Everyone", container)
+  expect(container.textContent).toContain("A Quiet Orbit")
+
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await render()
   expect(container.textContent).toContain("Watchlists unavailable")
-  expect(container.textContent).not.toContain("No plans yet")
-  expect(container.textContent).not.toContain("synthetic-rejected-key")
-  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-  await click("Refresh watchlists")
-  expect(container.textContent).toContain("A Quiet Orbit")
-  expect((await available()).entries).toHaveLength(1)
+  expect(container.textContent).not.toContain("Nothing planned yet")
 })
 
-test("a dropped accepted addition retains owner, whole-series kind and request ID across remount and retries", async () => {
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
+test("a lost addition keeps its person, kind and request ID across a remount", async () => {
+  await owners("Member A")
   let drop = true
   const requests: string[] = []
 
@@ -326,341 +398,76 @@ test("a dropped accepted addition retains owner, whole-series kind and request I
   const address = z.object({ port: z.number() }).parse(proxy.address())
   vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
   await render()
-  await type("Type for Member A", "series")
-  await add("Member A", "\u0085A Quiet Orbit\u0085")
-  expect(container.textContent).toContain("The response was lost")
+  await find("\u0085A Paper Garden\u0085", "Nothing found on TMDB")
+  await click("Series", sheet())
+  await click("Member A", sheet())
+  expect(sheet().textContent).toContain("The response was lost")
+
   await act(async () => root.unmount())
   root = createRoot(container)
   await render()
-  expect(field("Title for Member A").value).toBe("A Quiet Orbit")
-  expect(field("Type for Member A").value).toBe("series")
-  await add("Member A", "A Quiet Orbit")
+  await find("A Paper Garden", "Nothing found on TMDB")
+  await click("Series", sheet())
+  await click("Member A", sheet())
   expect(requests).toHaveLength(2)
   expect(requests[0]).toBe(requests[1])
-  expect((await available()).entries).toHaveLength(1)
-  expect(container.textContent).toContain("Plan saved to OpenHome")
-
-  // A second intention loses its response, then another client removes the accepted entry.
-  drop = true
-  await add("Member A", "The Lighthouse Journey")
-  expect(container.textContent).toContain("The response was lost")
-
-  const removed = (await available()).entries.find(
-    (entry) => entry.title === "The Lighthouse Journey"
-  )
-
-  if (removed === undefined)
-    throw new Error("Expected accepted plan before remote removal")
-
-  await writeWatchlist({
-    action: "remove",
-    owner_id: removed.owner_id,
-    entry_id: removed.id,
-  })
-  await act(async () => root.unmount())
-  root = createRoot(container)
-  await render()
-  await add("Member A", "The Lighthouse Journey")
-  expect(container.textContent).toContain("its entry was removed")
-  await click("Refresh watchlists")
-  await add("Member A", "The Lighthouse Journey")
-  expect(requests[2]).toBe(requests[3])
-  expect(requests[2]).toBe(requests[4])
-  expect((await available()).entries).toHaveLength(1)
-
-  const form = container.querySelector(
-    'form[aria-label="Add plan for Member A"]'
-  )
-
-  if (form === null) throw new Error("Expected retry form")
-
-  await click("Discard draft", form)
-  expect(field("Title for Member A").value).toBe("")
+  expect((await available()).entries).toMatchObject([
+    { title: "A Paper Garden", kind: "series" },
+  ])
   expect(sessionStorage.length).toBe(0)
-  await add("Member A", "The Lighthouse Journey")
-  expect(requests[5]).not.toBe(requests[2])
-  const plans = (await available()).entries
-
-  expect(plans).toHaveLength(2)
-  expect(
-    plans.find((entry) => entry.title === "The Lighthouse Journey")
-  ).toMatchObject({
-    kind: "series",
-  })
-  expect(container.textContent).toContain("Plan saved to OpenHome")
 })
 
-test("status/date editing persists through remount and filters retain household ownership", async () => {
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
-  await writeWishlist({ kind: "create-owner", name: "Member B" })
+test("TMDB outages leave hand planning open, and found details keep a completed title's dates", async () => {
+  const [member] = await owners("Member A")
+
+  if (member === undefined) throw new Error("Expected owner")
+
   await render()
-  await type("Type for Member A", "series")
-  await add("Member A", "A Quiet Orbit")
-  await add("Member B", "The Lighthouse Journey")
+  await find("Offline story", "TMDB is not answering")
+  await click("Movie", sheet())
+  await click("Member A", sheet())
+  expect(
+    (await available()).entries.find((entry) => entry.title === "Offline story")
+  ).toMatchObject({ tmdb_id: null, kind: "movie", status: "planned" })
+
+  const added = await writeWatchlist({
+    action: "add",
+    owner_id: member.id,
+    kind: "movie",
+    title: "A Quiet Orbit",
+    request_id: crypto.randomUUID(),
+  })
+
+  expect(added.state).toBe("saved")
 
   const original = (await available()).entries.find(
     (entry) => entry.title === "A Quiet Orbit"
   )
 
-  if (!original) throw new Error("Expected persisted series")
-
-  async function edit(): Promise<void> {
-    const summary = container
-      .querySelector<HTMLDetailsElement>(`details.watchlist-edit`)
-      ?.querySelector("summary")
-
-    if (!summary) throw new Error("Expected status/date editor")
-    await act(async () => {
-      summary.click()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-  }
-
-  await edit()
-  await type("Status for A Quiet Orbit / Member A", "watching")
-  await click("Save status & dates")
-  expect(container.textContent).toContain("Whole series")
-  expect(
-    (await available()).entries.find((entry) => entry.id === original.id)
-  ).toMatchObject({
-    status: "watching",
-    date_added: original.date_added,
-    completion_date: null,
-  })
-  await edit()
-  await type("Status for A Quiet Orbit / Member A", "completed")
-  await type("Date added for A Quiet Orbit / Member A", "2024-02-28")
-  await type("Completion date for A Quiet Orbit / Member A", "2024-02-29")
-  vi.stubEnv("API_KEY", "synthetic-rejected-key")
-  await click("Save status & dates")
-  expect(
-    container.querySelector<HTMLDetailsElement>("details.watchlist-edit")?.open
-  ).toBe(true)
-  expect(field("Completion date for A Quiet Orbit / Member A").value).toBe(
-    "2024-02-29"
-  )
-  expect(
-    container.querySelector("details.watchlist-edit")?.textContent
-  ).toContain("OpenHome rejected the API key")
-  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
-  await click("Save status & dates")
-  await act(async () => root.unmount())
-  root = createRoot(container)
-  await render()
-  expect(container.textContent).toContain("Completed 2024-02-29")
-  expect(
-    (await available()).entries.find((entry) => entry.id === original.id)
-  ).toMatchObject({
-    status: "completed",
-    kind: "series",
-    date_added: "2024-02-28",
-    completion_date: "2024-02-29",
-  })
-  await type("Household member", original.owner_id)
-  await act(async () => {
-    await refreshWork
-  })
-  await type("Watch status", "planned")
-  await act(async () => {
-    await refreshWork
-  })
-  expect(container.querySelectorAll('[role="group"]')).toHaveLength(1)
-  expect(container.textContent).toContain("No planned entries")
-  expect(container.textContent).not.toContain("The Lighthouse Journey")
-  await type("Watch status", "completed")
-  await act(async () => {
-    await refreshWork
-  })
-  expect(container.textContent).toContain("A Quiet Orbit")
-  await click("Refresh watchlists")
-  expect(field("Watch status").value).toBe("completed")
-  await edit()
-  await type("Status for A Quiet Orbit / Member A", "planned")
-  await click("Save status & dates")
-  expect(container.textContent).toContain("No completed entries")
-  await click("Clear filters")
-  expect(container.querySelectorAll('[role="group"]')).toHaveLength(2)
-  expect(
-    (await available()).entries.find((entry) => entry.id === original.id)
-  ).toMatchObject({
-    status: "planned",
-    date_added: "2024-02-28",
-    completion_date: null,
-  })
-})
-
-test("TMDB selection persists kind-specific identity and metadata while failed lookup retains manual planning", async () => {
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
-  await render()
-
-  const form = container.querySelector(
-    'form[aria-label="Add plan for Member A"]'
-  )
-
-  if (!form) throw new Error("Expected owner form")
-  await type("Title for Member A", "Orbit")
-  await click("Search TMDB", form)
-  await vi.waitFor(() =>
-    expect(form.textContent).toContain("Select A Quiet Orbit")
-  )
-  expect(form.querySelector("img")?.getAttribute("src")).toBe(
-    "https://image.tmdb.org/t/p/w342/synthetic.jpg"
-  )
-  expect(form.textContent).toContain("A fictional journey")
-  expect(
-    container.querySelector('[aria-label="TMDB credits"]')?.textContent
-  ).toContain("not endorsed or certified by TMDB")
-  await click("Select A Quiet Orbit", form)
-  await click("Add plan", form)
-  await type("Type for Member A", "series")
-  await type("Title for Member A", "Lighthouse")
-  await click("Search TMDB", form)
-  await vi.waitFor(() =>
-    expect(form.textContent).toContain("Select The Lighthouse Journey")
-  )
-  await click("Select The Lighthouse Journey", form)
-  await click("Add plan", form)
-
-  const poster = container.querySelector<HTMLImageElement>(
-    ".watchlist-entries img"
-  )
-
-  if (!poster) throw new Error("Expected persisted poster")
-  await act(async () => poster.dispatchEvent(new Event("error")))
-  expect(poster.hidden).toBe(true)
-  await act(async () => poster.dispatchEvent(new Event("load")))
-  expect(poster.hidden).toBe(false)
-  await act(async () => root.unmount())
-  root = createRoot(container)
-  await render()
-  const entries = (await available()).entries
-  expect(entries).toHaveLength(2)
-  expect(entries.find((entry) => entry.kind === "movie")).toMatchObject({
-    tmdb_id: 42,
-    title: "A Quiet Orbit",
-    release_date: "2020-02-29",
-    status: "planned",
-  })
-  expect(entries.find((entry) => entry.kind === "series")).toMatchObject({
-    tmdb_id: 42,
-    title: "The Lighthouse Journey",
-    status: "planned",
-  })
-
-  const metadataDetails = container.querySelector<HTMLDetailsElement>(
-    "details.watchlist-metadata-details"
-  )
-
-  if (!metadataDetails) throw new Error("Expected metadata editor")
-
-  const previousPoster = metadataDetails
-    .closest("li")
-    ?.querySelector<HTMLImageElement>("img")
-
-  if (!previousPoster) throw new Error("Expected poster before replacement")
-  await act(async () => {
-    previousPoster.dispatchEvent(new Event("error"))
-    metadataDetails.open = true
-  })
-  expect(previousPoster.hidden).toBe(true)
-  const searchTitle = metadataDetails.querySelector("input")
-
-  if (!searchTitle) throw new Error("Expected metadata query")
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value"
-    )?.set?.call(searchTitle, "Replacement poster")
-    searchTitle.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-  await click("Search TMDB", metadataDetails)
-
-  const select = metadataDetails.querySelector(
-    ".watchlist-search-results button"
-  )
-
-  if (!(select instanceof HTMLButtonElement))
-    throw new Error("Expected replacement result")
-  await click(select.textContent ?? "", metadataDetails)
-
-  const replacementPoster = metadataDetails
-    .closest("li")
-    ?.querySelector<HTMLImageElement>("img")
-
-  expect(replacementPoster?.getAttribute("src")).toBe(
-    "https://image.tmdb.org/t/p/w342/replacement.jpg"
-  )
-  expect(replacementPoster?.hidden).toBe(false)
-  await type("Type for Member A", "series")
-  await type("Title for Member A", "Offline story")
-  await click("Search TMDB")
-  await vi.waitFor(() =>
-    expect(container.textContent).toContain("TMDB is unavailable")
-  )
-  expect(field("Title for Member A").value).toBe("Offline story")
-  await click("Add plan")
-  expect(
-    (await available()).entries.find((entry) => entry.title === "Offline story")
-  ).toMatchObject({ tmdb_id: null, kind: "series", status: "planned" })
-  await type("Type for Member A", "movie")
-  await type("Title for Member A", "Unavailable details")
-  await click("Search TMDB")
-  await click("Select A Quiet Orbit")
-  await click("Add plan")
-  expect(container.textContent).toContain("TMDB could not load the title")
-  expect(field("Title for Member A").value).toBe("A Quiet Orbit")
-  await click("Add manually")
-  await click("Add plan")
-  expect(
-    (await available()).entries.filter(
-      (entry) => entry.title === "A Quiet Orbit"
-    )
-  ).toHaveLength(2)
-  expect(
-    (await available()).entries.find(
-      (entry) => entry.title === "A Quiet Orbit" && entry.tmdb_id === null
-    )
-  ).toMatchObject({ kind: "movie", status: "planned" })
-})
-
-test("manual plans can gain TMDB details without losing completed state or dates", async () => {
-  await writeWishlist({ kind: "create-owner", name: "Member A" })
-  await render()
-  await add("Member A", "A Quiet Orbit")
-  const original = (await available()).entries[0]
-
-  if (!original) throw new Error("Expected manual plan")
+  if (original === undefined) throw new Error("Expected manual plan")
   await writeWatchlist({
     action: "edit",
-    owner_id: original.owner_id,
+    owner_id: member.id,
     entry_id: original.id,
     status: "completed",
     date_added: "2024-02-28",
     completion_date: "2024-02-29",
   })
   await render()
-  const details = container.querySelector("details.watchlist-metadata-details")
-
-  if (!(details instanceof HTMLDetailsElement))
-    throw new Error("Expected metadata details")
-  await act(async () => {
-    details.open = true
-  })
-  await click("Search TMDB", details)
-  await vi.waitFor(() =>
-    expect(details.textContent).toContain("Select A Quiet Orbit")
+  await open("A Quiet Orbit")
+  await click("Find details", sheet())
+  await debounced()
+  await click(
+    /^A Quiet Orbit/,
+    sheet().querySelector(".media-results") ?? sheet()
   )
-  await click("Select A Quiet Orbit", details)
-  await act(async () => root.unmount())
-  root = createRoot(container)
-  await render()
-  expect(container.textContent).toContain("A fictional journey")
-  expect(container.textContent).toContain("Completed 2024-02-29")
-  expect((await available()).entries[0]).toMatchObject({
-    id: original.id,
+  expect(sheet().textContent).toContain("A fictional journey")
+  expect(
+    (await available()).entries.find((e) => e.id === original.id)
+  ).toMatchObject({
     tmdb_id: 42,
-    date_added: "2024-02-28",
     status: "completed",
+    date_added: "2024-02-28",
     completion_date: "2024-02-29",
   })
 })
