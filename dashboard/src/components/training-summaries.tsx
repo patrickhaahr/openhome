@@ -268,8 +268,23 @@ function Sync({
   )
 }
 
-/** Charge, Rest and Effort for the selected day; a glyph names each ring, the words stay for AT. */
+/** Charge, Rest and Effort for the selected day. */
 function Rings({
+  data,
+  missing,
+}: {
+  readonly data: RecoveryDay
+  readonly missing: string
+}): React.JSX.Element {
+  return (
+    <div className="today-rings">
+      <RecoveryRings data={data} missing={missing} />
+    </div>
+  )
+}
+
+/** The three day rings, shared by Recovery and Home; a glyph names each ring, the words stay for AT. */
+export function RecoveryRings({
   data,
   missing,
 }: {
@@ -281,7 +296,7 @@ function Rings({
   const effort = data.derived_scores.strain.value
 
   return (
-    <div className="today-rings">
+    <>
       <ScoreRing
         kind="charge"
         icon={LightningIcon}
@@ -311,7 +326,7 @@ function Rings({
           effort === null ? missing : `strain ${Math.round(effort)} of 100`
         }
       />
-    </div>
+    </>
   )
 }
 
