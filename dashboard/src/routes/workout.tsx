@@ -22,7 +22,7 @@ import {
 import { progressSearch } from "@/lib/exercise-progress"
 import { loadProgress } from "@/lib/exercise-progress.functions"
 import { historyStep, maxHistory, workoutSearch } from "@/lib/workout"
-import { loadWorkouts, mutateWorkout } from "@/lib/workout.functions"
+import { loadWorkouts } from "@/lib/workout.functions"
 
 /** Workout views: the log first, then exercise progress and body weight. Recovery has its own page. */
 export const Route = createFileRoute("/workout")({
@@ -86,7 +86,6 @@ function WorkoutPage(): React.JSX.Element {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const router = useRouter()
-  const mutate = useServerFn(mutateWorkout)
   const mutateBody = useServerFn(mutateBodyProfile)
 
   const switcher = (
@@ -157,8 +156,6 @@ function WorkoutPage(): React.JSX.Element {
         <Workouts
           lead={switcher}
           data={data.data}
-          change={(command) => mutate({ data: command })}
-          reload={() => router.invalidate({ sync: true })}
           showOlder={() =>
             navigate({
               search: (previous) => ({

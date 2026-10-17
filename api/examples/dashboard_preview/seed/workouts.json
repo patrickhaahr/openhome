@@ -106,6 +106,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Front Lever Raise",
+     "sets": [
+      {
+       "reps": 4,
+       "rpe": 8
+      },
+      {
+       "reps": 3,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Chest Supported Row Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 40.0,
+       "rpe": 7
+      },
+      {
+       "reps": 9,
+       "weight_kg": 45.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Rear Delt Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 25.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Biceps Curl Cable",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 15.0,
+       "rpe": 8
+      }
+     ]
     }
    ]
   },
@@ -163,6 +211,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Planche Push-up",
+     "sets": [
+      {
+       "reps": 5,
+       "rpe": 8
+      },
+      {
+       "reps": 4,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Shoulder Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 30.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Side Delt Raise Cable",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 7.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Triceps Pushdown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 25.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 27.5,
+       "rpe": 9
+      }
+     ]
     }
    ]
   },
@@ -183,6 +279,60 @@
        "reps": 10,
        "weight_kg": 20,
        "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Glute Bridge Machine",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 60,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 70,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Hip Abduction Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 45.0,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 45.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Cable Kickback",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 10.0,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 10.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Handstand (timed)",
+     "sets": [
+      {
+       "duration_seconds": 25,
+       "rpe": 7
       }
      ]
     },
@@ -257,6 +407,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Front Lever Raise",
+     "sets": [
+      {
+       "reps": 4,
+       "rpe": 8
+      },
+      {
+       "reps": 3,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Chest Supported Row Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 42.5,
+       "rpe": 7
+      },
+      {
+       "reps": 9,
+       "weight_kg": 47.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Rear Delt Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 25.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Biceps Curl Cable",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 15.0,
+       "rpe": 8
+      }
+     ]
     }
    ]
   },
@@ -314,6 +512,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Planche Push-up",
+     "sets": [
+      {
+       "reps": 5,
+       "rpe": 8
+      },
+      {
+       "reps": 4,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Shoulder Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 32.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Side Delt Raise Cable",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 7.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Triceps Pushdown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 25.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 27.5,
+       "rpe": 9
+      }
+     ]
     }
    ]
   },
@@ -334,6 +580,60 @@
        "reps": 10,
        "weight_kg": 20,
        "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Glute Bridge Machine",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 65,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 75,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Hip Abduction Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 47.5,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 47.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Cable Kickback",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 10.0,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 10.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Handstand (timed)",
+     "sets": [
+      {
+       "duration_seconds": 28,
+       "rpe": 7
       }
      ]
     },
@@ -408,6 +708,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Front Lever Raise",
+     "sets": [
+      {
+       "reps": 5,
+       "rpe": 8
+      },
+      {
+       "reps": 4,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Chest Supported Row Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 45.0,
+       "rpe": 7
+      },
+      {
+       "reps": 9,
+       "weight_kg": 50.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Rear Delt Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 27.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Biceps Curl Cable",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 17.5,
+       "rpe": 8
+      }
+     ]
     }
    ]
   },
@@ -465,6 +813,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Planche Push-up",
+     "sets": [
+      {
+       "reps": 6,
+       "rpe": 8
+      },
+      {
+       "reps": 5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Shoulder Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 35.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Side Delt Raise Cable",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 8.75,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Triceps Pushdown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 27.5,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 30.0,
+       "rpe": 9
+      }
+     ]
     }
    ]
   },
@@ -485,6 +881,60 @@
        "reps": 10,
        "weight_kg": 20,
        "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Glute Bridge Machine",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 70,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 80,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Hip Abduction Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 50.0,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 50.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Cable Kickback",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 11.25,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 11.25,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Handstand (timed)",
+     "sets": [
+      {
+       "duration_seconds": 31,
+       "rpe": 7
       }
      ]
     },
@@ -559,6 +1009,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Front Lever Raise",
+     "sets": [
+      {
+       "reps": 5,
+       "rpe": 8
+      },
+      {
+       "reps": 4,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Chest Supported Row Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 47.5,
+       "rpe": 7
+      },
+      {
+       "reps": 9,
+       "weight_kg": 52.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Rear Delt Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 27.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Biceps Curl Cable",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 17.5,
+       "rpe": 8
+      }
+     ]
     }
    ]
   },
@@ -616,6 +1114,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Planche Push-up",
+     "sets": [
+      {
+       "reps": 6,
+       "rpe": 8
+      },
+      {
+       "reps": 5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Shoulder Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 37.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Side Delt Raise Cable",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 8.75,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Triceps Pushdown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 27.5,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 30.0,
+       "rpe": 9
+      }
+     ]
     }
    ]
   },
@@ -636,6 +1182,60 @@
        "reps": 10,
        "weight_kg": 24,
        "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Glute Bridge Machine",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 75,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 85,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Hip Abduction Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 52.5,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 52.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Cable Kickback",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 11.25,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 11.25,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Handstand (timed)",
+     "sets": [
+      {
+       "duration_seconds": 34,
+       "rpe": 7
       }
      ]
     },
@@ -710,6 +1310,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Front Lever Raise",
+     "sets": [
+      {
+       "reps": 6,
+       "rpe": 8
+      },
+      {
+       "reps": 5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Chest Supported Row Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 50.0,
+       "rpe": 7
+      },
+      {
+       "reps": 9,
+       "weight_kg": 55.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Rear Delt Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 30.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Biceps Curl Cable",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 20.0,
+       "rpe": 8
+      }
+     ]
     }
    ]
   },
@@ -767,6 +1415,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Planche Push-up",
+     "sets": [
+      {
+       "reps": 7,
+       "rpe": 8
+      },
+      {
+       "reps": 6,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Shoulder Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 40.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Side Delt Raise Cable",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 10.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Triceps Pushdown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 30.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 32.5,
+       "rpe": 9
+      }
+     ]
     }
    ]
   },
@@ -787,6 +1483,60 @@
        "reps": 10,
        "weight_kg": 24,
        "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Glute Bridge Machine",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 80,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 90,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Hip Abduction Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 55.0,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 55.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Cable Kickback",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 12.5,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 12.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Handstand (timed)",
+     "sets": [
+      {
+       "duration_seconds": 37,
+       "rpe": 7
       }
      ]
     },
@@ -859,6 +1609,54 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "Planche Push-up",
+     "sets": [
+      {
+       "reps": 7,
+       "rpe": 8
+      },
+      {
+       "reps": 6,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Shoulder Press Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 42.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Side Delt Raise Cable",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 10.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Triceps Pushdown",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 30.0,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 32.5,
+       "rpe": 9
+      }
+     ]
     }
    ]
   },
@@ -918,6 +1716,64 @@
        "rpe": 8
       }
      ]
+    },
+    {
+     "exercise": "T-bar Row",
+     "sets": [
+      {
+       "reps": 8,
+       "weight_kg": 40,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Front Lever Raise",
+     "sets": [
+      {
+       "reps": 6,
+       "rpe": 8
+      },
+      {
+       "reps": 5,
+       "rpe": 9
+      }
+     ]
+    },
+    {
+     "exercise": "Chest Supported Row Machine",
+     "sets": [
+      {
+       "reps": 10,
+       "weight_kg": 52.5,
+       "rpe": 7
+      },
+      {
+       "reps": 9,
+       "weight_kg": 57.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Rear Delt Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 30.0,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Biceps Curl Cable",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 20.0,
+       "rpe": 8
+      }
+     ]
     }
    ]
   },
@@ -938,6 +1794,60 @@
        "reps": 10,
        "weight_kg": 24,
        "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Glute Bridge Machine",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 85,
+       "rpe": 7
+      },
+      {
+       "reps": 10,
+       "weight_kg": 95,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Hip Abduction Machine",
+     "sets": [
+      {
+       "reps": 15,
+       "weight_kg": 57.5,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 57.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Cable Kickback",
+     "sets": [
+      {
+       "reps": 12,
+       "weight_kg": 12.5,
+       "rpe": 7
+      },
+      {
+       "reps": 12,
+       "weight_kg": 12.5,
+       "rpe": 8
+      }
+     ]
+    },
+    {
+     "exercise": "Handstand (timed)",
+     "sets": [
+      {
+       "duration_seconds": 40,
+       "rpe": 7
       }
      ]
     },

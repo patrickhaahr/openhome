@@ -18,9 +18,7 @@ import {
   trainingDayOn,
   type LogSession,
   type WorkoutDetail,
-  type WorkoutCommand,
   type WorkoutFailure,
-  type WorkoutMutation,
   type WorkoutSearch,
   type WorkoutState,
 } from "./workout"
@@ -231,41 +229,4 @@ export async function readWorkouts(
     hasOlder,
     strap: summaries === undefined ? "unavailable" : "read",
   }
-}
-
-/**
- * Forward one Workout edit; only a parsed Axum receipt confirms persistence.
- *
- * Axum validates and replaces entries in one transaction, so a rejected edit leaves the stored Workout unchanged.
- *
- * @param command - The full replacement.
- * @returns The stored Workout id or a sanitized failure.
- */
-export async function writeWorkout(
-  command: WorkoutCommand
-): Promise<WorkoutMutation> {
-  const { date, name, notes, exercises } = command
-
-  const result = await requestOpenHome({
-    path: `/api/workouts/${command.workout_id}`,
-    method: "PATCH",
-    json: { date, name, notes, exercises },
-    timeoutMs: 5000,
-  })
-
-  if (result.state !== "received")
-    return { state: "failed", reason: result.state }
-
-  if (!result.response.ok)
-    return { state: "failed", reason: reason(result.response.status) }
-
-  try {
-    const parsed = workoutDetail.safeParse(await result.response.json())
-
-    if (parsed.success) return { state: "saved", workoutId: parsed.data.id }
-  } catch {
-    /* Never expose upstream error bodies. */
-  }
-
-  return { state: "failed", reason: "unavailable" }
 }
