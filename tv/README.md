@@ -75,16 +75,25 @@ The eye button switches picture profiles: white means the warm/dim Expert Dark
 Room profile, dark means the reference-oriented Cinema profile, and dim means unknown.
 Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
 
-App shortcuts use Input Hook's native `launch` action. Other number-key shortcuts
-keep their existing targets:
+App shortcuts use Input Hook's native `launch` action. The existing app shortcuts
+on 2–5 keep their targets:
 
-| Remote button | App | Input Hook key ID |
+| Remote button | Action | Input Hook key ID |
 | --- | --- | --- |
 | 1 | YouTube Cobalt AdFree (`youtube.leanback.v4`) | 2 |
 | Netflix | YouTube Cobalt AdFree (`youtube.leanback.v4`) | 1037 |
 | Prime Video | Litefin (`org.litefin.app`) | 1038 |
 | Disney+ | Crunchyroll (`com.crunchyroll.webapp`) | 1042 |
 | Rakuten TV | Web Browser (`com.webos.app.browser`) | 1044 |
+| 6 | Lights on | 7 |
+| 7 | Lights off | 8 |
+| 8 | Speaker Bluetooth input | 9 |
+| 9 | Speaker optical input | 10 |
+
+Keys 6–9 call the existing loopback TV client using the TV's native curl command.
+The client forwards the four allowlisted actions to Axum over verified HTTPS;
+credentials stay in its root-only configuration. These shortcuts share Home's
+existing command busy/rate limits and do not start Node on each keypress.
 
 The **red remote button** also switches Cinema ↔ warm night without opening Home.
 Input Hook runs `picture-toggle.py` through a nonblocking file lock; the script

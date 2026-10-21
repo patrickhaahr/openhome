@@ -358,5 +358,20 @@ number-key shortcuts were preserved.
 The live log recorded each physical button invoking its assigned app, and the
 owner confirmed that all three opened the correct app.
 
+### Number keys for lights and speaker inputs
+
+Mapped the previously unused remote keys 6/7/8/9 (Input Hook 7/8/9/10) to lights
+on/off and speaker Bluetooth/optical respectively. Each `exec` action runs native
+curl against the existing loopback TV client's matching allowlisted command,
+with the required `X-OpenHome-TV: 1` header and a 15-second deadline. The persistent
+client handles API authentication and verified HTTPS; no credential enters the
+Input Hook map, and no additional daemon or per-key Node startup is needed.
+
+Confirmed the API through `openhome health` and the TV through
+`just tv-client-check`. Saved the exact prior map locally and on the TV in
+`inputhook-before-room-shortcuts.json`, then verified only these four entries
+changed. Existing app shortcuts and the red picture toggle were preserved.
+The owner tested the physical remote and confirmed all four device actions work.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
