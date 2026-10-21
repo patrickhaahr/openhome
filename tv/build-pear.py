@@ -1,5 +1,4 @@
 """Build Pear locally from the backed-up firmware, without touching the TV."""
-import json
 from pathlib import Path
 import shutil
 import sys
@@ -9,7 +8,6 @@ ROOT = Path(__file__).resolve().parent
 UPSTREAM = ROOT / "upstream" / "PearWebOS"
 sys.path.insert(0, str(UPSTREAM / "installer"))
 import patch_home
-import wallpapers
 
 build = ROOT / "private" / "pear-build"
 stock = ROOT / "private" / "stock"
@@ -23,17 +21,10 @@ with tarfile.open(ROOT / "private" / "baseline" / "backup.tar") as backup:
 if build.exists():
     shutil.rmtree(build)
 build.mkdir()
-accents = wallpapers.build(str(UPSTREAM / "photos"), str(build / "wallpapers"))
-patch_home.build(str(stock), str(build / "files"), str(UPSTREAM / "qml" / "PearHome.qml"), {
-    "NAME": "", "CLOCK": "HH:mm", "WALLPAPERS": str(len(accents) - 1), "ACCENTS": json.dumps(accents),
-})
-qml = build / "files" / patch_home.PEAR_SLOT
-text = qml.read_text()
-anchor = "readonly property var hiddenApps: ["
-if text.count(anchor) != 1:
-    raise SystemExit("Pear's hiddenApps structure changed; review before rebuilding")
-text = text.replace(anchor, anchor + '\n        "com.webos.app.mediadiscovery", "amazon.alexapr",')
-qml.write_text(text)
+patch_home.build(str(stock), str(build / "files"), str(ROOT / "launcher" / "OpenHome.qml"), {})
+for directory in ("ui", "fonts"):
+    shutil.copytree(ROOT / "launcher" / directory, build / directory)
+shutil.copy(ROOT / "launcher" / "LICENSE-PearWebOS", build)
 # Preserve current power/firmware settings. Initially no Live-TV takeover daemon.
 (build / "pear.conf").write_text("GUARD=0\nBOOT_TO_HOME=0\nQUICK_START=0\nNO_UPDATE_PROMPT=0\n")
 for name in ("pearwebos", "homeguard", "luna-send-n", "tvkey.js"):
@@ -55,5 +46,5 @@ with tarfile.open(ROOT / "private" / "pear-install.tar", "w") as package:
             info.mtime = 1700000000
             return info
         package.add(item, arcname=item.name, filter=stable_time)
-print("PASS: firmware patches matched; Pear package built locally with all four unwanted tiles hidden.")
+print("PASS: firmware patches matched; native OpenHome launcher package built locally.")
 print("Power settings, update settings, and Live TV are preserved.")

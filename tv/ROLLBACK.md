@@ -1,5 +1,21 @@
 # TV rollback
 
+## Restore the original Pear design while keeping privacy/Alexa protection
+
+```sh
+devenv shell -- just tv-ssh 'touch /var/lib/openhome-tv/client-disabled; /var/lib/openhome-tv/client-service.sh stop; /var/lib/pearwebos/pearwebos unmount; cp -a /var/lib/pearwebos-baseline/. /var/lib/pearwebos/; /var/lib/pearwebos/pearwebos on'
+```
+
+The baseline is the working photo-based Pear installation saved before the first
+OpenHome deployment, also recorded in Git commit `5448646`. Extra OpenHome QML assets
+are unused after restoring Pear's three mounted files. The client boot hook respects
+`client-disabled`; no API calls occur while disabled. This does not restore Alexa or
+change the privacy protections. To re-enable the OpenHome design, remove that one
+flag and run `tv-deploy` from this branch.
+
+The API credential can be removed separately from `/var/lib/openhome-tv/client.json`
+after disabling the client. Never put that file in a backup intended for publication.
+
 Run commands from the OpenHome root through `devenv shell -- just tv-ssh`.
 SSH uses a local control socket and does not install an authentication key on
 the TV. After reboot, reconnect with the existing root password; the password
