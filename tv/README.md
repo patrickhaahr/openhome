@@ -36,6 +36,7 @@ devenv shell -- just tv-verify
 devenv shell -- just tv-screen home
 devenv shell -- just tv-client-check
 devenv shell -- just tv-deploy
+devenv shell -- just tv-picture-shortcut
 ```
 
 `tv-check` needs the ignored upstream checkout and private baseline; it has no
@@ -73,6 +74,17 @@ the right rail’s circle/capsule design, without a speaker header or volume but
 The eye button switches picture profiles: white means the warm/dim Expert Dark
 Room profile, dark means the reference-oriented Cinema profile, and dim means unknown.
 Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
+
+The **red remote button** also switches Cinema ↔ warm night without opening Home.
+Input Hook runs `picture-toggle.py` through a nonblocking file lock; the script
+reads the native mode, changes only `pictureMode`, and verifies the result.
+Home subscribes to native mode changes so the eye follows the remote shortcut.
+The helper uses the TV's existing Python runtime to avoid starting Node on every
+keypress; the measured full switch and readback take about 0.84 seconds.
+This shortcut is limited to the configured default-input 2D SDR profiles; it
+rejects other inputs/HDR rather than applying the SDR settings there. Other
+Input Hook shortcuts are preserved. `tv-picture-shortcut` installs the binding
+and refuses to overwrite a different red-button action.
 
 ## YouTube updates and picture warmth
 

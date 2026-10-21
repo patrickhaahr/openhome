@@ -10,19 +10,49 @@ Item {
     property bool pending: false
     property bool failed: false
     property var request: null
+    property var subscription: null
     property string operation: ""
-    onActiveChanged: if (active) refresh()
+    onActiveChanged: {
+        if (active) refresh();
+        else stopWatching();
+    }
+    function stopWatching() {
+        var token = subscription;
+        subscription = null;
+        if (token !== null) updates.cancel(token);
+    }
+    function watch() {
+        if (subscription === null) {
+            subscription = updates.call("luna://com.webos.settingsservice", "/getSystemSettings",
+                JSON.stringify({category: "picture", keys: ["pictureMode"], subscribe: true}));
+        }
+    }
     function read() {
         request = service.call("luna://com.webos.settingsservice", "/getSystemSettings",
             JSON.stringify({category: "picture", keys: ["pictureMode"]}));
         timeout.restart();
     }
-    function refresh() { if (!pending) { operation = "read"; read(); } }
+    function refresh() { if (active) watch(); if (!pending) { operation = "read"; read(); } }
     function toggle() {
         if (pending || value === null) return;
         pending = true; failed = false; operation = "toggle"; read();
     }
     function fail() { request = null; operation = ""; pending = false; value = null; failed = true; timeout.stop(); }
+    Service {
+        id: updates
+        appId: "com.webos.app.home"
+        onResponse: {
+            if (token !== setting.subscription) return;
+            var data;
+            try { data = JSON.parse(payload); } catch (e) { setting.stopWatching(); return; }
+            if (!data.returnValue) { setting.stopWatching(); return; }
+            var current = data.settings && data.settings.pictureMode;
+            if (typeof current === "string" && current.length > 0 && !setting.pending) {
+                setting.value = current === setting.warmMode;
+                setting.failed = false;
+            }
+        }
+    }
     Service {
         id: service
         appId: "com.webos.app.home"
