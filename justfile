@@ -46,7 +46,7 @@ tv-script file args='':
 
 # Validate TV scripts and build Pear against the locally backed-up LG Home files
 [group('tv')]
-tv-check:
+tv-check: tv-assets
     sh -n tv/ssh.sh
     sh -n tv/alexa-block.sh
     sh -n tv/probe.sh
@@ -54,7 +54,33 @@ tv-check:
     sh -n tv/privacy-hosts.sh
     sh -n tv/boot.sh
     sh -n tv/connect.sh
+    sh -n tv/client-service.sh
+    node --check tv/bridge/client.js
+    node --check tv/bridge/preview.js
+    node --check tv/verify-client.js
+    node tv/bridge/test.js
+    qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
     python3 tv/build-pear.py
+
+# Compile the authored vector mark for LG's Qt build, which has no SVG loader
+[group('tv')]
+tv-assets:
+    rsvg-convert --width 512 --height 512 tv/launcher/ui/ember-face.svg -o tv/launcher/ui/ember-face.png
+
+# Update OpenHome TV UI and its local client, preserving the original Pear UI
+[group('tv')]
+tv-deploy: tv-check
+    python3 tv/deploy-launcher.py
+
+# Read-only acceptance checks from the TV's native Node runtime
+[group('tv')]
+tv-client-check:
+    sh tv/ssh.sh 'node -' < tv/verify-client.js
+
+# Save actual TV screenshots with synthetic health/weather, then restore live data
+[group('tv')]
+tv-preview-capture:
+    python3 tv/capture-preview.py
 
 # Restore the exact setting values changed during TV setup
 [group('tv')]

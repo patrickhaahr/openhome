@@ -25,7 +25,15 @@
     # Repo tooling
     just
     git
-    (python3.withPackages (ps: [ ps.pillow ps.numpy ]))
+    python3
+    # TV asset/syntax tools only: importing Qt/GTK development packages here
+    # propagates their compiler flags into every Rust build in this shell.
+    (writeShellScriptBin "qmlformat" ''
+      exec ${lib.getExe' qt6.qtdeclarative "qmlformat"} "$@"
+    '')
+    (writeShellScriptBin "rsvg-convert" ''
+      exec ${lib.getExe' librsvg "rsvg-convert"} "$@"
+    '')
   ];
 
   # https://devenv.sh/integrations/android/
