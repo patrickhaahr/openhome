@@ -62,6 +62,11 @@ configuration changed. Live verification found Pi LAN10.0.10.4; 10.0.10.3 is zaz
 
 ## Remote
 
+![LG Magic Remote with the OpenHome number, streaming and red-button shortcuts](remote-keymap.png)
+
+[Full-size shortcut guide](remote-keymap.png). Photo: [Huoltopalvelu, LG MR21GA](https://www.huoltopalvelu.com/LG-TV-remote-control-MR21GA);
+annotations created with ImageGen and checked against the configured shortcuts.
+
 The TV has no visible labels or instructions: Danish date, clock and numerical
 readings accompany the dashboard's exact icons. Left/Right chooses apps; OK opens
 one. Up reaches the agent or the right-hand controls. Up/Down moves through the
@@ -81,6 +86,10 @@ on 2–5 keep their targets:
 | Remote button | Action | Input Hook key ID |
 | --- | --- | --- |
 | 1 | YouTube Cobalt AdFree (`youtube.leanback.v4`) | 2 |
+| 2 | Litefin (`org.litefin.app`) | 3 |
+| 3 | Spotify (`spotify-beehive`) | 4 |
+| 4 | Crunchyroll (`com.crunchyroll.webapp`) | 5 |
+| 5 | Twitch (`twitch.adamffdev.v1`) | 6 |
 | Netflix | YouTube Cobalt AdFree (`youtube.leanback.v4`) | 1037 |
 | Prime Video | Litefin (`org.litefin.app`) | 1038 |
 | Disney+ | Crunchyroll (`com.crunchyroll.webapp`) | 1042 |
