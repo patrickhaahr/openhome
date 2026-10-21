@@ -75,10 +75,16 @@ The eye button switches picture profiles: white means the warm/dim Expert Dark
 Room profile, dark means the reference-oriented Cinema profile, and dim means unknown.
 Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
 
-The **1** key and the **Netflix** button both launch the installed YouTube Cobalt
-AdFree app (`youtube.leanback.v4`) through Input Hook's native `launch` action.
-Their Input Hook key IDs are 2 and 1037 respectively. Other number-key shortcuts
-keep their existing targets.
+App shortcuts use Input Hook's native `launch` action. Other number-key shortcuts
+keep their existing targets:
+
+| Remote button | App | Input Hook key ID |
+| --- | --- | --- |
+| 1 | YouTube Cobalt AdFree (`youtube.leanback.v4`) | 2 |
+| Netflix | YouTube Cobalt AdFree (`youtube.leanback.v4`) | 1037 |
+| Prime Video | Litefin (`org.litefin.app`) | 1038 |
+| Disney+ | Crunchyroll (`com.crunchyroll.webapp`) | 1042 |
+| Rakuten TV | Web Browser (`com.webos.app.browser`) | 1044 |
 
 The **red remote button** also switches Cinema ↔ warm night without opening Home.
 Input Hook runs `picture-toggle.py` through a nonblocking file lock; the script
