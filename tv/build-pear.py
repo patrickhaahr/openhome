@@ -24,7 +24,9 @@ build.mkdir()
 patch_home.build(str(stock), str(build / "files"), str(ROOT / "launcher" / "OpenHome.qml"), {})
 for directory in ("ui", "fonts"):
     shutil.copytree(ROOT / "launcher" / directory, build / directory)
+shutil.copytree(ROOT / "private" / "icons", build / "ui" / "icons")
 shutil.copy(ROOT / "launcher" / "LICENSE-PearWebOS", build)
+shutil.copy(ROOT / "launcher" / "LICENSE-Phosphor", build)
 # Preserve current power/firmware settings. Initially no Live-TV takeover daemon.
 (build / "pear.conf").write_text("GUARD=0\nBOOT_TO_HOME=0\nQUICK_START=0\nNO_UPDATE_PROMPT=0\n")
 for name in ("pearwebos", "homeguard", "luna-send-n", "tvkey.js"):

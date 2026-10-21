@@ -19,7 +19,7 @@ FocusScope {
     readonly property int gapX: r(30)
     readonly property var source: interfaces.launchPoints ? interfaces.launchPoints.launchPointsModel : null
     readonly property var hiddenApps: [
-        "com.webos.app.mediadiscovery", "amazon.alexapr", "amazon.alexa.view",
+        "com.webos.app.mediadiscovery", "com.webos.app.discovery", "amazon.alexapr", "amazon.alexa.view",
         "lgchannels.uk", "com.webos.app.lgchannels", "com.webos.app.homeconnect",
         "com.webos.app.sportsteamsettings", "com.lgshop.app35", "com.lgtravel.app",
         "epoxyaisports", "com.lgtvod.app", "webos.day", "com.twin.app.audiochannel",
@@ -44,7 +44,7 @@ FocusScope {
     property string failed: ""
     property string feedback: ""
     readonly property var commands: ["lights-on", "lights-off", "speaker-bluetooth", "speaker-optical"]
-    readonly property var labels: ["Lights on", "Lights off", "Bluetooth", "Optical"]
+    readonly property var labels: ["Tænd lys", "Sluk lys", "Bluetooth", "Optisk indgang"]
     readonly property var glyphs: ["bulb", "bulb-off", "bluetooth", "optical"]
     readonly property bool today: live.day === Qt.formatDateTime(now, "yyyy-MM-dd")
     readonly property var weather: today && (!live.weather.fetchedAt || now.getTime() - Date.parse(live.weather.fetchedAt) < 21600000) ? live.weather : ({state: "unavailable", temperature: null, code: null, high: null, low: null, rain: null, wind: null})
@@ -62,12 +62,10 @@ FocusScope {
     }
     function takeFocus() { forceActiveFocus(); }
     function launch(e) { if (e) interfaces.launchPoints.doLaunch(e); }
-    function appTitle(e) {
-        if (!e) return "";
-        if (/^YouTube/.test(e.title)) return "YouTube";
-        if (/^Spotify/.test(e.title)) return "Spotify";
-        if (/^Twitch/.test(e.title)) return "Twitch";
-        return e.title;
+    function danishDate(date) {
+        var weekdays = ["søndag", "mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag"];
+        var months = ["januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december"];
+        return weekdays[date.getDay()] + " " + date.getDate() + ". " + months[date.getMonth()];
     }
     function openDrawer() { drawer = true; region = "apps"; takeFocus(); }
     function closeDrawer() { drawer = false; appIndex = Math.min(appIndex, dockApps.length - 1); region = "apps"; takeFocus(); }
@@ -83,9 +81,18 @@ FocusScope {
     function navigate(key) {
         if (agentOpen) return;
         if (region === "controls") {
-            if (key === Qt.Key_Left) controlIndex = Math.max(0, controlIndex - 1);
-            if (key === Qt.Key_Right) controlIndex = Math.min(4, controlIndex + 1);
-            if (key === Qt.Key_Down) { region = "apps"; appIndex = Math.min(controlIndex, dockApps.length - 1); }
+            if (controlIndex === 4) {
+                if (key === Qt.Key_Right) controlIndex = 2;
+                if (key === Qt.Key_Up) controlIndex = 1;
+                if (key === Qt.Key_Down || key === Qt.Key_Left) { region = "apps"; appIndex = Math.min(3, dockApps.length - 1); }
+            } else {
+                if (key === Qt.Key_Left) controlIndex = 4;
+                if (key === Qt.Key_Up) controlIndex = Math.max(0, controlIndex - 1);
+                if (key === Qt.Key_Down) {
+                    if (controlIndex < 3) controlIndex++;
+                    else { region = "apps"; appIndex = dockApps.length - 1; }
+                }
+            }
         } else if (drawer) {
             if (key === Qt.Key_Left) appIndex = Math.max(0, appIndex - 1);
             if (key === Qt.Key_Right) appIndex = Math.min(apps.length - 1, appIndex + 1);
@@ -94,7 +101,7 @@ FocusScope {
         } else {
             if (key === Qt.Key_Left) appIndex = Math.max(0, appIndex - 1);
             if (key === Qt.Key_Right) appIndex = Math.min(dockApps.length - 1, appIndex + 1);
-            if (key === Qt.Key_Up) { region = "controls"; controlIndex = Math.min(4, appIndex); }
+            if (key === Qt.Key_Up) { region = "controls"; controlIndex = appIndex === 5 ? 3 : 4; }
             if (key === Qt.Key_Down) openDrawer();
         }
     }
@@ -140,23 +147,15 @@ FocusScope {
         commandTimeout.restart(); req.send();
     }
     function temperature(v) { return v === null || v === undefined ? "–" : Math.round(v) + "°"; }
-    function weatherName(code) {
-        if (code === null || code === undefined) return "Weather unavailable";
-        if (code === 0) return "Clear sky";
-        if (code === 1) return "Mostly clear";
-        if (code === 2) return "Partly cloudy";
-        if (code === 3) return "Overcast";
-        if ([45, 48].indexOf(code) !== -1) return "Fog";
-        if ([51, 53, 55, 56, 57].indexOf(code) !== -1) return "Drizzle";
-        if ([61, 63, 65, 66, 67].indexOf(code) !== -1) return "Rain";
-        if ([71, 73, 75, 77].indexOf(code) !== -1) return "Snow";
-        if ([80, 81, 82].indexOf(code) !== -1) return "Rain showers";
-        if ([85, 86].indexOf(code) !== -1) return "Snow showers";
-        if ([95, 96, 99].indexOf(code) !== -1) return "Thunderstorms";
-        return "Weather unavailable";
-    }
     function weatherGlyph(code) {
-        return code === 0 || code === 1 ? "sun" : code >= 71 && code <= 77 || code === 85 || code === 86 ? "snow" : code >= 51 ? "rain" : "cloud";
+        if (code === 0 || code === 1) return "sun";
+        if (code === 2) return "cloud-sun";
+        if (code === 3) return "cloud";
+        if (code === 45 || code === 48) return "fog";
+        if ([51,53,55,56,57,61,63,65,66,67,80,81,82].indexOf(code) !== -1) return "rain";
+        if ([71,73,75,77,85,86].indexOf(code) !== -1) return "snow";
+        if ([95,96,99].indexOf(code) !== -1) return "storm";
+        return "unknown";
     }
     Component.onCompleted: { rebuild(); refresh(); }
     Connections {
@@ -228,38 +227,34 @@ FocusScope {
     }
     Item {
         anchors.fill: parent; visible: !home.drawer
-        OH.TVText { x: r(96); y: r(57); text: "openhome"; font.family: home.family; font.pixelSize: r(36); color: "#ecece6" }
-        Rectangle { x: r(260); y: r(85); width: r(8); height: width; radius: width / 2; color: "#ff6a2e" }
+        // Dashboard proportions: one large clock, today's weather, three rings.
         OH.TVText {
-            x: r(88); y: r(128); text: Qt.formatDateTime(home.now, "HH:mm")
-            color: "#ecece6"; font.family: home.family; font.pixelSize: r(174); font.letterSpacing: -r(7)
+            x: r(84); y: r(32); text: Qt.formatDateTime(home.now, "HH:mm")
+            color: "#ecece6"; font.family: home.family; font.pixelSize: r(270); font.letterSpacing: -r(11)
         }
-        OH.TVText { x: r(98); y: r(326); text: Qt.formatDateTime(home.now, "dddd, d MMMM"); color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(30) }
-        // Today lives next to the clock. Every missing measurement stays a dash.
-        OH.Glyph { x: r(790); y: r(166); width: r(82); height: width; kind: home.weatherGlyph(home.weather.code); ink: "#ecece6"; visible: home.weatherName(home.weather.code) !== "Weather unavailable" }
-        OH.TVText { x: r(902); y: r(137); text: home.temperature(home.weather.temperature); color: "#ecece6"; font.family: home.family; font.pixelSize: r(94) }
-        OH.TVText { x: r(793); y: r(264); text: home.weatherName(home.weather.code); color: "#cfd0ca"; font.family: home.family; font.pixelSize: r(30) }
-        OH.TVText { x: r(793); y: r(313); text: "Today  " + home.temperature(home.weather.high) + " / " + home.temperature(home.weather.low); color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(27) }
-        OH.TVText { x: r(793); y: r(355); text: home.weatherStale ? "Forecast may be out of date" : home.weather.rain === null ? "" : home.weather.rain.toFixed(1) + " mm rain"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(23) }
-        Item {
-            id: agentKey; x: r(1505); y: r(90); width: r(300); height: r(270)
-            Rectangle { anchors.fill: parent; radius: r(36); color: home.region === "controls" && home.controlIndex === 4 ? "#16171a" : "transparent"; border.width: home.region === "controls" && home.controlIndex === 4 ? r(3) : 0; border.color: "#ecece6" }
-            OH.AgentMark { anchors.horizontalCenter: parent.horizontalCenter; y: r(3); width: r(204); height: width }
-            OH.TVText { anchors.horizontalCenter: parent.horizontalCenter; y: r(218); text: "Meet Ember"; color: "#ecece6"; font.family: home.family; font.pixelSize: r(29) }
-            Accessible.role: Accessible.Button
-            Accessible.name: "Meet Ember, agent visual concept"
-            Accessible.onPressAction: home.agentOpen = true
-            MouseArea { anchors.fill: parent; hoverEnabled: true; onEntered: home.selectControl(4); onClicked: { home.agentOpen = true; home.takeFocus(); } }
+        OH.TVText {
+            x: r(96); y: r(350); text: home.danishDate(home.now)
+            color: "#ecece6"; font.family: home.family; font.pixelSize: r(40)
         }
-        // 1920 - 2*96 = 1728. Four 168-wide controls plus 20/40 gaps = 772.
-        // Three 184-wide rings + two 44 gaps = 640, aligned to the right edge.
-        OH.TVText { x: r(96); y: r(441); text: "Lights"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(25) }
-        OH.TVText { x: r(504); y: r(441); text: "Speaker"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(25) }
+        OH.Glyph { x: r(96); y: r(510); width: r(76); height: width; kind: home.weatherGlyph(home.weather.code); ink: "#ecece6" }
+        OH.TVText { x: r(194); y: r(470); text: home.temperature(home.weather.temperature); color: "#ecece6"; font.family: home.family; font.pixelSize: r(112) }
+        OH.Glyph { x: r(380); y: r(535); width: r(27); height: width; kind: "stale"; ink: "#9a9ea6"; visible: home.weatherStale }
+        Repeater {
+            model: 3
+            OH.ScoreRing {
+                x: r(940 + index * 240); y: r(102); width: r(190); height: width
+                label: ["Opladning", "Hvile", "Belastning"][index]; glyph: ["charge", "rest", "effort"][index]; family: home.family
+                value: [home.recovery.charge, home.recovery.rest, home.recovery.effort][index]
+                stale: home.recovery.state === "stale"
+            }
+        }
+        Rectangle { x: r(1700); y: r(96); width: r(124); height: r(240); radius: width / 2; color: "#16171a" }
+        Rectangle { x: r(1700); y: r(416); width: r(124); height: r(240); radius: width / 2; color: "#16171a" }
         Repeater {
             model: 4
             OH.Control {
-                x: r(96 + index * 188 + (index >= 2 ? 32 : 0)); y: r(489); width: r(168); height: r(140)
-                label: home.labels[index]; glyph: home.glyphs[index]; family: home.family
+                x: r(1710); y: r([106, 222, 426, 542][index]); width: r(104); height: width
+                label: home.labels[index]; glyph: home.glyphs[index]; primary: index === 0
                 selected: home.region === "controls" && home.controlIndex === index
                 pending: home.pending === home.commands[index]
                 accepted: home.acknowledged === home.commands[index]
@@ -268,43 +263,43 @@ FocusScope {
                 onActivated: { home.selectControl(index); home.send(home.commands[index]); }
             }
         }
-        OH.TVText { x: r(96); y: r(648); text: home.feedback; color: home.failed ? "#ff8a7a" : "#9a9ea6"; font.family: home.family; font.pixelSize: r(23) }
-        OH.TVText {
-            x: r(1184); y: r(408)
-            text: home.recovery.state === "unavailable" ? "Today · no recovery data" : home.recovery.state === "stale" ? "Today · last saved data" : home.recovery.freshness === "confirmed" ? "Today" : home.recovery.freshness === "partial" ? "Today · partial data" : "Today · sync unconfirmed"
-            color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(23)
-        }
-        Repeater {
-            model: 3
-            OH.ScoreRing {
-                x: r(1184 + index * 228); y: r(462); width: r(184); height: r(235)
-                label: ["Charge", "Rest", "Effort"][index]; glyph: ["charge", "rest", "effort"][index]; family: home.family
-                value: [home.recovery.charge, home.recovery.rest, home.recovery.effort][index]
-                stale: home.recovery.state === "stale"
+        Item {
+            id: agentKey; x: r(1110); y: r(372); width: r(350); height: width
+            Rectangle {
+                anchors.fill: parent; radius: width / 2; color: "transparent"
+                border.width: home.region === "controls" && home.controlIndex === 4 ? r(3) : 0
+                border.color: "#ecece6"
             }
+            OH.AgentMark { anchors.fill: parent }
+            Accessible.role: Accessible.Button
+            Accessible.name: "Åbn agentens visuelle prøve"
+            Accessible.onPressAction: home.agentOpen = true
+            MouseArea { anchors.fill: parent; hoverEnabled: true; onEntered: home.selectControl(4); onClicked: { home.agentOpen = true; home.takeFocus(); } }
         }
-        // The only horizon is the dashboard's small orange sun on a quiet line.
-        Rectangle { x: r(96); y: r(401); width: r(1728); height: Math.max(1, r(1)); color: "#272825" }
-        Rectangle { x: r(96); y: r(397); width: r(9); height: width; radius: width / 2; color: "#ff6a2e" }
-        OH.TVText { x: r(96); y: r(715); text: "Your apps"; color: "#cfd0ca"; font.family: home.family; font.pixelSize: r(29) }
-        OH.TVText { anchors.right: parent.right; anchors.rightMargin: r(96); y: r(715); text: "All apps  ↓"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(27) }
-        MouseArea { x: r(1584); y: r(703); width: r(240); height: r(60); onClicked: home.openDrawer() }
-        Row { x: r(99); y: r(784); spacing: home.gapX; Repeater { model: home.dockApps; delegate: appTile } }
-        OH.TVText { x: r(96); y: r(1015); text: "Open-Meteo"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(20) }
-        OH.TVText { anchors.right: parent.right; anchors.rightMargin: r(96); y: r(1015); text: "↑ Home controls     ↓ All apps     Hold OK to reorder"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(22) }
+        Row { x: r(99); y: r(790); spacing: home.gapX; Repeater { model: home.dockApps; delegate: appTile } }
+        OH.Glyph { x: r(936); y: r(1006); width: r(48); height: width; kind: "down"; ink: "#9a9ea6" }
+        MouseArea {
+            x: r(908); y: r(990); width: r(104); height: r(72)
+            Accessible.role: Accessible.Button; Accessible.name: "Alle apps"
+            onClicked: home.openDrawer()
+        }
     }
     Item {
         anchors.fill: parent; visible: home.drawer
-        OH.TVText { x: r(96); y: r(62); text: "Your apps"; color: "#ecece6"; font.family: home.family; font.pixelSize: r(44) }
-        OH.TVText { anchors.right: parent.right; anchors.rightMargin: r(96); y: r(76); text: "Back  Home"; color: "#9a9ea6"; font.family: home.family; font.pixelSize: r(26) }
+        OH.Glyph { x: r(1740); y: r(66); width: r(52); height: width; kind: "close"; ink: "#ecece6" }
+        MouseArea {
+            x: r(1720); y: r(46); width: r(92); height: width
+            Accessible.role: Accessible.Button; Accessible.name: "Luk appoversigt"
+            onClicked: home.closeDrawer()
+        }
         GridView {
-            id: grid; x: r(89); y: r(175); width: r(1752); height: r(825)
-            cellWidth: r(292); cellHeight: r(260); leftMargin: r(10); topMargin: r(12); bottomMargin: r(30)
+            id: grid; x: r(89); y: r(175); width: cellWidth * 6 + leftMargin; height: r(825)
+            cellWidth: r(292); cellHeight: r(240); leftMargin: r(10); topMargin: r(12); bottomMargin: r(30)
             clip: true; interactive: false; model: home.apps; delegate: appTile
             currentIndex: home.appIndex
             highlight: Item {}
             highlightMoveDuration: 0
-            preferredHighlightBegin: r(12); preferredHighlightEnd: height - r(240); highlightRangeMode: GridView.ApplyRange
+            preferredHighlightBegin: r(12); preferredHighlightEnd: height - r(220); highlightRangeMode: GridView.ApplyRange
         }
     }
     Component {
@@ -313,23 +308,18 @@ FocusScope {
             id: tile
             property var app: modelData
             readonly property bool selected: home.region === "apps" && home.appIndex === index
-            width: home.tileW; height: home.tileH
+            width: home.tileW; height: r(188)
             Accessible.role: Accessible.Button
-            Accessible.name: app ? app.title : "Application"
+            Accessible.name: app ? app.title : "App"
             Accessible.onPressAction: home.launch(tile.app)
             Rectangle {
-                anchors.fill: parent; radius: r(22); color: "#16171a"
-                border.color: tile.selected ? "#ecece6" : "#272825"; border.width: tile.selected ? r(4) : r(1)
+                anchors.fill: parent; radius: r(22); color: "#111213"
+                border.color: tile.selected ? "#ecece6" : "transparent"; border.width: tile.selected ? r(4) : 0
                 Image {
-                    anchors.centerIn: parent; width: r(130); height: width; fillMode: Image.PreserveAspectFit
+                    anchors.centerIn: parent; width: r(154); height: width; fillMode: Image.PreserveAspectFit
                     smooth: true; mipmap: true; asynchronous: true
                     source: tile.app ? tile.app.extraLargeIcon || tile.app.largeIcon || tile.app.icon || "" : ""
                 }
-            }
-            OH.TVText {
-                y: parent.height + r(16); width: parent.width; horizontalAlignment: Text.AlignHCenter
-                text: home.appTitle(tile.app); elide: Text.ElideRight
-                color: tile.selected ? "#ecece6" : "#9a9ea6"; font.family: home.family; font.pixelSize: r(27)
             }
             MouseArea {
                 anchors.fill: parent; hoverEnabled: true
@@ -339,5 +329,5 @@ FocusScope {
             }
         }
     }
-    OH.AgentScreen { id: agent; anchors.fill: parent; visible: home.agentOpen && uiController.homeShown; family: home.family; reducedMotion: home.reducedMotion }
+    OH.AgentScreen { id: agent; anchors.fill: parent; visible: home.agentOpen && uiController.homeShown; reducedMotion: home.reducedMotion; onDismissed: { home.agentOpen = false; home.takeFocus(); } }
 }

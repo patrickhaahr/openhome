@@ -10,7 +10,8 @@ Working branch: `tv`. Device: LG 55NANO806PA, webOS 6.5.3 / firmware 03.53.45.
 - [Pear app drawer](screenshots/after-apps.jpg)
 - [OpenHome launcher design](DESIGN.md)
 - [OpenHome TV Home, synthetic public data](screenshots/openhome.jpg)
-- [Ember speaking concept](screenshots/ember-speaking.jpg)
+- [Circular agent speaking concept](screenshots/ember-speaking.jpg)
+- [Earlier design, before removing labels](screenshots/before-wordless.jpg)
 
 ## Layout
 
@@ -20,6 +21,8 @@ SSH socket/known-hosts and the 69 MiB baseline backup. Both directories are
 ignored by Git; do not publish their contents. No SSH password is stored.
 
 Qt tooling parses the QML locally; the TV itself validates its QtQuick 2.12 runtime.
+The existing dashboard dependencies must be installed to export its exact Phosphor
+icons. Generated PNGs/SVGs stay under ignored `private/icons/` and enter the TV bundle.
 Run project commands from the OpenHome root:
 
 ```sh
@@ -42,7 +45,7 @@ Root changes live under
 `/var/lib` and runtime bind mounts, never in signed firmware partitions.
 
 Step 9 now includes live weather, Charge/Rest/Effort, lights on/off and speaker
-Bluetooth/optical commands. Ember is a fullscreen visual concept with a manual
+Bluetooth/optical commands. The circular agent is a fullscreen visual concept with a manual
 speaking animation. Microphone capture, speech models and Hermes are not implemented.
 
 The client runs independently of Home under `/var/lib/openhome-tv`, listening only on
@@ -54,10 +57,13 @@ configuration changed. Live verification found Pi LAN10.0.10.4; 10.0.10.3 is zaz
 
 ## Remote
 
-Left/Right chooses an app; OK opens it. Up reaches the room controls; Right from
-Optical reaches Ember. Down from apps opens the full app drawer. Back closes the
-drawer or Ember; hold OK on an app opens LG's existing reorder view. Magic Remote
-hover/click also works. No control selection is an observed device-state indicator.
+The TV has no visible labels or instructions: Danish date, clock and numerical
+readings accompany the dashboard's exact icons. Left/Right chooses apps; OK opens
+one. Up reaches the agent or the right-hand controls. Up/Down moves through the
+vertical controls; Left reaches the agent. Down from apps opens the full drawer.
+Back/X closes the drawer or agent; hold OK on an app opens LG's original reorder view.
+Magic Remote hover/click also works. No selection indicates observed device state.
+The LG Apps tile is hidden from both dock and drawer; its firmware is preserved.
 
 ## Future voice input
 
