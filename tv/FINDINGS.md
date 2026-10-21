@@ -7,8 +7,8 @@ Player and Alexa; prevent Alexa execution; selectively disable promotions,
 ACR and unwanted preloads; repair telemetry blocking. Keep normal app updates,
 HDMI, playback, SSH, casting and local OpenHome/SSAP control available.
 
-Step 9 is a later OpenHome integration into a modified Pear launcher. No
-OpenHome product changes belong in steps 1–8.
+Steps 1–8 were saved as the working Pear baseline in `5448646`. The user then
+authorized step 9: a native OpenHome launcher and live household controls.
 
 ## Device and baseline
 
@@ -59,7 +59,7 @@ the first empty JSON captures were retained separately as `raw-baseline`.
 - [x] Alexa payload/launch paths blocked and tested.
 - [x] Promotions/preloads/privacy changes checked.
 - [x] Full reboot and standby/wake persistence checked.
-- [ ] Step 9: OpenHome integration (explicitly deferred).
+- [x] Step 9: native OpenHome integration and fullscreen agent visual concept.
 
 ## Applied changes and evidence
 
@@ -151,9 +151,43 @@ uses IR, and its Home command was verified on the display.
 Hosts blocking is a selected hostname policy, not proof that every possible
 tracking connection is prevented. Firmware bytes remain; root can undo masks.
 
-## Step 9 — later work
+## Step 9 — OpenHome launcher
 
-Create our own Pear-based launcher with OpenHome integration after this working
-baseline. Follow `CONTEXT.md`: user-facing controls go through the Axum API and
-its existing integration boundaries. No integration UI or product behavior was
-implemented in this task.
+Replaced Pear's wallpaper UI with tracked `launcher/OpenHome.qml` and small native
+QtQuick components. Pure black, bundled Familjen Grotesk, large apps and clock,
+today's weather, four room controls and Charge/Rest/Effort from Axum. Date, null
+values and stale states follow the API contracts; no client-side Rest formula.
+
+The TV-local Node8 client exposes only four actions plus sanitized weather and
+recovery over loopback. The shared API key is root-owned mode600 on the TV and
+never appears in QML/Git. HTTPS uses Pi Tailscale100.120.132.42 with verified
+Host/SNI `openhome.haahr.me`. The existing router `tv_to_ts` rule already allows
+this path. Read-only router/Pi inspection established Pi LAN10.0.10.4 and zaza
+10.0.10.3. No firewall, Pi, dashboard or Axum product changes were required.
+
+The Node client has bounded requests, no command retries, a single command slot,
+rate limiting and a supervised boot hook `45-openhome-client`. Review found stale
+directory-lock and shutdown races; kernel `flock` and bounded Node shutdown replace
+them. Three concurrent cold starts produced one supervisor and one client.
+
+A full software reboot was verified by SSH down/up and uptime4412→85 seconds.
+The new client and all three Home mounts returned automatically, with Home's
+checkpoint stamp matching. Post-reboot `tv-client-check` and `tv-verify` passed,
+including actual Alexa activation attempts, privacy settings, read-only ACR and
+the existing resolver/local-control protections. The final TV was left on live Home.
+
+Verified on the TV: authenticated fresh API reads; all three scores present;
+loopback-only listener and origin/proxy rejection; remote focus/navigation, app
+drawer, YouTube launch and return Home; light and speaker command acknowledgements.
+Acknowledgements do not establish physical light power or speaker input. Audible
+playback and a physical remote microphone stream remain unverified.
+
+Ember is the new house-shaped mascot. It opens fullscreen and OK toggles animated
+radial strokes/mouth for a speaking demo. No recording, speech model, assistant
+network request or Hermes connection exists. The Magic Remote microphone is
+documented by LG; access to its audio under root is separate future research.
+The user confirmed the physical display stays complete during the speaking demo;
+intermittently missing unchanged elements occur in software captures only.
+
+See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
+and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
