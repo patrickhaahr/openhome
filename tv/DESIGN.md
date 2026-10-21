@@ -10,10 +10,13 @@ interface. This replaces the first worded design saved in commit `fd3497b`.
 - Today's weather is just its existing dashboard icon and current temperature.
 - Three recovery rings use Axum's actual Charge/Rest/Effort scores, with the
   dashboard's filled Lightning, Moon and Heartbeat symbols and colours.
-- Two vertical control capsules: lights on/off, then Bluetooth/optical.
+- Two vertical control capsules: lights on/off, then a SpeakerHifi header over Bluetooth/optical.
+- The eye button below toggles the TV’s actual blue-light filter: white is on, dark is off; unknown state is dimmed.
 - Six large app icons below, without captions. The LG Apps application
   (`com.webos.app.discovery`) is filtered from both the dock and the drawer.
-- A down chevron opens the complete app grid; an X closes it.
+- A down chevron opens the complete app grid; Back or Up from the first row closes it. No drawer X.
+- InputHook stays visible. Removed apps disappear through LG’s live app model.
+- Opaque app artwork grows to card height, with its edge colour extended across the rounded card. Transparent logos retain their original sizing. This avoids cropping or stretching logos.
 - No headings, brand wordmark, prose, app names, tips, weather breakdown or
   attribution text appears on the TV. Date and numerical readings remain.
 - Commands acknowledge with a short orange ring; failures use a red warning
@@ -26,6 +29,11 @@ using the exact component and weight used by the dashboard. `tv/export-icons.mjs
 renders them through React's static renderer, then `rsvg-convert` compiles PNGs
 for LG's Qt build, which has no SVG image loader. The package's MIT license is
 included in the TV bundle. This adds no new JavaScript dependency.
+
+The eye button uses Home’s native Luna settings service for `picture.eyeComfortMode`.
+It reads before toggling, writes only `on`/`off`, and reads back the result. It does
+not predict state. A timeout/error clears the value; periodic/return-to-Home reads
+recover it. Unlike room controls, this is a local TV setting, not an Axum command.
 
 ## Agent
 

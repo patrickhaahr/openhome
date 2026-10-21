@@ -12,6 +12,7 @@ Working branch: `tv`. Device: LG 55NANO806PA, webOS 6.5.3 / firmware 03.53.45.
 - [OpenHome TV Home, synthetic public data](screenshots/openhome.jpg)
 - [Circular agent speaking concept](screenshots/ember-speaking.jpg)
 - [Earlier design, before removing labels](screenshots/before-wordless.jpg)
+- [Before filling app cards](screenshots/before-card-fill.jpg)
 
 ## Layout
 
@@ -61,9 +62,13 @@ The TV has no visible labels or instructions: Danish date, clock and numerical
 readings accompany the dashboard's exact icons. Left/Right chooses apps; OK opens
 one. Up reaches the agent or the right-hand controls. Up/Down moves through the
 vertical controls; Left reaches the agent. Down from apps opens the full drawer.
-Back/X closes the drawer or agent; hold OK on an app opens LG's original reorder view.
+Back closes the drawer; Back/X closes the agent; hold OK on an app opens LG's original reorder view.
 Magic Remote hover/click also works. No selection indicates observed device state.
 The LG Apps tile is hidden from both dock and drawer; its firmware is preserved.
+LG Input Hook is visible. The speaker capsule has the dashboard’s SpeakerHifi header;
+there are no volume buttons. The eye button toggles the TV’s Reduce Blue Light
+setting; white means enabled, dark means disabled, and dim means unknown.
+Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
 
 ## Future voice input
 

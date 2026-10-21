@@ -15,7 +15,6 @@ FocusScope {
     FontLoader { source: "file:///var/lib/pearwebos/fonts/FamiljenGrotesk-SemiBold.ttf" }
     readonly property int columns: 6
     readonly property int tileW: r(262)
-    readonly property int tileH: r(158)
     readonly property int gapX: r(30)
     readonly property var source: interfaces.launchPoints ? interfaces.launchPoints.launchPointsModel : null
     readonly property var hiddenApps: [
@@ -23,7 +22,7 @@ FocusScope {
         "lgchannels.uk", "com.webos.app.lgchannels", "com.webos.app.homeconnect",
         "com.webos.app.sportsteamsettings", "com.lgshop.app35", "com.lgtravel.app",
         "epoxyaisports", "com.lgtvod.app", "webos.day", "com.twin.app.audiochannel",
-        "com.twin.app.gamingportal", "com.pirate.refresh", "org.webosbrew.inputhook",
+        "com.twin.app.gamingportal", "com.pirate.refresh",
         "org.aabytt.webos.custom-screensaver-aerial", "com.amazoff.patcher"
     ]
     property var apps: []
@@ -75,6 +74,7 @@ FocusScope {
         if (agentOpen) { agent.speaking = !agent.speaking; return; }
         if (region === "controls") {
             if (controlIndex === 4) agentOpen = true;
+            else if (controlIndex === 5) blueLight.toggle();
             else send(commands[controlIndex]);
         } else launch((drawer ? apps : dockApps)[appIndex]);
     }
@@ -87,9 +87,10 @@ FocusScope {
                 if (key === Qt.Key_Down || key === Qt.Key_Left) { region = "apps"; appIndex = Math.min(3, dockApps.length - 1); }
             } else {
                 if (key === Qt.Key_Left) controlIndex = 4;
-                if (key === Qt.Key_Up) controlIndex = Math.max(0, controlIndex - 1);
+                if (key === Qt.Key_Up) controlIndex = controlIndex === 5 ? 3 : Math.max(0, controlIndex - 1);
                 if (key === Qt.Key_Down) {
                     if (controlIndex < 3) controlIndex++;
+                    else if (controlIndex === 3) controlIndex = 5;
                     else { region = "apps"; appIndex = dockApps.length - 1; }
                 }
             }
@@ -101,7 +102,7 @@ FocusScope {
         } else {
             if (key === Qt.Key_Left) appIndex = Math.max(0, appIndex - 1);
             if (key === Qt.Key_Right) appIndex = Math.min(dockApps.length - 1, appIndex + 1);
-            if (key === Qt.Key_Up) { region = "controls"; controlIndex = appIndex === 5 ? 3 : 4; }
+            if (key === Qt.Key_Up) { region = "controls"; controlIndex = appIndex === 5 ? 5 : 4; }
             if (key === Qt.Key_Down) openDrawer();
         }
     }
@@ -218,6 +219,7 @@ FocusScope {
             event.accepted = true;
         }
     }
+    OH.BlueLight { id: blueLight; active: home.visible && uiController.homeShown }
     Rectangle { anchors.fill: parent; color: "#000000" }
     // Absorb pointer/wheel input so LG's hidden shelves cannot steal focus.
     MouseArea {
@@ -249,11 +251,11 @@ FocusScope {
             }
         }
         Rectangle { x: r(1700); y: r(96); width: r(124); height: r(240); radius: width / 2; color: "#16171a" }
-        Rectangle { x: r(1700); y: r(416); width: r(124); height: r(240); radius: width / 2; color: "#16171a" }
+        Rectangle { x: r(1700); y: r(380); width: r(124); height: r(304); radius: width / 2; color: "#16171a" }
         Repeater {
             model: 4
             OH.Control {
-                x: r(1710); y: r([106, 222, 426, 542][index]); width: r(104); height: width
+                x: r(1710); y: r([106, 222, 454, 570][index]); width: r(104); height: width
                 label: home.labels[index]; glyph: home.glyphs[index]; primary: index === 0
                 selected: home.region === "controls" && home.controlIndex === index
                 pending: home.pending === home.commands[index]
@@ -262,6 +264,17 @@ FocusScope {
                 onHovered: home.selectControl(index)
                 onActivated: { home.selectControl(index); home.send(home.commands[index]); }
             }
+        }
+        OH.Glyph { x: r(1740); y: r(392); width: r(44); height: width; kind: "speaker"; ink: "#9a9ea6" }
+        OH.Control {
+            x: r(1726); y: r(700); width: r(72); height: width
+            label: "Reducer blåt lys"; glyph: "eye"; primary: blueLight.value === true
+            enabled: blueLight.value !== null
+            opacity: enabled ? 1 : 0.4
+            selected: home.region === "controls" && home.controlIndex === 5
+            pending: blueLight.pending; failed: blueLight.failed
+            onHovered: home.selectControl(5)
+            onActivated: { home.selectControl(5); blueLight.toggle(); }
         }
         Item {
             id: agentKey; x: r(1110); y: r(372); width: r(350); height: width
@@ -286,12 +299,6 @@ FocusScope {
     }
     Item {
         anchors.fill: parent; visible: home.drawer
-        OH.Glyph { x: r(1740); y: r(66); width: r(52); height: width; kind: "close"; ink: "#ecece6" }
-        MouseArea {
-            x: r(1720); y: r(46); width: r(92); height: width
-            Accessible.role: Accessible.Button; Accessible.name: "Luk appoversigt"
-            onClicked: home.closeDrawer()
-        }
         GridView {
             id: grid; x: r(89); y: r(175); width: cellWidth * 6 + leftMargin; height: r(825)
             cellWidth: r(292); cellHeight: r(240); leftMargin: r(10); topMargin: r(12); bottomMargin: r(30)
@@ -312,14 +319,13 @@ FocusScope {
             Accessible.role: Accessible.Button
             Accessible.name: app ? app.title : "App"
             Accessible.onPressAction: home.launch(tile.app)
+            OH.AppArtwork {
+                anchors.fill: parent; cornerRadius: r(22); iconSize: r(154)
+                source: tile.app ? tile.app.extraLargeIcon || tile.app.largeIcon || tile.app.icon || "" : ""
+            }
             Rectangle {
-                anchors.fill: parent; radius: r(22); color: "#111213"
-                border.color: tile.selected ? "#ecece6" : "transparent"; border.width: tile.selected ? r(4) : 0
-                Image {
-                    anchors.centerIn: parent; width: r(154); height: width; fillMode: Image.PreserveAspectFit
-                    smooth: true; mipmap: true; asynchronous: true
-                    source: tile.app ? tile.app.extraLargeIcon || tile.app.largeIcon || tile.app.icon || "" : ""
-                }
+                anchors.fill: parent; radius: r(22); color: "transparent"
+                border.color: "#ecece6"; border.width: tile.selected ? r(4) : 0
             }
             MouseArea {
                 anchors.fill: parent; hoverEnabled: true

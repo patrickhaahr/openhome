@@ -207,5 +207,21 @@ The drawer initially fitted five columns despite six-column navigation; its
 width now includes the left margin, and Down selects the icon directly below.
 Native client checks passed against the authenticated live API after deployment.
 
+### Speaker, artwork and blue-light follow-up
+
+Added the dashboard’s SpeakerHifi header, removed the drawer X, and made
+`org.webosbrew.inputhook` visible. LG's live model handles the owner's removed
+apps; nothing was reinstalled. Opaque image edges are sampled locally and their
+colour fills the rounded card; logos preserve their aspect ratio. Transparent
+logos retain their previous size.
+
+Read `picture.eyeComfortMode` through the TV's settings service. Its descriptor
+reports a global, nonvolatile `on`/`off` setting, initially `on`. The native Home
+service can read and write it. Tested the actual remote button from on to off,
+verified via an independent Luna read, then toggled back and verified on.
+The launcher reads before toggling and after writing, rather than predicting
+state. Failures clear the displayed state. No room-control API or firewall
+changes were needed.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
