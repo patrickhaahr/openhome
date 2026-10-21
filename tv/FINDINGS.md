@@ -346,5 +346,17 @@ No extra app, daemon, command helper or boot hook was needed.
 The live Input Hook log recorded both physical keys invoking YouTube, and the
 owner confirmed that both 1 and Netflix opened it successfully.
 
+### Prime Video, Disney+ and Rakuten TV shortcuts
+
+Added native Input Hook `launch` bindings for Prime Video (1038) → Litefin
+(`org.litefin.app`), Disney+ (1042) → Crunchyroll (`com.crunchyroll.webapp`) and
+Rakuten TV (1044) → Web Browser (`com.webos.app.browser`). Confirmed all three app
+IDs against the live installed-app list. All three keys were previously unbound.
+Backed up the complete prior map locally and on the TV, hot-reloaded Input Hook,
+and verified that only these three entries changed. YouTube, red and the other
+number-key shortcuts were preserved.
+The live log recorded each physical button invoking its assigned app, and the
+owner confirmed that all three opened the correct app.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
