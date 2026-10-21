@@ -25,7 +25,7 @@
     # Repo tooling
     just
     git
-    python3
+    (python3.withPackages (ps: [ ps.pillow ps.numpy ]))
   ];
 
   # https://devenv.sh/integrations/android/
