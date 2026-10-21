@@ -133,8 +133,8 @@ ordinary Quick Start+ wake resumes the existing Pear process.
 
 IR power-off/on cycles through the existing OpenHome CLI suspended SSH, then
 returned the TV to `Active`, foreground LG Home running Pear, same Home PID and
-three mounts. `screenshots/after.jpg` is a real capture of the final running
-Pear Home, refreshed after the final reboot; private captures also record wake.
+three mounts. Private captures record Pear Home after the final reboot and wake.
+The current public before/after launcher screenshots are shown in [README](README.md#screenshots).
 
 Navigation/drawer, YouTube app opening to its account picker, HDMI 1 selection,
 Quick Settings and returning Home were checked on the real display. No account
