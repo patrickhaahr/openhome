@@ -106,3 +106,18 @@ The RF1705 repository can be removed from Homebrew Channel's Settings by selecti
 its URL/trash icon. This does not uninstall YouTube. The old v1.1.7 application
 folder backup is `private/youtube-legacy-1.1.7.tar.gz`; it is an emergency file
 backup, not a redistributable IPK or a verified reinstall procedure.
+
+## Restore the normal picture profile
+
+The eye now switches picture profiles. To return to the preserved Cinema profile:
+
+```sh
+devenv shell -- just tv-ssh "/var/lib/pearwebos/luna-send-n -n 1 luna://com.webos.settingsservice/setSystemSettings '{\"category\":\"picture\",\"settings\":{\"pictureMode\":\"cinema\"}}'"
+```
+
+`private/picture-normal-preserved.json` contains the normal settings captured
+before configuring Expert Dark Room; `private/picture-expert2-before.json` contains
+its prior values. Restore only the backed-up target profile's `settings` object
+while that profile and input are active. `private/picture-before-amber.json`
+records Cinema's RGB gains before the earlier green−10/blue−30 adjustment;
+restoring those two gains to0 removes that tint while retaining Warm3.
