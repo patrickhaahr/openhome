@@ -62,10 +62,10 @@ tv-check: tv-assets
     qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
     python3 tv/build-pear.py
 
-# Compile the authored vector mark for LG's Qt build, which has no SVG loader
+# Render dashboard icons and agent vectors for LG's Qt PNG image loader
 [group('tv')]
 tv-assets:
-    rsvg-convert --width 512 --height 512 tv/launcher/ui/ember-face.svg -o tv/launcher/ui/ember-face.png
+    node tv/export-icons.mjs
 
 # Update OpenHome TV UI and its local client, preserving the original Pear UI
 [group('tv')]
