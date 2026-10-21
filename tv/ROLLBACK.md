@@ -226,3 +226,30 @@ JS
 
 Input Hook reloads the map automatically. This restores the original button
 behaviour without uninstalling any apps.
+
+## Remove the lights/speaker number shortcuts
+
+The exact prior map is saved locally in
+`private/inputhook-before-room-shortcuts.json` and on the TV in
+`/var/lib/openhome-tv/inputhook-before-room-shortcuts.json`. Remote keys 6–9 were
+unassigned. Remove just their Input Hook entries 7–10:
+
+```sh
+devenv shell -- just tv-ssh 'node -' <<'JS'
+var fs = require('fs');
+var file = '/home/root/.config/lginputhook/keybinds.json';
+var bindings = JSON.parse(fs.readFileSync(file, 'utf8'));
+var actions = {'7': 'lights-on', '8': 'lights-off', '9': 'speaker-bluetooth', '10': 'speaker-optical'};
+Object.keys(actions).forEach(function (key) {
+  var command = "/usr/bin/curl -fsS --max-time 15 -X POST -H 'X-OpenHome-TV: 1' http://127.0.0.1:39479/command/" + actions[key];
+  if (!bindings[key] || bindings[key].action !== 'exec' || bindings[key].command !== command) {
+    throw new Error('A room shortcut changed; leaving the map alone');
+  }
+});
+Object.keys(actions).forEach(function (key) { delete bindings[key]; });
+fs.writeFileSync(file, JSON.stringify(bindings));
+JS
+```
+
+Input Hook reloads automatically. App shortcuts and the red profile toggle stay
+configured; the TV client and Home's controls remain available.
