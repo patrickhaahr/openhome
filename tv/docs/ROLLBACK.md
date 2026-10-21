@@ -31,7 +31,7 @@ This unmounts Pear's three QML overrides, discards Home's runtime checkpoint
 so it is regenerated from stock, and cold-starts LG Home. Pear records a
 disabled flag so its boot hook stays off. It does not alter system partitions.
 
-The task's scripts and private baseline are under `tv/`. Do not restore the
+Runtime scripts are under `tv/runtime/`; the private baseline stays under `tv/private/`. Do not restore the
 entire backup over the live TV: restore only the specific settings/scripts
 that were changed. Original signed firmware files need no restoration.
 
@@ -52,7 +52,7 @@ restored separately below. The original Homebrew startup script is unchanged.
 ## Restore Alexa execution
 
 ```sh
-devenv shell -- just tv-script tv/alexa-block.sh restore
+devenv shell -- just tv-script tv/runtime/alexa-block.sh restore
 ```
 
 This checks the source/target inode before unmounting each recorded Alexa
@@ -67,7 +67,7 @@ Disable the task's boot hook first once installed, and stop its bounded
 background ACR recheck (or reboot with the hook disabled). Then:
 
 ```sh
-devenv shell -- just tv-script tv/privacy-settings.sh restore
+devenv shell -- just tv-script tv/runtime/privacy-settings.sh restore
 devenv shell -- just tv-restore-settings
 ```
 
@@ -81,7 +81,7 @@ choices are unchanged; no preload restoration is needed.
 ## Restore hosts blocking
 
 ```sh
-devenv shell -- just tv-script tv/privacy-hosts.sh --restore
+devenv shell -- just tv-script tv/runtime/privacy-hosts.sh --restore
 devenv shell -- just tv-ssh 'cp -p /var/lib/openhome-tv/original-10-block-lg-telemetry /var/lib/webosbrew/init.d/10-block-lg-telemetry'
 ```
 

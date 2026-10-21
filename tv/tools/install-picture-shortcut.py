@@ -1,16 +1,15 @@
 """Bind the red key through the installed Input Hook, preserving other shortcuts."""
 import json
-from pathlib import Path
 import subprocess
 
-root = Path(__file__).resolve().parent
-ssh = ["sh", str(root / "ssh.sh")]
+from tv_paths import SSH, TV_ROOT as root
+
 config = "/home/root/.config/lginputhook/keybinds.json"
 binding = {
     "action": "exec",
     "command": "/usr/bin/flock -n /tmp/openhome-picture-toggle.lock /usr/bin/python /var/lib/openhome-tv/picture-toggle.py",
 }
-original = subprocess.run(ssh + ["cat " + config], capture_output=True, check=True).stdout
+original = subprocess.run(SSH + ["cat " + config], capture_output=True, check=True).stdout
 bindings = json.loads(original)
 if not isinstance(bindings, dict) or ("398" in bindings and bindings["398"] != binding):
     raise SystemExit("The red button already has another binding; refusing to overwrite it")
@@ -36,5 +35,5 @@ fs.writeFileSync('/var/lib/openhome-tv/picture-toggle.py', %s, {mode: 420});
 bindings['398'] = binding;
 fs.writeFileSync(config, JSON.stringify(bindings));
 console.log('Red button (398) bound; other Input Hook bindings preserved.');
-""" % (json.dumps(config), json.dumps(binding), json.dumps((root / "picture-toggle.py").read_text()))
-subprocess.run(ssh + ["node -"], input=script.encode(), check=True)
+""" % (json.dumps(config), json.dumps(binding), json.dumps((root / "runtime" / "picture-toggle.py").read_text()))
+subprocess.run(SSH + ["node -"], input=script.encode(), check=True)

@@ -1,10 +1,10 @@
 """Capture TV state privately; never print settings or app credentials."""
 import json
-from pathlib import Path
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parent
+from tv_paths import SSH, TV_ROOT as ROOT
+
 label = sys.argv[1]
 if not label.replace("-", "").isalnum():
     raise SystemExit("Use an alphanumeric snapshot label")
@@ -13,7 +13,7 @@ out.mkdir(mode=0o700, parents=True, exist_ok=False)
 
 
 def capture(name, command):
-    result = subprocess.run(["sh", str(ROOT / "ssh.sh"), command], capture_output=True, check=True)
+    result = subprocess.run(SSH + [command], capture_output=True, check=True)
     (out / name).write_bytes(result.stdout)
 
 
