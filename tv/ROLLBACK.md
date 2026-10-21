@@ -146,3 +146,28 @@ that factory behaviour. This does not require a full picture-mode reset.
 Expert Dark Room's stored profile controls were unchanged. Its independent
 before/after snapshots are `private/cinema-reference-night-before.json` and
 `private/cinema-reference-night-after.json`.
+
+## Remove the red-button shortcut
+
+The original Input Hook map is backed up locally in
+`private/inputhook-before-picture-shortcut.json` and on the TV in
+`/var/lib/openhome-tv/inputhook-before-picture-shortcut.json`. Red (398) was
+unassigned. Remove only this task's binding, preserving any later shortcut edits:
+
+```sh
+devenv shell -- just tv-ssh 'node -' <<'JS'
+var fs = require('fs');
+var file = '/home/root/.config/lginputhook/keybinds.json';
+var bindings = JSON.parse(fs.readFileSync(file, 'utf8'));
+var command = '/usr/bin/flock -n /tmp/openhome-picture-toggle.lock /usr/bin/python /var/lib/openhome-tv/picture-toggle.py';
+if (bindings['398'] && bindings['398'].command !== command) {
+  throw new Error('Red now has another binding; leaving it alone');
+}
+delete bindings['398'];
+fs.writeFileSync(file, JSON.stringify(bindings));
+JS
+```
+
+Input Hook reloads the file automatically; a reboot is not required. The helper
+can stay installed without a binding. No input service, app or boot hook needs
+to be removed.

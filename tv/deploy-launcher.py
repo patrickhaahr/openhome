@@ -17,6 +17,7 @@ config = json.dumps({"apiKey": key, "transportHost": "100.120.132.42", "serverNa
 files = {
     "var/lib/openhome-tv/client.js": ((root / "bridge/client.js").read_bytes(), 0o644),
     "var/lib/openhome-tv/client-service.sh": ((root / "client-service.sh").read_bytes(), 0o755),
+    "var/lib/openhome-tv/picture-toggle.py": ((root / "picture-toggle.py").read_bytes(), 0o644),
     "var/lib/openhome-tv/client.json": (config, 0o600),
     "var/lib/webosbrew/init.d/45-openhome-client": (b'#!/bin/sh\n/var/lib/openhome-tv/client-service.sh start\n', 0o755),
 }

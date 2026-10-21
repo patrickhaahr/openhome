@@ -305,5 +305,34 @@ to Cinema; native equality checks passed in both directions. Private snapshots
 and targeted rollback details are retained. No measured panel calibration or HDR
 playback verification is claimed.
 
+### Red-button picture shortcut
+
+The owner selected the red remote button. Live Input Hook 1.5.1 configuration had
+no binding for key 398; its log confirmed physical red events use 398. Added one
+`exec` binding without changing the five existing number-key app shortcuts.
+Backups of the exact original map are retained on the TV and in ignored
+`private/inputhook-before-picture-shortcut.json`. Input Hook hot-reloaded the map;
+its existing boot hook is unchanged. The owner confirmed the physical button
+worked, and native readback observed the warm profile at backlight 30.
+
+The helper reads the current native mode, writes only `pictureMode`, and reads
+back the result. It rejects contexts outside the configured default-input 2D SDR
+profiles. A nonblocking kernel file lock prevents overlapping shortcut commands.
+Home's eye subscribes to native changes and cancels that subscription when hidden;
+private display captures verified its white/night and dark/Cinema states without
+the prior polling delay. Current public screenshots were preserved.
+
+The first helper's per-key Node startup caused the owner's reported delay. A live
+timing assertion requiring completion below 1 second reproduced the issue at
+2.418 seconds. Node startup alone measured 1.991 seconds, versus 0.158 seconds for a
+native settings read. Replaced the helper with a small script compatible with
+the TV's existing Python 2.7.16 and local Python 3. The same full-command assertion
+then passed in both directions at 0.837/0.836 seconds, including readback. Native
+profile values, global controls and other Input Hook bindings were preserved.
+Timing evidence is in ignored `private/picture-shortcut-timing.json`.
+Also exercised the installed command in both directions with YouTube in the
+foreground: the app retained focus and the starting profile was restored before
+returning Home. The live OpenHome client acceptance check passed afterward.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
