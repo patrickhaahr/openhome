@@ -171,3 +171,32 @@ JS
 Input Hook reloads the file automatically; a reboot is not required. The helper
 can stay installed without a binding. No input service, app or boot hook needs
 to be removed.
+
+## Restore the prior YouTube shortcuts
+
+The exact map before updating 1/Netflix is saved locally in
+`private/inputhook-before-youtube-shortcuts.json` and on the TV in
+`/var/lib/openhome-tv/inputhook-before-youtube-shortcuts.json`. Restore only keys 2
+and 1037, preserving the red button and other later edits:
+
+```sh
+devenv shell -- just tv-ssh 'node -' <<'JS'
+var fs = require('fs');
+var file = '/home/root/.config/lginputhook/keybinds.json';
+var bindings = JSON.parse(fs.readFileSync(file, 'utf8'));
+var before = JSON.parse(fs.readFileSync('/var/lib/openhome-tv/inputhook-before-youtube-shortcuts.json', 'utf8'));
+['2', '1037'].forEach(function (key) {
+  if (!bindings[key] || bindings[key].action !== 'launch' || bindings[key].id !== 'youtube.leanback.v4') {
+    throw new Error('A YouTube shortcut changed; leaving the map alone');
+  }
+});
+['2', '1037'].forEach(function (key) {
+  if (before[key]) bindings[key] = before[key];
+  else delete bindings[key];
+});
+fs.writeFileSync(file, JSON.stringify(bindings));
+JS
+```
+
+This restores 1's old legacy-app target and removes the Netflix override. It does
+not reinstall the removed legacy YouTube app. Input Hook reloads without rebooting.
