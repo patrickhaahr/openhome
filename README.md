@@ -8,7 +8,7 @@
   <video src="https://github.com/user-attachments/assets/b9dff174-448f-4b85-b109-6cc2e2b53ebe"></video>
 </p>
 
-OpenHome is a self-hosted home control system with a cross-platform Android and iOS app. The mobile client is built with React Native and Expo and communicates exclusively with a Rust Axum API.
+OpenHome is a self-hosted home control system with a cross-platform Android and iOS app and a native LG webOS TV launcher. The mobile client is built with React Native and Expo and communicates exclusively with a Rust Axum API.
 
 The API authenticates the client and forwards HTTP requests to two ESP32 devices:
 
@@ -45,6 +45,28 @@ The app can also register a home geofence and automatically ask the API to turn 
 - View and manage Docker containers on the homelab server.
 - Monitor and control AdGuard Home DNS protection.
 - Aggregate RSS and Atom feeds into a timeline with read state.
+
+## TV
+
+OpenHome TV replaces LG Home on a rooted LG webOS TV using PearWebOS and a native QML interface. The launcher brings apps and home controls together on a clean black screen, with large icons for the Magic Remote.
+
+| Before: LG Home | After: OpenHome TV |
+| :---: | :---: |
+| ![LG Home before replacement](tv/screenshots/before.jpg) | ![OpenHome TV launcher with app icons, weather and home controls](tv/screenshots/after.jpg) |
+
+| App drawer | Agent speaking concept |
+| :---: | :---: |
+| ![OpenHome TV app drawer](tv/screenshots/openhome-apps.jpg) | ![Fullscreen circular agent speaking concept](tv/screenshots/ember-speaking.jpg) |
+
+- Large app icons, a full app drawer, pointer navigation and LG's app reordering.
+- A 24-hour clock, Danish date, today's weather and Charge, Rest and Effort rings.
+- Lights on/off and speaker Bluetooth/optical controls through the OpenHome API.
+- Cinema and warm night picture profiles, switched from the eye control or the red remote button.
+- Input Hook shortcuts for apps, lights and speaker inputs, including remapped streaming buttons.
+- Reversible Alexa blocking and privacy controls, with backups and rollback instructions.
+- A fullscreen circular agent with a speaking animation demo. Voice input, speech models and Hermes integration remain future work.
+
+See the [TV guide](tv/README.md) for setup, architecture and rollback, and the [annotated Magic Remote](tv/assets/remote-keymap.png) for all shortcuts.
 
 ## Architecture
 
