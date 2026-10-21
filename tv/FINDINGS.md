@@ -281,5 +281,29 @@ The actual remote eye was tested in both directions: expert2/backlight30 on,
 then a complete equality check against all preserved Cinema values on return.
 The screenshot was refreshed after the owner moved YouTube into the first slot.
 
+### Reference-oriented Cinema baseline
+
+At the owner's request, replaced the preserved amber Cinema settings with the
+[documented film baseline](CINEMA.md). Warm2/neutral RGB replaces Warm3 and the
+previous arbitrary gain reductions; brightness50, colour50 and contrast80 match
+the firmware's ordinary LCD Cinema defaults. Gamma2.4 and backlight50 are an
+evening-viewing baseline, not a measured luminance or gamma calibration.
+Disabled dynamic colour, noise reduction, local dimming and TruMotion; retained
+Auto gamut and Real Cinema. Other already-disabled enhancement controls stayed
+off. The unsupported legacy edge-enhancer key was not forced.
+
+Global Reduce Blue Light and automatic energy saving are off to avoid shifts in
+colour and output. The night profile's 78 readable profile-scoped controls were
+unchanged, although those global switches also affect its displayed appearance.
+All 26 submitted ordinary picture controls, both global switches and the
+energy-saving manual-change flag were read back. Merely setting Energy Saving
+Off reverted to Auto on a profile switch; setting the native
+`energySavingModified: true` flag kept it Off through the tested round trip.
+Explicit app-context queries verified TruMotion off for Home, YouTube and
+Netflix. The actual remote eye switched to the preserved night profile and back
+to Cinema; native equality checks passed in both directions. Private snapshots
+and targeted rollback details are retained. No measured panel calibration or HDR
+playback verification is claimed.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
