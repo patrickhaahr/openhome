@@ -27,7 +27,7 @@ Item {
     }
     Glyph {
         x: (parent.width - width) / 2; y: parent.width * 0.17
-        width: parent.width * 0.16; height: width
+        width: parent.width * 0.20; height: width
         kind: ring.glyph; ink: ring.ink
     }
     TVText {
@@ -36,10 +36,9 @@ Item {
         font.family: ring.family; font.pixelSize: parent.width * 0.32
         color: "#ecece6"
     }
-    TVText {
-        anchors.horizontalCenter: parent.horizontalCenter; y: parent.width + parent.width * 0.08
-        text: ring.label
-        font.family: ring.family; font.pixelSize: parent.width * 0.15
-        color: "#cfd0ca"
+    Glyph {
+        visible: ring.stale
+        anchors.right: parent.right; anchors.top: parent.top
+        width: parent.width * 0.15; height: width; kind: "stale"; ink: "#9a9ea6"
     }
 }

@@ -189,5 +189,23 @@ documented by LG; access to its audio under root is separate future research.
 The user confirmed the physical display stays complete during the speaking demo;
 intermittently missing unchanged elements occur in software captures only.
 
+### Owner's visual revision
+
+Removed all visible prose, headings, labels, app captions and instructions. Kept
+the clock, current temperature and scores; the only words are the Danish date.
+Used the dashboard's actual Phosphor icons, including filled recovery symbols,
+filled/outline bulbs and waveform for optical. Controls are vertical capsules;
+app icons remain large. LG's Apps tile (`com.webos.app.discovery`) is hidden.
+
+The face mascot was replaced with a cyan/blue circular interface matching the
+owner's reference: segmented annuli, compass ticks, circuit lines and a reactive
+core. Static vector layers are compiled to PNG; the speaking demo uses native
+transform animations. No audio/model/Hermes functionality was added.
+
+Verified remote focus on the agent and all four control positions on the TV.
+The drawer initially fitted five columns despite six-column navigation; its
+width now includes the left margin, and Down selects the icon directly below.
+Native client checks passed against the authenticated live API after deployment.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.

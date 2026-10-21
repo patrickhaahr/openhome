@@ -31,7 +31,7 @@ try:
     capture("openhome")
     keys("DOWN")
     capture("openhome-apps")
-    keys("BACK", "UP", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "OK")
+    keys("BACK", "UP", "OK")
     capture("ember-idle")
     keys("OK")
     capture("ember-speaking")
