@@ -2,11 +2,11 @@
 
 Working branch: `tv`. Device: LG 55NANO806PA, webOS 6.5.3 / firmware 03.53.45.
 
-- [Findings, changes and verification boundaries](FINDINGS.md)
-- [Exact rollback commands](ROLLBACK.md)
-- [Primary-source research](RESEARCH.md)
-- [OpenHome launcher design](DESIGN.md)
-- [Cinema picture settings](CINEMA.md)
+- [Findings, changes and verification boundaries](docs/FINDINGS.md)
+- [Exact rollback commands](docs/ROLLBACK.md)
+- [Primary-source research](docs/RESEARCH.md)
+- [OpenHome launcher design](docs/DESIGN.md)
+- [Cinema picture settings](docs/CINEMA.md)
 
 ## Screenshots
 
@@ -19,7 +19,23 @@ Working branch: `tv`. Device: LG 55NANO806PA, webOS 6.5.3 / firmware 03.53.45.
 
 ## Layout
 
-`upstream/` contains the three Git clones at the revisions in `FINDINGS.md`.
+| Directory | Responsibility |
+| --- | --- |
+| `launcher/` | Native QML interface, fonts and icons |
+| `bridge/` | TV-local OpenHome client, preview fixture and contract tests |
+| `runtime/` | Scripts installed on the TV: boot, privacy, client supervision and picture switching |
+| `tools/` | Workstation build, installation, SSH, backup, capture and verification commands |
+| `docs/` | Design, research, findings, picture settings and rollback instructions |
+| `assets/` | Annotated remote guide |
+| `screenshots/` | Selected public before/after screenshots |
+| `private/`, `upstream/` | Ignored device data, build output and pinned third-party source |
+
+`tools/tv_paths.py` shares the local TV root and SSH command between workstation
+scripts. Runtime scripts are self-contained; their installed `/var/lib` paths
+are independent of this repository layout. Paths in `docs/` are relative to
+`tv/` unless marked as absolute or shown in commands run from the repository root.
+
+`upstream/` contains the three Git clones at the revisions in `docs/FINDINGS.md`.
 `private/` holds proprietary firmware copies, personal settings, screenshots,
 SSH socket/known-hosts and the 69 MiB baseline backup. Both directories are
 ignored by Git; do not publish their contents. No SSH password is stored.
@@ -62,9 +78,9 @@ configuration changed. Live verification found Pi LAN10.0.10.4; 10.0.10.3 is zaz
 
 ## Remote
 
-![LG Magic Remote with the OpenHome number, streaming and red-button shortcuts](remote-keymap.png)
+![LG Magic Remote with the OpenHome number, streaming and red-button shortcuts](assets/remote-keymap.png)
 
-[Full-size shortcut guide](remote-keymap.png). Photo: [Huoltopalvelu, LG MR21GA](https://www.huoltopalvelu.com/LG-TV-remote-control-MR21GA);
+[Full-size shortcut guide](assets/remote-keymap.png). Photo: [Huoltopalvelu, LG MR21GA](https://www.huoltopalvelu.com/LG-TV-remote-control-MR21GA);
 annotations created with ImageGen and checked against the configured shortcuts.
 
 The TV has no visible labels or instructions: Danish date, clock and numerical
@@ -129,8 +145,8 @@ contrast80 and colour50. Expert Dark Room retains the earlier warm/dim controls:
 Warm3, backlight30, green gain−15 and blue gain−40. Global Reduce Blue Light and
 automatic energy saving are off; the eye changes only the profile. Other inputs
 and HDR picture presets remain separate, although those two global switches also
-affect them. See [Cinema settings and measurement limits](CINEMA.md) and
-[rollback](ROLLBACK.md).
+affect them. See [Cinema settings and measurement limits](docs/CINEMA.md) and
+[rollback](docs/ROLLBACK.md).
 
 ## Future voice input
 

@@ -1,16 +1,15 @@
 """Capture the actual TV UI with synthetic health/weather for public Git evidence."""
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
 
-root = Path(__file__).resolve().parent
-ssh = ["sh", str(root / "ssh.sh")]
+from tv_paths import SSH, TV_ROOT as root
+
 
 
 def remote(command, **kwargs):
-    return subprocess.run(ssh + [command], check=True, **kwargs)
+    return subprocess.run(SSH + [command], check=True, **kwargs)
 
 
 def keys(*names):
@@ -19,7 +18,7 @@ def keys(*names):
 
 
 def capture(name):
-    subprocess.run([sys.executable, str(root / "screen.py"), "public-" + name], check=True)
+    subprocess.run([sys.executable, str(root / "tools" / "screen.py"), "public-" + name], check=True)
     shutil.copy(root / "private" / ("public-" + name + ".jpg"), root / "screenshots" / (name + ".jpg"))
 
 

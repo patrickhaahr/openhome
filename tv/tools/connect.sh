@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 socket="$PWD/tv/private/ssh.sock"
 if timeout 8 ssh -S "$socket" -o BatchMode=yes -o ConnectTimeout=3 \
     -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$PWD/tv/private/known_hosts" \

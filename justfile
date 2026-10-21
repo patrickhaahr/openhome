@@ -12,91 +12,91 @@ groups:
 [group('tv')]
 [positional-arguments]
 tv-ssh *args:
-    sh tv/ssh.sh "$@"
+    sh tv/tools/ssh.sh "$@"
 
 # Reconnect the task's SSH control socket after a TV reboot (prompts for password)
 [group('tv')]
 tv-connect:
-    sh tv/connect.sh
+    sh tv/tools/connect.sh
 
 # Save a private, local backup of the LG TV before or after changes
 [group('tv')]
 tv-snapshot label:
-    python3 tv/snapshot.py {{quote(label)}}
+    python3 tv/tools/snapshot.py {{quote(label)}}
 
 # Capture the TV's actual display into the private evidence directory
 [group('tv')]
 tv-screen label:
-    python3 tv/screen.py {{quote(label)}}
+    python3 tv/tools/screen.py {{quote(label)}}
 
 # Install the locally checked Pear package without a boot hook
 [group('tv')]
 tv-install-pear: tv-check
-    python3 tv/install-pear.py
+    python3 tv/tools/install-pear.py
 
 # Enable the reviewed Alexa/privacy and Pear boot hooks after live validation
 [group('tv')]
 tv-install-hooks: tv-check
-    python3 tv/install-hooks.py
+    python3 tv/tools/install-hooks.py
 
 # Run a reviewed shell script on the TV with optional arguments
 [group('tv')]
 tv-script file args='':
-    sh tv/ssh.sh 'sh -s -- {{args}}' < {{quote(file)}}
+    sh tv/tools/ssh.sh 'sh -s -- {{args}}' < {{quote(file)}}
 
 # Validate TV scripts and build Pear against the locally backed-up LG Home files
 [group('tv')]
 tv-check: tv-assets
-    sh -n tv/ssh.sh
-    sh -n tv/alexa-block.sh
-    sh -n tv/probe.sh
-    sh -n tv/privacy-settings.sh
-    sh -n tv/privacy-hosts.sh
-    sh -n tv/boot.sh
-    sh -n tv/connect.sh
-    sh -n tv/client-service.sh
+    sh -n tv/tools/ssh.sh
+    sh -n tv/runtime/alexa-block.sh
+    sh -n tv/tools/probe.sh
+    sh -n tv/runtime/privacy-settings.sh
+    sh -n tv/runtime/privacy-hosts.sh
+    sh -n tv/runtime/boot.sh
+    sh -n tv/tools/connect.sh
+    sh -n tv/runtime/client-service.sh
     node --check tv/bridge/client.js
     node --check tv/bridge/preview.js
-    node --check tv/verify-client.js
-    python3 -c 'import ast; from pathlib import Path; [ast.parse(Path(p).read_text()) for p in ["tv/picture-toggle.py", "tv/install-picture-shortcut.py"]]'
+    node --check tv/tools/verify-client.js
+    python3 -c 'import ast; from pathlib import Path; [ast.parse(p.read_text(), filename=str(p)) for directory in ("tv/runtime", "tv/tools") for p in Path(directory).glob("*.py")]'
     node tv/bridge/test.js
     qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
-    python3 tv/build-pear.py
+    python3 tv/tools/build-pear.py
 
 # Render dashboard icons and agent vectors for LG's Qt PNG image loader
 [group('tv')]
 tv-assets:
-    node tv/export-icons.mjs
+    node tv/tools/export-icons.mjs
 
 # Update OpenHome TV UI and its local client, preserving the original Pear UI
 [group('tv')]
 tv-deploy: tv-check
-    python3 tv/deploy-launcher.py
+    python3 tv/tools/deploy-launcher.py
 
 # Bind red to the native Cinema/night profile toggle without replacing other shortcuts
 [group('tv')]
 tv-picture-shortcut: tv-check
-    python3 tv/install-picture-shortcut.py
+    python3 tv/tools/install-picture-shortcut.py
 
 # Read-only acceptance checks from the TV's native Node runtime
 [group('tv')]
 tv-client-check:
-    sh tv/ssh.sh 'node -' < tv/verify-client.js
+    sh tv/tools/ssh.sh 'node -' < tv/tools/verify-client.js
 
 # Save actual TV screenshots with synthetic health/weather, then restore live data
 [group('tv')]
 tv-preview-capture:
-    python3 tv/capture-preview.py
+    python3 tv/tools/capture-preview.py
 
 # Restore the exact setting values changed during TV setup
 [group('tv')]
 tv-restore-settings:
-    python3 tv/restore-settings.py
+    python3 tv/tools/restore-settings.py
 
 # Assert live Alexa blocking, privacy/preload settings, resolver and local control
 [group('tv')]
 tv-verify:
-    python3 tv/verify-live.py
+    python3 tv/tools/verify-live.py
 
 expodir := 'mobile-expo'
 

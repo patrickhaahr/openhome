@@ -4,10 +4,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const requireDashboard = createRequire(new URL("../dashboard/package.json", import.meta.url));
+const requireDashboard = createRequire(new URL("../../dashboard/package.json", import.meta.url));
 const { createElement } = requireDashboard("react");
 const { renderToStaticMarkup } = requireDashboard("react-dom/server");
-const output = new URL("./private/icons/", import.meta.url);
+const output = new URL("../private/icons/", import.meta.url);
 mkdirSync(output, { recursive: true });
 const glyphs = {
   bulb: ["LightbulbFilament", "fill"], "bulb-off": ["Lightbulb", "regular"],
@@ -23,7 +23,7 @@ const glyphs = {
 };
 const colours = ["ecece6", "000000", "3ddc84", "ffcc33", "ff6b5e", "5b9dff", "9a9ea6", "ff8a7a"];
 for (const [kind, [name, weight]] of Object.entries(glyphs)) {
-  const module = await import(new URL(`../dashboard/node_modules/@phosphor-icons/react/dist/csr/${name}.es.js`, import.meta.url));
+  const module = await import(new URL(`../../dashboard/node_modules/@phosphor-icons/react/dist/csr/${name}.es.js`, import.meta.url));
   for (const ink of colours) {
     const svg = renderToStaticMarkup(createElement(module[`${name}Icon`], { size: 256, weight, color: `#${ink}` }));
     const stem = new URL(`${kind}-${ink}`, output);

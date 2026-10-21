@@ -134,7 +134,7 @@ ordinary Quick Start+ wake resumes the existing Pear process.
 IR power-off/on cycles through the existing OpenHome CLI suspended SSH, then
 returned the TV to `Active`, foreground LG Home running Pear, same Home PID and
 three mounts. Private captures record Pear Home after the final reboot and wake.
-The current public before/after launcher screenshots are shown in [README](README.md#screenshots).
+The current public before/after launcher screenshots are shown in [README](../README.md#screenshots).
 
 Navigation/drawer, YouTube app opening to its account picker, HDMI 1 selection,
 Quick Settings and returning Home were checked on the real display. No account
@@ -373,5 +373,5 @@ Confirmed the API through `openhome health` and the TV through
 changed. Existing app shortcuts and the red picture toggle were preserved.
 The owner tested the physical remote and confirmed all four device actions work.
 
-See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
+See [design and public data provenance](DESIGN.md), [API boundary](../bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
