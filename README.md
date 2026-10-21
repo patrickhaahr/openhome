@@ -52,9 +52,9 @@ The OpenHome dashboard runs on a hacked digital photo frame as a dedicated house
 
 ![Dashboard home with clock, weather, fitness progress and home controls](dashboard/docs/redesign/home-desktop.png)
 
-| Weather | Photos |
+| Travel | Photos |
 | :---: | :---: |
-| ![Dashboard weather forecast](dashboard/docs/redesign/weather-desktop.png) | ![Dashboard photo albums](dashboard/docs/redesign/photos-desktop.png) |
+| ![Dashboard travel map](dashboard/docs/redesign/travel-desktop.png) | ![Dashboard photo albums](dashboard/docs/redesign/photos-desktop.png) |
 
 These screenshots use anonymous synthetic data. See [dashboard/docs/redesign](dashboard/docs/redesign/README.md) for screenshots of all pages in desktop and phone layouts.
 
