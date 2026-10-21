@@ -58,6 +58,7 @@ tv-check: tv-assets
     node --check tv/bridge/client.js
     node --check tv/bridge/preview.js
     node --check tv/verify-client.js
+    python3 -c 'import ast; from pathlib import Path; [ast.parse(Path(p).read_text()) for p in ["tv/picture-toggle.py", "tv/install-picture-shortcut.py"]]'
     node tv/bridge/test.js
     qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
     python3 tv/build-pear.py
@@ -71,6 +72,11 @@ tv-assets:
 [group('tv')]
 tv-deploy: tv-check
     python3 tv/deploy-launcher.py
+
+# Bind red to the native Cinema/night profile toggle without replacing other shortcuts
+[group('tv')]
+tv-picture-shortcut: tv-check
+    python3 tv/install-picture-shortcut.py
 
 # Read-only acceptance checks from the TV's native Node runtime
 [group('tv')]

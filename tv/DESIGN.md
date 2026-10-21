@@ -32,7 +32,9 @@ included in the TV bundle. This adds no new JavaScript dependency.
 
 The eye button uses Home’s native Luna settings service for `picture.pictureMode`.
 It reads before switching between `cinema` and `expert2`, then reads back the
-result. A timeout/error clears the state; periodic/return-to-Home reads recover it.
+result. A native subscription keeps it current when Input Hook or LG settings
+changes the mode; the subscription is cancelled while Home is hidden. A
+timeout/error clears the state; periodic/return-to-Home reads recover it.
 It changes no individual picture settings when clicked and leaves LG's global
 Reduce Blue Light switch alone. The two configured profiles belong to the current
 default-input SDR context. Other inputs/HDR profiles are separate.
@@ -62,6 +64,12 @@ Left/Right chooses apps. Up reaches the nearest interactive region above the
 apps: the agent or right-hand controls. The vertical control rail uses Up/Down;
 Left reaches the agent. Down from apps opens the drawer. Hold OK still opens
 LG's original reorder interface. Pointer hover/click remains supported.
+
+The red button is globally bound through the existing Input Hook app to the
+native Cinema/night switch. It changes the profile without bringing Home to the
+foreground. A kernel file lock prevents concurrent shortcut commands. The
+helper validates the configured default-input 2D SDR context before writing;
+other inputs and HDR are left alone.
 
 ## Evidence
 
