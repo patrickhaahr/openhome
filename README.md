@@ -8,7 +8,7 @@
   <video src="https://github.com/user-attachments/assets/b9dff174-448f-4b85-b109-6cc2e2b53ebe"></video>
 </p>
 
-OpenHome is a self-hosted home control system with a cross-platform Android and iOS app and a native LG webOS TV launcher. The mobile client is built with React Native and Expo and communicates exclusively with a Rust Axum API.
+OpenHome is a self-hosted home control system with a cross-platform Android and iOS app, a household dashboard and a native LG webOS TV launcher. The mobile client is built with React Native and Expo and communicates exclusively with a Rust Axum API.
 
 The API authenticates the client and forwards HTTP requests to two ESP32 devices:
 
@@ -45,6 +45,18 @@ The app can also register a home geofence and automatically ask the API to turn 
 - View and manage Docker containers on the homelab server.
 - Monitor and control AdGuard Home DNS protection.
 - Aggregate RSS and Atom feeds into a timeline with read state.
+
+## Dashboard
+
+The OpenHome dashboard runs on a hacked digital photo frame as a dedicated household display. It brings together a clock, weather, home controls, travel, workouts, recovery, lists and Immich photo albums, with an idle slideshow when the display is not in use.
+
+![Dashboard home with clock, weather, fitness progress and home controls](dashboard/docs/redesign/home-desktop.png)
+
+| Weather | Photos |
+| :---: | :---: |
+| ![Dashboard weather forecast](dashboard/docs/redesign/weather-desktop.png) | ![Dashboard photo albums](dashboard/docs/redesign/photos-desktop.png) |
+
+These screenshots use anonymous synthetic data. See [dashboard/docs/redesign](dashboard/docs/redesign/README.md) for screenshots of all pages in desktop and phone layouts.
 
 ## TV
 
