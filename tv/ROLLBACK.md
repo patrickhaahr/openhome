@@ -200,3 +200,29 @@ JS
 
 This restores 1's old legacy-app target and removes the Netflix override. It does
 not reinstall the removed legacy YouTube app. Input Hook reloads without rebooting.
+
+## Restore Prime Video, Disney+ and Rakuten TV
+
+These three buttons previously had no Input Hook overrides. The exact prior map
+is saved locally in `private/inputhook-before-app-shortcuts.json` and on the TV
+in `/var/lib/openhome-tv/inputhook-before-app-shortcuts.json`. Remove only the
+three new bindings, preserving YouTube, red and other shortcuts:
+
+```sh
+devenv shell -- just tv-ssh 'node -' <<'JS'
+var fs = require('fs');
+var file = '/home/root/.config/lginputhook/keybinds.json';
+var bindings = JSON.parse(fs.readFileSync(file, 'utf8'));
+var targets = {'1038': 'org.litefin.app', '1042': 'com.crunchyroll.webapp', '1044': 'com.webos.app.browser'};
+Object.keys(targets).forEach(function (key) {
+  if (!bindings[key] || bindings[key].action !== 'launch' || bindings[key].id !== targets[key]) {
+    throw new Error('An app shortcut changed; leaving the map alone');
+  }
+});
+Object.keys(targets).forEach(function (key) { delete bindings[key]; });
+fs.writeFileSync(file, JSON.stringify(bindings));
+JS
+```
+
+Input Hook reloads the map automatically. This restores the original button
+behaviour without uninstalling any apps.
