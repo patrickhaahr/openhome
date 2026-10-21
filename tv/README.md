@@ -70,7 +70,7 @@ The LG Apps tile is hidden from both dock and drawer; its firmware is preserved.
 LG Input Hook is visible. Bluetooth/optical and the full-size eye button share
 the right rail’s circle/capsule design, without a speaker header or volume buttons.
 The eye button switches picture profiles: white means the warm/dim Expert Dark
-Room profile, dark means the preserved Cinema profile, and dim means unknown.
+Room profile, dark means the reference-oriented Cinema profile, and dim means unknown.
 Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
 
 ## YouTube updates and picture warmth
@@ -82,11 +82,13 @@ Stable v1.2.5 is installed as `youtube.leanback.v4`; the old v1.1.7
 `com.cobalt.youtube.adfree` installation was backed up and removed.
 
 The eye switches the current SDR input between Cinema and Expert Dark Room.
-Cinema preserves the owner's settings: Warm3, backlight100, green gain−10 and
-blue gain−30. Expert Dark Room uses Warm3, backlight30, green gain−15 and blue
-gain−40, with the other core picture controls copied from Cinema. The eye leaves
-LG's global Reduce Blue Light setting unchanged. Other inputs/HDR profiles remain
-separate. See [rollback](ROLLBACK.md) for saved profile settings and restoration.
+Cinema now uses Warm2, neutral RGB gains, gamma2.4, backlight50, black level50,
+contrast80 and colour50. Expert Dark Room retains the earlier warm/dim controls:
+Warm3, backlight30, green gain−15 and blue gain−40. Global Reduce Blue Light and
+automatic energy saving are off; the eye changes only the profile. Other inputs
+and HDR picture presets remain separate, although those two global switches also
+affect them. See [Cinema settings and measurement limits](CINEMA.md) and
+[rollback](ROLLBACK.md).
 
 ## Future voice input
 
