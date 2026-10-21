@@ -10,8 +10,8 @@ interface. This replaces the first worded design saved in commit `fd3497b`.
 - Today's weather is just its existing dashboard icon and current temperature.
 - Three recovery rings use Axum's actual Charge/Rest/Effort scores, with the
   dashboard's filled Lightning, Moon and Heartbeat symbols and colours.
-- Two vertical control capsules: lights on/off, then a SpeakerHifi header over Bluetooth/optical.
-- The eye button below toggles the TV’s actual blue-light filter: white is on, dark is off; unknown state is dimmed.
+- Two vertical control capsules: lights on/off, then Bluetooth/optical.
+- The eye button has the same 104px size and 124px capsule as the other controls. It toggles the TV’s actual blue-light filter: white is on, dark is off; unknown state is dimmed.
 - Six large app icons below, without captions. The LG Apps application
   (`com.webos.app.discovery`) is filtered from both the dock and the drawer.
 - A down chevron opens the complete app grid; Back or Up from the first row closes it. No drawer X.

@@ -223,5 +223,40 @@ The launcher reads before toggling and after writing, rather than predicting
 state. Failures clear the displayed state. No room-control API or firewall
 changes were needed.
 
+### YouTube repository migration and stronger warmth
+
+Added the owner's [RF1705 repository](https://raw.githubusercontent.com/RF1705/youtube-webos-cobalt-adfree/main/repo.json)
+through Homebrew Channel's supported addRepository launch parameters and TV UI.
+The URL is persisted in Homebrew's localStorage. Its custom entries appear at
+**the top** of the catalogue, above the default repository's alphabetic list.
+The default repository also has a different YouTube AdFree package under the
+same `youtube.leanback.v4` ID; use the **RF1705 YouTube Cobalt AdFree** entry.
+
+The original manually installed app was `com.cobalt.youtube.adfree` v1.1.7.
+At the owner's request, installed stable `youtube.leanback.v4` v1.2.5 using
+Homebrew's install service and the repository's SHA256 verification:
+`189af7d46617a511b191dc472a9fcfec3d0f44caf70107fb1da9adde3d39f2de`.
+Verified it launches into YouTube's welcome/setup screen, then removed the
+legacy app through Homebrew's uninstall service and verified its ID is absent.
+The old app directory is backed up in ignored `private/youtube-legacy-1.1.7.tar.gz`.
+Sign-in and playback are not claimed by this launch test. No beta was installed.
+
+The picture stored `colorTemperature: -50` (Warm 50) with
+`eyeComfortMode: on`; that slider is inactive in Cinema mode. The current
+default-input/SDR/Cinema profile instead used
+`whiteBalanceColorTemperature: warm2`; its supported presets extend to warm3.
+Changed that one setting to **warm3**, verified via Luna readback, and kept
+Reduce Blue Light enabled. This changes the native TV picture, not a QML tint.
+Other picture profiles and RGB calibration values were not changed. Software
+captures do not measure the physical screen's emitted blue light. The prior
+values are in ignored `private/picture-before-warm3.json`; targeted rollback is
+in ROLLBACK.md.
+
+Removed the speaker header and enlarged the eye control from 72 to 104px, with
+its own matching 124px capsule and the same right-rail alignment and focus ring.
+Tested the enlarged button off and back on; independent Luna reads confirmed
+Warm 3 persists in both states. Homebrew’s RF1705 details page recognises the
+installed v1.2.5 and shows its disabled Update button (already current).
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.

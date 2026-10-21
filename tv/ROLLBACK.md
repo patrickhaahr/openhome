@@ -89,3 +89,20 @@ The script verifies the active mount ID and inode before removing its one
 override; Homebrew's underlying OTA protection stays mounted. The original
 telemetry boot hook is in the private baseline tar. If restoring that hook,
 note that its ineffective mount-detection behavior will return too.
+
+## Restore picture warmth or remove the custom YouTube repository
+
+Only `whiteBalanceColorTemperature` was changed from `warm2` to `warm3` in the
+current default-input SDR Cinema profile. Select that same input/profile and run:
+
+```sh
+devenv shell -- just tv-ssh "/var/lib/pearwebos/luna-send-n -n 1 luna://com.webos.settingsservice/setSystemSettings '{\"category\":\"picture\",\"settings\":{\"whiteBalanceColorTemperature\":\"warm2\"}}'"
+```
+
+This leaves the existing Reduce Blue Light switch and Warm 50 slider untouched.
+The exact prior readback is in ignored `private/picture-before-warm3.json`.
+
+The RF1705 repository can be removed from Homebrew Channel's Settings by selecting
+its URL/trash icon. This does not uninstall YouTube. The old v1.1.7 application
+folder backup is `private/youtube-legacy-1.1.7.tar.gz`; it is an emergency file
+backup, not a redistributable IPK or a verified reinstall procedure.

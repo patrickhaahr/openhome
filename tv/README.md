@@ -13,6 +13,8 @@ Working branch: `tv`. Device: LG 55NANO806PA, webOS 6.5.3 / firmware 03.53.45.
 - [Circular agent speaking concept](screenshots/ember-speaking.jpg)
 - [Earlier design, before removing labels](screenshots/before-wordless.jpg)
 - [Before filling app cards](screenshots/before-card-fill.jpg)
+- [Before integrating the eye button](screenshots/before-eye-layout.jpg)
+- [YouTube recognised by Homebrew](screenshots/youtube-homebrew.jpg)
 
 ## Layout
 
@@ -65,10 +67,25 @@ vertical controls; Left reaches the agent. Down from apps opens the full drawer.
 Back closes the drawer; Back/X closes the agent; hold OK on an app opens LG's original reorder view.
 Magic Remote hover/click also works. No selection indicates observed device state.
 The LG Apps tile is hidden from both dock and drawer; its firmware is preserved.
-LG Input Hook is visible. The speaker capsule has the dashboard’s SpeakerHifi header;
-there are no volume buttons. The eye button toggles the TV’s Reduce Blue Light
+LG Input Hook is visible. Bluetooth/optical and the full-size eye button share
+the right rail’s circle/capsule design, without a speaker header or volume buttons.
+The eye button toggles the TV’s Reduce Blue Light
 setting; white means enabled, dark means disabled, and dim means unknown.
 Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
+
+## YouTube updates and picture warmth
+
+The RF1705 custom repository is saved in Homebrew Channel. Choose **YouTube Cobalt
+AdFree** at the top of its catalogue for updates; the default repository's
+**YouTube AdFree** is a different package using the same application ID.
+Stable v1.2.5 is installed as `youtube.leanback.v4`; the old v1.1.7
+`com.cobalt.youtube.adfree` installation was backed up and removed.
+
+The current default-input SDR Cinema picture uses Warm 3, with Reduce Blue Light
+on. Its stored Warm 50 slider is inactive in this mode. The eye button controls LG's on/off
+Reduce Blue Light setting; the warmer base preset remains when it is off.
+Other inputs/picture profiles retain their settings. See [rollback](ROLLBACK.md)
+to restore the prior Warm 2 preset.
 
 ## Future voice input
 
