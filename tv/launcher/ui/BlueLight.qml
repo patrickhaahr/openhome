@@ -1,0 +1,50 @@
+import QtQuick 2.12
+import WebOSServices 1.0
+
+Item {
+    id: setting
+    property bool active: false
+    property var value: null
+    property bool pending: false
+    property bool failed: false
+    property var request: null
+    property string operation: ""
+    onActiveChanged: if (active) refresh()
+    function read() {
+        request = service.call("luna://com.webos.settingsservice", "/getSystemSettings",
+            JSON.stringify({category: "picture", keys: ["eyeComfortMode"]}));
+        timeout.restart();
+    }
+    function refresh() { if (!pending) { operation = "read"; read(); } }
+    function toggle() {
+        if (pending || value === null) return;
+        pending = true; failed = false; operation = "toggle"; read();
+    }
+    function fail() { request = null; operation = ""; pending = false; value = null; failed = true; timeout.stop(); }
+    Service {
+        id: service
+        appId: "com.webos.app.home"
+        onResponse: {
+            if (token !== setting.request) return;
+            timeout.stop();
+            var data;
+            try { data = JSON.parse(payload); } catch (e) { setting.fail(); return; }
+            if (!data.returnValue) { setting.fail(); return; }
+            if (setting.operation === "write") {
+                setting.operation = "verify"; setting.read(); return;
+            }
+            var current = data.settings && data.settings.eyeComfortMode;
+            if (current !== "on" && current !== "off") { setting.fail(); return; }
+            setting.value = current === "on";
+            if (setting.operation === "toggle") {
+                setting.operation = "write";
+                setting.request = service.call("luna://com.webos.settingsservice", "/setSystemSettings",
+                    JSON.stringify({category: "picture", settings: {eyeComfortMode: current === "on" ? "off" : "on"}}));
+                timeout.restart(); return;
+            }
+            setting.request = null; setting.operation = ""; setting.pending = false; setting.failed = false;
+        }
+    }
+    Timer { id: timeout; interval: 5000; onTriggered: setting.fail() }
+    Timer { interval: 60000; running: setting.active; repeat: true; onTriggered: setting.refresh() }
+}
