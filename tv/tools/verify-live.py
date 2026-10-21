@@ -1,16 +1,16 @@
 """Assert the user-visible blocking and settings against the live TV."""
 import json
-from pathlib import Path
 import shlex
 import socket
 import subprocess
 import xml.etree.ElementTree as ET
 
-ROOT = Path(__file__).resolve().parent
+from tv_paths import SSH, TV_ROOT as ROOT
+
 
 
 def remote(command):
-    return subprocess.run(["sh", str(ROOT / "ssh.sh"), command], capture_output=True, check=True).stdout.decode()
+    return subprocess.run(SSH + [command], capture_output=True, check=True).stdout.decode()
 
 
 def luna(uri, payload):
@@ -19,7 +19,7 @@ def luna(uri, payload):
 
 
 for area in ("alexa", "privacy"):
-    result = subprocess.run(["sh", str(ROOT / "ssh.sh"), "sh -s -- " + area], input=(ROOT / "probe.sh").read_bytes(), capture_output=True, check=True)
+    result = subprocess.run(SSH + ["sh -s -- " + area], input=(ROOT / "tools" / "probe.sh").read_bytes(), capture_output=True, check=True)
     print(result.stdout.decode().strip())
 for app in ("amazon.alexa.view", "amazon.alexapr"):
     reply = luna("luna://com.webos.applicationManager/launch", {"id": app})
@@ -33,7 +33,7 @@ for service in ("amazon.alexa.adapter.plugin", "amazon.alexa.adapter.vsk"):
     reply = luna("luna://com.webos.service.bus/signal/registerServerStatus", {"serviceName": service})
     assert reply.get("connected") is False, reply
     print("PASS: Alexa service disconnected:", service)
-result = subprocess.run(["sh", str(ROOT / "ssh.sh"), "sh -s -- alexa"], input=(ROOT / "probe.sh").read_bytes(), capture_output=True, check=True)
+result = subprocess.run(SSH + ["sh -s -- alexa"], input=(ROOT / "tools" / "probe.sh").read_bytes(), capture_output=True, check=True)
 print("PASS: Alexa masks/process checks still pass after fresh activation attempts.")
 expected = {
     "general": {"homePromotion": "off", "sportsAlarm": "off"},

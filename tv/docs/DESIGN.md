@@ -25,7 +25,7 @@ interface. This replaces the first worded design saved in commit `fd3497b`.
   rewind icon. Button and app names remain in accessibility metadata only.
 
 The icons are exported directly from `dashboard/node_modules/@phosphor-icons/react`,
-using the exact component and weight used by the dashboard. `tv/export-icons.mjs`
+using the exact component and weight used by the dashboard. `tv/tools/export-icons.mjs`
 renders them through React's static renderer, then `rsvg-convert` compiles PNGs
 for LG's Qt build, which has no SVG image loader. The package's MIT license is
 included in the TV bundle. This adds no new JavaScript dependency.

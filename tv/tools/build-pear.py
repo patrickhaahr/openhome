@@ -1,10 +1,10 @@
 """Build Pear locally from the backed-up firmware, without touching the TV."""
-from pathlib import Path
 import shutil
 import sys
 import tarfile
 
-ROOT = Path(__file__).resolve().parent
+from tv_paths import TV_ROOT as ROOT
+
 UPSTREAM = ROOT / "upstream" / "PearWebOS"
 sys.path.insert(0, str(UPSTREAM / "installer"))
 import patch_home
