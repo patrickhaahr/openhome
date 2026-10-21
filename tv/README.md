@@ -5,16 +5,17 @@ Working branch: `tv`. Device: LG 55NANO806PA, webOS 6.5.3 / firmware 03.53.45.
 - [Findings, changes and verification boundaries](FINDINGS.md)
 - [Exact rollback commands](ROLLBACK.md)
 - [Primary-source research](RESEARCH.md)
-- [Before LG Home](screenshots/before.jpg)
-- [After Pear, captured after the final reboot](screenshots/after.jpg)
-- [Pear app drawer](screenshots/after-apps.jpg)
 - [OpenHome launcher design](DESIGN.md)
-- [OpenHome TV Home, synthetic public data](screenshots/openhome.jpg)
+- [Cinema picture settings](CINEMA.md)
+
+## Screenshots
+
+| Before: LG Home | After: OpenHome TV |
+| --- | --- |
+| ![LG Home before replacement](screenshots/before.jpg) | ![OpenHome launcher with large app icons and room controls](screenshots/after.jpg) |
+
+- [OpenHome app drawer](screenshots/openhome-apps.jpg)
 - [Circular agent speaking concept](screenshots/ember-speaking.jpg)
-- [Earlier design, before removing labels](screenshots/before-wordless.jpg)
-- [Before filling app cards](screenshots/before-card-fill.jpg)
-- [Before integrating the eye button](screenshots/before-eye-layout.jpg)
-- [YouTube recognised by Homebrew](screenshots/youtube-homebrew.jpg)
 
 ## Layout
 

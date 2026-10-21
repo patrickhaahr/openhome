@@ -65,9 +65,9 @@ LG's original reorder interface. Pointer hover/click remains supported.
 
 ## Evidence
 
-`before-wordless.jpg` preserves the first OpenHome design. `openhome.jpg` and
-`openhome-apps.jpg` show the redesign; `ember-idle.jpg` and `ember-speaking.jpg`
-show the circular agent. These are captures of the actual TV, not browser mockups.
+`before.jpg` shows LG Home and `after.jpg` shows the current OpenHome launcher.
+`openhome-apps.jpg` shows the app drawer; `ember-speaking.jpg` shows the circular
+agent concept. These are captures of the actual TV, not browser mockups.
 Public weather/recovery values come from `bridge/preview.js`: 12°C, scores76/88/42.
 Real API data and live command evidence remain in ignored `private/`.
 
