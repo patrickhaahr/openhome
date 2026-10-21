@@ -109,7 +109,7 @@ backup, not a redistributable IPK or a verified reinstall procedure.
 
 ## Restore the normal picture profile
 
-The eye now switches picture profiles. To return to the preserved Cinema profile:
+The eye now switches picture profiles. To select Cinema (now the film baseline):
 
 ```sh
 devenv shell -- just tv-ssh "/var/lib/pearwebos/luna-send-n -n 1 luna://com.webos.settingsservice/setSystemSettings '{\"category\":\"picture\",\"settings\":{\"pictureMode\":\"cinema\"}}'"
@@ -121,3 +121,28 @@ its prior values. Restore only the backed-up target profile's `settings` object
 while that profile and input are active. `private/picture-before-amber.json`
 records Cinema's RGB gains before the earlier green−10/blue−30 adjustment;
 restoring those two gains to0 removes that tint while retaining Warm3.
+
+## Undo the Cinema baseline
+
+`private/cinema-reference-before-getSystemSettings.json` contains the full Cinema
+snapshot immediately before the reference-oriented tuning. The submitted key list
+is in `private/cinema-reference-applied.json`. Select Cinema on the same default
+SDR input first, then restore **only** the intersection of that submitted
+`settings` key list with the before snapshot's `settings`. Do not send the full
+snapshot: it includes read-only, unsupported and unrelated settings.
+
+Restore the three submitted global keys separately from the same before snapshot:
+`eyeComfortMode: on`, `energySaving: auto`, `energySavingModified: false`.
+They affect all profiles/inputs.
+Read back the restored keys and compare with the snapshot.
+
+TruMotion's original app-context value was not captured before the change; it
+was absent from an ordinary settings query. It was subsequently set to `off` and
+verified with explicit Home/YouTube/Netflix app IDs. An exact pre-change TruMotion
+restoration cannot be claimed from this backup. The ordinary LCD Cinema factory
+default is `cinemaClear`; use LG's native TruMotion menu if choosing to restore
+that factory behaviour. This does not require a full picture-mode reset.
+
+Expert Dark Room's stored profile controls were unchanged. Its independent
+before/after snapshots are `private/cinema-reference-night-before.json` and
+`private/cinema-reference-night-after.json`.
