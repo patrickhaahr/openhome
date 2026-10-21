@@ -69,8 +69,8 @@ Magic Remote hover/click also works. No selection indicates observed device stat
 The LG Apps tile is hidden from both dock and drawer; its firmware is preserved.
 LG Input Hook is visible. Bluetooth/optical and the full-size eye button share
 the right rail’s circle/capsule design, without a speaker header or volume buttons.
-The eye button toggles the TV’s Reduce Blue Light
-setting; white means enabled, dark means disabled, and dim means unknown.
+The eye button switches picture profiles: white means the warm/dim Expert Dark
+Room profile, dark means the preserved Cinema profile, and dim means unknown.
 Opaque app backgrounds fill their rounded cards; transparent logos keep their sizing.
 
 ## YouTube updates and picture warmth
@@ -81,11 +81,12 @@ AdFree** at the top of its catalogue for updates; the default repository's
 Stable v1.2.5 is installed as `youtube.leanback.v4`; the old v1.1.7
 `com.cobalt.youtube.adfree` installation was backed up and removed.
 
-The current default-input SDR Cinema picture uses Warm 3, with Reduce Blue Light
-on. Its stored Warm 50 slider is inactive in this mode. The eye button controls LG's on/off
-Reduce Blue Light setting; the warmer base preset remains when it is off.
-Other inputs/picture profiles retain their settings. See [rollback](ROLLBACK.md)
-to restore the prior Warm 2 preset.
+The eye switches the current SDR input between Cinema and Expert Dark Room.
+Cinema preserves the owner's settings: Warm3, backlight100, green gain−10 and
+blue gain−30. Expert Dark Room uses Warm3, backlight30, green gain−15 and blue
+gain−40, with the other core picture controls copied from Cinema. The eye leaves
+LG's global Reduce Blue Light setting unchanged. Other inputs/HDR profiles remain
+separate. See [rollback](ROLLBACK.md) for saved profile settings and restoration.
 
 ## Future voice input
 

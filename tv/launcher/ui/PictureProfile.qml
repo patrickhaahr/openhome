@@ -3,6 +3,8 @@ import WebOSServices 1.0
 
 Item {
     id: setting
+    readonly property string normalMode: "cinema"
+    readonly property string warmMode: "expert2"
     property bool active: false
     property var value: null
     property bool pending: false
@@ -12,7 +14,7 @@ Item {
     onActiveChanged: if (active) refresh()
     function read() {
         request = service.call("luna://com.webos.settingsservice", "/getSystemSettings",
-            JSON.stringify({category: "picture", keys: ["eyeComfortMode"]}));
+            JSON.stringify({category: "picture", keys: ["pictureMode"]}));
         timeout.restart();
     }
     function refresh() { if (!pending) { operation = "read"; read(); } }
@@ -33,13 +35,13 @@ Item {
             if (setting.operation === "write") {
                 setting.operation = "verify"; setting.read(); return;
             }
-            var current = data.settings && data.settings.eyeComfortMode;
-            if (current !== "on" && current !== "off") { setting.fail(); return; }
-            setting.value = current === "on";
+            var current = data.settings && data.settings.pictureMode;
+            if (typeof current !== "string" || current.length === 0) { setting.fail(); return; }
+            setting.value = current === setting.warmMode;
             if (setting.operation === "toggle") {
                 setting.operation = "write";
                 setting.request = service.call("luna://com.webos.settingsservice", "/setSystemSettings",
-                    JSON.stringify({category: "picture", settings: {eyeComfortMode: current === "on" ? "off" : "on"}}));
+                    JSON.stringify({category: "picture", settings: {pictureMode: current === setting.warmMode ? setting.normalMode : setting.warmMode}}));
                 timeout.restart(); return;
             }
             setting.request = null; setting.operation = ""; setting.pending = false; setting.failed = false;
