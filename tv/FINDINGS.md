@@ -258,5 +258,28 @@ Tested the enlarged button off and back on; independent Luna reads confirmed
 Warm 3 persists in both states. Homebrew’s RF1705 details page recognises the
 installed v1.2.5 and shows its disabled Update button (already current).
 
+### Separate warm/dim picture profile
+
+The owner chose a profile switch instead of changing the current profile further.
+Preserved the exact current Cinema settings, including the previously applied
+red0/green−10/blue−30 gains and the owner's brightness65/contrast65/color60 values.
+Saved them in ignored `private/picture-normal-preserved.json`. The pre-adjustment
+Cinema gains remain in `private/picture-before-amber.json`.
+
+Selected `expert2` (Expert Dark Room), backed up its original settings to ignored
+`private/picture-expert2-before.json`, then copied Cinema's core picture controls
+with Warm3, backlight30, green gain−15 and blue gain−40. Red and RGB offsets were
+preserved. Readback verified every written value; selecting Cinema again restored
+all queried normal values exactly. The `brightness` black-level control stayed65;
+actual light output is reduced through `backlight`.
+
+The native eye component now reads/writes `pictureMode` (`cinema`/`expert2`) and
+reads back the result. It no longer changes `eyeComfortMode`, which stays as the
+owner had it. A white eye identifies the warm/dim profile; a dark eye identifies
+Cinema. These presets are configured for the current default-input SDR context.
+The actual remote eye was tested in both directions: expert2/backlight30 on,
+then a complete equality check against all preserved Cinema values on return.
+The screenshot was refreshed after the owner moved YouTube into the first slot.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.

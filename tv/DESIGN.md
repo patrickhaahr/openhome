@@ -11,7 +11,7 @@ interface. This replaces the first worded design saved in commit `fd3497b`.
 - Three recovery rings use Axum's actual Charge/Rest/Effort scores, with the
   dashboard's filled Lightning, Moon and Heartbeat symbols and colours.
 - Two vertical control capsules: lights on/off, then Bluetooth/optical.
-- The eye button has the same 104px size and 124px capsule as the other controls. It toggles the TV’s actual blue-light filter: white is on, dark is off; unknown state is dimmed.
+- The eye button has the same 104px size and 124px capsule as the other controls. It switches picture profiles: white is the warm/dim Expert Dark Room profile, dark is the preserved Cinema profile; unknown state is dimmed.
 - Six large app icons below, without captions. The LG Apps application
   (`com.webos.app.discovery`) is filtered from both the dock and the drawer.
 - A down chevron opens the complete app grid; Back or Up from the first row closes it. No drawer X.
@@ -30,10 +30,18 @@ renders them through React's static renderer, then `rsvg-convert` compiles PNGs
 for LG's Qt build, which has no SVG image loader. The package's MIT license is
 included in the TV bundle. This adds no new JavaScript dependency.
 
-The eye button uses Home’s native Luna settings service for `picture.eyeComfortMode`.
-It reads before toggling, writes only `on`/`off`, and reads back the result. It does
-not predict state. A timeout/error clears the value; periodic/return-to-Home reads
-recover it. Unlike room controls, this is a local TV setting, not an Axum command.
+The eye button uses Home’s native Luna settings service for `picture.pictureMode`.
+It reads before switching between `cinema` and `expert2`, then reads back the
+result. A timeout/error clears the state; periodic/return-to-Home reads recover it.
+It changes no individual picture settings when clicked and leaves LG's global
+Reduce Blue Light switch alone. The two configured profiles belong to the current
+default-input SDR context. Other inputs/HDR profiles are separate.
+
+Cinema preserves the owner's current settings, including backlight100,
+brightness65, Warm3, red gain0, green gain−10 and blue gain−30. Expert Dark Room
+copies its other core picture controls, with backlight30, green gain−15 and blue
+gain−40 for a dimmer, warmer view. RGB offsets remain unchanged. The numerical
+brightness setting controls black level, so dimming uses the backlight instead.
 
 ## Agent
 

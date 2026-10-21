@@ -74,7 +74,7 @@ FocusScope {
         if (agentOpen) { agent.speaking = !agent.speaking; return; }
         if (region === "controls") {
             if (controlIndex === 4) agentOpen = true;
-            else if (controlIndex === 5) blueLight.toggle();
+            else if (controlIndex === 5) pictureProfile.toggle();
             else send(commands[controlIndex]);
         } else launch((drawer ? apps : dockApps)[appIndex]);
     }
@@ -219,7 +219,7 @@ FocusScope {
             event.accepted = true;
         }
     }
-    OH.BlueLight { id: blueLight; active: home.visible && uiController.homeShown }
+    OH.PictureProfile { id: pictureProfile; active: home.visible && uiController.homeShown }
     Rectangle { anchors.fill: parent; color: "#000000" }
     // Absorb pointer/wheel input so LG's hidden shelves cannot steal focus.
     MouseArea {
@@ -268,13 +268,13 @@ FocusScope {
         Rectangle { x: r(1700); y: r(656); width: r(124); height: width; radius: width / 2; color: "#16171a" }
         OH.Control {
             x: r(1710); y: r(666); width: r(104); height: width
-            label: "Reducer blåt lys"; glyph: "eye"; primary: blueLight.value === true
-            enabled: blueLight.value !== null
+            label: "Varm natteprofil"; glyph: "eye"; primary: pictureProfile.value === true
+            enabled: pictureProfile.value !== null
             opacity: enabled ? 1 : 0.4
             selected: home.region === "controls" && home.controlIndex === 5
-            pending: blueLight.pending; failed: blueLight.failed
+            pending: pictureProfile.pending; failed: pictureProfile.failed
             onHovered: home.selectControl(5)
-            onActivated: { home.selectControl(5); blueLight.toggle(); }
+            onActivated: { home.selectControl(5); pictureProfile.toggle(); }
         }
         Item {
             id: agentKey; x: r(1110); y: r(372); width: r(350); height: width
