@@ -251,11 +251,11 @@ FocusScope {
             }
         }
         Rectangle { x: r(1700); y: r(96); width: r(124); height: r(240); radius: width / 2; color: "#16171a" }
-        Rectangle { x: r(1700); y: r(380); width: r(124); height: r(304); radius: width / 2; color: "#16171a" }
+        Rectangle { x: r(1700); y: r(380); width: r(124); height: r(240); radius: width / 2; color: "#16171a" }
         Repeater {
             model: 4
             OH.Control {
-                x: r(1710); y: r([106, 222, 454, 570][index]); width: r(104); height: width
+                x: r(1710); y: r([106, 222, 390, 506][index]); width: r(104); height: width
                 label: home.labels[index]; glyph: home.glyphs[index]; primary: index === 0
                 selected: home.region === "controls" && home.controlIndex === index
                 pending: home.pending === home.commands[index]
@@ -265,9 +265,9 @@ FocusScope {
                 onActivated: { home.selectControl(index); home.send(home.commands[index]); }
             }
         }
-        OH.Glyph { x: r(1740); y: r(392); width: r(44); height: width; kind: "speaker"; ink: "#9a9ea6" }
+        Rectangle { x: r(1700); y: r(656); width: r(124); height: width; radius: width / 2; color: "#16171a" }
         OH.Control {
-            x: r(1726); y: r(700); width: r(72); height: width
+            x: r(1710); y: r(666); width: r(104); height: width
             label: "Reducer blåt lys"; glyph: "eye"; primary: blueLight.value === true
             enabled: blueLight.value !== null
             opacity: enabled ? 1 : 0.4

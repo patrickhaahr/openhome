@@ -11,7 +11,7 @@ const output = new URL("./private/icons/", import.meta.url);
 mkdirSync(output, { recursive: true });
 const glyphs = {
   bulb: ["LightbulbFilament", "fill"], "bulb-off": ["Lightbulb", "regular"],
-  speaker: ["SpeakerHifi", "regular"], eye: ["Eye", "regular"],
+  eye: ["Eye", "regular"],
   bluetooth: ["Bluetooth", "regular"], optical: ["Waveform", "regular"],
   charge: ["Lightning", "fill"], rest: ["Moon", "fill"], effort: ["Heartbeat", "fill"],
   sun: ["Sun", "regular"], cloud: ["Cloud", "regular"], "cloud-sun": ["CloudSun", "regular"],
