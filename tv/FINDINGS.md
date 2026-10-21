@@ -334,5 +334,17 @@ Also exercised the installed command in both directions with YouTube in the
 foreground: the app retained focus and the starting profile was restored before
 returning Home. The live OpenHome client acceptance check passed afterward.
 
+### YouTube shortcuts through Input Hook
+
+Updated Input Hook key 2 (remote 1) from the removed `com.cobalt.youtube.adfree` app
+to the installed `youtube.leanback.v4` v1.2.5. Added key 1037 (Netflix) with the same
+native `launch` action. Netflix previously had no Input Hook override. Confirmed
+the installed app's actual ID before writing, saved the exact prior map locally
+and on the TV, and verified both entries after Input Hook's file reload. Every
+other entry, including the red picture-profile shortcut, matched the prior map.
+No extra app, daemon, command helper or boot hook was needed.
+The live Input Hook log recorded both physical keys invoking YouTube, and the
+owner confirmed that both 1 and Netflix opened it successfully.
+
 See [design and public data provenance](DESIGN.md), [API boundary](bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
