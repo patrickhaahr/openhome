@@ -1,0 +1,75 @@
+# TV rollback
+
+Run commands from the OpenHome root through `devenv shell -- just tv-ssh`.
+SSH uses a local control socket and does not install an authentication key on
+the TV. After reboot, reconnect with the existing root password; the password
+is not saved in this repository.
+
+## Restore LG Home
+
+```sh
+devenv shell -- just tv-ssh '/var/lib/pearwebos/pearwebos off'
+```
+
+This unmounts Pear's three QML overrides, discards Home's runtime checkpoint
+so it is regenerated from stock, and cold-starts LG Home. Pear records a
+disabled flag so its boot hook stays off. It does not alter system partitions.
+
+The task's scripts and private baseline are under `tv/`. Do not restore the
+entire backup over the live TV: restore only the specific settings/scripts
+that were changed. Original signed firmware files need no restoration.
+
+If a startup customization breaks boot, Homebrew's existing failsafe opens an
+emergency telnet shell and skips custom hooks. This fallback was confirmed in
+the installed startup source, not triggered in a destructive test.
+
+## Disable automatic changes before any rollback
+
+```sh
+devenv shell -- just tv-ssh 'touch /var/lib/openhome-tv/disabled; chmod -x /var/lib/webosbrew/init.d/40-openhome-tv'
+```
+
+Pear has its separate `60-pearwebos` hook; `pearwebos off` disables Pear via its
+own flag. The repaired hosts hook replaces `10-block-lg-telemetry` and must be
+restored separately below. The original Homebrew startup script is unchanged.
+
+## Restore Alexa execution
+
+```sh
+devenv shell -- just tv-script tv/alexa-block.sh restore
+```
+
+This checks the source/target inode before unmounting each recorded Alexa
+override, unlocks the two apps and asks LG's hub to rescan its service files.
+Original firmware payloads and service definitions then reappear.
+Disable `40-openhome-tv` as above before restoring. A full reboot with that hook disabled also drops the
+runtime masks. No Amazon account or app data is erased.
+
+## Restore promotions/privacy settings
+
+Disable the task's boot hook first once installed, and stop its bounded
+background ACR recheck (or reboot with the hook disabled). Then:
+
+```sh
+devenv shell -- just tv-script tv/privacy-settings.sh restore
+devenv shell -- just tv-restore-settings
+```
+
+Only task-owned setting keys are restored from the baseline. The original
+`/tmp/acr.xml` is backed up on the TV as `/var/lib/openhome-tv/acr.xml.orig`.
+The runtime restore removes the task-owned read-only ACR bind before copying
+that original back; it does not remove unrelated mounts.
+Alexa's original `isAllowed=false` preload exclusion and the other preload
+choices are unchanged; no preload restoration is needed.
+
+## Restore hosts blocking
+
+```sh
+devenv shell -- just tv-script tv/privacy-hosts.sh --restore
+devenv shell -- just tv-ssh 'cp -p /var/lib/openhome-tv/original-10-block-lg-telemetry /var/lib/webosbrew/init.d/10-block-lg-telemetry'
+```
+
+The script verifies the active mount ID and inode before removing its one
+override; Homebrew's underlying OTA protection stays mounted. The original
+telemetry boot hook is in the private baseline tar. If restoring that hook,
+note that its ineffective mount-detection behavior will return too.
