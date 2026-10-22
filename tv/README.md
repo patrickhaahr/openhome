@@ -53,6 +53,7 @@ devenv shell -- just tv-screen home
 devenv shell -- just tv-client-check
 devenv shell -- just tv-deploy
 devenv shell -- just tv-picture-shortcut
+devenv shell -- just tv-inputhook-startup
 ```
 
 `tv-check` needs the ignored upstream checkout and private baseline; it has no
@@ -130,6 +131,14 @@ This shortcut is limited to the configured default-input 2D SDR profiles; it
 rejects other inputs/HDR rather than applying the SDR settings there. Other
 Input Hook shortcuts are preserved. `tv-picture-shortcut` installs the binding
 and refuses to overwrite a different red-button action.
+
+`tv-inputhook-startup` installs `50-openhome-inputhook`, which refreshes LS2's
+volatile developer-service manifests before starting Input Hook. This firmware
+can retain a sandboxed launcher in its service cache even when the elevated
+definition is already on disk; a normal `scan-services` does not refresh that
+cache. The helper uses the TV's Python 2.7 runtime and Pear's native LS2 client,
+with a ten-second deadline per command, so a missing reply cannot stall boot.
+The upstream Input Hook startup hook and all saved key mappings are preserved.
 
 ## YouTube updates and picture warmth
 

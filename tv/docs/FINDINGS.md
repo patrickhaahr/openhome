@@ -375,3 +375,26 @@ The owner tested the physical remote and confirmed all four device actions work.
 
 See [design and public data provenance](DESIGN.md), [API boundary](../bridge/README.md)
 and [rollback](ROLLBACK.md). Original Pear remains under `/var/lib/pearwebos-baseline`.
+
+### Input Hook cold-start recovery (2026-10-22)
+
+The owner reported that every remote shortcut stopped working after the next
+day's boot. All 14 saved bindings were intact, but neither `lginput2` nor
+`micomservice` had `libinputhookpp.so` loaded. Input Hook repeatedly launched
+under an unprivileged UID in its jail, despite its elevated service definition
+remaining on disk; the original unbounded startup call was stuck waiting.
+
+A normal LS2 `scan-services` did not fix activation. Refreshing the volatile
+developer-service manifests with `scan-volatile-dirs` restored root activation.
+`50-openhome-inputhook` now performs that refresh before the upstream startup
+hook. Its Python 2.7 helper uses Pear's native `luna-send-n` for reliable
+noninteractive replies and bounds each child command to ten seconds. It neither
+rewrites key mappings nor changes Homebrew's shared service launcher.
+
+The regression fails against the original startup hook and passes with the
+repair; failed registry refresh and unresponsive activation are also covered.
+After a real TV reboot, Input Hook started as root automatically, both input
+processes had the library loaded, Homebrew startup completed, and the saved
+bindings remained byte-for-byte unchanged. The owner confirmed that physical
+1/YouTube and red/picture-profile shortcuts work both before and after reboot.
+Private pre-change files and evidence are under `private/inputhook-startup/`.
