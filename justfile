@@ -60,6 +60,7 @@ tv-check: tv-assets
     node --check tv/tools/verify-client.js
     python3 -c 'import ast; from pathlib import Path; [ast.parse(p.read_text(), filename=str(p)) for directory in ("tv/runtime", "tv/tools") for p in Path(directory).glob("*.py")]'
     node tv/bridge/test.js
+    python3 tv/tools/test-inputhook-startup.py
     qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
     python3 tv/tools/build-pear.py
 
@@ -77,6 +78,11 @@ tv-deploy: tv-check
 [group('tv')]
 tv-picture-shortcut: tv-check
     python3 tv/tools/install-picture-shortcut.py
+
+# Refresh Input Hook's elevated service registration before its normal boot startup
+[group('tv')]
+tv-inputhook-startup: tv-check
+    python3 tv/tools/install-inputhook-startup.py
 
 # Read-only acceptance checks from the TV's native Node runtime
 [group('tv')]
