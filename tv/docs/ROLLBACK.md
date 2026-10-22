@@ -172,6 +172,17 @@ Input Hook reloads the file automatically; a reboot is not required. The helper
 can stay installed without a binding. No input service, app or boot hook needs
 to be removed.
 
+## Remove the Input Hook startup repair
+
+```sh
+devenv shell -- just tv-ssh 'rm -f /var/lib/webosbrew/init.d/50-openhome-inputhook /var/lib/openhome-tv/inputhook-start.py'
+```
+
+This removes only OpenHome's volatile-service refresh at boot. Input Hook's
+original `inputhook` hook, application and saved mappings remain. The currently
+loaded remaps stay active; after the next reboot the original startup behavior,
+including the stale sandboxed-launcher risk, returns.
+
 ## Restore the prior YouTube shortcuts
 
 The exact map before updating 1/Netflix is saved locally in
