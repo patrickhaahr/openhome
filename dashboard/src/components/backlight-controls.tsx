@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useIdleBlock } from "@/components/idle-block"
+import { bedtimeFields } from "@/lib/backlight"
 import type {
   BacklightAction,
   BacklightRead,
   BacklightResult,
   BacklightSelection,
+  BacklightStatus,
 } from "@/lib/backlight"
 
 type Props = {
@@ -93,6 +95,10 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             )
           else if (action.action === "profile")
             announce("TV Sync settings saved safely.")
+          else if (action.action === "bedtime")
+            announce(
+              "Bedtime settings saved. Readable device state is shown below."
+            )
           else if (action.action === "refresh")
             announce(
               result.status.reachability === "reachable"
@@ -112,6 +118,10 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
         else if (result.state === "invalid-profile")
           announce(
             "The saved profile is invalid. Your previous TV Sync settings were kept."
+          )
+        else if (result.state === "invalid-settings")
+          announce(
+            "Bedtime settings weren’t saved. Check the times and red brightness, then try again."
           )
         else
           announce(
@@ -263,6 +273,14 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
               Automatic
             </Button>
           </div>
+          {status !== undefined ? (
+            <BedtimeForm
+              key={`${status.bedtime.start}-${status.bedtime.end}-${status.bedtime.brightness}`}
+              saved={status.bedtime}
+              pending={pending}
+              save={perform}
+            />
+          ) : null}
         </section>
         <fieldset
           className="backlight-adjustments"
@@ -475,5 +493,111 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
         </Button>
       </aside>
     </div>
+  )
+}
+
+function BedtimeForm({
+  saved,
+  pending,
+  save,
+}: {
+  saved: BacklightStatus["bedtime"]
+  pending: boolean
+  save: (action: BacklightAction) => void
+}): React.JSX.Element {
+  const [start, setStart] = useState(saved.start)
+  const [end, setEnd] = useState(saved.end)
+  const [brightness, setBrightness] = useState(String(saved.brightness))
+  const [error, setError] = useState<string | null>(null)
+
+  const dirty =
+    start !== saved.start ||
+    end !== saved.end ||
+    brightness !== String(saved.brightness)
+
+  useIdleBlock(dirty)
+
+  return (
+    <form
+      className="mt-6 space-y-4"
+      aria-label="Bedtime settings"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault()
+
+        const parsed = bedtimeFields.safeParse({
+          start,
+          end,
+          brightness: brightness === "" ? Number.NaN : Number(brightness),
+        })
+
+        if (!parsed.success) {
+          setError(
+            parsed.error.issues[0]?.message ?? "Check the bedtime settings."
+          )
+
+          return
+        }
+
+        setError(null)
+        save({ action: "bedtime", ...parsed.data })
+      }}
+    >
+      <fieldset disabled={pending} className="grid grid-cols-2 gap-4">
+        <legend className="sr-only">Daily window in Europe/Copenhagen</legend>
+        <label className="min-w-0 space-y-2">
+          <span>Start</span>
+          <Input
+            type="time"
+            aria-label="Start"
+            required
+            step={60}
+            value={start}
+            onChange={(event) => {
+              setStart(event.currentTarget.value)
+              setError(null)
+            }}
+          />
+        </label>
+        <label className="min-w-0 space-y-2">
+          <span>End</span>
+          <Input
+            type="time"
+            aria-label="End"
+            required
+            step={60}
+            value={end}
+            onChange={(event) => {
+              setEnd(event.currentTarget.value)
+              setError(null)
+            }}
+          />
+        </label>
+        <label className="col-span-2 space-y-2">
+          <span>Red brightness (%)</span>
+          <Input
+            type="number"
+            aria-label="Red brightness"
+            required
+            min={0}
+            max={100}
+            step={1}
+            value={brightness}
+            onChange={(event) => {
+              setBrightness(event.currentTarget.value)
+              setError(null)
+            }}
+          />
+        </label>
+      </fieldset>
+      <p>
+        Times follow Copenhagen, including summer and winter time. Settings are
+        kept while disabled.
+      </p>
+      {error !== null ? <p role="alert">{error}</p> : null}
+      <Button type="submit" variant="outline" disabled={pending || !dirty}>
+        Save bedtime settings
+      </Button>
+    </form>
   )
 }

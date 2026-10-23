@@ -20,6 +20,54 @@ pub struct BedtimeSettings {
 pub struct BedtimeUpdate {
     #[serde(default)]
     pub enabled: crate::services::patch::Patch<bool>,
+    #[serde(default)]
+    pub start: crate::services::patch::Patch<String>,
+    #[serde(default)]
+    pub end: crate::services::patch::Patch<String>,
+    #[serde(default)]
+    pub brightness: crate::services::patch::Patch<Brightness>,
+}
+impl BedtimeUpdate {
+    pub(super) fn supplied(&self) -> bool {
+        self.enabled.supplied()
+            || self.start.supplied()
+            || self.end.supplied()
+            || self.brightness.supplied()
+    }
+    pub(super) fn apply(self, settings: &mut BedtimeSettings) -> crate::error::Result<()> {
+        use crate::{error::AppError, services::patch::Patch};
+        fn field<T>(patch: Patch<T>, current: T) -> crate::error::Result<T> {
+            match patch {
+                Patch::Missing => Ok(current),
+                Patch::Value(Some(value)) => Ok(value),
+                Patch::Value(None) => Err(AppError::Validation(
+                    "Bedtime settings cannot be null".into(),
+                )),
+            }
+        }
+        fn time(patch: Patch<String>, current: NaiveTime) -> crate::error::Result<NaiveTime> {
+            let value = field(patch, current.format("%H:%M").to_string())?;
+            let parsed = NaiveTime::parse_from_str(&value, "%H:%M").map_err(|_| {
+                AppError::Validation("Use a time from 00:00 to 23:59 in HH:MM format".into())
+            })?;
+            if value != parsed.format("%H:%M").to_string() {
+                return Err(AppError::Validation(
+                    "Use HH:MM format for bedtime times".into(),
+                ));
+            }
+            Ok(parsed)
+        }
+        settings.enabled = field(self.enabled, settings.enabled)?;
+        settings.start = time(self.start, settings.start)?;
+        settings.end = time(self.end, settings.end)?;
+        settings.brightness = field(self.brightness, settings.brightness)?;
+        if settings.start == settings.end {
+            return Err(AppError::Validation(
+                "Start and End must be different".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 #[derive(Clone, Copy, Deserialize, Serialize)]
 pub struct BacklightOverride {
