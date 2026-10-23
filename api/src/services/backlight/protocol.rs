@@ -25,13 +25,13 @@ impl TvSyncProfile {
     pub fn validate(self) -> Option<Self> {
         Self::capture(&[self.video, self.brightness])
     }
-    pub fn writes(&self) -> Vec<Packet> {
+    pub fn writes(&self, brightness: Option<u8>) -> Vec<Packet> {
         let mut video = self.video;
         video[0] = 0x33;
         vec![
             frame(&[0x33, 1, 1]),
             frame(&video[..19]),
-            frame(&[0x33, 4, self.brightness[2]]),
+            frame(&[0x33, 4, brightness.unwrap_or(self.brightness[2])]),
         ]
     }
 }
