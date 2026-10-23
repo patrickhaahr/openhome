@@ -70,6 +70,32 @@ lights. An accepted Light Command acknowledges the request only; it never
 establishes the lights' power state.
 _Avoid_: Light toggle, IR Command, light state
 
+### Backlight
+
+**Backlight**:
+The independently controlled lighting behind the TV. Dashboard copy may also
+call it the LED; code and domain names use backlight.
+_Avoid_: Lights, Light Command
+
+**TV Sync**:
+The Backlight mode whose light output follows the TV picture captured by its
+camera, using the household's existing picture-response and black-screen settings.
+_Avoid_: Motion detection, TV power state
+
+**Backlight Routine**:
+The household's daily schedule for selecting Backlight settings automatically.
+_Avoid_: TV power automation, reminder
+
+**Bedtime Mode**:
+The Backlight Routine's optional daily time window for showing red as a bedtime
+cue, with its own brightness. Outside an enabled window, the routine selects TV Sync.
+_Avoid_: Motion mode, midnight power-off
+
+**Backlight Override**:
+A manual Backlight selection that temporarily replaces the Backlight Routine
+until its next enabled transition or until the household selects Automatic.
+_Avoid_: Permanent setting, routine edit
+
 ### Mobile Navigation
 
 **Home Tab**:
@@ -369,6 +395,10 @@ _Avoid_: Survey, habit log
 - An **IR Remote** exposes one or more **Commands**.
 - A **Mobile Client** triggers **IR Remote** **Commands** by calling the **Axum API**.
 - The **Dashboard** sends **Light Commands** through the **Axum API** and shows the lights' observed power as unknown.
+- The **Backlight** is controlled separately from the wall-switch **Light Commands**.
+- **TV Sync** is a **Backlight** mode; it does not establish the TV's power state.
+- A **Backlight Override** temporarily replaces the **Backlight Routine**.
+- **Bedtime Mode** supplies the red window within the **Backlight Routine**.
 - A **Home Tab** combines summaries and shortcuts from multiple **Top-Level Tabs**.
 - Each **Top-Level Tab** intentionally aligns to one Axum API area.
 - A **Remote Button** maps to exactly one **Command**.
