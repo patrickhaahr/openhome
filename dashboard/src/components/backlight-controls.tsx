@@ -1,9 +1,12 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { useIdleBlock } from "@/components/idle-block"
 import type {
   BacklightAction,
   BacklightRead,
   BacklightResult,
+  BacklightSelection,
 } from "@/lib/backlight"
 
 type Props = {
@@ -40,59 +43,135 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
   )
 
   const inFlight = useRef(false)
+  const queued = useRef<BacklightAction | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mounted = useRef(true)
+  const latestData = useRef(data)
+  useEffect(() => {
+    latestData.current = data
+  }, [data])
+  const [draft, setDraft] = useState<BacklightSelection | null>(null)
+  useIdleBlock(pending)
 
-  async function perform(action: BacklightAction): Promise<void> {
+  useEffect(() => {
+    mounted.current = true
+
+    return () => {
+      mounted.current = false
+
+      if (timer.current !== null) clearTimeout(timer.current)
+      queued.current = null
+    }
+  }, [])
+
+  async function drain(): Promise<void> {
     if (inFlight.current) return
     inFlight.current = true
     setPending(true)
-    setMessage("Contacting the Backlight…")
 
-    try {
-      const result = await change(action)
+    while (queued.current !== null && mounted.current) {
+      const action = queued.current
+      queued.current = null
+      setMessage("Sending your latest selection…")
 
-      if (result.state === "available") {
-        setLocal({ base: data, value: result })
+      // An older response must not replace feedback for a newer queued edit.
+      const announce = (text: string): void => {
+        if (queued.current === null && timer.current === null) setMessage(text)
+      }
 
-        if (action.action === "select" && result.status.command === "failed")
-          setMessage(
-            "OpenHome couldn’t confirm the command. Check the connection and try again."
+      try {
+        const result = await change(action)
+
+        if (!mounted.current) return
+
+        if (result.state === "available") {
+          setLocal({ base: latestData.current, value: result })
+
+          if (action.action === "select" && result.status.command === "failed")
+            announce(
+              "OpenHome couldn’t confirm the command. Your selection is saved; check the connection and try again."
+            )
+          else if (action.action === "profile")
+            announce("TV Sync settings saved safely.")
+          else if (action.action === "refresh")
+            announce(
+              result.status.reachability === "reachable"
+                ? "Backlight state refreshed."
+                : "The Backlight couldn’t be reached."
+            )
+          else if (result.status.command === "pending")
+            announce("Your selection is saved and waiting for the Backlight.")
+          else
+            announce(
+              "Command acknowledged. Readable device state is shown below."
+            )
+        } else if (result.state === "profile-required")
+          announce(
+            "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup."
           )
-        else if (action.action === "profile")
-          setMessage("TV Sync settings saved safely.")
-        else if (action.action === "refresh")
-          setMessage(
-            result.status.reachability === "reachable"
-              ? "Backlight state refreshed."
-              : "The Backlight couldn’t be reached."
+        else if (result.state === "invalid-profile")
+          announce(
+            "The saved profile is invalid. Your previous TV Sync settings were kept."
           )
         else
-          setMessage(
-            "Command acknowledged. Readable device state is shown below."
+          announce(
+            "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
           )
-      } else if (result.state === "profile-required")
-        setMessage(
-          "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup."
-        )
-      else if (result.state === "invalid-profile")
-        setMessage(
-          "The saved profile is invalid. Your previous TV Sync settings were kept."
-        )
-      else
-        setMessage(
-          "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
-        )
-    } catch {
-      setMessage(
-        "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
-      )
-    } finally {
-      inFlight.current = false
-      setPending(false)
+      } catch {
+        if (mounted.current)
+          announce(
+            "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
+          )
+      }
     }
+
+    inFlight.current = false
+
+    if (mounted.current && timer.current === null) {
+      setPending(false)
+      setDraft(null)
+    }
+  }
+
+  function perform(action: BacklightAction): void {
+    if (timer.current !== null) clearTimeout(timer.current)
+    timer.current = null
+    queued.current = action
+
+    if (action.action === "select") setDraft(action.selection)
+    void drain()
+  }
+
+  function edit(selection: BacklightSelection): void {
+    setDraft(selection)
+    setPending(true)
+    setMessage("Waiting for your latest adjustment…")
+
+    if (timer.current !== null) clearTimeout(timer.current)
+    // A single trailing target, even while another request is in flight.
+    queued.current = null
+    timer.current = setTimeout(() => {
+      timer.current = null
+      queued.current = { action: "select", selection }
+      void drain()
+    }, 200)
   }
 
   const status = current.state === "available" ? current.status : undefined
   const observed = status?.observed
+  const selection = draft ?? status?.intended
+
+  const rgb =
+    selection?.mode === "color"
+      ? selection.rgb
+      : { red: 255, green: 0, blue: 0 }
+
+  const brightness =
+    selection?.mode === "color" || selection?.mode === "tv-sync"
+      ? (selection.brightness ?? observed?.brightness ?? 20)
+      : (observed?.brightness ?? 20)
+
+  const hex = `#${[rgb.red, rgb.green, rgb.blue].map((value) => value.toString(16).padStart(2, "0")).join("")}`
 
   return (
     <div className="backlight-board" aria-busy={pending}>
@@ -101,18 +180,21 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
           <p className="backlight-caption">Behind the picture</p>
           <h2>LED</h2>
           <p>
-            Follow the TV picture with your saved camera settings, or turn the
-            Backlight off.
+            Follow the TV picture, choose a color, or turn the Backlight off.
           </p>
         </div>
-        <div className="backlight-modes" aria-label="Backlight selection">
+        <div
+          className="backlight-modes"
+          role="group"
+          aria-label="Backlight selection"
+        >
           <Button
             size="key-xl"
             variant="outline"
-            disabled={pending || status === undefined}
-            aria-pressed={status?.intended.mode === "off"}
+            disabled={status === undefined}
+            aria-pressed={selection?.mode === "off"}
             onClick={() =>
-              void perform({ action: "select", selection: { mode: "off" } })
+              perform({ action: "select", selection: { mode: "off" } })
             }
           >
             Off
@@ -120,17 +202,88 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
           <Button
             size="key-xl"
             variant="outline"
-            disabled={
-              pending || status === undefined || status.setup !== "ready"
-            }
-            aria-pressed={status?.intended.mode === "tv-sync"}
+            disabled={status === undefined || status.setup !== "ready"}
+            aria-pressed={selection?.mode === "tv-sync"}
             onClick={() =>
-              void perform({ action: "select", selection: { mode: "tv-sync" } })
+              perform({ action: "select", selection: { mode: "tv-sync" } })
             }
           >
             TV Sync
           </Button>
+          <Button
+            size="key-xl"
+            variant="outline"
+            disabled={status?.setup !== "ready"}
+            aria-pressed={selection?.mode === "color"}
+            onClick={() =>
+              perform({
+                action: "select",
+                selection: { mode: "color", rgb, brightness },
+              })
+            }
+          >
+            Color
+          </Button>
         </div>
+        <fieldset
+          className="backlight-adjustments"
+          disabled={status?.setup !== "ready"}
+        >
+          <legend>Manual selection</legend>
+          <label className="backlight-color">
+            <span>RGB color</span>
+            <Input
+              type="color"
+              aria-label="RGB color"
+              value={hex}
+              onChange={(event) => {
+                const value = event.currentTarget.value
+
+                if (!/^#[0-9a-f]{6}$/i.test(value)) return
+                edit({
+                  mode: "color",
+                  rgb: {
+                    red: Number.parseInt(value.slice(1, 3), 16),
+                    green: Number.parseInt(value.slice(3, 5), 16),
+                    blue: Number.parseInt(value.slice(5, 7), 16),
+                  },
+                  brightness,
+                })
+              }}
+            />
+          </label>
+          <label className="backlight-brightness">
+            <span>
+              Brightness <output>{brightness}%</output>
+            </span>
+            <Input
+              type="range"
+              aria-label="Brightness"
+              min={0}
+              max={100}
+              step={1}
+              value={brightness}
+              disabled={selection?.mode === "off"}
+              onChange={(event) => {
+                const value = event.currentTarget.valueAsNumber
+
+                if (
+                  !Number.isInteger(value) ||
+                  value < 0 ||
+                  value > 100 ||
+                  selection?.mode === "off" ||
+                  selection === undefined
+                )
+                  return
+                edit({ ...selection, brightness: value })
+              }}
+            />
+          </label>
+          <p>
+            Your manual selection stays until you choose again. TV Sync restores
+            its saved brightness.
+          </p>
+        </fieldset>
         <p role="status" aria-live="polite" className="backlight-feedback">
           {status === undefined
             ? "OpenHome is unavailable. Refresh to try again."
@@ -148,7 +301,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
                 variant="outline"
                 disabled={pending}
                 onClick={() =>
-                  void perform({ action: "profile", source: "capture" })
+                  perform({ action: "profile", source: "capture" })
                 }
               >
                 Capture TV Sync
@@ -156,9 +309,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
               <Button
                 variant="ghost"
                 disabled={pending}
-                onClick={() =>
-                  void perform({ action: "profile", source: "backup" })
-                }
+                onClick={() => perform({ action: "profile", source: "backup" })}
               >
                 Recover saved profile
               </Button>
@@ -174,9 +325,25 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             <dd>
               {status === undefined
                 ? "Unknown"
-                : modeLabel[status.intended.mode]}
+                : modeLabel[selection?.mode ?? status.intended.mode]}
             </dd>
           </div>
+          {selection?.mode === "color" ? (
+            <div>
+              <dt>Requested RGB</dt>
+              <dd>
+                {selection.rgb.red}, {selection.rgb.green}, {selection.rgb.blue}
+              </dd>
+            </div>
+          ) : null}
+          {selection?.mode === "color" ||
+          (selection?.mode === "tv-sync" &&
+            selection.brightness !== undefined) ? (
+            <div>
+              <dt>Requested brightness</dt>
+              <dd>{selection.brightness}%</dd>
+            </div>
+          ) : null}
           <div>
             <dt>Last acknowledged</dt>
             <dd>
@@ -217,7 +384,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             </dd>
           </div>
           <div>
-            <dt>Brightness</dt>
+            <dt>Observed brightness</dt>
             <dd>
               {observed === null || observed === undefined
                 ? "Unknown"
@@ -232,7 +399,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
         <Button
           variant="ghost"
           disabled={pending}
-          onClick={() => void perform({ action: "refresh" })}
+          onClick={() => perform({ action: "refresh" })}
         >
           Refresh state
         </Button>

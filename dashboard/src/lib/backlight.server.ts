@@ -3,6 +3,7 @@ import { requestOpenHome } from "./openhome.server"
 import {
   backlightStatus,
   type BacklightAction,
+  type BacklightSelection,
   type BacklightRead,
   type BacklightResult,
 } from "./backlight"
@@ -38,10 +39,7 @@ export async function changeBacklight(
   let path: `/api/${string}` = "/api/backlight/refresh"
   let method: "POST" | "PUT" = "POST"
 
-  let json:
-    | { mode: "off" | "tv-sync" }
-    | { source: "capture" | "backup" }
-    | undefined
+  let json: BacklightSelection | { source: "capture" | "backup" } | undefined
 
   switch (action.action) {
     case "select":

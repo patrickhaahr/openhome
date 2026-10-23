@@ -38,7 +38,13 @@ for the current household controller.
 `GET /api/backlight` returns sanitized cached status. `POST
 /api/backlight/refresh` reads power, brightness and mode. `PUT
 /api/backlight/selection {"mode":"off"}` and `{"mode":"tv-sync"}` persist the
-intention before writing. All endpoints use the existing API-key middleware;
+intention before writing. A manual color uses, for example,
+`{"mode":"color","rgb":{"red":255,"green":0,"blue":0},"brightness":20}`.
+RGB channels are integers from 0 to 255; brightness commands are integers from
+0 to 100. These are controller values, not calibrated intensity measurements.
+`{"mode":"tv-sync","brightness":30}` adjusts TV Sync manually without changing
+its saved profile. Selecting `{"mode":"tv-sync"}` restores the original saved
+brightness. All endpoints use the existing API-key middleware;
 Dashboard calls use its private server transport. A saved intention, a completed
 GATT write and a readable observation are separate facts. The basic mode response
 cannot prove exact static RGB. Observations become stale after 30 seconds or a
@@ -46,5 +52,13 @@ failed read; a failed write keeps its selected intention and reports failure.
 Each device exchange has a 30-second bound; first-time profile capture can add
 one exchange before a selection. Off remains available with incomplete setup.
 
-No schedule is activated by this first slice. Routine, overrides, coalescing and
-reconnect recovery are delivered by the subsequent epic tickets.
+Manual selections have no hidden expiry. Dashboard adjustments coalesce after
+200 ms and retain only the latest pending edit. Across clients, selections are
+persisted before waiting on Bluetooth; only the latest pending target reaches the
+controller after the current complete GATT operation finishes. Accepted work
+continues if its requesting client disconnects. Refresh and profile operations
+share the same device-operation lock. Cached reads never issue device writes;
+external changes remain untouched until another explicit command.
+
+No schedule is activated yet. Automatic/routine behavior and reconnect recovery
+are delivered by the subsequent epic tickets.
