@@ -80,8 +80,12 @@ async fn captured_profile_is_private_durable_and_cannot_be_replaced_from_static_
             &'a self,
             writes: &'a [Packet],
             queries: &'a [Vec<u8>],
+            current: &'a openhome_api::services::backlight::CurrentOperation,
         ) -> TransportFuture<'a> {
             Box::pin(async move {
+                if !current() {
+                    return Err(openhome_api::services::backlight::TransportError::Superseded);
+                }
                 self.writes.lock().unwrap().extend_from_slice(writes);
                 // Synthetic protocol responses, unrelated to any household's settings.
                 let replies = queries
@@ -102,6 +106,7 @@ async fn captured_profile_is_private_durable_and_cannot_be_replaced_from_static_
                     })
                     .collect();
                 Ok(Exchange {
+                    reconnected: false,
                     writes_accepted: true,
                     replies,
                 })
@@ -185,9 +190,14 @@ async fn accepted_write_without_readback_does_not_invent_an_observation() {
             &'a self,
             writes: &'a [Packet],
             _queries: &'a [Vec<u8>],
+            current: &'a openhome_api::services::backlight::CurrentOperation,
         ) -> TransportFuture<'a> {
             Box::pin(async move {
+                if !current() {
+                    return Err(openhome_api::services::backlight::TransportError::Superseded);
+                }
                 Ok(Exchange {
+                    reconnected: false,
                     writes_accepted: !writes.is_empty(),
                     replies: Vec::new(),
                 })
@@ -236,11 +246,16 @@ impl openhome_api::services::backlight::GattTransport for ManualDevice {
         &'a self,
         writes: &'a [openhome_api::services::backlight::Packet],
         _queries: &'a [Vec<u8>],
+        current: &'a openhome_api::services::backlight::CurrentOperation,
     ) -> openhome_api::services::backlight::TransportFuture<'a> {
         Box::pin(async move {
+            if !current() {
+                return Err(openhome_api::services::backlight::TransportError::Superseded);
+            }
             self.packets.lock().unwrap().push(writes.to_vec());
             // Known synthetic TV Sync profile, brightness and power replies.
             Ok(openhome_api::services::backlight::Exchange {
+                reconnected: false,
                 writes_accepted: !writes.is_empty(),
                 replies: vec![
                     [
@@ -366,6 +381,7 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
             &'a self,
             writes: &'a [Packet],
             queries: &'a [Vec<u8>],
+            current: &'a openhome_api::services::backlight::CurrentOperation,
         ) -> TransportFuture<'a> {
             Box::pin(async move {
                 assert_eq!(
@@ -377,7 +393,7 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
                     self.entered.notify_one();
                     self.release.acquire().await.unwrap().forget();
                 }
-                let result = self.device.exchange(writes, queries).await;
+                let result = self.device.exchange(writes, queries, current).await;
                 self.active.fetch_sub(1, Ordering::SeqCst);
                 result
             })
@@ -465,11 +481,10 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
         .collect();
     assert_eq!(
         changes.len(),
-        2,
-        "superseded green must never reach the controller"
+        1,
+        "superseded red and green must never reach the controller"
     );
-    assert_eq!(changes[0][1][4..7], [255, 0, 0]);
-    assert_eq!(changes[1][1][4..7], [0, 0, 255]);
+    assert_eq!(changes[0][1][4..7], [0, 0, 255]);
 }
 
 #[tokio::test]
@@ -508,9 +523,14 @@ async fn bedtime_enable_applies_red_and_automatic_clears_a_durable_override() {
     let (_, manual) = select(app.clone(), serde_json::json!({"mode":"off"})).await;
     assert_eq!(manual["control_source"], "manual");
     assert!(manual["override_expires_at"].is_string());
-    let restarted = BacklightService::new(state.db.clone(), None, None)
-        .await
-        .unwrap();
+    let restarted = BacklightService::with_clock(
+        state.db.clone(),
+        None,
+        None,
+        std::sync::Arc::new(ControlledClock::at("2026-10-23T21:30:00Z")),
+    )
+    .await
+    .unwrap();
     let (_, saved) = send_request(
         authenticated(restarted, state),
         "/api/backlight",
@@ -551,7 +571,10 @@ async fn wait_for_mode(app: Router, mode: &str) -> serde_json::Value {
     tokio::time::timeout(std::time::Duration::from_secs(4), async {
         loop {
             let (_, body) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
-            if body["intended"]["mode"] == mode && body["command"] == "acknowledged" {
+            if body["intended"]["mode"] == mode
+                && body["command"] == "acknowledged"
+                && body["recovery"] == "recovered"
+            {
                 return body;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -927,5 +950,470 @@ fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_rep
             next.parse::<chrono::DateTime<chrono::Utc>>().unwrap(),
             "{start}–{end} at {instant}"
         );
+    }
+}
+
+#[tokio::test]
+async fn restart_recovers_current_custom_window_and_only_unexpired_overrides() {
+    use std::sync::Arc;
+    let (_, mut state) = common::test_app_with_db().await;
+    let file = std::env::temp_dir().join(format!("openhome-backlight-{}.db", uuid::Uuid::new_v4()));
+    let database_url = format!("sqlite:{}?mode=rwc", file.display());
+    state.db = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    sqlx::migrate!("./migrations").run(&state.db).await.unwrap();
+    let device = Arc::new(ManualDevice {
+        packets: std::sync::Mutex::default(),
+    });
+    let clock = Arc::new(ControlledClock::at("2026-10-23T20:00:00Z"));
+    let service =
+        BacklightService::with_clock(state.db.clone(), Some(device.clone()), None, clock.clone())
+            .await
+            .unwrap();
+    let app = authenticated(service, state.clone());
+    send_request_with_method(
+        app.clone(),
+        "/api/backlight/bedtime",
+        Method::PATCH,
+        Some(serde_json::json!({"enabled":true,"start":"22:30","end":"02:00","brightness":31})),
+        Some("test-api-key"),
+    )
+    .await;
+    select(app, serde_json::json!({"mode":"off"})).await;
+    for (now, expected, source) in [
+        ("2026-10-23T20:10:00Z", "off", "manual"),
+        ("2026-10-23T20:45:00Z", "color", "automatic"),
+        // Both boundaries were missed; only the current TV Sync target is applied.
+        ("2026-10-24T10:00:00Z", "tv-sync", "automatic"),
+    ] {
+        clock.set(now);
+        // Reopen the file-backed main database, not the original connection pool.
+        state.db.close().await;
+        state.db = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+        device.packets.lock().unwrap().clear();
+        let restarted = BacklightService::with_clock(
+            state.db.clone(),
+            Some(device.clone()),
+            None,
+            clock.clone(),
+        )
+        .await
+        .unwrap();
+        let app = authenticated(restarted.clone(), state.clone());
+        let runner = tokio::spawn(restarted.run_routine());
+        let recovered = wait_for_mode(app, expected).await;
+        assert_eq!(recovered["control_source"], source);
+        assert_eq!(recovered["recovery"], "recovered");
+        {
+            let packets = device.packets.lock().unwrap();
+            let writes: Vec<_> = packets.iter().filter(|p| !p.is_empty()).collect();
+            assert_eq!(writes.len(), 1, "restart must not replay elapsed actions");
+            if expected == "color" {
+                assert_eq!(writes[0][2][..3], [0x33, 4, 31]);
+            }
+            if expected == "tv-sync" {
+                assert_eq!(writes[0][1][..6], [0x33, 5, 0, 7, 42, 19]);
+                assert_eq!(writes[0][2][..3], [0x33, 4, 45]);
+            }
+        }
+        runner.abort();
+        let _ = runner.await;
+    }
+    state.db.close().await;
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", file.display()));
+    }
+}
+
+struct RecoveringDevice {
+    device: ManualDevice,
+    online: std::sync::atomic::AtomicBool,
+    readable: std::sync::atomic::AtomicBool,
+    reconnected: std::sync::atomic::AtomicBool,
+    active: std::sync::atomic::AtomicUsize,
+    block: std::sync::atomic::AtomicBool,
+    entered: tokio::sync::Notify,
+    release: tokio::sync::Semaphore,
+}
+impl RecoveringDevice {
+    fn new() -> Self {
+        Self {
+            device: ManualDevice {
+                packets: std::sync::Mutex::default(),
+            },
+            online: true.into(),
+            readable: true.into(),
+            reconnected: false.into(),
+            active: 0.into(),
+            block: false.into(),
+            entered: tokio::sync::Notify::new(),
+            release: tokio::sync::Semaphore::new(0),
+        }
+    }
+}
+impl openhome_api::services::backlight::GattTransport for RecoveringDevice {
+    fn matches_device(&self, _identity: &str) -> bool {
+        false
+    }
+    fn exchange<'a>(
+        &'a self,
+        writes: &'a [openhome_api::services::backlight::Packet],
+        queries: &'a [Vec<u8>],
+        current: &'a openhome_api::services::backlight::CurrentOperation,
+    ) -> openhome_api::services::backlight::TransportFuture<'a> {
+        Box::pin(async move {
+            use std::sync::atomic::Ordering::SeqCst;
+            assert_eq!(
+                self.active.fetch_add(1, SeqCst),
+                0,
+                "whole GATT operations must be serialized"
+            );
+            if self.block.swap(false, SeqCst) {
+                self.entered.notify_one();
+                self.release.acquire().await.unwrap().forget();
+            }
+            let result = if self.online.load(SeqCst) {
+                openhome_api::services::backlight::GattTransport::exchange(
+                    &self.device,
+                    writes,
+                    queries,
+                    current,
+                )
+                .await
+                .map(|mut result| {
+                    result.reconnected = self.reconnected.swap(false, SeqCst);
+                    if !self.readable.load(SeqCst) {
+                        result.replies.clear();
+                    }
+                    result
+                })
+            } else {
+                Err(openhome_api::services::backlight::TransportError::Unavailable)
+            };
+            self.active.fetch_sub(1, SeqCst);
+            result
+        })
+    }
+}
+
+#[tokio::test]
+async fn outage_retains_stale_observation_and_recovers_only_latest_target_during_concurrent_commands()
+ {
+    use std::sync::{Arc, atomic::Ordering::SeqCst};
+    let (_, state) = common::test_app_with_db().await;
+    let device = Arc::new(RecoveringDevice::new());
+    let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    let app = authenticated(service.clone(), state);
+    select(app.clone(), serde_json::json!({"mode":"tv-sync"})).await;
+    let runner = tokio::spawn(service.run_routine());
+    device.online.store(false, SeqCst);
+    let (_, disconnected) = send_request_with_method(
+        app.clone(),
+        "/api/backlight/refresh",
+        Method::POST,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(disconnected["reachability"], "unreachable");
+    assert_eq!(disconnected["stale"], true);
+    assert!(
+        disconnected["observed"].is_object(),
+        "last observation is retained but marked stale"
+    );
+    assert_eq!(disconnected["recovery"], "retrying");
+    let target = |red, green, blue| serde_json::json!({"mode":"color","rgb":{"red":red,"green":green,"blue":blue},"brightness":29});
+    select(app.clone(), target(255, 0, 0)).await;
+    select(app.clone(), target(0, 255, 0)).await;
+    device.device.packets.lock().unwrap().clear();
+    device.block.store(true, SeqCst);
+    // The retry owns the full operation; newer commands still durably supersede its target.
+    tokio::time::timeout(std::time::Duration::from_secs(4), device.entered.notified())
+        .await
+        .unwrap();
+    let latest = target(0, 0, 255);
+    let command = tokio::spawn(select(app.clone(), latest.clone()));
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            let (_, current) =
+                send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+            if current["intended"] == latest {
+                assert_eq!(current["command"], "pending");
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    // The blocked attempt fails; only the newest blue target reaches the restored device.
+    device.release.add_permits(1);
+    command.await.unwrap();
+    device.online.store(true, SeqCst);
+    let recovered = wait_for_mode(app.clone(), "color").await;
+    assert_eq!(recovered["acknowledged"], latest);
+    assert_eq!(recovered["recovery"], "recovered");
+    let packets = device.device.packets.lock().unwrap().clone();
+    assert!(
+        packets
+            .iter()
+            .filter(|p| !p.is_empty())
+            .all(|p| p[1][4..7] == [0, 0, 255])
+    );
+    let writes = packets.iter().filter(|p| !p.is_empty()).count();
+    // Read-only healthy refreshes must preserve external changes, not repeat target writes.
+    for _ in 0..3 {
+        send_request_with_method(
+            app.clone(),
+            "/api/backlight/refresh",
+            Method::POST,
+            None,
+            Some("test-api-key"),
+        )
+        .await;
+    }
+    assert_eq!(
+        device
+            .device
+            .packets
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| !p.is_empty())
+            .count(),
+        writes
+    );
+    runner.abort();
+}
+
+#[tokio::test]
+async fn silent_reconnect_reapplies_current_target_but_healthy_refresh_does_not() {
+    use std::sync::Arc;
+    let (_, state) = common::test_app_with_db().await;
+    let device = Arc::new(RecoveringDevice::new());
+    let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    let app = authenticated(service.clone(), state);
+    select(app.clone(), serde_json::json!({"mode":"tv-sync"})).await;
+    device.device.packets.lock().unwrap().clear();
+    // Adapter establishes a new link while the API was not polling. An external
+    // controller may have changed the mode; this successful read is still recovery.
+    device
+        .reconnected
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    send_request_with_method(
+        app.clone(),
+        "/api/backlight/refresh",
+        Method::POST,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    let runner = tokio::spawn(service.run_routine());
+    wait_for_mode(app.clone(), "tv-sync").await;
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    assert_eq!(
+        device
+            .device
+            .packets
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| !p.is_empty())
+            .count(),
+        1
+    );
+    runner.abort();
+}
+
+#[tokio::test]
+async fn failed_transition_persistence_is_retried_with_current_clock_before_any_device_write() {
+    use std::sync::Arc;
+    let (_, state) = common::test_app_with_db().await;
+    let device = Arc::new(ManualDevice {
+        packets: std::sync::Mutex::default(),
+    });
+    let clock = Arc::new(ControlledClock::at("2026-10-23T20:00:00Z"));
+    let service =
+        BacklightService::with_clock(state.db.clone(), Some(device.clone()), None, clock.clone())
+            .await
+            .unwrap();
+    let app = authenticated(service.clone(), state.clone());
+    send_request_with_method(
+        app.clone(),
+        "/api/backlight/bedtime",
+        Method::PATCH,
+        Some(serde_json::json!({"enabled":true})),
+        Some("test-api-key"),
+    )
+    .await;
+    sqlx::query("CREATE TRIGGER unavailable_backlight_storage BEFORE UPDATE ON backlight BEGIN SELECT RAISE(FAIL, 'storage unavailable'); END").execute(&state.db).await.unwrap();
+    device.packets.lock().unwrap().clear();
+    clock.set("2026-10-23T21:30:00Z");
+    let runner = tokio::spawn(service.run_routine());
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let (_, failed) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+    assert_eq!(failed["recovery"], "retrying");
+    assert_eq!(failed["command"], "failed");
+    assert!(
+        device.packets.lock().unwrap().is_empty(),
+        "unsaved target must never reach hardware"
+    );
+    // Storage returns after the entire red window has passed.
+    clock.set("2026-10-24T10:00:00Z");
+    sqlx::query("DROP TRIGGER unavailable_backlight_storage")
+        .execute(&state.db)
+        .await
+        .unwrap();
+    wait_for_mode(app, "tv-sync").await;
+    let packets = device.packets.lock().unwrap();
+    assert_eq!(packets.len(), 1);
+    assert_eq!(packets[0][1][..6], [0x33, 5, 0, 7, 42, 19]);
+    runner.abort();
+}
+
+#[tokio::test]
+async fn missing_or_invalid_profile_blocks_recovery_without_capturing_or_guessing_camera_settings()
+{
+    use std::sync::Arc;
+    for invalid in [None, Some("{\"schema_version\":99}")] {
+        let (_, state) = common::test_app_with_db().await;
+        sqlx::query("UPDATE backlight SET tv_sync_profile = ?, manual_override = NULL, intended = '{\"mode\":\"tv-sync\"}' WHERE id = 1").bind(invalid).execute(&state.db).await.unwrap();
+        let device = Arc::new(ManualDevice {
+            packets: std::sync::Mutex::default(),
+        });
+        let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+            .await
+            .unwrap();
+        let app = authenticated(service.clone(), state);
+        let runner = tokio::spawn(service.run_routine());
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (_, status) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+        assert_eq!(status["setup"], "incomplete");
+        assert_eq!(status["recovery"], "profile-required");
+        assert!(
+            device.packets.lock().unwrap().is_empty(),
+            "startup must not implicitly capture a new camera profile"
+        );
+        assert_eq!(
+            select(app, serde_json::json!({"mode":"off"})).await.0,
+            StatusCode::OK
+        );
+        runner.abort();
+    }
+}
+
+#[tokio::test]
+async fn incomplete_readback_stays_stale_until_current_target_has_been_recovered() {
+    use std::sync::{Arc, atomic::Ordering::SeqCst};
+    let (_, state) = common::test_app_with_db().await;
+    let device = Arc::new(RecoveringDevice::new());
+    let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    let app = authenticated(service.clone(), state);
+    select(app.clone(), serde_json::json!({"mode":"tv-sync"})).await;
+    device.readable.store(false, SeqCst);
+    let (_, unreadable) = send_request_with_method(
+        app.clone(),
+        "/api/backlight/refresh",
+        Method::POST,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(unreadable["stale"], true);
+    assert_eq!(unreadable["recovery"], "retrying");
+    let (_, selected) = select(app.clone(), serde_json::json!({"mode":"off"})).await;
+    assert_eq!(selected["command"], "acknowledged");
+    assert_eq!(selected["stale"], true);
+    assert_eq!(
+        selected["recovery"], "retrying",
+        "accepted writes are not successful recovery without readable state"
+    );
+    device.readable.store(true, SeqCst);
+    let runner = tokio::spawn(service.run_routine());
+    let recovered = wait_for_mode(app, "off").await;
+    assert_eq!(recovered["recovery"], "recovered");
+    assert_eq!(recovered["stale"], false);
+    runner.abort();
+}
+
+#[tokio::test]
+async fn manual_command_expiring_while_waiting_for_the_worker_never_reaches_hardware() {
+    use std::sync::{Arc, atomic::Ordering::SeqCst};
+    for waiting_for_worker in [true, false] {
+        let (_, state) = common::test_app_with_db().await;
+        let device = Arc::new(RecoveringDevice::new());
+        let clock = Arc::new(ControlledClock::at("2026-10-23T20:59:59Z"));
+        let service = BacklightService::with_clock(
+            state.db.clone(),
+            Some(device.clone()),
+            None,
+            clock.clone(),
+        )
+        .await
+        .unwrap();
+        let app = authenticated(service.clone(), state);
+        send_request_with_method(
+            app.clone(),
+            "/api/backlight/bedtime",
+            Method::PATCH,
+            Some(serde_json::json!({"enabled":true})),
+            Some("test-api-key"),
+        )
+        .await;
+        device.device.packets.lock().unwrap().clear();
+        device.block.store(true, SeqCst);
+        let refresh = if waiting_for_worker {
+            let refresh = tokio::spawn(send_request_with_method(
+                app.clone(),
+                "/api/backlight/refresh",
+                Method::POST,
+                None,
+                Some("test-api-key"),
+            ));
+            device.entered.notified().await;
+            Some(refresh)
+        } else {
+            None
+        };
+        let command = tokio::spawn(select(app.clone(), serde_json::json!({"mode":"off"})));
+        if !waiting_for_worker {
+            device.entered.notified().await;
+        }
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let (_, current) =
+                    send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+                if current["intended"]["mode"] == "off" {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        clock.set("2026-10-23T21:05:00Z");
+        device.release.add_permits(1);
+        if let Some(refresh) = refresh {
+            refresh.await.unwrap();
+        }
+        command.await.unwrap();
+        assert!(
+            device
+                .device
+                .packets
+                .lock()
+                .unwrap()
+                .iter()
+                .all(Vec::is_empty),
+            "expired queued or reconnecting Off must not flash before current red"
+        );
+        let runner = tokio::spawn(service.run_routine());
+        wait_for_mode(app, "color").await;
+        runner.abort();
     }
 }

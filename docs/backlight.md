@@ -58,7 +58,9 @@ persisted before waiting on Bluetooth; only the latest pending target reaches th
 controller after the current complete GATT operation finishes. Accepted work
 continues if its requesting client disconnects. Refresh and profile operations
 share the same device-operation lock. Cached reads never issue device writes;
-external changes remain untouched until another explicit command or scheduled transition.
+external changes remain untouched during a healthy connection until another explicit
+command or scheduled transition. Startup and reconnect deliberately restore the
+current OpenHome target.
 
 Bedtime Mode starts disabled, retaining 23:00–00:00 Europe/Copenhagen and its own
 20% red brightness. `PATCH /api/backlight/bedtime {"enabled":true}` clears manual
@@ -91,5 +93,24 @@ a window covering the whole repeated hour stays active throughout. Override
 expiry is the next actual change, including a rollback change, rather than an
 arbitrarily chosen occurrence of an ambiguous local boundary.
 
-Complete restart/reconnect recovery follows in #208; initial settings do not
-activate a production schedule.
+Startup validates the saved profile, retains unexpired manual selections and
+removes expired overrides against the current Copenhagen window. The background
+worker applies only the current target; missed transitions and superseded commands
+are never replayed. After waiting for connection/discovery, the transport checks the
+current revision and window deadline again before starting its write batch.
+Expired or superseded batches send no obsolete target. Profile recovery does not capture or replace a valid saved
+profile from reconnect observations. Missing or invalid profiles report incomplete
+setup; non-Off recovery waits for a valid saved profile.
+
+Every ten seconds the worker reads device state to detect an unavailable adapter
+or link. A newly established Bluetooth link also triggers recovery even if its
+read succeeds. Healthy reads do not repeat target writes. Failed operations retain
+the last observation as stale and retry only the latest target with exponential
+backoff from one second, capped at thirty seconds (plus the bounded exchange time).
+A new explicit selection attempts immediately and supersedes queued recovery work.
+The status contract distinguishes `recovery` pending/retrying/recovered/profile-required,
+command pending/failed/acknowledged, and fresh versus stale observations. Recovered
+means the current write was accepted and readable state returned; it does not
+establish exact visible RGB. Persistence failures retain the due transition and
+retry saving it before hardware work. Initial settings do not activate a
+production schedule.

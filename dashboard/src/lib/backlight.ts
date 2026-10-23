@@ -57,6 +57,9 @@ export const backlightStatus = z.object({
     .nullable(),
   stale: z.boolean(),
   command: z.enum(["idle", "pending", "acknowledged", "failed"]),
+  recovery: z
+    .enum(["idle", "pending", "retrying", "recovered", "profile-required"])
+    .default("idle"),
   bedtime: z.object({
     enabled: z.boolean(),
     start: clockTime,

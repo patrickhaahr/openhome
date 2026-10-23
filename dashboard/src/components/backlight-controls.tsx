@@ -23,6 +23,21 @@ const modeLabel = {
   other: "Other",
 }
 
+const commandLabel = {
+  idle: "No command",
+  pending: "Pending",
+  acknowledged: "Acknowledged",
+  failed: "Failed; selection saved",
+}
+
+const recoveryLabel = {
+  idle: "No recovery needed",
+  pending: "Pending",
+  retrying: "Retrying latest selection",
+  recovered: "Current selection recovered",
+  "profile-required": "TV Sync settings needed",
+}
+
 const connectionLabel = {
   unconfigured: "Setup needed",
   unknown: "Not checked",
@@ -91,7 +106,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
 
           if (result.status.command === "failed")
             announce(
-              "OpenHome couldn’t confirm the command. Your selection is saved; check the connection and try again."
+              "OpenHome couldn’t confirm the command. Your selection is saved; OpenHome retries the latest selection automatically."
             )
           else if (action.action === "profile")
             announce("TV Sync settings saved safely.")
@@ -447,6 +462,20 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
               {status === undefined
                 ? "Unavailable"
                 : connectionLabel[status.reachability]}
+            </dd>
+          </div>
+          <div>
+            <dt>Command</dt>
+            <dd>
+              {status === undefined ? "Unknown" : commandLabel[status.command]}
+            </dd>
+          </div>
+          <div>
+            <dt>Recovery</dt>
+            <dd>
+              {status === undefined
+                ? "Unknown"
+                : recoveryLabel[status.recovery]}
             </dd>
           </div>
           <div>
