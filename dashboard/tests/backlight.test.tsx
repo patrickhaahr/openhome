@@ -12,6 +12,7 @@ test("incomplete setup keeps Off available and announces failed hardware writes 
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+
   const container = document.createElement("div")
   document.body.append(container)
   const root = createRoot(container)
@@ -234,6 +235,7 @@ test("Bedtime controls show the saved schedule and resume Automatic with overrid
 
   const actions: import("@/lib/backlight").BacklightAction[] = []
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+
   const container = document.createElement("div")
   document.body.append(container)
   const root = createRoot(container)
@@ -307,6 +309,7 @@ test("Bedtime form validates locally, saves independently, and shows the returne
   const actions: import("@/lib/backlight").BacklightAction[] = []
   let reject = false
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+
   const container = document.createElement("div")
   document.body.append(container)
   const root = createRoot(container)
@@ -403,6 +406,72 @@ test("Bedtime form validates locally, saves independently, and shows the returne
     expect(container.textContent).toContain("22:30–02:00")
     const draft = container.querySelector('[aria-label="Start"]')
     expect(draft instanceof HTMLInputElement && draft.value).toBe("21:00")
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+    vi.unstubAllGlobals()
+  }
+})
+
+test("polling reports pending, failed and recovered targets without claiming stale readback is current", async () => {
+  const { backlightStatus } = await import("@/lib/backlight")
+
+  const baseline = backlightStatus.parse({
+    setup: "ready",
+    reachability: "unreachable",
+    intended: { mode: "off" },
+    acknowledged: { mode: "tv-sync" },
+    observed: {
+      power: true,
+      brightness: 45,
+      mode: "tv-sync",
+      observed_at: "2026-10-23T18:00:00Z",
+    },
+    stale: true,
+    command: "failed",
+    recovery: "retrying",
+    bedtime: { enabled: false, start: "23:00", end: "00:00", brightness: 20 },
+    control_source: "manual",
+    override_expires_at: null,
+    next_transition: null,
+  })
+
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+
+  const container = document.createElement("div")
+  document.body.append(container)
+  const root = createRoot(container)
+
+  async function render(
+    status: import("@/lib/backlight").BacklightStatus
+  ): Promise<void> {
+    await act(async () =>
+      root.render(
+        <BacklightControls
+          data={{ state: "available", status }}
+          change={async () => ({ state: "unavailable" })}
+        />
+      )
+    )
+  }
+
+  try {
+    await render(baseline)
+    expect(container.textContent).toContain("Retrying latest selection")
+    expect(container.textContent).toContain("Failed; selection saved")
+    expect(container.textContent).toContain("Stale / unknown")
+    await render({ ...baseline, command: "pending", recovery: "pending" })
+    expect(container.textContent).toContain("Pending")
+    await render({
+      ...baseline,
+      command: "acknowledged",
+      recovery: "recovered",
+      reachability: "reachable",
+      stale: false,
+      acknowledged: { mode: "off" },
+    })
+    expect(container.textContent).toContain("Current selection recovered")
+    expect(container.textContent).toContain("Fresh")
   } finally {
     await act(async () => root.unmount())
     container.remove()
