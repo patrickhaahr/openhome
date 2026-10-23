@@ -7,7 +7,16 @@ use chrono::{DateTime, Utc};
 use protocol::{TvSyncProfile, frame};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    path::PathBuf,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 use tokio::sync::Mutex;
 
 pub type Packet = [u8; 20];
@@ -28,8 +37,41 @@ pub trait GattTransport: Send + Sync {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "mode", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Selection {
-    Off,
-    TvSync,
+    Off {},
+    TvSync {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        brightness: Option<Brightness>,
+    },
+    Color {
+        rgb: Rgb,
+        brightness: Brightness,
+    },
+}
+/// Controller brightness command value (0–100); not photometric calibration.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(try_from = "u8", into = "u8")]
+pub struct Brightness(u8);
+impl TryFrom<u8> for Brightness {
+    type Error = &'static str;
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        if value <= 100 {
+            Ok(Self(value))
+        } else {
+            Err("Brightness must be between 0 and 100")
+        }
+    }
+}
+impl From<Brightness> for u8 {
+    fn from(value: Brightness) -> Self {
+        value.0
+    }
+}
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Rgb {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
 }
 #[derive(Clone, Serialize)]
 pub struct Status {
@@ -58,8 +100,11 @@ pub enum ProfileSource {
 pub struct BacklightService {
     db: SqlitePool,
     state: Arc<Mutex<Status>>,
-    // All capture/read/write exchanges share this lock, including persistence before writes.
+    // All capture/read/write exchanges share this lock for the complete operation.
     worker: Arc<Mutex<()>>,
+    // Persistence follows submission order independently of slow device operations.
+    submission: Arc<Mutex<()>>,
+    revision: Arc<AtomicU64>,
     transport: Option<Arc<dyn GattTransport>>,
     backup: Option<PathBuf>,
     profile: Arc<Mutex<Option<TvSyncProfile>>>,
@@ -99,6 +144,8 @@ impl BacklightService {
                 command: "idle",
             })),
             worker: Arc::new(Mutex::new(())),
+            submission: Arc::new(Mutex::new(())),
+            revision: Arc::new(AtomicU64::new(0)),
             transport,
             backup,
             profile: Arc::new(Mutex::new(profile)),
@@ -209,55 +256,84 @@ impl BacklightService {
         self.status().await
     }
     pub async fn select(&self, selection: Selection) -> Result<Status> {
-        let _worker = self.worker.lock().await;
+        let submission = self.submission.lock().await;
         // Capture before leaving TV Sync. Off still works if setup cannot be completed.
         if self.profile.lock().await.is_none() {
+            let _worker = self.worker.lock().await;
             let captured = self.capture().await;
-            if selection != Selection::Off && captured.is_err() {
+            if selection != (Selection::Off {}) && captured.is_err() {
                 return Err(AppError::Conflict(
                     "Save a valid TV Sync profile first".into(),
                 ));
             }
         }
-        let writes = match selection {
-            Selection::Off => vec![frame(&[0x33, 1, 0])],
-            Selection::TvSync => self
-                .profile
-                .lock()
-                .await
-                .as_ref()
-                .ok_or_else(|| AppError::Conflict("Save a valid TV Sync profile first".into()))?
-                .writes(),
-        };
         let intended = serde_json::to_string(&selection).map_err(anyhow::Error::from)?;
         sqlx::query!("UPDATE backlight SET intended = ? WHERE id = 1", intended)
             .execute(&self.db)
             .await
             .map_err(anyhow::Error::from)?;
-        {
+        let revision = {
             let mut state = self.state.lock().await;
             state.intended = selection;
             state.command = "pending";
+            self.revision.fetch_add(1, Ordering::SeqCst) + 1
+        };
+        drop(submission);
+        // Keep accepted durable work alive even if its requesting client disconnects.
+        let service = self.clone();
+        tokio::spawn(async move { service.dispatch(selection, revision).await })
+            .await
+            .map_err(anyhow::Error::from)??;
+        Ok(self.status().await)
+    }
+    async fn dispatch(&self, selection: Selection, revision: u64) -> Result<()> {
+        let _worker = self.worker.lock().await;
+        if self.revision.load(Ordering::SeqCst) != revision {
+            return Ok(());
         }
+        let writes = match selection {
+            Selection::Off {} => vec![frame(&[0x33, 1, 0])],
+            Selection::TvSync { brightness } => self
+                .profile
+                .lock()
+                .await
+                .as_ref()
+                .ok_or_else(|| AppError::Conflict("Save a valid TV Sync profile first".into()))?
+                .writes(brightness.map(u8::from)),
+            Selection::Color { rgb, brightness } => vec![
+                frame(&[0x33, 1, 1]),
+                // H605C requires the RGBIC whole-strip variant; generic RGB can ACK without applying.
+                frame(&[
+                    0x33, 5, 0x15, 1, rgb.red, rgb.green, rgb.blue, 0, 0, 0, 0, 0, 0xff, 0x7f,
+                ]),
+                frame(&[0x33, 4, brightness.into()]),
+            ],
+        };
         if let Ok(result) = self.exchange(&writes).await {
             self.record_observation(&result).await;
             let mut state = self.state.lock().await;
             if result.writes_accepted {
                 state.acknowledged = Some(selection);
-                state.command = "acknowledged";
-            } else {
-                state.command = "failed";
+            }
+            if self.revision.load(Ordering::SeqCst) == revision {
+                state.command = if result.writes_accepted {
+                    "acknowledged"
+                } else {
+                    "failed"
+                };
             }
         } else {
             let mut state = self.state.lock().await;
-            state.command = "failed";
+            if self.revision.load(Ordering::SeqCst) == revision {
+                state.command = "failed";
+            }
             state.reachability = if self.transport.is_some() {
                 "unreachable"
             } else {
                 "unconfigured"
             };
         }
-        Ok(self.status().await)
+        Ok(())
     }
 }
 #[derive(Deserialize)]

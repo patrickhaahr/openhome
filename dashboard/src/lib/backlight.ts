@@ -1,6 +1,30 @@
 import { z } from "zod"
 
-export const backlightSelection = z.object({ mode: z.enum(["off", "tv-sync"]) })
+const brightness = z.number().int().min(0).max(100)
+
+/** A requested setting, independent of the controller's observable state. */
+export const backlightSelection = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("off") }).strict(),
+  z
+    .object({ mode: z.literal("tv-sync"), brightness: brightness.optional() })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("color"),
+      rgb: z
+        .object({
+          red: z.number().int().min(0).max(255),
+          green: z.number().int().min(0).max(255),
+          blue: z.number().int().min(0).max(255),
+        })
+        .strict(),
+      brightness,
+    })
+    .strict(),
+])
+
+/** The durable manual target sent through the private OpenHome transport. */
+export type BacklightSelection = z.infer<typeof backlightSelection>
 
 export const backlightStatus = z.object({
   setup: z.enum(["incomplete", "ready"]),
