@@ -503,6 +503,11 @@ dashboard-docker-build version: docker-builder
 dashboard-docker-push version: docker-builder
     docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest --push dashboard
 
+# Load the locally built Dashboard OCI images for container verification
+[group('dashboard')]
+dashboard-docker-load:
+    docker load --input .devenv/openhome-dashboard.tar
+
 # Verify a dashboard image's rendered page, static assets and private configuration
 [group('dashboard')]
 dashboard-docker-smoke image='patrickhaahr/openhome-dashboard:latest':
