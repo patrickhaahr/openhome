@@ -154,6 +154,12 @@ mcp-build:
 mcp-run:
     cargo run
 
+# Refresh the MCP test harness lock after changing the local API dependency
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-refresh-api-lock:
+    cargo update --offline --package openhome-api
+
 # Test the MCP adapter against the real API training routes
 [group('mcp')]
 [working-directory: 'mcp']
@@ -222,6 +228,12 @@ api-test-integration name:
 [working-directory: 'api']
 api-run:
     cargo run
+
+# Run the actual API against a separate private SQLite database for local verification
+[group('api')]
+[working-directory: 'api']
+api-run-isolated database_url:
+    SQLX_OFFLINE=true DATABASE_URL={{quote(database_url)}} cargo run
 
 # Apply main API migrations to DATABASE_URL
 [group('api')]
