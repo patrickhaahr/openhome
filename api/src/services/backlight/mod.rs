@@ -381,21 +381,35 @@ impl BacklightService {
         self.finish_dispatch(selection, revision).await
     }
     pub async fn update_bedtime(&self, update: BedtimeUpdate) -> Result<Status> {
-        use crate::services::patch::Patch;
-        let enabled = match update.enabled {
-            Patch::Missing => return Ok(self.status().await),
-            Patch::Value(Some(enabled)) => enabled,
-            Patch::Value(None) => {
-                return Err(AppError::Validation("Enabled cannot be null".into()));
-            }
-        };
+        if !update.supplied() {
+            return Ok(self.status().await);
+        }
         let submission = self.submission.lock().await;
-        let mut bedtime = self.state.lock().await.bedtime.clone();
-        bedtime.enabled = enabled;
-        let evaluation = evaluate(&bedtime, self.clock.now());
-        let selection = evaluation.selection;
+        let status = self.state.lock().await.clone();
+        let mut bedtime = status.bedtime;
+        let reset_override = update.enabled.supplied();
+        update.apply(&mut bedtime)?;
+        let now = self.clock.now();
+        let evaluation = evaluate(&bedtime, now);
+        let manual_override = if !reset_override
+            && matches!(status.control_source, ControlSource::Manual)
+            && status.override_expires_at.is_none_or(|expiry| now < expiry)
+        {
+            Some(BacklightOverride {
+                selection: status.intended,
+                expires_at: evaluation.next_transition,
+            })
+        } else {
+            None
+        };
+        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
         let revision = self
-            .persist(selection, bedtime, None, evaluation.next_transition)
+            .persist(
+                selection,
+                bedtime,
+                manual_override,
+                evaluation.next_transition,
+            )
             .await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await

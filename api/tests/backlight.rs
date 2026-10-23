@@ -702,3 +702,230 @@ async fn omitted_bedtime_patch_preserves_settings_and_override_without_device_wr
     .await;
     assert_eq!(code, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn bedtime_edits_apply_now_preserve_manual_expiry_and_persist_while_disabled() {
+    use std::sync::Arc;
+    let (_, state) = common::test_app_with_db().await;
+    let device = Arc::new(ManualDevice {
+        packets: std::sync::Mutex::default(),
+    });
+    let clock = Arc::new(ControlledClock::at("2026-10-23T21:30:00Z")); // 23:30 Copenhagen
+    let service =
+        BacklightService::with_clock(state.db.clone(), Some(device.clone()), None, clock.clone())
+            .await
+            .unwrap();
+    let app = authenticated(service, state.clone());
+    let patch = |body| {
+        send_request_with_method(
+            app.clone(),
+            "/api/backlight/bedtime",
+            Method::PATCH,
+            Some(body),
+            Some("test-api-key"),
+        )
+    };
+    let (code, edited) =
+        patch(serde_json::json!({"enabled":true,"start":"22:00","end":"02:00","brightness":31}))
+            .await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(edited["intended"]["brightness"], 31);
+    assert_eq!(edited["next_transition"], "2026-10-24T00:00:00Z");
+    let (_, outside) = patch(serde_json::json!({"start":"00:30","end":"02:00"})).await;
+    assert_eq!(outside["intended"]["mode"], "tv-sync");
+    let (_, manual) = select(app.clone(), serde_json::json!({"mode":"off"})).await;
+    assert_eq!(manual["override_expires_at"], "2026-10-23T22:30:00Z");
+    let (_, preserved) = patch(serde_json::json!({"start":"01:00","brightness":0})).await;
+    assert_eq!(preserved["intended"], serde_json::json!({"mode":"off"}));
+    assert_eq!(preserved["control_source"], "manual");
+    assert_eq!(preserved["override_expires_at"], "2026-10-23T23:00:00Z");
+    patch(serde_json::json!({"enabled":false})).await;
+    select(app.clone(), serde_json::json!({"mode":"off"})).await;
+    let (_, disabled) =
+        patch(serde_json::json!({"start":"22:30","end":"03:15","brightness":100})).await;
+    assert_eq!(disabled["intended"]["mode"], "off");
+    assert!(disabled["override_expires_at"].is_null());
+    let reopened = BacklightService::with_clock(state.db.clone(), Some(device), None, clock)
+        .await
+        .unwrap();
+    let (_, saved) = send_request(
+        authenticated(reopened, state),
+        "/api/backlight",
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(
+        saved["bedtime"],
+        serde_json::json!({"enabled":false,"start":"22:30","end":"03:15","brightness":100})
+    );
+    assert_eq!(saved["intended"]["mode"], "off");
+}
+
+#[tokio::test]
+async fn bedtime_patch_rejects_ambiguous_or_malformed_values_atomically() {
+    let (_, state) = common::test_app_with_db().await;
+    let device = std::sync::Arc::new(ManualDevice {
+        packets: std::sync::Mutex::default(),
+    });
+    let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    let app = authenticated(service, state);
+    select(app.clone(), serde_json::json!({"mode":"off"})).await;
+    let (_, before) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+    let writes = device.packets.lock().unwrap().len();
+    for body in [
+        serde_json::json!({"start":"00:00","brightness":31}),
+        serde_json::json!({"start":"24:00"}),
+        serde_json::json!({"end":"12:60"}),
+        serde_json::json!({"start":"9:00"}),
+        serde_json::json!({"start":"09:00:00"}),
+        serde_json::json!({"end":"tomorrow"}),
+        serde_json::json!({"start":null}),
+        serde_json::json!({"end":null}),
+        serde_json::json!({"brightness":null}),
+        serde_json::json!({"brightness":101}),
+        serde_json::json!({"brightness":-1}),
+        serde_json::json!({"brightness":1.5}),
+    ] {
+        let (code, _) = send_request_with_method(
+            app.clone(),
+            "/api/backlight/bedtime",
+            Method::PATCH,
+            Some(body.clone()),
+            Some("test-api-key"),
+        )
+        .await;
+        assert!(
+            matches!(
+                code,
+                StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
+            ),
+            "{body}: {code}"
+        );
+        let (_, after) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+        assert_eq!(after["bedtime"], before["bedtime"]);
+        assert_eq!(after["intended"], before["intended"]);
+    }
+    assert_eq!(device.packets.lock().unwrap().len(), writes);
+}
+
+#[test]
+fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_repeat() {
+    use openhome_api::services::backlight::routine::{BedtimeSettings, evaluate};
+    // Expected UTC instants are calendar examples, independent of the evaluator.
+    for (start, end, instant, mode, next) in [
+        (
+            "22:00",
+            "02:00",
+            "2026-01-15T23:00:00Z",
+            "color",
+            "2026-01-16T01:00:00Z",
+        ),
+        (
+            "22:00",
+            "02:00",
+            "2026-01-16T01:00:00Z",
+            "tv-sync",
+            "2026-01-16T21:00:00Z",
+        ),
+        // 29 March jumps from 01:59 CET to 03:00 CEST.
+        (
+            "02:30",
+            "03:30",
+            "2026-03-29T00:59:59Z",
+            "tv-sync",
+            "2026-03-29T01:00:00Z",
+        ),
+        (
+            "02:30",
+            "03:30",
+            "2026-03-29T01:00:00Z",
+            "color",
+            "2026-03-29T01:30:00Z",
+        ),
+        (
+            "01:30",
+            "02:30",
+            "2026-03-29T00:45:00Z",
+            "color",
+            "2026-03-29T01:00:00Z",
+        ),
+        // A wholly skipped red interval does not invent an action that day.
+        (
+            "02:10",
+            "02:20",
+            "2026-03-29T00:59:00Z",
+            "tv-sync",
+            "2026-03-30T00:10:00Z",
+        ),
+        // 25 October repeats 02:00–02:59, so a contained window runs twice.
+        (
+            "02:15",
+            "02:45",
+            "2026-10-25T00:14:59Z",
+            "tv-sync",
+            "2026-10-25T00:15:00Z",
+        ),
+        (
+            "02:15",
+            "02:45",
+            "2026-10-25T00:15:00Z",
+            "color",
+            "2026-10-25T00:45:00Z",
+        ),
+        (
+            "02:15",
+            "02:45",
+            "2026-10-25T00:45:00Z",
+            "tv-sync",
+            "2026-10-25T01:15:00Z",
+        ),
+        (
+            "02:15",
+            "02:45",
+            "2026-10-25T01:15:00Z",
+            "color",
+            "2026-10-25T01:45:00Z",
+        ),
+        // Crossing the rollback can leave/reenter even without a named boundary.
+        (
+            "02:30",
+            "03:30",
+            "2026-10-25T00:45:00Z",
+            "color",
+            "2026-10-25T01:00:00Z",
+        ),
+        (
+            "02:30",
+            "03:30",
+            "2026-10-25T01:00:00Z",
+            "tv-sync",
+            "2026-10-25T01:30:00Z",
+        ),
+        // A window containing the whole repeated hour stays active through it.
+        (
+            "01:30",
+            "03:30",
+            "2026-10-25T00:30:00Z",
+            "color",
+            "2026-10-25T02:30:00Z",
+        ),
+    ] {
+        let settings: BedtimeSettings = serde_json::from_value(
+            serde_json::json!({"enabled":true,"start":start,"end":end,"brightness":20}),
+        )
+        .unwrap();
+        let result = evaluate(&settings, instant.parse().unwrap());
+        assert_eq!(
+            serde_json::to_value(result.selection).unwrap()["mode"],
+            mode,
+            "{start}–{end} at {instant}"
+        );
+        assert_eq!(
+            result.next_transition.unwrap(),
+            next.parse::<chrono::DateTime<chrono::Utc>>().unwrap(),
+            "{start}–{end} at {instant}"
+        );
+    }
+}

@@ -55,6 +55,20 @@ test("incomplete setup keeps Off available and announces failed hardware writes 
       "couldn’t confirm"
     )
     expect(container.textContent).toContain("Unknown")
+
+    const saved = await changeBacklight({
+      action: "bedtime",
+      start: "22:30",
+      end: "02:00",
+      brightness: 37,
+    })
+
+    expect(saved.state).toBe("available")
+
+    const persisted = await readBacklight()
+    expect(persisted.state === "available" && persisted.status.bedtime).toEqual(
+      { enabled: false, start: "22:30", end: "02:00", brightness: 37 }
+    )
   } finally {
     await act(async () => root.unmount())
     container.remove()
@@ -266,6 +280,129 @@ test("Bedtime controls show the saved schedule and resume Automatic with overrid
       if (enabled instanceof HTMLElement) enabled.click()
     })
     expect(actions[1]).toEqual({ action: "bedtime", enabled: false })
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+    vi.unstubAllGlobals()
+  }
+})
+
+test("Bedtime form validates locally, saves independently, and shows the returned override expiry", async () => {
+  const { backlightStatus } = await import("@/lib/backlight")
+
+  const status = backlightStatus.parse({
+    setup: "ready",
+    reachability: "reachable",
+    intended: { mode: "off" },
+    acknowledged: { mode: "off" },
+    observed: null,
+    stale: true,
+    command: "acknowledged",
+    bedtime: { enabled: false, start: "23:00", end: "00:00", brightness: 20 },
+    control_source: "manual",
+    override_expires_at: null,
+    next_transition: null,
+  })
+
+  const actions: import("@/lib/backlight").BacklightAction[] = []
+  let reject = false
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  const container = document.createElement("div")
+  document.body.append(container)
+  const root = createRoot(container)
+
+  async function edit(label: string, value: string): Promise<void> {
+    const field = container.querySelector(`input[aria-label="${label}"]`)
+    expect(field).toBeInstanceOf(HTMLInputElement)
+
+    if (!(field instanceof HTMLInputElement))
+      throw new Error(`Missing ${label}`)
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set?.call(field, value)
+      field.dispatchEvent(new Event("input", { bubbles: true }))
+      field.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+  }
+
+  async function save(): Promise<void> {
+    await act(async () =>
+      container
+        .querySelector("form")
+        ?.dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true })
+        )
+    )
+  }
+
+  try {
+    await act(async () =>
+      root.render(
+        <BacklightControls
+          data={{ state: "available", status }}
+          change={async (action) => {
+            actions.push(action)
+
+            if (reject) return { state: "invalid-settings" }
+
+            return {
+              state: "available",
+              status: {
+                ...status,
+                bedtime: {
+                  enabled: false,
+                  start: "22:30",
+                  end: "02:00",
+                  brightness: 37,
+                },
+                override_expires_at: "2026-10-24T00:00:00Z",
+              },
+            }
+          }}
+        />
+      )
+    )
+    await edit("Start", "00:00")
+    await save()
+    expect(actions).toEqual([])
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "different"
+    )
+    await edit("Start", "22:30")
+    await edit("End", "02:00")
+    await edit("Red brightness", "101")
+    await save()
+    expect(actions).toEqual([])
+    await edit("Red brightness", "37")
+    expect(actions).toEqual([])
+    await save()
+    expect(actions).toEqual([
+      { action: "bedtime", start: "22:30", end: "02:00", brightness: 37 },
+    ])
+    expect(container.textContent).toContain("22:30–02:00")
+    expect(container.textContent).toContain("Manual override")
+    expect(container.querySelector("time")?.dateTime).toBe(
+      "2026-10-24T00:00:00Z"
+    )
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      "Bedtime settings saved"
+    )
+    expect(
+      container
+        .querySelector('[aria-label="Bedtime Mode enabled"]')
+        ?.getAttribute("aria-checked")
+    ).toBe("false")
+    reject = true
+    await edit("Start", "21:00")
+    await save()
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      "weren’t saved"
+    )
+    expect(container.textContent).toContain("22:30–02:00")
+    const draft = container.querySelector('[aria-label="Start"]')
+    expect(draft instanceof HTMLInputElement && draft.value).toBe("21:00")
   } finally {
     await act(async () => root.unmount())
     container.remove()

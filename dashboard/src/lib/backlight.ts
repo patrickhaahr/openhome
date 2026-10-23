@@ -2,6 +2,22 @@ import { z } from "zod"
 
 const brightness = z.number().int().min(0).max(100)
 
+const clockTime = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM from 00:00 to 23:59.")
+
+/** Editable window fields, also checked by the authoritative API. */
+export const bedtimeFields = z
+  .object({
+    start: clockTime,
+    end: clockTime,
+    brightness,
+  })
+  .refine((value) => value.start !== value.end, {
+    message: "Start and End must be different.",
+    path: ["end"],
+  })
+
 /** A requested setting, independent of the controller's observable state. */
 export const backlightSelection = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("off") }).strict(),
@@ -43,8 +59,8 @@ export const backlightStatus = z.object({
   command: z.enum(["idle", "pending", "acknowledged", "failed"]),
   bedtime: z.object({
     enabled: z.boolean(),
-    start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-    end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    start: clockTime,
+    end: clockTime,
     brightness,
   }),
   control_source: z.enum(["automatic", "manual"]),
@@ -60,7 +76,23 @@ export const backlightAction = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("refresh") }),
   z.object({ action: z.literal("automatic") }),
-  z.object({ action: z.literal("bedtime"), enabled: z.boolean() }),
+  z
+    .object({
+      action: z.literal("bedtime"),
+      enabled: z.boolean().optional(),
+      start: clockTime.optional(),
+      end: clockTime.optional(),
+      brightness: brightness.optional(),
+    })
+    .refine(
+      (value) =>
+        value.start === undefined ||
+        value.end === undefined ||
+        value.start !== value.end,
+      {
+        message: "Start and End must be different.",
+      }
+    ),
 ])
 
 export type BacklightAction = z.infer<typeof backlightAction>
@@ -75,3 +107,4 @@ export type BacklightResult =
   | BacklightRead
   | { state: "profile-required" }
   | { state: "invalid-profile" }
+  | { state: "invalid-settings" }
