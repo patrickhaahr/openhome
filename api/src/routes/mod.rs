@@ -16,3 +16,5 @@ pub mod weather;
 pub mod wishlist;
 
 pub mod photos;
+
+pub mod backlight;
