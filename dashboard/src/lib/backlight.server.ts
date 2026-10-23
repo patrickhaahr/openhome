@@ -37,9 +37,13 @@ export async function changeBacklight(
   action: BacklightAction
 ): Promise<BacklightResult> {
   let path: `/api/${string}` = "/api/backlight/refresh"
-  let method: "POST" | "PUT" = "POST"
+  let method: "POST" | "PUT" | "PATCH" = "POST"
 
-  let json: BacklightSelection | { source: "capture" | "backup" } | undefined
+  let json:
+    | BacklightSelection
+    | { source: "capture" | "backup" }
+    | { enabled: boolean }
+    | undefined
 
   switch (action.action) {
     case "select":
@@ -50,6 +54,14 @@ export async function changeBacklight(
     case "profile":
       path = "/api/backlight/profile"
       json = { source: action.source }
+      break
+    case "automatic":
+      path = "/api/backlight/automatic"
+      break
+    case "bedtime":
+      path = "/api/backlight/bedtime"
+      method = "PATCH"
+      json = { enabled: action.enabled }
       break
     case "refresh":
       break

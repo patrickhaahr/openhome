@@ -87,7 +87,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
         if (result.state === "available") {
           setLocal({ base: latestData.current, value: result })
 
-          if (action.action === "select" && result.status.command === "failed")
+          if (result.status.command === "failed")
             announce(
               "OpenHome couldn’t confirm the command. Your selection is saved; check the connection and try again."
             )
@@ -225,6 +225,45 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             Color
           </Button>
         </div>
+        <section className="backlight-setup mb-8" aria-label="Bedtime Mode">
+          <h3>Bedtime Mode</h3>
+          <p>
+            {status === undefined ? (
+              "Schedule unavailable."
+            ) : (
+              <>
+                Red at {status.bedtime.brightness}% · {status.bedtime.start}–
+                {status.bedtime.end} Europe/Copenhagen. Then TV Sync, with its
+                saved brightness.
+              </>
+            )}
+          </p>
+          <div className="backlight-actions">
+            <Button
+              variant="outline"
+              role="switch"
+              aria-label="Bedtime Mode enabled"
+              aria-checked={status?.bedtime.enabled === true}
+              disabled={pending || status?.setup !== "ready"}
+              onClick={() =>
+                perform({
+                  action: "bedtime",
+                  enabled: status?.bedtime.enabled !== true,
+                })
+              }
+            >
+              {status?.bedtime.enabled === true ? "Enabled" : "Disabled"}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={status?.setup !== "ready"}
+              aria-pressed={status?.control_source === "automatic"}
+              onClick={() => perform({ action: "automatic" })}
+            >
+              Automatic
+            </Button>
+          </div>
+        </section>
         <fieldset
           className="backlight-adjustments"
           disabled={status?.setup !== "ready"}
@@ -280,8 +319,10 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             />
           </label>
           <p>
-            Your manual selection stays until you choose again. TV Sync restores
-            its saved brightness.
+            {status?.bedtime.enabled === true
+              ? "Manual selections last until the next Bedtime Mode transition. Automatic resumes the routine now."
+              : "Your manual selection stays until you choose again. Automatic restores TV Sync."}{" "}
+            TV Sync restores its saved brightness.
           </p>
         </fieldset>
         <p role="status" aria-live="polite" className="backlight-feedback">
@@ -320,6 +361,35 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
       <aside className="backlight-state" aria-label="Backlight state">
         <h3>Backlight</h3>
         <dl>
+          <div>
+            <dt>Control</dt>
+            <dd>
+              {status === undefined
+                ? "Unknown"
+                : status.control_source === "manual"
+                  ? "Manual override"
+                  : "Automatic"}
+            </dd>
+          </div>
+          {status?.control_source === "manual" ? (
+            <div>
+              <dt>Override ends</dt>
+              <dd>
+                {status.override_expires_at === null ? (
+                  "Until another selection"
+                ) : (
+                  <time dateTime={status.override_expires_at}>
+                    {new Intl.DateTimeFormat("en-GB", {
+                      timeZone: "Europe/Copenhagen",
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(new Date(status.override_expires_at))}{" "}
+                    Copenhagen
+                  </time>
+                )}
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt>Selected</dt>
             <dd>

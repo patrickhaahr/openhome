@@ -52,13 +52,25 @@ failed read; a failed write keeps its selected intention and reports failure.
 Each device exchange has a 30-second bound; first-time profile capture can add
 one exchange before a selection. Off remains available with incomplete setup.
 
-Manual selections have no hidden expiry. Dashboard adjustments coalesce after
+Dashboard adjustments coalesce after
 200 ms and retain only the latest pending edit. Across clients, selections are
 persisted before waiting on Bluetooth; only the latest pending target reaches the
 controller after the current complete GATT operation finishes. Accepted work
 continues if its requesting client disconnects. Refresh and profile operations
 share the same device-operation lock. Cached reads never issue device writes;
-external changes remain untouched until another explicit command.
+external changes remain untouched until another explicit command or scheduled transition.
 
-No schedule is activated yet. Automatic/routine behavior and reconnect recovery
-are delivered by the subsequent epic tickets.
+Bedtime Mode starts disabled, retaining 23:00–00:00 Europe/Copenhagen and its own
+20% red brightness. `PATCH /api/backlight/bedtime {"enabled":true}` clears manual
+overrides and applies Automatic immediately. Start is inclusive; End is exclusive.
+Red powers on even after Off; End restores the saved powered-on TV Sync profile.
+Disabling clears overrides, restores TV Sync and retains the window settings.
+`POST /api/backlight/automatic` clears overrides immediately, selecting the current
+routine target (TV Sync while disabled). Manual selections during an enabled
+routine expire at its next actual transition; while disabled they have no expiry.
+Status exposes `bedtime`, `control_source`, `override_expires_at` and
+`next_transition`. Settings, override selection/expiry and intended target commit
+atomically to SQLite. The API's background task evaluates current wall time,
+independently of Dashboard activity, and writes once at meaningful transitions.
+Editable settings and complete restart/reconnect recovery follow in #207/#208;
+initial settings do not activate a production schedule.

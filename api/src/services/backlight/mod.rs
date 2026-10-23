@@ -1,10 +1,14 @@
 //! Local Backlight control. Private packets and identifiers never enter the HTTP contract.
 mod bluetooth;
 mod protocol;
+pub mod routine;
 use crate::error::{AppError, Result};
 pub use bluetooth::Bluetooth;
 use chrono::{DateTime, Utc};
 use protocol::{TvSyncProfile, frame};
+use routine::{
+    BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, SystemClock, evaluate,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::{
@@ -82,6 +86,10 @@ pub struct Status {
     pub observed: Option<Observation>,
     pub stale: bool,
     pub command: &'static str,
+    pub bedtime: BedtimeSettings,
+    pub control_source: ControlSource,
+    pub override_expires_at: Option<DateTime<Utc>>,
+    pub next_transition: Option<DateTime<Utc>>,
 }
 #[derive(Clone, Serialize)]
 pub struct Observation {
@@ -108,6 +116,7 @@ pub struct BacklightService {
     transport: Option<Arc<dyn GattTransport>>,
     backup: Option<PathBuf>,
     profile: Arc<Mutex<Option<TvSyncProfile>>>,
+    clock: Arc<dyn Clock>,
 }
 impl BacklightService {
     pub async fn new(
@@ -115,15 +124,34 @@ impl BacklightService {
         transport: Option<Arc<dyn GattTransport>>,
         backup: Option<PathBuf>,
     ) -> Result<Self> {
-        let row = sqlx::query!("SELECT tv_sync_profile, intended FROM backlight WHERE id = 1")
-            .fetch_one(&db)
-            .await
-            .map_err(anyhow::Error::from)?;
+        Self::with_clock(db, transport, backup, Arc::new(SystemClock)).await
+    }
+    pub async fn with_clock(
+        db: SqlitePool,
+        transport: Option<Arc<dyn GattTransport>>,
+        backup: Option<PathBuf>,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self> {
+        let row = sqlx::query!(
+            "SELECT tv_sync_profile, intended, bedtime, manual_override FROM backlight WHERE id = 1"
+        )
+        .fetch_one(&db)
+        .await
+        .map_err(anyhow::Error::from)?;
         let profile = row
             .tv_sync_profile
             .and_then(|json| serde_json::from_str::<TvSyncProfile>(&json).ok())
             .and_then(TvSyncProfile::validate);
         let intended = serde_json::from_str(&row.intended).map_err(anyhow::Error::from)?;
+        let bedtime: BedtimeSettings =
+            serde_json::from_str(&row.bedtime).map_err(anyhow::Error::from)?;
+        let manual_override: Option<BacklightOverride> = row
+            .manual_override
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(anyhow::Error::from)?;
+        let next_transition = evaluate(&bedtime, clock.now()).next_transition;
         Ok(Self {
             db,
             state: Arc::new(Mutex::new(Status {
@@ -142,6 +170,14 @@ impl BacklightService {
                 observed: None,
                 stale: true,
                 command: "idle",
+                bedtime,
+                control_source: if manual_override.is_some() {
+                    ControlSource::Manual
+                } else {
+                    ControlSource::Automatic
+                },
+                override_expires_at: manual_override.and_then(|o| o.expires_at),
+                next_transition,
             })),
             worker: Arc::new(Mutex::new(())),
             submission: Arc::new(Mutex::new(())),
@@ -149,6 +185,7 @@ impl BacklightService {
             transport,
             backup,
             profile: Arc::new(Mutex::new(profile)),
+            clock,
         })
     }
     pub async fn status(&self) -> Status {
@@ -257,6 +294,24 @@ impl BacklightService {
     }
     pub async fn select(&self, selection: Selection) -> Result<Status> {
         let submission = self.submission.lock().await;
+        let bedtime = self.state.lock().await.bedtime.clone();
+        let evaluation = evaluate(&bedtime, self.clock.now());
+        let manual_override = Some(BacklightOverride {
+            selection,
+            expires_at: evaluation.next_transition,
+        });
+        let revision = self
+            .persist(
+                selection,
+                bedtime,
+                manual_override,
+                evaluation.next_transition,
+            )
+            .await?;
+        drop(submission);
+        self.finish_dispatch(selection, revision).await
+    }
+    async fn prepare_profile(&self, selection: Selection) -> Result<()> {
         // Capture before leaving TV Sync. Off still works if setup cannot be completed.
         if self.profile.lock().await.is_none() {
             let _worker = self.worker.lock().await;
@@ -267,24 +322,115 @@ impl BacklightService {
                 ));
             }
         }
+        Ok(())
+    }
+    // Called with the submission lock: target, settings and override commit together.
+    async fn persist(
+        &self,
+        selection: Selection,
+        bedtime: BedtimeSettings,
+        manual_override: Option<BacklightOverride>,
+        next_transition: Option<DateTime<Utc>>,
+    ) -> Result<u64> {
+        self.prepare_profile(selection).await?;
         let intended = serde_json::to_string(&selection).map_err(anyhow::Error::from)?;
-        sqlx::query!("UPDATE backlight SET intended = ? WHERE id = 1", intended)
-            .execute(&self.db)
-            .await
+        let settings = serde_json::to_string(&bedtime).map_err(anyhow::Error::from)?;
+        let override_json = manual_override
+            .map(|value| serde_json::to_string(&value))
+            .transpose()
             .map_err(anyhow::Error::from)?;
-        let revision = {
-            let mut state = self.state.lock().await;
-            state.intended = selection;
-            state.command = "pending";
-            self.revision.fetch_add(1, Ordering::SeqCst) + 1
+        sqlx::query!(
+            "UPDATE backlight SET intended = ?, bedtime = ?, manual_override = ? WHERE id = 1",
+            intended,
+            settings,
+            override_json
+        )
+        .execute(&self.db)
+        .await
+        .map_err(anyhow::Error::from)?;
+        let mut state = self.state.lock().await;
+        state.intended = selection;
+        state.bedtime = bedtime;
+        state.control_source = if manual_override.is_some() {
+            ControlSource::Manual
+        } else {
+            ControlSource::Automatic
         };
-        drop(submission);
+        state.override_expires_at = manual_override.and_then(|o| o.expires_at);
+        state.next_transition = next_transition;
+        state.command = "pending";
+        Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
+    }
+    async fn finish_dispatch(&self, selection: Selection, revision: u64) -> Result<Status> {
         // Keep accepted durable work alive even if its requesting client disconnects.
         let service = self.clone();
         tokio::spawn(async move { service.dispatch(selection, revision).await })
             .await
             .map_err(anyhow::Error::from)??;
         Ok(self.status().await)
+    }
+    pub async fn automatic(&self) -> Result<Status> {
+        let submission = self.submission.lock().await;
+        let bedtime = self.state.lock().await.bedtime.clone();
+        let evaluation = evaluate(&bedtime, self.clock.now());
+        let selection = evaluation.selection;
+        let revision = self
+            .persist(selection, bedtime, None, evaluation.next_transition)
+            .await?;
+        drop(submission);
+        self.finish_dispatch(selection, revision).await
+    }
+    pub async fn update_bedtime(&self, update: BedtimeUpdate) -> Result<Status> {
+        use crate::services::patch::Patch;
+        let enabled = match update.enabled {
+            Patch::Missing => return Ok(self.status().await),
+            Patch::Value(Some(enabled)) => enabled,
+            Patch::Value(None) => {
+                return Err(AppError::Validation("Enabled cannot be null".into()));
+            }
+        };
+        let submission = self.submission.lock().await;
+        let mut bedtime = self.state.lock().await.bedtime.clone();
+        bedtime.enabled = enabled;
+        let evaluation = evaluate(&bedtime, self.clock.now());
+        let selection = evaluation.selection;
+        let revision = self
+            .persist(selection, bedtime, None, evaluation.next_transition)
+            .await?;
+        drop(submission);
+        self.finish_dispatch(selection, revision).await
+    }
+    /// Reevaluate current wall time without replaying historical transitions.
+    /// The runtime cursor makes uninterrupted operation leave external changes alone.
+    pub async fn run_routine(self) {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let submission = self.submission.lock().await;
+            let status = self.state.lock().await.clone();
+            if status
+                .next_transition
+                .is_none_or(|next| self.clock.now() < next)
+            {
+                continue;
+            }
+            let evaluation = evaluate(&status.bedtime, self.clock.now());
+            let selection = evaluation.selection;
+            if let Ok(revision) = self
+                .persist(selection, status.bedtime, None, evaluation.next_transition)
+                .await
+            {
+                drop(submission);
+                if self.finish_dispatch(selection, revision).await.is_err() {
+                    tracing::warn!("Backlight routine dispatch failed");
+                }
+            } else {
+                // Recovery/retry is owned by the device worker; do not loop writes.
+                self.state.lock().await.next_transition = evaluation.next_transition;
+                tracing::warn!("Backlight routine could not save its target");
+            }
+        }
     }
     async fn dispatch(&self, selection: Selection, revision: u64) -> Result<()> {
         let _worker = self.worker.lock().await;

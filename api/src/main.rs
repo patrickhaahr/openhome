@@ -121,6 +121,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
+    tokio::spawn(backlight_service.clone().run_routine());
     let state = openhome_api::AppState {
         db,
         noop_db: noop_db.clone(),

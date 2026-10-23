@@ -41,6 +41,15 @@ export const backlightStatus = z.object({
     .nullable(),
   stale: z.boolean(),
   command: z.enum(["idle", "pending", "acknowledged", "failed"]),
+  bedtime: z.object({
+    enabled: z.boolean(),
+    start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    brightness,
+  }),
+  control_source: z.enum(["automatic", "manual"]),
+  override_expires_at: z.string().datetime().nullable(),
+  next_transition: z.string().datetime().nullable(),
 })
 
 export const backlightAction = z.discriminatedUnion("action", [
@@ -50,6 +59,8 @@ export const backlightAction = z.discriminatedUnion("action", [
     source: z.enum(["capture", "backup"]),
   }),
   z.object({ action: z.literal("refresh") }),
+  z.object({ action: z.literal("automatic") }),
+  z.object({ action: z.literal("bedtime"), enabled: z.boolean() }),
 ])
 
 export type BacklightAction = z.infer<typeof backlightAction>

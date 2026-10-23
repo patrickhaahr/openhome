@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tv_sync_profile, intended, bedtime, manual_override FROM backlight WHERE id = 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "tv_sync_profile",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "intended",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "bedtime",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "manual_override",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1ba317f44e2a2520249dfa2affdf2aa45c8776009becd9734801e3a54a74a3b3"
+}
