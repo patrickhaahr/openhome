@@ -19,6 +19,14 @@ test("incomplete setup keeps Off available and announces failed hardware writes 
 
   try {
     const data = await readBacklight()
+    expect(await changeBacklight({ action: "automatic" })).toEqual({
+      state: "profile-required",
+    })
+    expect(await changeBacklight({ action: "bedtime", enabled: true })).toEqual(
+      {
+        state: "profile-required",
+      }
+    )
     await act(async () =>
       root.render(
         <BacklightControls
@@ -60,6 +68,10 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
   const { backlightStatus } = await import("@/lib/backlight")
 
   const initial = backlightStatus.parse({
+    bedtime: { enabled: false, start: "23:00", end: "00:00", brightness: 20 },
+    control_source: "manual",
+    override_expires_at: null,
+    next_transition: null,
     setup: "ready",
     reachability: "reachable",
     intended: { mode: "tv-sync" },
@@ -185,6 +197,78 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
     await act(async () => root.unmount())
     container.remove()
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+  }
+})
+
+test("Bedtime controls show the saved schedule and resume Automatic with override expiry", async () => {
+  const { backlightStatus } = await import("@/lib/backlight")
+
+  const status = backlightStatus.parse({
+    setup: "ready",
+    reachability: "reachable",
+    intended: { mode: "off" },
+    acknowledged: { mode: "off" },
+    observed: null,
+    stale: true,
+    command: "acknowledged",
+    bedtime: { enabled: true, start: "23:00", end: "00:00", brightness: 20 },
+    control_source: "manual",
+    override_expires_at: "2026-10-23T22:00:00Z",
+    next_transition: "2026-10-23T22:00:00Z",
+  })
+
+  const actions: import("@/lib/backlight").BacklightAction[] = []
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  const container = document.createElement("div")
+  document.body.append(container)
+  const root = createRoot(container)
+
+  try {
+    await act(async () =>
+      root.render(
+        <BacklightControls
+          data={{ state: "available", status }}
+          change={async (action) => {
+            actions.push(action)
+
+            return {
+              state: "available",
+              status: {
+                ...status,
+                control_source: "automatic",
+                override_expires_at: null,
+                intended: { mode: "tv-sync" },
+              },
+            }
+          }}
+        />
+      )
+    )
+    expect(container.textContent).toContain("23:00–00:00")
+    expect(container.textContent).toContain("Manual override")
+    expect(container.querySelector("time")?.getAttribute("dateTime")).toBe(
+      "2026-10-23T22:00:00Z"
+    )
+
+    const automatic = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Automatic"
+    )
+
+    expect(automatic).toBeDefined()
+    await act(async () => automatic?.click())
+    expect(actions[0]).toEqual({ action: "automatic" })
+    expect(container.textContent).not.toContain("Manual override")
+    const enabled = container.querySelector('[role="switch"]')
+
+    expect(enabled?.getAttribute("aria-checked")).toBe("true")
+    await act(async () => {
+      if (enabled instanceof HTMLElement) enabled.click()
+    })
+    expect(actions[1]).toEqual({ action: "bedtime", enabled: false })
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
     vi.unstubAllGlobals()
   }
 })
