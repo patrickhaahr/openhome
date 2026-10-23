@@ -42,7 +42,7 @@ export async function changeBacklight(
   let json:
     | BacklightSelection
     | { source: "capture" | "backup" }
-    | { enabled: boolean }
+    | Omit<Extract<BacklightAction, { action: "bedtime" }>, "action">
     | undefined
 
   switch (action.action) {
@@ -61,7 +61,12 @@ export async function changeBacklight(
     case "bedtime":
       path = "/api/backlight/bedtime"
       method = "PATCH"
-      json = { enabled: action.enabled }
+      json = {
+        enabled: action.enabled,
+        start: action.start,
+        end: action.end,
+        brightness: action.brightness,
+      }
       break
     case "refresh":
       break
@@ -81,7 +86,11 @@ export async function changeBacklight(
 
   if (result.response.status === 409) return { state: "profile-required" }
 
-  if (result.response.status === 400) return { state: "invalid-profile" }
+  if (result.response.status === 400 || result.response.status === 422)
+    return {
+      state:
+        action.action === "bedtime" ? "invalid-settings" : "invalid-profile",
+    }
 
   if (!result.response.ok) return { state: "unavailable" }
 

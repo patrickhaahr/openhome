@@ -72,5 +72,24 @@ Status exposes `bedtime`, `control_source`, `override_expires_at` and
 `next_transition`. Settings, override selection/expiry and intended target commit
 atomically to SQLite. The API's background task evaluates current wall time,
 independently of Dashboard activity, and writes once at meaningful transitions.
-Editable settings and complete restart/reconnect recovery follow in #207/#208;
-initial settings do not activate a production schedule.
+The LED form saves Start, End and independent red brightness through the same
+PATCH operation, for example `{"start":"22:30","end":"02:00","brightness":30}`.
+Omitted fields retain their values; nulls, equal times and invalid values are
+rejected without changing settings or the intended target. Times use exact
+`HH:MM` from 00:00 to 23:59; red brightness is an integer from 0 to 100.
+Edits apply the current Automatic target immediately. An unexpired manual
+selection stays selected and receives the edited window's next actual transition
+as its expiry. Disabled edits retain an indefinite manual selection and saved
+window settings. Supplying Enabled explicitly clears the override as above.
+
+Every actual minute is evaluated against Copenhagen wall time. During the spring
+jump, a partially skipped window starts or ends at the first real minute whose
+membership changes; a wholly skipped window has no transition that day. During
+the autumn repeat, a window contained within the repeated hour runs twice.
+Rollback itself can leave a window and the second occurrence can reenter it;
+a window covering the whole repeated hour stays active throughout. Override
+expiry is the next actual change, including a rollback change, rather than an
+arbitrarily chosen occurrence of an ambiguous local boundary.
+
+Complete restart/reconnect recovery follows in #208; initial settings do not
+activate a production schedule.
