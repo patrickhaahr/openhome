@@ -25,18 +25,32 @@ use tokio::sync::Mutex;
 
 pub type Packet = [u8; 20];
 pub struct Exchange {
+    /// A newly established link requires current-target recovery, even if reads succeed.
+    pub reconnected: bool,
     pub writes_accepted: bool,
     pub replies: Vec<Packet>,
 }
 #[derive(Debug)]
-pub struct TransportError;
+pub enum TransportError {
+    Unavailable,
+    Superseded,
+}
+/// Checked after connecting and immediately before starting an ordered write batch.
+pub type CurrentOperation = dyn Fn() -> bool + Send + Sync;
 pub type TransportFuture<'a> =
     Pin<Box<dyn Future<Output = std::result::Result<Exchange, TransportError>> + Send + 'a>>;
 /// One complete GATT operation: ordered writes followed by correlated status queries.
 pub trait GattTransport: Send + Sync {
     /// Verify a private backup belongs to the configured controller.
     fn matches_device(&self, identity: &str) -> bool;
-    fn exchange<'a>(&'a self, writes: &'a [Packet], queries: &'a [Vec<u8>]) -> TransportFuture<'a>;
+    /// Check `current` after connection setup, before starting any write batch.
+    /// Keep the ordered batch and its queries together once writes have started.
+    fn exchange<'a>(
+        &'a self,
+        writes: &'a [Packet],
+        queries: &'a [Vec<u8>],
+        current: &'a CurrentOperation,
+    ) -> TransportFuture<'a>;
 }
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "mode", rename_all = "kebab-case", deny_unknown_fields)]
@@ -86,10 +100,20 @@ pub struct Status {
     pub observed: Option<Observation>,
     pub stale: bool,
     pub command: &'static str,
+    pub recovery: Recovery,
     pub bedtime: BedtimeSettings,
     pub control_source: ControlSource,
     pub override_expires_at: Option<DateTime<Utc>>,
     pub next_transition: Option<DateTime<Utc>>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Recovery {
+    Idle,
+    Pending,
+    Retrying,
+    Recovered,
+    ProfileRequired,
 }
 #[derive(Clone, Serialize)]
 pub struct Observation {
@@ -142,7 +166,6 @@ impl BacklightService {
             .tv_sync_profile
             .and_then(|json| serde_json::from_str::<TvSyncProfile>(&json).ok())
             .and_then(TvSyncProfile::validate);
-        let intended = serde_json::from_str(&row.intended).map_err(anyhow::Error::from)?;
         let bedtime: BedtimeSettings =
             serde_json::from_str(&row.bedtime).map_err(anyhow::Error::from)?;
         let manual_override: Option<BacklightOverride> = row
@@ -151,8 +174,12 @@ impl BacklightService {
             .map(serde_json::from_str)
             .transpose()
             .map_err(anyhow::Error::from)?;
-        let next_transition = evaluate(&bedtime, clock.now()).next_transition;
-        Ok(Self {
+        let evaluation = evaluate(&bedtime, clock.now());
+        let manual_override = manual_override
+            .filter(|value| value.expires_at.is_none_or(|expiry| clock.now() < expiry));
+        let intended = manual_override.map_or(evaluation.selection, |value| value.selection);
+        let next_transition = evaluation.next_transition;
+        let service = Self {
             db,
             state: Arc::new(Mutex::new(Status {
                 setup: if profile.is_some() {
@@ -170,6 +197,7 @@ impl BacklightService {
                 observed: None,
                 stale: true,
                 command: "idle",
+                recovery: Recovery::Pending,
                 bedtime,
                 control_source: if manual_override.is_some() {
                     ControlSource::Manual
@@ -186,7 +214,12 @@ impl BacklightService {
             backup,
             profile: Arc::new(Mutex::new(profile)),
             clock,
-        })
+        };
+        let bedtime = service.state.lock().await.bedtime.clone();
+        service
+            .persist(intended, bedtime, manual_override, next_transition)
+            .await?;
+        Ok(service)
     }
     pub async fn status(&self) -> Status {
         let mut status = self.state.lock().await.clone();
@@ -197,17 +230,21 @@ impl BacklightService {
                 .is_none_or(|o| Utc::now() - o.observed_at > chrono::Duration::seconds(30));
         status
     }
-    async fn exchange(&self, writes: &[Packet]) -> std::result::Result<Exchange, TransportError> {
+    async fn exchange(
+        &self,
+        writes: &[Packet],
+        current: &CurrentOperation,
+    ) -> std::result::Result<Exchange, TransportError> {
         let Some(transport) = &self.transport else {
-            return Err(TransportError);
+            return Err(TransportError::Unavailable);
         };
         let queries = vec![vec![0xaa, 1], vec![0xaa, 4], vec![0xaa, 5, 1]];
         tokio::time::timeout(
             Duration::from_secs(30),
-            transport.exchange(writes, &queries),
+            transport.exchange(writes, &queries, current),
         )
         .await
-        .unwrap_or(Err(TransportError))
+        .unwrap_or(Err(TransportError::Unavailable))
     }
     async fn store_profile(&self, profile: TvSyncProfile) -> Result<()> {
         let json = serde_json::to_string(&profile).map_err(anyhow::Error::from)?;
@@ -219,12 +256,16 @@ impl BacklightService {
         .await
         .map_err(anyhow::Error::from)?;
         *self.profile.lock().await = Some(profile);
-        self.state.lock().await.setup = "ready";
+        let mut state = self.state.lock().await;
+        state.setup = "ready";
+        if state.recovery == Recovery::ProfileRequired {
+            state.recovery = Recovery::Pending;
+        }
         Ok(())
     }
     async fn capture(&self) -> Result<()> {
         let result = self
-            .exchange(&[])
+            .exchange(&[], &|| true)
             .await
             .map_err(|_| AppError::ServiceUnavailable("Backlight could not be reached".into()))?;
         self.record_observation(&result).await;
@@ -269,6 +310,11 @@ impl BacklightService {
     async fn record_observation(&self, result: &Exchange) {
         let observed = protocol::observation(&result.replies);
         let mut state = self.state.lock().await;
+        if observed.is_none() {
+            state.recovery = Recovery::Retrying;
+        } else if result.reconnected {
+            state.recovery = Recovery::Pending;
+        }
         state.reachability = if observed.is_some() {
             "reachable"
         } else {
@@ -280,15 +326,16 @@ impl BacklightService {
     }
     pub async fn refresh(&self) -> Status {
         let _worker = self.worker.lock().await;
-        match self.exchange(&[]).await {
-            Ok(result) => self.record_observation(&result).await,
-            Err(_) => {
-                self.state.lock().await.reachability = if self.transport.is_some() {
-                    "unreachable"
-                } else {
-                    "unconfigured"
-                }
-            }
+        if let Ok(result) = self.exchange(&[], &|| true).await {
+            self.record_observation(&result).await;
+        } else {
+            let mut state = self.state.lock().await;
+            state.recovery = Recovery::Retrying;
+            state.reachability = if self.transport.is_some() {
+                "unreachable"
+            } else {
+                "unconfigured"
+            };
         }
         self.status().await
     }
@@ -300,6 +347,7 @@ impl BacklightService {
             selection,
             expires_at: evaluation.next_transition,
         });
+        self.prepare_profile(selection).await?;
         let revision = self
             .persist(
                 selection,
@@ -332,7 +380,6 @@ impl BacklightService {
         manual_override: Option<BacklightOverride>,
         next_transition: Option<DateTime<Utc>>,
     ) -> Result<u64> {
-        self.prepare_profile(selection).await?;
         let intended = serde_json::to_string(&selection).map_err(anyhow::Error::from)?;
         let settings = serde_json::to_string(&bedtime).map_err(anyhow::Error::from)?;
         let override_json = manual_override
@@ -359,6 +406,7 @@ impl BacklightService {
         state.override_expires_at = manual_override.and_then(|o| o.expires_at);
         state.next_transition = next_transition;
         state.command = "pending";
+        state.recovery = Recovery::Pending;
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
     }
     async fn finish_dispatch(&self, selection: Selection, revision: u64) -> Result<Status> {
@@ -374,6 +422,7 @@ impl BacklightService {
         let bedtime = self.state.lock().await.bedtime.clone();
         let evaluation = evaluate(&bedtime, self.clock.now());
         let selection = evaluation.selection;
+        self.prepare_profile(selection).await?;
         let revision = self
             .persist(selection, bedtime, None, evaluation.next_transition)
             .await?;
@@ -403,6 +452,7 @@ impl BacklightService {
             None
         };
         let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
+        self.prepare_profile(selection).await?;
         let revision = self
             .persist(
                 selection,
@@ -415,40 +465,99 @@ impl BacklightService {
         self.finish_dispatch(selection, revision).await
     }
     /// Reevaluate current wall time without replaying historical transitions.
-    /// The runtime cursor makes uninterrupted operation leave external changes alone.
+    /// Healthy observations do not reassert targets changed by external controllers.
     pub async fn run_routine(self) {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut retry_at = tokio::time::Instant::now();
+        let mut backoff = Duration::from_secs(1);
+        let mut probe_at = tokio::time::Instant::now() + Duration::from_secs(10);
         loop {
             interval.tick().await;
+            if tokio::time::Instant::now() >= probe_at {
+                if !matches!(
+                    self.state.lock().await.recovery,
+                    Recovery::Pending | Recovery::Retrying
+                ) {
+                    self.refresh().await;
+                }
+                probe_at = tokio::time::Instant::now() + Duration::from_secs(10);
+            }
             let submission = self.submission.lock().await;
             let status = self.state.lock().await.clone();
-            if status
+            let transition_due = status
                 .next_transition
-                .is_none_or(|next| self.clock.now() < next)
-            {
+                .is_some_and(|next| self.clock.now() >= next);
+            let recovering = matches!(status.recovery, Recovery::Pending | Recovery::Retrying);
+            if !transition_due && !recovering {
+                continue;
+            }
+            if tokio::time::Instant::now() < retry_at {
                 continue;
             }
             let evaluation = evaluate(&status.bedtime, self.clock.now());
-            let selection = evaluation.selection;
+            let manual_override = if matches!(status.control_source, ControlSource::Manual)
+                && status
+                    .override_expires_at
+                    .is_none_or(|expiry| self.clock.now() < expiry)
+            {
+                Some(BacklightOverride {
+                    selection: status.intended,
+                    expires_at: status.override_expires_at,
+                })
+            } else {
+                None
+            };
+            let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
+            if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
+                let mut state = self.state.lock().await;
+                state.recovery = Recovery::ProfileRequired;
+                state.command = "failed";
+                continue;
+            }
             if let Ok(revision) = self
-                .persist(selection, status.bedtime, None, evaluation.next_transition)
+                .persist(
+                    selection,
+                    status.bedtime,
+                    manual_override,
+                    evaluation.next_transition,
+                )
                 .await
             {
                 drop(submission);
                 if self.finish_dispatch(selection, revision).await.is_err() {
-                    tracing::warn!("Backlight routine dispatch failed");
+                    tracing::warn!("Backlight recovery dispatch failed");
                 }
             } else {
-                // Recovery/retry is owned by the device worker; do not loop writes.
-                self.state.lock().await.next_transition = evaluation.next_transition;
+                let mut state = self.state.lock().await;
+                state.recovery = Recovery::Retrying;
+                state.command = "failed";
                 tracing::warn!("Backlight routine could not save its target");
+            }
+            let status = self.state.lock().await.clone();
+            if matches!(status.recovery, Recovery::Retrying) {
+                retry_at = tokio::time::Instant::now() + backoff;
+                backoff = (backoff * 2).min(Duration::from_secs(30));
+            } else {
+                retry_at = tokio::time::Instant::now();
+                backoff = Duration::from_secs(1);
             }
         }
     }
     async fn dispatch(&self, selection: Selection, revision: u64) -> Result<()> {
         let _worker = self.worker.lock().await;
         if self.revision.load(Ordering::SeqCst) != revision {
+            return Ok(());
+        }
+        // A whole exchange ahead of us may have crossed the window boundary.
+        // Leave the due cursor intact so the routine saves and applies only now's target.
+        if self
+            .state
+            .lock()
+            .await
+            .next_transition
+            .is_some_and(|next| self.clock.now() >= next)
+        {
             return Ok(());
         }
         let writes = match selection {
@@ -469,7 +578,18 @@ impl BacklightService {
                 frame(&[0x33, 4, brightness.into()]),
             ],
         };
-        if let Ok(result) = self.exchange(&writes).await {
+        let deadline = self.state.lock().await.next_transition;
+        let revision_counter = self.revision.clone();
+        let clock = self.clock.clone();
+        let current = move || {
+            revision_counter.load(Ordering::SeqCst) == revision
+                && deadline.is_none_or(|next| clock.now() < next)
+        };
+        let result = self.exchange(&writes, &current).await;
+        if matches!(result, Err(TransportError::Superseded)) {
+            return Ok(());
+        }
+        if let Ok(result) = result {
             self.record_observation(&result).await;
             let mut state = self.state.lock().await;
             if result.writes_accepted {
@@ -481,11 +601,19 @@ impl BacklightService {
                 } else {
                     "failed"
                 };
+                if result.writes_accepted && state.reachability == "reachable" {
+                    if state.recovery != Recovery::Idle {
+                        state.recovery = Recovery::Recovered;
+                    }
+                } else {
+                    state.recovery = Recovery::Retrying;
+                }
             }
         } else {
             let mut state = self.state.lock().await;
             if self.revision.load(Ordering::SeqCst) == revision {
                 state.command = "failed";
+                state.recovery = Recovery::Retrying;
             }
             state.reachability = if self.transport.is_some() {
                 "unreachable"
