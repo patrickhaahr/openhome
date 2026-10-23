@@ -3547,3 +3547,104 @@ a.dir-go:hover {
 .training-summaries dd[data-gap="true"] small {
   font-size: 0.75rem;
 }
+
+/* Backlight belongs to Controls; a focused view keeps the saved TV response in reach. */
+.controls-lights {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.controls-lights > .panel {
+  flex: 1;
+}
+.backlight-link {
+  padding: 0.75rem;
+  text-align: center;
+  text-underline-offset: 0.25em;
+}
+.backlight-page {
+  display: grid;
+  gap: 1.5rem;
+}
+.backlight-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(17rem, 1fr);
+  gap: clamp(1.5rem, 4vw, 4rem);
+  align-items: start;
+}
+.backlight-main {
+  padding: clamp(1.5rem, 4vw, 3rem);
+  background: var(--wash);
+  border-radius: 2rem;
+}
+.backlight-intro h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+  margin: 0.5rem 0 1rem;
+}
+.backlight-intro p,
+.backlight-setup p,
+.backlight-state p {
+  color: var(--muted-ink);
+  max-width: 38rem;
+}
+.backlight-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+.backlight-feedback {
+  min-height: 3rem;
+  max-width: 38rem;
+}
+.backlight-setup {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+.backlight-setup h3,
+.backlight-state h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+.backlight-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.backlight-state {
+  padding: 1.5rem 0;
+}
+.backlight-state dl {
+  margin: 1.5rem 0;
+}
+.backlight-state dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.backlight-state dt {
+  color: var(--muted-ink);
+}
+.backlight-state dd {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.backlight-state p {
+  font-size: 0.9375rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 850px) {
+  .backlight-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.backlight-caption {
+  font-size: 0.9375rem;
+}

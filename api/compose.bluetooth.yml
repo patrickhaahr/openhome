@@ -1,0 +1,9 @@
+# Opt-in host BlueZ access. Use with compose.yml after configuring the private device address.
+# Bluetooth remains owned by host bluetoothd; no privileged container or USB pass-through.
+services:
+  openhome-api:
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+    environment:
+      DBUS_SYSTEM_BUS_ADDRESS: unix:path=/run/dbus/system_bus_socket
+      BACKLIGHT_BLUETOOTH_ADDRESS: ${BACKLIGHT_BLUETOOTH_ADDRESS:?Set the private Backlight address}

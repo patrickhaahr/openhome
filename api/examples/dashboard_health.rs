@@ -54,10 +54,14 @@ async fn main() -> anyhow::Result<()> {
         };
     let planner = LoopPlanner::new(demo_origin, Some(endpoint))?;
     let tmdb = providers::synthetic_tmdb().await?;
+    let backlight =
+        openhome_api::services::backlight::BacklightService::new(state.db.clone(), None, None)
+            .await?;
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(Some(tmdb)))
         .merge(routes::important_dates::router())
+        .merge(routes::backlight::router(backlight))
         .merge(routes::map::router(demo_origin))
         .merge(routes::route_loop::router(planner))
         .merge(routes::photos::router(None))

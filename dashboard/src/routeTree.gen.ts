@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeatureRouteImport } from './routes/$feature'
+import { Route as BacklightRouteImport } from './routes/backlight'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
 import { Route as ListsRouteImport } from './routes/lists'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const FeatureRoute = FeatureRouteImport.update({
   id: '/$feature',
   path: '/$feature',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BacklightRoute = BacklightRouteImport.update({
+  id: '/backlight',
+  path: '/backlight',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectionRoute = ConnectionRouteImport.update({
@@ -87,6 +93,7 @@ const WishImageOwnerListItemRoute = WishImageOwnerListItemRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
+  '/backlight': typeof BacklightRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/lists': typeof ListsRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
+  '/backlight': typeof BacklightRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/lists': typeof ListsRoute
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
+  '/backlight': typeof BacklightRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/lists': typeof ListsRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$feature'
+    | '/backlight'
     | '/connection'
     | '/controls'
     | '/lists'
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$feature'
+    | '/backlight'
     | '/connection'
     | '/controls'
     | '/lists'
@@ -160,6 +171,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$feature'
+    | '/backlight'
     | '/connection'
     | '/controls'
     | '/lists'
@@ -175,6 +187,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FeatureRoute: typeof FeatureRoute
+  BacklightRoute: typeof BacklightRoute
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
   ListsRoute: typeof ListsRoute
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/$feature'
       fullPath: '/$feature'
       preLoaderRoute: typeof FeatureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/backlight': {
+      id: '/backlight'
+      path: '/backlight'
+      fullPath: '/backlight'
+      preLoaderRoute: typeof BacklightRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connection': {
@@ -279,6 +299,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FeatureRoute: FeatureRoute,
+  BacklightRoute: BacklightRoute,
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
   ListsRoute: ListsRoute,

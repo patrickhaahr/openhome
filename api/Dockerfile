@@ -22,8 +22,8 @@ COPY .sqlx ./.sqlx
 ENV SQLX_OFFLINE=true
 
 ARG TARGETARCH
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=locked,target=/app/target \
     case "$TARGETARCH" in \
         amd64) target=x86_64-unknown-linux-gnu ;; \
         arm64) target=aarch64-unknown-linux-gnu ;; \
