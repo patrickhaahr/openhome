@@ -41,6 +41,20 @@ enum Command {
         #[command(subcommand)]
         action: Adguard,
     },
+    /// Inspect or configure the TV Backlight.
+    Backlight {
+        #[command(subcommand)]
+        action: Backlight,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum Backlight {
+    /// Read the native inactivity hold, or keep the last tone for this many seconds.
+    Inactivity {
+        #[arg(long, value_parser = clap::value_parser!(u16).range(120..=1800))]
+        seconds: Option<u16>,
+    },
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
@@ -90,6 +104,13 @@ struct Request {
 
 fn request(command: &Command) -> Request {
     match command {
+        Command::Backlight {
+            action: Backlight::Inactivity { seconds },
+        } => Request {
+            post: seconds.is_some(),
+            path: "/api/backlight/inactivity",
+            body: seconds.map(|seconds| json!({"seconds":seconds})),
+        },
         Command::Health => Request {
             post: false,
             path: "/api/health",
@@ -161,7 +182,13 @@ fn run() -> Result<()> {
     let request = request(&cli.command);
 
     let client = Client::builder()
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(
+            if matches!(cli.command, Command::Backlight { .. }) {
+                90
+            } else {
+                10
+            },
+        ))
         .build()
         .context("failed to create HTTP client")?;
     let url = format!("{}{}", cli.url.trim_end_matches('/'), request.path);

@@ -1549,3 +1549,153 @@ async fn native_effect_is_validated_durable_and_tv_sync_keeps_its_profile() {
     assert_eq!(&restore[1][..6], &[0x33, 5, 0, 7, 42, 19]);
     assert_eq!(&restore[2][..3], &[0x33, 4, 45]);
 }
+
+#[tokio::test]
+async fn inactivity_hold_is_verified_on_device_without_changing_lighting_intent() {
+    use openhome_api::services::backlight::{
+        CurrentOperation, Exchange, GattTransport, Packet, TransportFuture,
+    };
+    use std::sync::{Arc, Mutex};
+    fn frame(payload: &[u8]) -> Packet {
+        let mut packet = [0; 20];
+        packet[..payload.len()].copy_from_slice(payload);
+        packet[19] = packet[..19].iter().fold(0, |a, b| a ^ b);
+        packet
+    }
+    struct Device {
+        settings: Mutex<Packet>,
+        writes: Mutex<Vec<Packet>>,
+        accepts_settings: std::sync::atomic::AtomicBool,
+    }
+    impl GattTransport for Device {
+        fn matches_device(&self, _: &str) -> bool {
+            false
+        }
+        fn exchange<'a>(
+            &'a self,
+            writes: &'a [Packet],
+            queries: &'a [Vec<u8>],
+            _: &'a CurrentOperation,
+        ) -> TransportFuture<'a> {
+            Box::pin(async move {
+                for write in writes {
+                    self.writes.lock().unwrap().push(*write);
+                    if !self
+                        .accepts_settings
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                    {
+                        continue;
+                    }
+                    let mut reply = *write;
+                    reply[0] = 0xaa;
+                    reply[19] = reply[..19].iter().fold(0, |a, b| a ^ b);
+                    *self.settings.lock().unwrap() = reply;
+                }
+                Ok(Exchange {
+                    reconnected: false,
+                    writes_accepted: true,
+                    replies: queries
+                        .iter()
+                        .map(|query| {
+                            if query == &[0xaa, 0xa9, 0x0a] {
+                                *self.settings.lock().unwrap()
+                            } else {
+                                frame(&[0xaa, query[1], u8::from(query[1] != 5)])
+                            }
+                        })
+                        .collect(),
+                })
+            })
+        }
+    }
+    let (_, state) = common::test_app_with_db().await;
+    let device = Arc::new(Device {
+        settings: Mutex::new(frame(&[0xaa, 0xa9, 0x0a, 6, 1, 2, 10, 0, 120, 0])),
+        writes: Mutex::default(),
+        accepts_settings: std::sync::atomic::AtomicBool::new(true),
+    });
+    let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    let app = authenticated(service, state);
+    let (_, before) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+    assert_eq!(
+        send_request(app.clone(), "/api/backlight/inactivity", None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (status, initial) = send_request(
+        app.clone(),
+        "/api/backlight/inactivity",
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(initial["same_tone_seconds"], 120);
+    let (status, changed) = send_request_with_method(
+        app.clone(),
+        "/api/backlight/inactivity",
+        Method::POST,
+        Some(serde_json::json!({"seconds":300})),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        changed,
+        serde_json::json!({"enabled":true,"mode":"same-tone","low_brightness_seconds":10,"same_tone_seconds":300})
+    );
+    assert_eq!(
+        *device.writes.lock().unwrap(),
+        vec![frame(&[0x33, 0xa9, 0x0a, 6, 1, 2, 10, 0, 0x2c, 1])]
+    );
+    let (_, after) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+    for field in [
+        "intended",
+        "control_source",
+        "bedtime",
+        "override_expires_at",
+    ] {
+        assert_eq!(after[field], before[field]);
+    }
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        "/api/backlight/inactivity",
+        Method::POST,
+        Some(serde_json::json!({"seconds":1801})),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(device.writes.lock().unwrap().len(), 1);
+    device
+        .accepts_settings
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        "/api/backlight/inactivity",
+        Method::POST,
+        Some(serde_json::json!({"seconds":420})),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::SERVICE_UNAVAILABLE,
+        "a write receipt alone cannot confirm the hold"
+    );
+    // A malformed native response must prevent even attempting a settings write.
+    device.settings.lock().unwrap()[19] ^= 1;
+    let count = device.writes.lock().unwrap().len();
+    let (status, _) = send_request_with_method(
+        app,
+        "/api/backlight/inactivity",
+        Method::POST,
+        Some(serde_json::json!({"seconds":300})),
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(device.writes.lock().unwrap().len(), count);
+}

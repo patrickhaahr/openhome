@@ -182,3 +182,26 @@ fn ir_api_error_writes_diagnostics_and_fails() {
     assert!(stdout(&output).is_empty());
     assert!(stderr(&output).contains("502 Bad Gateway"));
 }
+
+#[test]
+fn backlight_inactivity_reads_or_sets_the_native_hold_through_the_api() {
+    for (args, method) in [
+        (vec!["backlight", "inactivity"], "GET"),
+        (vec!["backlight", "inactivity", "--seconds", "300"], "POST"),
+    ] {
+        let server = StubServer::start("200 OK", r#"{"enabled":true,"same_tone_seconds":300}"#);
+        let output = openhome()
+            .args(["--url", &server.url])
+            .args(&args)
+            .env("OPENHOME_API_KEY", test_api_key("inactivity"))
+            .output()
+            .expect("run openhome");
+        assert!(output.status.success(), "{}", stderr(&output));
+        let request = server.request();
+        assert!(request.starts_with(&format!("{method} /api/backlight/inactivity HTTP/1.1\r\n")));
+        if method == "POST" {
+            assert!(request.ends_with("{\"seconds\":300}"));
+        }
+        assert!(stdout(&output).contains("\"same_tone_seconds\":300"));
+    }
+}

@@ -36,6 +36,21 @@ restores the saved brightness. White balance, black-screen settings and camera
 geometry are never changed by these commands. This is not a complete camera
 calibration export.
 
+The native camera inactivity hold can be read with `openhome backlight inactivity`
+and set with `openhome backlight inactivity --seconds 300` (or the corresponding
+`devenv shell -- just cli-run ...` recipe). The authenticated API provides
+`GET /api/backlight/inactivity` and `POST /api/backlight/inactivity {"seconds":300}`.
+Setting it enables the controller's same-tone behavior for 120–1800 seconds after
+it detects a black or unchanged picture. It preserves the separate low-brightness
+duration, saved TV Sync profile, selected mode and Bedtime policy. The controller
+owns this setting; TV Sync restoration does not overwrite it. The API validates
+the current native response before writing and requires matching fresh readback
+before reporting success. An unavailable controller or unconfirmed setting fails
+without queuing a delayed change. This is camera behavior, not TV-power telemetry
+or Dashboard inactivity. The protocol reference is
+[pygovee-h6199-ble's black-screen encoder](https://github.com/NecroKote/pygovee-h6199-ble/blob/main/govee_h6199_ble/protocol/commands.py),
+with actual H605C readback required for acceptance.
+
 A previously verified private probe backup can be recovered by setting
 `BACKLIGHT_PROFILE_BACKUP` to its local path and using `{"source":"backup"}`.
 For a container, mount that individual verified backup read-only and set its

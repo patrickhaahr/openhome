@@ -7,6 +7,7 @@ use crate::error::{AppError, Result};
 pub use bluetooth::Bluetooth;
 use chrono::{DateTime, Utc};
 pub use effects::EffectId;
+pub use protocol::InactivitySettings;
 use protocol::{TvSyncProfile, frame};
 use routine::{
     BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, SystemClock, evaluate,
@@ -274,6 +275,55 @@ impl BacklightService {
                 .as_ref()
                 .is_none_or(|o| Utc::now() - o.observed_at > chrono::Duration::seconds(30));
         status
+    }
+    /// Read or set the controller's native same-tone hold without changing lighting intent.
+    pub async fn inactivity(&self, seconds: Option<u16>) -> Result<InactivitySettings> {
+        if seconds.is_some_and(|value| !(120..=1800).contains(&value)) {
+            return Err(AppError::Validation(
+                "Inactivity hold must be between 120 and 1800 seconds".into(),
+            ));
+        }
+        let _worker = self.worker.lock().await;
+        let current = self.read_inactivity(&[]).await?;
+        let Some(seconds) = seconds else {
+            return Ok(current);
+        };
+        let desired = current.hold_same_tone(seconds);
+        let observed = self.read_inactivity(&[desired.write()]).await?;
+        if observed != desired {
+            return Err(AppError::ServiceUnavailable(
+                "Backlight inactivity setting was not confirmed".into(),
+            ));
+        }
+        Ok(observed)
+    }
+    async fn read_inactivity(&self, writes: &[Packet]) -> Result<InactivitySettings> {
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| AppError::ServiceUnavailable("Backlight is not configured".into()))?;
+        let queries = vec![
+            vec![0xaa, 1],
+            vec![0xaa, 4],
+            vec![0xaa, 5, 1],
+            vec![0xaa, 0xa9, 0x0a],
+        ];
+        let result = tokio::time::timeout(
+            Duration::from_secs(30),
+            transport.exchange(writes, &queries, &|| true),
+        )
+        .await
+        .unwrap_or(Err(TransportError::Unavailable))
+        .map_err(|_| AppError::ServiceUnavailable("Backlight could not be reached".into()))?;
+        self.record_observation(&result).await;
+        if !writes.is_empty() && !result.writes_accepted {
+            return Err(AppError::ServiceUnavailable(
+                "Backlight inactivity setting was not accepted".into(),
+            ));
+        }
+        InactivitySettings::capture(&result.replies).ok_or_else(|| {
+            AppError::ServiceUnavailable("Backlight inactivity settings are unavailable".into())
+        })
     }
     async fn exchange(
         &self,
