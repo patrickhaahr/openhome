@@ -1,10 +1,12 @@
 //! Local Backlight control. Private packets and identifiers never enter the HTTP contract.
 mod bluetooth;
+mod effects;
 mod protocol;
 pub mod routine;
 use crate::error::{AppError, Result};
 pub use bluetooth::Bluetooth;
 use chrono::{DateTime, Utc};
+pub use effects::EffectId;
 use protocol::{TvSyncProfile, frame};
 use routine::{
     BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, SystemClock, evaluate,
@@ -35,7 +37,7 @@ pub enum TransportError {
     Unavailable,
     Superseded,
 }
-/// Checked after connecting and immediately before starting an ordered write batch.
+/// Checked after connecting and before each write, including every scene-upload frame.
 pub type CurrentOperation = dyn Fn() -> bool + Send + Sync;
 pub type TransportFuture<'a> =
     Pin<Box<dyn Future<Output = std::result::Result<Exchange, TransportError>> + Send + 'a>>;
@@ -43,8 +45,8 @@ pub type TransportFuture<'a> =
 pub trait GattTransport: Send + Sync {
     /// Verify a private backup belongs to the configured controller.
     fn matches_device(&self, identity: &str) -> bool;
-    /// Check `current` after connection setup, before starting any write batch.
-    /// Keep the ordered batch and its queries together once writes have started.
+    /// Check `current` after connection setup and before every write.
+    /// Keep the operation lock until completion/cancellation; never interleave scene uploads.
     fn exchange<'a>(
         &'a self,
         writes: &'a [Packet],
@@ -62,6 +64,10 @@ pub enum Selection {
     },
     Color {
         rgb: Rgb,
+        brightness: Brightness,
+    },
+    Effect {
+        effect: EffectId,
         brightness: Brightness,
     },
 }
@@ -93,6 +99,7 @@ pub struct Rgb {
 }
 #[derive(Clone, Serialize)]
 pub struct Status {
+    pub effects: &'static [effects::Effect],
     pub setup: &'static str,
     pub reachability: &'static str,
     pub intended: Selection,
@@ -182,6 +189,7 @@ impl BacklightService {
         let service = Self {
             db,
             state: Arc::new(Mutex::new(Status {
+                effects: effects::CATALOG,
                 setup: if profile.is_some() {
                     "ready"
                 } else {
@@ -561,6 +569,7 @@ impl BacklightService {
             return Ok(());
         }
         let writes = match selection {
+            Selection::Effect { effect, brightness } => effect.writes(brightness.into()),
             Selection::Off {} => vec![frame(&[0x33, 1, 0])],
             Selection::TvSync { brightness } => self
                 .profile
