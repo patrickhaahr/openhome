@@ -43,11 +43,11 @@ pub fn observation(replies: &[Packet]) -> Option<Observation> {
         power: power[2] == 1,
         brightness: brightness[2],
         mode: if mode[2] == 0 {
-            "tv-sync"
+            super::ObservedMode::TvSync
         } else if mode[2] == 0x15 {
-            "color"
+            super::ObservedMode::Color
         } else {
-            "other"
+            super::ObservedMode::Other
         },
         observed_at: chrono::Utc::now(),
     })
