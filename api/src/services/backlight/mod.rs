@@ -104,18 +104,51 @@ pub struct Rgb {
 #[derive(Clone, Serialize)]
 pub struct Status {
     pub effects: &'static [effects::Effect],
-    pub setup: &'static str,
-    pub reachability: &'static str,
+    pub setup: Setup,
+    pub reachability: Reachability,
     pub intended: Selection,
     pub acknowledged: Option<Selection>,
     pub observed: Option<Observation>,
     pub stale: bool,
-    pub command: &'static str,
+    pub command: Command,
     pub recovery: Recovery,
     pub bedtime: BedtimeSettings,
     pub control_source: ControlSource,
     pub override_expires_at: Option<DateTime<Utc>>,
     pub next_transition: Option<DateTime<Utc>>,
+}
+/// Whether a validated private TV Sync profile is available.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Setup {
+    Incomplete,
+    Ready,
+}
+/// Device reachability, independent of a command acknowledgment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reachability {
+    Unconfigured,
+    Unknown,
+    Reachable,
+    Unreachable,
+}
+/// Outcome of the most recent intended-target dispatch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Command {
+    Idle,
+    Pending,
+    Acknowledged,
+    Failed,
+}
+/// Only the mode categories supported by controller readback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ObservedMode {
+    TvSync,
+    Color,
+    Other,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -130,7 +163,7 @@ pub enum Recovery {
 pub struct Observation {
     pub power: bool,
     pub brightness: u8,
-    pub mode: &'static str,
+    pub mode: ObservedMode,
     pub observed_at: DateTime<Utc>,
 }
 #[derive(Deserialize)]
@@ -195,20 +228,20 @@ impl BacklightService {
             state: Arc::new(Mutex::new(Status {
                 effects: effects::CATALOG,
                 setup: if profile.is_some() {
-                    "ready"
+                    Setup::Ready
                 } else {
-                    "incomplete"
+                    Setup::Incomplete
                 },
                 reachability: if transport.is_some() {
-                    "unknown"
+                    Reachability::Unknown
                 } else {
-                    "unconfigured"
+                    Reachability::Unconfigured
                 },
                 intended,
                 acknowledged: None,
                 observed: None,
                 stale: true,
-                command: "idle",
+                command: Command::Idle,
                 recovery: Recovery::Pending,
                 bedtime,
                 control_source: if manual_override.is_some() {
@@ -235,7 +268,7 @@ impl BacklightService {
     }
     pub async fn status(&self) -> Status {
         let mut status = self.state.lock().await.clone();
-        status.stale = status.reachability != "reachable"
+        status.stale = status.reachability != Reachability::Reachable
             || status
                 .observed
                 .as_ref()
@@ -269,7 +302,7 @@ impl BacklightService {
         .map_err(anyhow::Error::from)?;
         *self.profile.lock().await = Some(profile);
         let mut state = self.state.lock().await;
-        state.setup = "ready";
+        state.setup = Setup::Ready;
         if state.recovery == Recovery::ProfileRequired {
             state.recovery = Recovery::Pending;
         }
@@ -328,9 +361,9 @@ impl BacklightService {
             state.recovery = Recovery::Pending;
         }
         state.reachability = if observed.is_some() {
-            "reachable"
+            Reachability::Reachable
         } else {
-            "unreachable"
+            Reachability::Unreachable
         };
         if let Some(observed) = observed {
             state.observed = Some(observed);
@@ -344,9 +377,9 @@ impl BacklightService {
             let mut state = self.state.lock().await;
             state.recovery = Recovery::Retrying;
             state.reachability = if self.transport.is_some() {
-                "unreachable"
+                Reachability::Unreachable
             } else {
-                "unconfigured"
+                Reachability::Unconfigured
             };
         }
         self.status().await
@@ -417,7 +450,7 @@ impl BacklightService {
         };
         state.override_expires_at = manual_override.and_then(|o| o.expires_at);
         state.next_transition = next_transition;
-        state.command = "pending";
+        state.command = Command::Pending;
         state.recovery = Recovery::Pending;
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
     }
@@ -521,12 +554,6 @@ impl BacklightService {
                 None
             };
             let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
-            if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
-                let mut state = self.state.lock().await;
-                state.recovery = Recovery::ProfileRequired;
-                state.command = "failed";
-                continue;
-            }
             if let Ok(revision) = self
                 .persist(
                     selection,
@@ -536,6 +563,13 @@ impl BacklightService {
                 )
                 .await
             {
+                // Policy still advances when setup prevents dispatch, including override expiry.
+                if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
+                    let mut state = self.state.lock().await;
+                    state.recovery = Recovery::ProfileRequired;
+                    state.command = Command::Failed;
+                    continue;
+                }
                 drop(submission);
                 if self.finish_dispatch(selection, revision).await.is_err() {
                     tracing::warn!("Backlight recovery dispatch failed");
@@ -543,7 +577,7 @@ impl BacklightService {
             } else {
                 let mut state = self.state.lock().await;
                 state.recovery = Recovery::Retrying;
-                state.command = "failed";
+                state.command = Command::Failed;
                 tracing::warn!("Backlight routine could not save its target");
             }
             let status = self.state.lock().await.clone();
@@ -610,11 +644,11 @@ impl BacklightService {
             }
             if self.revision.load(Ordering::SeqCst) == revision {
                 state.command = if result.writes_accepted {
-                    "acknowledged"
+                    Command::Acknowledged
                 } else {
-                    "failed"
+                    Command::Failed
                 };
-                if result.writes_accepted && state.reachability == "reachable" {
+                if result.writes_accepted && state.reachability == Reachability::Reachable {
                     if state.recovery != Recovery::Idle {
                         state.recovery = Recovery::Recovered;
                     }
@@ -625,13 +659,13 @@ impl BacklightService {
         } else {
             let mut state = self.state.lock().await;
             if self.revision.load(Ordering::SeqCst) == revision {
-                state.command = "failed";
+                state.command = Command::Failed;
                 state.recovery = Recovery::Retrying;
             }
             state.reachability = if self.transport.is_some() {
-                "unreachable"
+                Reachability::Unreachable
             } else {
-                "unconfigured"
+                Reachability::Unconfigured
             };
         }
         Ok(())

@@ -47,6 +47,7 @@ export const backlightSelection = z.discriminatedUnion("mode", [
 /** The durable manual target sent through the private OpenHome transport. */
 export type BacklightSelection = z.infer<typeof backlightSelection>
 
+/** Sanitized API status; intention and acknowledgment do not establish observed state. */
 export const backlightStatus = z.object({
   effects: z
     .array(
@@ -81,6 +82,7 @@ export const backlightStatus = z.object({
   next_transition: z.string().datetime().nullable(),
 })
 
+/** Validated dashboard requests; the API owns scheduling and device operations. */
 export const backlightAction = z.discriminatedUnion("action", [
   z.object({ action: z.literal("select"), selection: backlightSelection }),
   z.object({
@@ -108,14 +110,18 @@ export const backlightAction = z.discriminatedUnion("action", [
     ),
 ])
 
+/** A validated request accepted by the dashboard's server boundary. */
 export type BacklightAction = z.infer<typeof backlightAction>
 
+/** Intended, accepted and readable device state with independent freshness and setup. */
 export type BacklightStatus = z.infer<typeof backlightStatus>
 
+/** A validated status or a sanitized unavailable result without private failure details. */
 export type BacklightRead =
   | { state: "available"; status: BacklightStatus }
   | { state: "unavailable" }
 
+/** Sanitized action outcome; an available status can still report a failed command. */
 export type BacklightResult =
   | BacklightRead
   | { state: "profile-required" }
