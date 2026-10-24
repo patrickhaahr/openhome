@@ -6,7 +6,7 @@ and the native scenes in `backlight-effects.md`.
 
 ## Release and container boundary
 
-The repository release workflow built and published API **0.6.3**, MCP **0.3.3**
+The initial production acceptance built and published API **0.6.3**, MCP **0.3.3**
 and Dashboard **0.2.4** on the development host, for amd64 and arm64. The Pi ran
 all three images natively as arm64. The workflow verified immutable release-image
 identities, healthy containers, zero restarts, authenticated API/MCP reads,
@@ -83,6 +83,30 @@ saved profile and all seven supported readable replies: power, brightness, full
 video response, firmware, white balance, whole-screen brightness and black-screen
 behavior. The private operational handoff retains exact timestamps, request/status
 evidence, backups and rollback image identities.
+
+## Final review correction
+
+The corrected final release is API **0.6.4**, MCP **0.3.4** and Dashboard
+**0.2.5**, built and published locally for both architectures. Its full release
+verification and subsequent verification passed with matching images, healthy
+containers, zero restarts, authenticated API/MCP reads and HTTPS Dashboard assets.
+Both databases were backed up and validated again before activation.
+
+A controlled-clock authenticated HTTP/SQLite regression failed before the fix:
+an expired Off override remained Manual when the TV Sync profile was missing.
+It now proves that missing and invalid profiles still advance to the current
+Automatic target, clear the durable override and advance the next transition,
+while reporting `profile-required` and issuing no unsafe writes or profile capture.
+Finite status enums preserve the existing JSON values, and Dashboard boundary
+contracts now document sanitized outcomes and independent intended/accepted/observed
+state.
+
+The focused current-release checks verified the daily defaults and fresh TV Sync
+readback at the original brightness, then compared the stored profile byte for
+byte with the original. An existing Manual TV Sync override was cleared through
+explicit Automatic to restore the agreed final control source. The earlier
+54-check hardware acceptance and hold trace above remain evidence from the prior
+release; those experiments were not repeated for this review correction.
 
 ## Final state and limits
 
