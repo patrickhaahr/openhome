@@ -68,5 +68,7 @@ phone screenshots are in [the redesign gallery](../dashboard/docs/redesign/READM
 They use the real production component with invented status/replies in the
 synthetic Dashboard shell, without household settings or device identifiers.
 
-Production Docker/Pi execution remains the final release ticket #211. This ticket
-does not deploy an intermediate slice or establish physical iPad/Safari behavior.
+Production Docker/Pi acceptance is recorded in
+[production verification](backlight-production-verification.md) for #211. This
+local ticket did not deploy an intermediate slice or establish physical
+iPad/Safari behavior.
