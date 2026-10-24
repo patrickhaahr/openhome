@@ -108,6 +108,23 @@ explicit Automatic to restore the agreed final control source. The earlier
 54-check hardware acceptance and hold trace above remain evidence from the prior
 release; those experiments were not repeated for this review correction.
 
+## Picture-inactivity hold follow-up
+
+A subsequent user request added native picture-inactivity control through the
+first-party CLI and authenticated API. API **0.6.5**, MCP **0.3.5** and Dashboard
+**0.2.6** passed the full local release workflow and native Pi verification with
+matching images, healthy containers and zero restarts. Both databases were backed
+up and verified before activation.
+
+The deployed CLI read the current native settings before changing them, then set
+same-tone hold to **300 seconds**. Fresh Bluetooth readback confirmed enabled
+same-tone mode, the requested duration and the unchanged separate low-brightness
+duration. This setting belongs to the controller and does not replace the saved
+TV Sync profile or create a routine override. Automated HTTP/transport coverage
+also rejects malformed settings and refuses to claim success when write acceptance
+is followed by nonmatching readback. Private before/after settings are retained
+outside Git. No human observation of the five-minute light output is claimed.
+
 ## Final state and limits
 
 Bedtime Mode is **enabled**, daily **23:00–00:00 Europe/Copenhagen**, with **20%
