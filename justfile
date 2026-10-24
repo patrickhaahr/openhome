@@ -154,6 +154,12 @@ mcp-build:
 mcp-run:
     cargo run
 
+# Refresh the MCP test harness lock after changing the local API dependency
+[group('mcp')]
+[working-directory: 'mcp']
+mcp-refresh-api-lock:
+    cargo update --offline --package openhome-api
+
 # Test the MCP adapter against the real API training routes
 [group('mcp')]
 [working-directory: 'mcp']
@@ -222,6 +228,12 @@ api-test-integration name:
 [working-directory: 'api']
 api-run:
     cargo run
+
+# Run the actual API against a separate private SQLite database for local verification
+[group('api')]
+[working-directory: 'api']
+api-run-isolated database_url:
+    SQLX_OFFLINE=true DATABASE_URL={{quote(database_url)}} cargo run
 
 # Apply main API migrations to DATABASE_URL
 [group('api')]
@@ -491,6 +503,11 @@ dashboard-docker-build version: docker-builder
 dashboard-docker-push version: docker-builder
     docker buildx build --builder openhome-local --platform linux/amd64,linux/arm64 -f dashboard/Dockerfile -t patrickhaahr/openhome-dashboard:{{version}} -t patrickhaahr/openhome-dashboard:latest --push dashboard
 
+# Load the locally built Dashboard OCI images for container verification
+[group('dashboard')]
+dashboard-docker-load:
+    docker load --input .devenv/openhome-dashboard.tar
+
 # Verify a dashboard image's rendered page, static assets and private configuration
 [group('dashboard')]
 dashboard-docker-smoke image='patrickhaahr/openhome-dashboard:latest':
@@ -672,5 +689,6 @@ openhome-verify:
 # Check release automation without publishing images or restarting services
 [group('deployment')]
 deployment-check:
+    python3 -m py_compile scripts/deploy.py scripts/deploy-pi.py
     python3 -m unittest discover -s scripts -p 'test_*.py'
     node --check scripts/deploy-smoke.mjs

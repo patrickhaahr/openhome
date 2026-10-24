@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { PageHead } from "@/components/page-head"
 import { LightControls } from "@/components/light-controls"
 import { SpeakerRemote } from "@/components/speaker-remote"
@@ -27,11 +27,16 @@ function ControlsPage(): React.JSX.Element {
   return (
     <section className="controls">
       <PageHead title={controls.title} />
-      <LightControls
-        layout="full"
-        connectionState={health.state}
-        sendCommand={sendLightCommand}
-      />
+      <div className="controls-lights">
+        <LightControls
+          layout="full"
+          connectionState={health.state}
+          sendCommand={sendLightCommand}
+        />
+        <Link to="/backlight" className="backlight-link">
+          LED · TV backlight →
+        </Link>
+      </div>
       <TvRemote
         layout="full"
         connectionState={health.state}

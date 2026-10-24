@@ -1,6 +1,6 @@
 [package]
 name = "openhome-api"
-version = "0.6.1"
+version = "0.6.4"
 edition = "2024"
 
 [dependencies]
@@ -30,6 +30,8 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 flate2 = "1.1.10"
 sha2 = "0.10"
 scraper = "0.27.0"
+bluer = { version = "0.17.4", default-features = false, features = ["bluetoothd"] }
+dbus = { version = "0.9.12", features = ["vendored"] }
 
 [dev-dependencies]
 axum = { version = "0.8.8", features = ["macros"] }

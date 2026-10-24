@@ -8,7 +8,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use openhome_api::auth;
 use openhome_api::routes;
 use openhome_api::services::{
-    adguard, docker, feed, ir, map, noop_push, route_loop, switchbot, weather,
+    adguard, backlight, docker, feed, ir, map, noop_push, route_loop, switchbot, weather,
 };
 
 #[tokio::main]
@@ -111,6 +111,17 @@ async fn main() -> anyhow::Result<()> {
         Some(switchbot::SwitchbotService::new(&switchbot_base_url)?)
     };
 
+    let backlight_transport = non_empty_env("BACKLIGHT_BLUETOOTH_ADDRESS")
+        .map(|address| backlight::Bluetooth::configure(&address).map_err(anyhow::Error::msg))
+        .transpose()?;
+    let backlight_service = backlight::BacklightService::new(
+        db.clone(),
+        backlight_transport,
+        non_empty_env("BACKLIGHT_PROFILE_BACKUP").map(std::path::PathBuf::from),
+    )
+    .await?;
+
+    tokio::spawn(backlight_service.clone().run_routine());
     let state = openhome_api::AppState {
         db,
         noop_db: noop_db.clone(),
@@ -177,6 +188,7 @@ async fn main() -> anyhow::Result<()> {
         ))
         .merge(routes::important_dates::router())
         .merge(routes::weather::router(weather_service))
+        .merge(routes::backlight::router(backlight_service))
         .merge(routes::photos::router(photo_service))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
