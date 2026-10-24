@@ -103,6 +103,9 @@ def verify_https():
 
 def activate(release, verify_only=False):
     run("scp", "scripts/deploy-smoke.mjs", "pi:/tmp/openhome-deploy-smoke.mjs")
+    if not verify_only:
+        run("scp", "api/compose.yml", "pi:/tmp/openhome-compose.yml")
+        run("scp", "api/compose.bluetooth.yml", "pi:/tmp/openhome-compose.bluetooth.yml")
     arguments = [release[area] for area in AREAS]
     if verify_only:
         arguments.append("--verify-only")

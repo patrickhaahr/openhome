@@ -25,6 +25,10 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+// H605C drops an idle link after about twenty seconds. Frequent power queries
+// keep it alive without reasserting the intended lighting selection.
+const PROBE_INTERVAL: Duration = Duration::from_secs(2);
+
 pub type Packet = [u8; 20];
 pub struct Exchange {
     /// A newly established link requires current-target recovery, even if reads succeed.
@@ -479,7 +483,7 @@ impl BacklightService {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut retry_at = tokio::time::Instant::now();
         let mut backoff = Duration::from_secs(1);
-        let mut probe_at = tokio::time::Instant::now() + Duration::from_secs(10);
+        let mut probe_at = tokio::time::Instant::now() + PROBE_INTERVAL;
         loop {
             interval.tick().await;
             if tokio::time::Instant::now() >= probe_at {
@@ -489,7 +493,7 @@ impl BacklightService {
                 ) {
                     self.refresh().await;
                 }
-                probe_at = tokio::time::Instant::now() + Duration::from_secs(10);
+                probe_at = tokio::time::Instant::now() + PROBE_INTERVAL;
             }
             let submission = self.submission.lock().await;
             let status = self.state.lock().await.clone();
