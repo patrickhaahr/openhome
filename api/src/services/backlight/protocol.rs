@@ -10,6 +10,80 @@ pub fn frame(payload: &[u8]) -> Packet {
 fn valid(packet: &Packet, command: u8) -> bool {
     packet[0] == 0xaa && packet[1] == command && packet.iter().fold(0, |a, b| a ^ b) == 0
 }
+/// Native picture-inactivity settings, independent of the saved TV Sync profile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct InactivitySettings {
+    pub enabled: bool,
+    pub mode: InactivityMode,
+    pub low_brightness_seconds: u16,
+    pub same_tone_seconds: u16,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum InactivityMode {
+    LowBrightness,
+    SameTone,
+}
+impl InactivitySettings {
+    #[must_use]
+    pub fn capture(replies: &[Packet]) -> Option<Self> {
+        let p = replies
+            .iter()
+            .find(|p| valid(p, 0xa9) && p[2..4] == [0x0a, 6])?;
+        let enabled = match p[4] {
+            0 => false,
+            1 => true,
+            _ => return None,
+        };
+        let mode = match p[5] {
+            1 => InactivityMode::LowBrightness,
+            2 => InactivityMode::SameTone,
+            _ => return None,
+        };
+        let low_brightness_seconds = u16::from_le_bytes([p[6], p[7]]);
+        let same_tone_seconds = u16::from_le_bytes([p[8], p[9]]);
+        if !(5..=300).contains(&low_brightness_seconds)
+            || !(120..=1800).contains(&same_tone_seconds)
+        {
+            return None;
+        }
+        Some(Self {
+            enabled,
+            mode,
+            low_brightness_seconds,
+            same_tone_seconds,
+        })
+    }
+    #[must_use]
+    pub(super) fn hold_same_tone(self, seconds: u16) -> Self {
+        Self {
+            enabled: true,
+            mode: InactivityMode::SameTone,
+            same_tone_seconds: seconds,
+            ..self
+        }
+    }
+    #[must_use]
+    pub(super) fn write(self) -> Packet {
+        let low = self.low_brightness_seconds.to_le_bytes();
+        let same = self.same_tone_seconds.to_le_bytes();
+        frame(&[
+            0x33,
+            0xa9,
+            0x0a,
+            6,
+            u8::from(self.enabled),
+            match self.mode {
+                InactivityMode::LowBrightness => 1,
+                InactivityMode::SameTone => 2,
+            },
+            low[0],
+            low[1],
+            same[0],
+            same[1],
+        ])
+    }
+}
 /// Stored privately; never serialize this type in capability responses or logs.
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TvSyncProfile {
