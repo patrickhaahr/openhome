@@ -689,5 +689,6 @@ openhome-verify:
 # Check release automation without publishing images or restarting services
 [group('deployment')]
 deployment-check:
+    python3 -m py_compile scripts/deploy.py scripts/deploy-pi.py
     python3 -m unittest discover -s scripts -p 'test_*.py'
     node --check scripts/deploy-smoke.mjs

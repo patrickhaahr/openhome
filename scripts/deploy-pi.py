@@ -3,6 +3,7 @@
 import datetime
 import json
 from pathlib import Path
+import pwd
 import shutil
 import sqlite3
 import subprocess
@@ -40,12 +41,31 @@ if not verify_only:
                 if destination.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
                     raise RuntimeError(f"Backup validation failed for {name}")
         print(f"{name}: backup verified", flush=True)
-    for name in ("compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml"):
+    for name in ("compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml",
+                 "compose.bluetooth.yml", ".env"):
         if (root / name).exists():
             shutil.copy2(root / name, backup / name)
+            (backup / name).chmod(0o600)
     images = {area: inspect("container", f"openhome-{area}")["Image"] for area in areas}
     (backup / "previous-images.json").write_text(json.dumps(images, indent=2) + "\n")
     print(f"Backup: {backup}", flush=True)
+    # COMPOSE_FILE in the private .env opts into the Bluetooth overlay. Install
+    # release-owned configuration only after preserving the previous stack.
+    for name in ("compose.yml", "compose.bluetooth.yml"):
+        shutil.copy2(Path("/tmp") / ("openhome-" + name), root / name)
+    configuration = json.loads(run("docker", "compose", "config", "--format", "json",
+                                   capture_output=True).stdout)
+    api_environment = configuration["services"]["openhome-api"].get("environment", {})
+    if api_environment.get("BACKLIGHT_BLUETOOTH_ADDRESS") and api_environment.get("DBUS_SYSTEM_BUS_ADDRESS"):
+        # System D-Bus authenticates the container's numeric UID against the host
+        # user database before its existing BlueZ policy can apply.
+        try:
+            pwd.getpwuid(10001)
+        except KeyError:
+            run("sudo", "-n", "useradd", "--system", "--uid", "10001", "--no-create-home",
+                "--no-user-group", "--gid", "nogroup", "--shell", "/usr/sbin/nologin", "openhome-api")
+            run("sudo", "-n", "busctl", "--system", "call", "org.freedesktop.DBus",
+                "/org/freedesktop/DBus", "org.freedesktop.DBus", "ReloadConfig")
     run("docker", "compose", "down")
     run("docker", "compose", "pull")
 
