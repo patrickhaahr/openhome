@@ -478,3 +478,103 @@ test("polling reports pending, failed and recovered targets without claiming sta
     vi.unstubAllGlobals()
   }
 })
+
+test("native effects are one tap manual selections and readable mode never claims their identity", async () => {
+  const { backlightStatus } = await import("@/lib/backlight")
+
+  const status = backlightStatus.parse({
+    setup: "ready",
+    reachability: "reachable",
+    intended: { mode: "tv-sync" },
+    acknowledged: null,
+    observed: {
+      power: true,
+      mode: "other",
+      brightness: 35,
+      observed_at: "2026-10-24T12:00:00Z",
+    },
+    stale: false,
+    command: "idle",
+    recovery: "recovered",
+    bedtime: { enabled: false, start: "23:00", end: "00:00", brightness: 20 },
+    control_source: "automatic",
+    override_expires_at: null,
+    next_transition: null,
+    effects: [
+      {
+        id: "aurora",
+        name: "Aurora",
+        description: "Cool waves of green and blue.",
+      },
+    ],
+  })
+
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+
+  const container = document.createElement("div")
+
+  document.body.append(container)
+
+  const root = createRoot(container)
+
+  const actions: import("@/lib/backlight").BacklightAction[] = []
+
+  try {
+    await act(async () =>
+      root.render(
+        <BacklightControls
+          data={{ state: "available", status }}
+          change={async (action) => {
+            actions.push(action)
+
+            return {
+              state: "available",
+              status: {
+                ...status,
+                intended:
+                  action.action === "select"
+                    ? action.selection
+                    : status.intended,
+              },
+            }
+          }}
+        />
+      )
+    )
+
+    const effect = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Aurora")
+    )
+
+    expect(effect).toBeDefined()
+
+    await act(async () => effect?.click())
+
+    expect(actions).toEqual([
+      {
+        action: "select",
+        selection: { mode: "effect", effect: "aurora", brightness: 35 },
+      },
+    ])
+
+    expect(container.textContent).toContain("Requested effectAurora")
+
+    expect(container.textContent).toContain("Observed modeOther")
+
+    const sync = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "TV Sync"
+    )
+
+    await act(async () => sync?.click())
+
+    expect(actions.at(-1)).toEqual({
+      action: "select",
+      selection: { mode: "tv-sync" },
+    })
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+
+    vi.unstubAllGlobals()
+  }
+})

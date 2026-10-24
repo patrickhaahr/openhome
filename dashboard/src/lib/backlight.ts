@@ -18,9 +18,14 @@ export const bedtimeFields = z
     path: ["end"],
   })
 
+const effectId = z.enum(["forest", "aurora", "rainbow", "fire", "party"])
+
 /** A requested setting, independent of the controller's observable state. */
 export const backlightSelection = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("off") }).strict(),
+  z
+    .object({ mode: z.literal("effect"), effect: effectId, brightness })
+    .strict(),
   z
     .object({ mode: z.literal("tv-sync"), brightness: brightness.optional() })
     .strict(),
@@ -43,6 +48,11 @@ export const backlightSelection = z.discriminatedUnion("mode", [
 export type BacklightSelection = z.infer<typeof backlightSelection>
 
 export const backlightStatus = z.object({
+  effects: z
+    .array(
+      z.object({ id: effectId, name: z.string(), description: z.string() })
+    )
+    .default([]),
   setup: z.enum(["incomplete", "ready"]),
   reachability: z.enum(["unconfigured", "unknown", "reachable", "unreachable"]),
   intended: backlightSelection,
