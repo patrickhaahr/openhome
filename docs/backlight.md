@@ -55,8 +55,10 @@ one exchange before a selection. Off remains available with incomplete setup.
 Dashboard adjustments coalesce after
 200 ms and retain only the latest pending edit. Across clients, selections are
 persisted before waiting on Bluetooth; only the latest pending target reaches the
-controller after the current complete GATT operation finishes. Accepted work
-continues if its requesting client disconnects. Refresh and profile operations
+controller after the current GATT operation finishes or is canceled. Native
+[effects](backlight-effects.md) use the same durable selection and override policy;
+obsolete multi-frame uploads stop before their remaining frames and activation.
+Accepted work continues if its requesting client disconnects. Refresh and profile operations
 share the same device-operation lock. Cached reads never issue device writes;
 external changes remain untouched during a healthy connection until another explicit
 command or scheduled transition. Startup and reconnect deliberately restore the
@@ -97,9 +99,9 @@ Startup validates the saved profile, retains unexpired manual selections and
 removes expired overrides against the current Copenhagen window. The background
 worker applies only the current target; missed transitions and superseded commands
 are never replayed. After waiting for connection/discovery, the transport checks the
-current revision and window deadline again before starting its write batch.
-Expired or superseded batches send no obsolete target. Profile recovery does not capture or replace a valid saved
-profile from reconnect observations. Missing or invalid profiles report incomplete
+current revision and window deadline again before every write, including each
+effect-upload frame. Expired or superseded operations stop remaining writes.
+Profile recovery does not capture or replace a valid saved profile from reconnect observations. Missing or invalid profiles report incomplete
 setup; non-Off recovery waits for a valid saved profile.
 
 Every ten seconds the worker reads device state to detect an unavailable adapter
