@@ -1,7 +1,8 @@
 use crate::{
     error::Result,
     services::backlight::{
-        BacklightService, ProfileSource, Selection, Status, routine::BedtimeUpdate,
+        BacklightService, InactivitySettings, ProfileSource, Selection, Status,
+        routine::BedtimeUpdate,
     },
 };
 use axum::{
@@ -18,7 +19,25 @@ pub fn router(service: BacklightService) -> Router<crate::AppState> {
         .route("/api/backlight/bedtime", patch(bedtime))
         .route("/api/backlight/profile", post(profile))
         .route("/api/backlight/refresh", post(refresh))
+        .route(
+            "/api/backlight/inactivity",
+            get(inactivity).post(set_inactivity),
+        )
         .with_state(service)
+}
+async fn inactivity(State(service): State<BacklightService>) -> Result<Json<InactivitySettings>> {
+    service.inactivity(None).await.map(Json)
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InactivityUpdate {
+    seconds: u16,
+}
+async fn set_inactivity(
+    State(service): State<BacklightService>,
+    Json(update): Json<InactivityUpdate>,
+) -> Result<Json<InactivitySettings>> {
+    service.inactivity(Some(update.seconds)).await.map(Json)
 }
 async fn read(State(service): State<BacklightService>) -> Json<Status> {
     Json(service.status().await)
