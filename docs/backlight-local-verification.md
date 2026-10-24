@@ -115,8 +115,13 @@ with the execution handoff. No duplicate automated tests were added merely to
 restate already-covered contracts; the actual Docker build was the regression
 check for the discovered build issue.
 
-#211 must still verify the deployed API container's host BlueZ/system-D-Bus access,
+At completion of this local ticket, #211 still needed to verify the deployed API container's host BlueZ/system-D-Bus access,
 UID/policy permissions, actual Pi adapter, deployed Dashboard→API→device flow,
 unattended routine and restart/reconnect recovery. A native development-host probe
 or local multi-platform image build does not establish these production facts.
 The optional effects work in #210 is independent of this completed core gate.
+
+These production gates have since passed in #211; see
+[production verification](backlight-production-verification.md). The native Pi
+release also establishes actual arm64 runtime execution after the local emulated
+smoke limitation recorded above.

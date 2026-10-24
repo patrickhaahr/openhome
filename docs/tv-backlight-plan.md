@@ -1,9 +1,11 @@
 # TV backlight plan
 
-Status: agreed design published in GitHub epic #203. Tickets #204–#210 cover
-development and local verification; final ticket #211 covers Docker deployment
-and production end-to-end testing. No product implementation, deployment or
-schedule activation has taken place.
+Status: implemented through GitHub epic #203 and verified on the production Pi
+in #211. API 0.6.3, MCP 0.3.3 and Dashboard 0.2.4 are deployed. Bedtime Mode is
+enabled daily at 23:00–00:00 Europe/Copenhagen with 20% red, Automatic control
+and saved TV Sync outside the window. See
+[production verification](backlight-production-verification.md) for measured
+acceptance and its limits. The design decisions below remain the specification.
 
 ## Final design
 

@@ -10,13 +10,22 @@ transport uses BlueR's `bluetoothd` feature only. Its vendored D-Bus library bui
 with the existing amd64/arm64 C cross compilers and adds no runtime shared-library
 dependency. The API never starts another Bluetooth daemon.
 
-For Docker, `api/compose.bluetooth.yml` prepares an opt-in system-bus socket mount
-and bus address. It retains the existing unprivileged runtime UID, without
+For Docker, set `COMPOSE_FILE=compose.yml:compose.bluetooth.yml` and the private
+`BACKLIGHT_BLUETOOTH_ADDRESS` in the production `.env`. Put the verified private
+backup at `backlight/profile.json`, with its directory and file readable only by
+the API's UID 10001 (directory 0700, file 0600). The release installs both Compose
+files after backing up the existing Compose files, `.env` and both databases.
+The opt-in overlay mounts only the system-bus socket and private profile directory;
+the profile mount is read-only. It retains the existing unprivileged runtime UID, without
 `privileged`, host networking, extra capabilities or a USB device mount. The host
 D-Bus policy must permit this UID to send to `org.bluez`; use the host's existing
 BlueZ policy where possible. Restrict any additional host policy to that UID and
 BlueZ destination, and keep the socket unavailable to the Dashboard and MCP.
-Production container permissions and Pi hardware verification belong to #211.
+The numeric runtime UID must also exist in the host user database for system
+D-Bus authentication. For an enabled Bluetooth configuration, deployment registers
+UID 10001 as a locked service identity without a home directory if it is absent,
+then reloads D-Bus configuration. It does not broaden the host's BlueZ policy.
+Production acceptance is recorded in `backlight-production-verification.md`.
 
 Capture the current complete TV Sync response and brightness with
 `POST /api/backlight/profile {"source":"capture"}` while TV Sync is active.
@@ -104,8 +113,9 @@ effect-upload frame. Expired or superseded operations stop remaining writes.
 Profile recovery does not capture or replace a valid saved profile from reconnect observations. Missing or invalid profiles report incomplete
 setup; non-Off recovery waits for a valid saved profile.
 
-Every ten seconds the worker reads device state to detect an unavailable adapter
-or link. A newly established Bluetooth link also triggers recovery even if its
+The worker reads device state with a two-second probe interval, including a power
+query that keeps the H605C link alive, and detects an unavailable adapter or link.
+A newly established Bluetooth link also triggers recovery even if its
 read succeeds. Healthy reads do not repeat target writes. Failed operations retain
 the last observation as stale and retry only the latest target with exponential
 backoff from one second, capped at thirty seconds (plus the bounded exchange time).
