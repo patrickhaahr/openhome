@@ -100,6 +100,10 @@ impl Bluetooth {
                 return Err(TransportError::Superseded);
             }
             for packet in writes {
+                // A fresh A3 header resets an interrupted upload. Never activate a superseded scene.
+                if !current() {
+                    return Err(TransportError::Superseded);
+                }
                 write
                     .write(packet)
                     .await

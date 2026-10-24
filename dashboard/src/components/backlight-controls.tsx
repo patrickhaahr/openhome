@@ -20,6 +20,7 @@ const modeLabel = {
   off: "Off",
   "tv-sync": "TV Sync",
   color: "Color",
+  effect: "Effect",
   other: "Other",
 }
 
@@ -192,7 +193,9 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
       : { red: 255, green: 0, blue: 0 }
 
   const brightness =
-    selection?.mode === "color" || selection?.mode === "tv-sync"
+    selection?.mode === "color" ||
+    selection?.mode === "tv-sync" ||
+    selection?.mode === "effect"
       ? (selection.brightness ?? observed?.brightness ?? 20)
       : (observed?.brightness ?? 20)
 
@@ -205,7 +208,8 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
           <p className="backlight-caption">Behind the picture</p>
           <h2>LED</h2>
           <p>
-            Follow the TV picture, choose a color, or turn the Backlight off.
+            Follow the TV picture, try a color or scene, or turn the Backlight
+            off.
           </p>
         </div>
         <div
@@ -250,6 +254,46 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             Color
           </Button>
         </div>
+        {status !== undefined && status.effects.length > 0 ? (
+          <section
+            className="backlight-effects"
+            aria-label="Effects playground"
+          >
+            <h3>Effects playground</h3>
+            <p>
+              Try a native scene. Each selection follows the same override and
+              Bedtime Mode rules.
+            </p>
+            <div className="backlight-effect-list">
+              {status.effects.map((effect) => (
+                <Button
+                  key={effect.id}
+                  variant="outline"
+                  disabled={status.setup !== "ready"}
+                  aria-pressed={
+                    selection?.mode === "effect" &&
+                    selection.effect === effect.id
+                  }
+                  onClick={() =>
+                    perform({
+                      action: "select",
+                      selection: {
+                        mode: "effect",
+                        effect: effect.id,
+                        brightness,
+                      },
+                    })
+                  }
+                >
+                  <span>{effect.name}</span>
+                  <span className="backlight-effect-description">
+                    {effect.description}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          </section>
+        ) : null}
         <section className="backlight-setup mb-8" aria-label="Bedtime Mode">
           <h3>Bedtime Mode</h3>
           <p>
@@ -431,6 +475,16 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
                 : modeLabel[selection?.mode ?? status.intended.mode]}
             </dd>
           </div>
+          {selection?.mode === "effect" ? (
+            <div>
+              <dt>Requested effect</dt>
+              <dd>
+                {status?.effects.find(
+                  (effect) => effect.id === selection.effect
+                )?.name ?? selection.effect}
+              </dd>
+            </div>
+          ) : null}
           {selection?.mode === "color" ? (
             <div>
               <dt>Requested RGB</dt>
@@ -440,6 +494,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
             </div>
           ) : null}
           {selection?.mode === "color" ||
+          selection?.mode === "effect" ||
           (selection?.mode === "tv-sync" &&
             selection.brightness !== undefined) ? (
             <div>
@@ -511,7 +566,7 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
         </dl>
         <p>
           Readback reports power, mode and brightness. It does not confirm the
-          exact visible color.
+          exact visible color or effect.
         </p>
         <Button
           variant="ghost"

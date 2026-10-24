@@ -360,7 +360,7 @@ async fn invalid_manual_selections_leave_the_durable_target_untouched() {
 }
 
 #[tokio::test]
-async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsolete_work() {
+async fn rapid_effect_clients_cancel_partial_uploads_and_keep_only_the_latest_target() {
     use openhome_api::services::backlight::{GattTransport, Packet, TransportFuture};
     use std::sync::{
         Arc,
@@ -369,6 +369,7 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
     struct BlockedDevice {
         device: ManualDevice,
         first: AtomicBool,
+        frames: std::sync::Mutex<Vec<Packet>>,
         active: AtomicUsize,
         entered: tokio::sync::Notify,
         release: tokio::sync::Semaphore,
@@ -389,9 +390,16 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
                     0,
                     "GATT operations must not overlap"
                 );
-                if !writes.is_empty() && self.first.swap(false, Ordering::SeqCst) {
-                    self.entered.notify_one();
-                    self.release.acquire().await.unwrap().forget();
+                for packet in writes {
+                    if !current() {
+                        self.active.fetch_sub(1, Ordering::SeqCst);
+                        return Err(openhome_api::services::backlight::TransportError::Superseded);
+                    }
+                    self.frames.lock().unwrap().push(*packet);
+                    if self.first.swap(false, Ordering::SeqCst) {
+                        self.entered.notify_one();
+                        self.release.acquire().await.unwrap().forget();
+                    }
                 }
                 let result = self.device.exchange(writes, queries, current).await;
                 self.active.fetch_sub(1, Ordering::SeqCst);
@@ -420,6 +428,7 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
             packets: std::sync::Mutex::default(),
         },
         first: AtomicBool::new(true),
+        frames: std::sync::Mutex::default(),
         active: AtomicUsize::new(0),
         entered: tokio::sync::Notify::default(),
         release: tokio::sync::Semaphore::new(0),
@@ -428,15 +437,15 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
         .await
         .unwrap();
     let app = authenticated(service, state.clone());
-    let target = |red, green, blue| serde_json::json!({"mode":"color","rgb":{"red":red,"green":green,"blue":blue},"brightness":20});
-    let first = tokio::spawn(select(app.clone(), target(255, 0, 0)));
+    let target = |effect| serde_json::json!({"mode":"effect","effect":effect,"brightness":20});
+    let first = tokio::spawn(select(app.clone(), target("party")));
     tokio::time::timeout(std::time::Duration::from_secs(2), device.entered.notified())
         .await
         .unwrap();
-    let obsolete_target = target(0, 255, 0);
+    let obsolete_target = target("forest");
     let obsolete = tokio::spawn(select(app.clone(), obsolete_target.clone()));
     wait_for_target(app.clone(), &obsolete_target).await;
-    let latest_target = target(0, 0, 255);
+    let latest_target = target("aurora");
     let latest = tokio::spawn(select(app.clone(), latest_target.clone()));
     wait_for_target(app.clone(), &latest_target).await;
     let restarted = BacklightService::new(state.db.clone(), None, None)
@@ -475,16 +484,29 @@ async fn rapid_clients_persist_the_latest_target_before_dispatch_and_skip_obsole
     }
     assert_eq!(device.device.packets.lock().unwrap().len(), operations);
     let writes = device.device.packets.lock().unwrap();
-    let changes: Vec<_> = writes
+    let changes = writes.iter().filter(|packets| !packets.is_empty()).count();
+    assert_eq!(changes, 1, "obsolete uploads must never finish");
+    let frames = device.frames.lock().unwrap();
+    assert_eq!(
+        &frames[0][..5],
+        &[0xa3, 0, 1, 9, 2],
+        "Party began uploading"
+    );
+    assert_eq!(
+        &frames[1][..5],
+        &[0xa3, 0, 1, 5, 2],
+        "Aurora resets the partial upload"
+    );
+    let activations: Vec<_> = frames
         .iter()
-        .filter(|packets| !packets.is_empty())
+        .filter(|frame| frame[..3] == [0x33, 5, 4])
         .collect();
     assert_eq!(
-        changes.len(),
+        activations.len(),
         1,
-        "superseded red and green must never reach the controller"
+        "no obsolete scene activation or interleaving"
     );
-    assert_eq!(changes[0][1][4..7], [0, 0, 255]);
+    assert_eq!(&activations[0][..5], &[0x33, 5, 4, 215, 0]);
 }
 
 #[tokio::test]
@@ -1416,4 +1438,53 @@ async fn manual_command_expiring_while_waiting_for_the_worker_never_reaches_hard
         wait_for_mode(app, "color").await;
         runner.abort();
     }
+}
+
+#[tokio::test]
+async fn native_effect_is_validated_durable_and_tv_sync_keeps_its_profile() {
+    let (_, state) = common::test_app_with_db().await;
+    let device = std::sync::Arc::new(ManualDevice {
+        packets: std::sync::Mutex::default(),
+    });
+    let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    let app = authenticated(service, state.clone());
+    let target = serde_json::json!({"mode":"effect","effect":"aurora","brightness":29});
+    let (code, result) = select(app.clone(), target.clone()).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(result["intended"], target);
+    assert_eq!(result["acknowledged"], target);
+    assert_eq!(result["control_source"], "manual");
+    assert!(result["observed"].get("effect").is_none());
+    {
+        let batches = device.packets.lock().unwrap();
+        let upload = batches.last().unwrap();
+        // Independent H605C catalog/ptReal reference: Aurora 215, five data frames.
+        assert_eq!(&upload[0][..5], &[0xa3, 0, 1, 5, 2]);
+        assert_eq!(&upload[4][..2], &[0xa3, 0xff]);
+        assert_eq!(&upload[5][..5], &[0x33, 5, 4, 215, 0]);
+    }
+    let restarted = BacklightService::new(state.db.clone(), Some(device.clone()), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(restarted.status().await).unwrap()["intended"],
+        target
+    );
+    let app = authenticated(restarted, state);
+    let (code, _) = select(
+        app.clone(),
+        serde_json::json!({"mode":"effect","effect":"other-model","brightness":29}),
+    )
+    .await;
+    assert!(code.is_client_error());
+    let (_, unchanged) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
+    assert_eq!(unchanged["intended"], target);
+    let (_, result) = select(app, serde_json::json!({"mode":"tv-sync"})).await;
+    assert_eq!(result["acknowledged"]["mode"], "tv-sync");
+    let batches = device.packets.lock().unwrap();
+    let restore = batches.last().unwrap();
+    assert_eq!(&restore[1][..6], &[0x33, 5, 0, 7, 42, 19]);
+    assert_eq!(&restore[2][..3], &[0x33, 4, 45]);
 }
