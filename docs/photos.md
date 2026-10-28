@@ -59,7 +59,7 @@ are outside this slice.
 
 After `IDLE_TIMEOUT_SECONDS` without a touch, click, key or wheel (default 300, five
 minutes), the dashboard shows the selected albums full screen with the time, date and
-today's weather and opted-in Important Dates on a night plate in the corner. Set it
+today's weather and opted-in Important Dates on a small, half-clear night plate in the corner. Set it
 on the **dashboard** server at
 runtime: whole seconds from 10 to 86400, or `0` to turn the slideshow off; any other value
 keeps the default.

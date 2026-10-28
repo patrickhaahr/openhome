@@ -198,7 +198,7 @@ function IdleWeather({
 
         return (
           <p className="idle-weather">
-            <WeatherGlyph code={current?.weather_code ?? null} size={40} />
+            <WeatherGlyph code={current?.weather_code ?? null} size={26} />
             <span className="idle-weather-now num" aria-hidden="true">
               {degrees(current?.temperature_c)}
             </span>

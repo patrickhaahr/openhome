@@ -95,7 +95,8 @@
   }
 }
 
-/* The tone plate: solid night ground behind the text; no gradient, shadow, blur or glass. */
+/* The tone plate: flat, half-clear night ground so the photo shows through; no gradient,
+   shadow, blur or glass. */
 .idle-plate {
   position: absolute;
   left: var(--margin);
@@ -103,24 +104,24 @@
   z-index: 2;
   display: grid;
   justify-items: start;
-  gap: 0.5rem;
-  max-width: calc(100% - var(--margin) * 2);
-  padding: clamp(1.25rem, 2.4vw, 2rem) clamp(1.5rem, 3vw, 2.5rem);
+  gap: 0.3rem;
+  max-width: min(32rem, calc(100% - var(--margin) * 2));
+  padding: clamp(0.75rem, 1.4vw, 1.25rem) clamp(1rem, 1.8vw, 1.5rem);
   border-radius: 0.75rem;
-  background: var(--ground);
+  background: color-mix(in srgb, var(--ground) 50%, transparent);
   color: var(--ink);
 }
 .idle-time {
   display: block;
   margin-left: -0.06em;
-  font-size: clamp(4.5rem, 1.5rem + 9vw, 10rem);
+  font-size: clamp(2.75rem, 1rem + 5vw, 6rem);
   font-weight: 500;
   line-height: 0.82;
   letter-spacing: -0.07em;
 }
 .idle-date {
-  margin-top: 0.5rem;
-  font-size: var(--t-m);
+  margin-top: 0.35rem;
+  font-size: clamp(1rem, 0.85rem + 0.5vw, 1.25rem);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -128,10 +129,10 @@
 .idle-weather {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
   color: var(--muted-ink);
-  font-size: var(--t-m);
+  font-size: clamp(1rem, 0.85rem + 0.5vw, 1.25rem);
   font-weight: 500;
   letter-spacing: -0.03em;
 }
@@ -145,20 +146,20 @@
   font-size: 0.8em;
 }
 .idle-extra {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 .idle-dates {
   display: grid;
-  gap: clamp(1rem, 2vh, 1.75rem);
-  max-width: 52rem;
+  gap: clamp(0.5rem, 1.2vh, 1rem);
+  max-width: 30rem;
 }
 .idle-since-title {
   color: var(--muted-ink);
-  font-size: clamp(1rem, 1.5vw, 1.5rem);
+  font-size: clamp(0.85rem, 1vw, 1rem);
 }
 .idle-since-figure {
-  font-size: clamp(1.55rem, 3.3vw, 3.75rem);
+  font-size: clamp(1.15rem, 2vw, 2.1rem);
   font-weight: 500;
   letter-spacing: -0.045em;
   line-height: 1.1;
@@ -169,10 +170,10 @@
 .idle-since-total,
 .idle-photo-memory {
   color: var(--muted-ink);
-  font-size: clamp(0.95rem, 1.3vw, 1.35rem);
+  font-size: clamp(0.8rem, 0.9vw, 0.95rem);
 }
 .idle-upcoming {
-  font-size: clamp(1.15rem, 2vw, 2rem);
+  font-size: clamp(0.95rem, 1.3vw, 1.25rem);
   letter-spacing: -0.03em;
   line-height: 1.15;
 }
@@ -183,19 +184,19 @@
 }
 @media (max-height: 750px) and (min-width: 641px) {
   .idle-plate:has(.idle-milestone) {
-    padding-block: 1.25rem;
+    padding-block: 0.75rem;
   }
   .idle-plate:has(.idle-milestone) .idle-time {
-    font-size: clamp(4.5rem, 9vw, 7rem);
+    font-size: clamp(2.75rem, 5.5vw, 4.25rem);
   }
   .idle-plate .idle-milestone-figure {
-    font-size: clamp(2.5rem, 4.5vw, 4.5rem);
+    font-size: clamp(1.5rem, 2.8vw, 2.75rem);
   }
   .idle-dates {
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
   .idle-since-figure {
-    font-size: clamp(1.75rem, 3vw, 2.75rem);
+    font-size: clamp(1.1rem, 1.8vw, 1.75rem);
   }
 }
 
