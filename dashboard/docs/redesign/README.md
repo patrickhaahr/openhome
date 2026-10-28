@@ -5,8 +5,7 @@ synthetic seeds (`api/examples/dashboard_preview/seed/`), the public demo origin
 and travel, drawn photo albums and public TMDB posters. No household data, location or
 credentials. The LED captures mount the production Backlight component in this
 synthetic shell with invented status and interaction replies; they show no real
-device state. The LED desktop image includes the full page; the phone image is
-scrolled to the playground at 390 × 844.
+device state: TV Sync at 62 % with Bedtime Mode 22:30–06:45.
 
 | Page             | Desktop, 1280 × 720                               | Phone, 390 × 844                                |
 | ---------------- | ------------------------------------------------- | ----------------------------------------------- |
