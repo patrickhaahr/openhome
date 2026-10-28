@@ -109,20 +109,16 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
   document.body.append(container)
   const root = createRoot(container)
 
-  async function edit(label: string, value: string): Promise<void> {
-    const field = container.querySelector(`input[aria-label="${label}"]`)
-    expect(field).toBeInstanceOf(HTMLInputElement)
+  async function press(label: string, ...keys: string[]): Promise<void> {
+    const control = container.querySelector(`[aria-label="${label}"]`)
+    expect(control).toBeInstanceOf(Element)
 
-    if (!(field instanceof HTMLInputElement))
-      throw new Error(`Missing ${label}`)
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set?.call(field, value)
-      field.dispatchEvent(new Event("input", { bubbles: true }))
-      field.dispatchEvent(new Event("change", { bubbles: true }))
-    })
+    for (const key of keys)
+      await act(async () => {
+        control?.dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })
+        )
+      })
   }
 
   try {
@@ -157,9 +153,9 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
         />
       )
     )
-    await edit("RGB color", "#ff8000")
-    await edit("Brightness", "10")
-    await edit("Brightness", "20")
+    // Six hue steps of 5° from red land on orange; Home then two pages set 20 %.
+    await press("RGB color", ...Array<string>(6).fill("ArrowRight"))
+    await press("Brightness", "Home", "PageUp", "PageUp")
     expect(accepted).toEqual([])
     await act(async () => vi.advanceTimersByTimeAsync(250))
     expect(accepted).toEqual([
@@ -172,9 +168,14 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
         },
       },
     ])
-    await edit("RGB color", "#00ff00")
-    await edit("RGB color", "#0000ff")
-    await edit("Brightness", "30")
+    await press("RGB color", "PageUp", "PageUp", "PageUp")
+    expect(
+      container
+        .querySelector('[aria-label="RGB color"]')
+        ?.getAttribute("aria-valuetext")
+    ).toBe("0, 255, 0")
+    await press("RGB color", "PageUp", "PageUp", "PageUp", "PageUp")
+    await press("Brightness", "PageUp")
     await act(async () => vi.advanceTimersByTimeAsync(250))
     expect(accepted).toHaveLength(1)
     expect(
@@ -196,7 +197,7 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
     expect(container.textContent).toContain("45%")
     expect(container.textContent).toContain("does not confirm")
     expect(container.textContent).toContain("until you choose again")
-    await edit("Brightness", "60")
+    await press("Brightness", "PageUp", "PageUp", "PageUp")
     await act(async () => {
       Array.from(container.querySelectorAll("button"))
         .find((button) => button.textContent === "Off")
@@ -289,7 +290,7 @@ test("Bedtime controls show the saved schedule and resume Automatic with overrid
   }
 })
 
-test("Bedtime form validates locally, saves independently, and shows the returned override expiry", async () => {
+test("Bedtime dial never collapses the window, saves one settled edit, and springs back when refused", async () => {
   const { backlightStatus } = await import("@/lib/backlight")
 
   const status = backlightStatus.parse({
@@ -309,35 +310,32 @@ test("Bedtime form validates locally, saves independently, and shows the returne
   const actions: import("@/lib/backlight").BacklightAction[] = []
   let reject = false
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  vi.useFakeTimers()
 
   const container = document.createElement("div")
   document.body.append(container)
   const root = createRoot(container)
 
-  async function edit(label: string, value: string): Promise<void> {
-    const field = container.querySelector(`input[aria-label="${label}"]`)
-    expect(field).toBeInstanceOf(HTMLInputElement)
-
-    if (!(field instanceof HTMLInputElement))
-      throw new Error(`Missing ${label}`)
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set?.call(field, value)
-      field.dispatchEvent(new Event("input", { bubbles: true }))
-      field.dispatchEvent(new Event("change", { bubbles: true }))
-    })
+  async function press(label: string, ...keys: string[]): Promise<void> {
+    for (const key of keys)
+      await act(async () => {
+        container.querySelector(`[aria-label="${label}"]`)?.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            bubbles: true,
+            cancelable: true,
+          })
+        )
+      })
   }
 
-  async function save(): Promise<void> {
-    await act(async () =>
-      container
-        .querySelector("form")
-        ?.dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true })
-        )
-    )
+  const shown = (label: string): string | null | undefined =>
+    container
+      .querySelector(`[aria-label="${label}"]`)
+      ?.getAttribute("aria-valuetext")
+
+  async function settle(): Promise<void> {
+    await act(async () => vi.advanceTimersByTimeAsync(800))
   }
 
   try {
@@ -367,20 +365,15 @@ test("Bedtime form validates locally, saves independently, and shows the returne
         />
       )
     )
-    await edit("Start", "00:00")
-    await save()
+    // Walking End back onto Start hops over it instead of emptying the window.
+    await press("End", "ArrowDown", "ArrowDown", "ArrowDown", "ArrowDown")
+    expect(shown("End")).toBe("22:45")
+    await press("End", "PageUp", "PageUp", "PageUp", "ArrowUp")
+    await press("Start", "ArrowLeft", "ArrowLeft")
+    await press("Red brightness", "PageUp", "ArrowUp", "ArrowUp")
+    await press("Red brightness", ...Array<string>(5).fill("ArrowUp"))
     expect(actions).toEqual([])
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "different"
-    )
-    await edit("Start", "22:30")
-    await edit("End", "02:00")
-    await edit("Red brightness", "101")
-    await save()
-    expect(actions).toEqual([])
-    await edit("Red brightness", "37")
-    expect(actions).toEqual([])
-    await save()
+    await settle()
     expect(actions).toEqual([
       { action: "bedtime", start: "22:30", end: "02:00", brightness: 37 },
     ])
@@ -398,17 +391,23 @@ test("Bedtime form validates locally, saves independently, and shows the returne
         ?.getAttribute("aria-checked")
     ).toBe("false")
     reject = true
-    await edit("Start", "21:00")
-    await save()
+    await press("Start", ...Array<string>(6).fill("ArrowLeft"))
+    expect(shown("Start")).toBe("21:00")
+    await settle()
+    expect(actions.at(-1)).toEqual({
+      action: "bedtime",
+      start: "21:00",
+      end: "02:00",
+    })
     expect(container.querySelector('[role="status"]')?.textContent).toContain(
       "weren’t saved"
     )
-    expect(container.textContent).toContain("22:30–02:00")
-    const draft = container.querySelector('[aria-label="Start"]')
-    expect(draft instanceof HTMLInputElement && draft.value).toBe("21:00")
+    expect(container.textContent).toContain("Not saved")
+    expect(shown("Start")).toBe("22:30")
   } finally {
     await act(async () => root.unmount())
     container.remove()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   }
 })
