@@ -146,7 +146,7 @@ begins and again at Europe/Copenhagen midnight, including across daylight-saving
 changes. Axum remains the owner of elapsed and countdown arithmetic.
 
 Each since date shows its title, years/months/days and smaller total days on the
-clock's solid night-ground plate. One yearly line rotates every 12 seconds,
+clock's half-clear night-ground plate. One yearly line rotates every 12 seconds,
 nearest first, saying "today" or "tomorrow" where appropriate. Lines swap without
 travel for every motion preference. Empty or failed reads quietly leave the clock
 and weather. `IdleDates` accepts optional `lead` content above the dates, either a node or a

@@ -50,8 +50,9 @@ Screenshot:  Home at night: giant clock, the sun below the horizon as a hollow r
 - **Idle**: the sun on the horizon (minute clock) and the clock. Nothing else moves at rest.
   Left untouched, the **Idle Slideshow** covers the page: the selected photos on the night
   ground, crossfading slowly with a gentle drift (crossfade only with reduced motion), and
-  one solid night-ground tone plate in the bottom-left corner holding a large clock, the
-  date and today's weather. No gradient, shadow, blur or glass behind the text. Later idle
+  one small, half-clear night-ground tone plate in the bottom-left corner holding the clock,
+  the date and today's weather, so the photo shows through. Flat tint only: no gradient,
+  shadow, blur or glass behind the text. Later idle
   content (important dates) joins the same plate. Without photos the plate sits on the
   bare ground. The first touch only wakes.
 
