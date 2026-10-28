@@ -140,6 +140,21 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   date and its people's discs sit beneath and beside it, and a sun disc marks today. A plate
   opens a sheet with Edit, a Show when idle switch and Delete; one "Add a date" key adds.
   No per-plate keys and no refresh: the view re-reads when the Copenhagen day turns.
+- **LED is the light itself**: the Backlight drawn as a TV on a night wall (always the night
+  ground, even by day) with the requested light glowing behind it. The halo _is_ the selection:
+  one colour, the picture's colours for TV Sync (the screen shows dusk with the house sun
+  setting on a horizon), or an effect moving the way its light moves (rainbow turns, aurora
+  and forest sway, fire flickers, party hops). A new choice blooms out from behind the TV.
+  A dock of discs, each a small disc of its own light, picks the mode (Off is the hollow
+  ring of a set sun); a tall dimmer on the wall's right edge fills with that light and carries
+  a notch where the controller last read back; a hue wheel (hue around, white at the heart)
+  paints the colour when touched; a 24-hour ring with midnight at the top holds the bedtime
+  window as a red arc from a moon to a sun, the sun dot at this minute, a moon switch in the
+  middle and the red level beneath. Drag either end; edits send when the hand lifts. Status
+  is marks (a signal dot, a rewind mark when stale, one-word failure tags, the spinning sun
+  arc on the chosen disc); every sentence lives in the live region and an sr-only state list.
+  This is the one page where gradients and glow are allowed, because they are the thing
+  itself, not decoration.
 - **Tap targets are at least 44 px** (key-icon 48 px, key-round 64 px, key-hero 96 px);
   inline attribution links are the only exception.
 - **Connection** is one word in display type beside a signal disc that pulses once (and

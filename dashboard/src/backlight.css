@@ -1,0 +1,870 @@
+/* ------------------------------------------------------------------------------------------
+   LED: the Backlight drawn as itself. A TV on a night wall and, behind it, the light it is
+   asked to make. This is the one page where light is drawn as light: the halo, the wheel and
+   the picture are gradients because they are the thing itself, not decoration (DESIGN.md).
+   ------------------------------------------------------------------------------------------ */
+
+.led {
+  --wall: #07080a;
+  --wall-ink: #ecece6;
+  --wall-muted: #9a9ea6;
+  --wall-wash: rgb(236 236 230 / 7%);
+  --wall-wash-strong: rgb(236 236 230 / 13%);
+  --bedtime-red: #e8261c;
+  --stage-inset: clamp(1rem, 2vw, 1.5rem);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(15rem, 27vw, 21rem);
+  gap: clamp(1rem, 2.4vw, 2rem);
+  height: max(
+    calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem)),
+    34rem
+  );
+}
+
+/* ---------- The wall ---------- */
+
+.led-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+  container-type: size;
+  border-radius: 2rem;
+  background: var(--wall);
+  color: var(--wall-ink);
+}
+
+.led-marks,
+.led-tools {
+  position: absolute;
+  top: var(--stage-inset);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem;
+}
+.led-marks {
+  left: calc(var(--stage-inset) + 0.75rem);
+}
+.led-tools {
+  right: var(--stage-inset);
+  gap: 0.25rem;
+}
+.led .control-alert {
+  color: #ff8a7a;
+}
+
+/* Reachable: a lit dot. Not yet checked: a ring. Unreachable: a red ring that shakes once. */
+.led-signal {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--wall-ink);
+}
+.led-signal[data-reach="unknown"],
+.led-signal[data-reach="unconfigured"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--wall-muted);
+}
+.led-signal[data-reach="unreachable"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ff8a7a;
+}
+.led-stale {
+  color: var(--wall-muted);
+}
+.led-until {
+  margin-right: 0.25rem;
+  color: var(--wall-muted);
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+.led-tools [data-slot="button"] {
+  color: var(--wall-muted);
+}
+.led-tools [data-slot="button"]:hover {
+  background: var(--wall-wash-strong);
+  color: var(--wall-ink);
+}
+
+/* ---------- The TV and its light ---------- */
+
+.led-tv {
+  position: absolute;
+  top: 44%;
+  left: 47%;
+  width: min(58cqw, 82cqh);
+  aspect-ratio: 16 / 9;
+  translate: -50% -50%;
+}
+
+.led-halo {
+  position: absolute;
+  inset: -62% -36%;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    #000 52%,
+    rgb(0 0 0 / 62%) 66%,
+    rgb(0 0 0 / 20%) 84%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    closest-side,
+    #000 52%,
+    rgb(0 0 0 / 62%) 66%,
+    rgb(0 0 0 / 20%) 84%,
+    transparent 100%
+  );
+  opacity: calc(0.16 + var(--level) * 0.84);
+  scale: calc(0.78 + var(--level) * 0.3);
+  transition:
+    opacity var(--t-mid) var(--ease),
+    scale var(--t-mid) var(--ease);
+}
+/* The same light, thrown wide and faint across the wall. */
+.led-spill {
+  inset: -150% -95%;
+  opacity: calc(var(--level) * 0.28);
+  scale: 1;
+}
+.led-stage[data-mode="off"] .led-halo {
+  opacity: 0;
+  scale: 0.7;
+  transition-duration: var(--t-slow);
+}
+
+.led-light {
+  position: absolute;
+  inset: -50%;
+  background: var(--light, var(--led));
+  transition: background-color var(--t-mid) var(--ease);
+}
+
+/* The picture's own colours: night sky above, the sun along the bottom edge. */
+.led-stage[data-mode="tv-sync"] {
+  --light: conic-gradient(
+    #2f54ff 0deg,
+    #6c46ff 70deg,
+    #ff7a3c 140deg,
+    #ff5b1f 180deg,
+    #ff7a3c 220deg,
+    #6c46ff 290deg,
+    #2f54ff 360deg
+  );
+}
+.led-stage[data-effect="forest"] {
+  --light: conic-gradient(
+    #0f6b3a,
+    #59c14a,
+    #b6e35a,
+    #1e8a4c,
+    #2fd07d,
+    #0b4f2c,
+    #0f6b3a
+  );
+}
+.led-stage[data-effect="aurora"] {
+  --light: conic-gradient(
+    #00e0a8,
+    #1d6bff,
+    #8a3cff,
+    #00c8ff,
+    #1fff8e,
+    #3b5bff,
+    #00e0a8
+  );
+}
+.led-stage[data-effect="rainbow"] {
+  --light: conic-gradient(
+    #ff2a2a,
+    #ff8a00,
+    #ffe600,
+    #3dff4a,
+    #00e5ff,
+    #2f54ff,
+    #c43cff,
+    #ff2a2a
+  );
+}
+.led-stage[data-effect="fire"] {
+  --light: conic-gradient(
+    #8a1200 0deg,
+    #ff3d00 70deg,
+    #ff9a00 130deg,
+    #ffc53a 180deg,
+    #ff9a00 230deg,
+    #ff3d00 290deg,
+    #8a1200 360deg
+  );
+}
+.led-stage[data-effect="party"] {
+  --light: conic-gradient(
+    #ff1fa9 0deg 60deg,
+    #ffe600 60deg 120deg,
+    #00e5ff 120deg 180deg,
+    #7c3cff 180deg 240deg,
+    #ff5b1f 240deg 300deg,
+    #19ff8c 300deg 360deg
+  );
+}
+
+.led-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--led) calc(var(--level) * 45%),
+      rgb(236 236 230 / 9%)
+    );
+  border-radius: 0.5rem;
+  background: #000;
+  transition: border-color var(--t-mid) var(--ease);
+}
+.led-stage:not([data-mode="color"]) .led-screen {
+  border-color: rgb(236 236 230 / 9%);
+}
+
+/* TV Sync shows a picture: dusk over a horizon, the house's sun setting on it. */
+.led-picture {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    #0b1230 0%,
+    #1b1f5c 38%,
+    #5a2c6e 56%,
+    #ff7a3c 62%,
+    #120c14 62.4%,
+    #07070a 100%
+  );
+}
+.led-picture::before {
+  content: "";
+  position: absolute;
+  top: 62%;
+  left: 50%;
+  width: 17%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--sun);
+  translate: -50% -50%;
+  clip-path: inset(0 0 50% 0);
+}
+.led-picture::after {
+  content: "";
+  position: absolute;
+  top: 62%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgb(255 210 180 / 55%);
+}
+
+.led-setup {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+.led-setup [data-slot="button"] {
+  background: var(--wall-wash-strong);
+  color: var(--wall-ink);
+}
+.led-setup [data-slot="button"]:hover {
+  background: var(--wall-ink);
+  color: var(--wall);
+}
+
+/* ---------- Brightness: a dimmer on the right edge, filled with the light it sets ---------- */
+
+.led-level {
+  position: absolute;
+  top: 44%;
+  right: calc(var(--stage-inset) + 0.5rem);
+  z-index: 2;
+  width: 4.5rem;
+  height: min(58cqh, 22rem);
+  translate: 0 -50%;
+}
+
+/* The dimmer fills with the light itself: the colour, the picture or the effect. */
+.led-level .fader {
+  --tone: var(--light, var(--led));
+}
+.led-stage[data-mode="off"] .led-level .fader {
+  --tone: var(--wall-wash-strong);
+}
+.fader {
+  --track: var(--wall-wash-strong);
+  --tone: var(--wall-ink);
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background: var(--track);
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  transition: scale var(--t-fast) var(--ease);
+}
+.fader:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.fader[data-held="true"] {
+  cursor: grabbing;
+  scale: 1.03;
+}
+.fader[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.4;
+}
+.fader-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--tone);
+  translate: 0 calc((1 - var(--fill)) * 100%);
+  transition: translate var(--t-fast) var(--ease);
+}
+.fader[data-orientation="horizontal"] .fader-fill {
+  translate: calc((var(--fill) - 1) * 100%) 0;
+}
+.fader[data-held="true"] .fader-fill {
+  transition: none;
+}
+/* What the controller last read back: a notch across the capsule. */
+.fader-readback {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: calc(var(--at) * 100%);
+  height: 3px;
+  margin-bottom: -1.5px;
+  border-radius: 999px;
+  background: var(--wall-ink);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
+  transition: bottom var(--t-mid) var(--ease);
+}
+.fader-figure {
+  position: absolute;
+  top: 0.75rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: #fff;
+  mix-blend-mode: difference;
+  opacity: 0;
+  translate: 0 0.5rem;
+  transition:
+    opacity var(--t-fast) var(--ease),
+    translate var(--t-fast) var(--ease);
+}
+.fader[data-held="true"] .fader-figure,
+.fader:focus-visible .fader-figure {
+  opacity: 1;
+  translate: 0 0;
+}
+.fader-glyph {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  translate: -50% 0;
+  color: rgb(0 0 0 / 62%);
+}
+.fader[data-orientation="horizontal"] .fader-glyph {
+  bottom: auto;
+  top: 50%;
+  left: 0.875rem;
+  translate: 0 -50%;
+}
+.fader[data-orientation="horizontal"] .fader-figure {
+  top: 50%;
+  left: auto;
+  right: 1rem;
+  translate: 0.5rem -50%;
+  font-size: 1.0625rem;
+}
+.fader[data-orientation="horizontal"][data-held="true"] .fader-figure,
+.fader[data-orientation="horizontal"]:focus-visible .fader-figure {
+  translate: 0 -50%;
+}
+
+/* ---------- The dock: every light the strip knows, each drawn as a small disc of itself ---------- */
+
+.led-dock {
+  position: absolute;
+  bottom: var(--stage-inset);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: calc(100% - 2 * var(--stage-inset));
+  padding: 0.5rem;
+  border-radius: 999px;
+  background: var(--wall-wash);
+  translate: -50% 0;
+}
+.led-dock [data-slot="button"] {
+  width: 3.75rem;
+  height: 3.75rem;
+  padding: 0;
+  color: var(--wall-ink);
+  transition:
+    translate var(--t-mid) var(--ease),
+    background-color var(--t-fast) var(--ease),
+    scale var(--t-fast) var(--ease);
+}
+.led-dock [data-slot="button"]:hover {
+  background: var(--wall-wash-strong);
+}
+/* The chosen light rises off the dock and gains a ring. */
+.led-dock [aria-pressed="true"] {
+  translate: 0 -0.375rem;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--wall-ink);
+}
+.led-dock [data-key="color"] {
+  margin-left: 0;
+}
+.led-dock [data-key="color"] + [data-slot="button"] {
+  margin-left: 0.875rem;
+}
+
+.led-swatch {
+  position: absolute;
+  inset: 0.5rem;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+/* Your own colour sits inside a ring of every colour. */
+[data-key="color"] .led-swatch {
+  border: 3px solid var(--wall);
+}
+[data-key="color"]::before {
+  content: "";
+  position: absolute;
+  inset: 0.3125rem;
+  border-radius: 50%;
+  background: conic-gradient(
+    #f00,
+    #ff0 60deg,
+    #0f0 120deg,
+    #0ff 180deg,
+    #00f 240deg,
+    #f0f 300deg,
+    #f00
+  );
+}
+[data-key="off"] .led-swatch {
+  inset: 0.875rem;
+  box-shadow: inset 0 0 0 2px var(--wall-muted);
+}
+[data-key="tv-sync"] .led-swatch {
+  overflow: hidden;
+  background: linear-gradient(#1b1f5c 0%, #5a2c6e 52%, #07070a 56%);
+}
+[data-key="tv-sync"] .led-swatch::before {
+  content: "";
+  position: absolute;
+  top: 56%;
+  left: 50%;
+  width: 44%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--sun);
+  translate: -50% -50%;
+  clip-path: inset(0 0 50% 0);
+}
+[data-key="forest"] .led-swatch {
+  background: conic-gradient(#0f6b3a, #59c14a, #b6e35a, #1e8a4c, #0f6b3a);
+}
+[data-key="aurora"] .led-swatch {
+  background: conic-gradient(#00e0a8, #1d6bff, #8a3cff, #00c8ff, #00e0a8);
+}
+[data-key="rainbow"] .led-swatch {
+  background: conic-gradient(
+    #ff2a2a,
+    #ff8a00,
+    #ffe600,
+    #3dff4a,
+    #00e5ff,
+    #2f54ff,
+    #c43cff,
+    #ff2a2a
+  );
+}
+[data-key="fire"] .led-swatch {
+  background: conic-gradient(
+    from 180deg,
+    #ffd84a,
+    #ff3d00 90deg,
+    #8a1200 180deg,
+    #ff3d00 270deg,
+    #ffd84a
+  );
+}
+[data-key="party"] .led-swatch {
+  background: conic-gradient(
+    #ff1fa9 0deg 60deg,
+    #ffe600 60deg 120deg,
+    #00e5ff 120deg 180deg,
+    #7c3cff 180deg 240deg,
+    #ff5b1f 240deg 300deg,
+    #19ff8c 300deg 360deg
+  );
+}
+
+/* ---------- The side: the colour wheel and the bedtime dial ---------- */
+
+.led-side {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1.25fr);
+  align-items: center;
+  justify-items: center;
+  gap: clamp(1rem, 3svh, 2rem);
+  min-height: 0;
+}
+
+.hue-wheel {
+  position: relative;
+  width: min(100%, 36svh, 17rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, #fff, rgb(255 255 255 / 0%)),
+    conic-gradient(
+      #f00,
+      #ff0 60deg,
+      #0f0 120deg,
+      #0ff 180deg,
+      #00f 240deg,
+      #f0f 300deg,
+      #f00
+    );
+  touch-action: none;
+  cursor: crosshair;
+  outline: none;
+  transition:
+    opacity var(--t-mid) var(--ease),
+    scale var(--t-mid) var(--ease);
+}
+.hue-wheel[data-active="false"] {
+  scale: 0.92;
+}
+.hue-wheel[aria-disabled="true"] {
+  opacity: 0.2;
+  cursor: default;
+}
+.hue-wheel:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.hue-wheel-knob {
+  position: absolute;
+  top: var(--knob-y);
+  left: var(--knob-x);
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: var(--knob);
+  translate: -50% -50%;
+  pointer-events: none;
+  transition:
+    width var(--t-fast) var(--ease),
+    height var(--t-fast) var(--ease),
+    opacity var(--t-mid) var(--ease);
+}
+.hue-wheel[data-held="true"] .hue-wheel-knob {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.hue-wheel[data-active="false"] .hue-wheel-knob {
+  opacity: 0;
+}
+
+.bedtime-dial {
+  display: grid;
+  justify-items: center;
+  gap: clamp(0.75rem, 2svh, 1.25rem);
+  width: min(100%, 40svh, 18rem);
+}
+.bedtime-face {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+}
+.bedtime-ring {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  touch-action: none;
+}
+.bedtime-track {
+  fill: none;
+  stroke: var(--wash-strong);
+  stroke-width: 18;
+}
+.bedtime-hour {
+  fill: var(--line-strong);
+}
+.bedtime-hour[data-quarter="true"] {
+  fill: var(--muted-ink);
+}
+.bedtime-window {
+  fill: none;
+  stroke: var(--bedtime-red);
+  stroke-width: 18;
+  stroke-linecap: round;
+  transition: stroke var(--t-mid) var(--ease);
+}
+.bedtime-dial[data-enabled="false"] .bedtime-window {
+  stroke: var(--line-strong);
+}
+.bedtime-now {
+  fill: var(--sun);
+}
+.bedtime-handle {
+  cursor: grab;
+  outline: none;
+}
+.bedtime-handle[aria-disabled="true"] {
+  cursor: default;
+}
+.bedtime-hit {
+  fill: transparent;
+}
+.bedtime-knob {
+  fill: var(--ground);
+  stroke: var(--bedtime-red);
+  stroke-width: 3;
+  transition: r var(--t-fast) var(--ease);
+}
+.bedtime-dial[data-enabled="false"] .bedtime-knob {
+  stroke: var(--line-strong);
+}
+.bedtime-handle svg {
+  color: var(--ink);
+}
+.bedtime-handle[data-held="true"] .bedtime-knob {
+  r: 19;
+}
+.bedtime-handle:focus-visible .bedtime-knob {
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+
+.bedtime-centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.bedtime-centre > * {
+  pointer-events: auto;
+}
+.bedtime-centre [data-slot="button"][data-on="true"] {
+  background: var(--bedtime-red);
+  color: #fff;
+}
+.bedtime-span {
+  color: var(--muted-ink);
+  font-size: 1rem;
+  font-weight: 500;
+}
+.bedtime-red {
+  width: 82%;
+  height: 2.75rem;
+}
+.bedtime-red .fader {
+  --track: var(--wash-strong);
+  border-radius: 999px;
+}
+.bedtime-red .fader-glyph {
+  color: #fff;
+}
+.bedtime-red .fader[aria-valuenow="0"] .fader-glyph {
+  color: var(--muted-ink);
+}
+
+.dark .led {
+  --bedtime-red: #ff3b2f;
+}
+
+/* ---------- Motion: each effect moves the way its light does ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* A new choice blooms out from behind the TV. */
+  .led-halo:not(.led-spill) {
+    animation: led-bloom var(--t-slow) var(--ease);
+  }
+  .led-stage[data-effect="rainbow"] .led-light {
+    animation: led-turn 16s linear infinite;
+  }
+  .led-stage[data-effect="forest"] .led-light {
+    animation: led-sway 22s ease-in-out infinite alternate;
+  }
+  .led-stage[data-effect="aurora"] .led-light {
+    animation: led-sway 9s ease-in-out infinite alternate;
+  }
+  .led-stage[data-effect="fire"] .led-light {
+    animation: led-flicker 2.2s linear infinite;
+  }
+  .led-stage[data-effect="party"] .led-light {
+    animation: led-turn 3s steps(6) infinite;
+  }
+  .led-stage[data-mode="tv-sync"] .led-picture::before {
+    animation: led-set 18s var(--ease) infinite alternate;
+  }
+  .led-dock [aria-pressed="true"][data-key="rainbow"] .led-swatch,
+  .led-dock [aria-pressed="true"][data-key="aurora"] .led-swatch,
+  .led-dock [aria-pressed="true"][data-key="forest"] .led-swatch {
+    animation: led-turn 8s linear infinite;
+  }
+  .led-dock [aria-pressed="true"][data-key="party"] .led-swatch {
+    animation: led-turn 3s steps(6) infinite;
+  }
+  .led-signal[data-reach="unreachable"] {
+    animation: refuse 420ms var(--ease);
+  }
+}
+
+@keyframes led-bloom {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+@keyframes led-turn {
+  to {
+    rotate: 1turn;
+  }
+}
+@keyframes led-sway {
+  from {
+    rotate: -50deg;
+  }
+  to {
+    rotate: 50deg;
+  }
+}
+@keyframes led-flicker {
+  0%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+  12% {
+    opacity: 0.78;
+    scale: 0.97;
+  }
+  24% {
+    opacity: 1;
+    scale: 1.03;
+  }
+  41% {
+    opacity: 0.86;
+    scale: 0.99;
+  }
+  58% {
+    opacity: 1;
+    scale: 1.02;
+  }
+  77% {
+    opacity: 0.8;
+    scale: 0.98;
+  }
+}
+@keyframes led-set {
+  from {
+    translate: -50% -50%;
+  }
+  to {
+    translate: -50% -38%;
+  }
+}
+
+/* ---------- Portrait tablet: the wall on top, wheel and dial side by side beneath ---------- */
+
+@media (max-width: 1100px) and (orientation: portrait), (max-width: 860px) {
+  .led {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+  .led-stage {
+    height: max(24rem, 54svh);
+  }
+  .led-side {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+  }
+  .hue-wheel {
+    width: min(100%, 15rem, 22svh);
+  }
+  .bedtime-dial {
+    width: min(100%, 15rem, 22svh);
+  }
+}
+
+/* ---------- Phone: everything in one column; the dock wraps under the TV ---------- */
+
+@media (max-width: 600px) {
+  .led {
+    height: auto;
+    grid-template-rows: auto auto;
+  }
+  .led-stage {
+    height: 30rem;
+    border-radius: 1.5rem;
+  }
+  .led-tv {
+    top: 36%;
+    left: 42%;
+    width: 68cqw;
+  }
+  .led-level {
+    top: 36%;
+    width: 3.5rem;
+    height: 42cqh;
+  }
+  .led-dock {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: calc(100% - 2 * var(--stage-inset));
+    border-radius: 1.75rem;
+  }
+  .led-dock [data-slot="button"] {
+    width: 3rem;
+    height: 3rem;
+  }
+  .led-swatch {
+    inset: 0.375rem;
+  }
+  .led-dock [data-key="color"] + [data-slot="button"] {
+    margin-left: 0;
+  }
+  .led-side {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+    padding-block: 1rem 2rem;
+  }
+}
