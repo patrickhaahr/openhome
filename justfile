@@ -518,7 +518,7 @@ dashboard-docker-smoke image='patrickhaahr/openhome-dashboard:latest':
     docker cp dashboard/tests/docker-smoke.ts "$container:/tmp/openhome-docker-smoke.ts"
     docker exec "$container" bun /tmp/openhome-docker-smoke.ts
 
-# Stop the stack, pull the published API, MCP and dashboard images, and wait for healthy containers
+# Pull the published API, MCP and dashboard images, recreate changed containers, and wait for health
 [group('deployment')]
 openhome-deploy:
     python3 scripts/deploy.py activate
@@ -671,10 +671,11 @@ dashboard-photos-preview:
 docker-builder:
     python3 scripts/deploy.py builder
 
-# Patch-bump API/MCP/dashboard, check, publish both platforms, back up, deploy, and verify
+# Patch-bump, check, publish and deploy only the areas changed since their last release (MCP follows API);
+# name areas (api mcp dashboard) to force them. Backs up both databases and verifies the whole stack.
 [group('deployment')]
-deploy:
-    python3 scripts/deploy.py deploy
+deploy *areas:
+    python3 scripts/deploy.py deploy {{areas}}
 
 # Retry the current versions after fixing an interrupted release
 [group('deployment')]

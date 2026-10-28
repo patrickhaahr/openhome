@@ -130,17 +130,20 @@ Release the API, MCP and dashboard together from the repository root:
 devenv shell -- just deploy
 ```
 
-This patch-bumps all three versions and their lockfiles, runs their checks,
-builds and publishes version tags plus `latest` for amd64 and arm64, then smoke-tests
-the dashboard image. Builds use the single-node local `openhome-local` builder.
+This releases only the areas (`api`, `mcp`, `dashboard`) changed since the commit that
+set their current version; MCP always follows API, and `just deploy dashboard` forces an
+area. It patch-bumps those versions and their lockfiles, runs their checks, builds and
+publishes version tags plus `latest` for amd64 and arm64, then smoke-tests a released
+dashboard image. Builds use the single-node local `openhome-local` builder.
 Rust cross-compiles with `cargo build --release --locked` on the current host;
 ARM64 emulation handles target-platform runtime image steps. The Pi performs no
 build work. Cargo caches persist across version bumps.
 
 The command then connects through `ssh pi` to `~/d/openhome`, verifies SQLite
 online backups of both databases, records the previous image IDs and Compose file,
-and runs `docker compose down`, `pull` and `up -d --wait`. It verifies the running
-images against their release tags, healthy containers with zero restarts,
+pulls the released services and runs `docker compose up -d --wait`, which recreates
+only changed containers. It verifies all running images against their release tags,
+healthy containers, zero restarts for released ones,
 authenticated API/MCP reads, the dashboard's connected state and HTTPS CSS/JS assets.
 
 After fixing a failed release, run `devenv shell -- just deploy-current` to retry
