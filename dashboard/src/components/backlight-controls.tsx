@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from "react"
+import { ApertureIcon } from "@phosphor-icons/react/dist/csr/Aperture"
+import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockwise"
+import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise"
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise"
+import { ControlAlert } from "@/components/control-alert"
+import { BedtimeDial } from "@/components/bedtime-dial"
+import { HueWheel } from "@/components/hue-wheel"
+import { LightFader } from "@/components/light-fader"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { useIdleBlock } from "@/components/idle-block"
-import { bedtimeFields } from "@/lib/backlight"
+import { copenhagenClockTime, defaultRgb, rgbCss } from "@/lib/backlight-light"
 import type {
   BacklightAction,
   BacklightRead,
   BacklightResult,
   BacklightSelection,
-  BacklightStatus,
 } from "@/lib/backlight"
 
 type Props = {
   data: BacklightRead
   change: (action: BacklightAction) => Promise<BacklightResult>
+  /** The display clock, for the sun on the bedtime ring. */
+  now?: Date
 }
 
 const modeLabel = {
@@ -46,8 +54,19 @@ const connectionLabel = {
   unreachable: "Unreachable",
 }
 
-/** Commands report write acceptance separately from the controller's readable state. */
-export function BacklightControls({ data, change }: Props): React.JSX.Element {
+const unconfirmed =
+  "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
+
+/**
+ * The LED drawn as itself: a TV on a night wall, and behind it the light it is asked to make.
+ * The halo is the selection; the dock below picks one, the fader sets how far it reaches, the
+ * wheel paints it and the dial schedules the bedtime red. Words live only in the live region.
+ */
+export function BacklightControls({
+  data,
+  change,
+  now,
+}: Props): React.JSX.Element {
   const [local, setLocal] = useState<{
     base: BacklightRead
     value: BacklightRead
@@ -55,10 +74,10 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
 
   const current = local?.base === data ? local.value : data
   const [pending, setPending] = useState(false)
-
-  const [message, setMessage] = useState(
-    "Choose how the LED follows your evening."
-  )
+  const [message, setMessage] = useState("")
+  const [alert, setAlert] = useState<string | null>(null)
+  const [sent, setSent] = useState<BacklightAction["action"] | null>(null)
+  const [bedtimeRound, setBedtimeRound] = useState(0)
 
   const inFlight = useRef(false)
   const queued = useRef<BacklightAction | null>(null)
@@ -90,11 +109,16 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
     while (queued.current !== null && mounted.current) {
       const action = queued.current
       queued.current = null
+      setSent(action.action)
+      setAlert(null)
       setMessage("Sending your latest selection…")
 
       // An older response must not replace feedback for a newer queued edit.
-      const announce = (text: string): void => {
-        if (queued.current === null && timer.current === null) setMessage(text)
+      const announce = (text: string, tag: string | null = null): void => {
+        if (queued.current === null && timer.current === null) {
+          setMessage(text)
+          setAlert(tag)
+        }
       }
 
       try {
@@ -102,52 +126,53 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
 
         if (!mounted.current) return
 
+        if (action.action === "bedtime") setBedtimeRound((round) => round + 1)
+
         if (result.state === "available") {
           setLocal({ base: latestData.current, value: result })
 
           if (result.status.command === "failed")
             announce(
-              "OpenHome couldn’t confirm the command. Your selection is saved; OpenHome retries the latest selection automatically."
+              "OpenHome couldn’t confirm the command. Your selection is saved; OpenHome retries the latest selection automatically.",
+              "Retrying"
             )
           else if (action.action === "profile")
             announce("TV Sync settings saved safely.")
           else if (action.action === "bedtime")
             announce(
-              "Bedtime settings saved. Readable device state is shown below."
+              "Bedtime settings saved. Readable device state is listed with the Backlight state."
             )
           else if (action.action === "refresh")
             announce(
               result.status.reachability === "reachable"
                 ? "Backlight state refreshed."
-                : "The Backlight couldn’t be reached."
+                : "The Backlight couldn’t be reached.",
+              result.status.reachability === "reachable" ? null : "No answer"
             )
           else if (result.status.command === "pending")
             announce("Your selection is saved and waiting for the Backlight.")
           else
             announce(
-              "Command acknowledged. Readable device state is shown below."
+              "Command acknowledged. Readable device state is listed with the Backlight state."
             )
         } else if (result.state === "profile-required")
           announce(
-            "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup."
+            "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup.",
+            "Setup needed"
           )
         else if (result.state === "invalid-profile")
           announce(
-            "The saved profile is invalid. Your previous TV Sync settings were kept."
+            "The saved profile is invalid. Your previous TV Sync settings were kept.",
+            "Not saved"
           )
         else if (result.state === "invalid-settings")
           announce(
-            "Bedtime settings weren’t saved. Check the times and red brightness, then try again."
+            "Bedtime settings weren’t saved. Check the times and red brightness, then try again.",
+            "Not saved"
           )
-        else
-          announce(
-            "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
-          )
+        else announce(unconfirmed, "No answer")
       } catch {
-        if (mounted.current)
-          announce(
-            "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
-          )
+        if (mounted.current) announce(unconfirmed, "No answer")
       }
     }
 
@@ -186,11 +211,14 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
   const status = current.state === "available" ? current.status : undefined
   const observed = status?.observed
   const selection = draft ?? status?.intended
+  const ready = status?.setup === "ready"
 
-  const rgb =
-    selection?.mode === "color"
-      ? selection.rgb
-      : { red: 255, green: 0, blue: 0 }
+  // The wheel remembers the last chosen colour while another mode is showing.
+  const [lastRgb, setLastRgb] = useState(defaultRgb)
+  const rgb = selection?.mode === "color" ? selection.rgb : lastRgb
+
+  if (selection?.mode === "color" && selection.rgb !== lastRgb)
+    setLastRgb(selection.rgb)
 
   const brightness =
     selection?.mode === "color" ||
@@ -199,257 +227,296 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
       ? (selection.brightness ?? observed?.brightness ?? 20)
       : (observed?.brightness ?? 20)
 
-  const hex = `#${[rgb.red, rgb.green, rgb.blue].map((value) => value.toString(16).padStart(2, "0")).join("")}`
+  const mode = selection?.mode ?? "off"
+  const effect = selection?.mode === "effect" ? selection.effect : undefined
+
+  const settling =
+    pending ||
+    status?.command === "pending" ||
+    status?.recovery === "pending" ||
+    status?.recovery === "retrying"
+
+  const outcome: "pending" | "failed" | "accepted" | undefined =
+    alert !== null && sent === "select"
+      ? "failed"
+      : status?.command === "failed"
+        ? "failed"
+        : settling
+          ? "pending"
+          : sent === "select" && status?.command === "acknowledged"
+            ? "accepted"
+            : undefined
+
+  const tag =
+    status === undefined
+      ? "Offline"
+      : (alert ?? (status.command === "failed" ? "Retrying" : null))
+
+  const keys: {
+    id: string
+    label: string
+    detail?: string
+    selected: boolean
+    disabled: boolean
+    selection: BacklightSelection
+  }[] = [
+    {
+      id: "off",
+      label: "Off",
+      selected: mode === "off",
+      disabled: status === undefined,
+      selection: { mode: "off" },
+    },
+    {
+      id: "tv-sync",
+      label: "TV Sync",
+      selected: mode === "tv-sync",
+      disabled: !ready,
+      selection: { mode: "tv-sync" },
+    },
+    {
+      id: "color",
+      label: "Color",
+      selected: mode === "color",
+      disabled: !ready,
+      selection: { mode: "color", rgb, brightness },
+    },
+    ...(status?.effects ?? []).map((item) => ({
+      id: item.id,
+      label: item.name,
+      detail: item.description,
+      selected: effect === item.id,
+      disabled: !ready,
+      selection: {
+        mode: "effect",
+        effect: item.id,
+        brightness,
+      } satisfies BacklightSelection,
+    })),
+  ]
+
+  const override =
+    status?.control_source === "manual" ? status.override_expires_at : undefined
 
   return (
-    <div className="backlight-board" aria-busy={pending}>
-      <section className="backlight-main" aria-label="LED controls">
-        <div className="backlight-intro">
-          <p className="backlight-caption">Behind the picture</p>
-          <h2>LED</h2>
-          <p>
-            Follow the TV picture, try a color or scene, or turn the Backlight
-            off.
-          </p>
-        </div>
-        <div
-          className="backlight-modes"
-          role="group"
-          aria-label="Backlight selection"
-        >
-          <Button
-            size="key-xl"
-            variant="outline"
-            disabled={status === undefined}
-            aria-pressed={selection?.mode === "off"}
-            onClick={() =>
-              perform({ action: "select", selection: { mode: "off" } })
+    <div className="led" aria-busy={pending}>
+      <section
+        className="led-stage"
+        aria-label="LED controls"
+        data-mode={mode}
+        data-effect={effect}
+        data-ready={ready}
+        // SAFETY: CSSProperties omits custom properties; --led is a CSS colour, --level 0..1.
+        style={
+          {
+            "--led": rgbCss(rgb),
+            "--level": mode === "off" ? 0 : brightness / 100,
+          } as React.CSSProperties
+        }
+      >
+        <div className="led-marks">
+          <span
+            className="led-signal"
+            data-reach={status?.reachability ?? "unreachable"}
+            title={
+              status === undefined
+                ? "Unavailable"
+                : connectionLabel[status.reachability]
             }
-          >
-            Off
-          </Button>
-          <Button
-            size="key-xl"
-            variant="outline"
-            disabled={status === undefined || status.setup !== "ready"}
-            aria-pressed={selection?.mode === "tv-sync"}
-            onClick={() =>
-              perform({ action: "select", selection: { mode: "tv-sync" } })
-            }
-          >
-            TV Sync
-          </Button>
-          <Button
-            size="key-xl"
-            variant="outline"
-            disabled={status?.setup !== "ready"}
-            aria-pressed={selection?.mode === "color"}
-            onClick={() =>
-              perform({
-                action: "select",
-                selection: { mode: "color", rgb, brightness },
-              })
-            }
-          >
-            Color
-          </Button>
-        </div>
-        {status !== undefined && status.effects.length > 0 ? (
-          <section
-            className="backlight-effects"
-            aria-label="Effects playground"
-          >
-            <h3>Effects playground</h3>
-            <p>
-              Try a native scene. Each selection follows the same override and
-              Bedtime Mode rules.
-            </p>
-            <div className="backlight-effect-list">
-              {status.effects.map((effect) => (
-                <Button
-                  key={effect.id}
-                  variant="outline"
-                  disabled={status.setup !== "ready"}
-                  aria-pressed={
-                    selection?.mode === "effect" &&
-                    selection.effect === effect.id
-                  }
-                  onClick={() =>
-                    perform({
-                      action: "select",
-                      selection: {
-                        mode: "effect",
-                        effect: effect.id,
-                        brightness,
-                      },
-                    })
-                  }
-                >
-                  <span>{effect.name}</span>
-                  <span className="backlight-effect-description">
-                    {effect.description}
-                  </span>
-                </Button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-        <section className="backlight-setup mb-8" aria-label="Bedtime Mode">
-          <h3>Bedtime Mode</h3>
-          <p>
-            {status === undefined ? (
-              "Schedule unavailable."
-            ) : (
-              <>
-                Red at {status.bedtime.brightness}% · {status.bedtime.start}–
-                {status.bedtime.end} Europe/Copenhagen. Then TV Sync, with its
-                saved brightness.
-              </>
-            )}
-          </p>
-          <div className="backlight-actions">
-            <Button
-              variant="outline"
-              role="switch"
-              aria-label="Bedtime Mode enabled"
-              aria-checked={status?.bedtime.enabled === true}
-              disabled={pending || status?.setup !== "ready"}
-              onClick={() =>
-                perform({
-                  action: "bedtime",
-                  enabled: status?.bedtime.enabled !== true,
-                })
-              }
-            >
-              {status?.bedtime.enabled === true ? "Enabled" : "Disabled"}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={status?.setup !== "ready"}
-              aria-pressed={status?.control_source === "automatic"}
-              onClick={() => perform({ action: "automatic" })}
-            >
-              Automatic
-            </Button>
-          </div>
-          {status !== undefined ? (
-            <BedtimeForm
-              key={`${status.bedtime.start}-${status.bedtime.end}-${status.bedtime.brightness}`}
-              saved={status.bedtime}
-              pending={pending}
-              save={perform}
+            aria-hidden="true"
+          />
+          {status?.stale === true ? (
+            <ClockCounterClockwiseIcon
+              className="led-stale"
+              size={18}
+              weight="bold"
+              aria-hidden="true"
             />
           ) : null}
-        </section>
-        <fieldset
-          className="backlight-adjustments"
-          disabled={status?.setup !== "ready"}
-        >
-          <legend>Manual selection</legend>
-          <label className="backlight-color">
-            <span>RGB color</span>
-            <Input
-              type="color"
-              aria-label="RGB color"
-              value={hex}
-              onChange={(event) => {
-                const value = event.currentTarget.value
+          {tag === null ? null : <ControlAlert tag={tag} />}
+        </div>
 
-                if (!/^#[0-9a-f]{6}$/i.test(value)) return
-                edit({
-                  mode: "color",
-                  rgb: {
-                    red: Number.parseInt(value.slice(1, 3), 16),
-                    green: Number.parseInt(value.slice(3, 5), 16),
-                    blue: Number.parseInt(value.slice(5, 7), 16),
-                  },
-                  brightness,
-                })
-              }}
-            />
-          </label>
-          <label className="backlight-brightness">
-            <span>
-              Brightness <output>{brightness}%</output>
-            </span>
-            <Input
-              type="range"
-              aria-label="Brightness"
-              min={0}
-              max={100}
-              step={1}
-              value={brightness}
-              disabled={selection?.mode === "off"}
-              onChange={(event) => {
-                const value = event.currentTarget.valueAsNumber
+        <div className="led-tools">
+          {override === undefined ? null : (
+            <>
+              {override === null ? null : (
+                <span className="led-until num" aria-hidden="true">
+                  {copenhagenClockTime(new Date(override))}
+                </span>
+              )}
+              <Button
+                size="key-icon"
+                variant="ghost"
+                disabled={!ready}
+                title="Automatic"
+                onClick={() => perform({ action: "automatic" })}
+              >
+                <ArrowCounterClockwiseIcon
+                  size={22}
+                  weight="bold"
+                  aria-hidden="true"
+                />
+                <span className="sr-only">Automatic</span>
+              </Button>
+            </>
+          )}
+          <Button
+            size="key-icon"
+            variant="ghost"
+            disabled={pending}
+            data-spinning={pending && sent === "refresh"}
+            title="Refresh state"
+            onClick={() => perform({ action: "refresh" })}
+          >
+            <ArrowsClockwiseIcon size={22} weight="bold" aria-hidden="true" />
+            <span className="sr-only">Refresh state</span>
+          </Button>
+        </div>
 
-                if (
-                  !Number.isInteger(value) ||
-                  value < 0 ||
-                  value > 100 ||
-                  selection?.mode === "off" ||
-                  selection === undefined
-                )
-                  return
-                edit({ ...selection, brightness: value })
-              }}
-            />
-          </label>
-          <p>
-            {status?.bedtime.enabled === true
-              ? "Manual selections last until the next Bedtime Mode transition. Automatic resumes the routine now."
-              : "Your manual selection stays until you choose again. Automatic restores TV Sync."}{" "}
-            TV Sync restores its saved brightness.
-          </p>
-        </fieldset>
-        <p role="status" aria-live="polite" className="backlight-feedback">
+        <div className="led-tv">
+          <div className="led-halo led-spill" aria-hidden="true">
+            <span className="led-light" />
+          </div>
+          <div
+            key={`${mode}-${effect ?? ""}`}
+            className="led-halo"
+            aria-hidden="true"
+          >
+            <span className="led-light" />
+          </div>
+          <div className="led-screen">
+            {mode === "tv-sync" && ready ? (
+              <span className="led-picture" aria-hidden="true" />
+            ) : null}
+            {status?.setup === "incomplete" ? (
+              <section className="led-setup" aria-labelledby="led-setup">
+                <h2 id="led-setup" className="sr-only">
+                  Save your TV Sync settings
+                </h2>
+                <p className="sr-only">
+                  Capture while TV Sync is active, or recover the installer’s
+                  private backup. Off stays available during setup.
+                </p>
+                <Button
+                  size="key"
+                  variant="outline"
+                  disabled={pending}
+                  title="Capture TV Sync"
+                  onClick={() =>
+                    perform({ action: "profile", source: "capture" })
+                  }
+                >
+                  <ApertureIcon size={22} aria-hidden="true" />
+                  <span aria-hidden="true">Capture</span>
+                  <span className="sr-only">Capture TV Sync</span>
+                </Button>
+                <Button
+                  size="key"
+                  variant="ghost"
+                  disabled={pending}
+                  title="Recover saved profile"
+                  onClick={() =>
+                    perform({ action: "profile", source: "backup" })
+                  }
+                >
+                  <ClockCounterClockwiseIcon size={22} aria-hidden="true" />
+                  <span aria-hidden="true">Restore</span>
+                  <span className="sr-only">Recover saved profile</span>
+                </Button>
+              </section>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="led-level">
+          <LightFader
+            label="Brightness"
+            orientation="vertical"
+            tone="var(--light, var(--led))"
+            value={brightness}
+            disabled={!ready || mode === "off" || selection === undefined}
+            readback={
+              observed === null || observed === undefined
+                ? null
+                : observed.brightness
+            }
+            onChange={(value) => {
+              if (selection === undefined || selection.mode === "off") return
+              edit({ ...selection, brightness: value })
+            }}
+          />
+        </div>
+
+        <div className="led-dock" role="group" aria-label="Backlight selection">
+          {keys.map((key) => (
+            <Button
+              key={key.id}
+              variant="ghost"
+              data-key={key.id}
+              disabled={key.disabled}
+              aria-pressed={key.selected}
+              data-outcome={key.selected ? outcome : undefined}
+              title={key.label}
+              // SAFETY: CSSProperties omits custom properties; --swatch is a CSS colour.
+              style={
+                key.id === "color"
+                  ? ({ "--swatch": rgbCss(rgb) } as React.CSSProperties)
+                  : undefined
+              }
+              onClick={() =>
+                perform({ action: "select", selection: key.selection })
+              }
+            >
+              <span className="led-swatch" aria-hidden="true" />
+              <span className="sr-only">{key.label}</span>
+              {key.detail === undefined ? null : (
+                <span className="sr-only">{key.detail}</span>
+              )}
+            </Button>
+          ))}
+        </div>
+      </section>
+
+      <aside className="led-side" aria-label="Color and Bedtime Mode">
+        <HueWheel
+          rgb={rgb}
+          active={mode === "color"}
+          disabled={!ready}
+          onChange={(next) => {
+            setLastRgb(next)
+            edit({ mode: "color", rgb: next, brightness })
+          }}
+        />
+        {status === undefined ? null : (
+          <BedtimeDial
+            key={`${status.bedtime.start}-${status.bedtime.end}-${status.bedtime.brightness}-${bedtimeRound}`}
+            saved={status.bedtime}
+            now={now}
+            canSwitch={ready}
+            pending={pending}
+            save={perform}
+          />
+        )}
+      </aside>
+
+      <div className="sr-only">
+        <p role="status" aria-live="polite">
           {status === undefined
             ? "OpenHome is unavailable. Refresh to try again."
             : message}
         </p>
-        {status?.setup === "incomplete" ? (
-          <section className="backlight-setup" aria-label="TV Sync setup">
-            <h3>Save your TV Sync settings</h3>
-            <p>
-              Capture while TV Sync is active, or recover the installer’s
-              private backup. Off stays available during setup.
-            </p>
-            <div className="backlight-actions">
-              <Button
-                variant="outline"
-                disabled={pending}
-                onClick={() =>
-                  perform({ action: "profile", source: "capture" })
-                }
-              >
-                Capture TV Sync
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={pending}
-                onClick={() => perform({ action: "profile", source: "backup" })}
-              >
-                Recover saved profile
-              </Button>
-            </div>
-          </section>
-        ) : null}
-      </section>
-      <aside className="backlight-state" aria-label="Backlight state">
-        <h3>Backlight</h3>
+        <h2>Backlight state</h2>
         <dl>
-          <div>
-            <dt>Control</dt>
-            <dd>
-              {status === undefined
-                ? "Unknown"
-                : status.control_source === "manual"
-                  ? "Manual override"
-                  : "Automatic"}
-            </dd>
-          </div>
+          <dt>Control</dt>
+          <dd>
+            {status === undefined
+              ? "Unknown"
+              : status.control_source === "manual"
+                ? "Manual override"
+                : "Automatic"}
+          </dd>
           {status?.control_source === "manual" ? (
-            <div>
+            <>
               <dt>Override ends</dt>
               <dd>
                 {status.override_expires_at === null ? (
@@ -465,223 +532,97 @@ export function BacklightControls({ data, change }: Props): React.JSX.Element {
                   </time>
                 )}
               </dd>
-            </div>
+            </>
           ) : null}
-          <div>
-            <dt>Selected</dt>
-            <dd>
-              {status === undefined
-                ? "Unknown"
-                : modeLabel[selection?.mode ?? status.intended.mode]}
-            </dd>
-          </div>
+          <dt>Selected</dt>
+          <dd>{status === undefined ? "Unknown" : modeLabel[mode]}</dd>
           {selection?.mode === "effect" ? (
-            <div>
+            <>
               <dt>Requested effect</dt>
               <dd>
-                {status?.effects.find(
-                  (effect) => effect.id === selection.effect
-                )?.name ?? selection.effect}
+                {status?.effects.find((item) => item.id === selection.effect)
+                  ?.name ?? selection.effect}
               </dd>
-            </div>
+            </>
           ) : null}
           {selection?.mode === "color" ? (
-            <div>
+            <>
               <dt>Requested RGB</dt>
               <dd>
                 {selection.rgb.red}, {selection.rgb.green}, {selection.rgb.blue}
               </dd>
-            </div>
+            </>
           ) : null}
           {selection?.mode === "color" ||
           selection?.mode === "effect" ||
           (selection?.mode === "tv-sync" &&
             selection.brightness !== undefined) ? (
-            <div>
+            <>
               <dt>Requested brightness</dt>
               <dd>{selection.brightness}%</dd>
-            </div>
+            </>
           ) : null}
-          <div>
-            <dt>Last acknowledged</dt>
-            <dd>
-              {status?.acknowledged === null ||
-              status?.acknowledged === undefined
-                ? "None"
-                : modeLabel[status.acknowledged.mode]}
-            </dd>
-          </div>
-          <div>
-            <dt>Connection</dt>
-            <dd>
-              {status === undefined
-                ? "Unavailable"
-                : connectionLabel[status.reachability]}
-            </dd>
-          </div>
-          <div>
-            <dt>Command</dt>
-            <dd>
-              {status === undefined ? "Unknown" : commandLabel[status.command]}
-            </dd>
-          </div>
-          <div>
-            <dt>Recovery</dt>
-            <dd>
-              {status === undefined
-                ? "Unknown"
-                : recoveryLabel[status.recovery]}
-            </dd>
-          </div>
-          <div>
-            <dt>Observation</dt>
-            <dd>{status?.stale === false ? "Fresh" : "Stale / unknown"}</dd>
-          </div>
-          <div>
-            <dt>Observed power</dt>
-            <dd>
-              {observed === null || observed === undefined
-                ? "Unknown"
-                : observed.power
-                  ? "On"
-                  : "Off"}
-            </dd>
-          </div>
-          <div>
-            <dt>Observed mode</dt>
-            <dd>
-              {observed === undefined || observed === null
-                ? "Unknown"
-                : modeLabel[observed.mode]}
-            </dd>
-          </div>
-          <div>
-            <dt>Observed brightness</dt>
-            <dd>
-              {observed === null || observed === undefined
-                ? "Unknown"
-                : `${observed.brightness}%`}
-            </dd>
-          </div>
+          <dt>Last acknowledged</dt>
+          <dd>
+            {status?.acknowledged === null || status?.acknowledged === undefined
+              ? "None"
+              : modeLabel[status.acknowledged.mode]}
+          </dd>
+          <dt>Connection</dt>
+          <dd>
+            {status === undefined
+              ? "Unavailable"
+              : connectionLabel[status.reachability]}
+          </dd>
+          <dt>Command</dt>
+          <dd>
+            {status === undefined ? "Unknown" : commandLabel[status.command]}
+          </dd>
+          <dt>Recovery</dt>
+          <dd>
+            {status === undefined ? "Unknown" : recoveryLabel[status.recovery]}
+          </dd>
+          <dt>Observation</dt>
+          <dd>{status?.stale === false ? "Fresh" : "Stale / unknown"}</dd>
+          <dt>Observed power</dt>
+          <dd>
+            {observed === null || observed === undefined
+              ? "Unknown"
+              : observed.power
+                ? "On"
+                : "Off"}
+          </dd>
+          <dt>Observed mode</dt>
+          <dd>
+            {observed === undefined || observed === null
+              ? "Unknown"
+              : modeLabel[observed.mode]}
+          </dd>
+          <dt>Observed brightness</dt>
+          <dd>
+            {observed === null || observed === undefined
+              ? "Unknown"
+              : `${observed.brightness}%`}
+          </dd>
         </dl>
         <p>
           Readback reports power, mode and brightness. It does not confirm the
-          exact visible color or effect.
+          exact visible color or effect. The notch on the brightness fader marks
+          the read brightness.
         </p>
-        <Button
-          variant="ghost"
-          disabled={pending}
-          onClick={() => perform({ action: "refresh" })}
-        >
-          Refresh state
-        </Button>
-      </aside>
+        {status === undefined ? null : (
+          <p>
+            Bedtime Mode: red at {status.bedtime.brightness}% ·{" "}
+            {status.bedtime.start}–{status.bedtime.end} Europe/Copenhagen, then
+            TV Sync with its saved brightness.{" "}
+            {status.bedtime.enabled === true
+              ? "Manual selections last until the next Bedtime Mode transition. Automatic resumes the routine now."
+              : "Your manual selection stays until you choose again. Automatic restores TV Sync."}{" "}
+            TV Sync restores its saved brightness. Times follow Copenhagen,
+            including summer and winter time. Settings are kept while disabled.
+          </p>
+        )}
+      </div>
     </div>
-  )
-}
-
-function BedtimeForm({
-  saved,
-  pending,
-  save,
-}: {
-  saved: BacklightStatus["bedtime"]
-  pending: boolean
-  save: (action: BacklightAction) => void
-}): React.JSX.Element {
-  const [start, setStart] = useState(saved.start)
-  const [end, setEnd] = useState(saved.end)
-  const [brightness, setBrightness] = useState(String(saved.brightness))
-  const [error, setError] = useState<string | null>(null)
-
-  const dirty =
-    start !== saved.start ||
-    end !== saved.end ||
-    brightness !== String(saved.brightness)
-
-  useIdleBlock(dirty)
-
-  return (
-    <form
-      className="mt-6 space-y-4"
-      aria-label="Bedtime settings"
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault()
-
-        const parsed = bedtimeFields.safeParse({
-          start,
-          end,
-          brightness: brightness === "" ? Number.NaN : Number(brightness),
-        })
-
-        if (!parsed.success) {
-          setError(
-            parsed.error.issues[0]?.message ?? "Check the bedtime settings."
-          )
-
-          return
-        }
-
-        setError(null)
-        save({ action: "bedtime", ...parsed.data })
-      }}
-    >
-      <fieldset disabled={pending} className="grid grid-cols-2 gap-4">
-        <legend className="sr-only">Daily window in Europe/Copenhagen</legend>
-        <label className="min-w-0 space-y-2">
-          <span>Start</span>
-          <Input
-            type="time"
-            aria-label="Start"
-            required
-            step={60}
-            value={start}
-            onChange={(event) => {
-              setStart(event.currentTarget.value)
-              setError(null)
-            }}
-          />
-        </label>
-        <label className="min-w-0 space-y-2">
-          <span>End</span>
-          <Input
-            type="time"
-            aria-label="End"
-            required
-            step={60}
-            value={end}
-            onChange={(event) => {
-              setEnd(event.currentTarget.value)
-              setError(null)
-            }}
-          />
-        </label>
-        <label className="col-span-2 space-y-2">
-          <span>Red brightness (%)</span>
-          <Input
-            type="number"
-            aria-label="Red brightness"
-            required
-            min={0}
-            max={100}
-            step={1}
-            value={brightness}
-            onChange={(event) => {
-              setBrightness(event.currentTarget.value)
-              setError(null)
-            }}
-          />
-        </label>
-      </fieldset>
-      <p>
-        Times follow Copenhagen, including summer and winter time. Settings are
-        kept while disabled.
-      </p>
-      {error !== null ? <p role="alert">{error}</p> : null}
-      <Button type="submit" variant="outline" disabled={pending || !dirty}>
-        Save bedtime settings
-      </Button>
-    </form>
   )
 }
