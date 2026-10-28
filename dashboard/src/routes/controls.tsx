@@ -34,7 +34,6 @@ function ControlsPage(): React.JSX.Element {
           sendCommand={sendLightCommand}
         />
         <Link to="/backlight" className="backlight-link" title="LED">
-          <span className="backlight-link-tv" aria-hidden="true" />
           <span className="sr-only">LED · TV backlight</span>
         </Link>
       </div>
