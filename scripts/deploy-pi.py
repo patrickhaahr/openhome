@@ -12,7 +12,10 @@ import sys
 root = Path.home() / "d/openhome"
 areas = ("api", "mcp", "dashboard")
 versions = dict(zip(areas, sys.argv[1:4], strict=True))
-verify_only = sys.argv[4:] == ["--verify-only"]
+released = sys.argv[4].removeprefix("--areas=").split(",")
+verify_only = sys.argv[5:] == ["--verify-only"]
+if not sys.argv[4].startswith("--areas=") or not set(released) <= set(areas):
+    raise SystemExit("Usage: deploy-pi.py API MCP DASHBOARD --areas=a,b [--verify-only]")
 
 
 def run(*args, **kwargs):
@@ -66,8 +69,9 @@ if not verify_only:
                 "--no-user-group", "--gid", "nogroup", "--shell", "/usr/sbin/nologin", "openhome-api")
             run("sudo", "-n", "busctl", "--system", "call", "org.freedesktop.DBus",
                 "/org/freedesktop/DBus", "org.freedesktop.DBus", "ReloadConfig")
-    run("docker", "compose", "down")
-    run("docker", "compose", "pull")
+    # Only released services are pulled; `up` recreates just the containers whose image or
+    # configuration changed and leaves the rest running.
+    run("docker", "compose", "pull", *[f"openhome-{area}" for area in released])
 
 # Verify the immutable release tags against the latest images Compose will use.
 for area, version in versions.items():
@@ -81,9 +85,10 @@ if not verify_only:
 for area, version in versions.items():
     container = inspect("container", f"openhome-{area}")
     expected = expected_images[area]
+    # Containers left running keep their history; only a fresh one must have no restarts.
     if (container["Image"] != expected or not container["State"]["Running"]
             or container["State"].get("Health", {}).get("Status") != "healthy"
-            or container["RestartCount"] != 0):
+            or (area in released and container["RestartCount"] != 0)):
         raise RuntimeError(f"openhome-{area} is not a healthy, stable instance of {version}")
     print(f"openhome-{area}: {version}, correct image, healthy, zero restarts", flush=True)
 

@@ -1,4 +1,4 @@
-"""Release the three OpenHome images through the repository's just recipes."""
+"""Release the changed OpenHome images through the repository's just recipes."""
 
 import argparse
 import fcntl
@@ -14,28 +14,64 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 AREAS = ("api", "mcp", "dashboard")
+MANIFESTS = {"api": "api/Cargo.toml", "mcp": "mcp/Cargo.toml", "dashboard": "dashboard/package.json"}
 
 
 def run(*args, **kwargs):
     return subprocess.run(args, check=True, text=True, **kwargs)
 
 
+def version_of(area, text):
+    return json.loads(text)["version"] if area == "dashboard" else tomllib.loads(text)["package"]["version"]
+
+
 def versions(root):
-    result = {
-        area: tomllib.loads((root / area / "Cargo.toml").read_text())["package"]["version"]
-        for area in ("api", "mcp")
-    }
-    result["dashboard"] = json.loads((root / "dashboard/package.json").read_text())["version"]
+    result = {area: version_of(area, (root / MANIFESTS[area]).read_text()) for area in AREAS}
     if any(not re.fullmatch(r"\d+\.\d+\.\d+", version) for version in result.values()):
         raise ValueError("Release versions must use major.minor.patch")
     return result
 
 
-def bump_versions(root):
+def git(root, *args):
+    return subprocess.run(["git", *args], cwd=root, check=True, text=True, capture_output=True).stdout
+
+
+def released_at(root, area, version):
+    """The commit that set the area's current version: its last release."""
+    found = None
+    for commit in git(root, "log", "--format=%H", "--", MANIFESTS[area]).split():
+        if version_of(area, git(root, "show", f"{commit}:{MANIFESTS[area]}")) != version:
+            break
+        found = commit
+    if found is None:
+        raise ValueError(f"No commit records {area} {version}; name the areas to release")
+    return found
+
+
+def changed_areas(root):
+    """Areas with tracked or untracked changes since their last release, in release order."""
+    current = versions(root)
+    changed = set()
+    for area in AREAS:
+        since = released_at(root, area, current[area])
+        if (subprocess.run(["git", "diff", "--quiet", since, "--", area], cwd=root).returncode
+                or git(root, "ls-files", "--others", "--exclude-standard", "--", area)):
+            changed.add(area)
+    return with_dependents(changed)
+
+
+def with_dependents(areas):
+    # The MCP image compiles the API crate and locks its version.
+    areas = set(areas) | ({"mcp"} if "api" in areas else set())
+    return [area for area in AREAS if area in areas]
+
+
+def bump_versions(root, areas=AREAS):
     before = versions(root)
-    after = {}
+    after = dict(before)
     edits = {}
-    for area, version in before.items():
+    for area in with_dependents(areas):
+        version = before[area]
         major, minor, patch = version.split(".")
         after[area] = f"{major}.{minor}.{int(patch) + 1}"
         path = root / area / ("package.json" if area == "dashboard" else "Cargo.toml")
@@ -46,7 +82,7 @@ def bump_versions(root):
         if count != 1:
             raise ValueError(f"Expected one package version in {path}")
         edits[path] = content
-    for area in ("api", "mcp"):
+    for area in [area for area in ("api", "mcp") if area in after and after[area] != before[area]]:
         path = root / area / "Cargo.lock"
         content = path.read_text()
         for dependency in (("api",) if area == "api" else ("api", "mcp")):
@@ -101,41 +137,50 @@ def verify_https():
     print(f"HTTPS verified: connected dashboard, {len(assets)} assets, API/MCP authentication.", flush=True)
 
 
-def activate(release, verify_only=False):
+def activate(release, areas=AREAS, verify_only=False):
     run("scp", "scripts/deploy-smoke.mjs", "pi:/tmp/openhome-deploy-smoke.mjs")
     if not verify_only:
         run("scp", "api/compose.yml", "pi:/tmp/openhome-compose.yml")
         run("scp", "api/compose.bluetooth.yml", "pi:/tmp/openhome-compose.bluetooth.yml")
-    arguments = [release[area] for area in AREAS]
+    arguments = [release[area] for area in AREAS] + ["--areas=" + ",".join(areas)]
     if verify_only:
         arguments.append("--verify-only")
     run("ssh", "pi", shlex.join(["python3", "-", *arguments]), input=(ROOT / "scripts/deploy-pi.py").read_text())
     verify_https()
 
 
-def main(mode):
+def main(mode, requested=()):
     if mode == "builder":
         builder()
         return
     release = versions(ROOT)
+    areas = list(AREAS)
     pending = ROOT / ".devenv/release.json"
     if mode in ("deploy", "current"):
         if mode == "deploy" and pending.exists():
             raise ValueError("An unfinished release exists; use just deploy-current")
-        if mode == "current" and (not pending.exists() or json.loads(pending.read_text()) != release):
-            raise ValueError("No unfinished release matches the current versions; use just deploy")
+        if mode == "current":
+            unfinished = json.loads(pending.read_text()) if pending.exists() else {}
+            if unfinished.get("versions") != release:
+                raise ValueError("No unfinished release matches the current versions; use just deploy")
+            areas = unfinished["areas"]
+        else:
+            areas = with_dependents(requested) if requested else changed_areas(ROOT)
+            if not areas:
+                raise ValueError("Nothing changed since the last release; name the areas to force one")
         # A failed release keeps its bumped versions; `deploy-current` resumes them.
         run("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "pi", "true")
         run("just", "docker-builder")
         if mode == "deploy":
-            release = bump_versions(ROOT)
-            pending.write_text(json.dumps(release) + "\n")
-        print("Release: " + json.dumps(release), flush=True)
-        run("just", "api-check", "mcp-check", "dashboard-check", "deployment-check")
-        for area in AREAS:
+            release = bump_versions(ROOT, areas)
+            pending.write_text(json.dumps({"versions": release, "areas": areas}) + "\n")
+        print("Release: " + json.dumps({area: release[area] for area in areas}), flush=True)
+        run("just", *[f"{area}-check" for area in areas], "deployment-check")
+        for area in areas:
             run("just", f"{area}-docker-push", release[area])
-        run("just", "dashboard-docker-smoke", f'patrickhaahr/openhome-dashboard:{release["dashboard"]}')
-    activate(release, verify_only=mode == "verify")
+        if "dashboard" in areas:
+            run("just", "dashboard-docker-smoke", f'patrickhaahr/openhome-dashboard:{release["dashboard"]}')
+    activate(release, areas, verify_only=mode == "verify")
     if mode in ("deploy", "current"):
         pending.unlink()
 
@@ -143,7 +188,10 @@ def main(mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("builder", "deploy", "current", "activate", "verify"))
-    mode = parser.parse_args().mode
+    parser.add_argument("areas", nargs="*", choices=AREAS,
+                        help="deploy only: release these areas instead of the changed ones")
+    arguments = parser.parse_args()
+    mode = arguments.mode
     lock_dir = ROOT / ".devenv"
     lock_dir.mkdir(exist_ok=True)
     with (lock_dir / "deploy.lock").open("w") as lock:
@@ -151,7 +199,7 @@ if __name__ == "__main__":
             # Builder setup is also called by recipes inside the locked release.
             if mode != "builder":
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            main(mode)
+            main(mode, arguments.areas)
         except (OSError, ValueError, subprocess.CalledProcessError) as error:
             retry = "deploy-current" if (ROOT / ".devenv/release.json").exists() else "deploy"
             sys.exit(f"Deployment stopped: {error}. Fix the failure before retrying with just {retry}.")

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from deploy import bump_versions, versions
+from deploy import bump_versions, changed_areas, versions
 
 
 class ReleaseVersions(unittest.TestCase):
@@ -35,6 +35,28 @@ class ReleaseVersions(unittest.TestCase):
                 self.assertEqual(package["version"], result[package["name"].removeprefix("openhome-")])
         self.assertEqual(json.loads((self.root / "dashboard/package.json").read_text())["name"], "dashboard")
 
+    def test_dashboard_release_leaves_api_and_mcp_versions_alone(self):
+        before = {path: path.read_bytes() for path in self.root.glob("[am]*/*")}
+        result = bump_versions(self.root, ["dashboard"])
+        self.assertEqual(result, {"api": "0.6.9", "mcp": "0.3.1", "dashboard": "0.2.3"})
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
+    def test_api_release_brings_mcp_along(self):
+        result = bump_versions(self.root, ["api"])
+        self.assertEqual(result, {"api": "0.6.10", "mcp": "0.3.2", "dashboard": "0.2.2"})
+
+    def test_changes_since_each_area_release_choose_the_areas(self):
+        git = lambda *args: subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
+        git("init", "-q")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "root")
+        git("add", ".")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "release")
+        self.assertEqual(changed_areas(self.root), [])
+        (self.root / "dashboard/idle.css").write_text("a {}\n")
+        self.assertEqual(changed_areas(self.root), ["dashboard"])
+        (self.root / "api/main.rs").write_text("fn main() {}\n")
+        self.assertEqual(changed_areas(self.root), ["api", "mcp", "dashboard"])
+
     def test_inconsistent_lock_aborts_before_changing_any_version(self):
         lock = self.root / "mcp/Cargo.lock"
         lock.write_text(lock.read_text().replace('version = "0.6.9"', 'version = "0.6.8"'))
@@ -59,12 +81,13 @@ class ReleaseVersions(unittest.TestCase):
             executable.chmod(0o700)
         environment = {**os.environ, "PATH": str(binaries) + os.pathsep + os.environ["PATH"]}
         expected = {"api": "0.6.10", "mcp": "0.3.2", "dashboard": "0.2.3"}
-        for mode in ("deploy", "deploy", "current"):
-            result = subprocess.run([sys.executable, str(scripts / "deploy.py"), mode],
+        for mode in (["deploy", "api", "dashboard"], ["deploy", "api", "dashboard"], ["current"]):
+            result = subprocess.run([sys.executable, str(scripts / "deploy.py"), *mode],
                                     cwd=self.root, env=environment, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(versions(self.root), expected)
-            self.assertEqual(json.loads((self.root / ".devenv/release.json").read_text()), expected)
+            self.assertEqual(json.loads((self.root / ".devenv/release.json").read_text()),
+                             {"versions": expected, "areas": ["api", "mcp", "dashboard"]})
 
 
 if __name__ == "__main__":

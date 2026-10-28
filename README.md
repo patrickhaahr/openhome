@@ -116,7 +116,8 @@ image publishing, Raspberry Pi updates and Caddy routing on the existing hostnam
 
 ## Deployment
 
-Run `devenv shell -- just deploy` to patch-bump, check, build locally for amd64 and
-arm64, publish, deploy to the Pi and verify the release. See the
+Run `devenv shell -- just deploy` to patch-bump only the images changed since their last
+release, check, build them locally for amd64 and arm64, publish, deploy them to the Pi and
+verify the release. See the
 [deployment skill](.agents/skills/deploy/SKILL.md) for agent operation and the
 [deployment guide](dashboard/README.md#docker-deployment) for setup and recovery.
