@@ -3559,8 +3559,56 @@ a.dir-go:hover {
 .controls-lights > .panel {
   flex: 1;
 }
+/* The way to LED is a small LED: a TV on the night wall, its light glowing behind it. */
 .backlight-link {
-  padding: 0.75rem;
-  text-align: center;
-  text-underline-offset: 0.25em;
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 5.5rem;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 2rem;
+  background: #07080a;
+  transition: scale var(--t-fast) var(--ease);
+}
+.backlight-link::before {
+  content: "";
+  position: absolute;
+  inset: -14% 2%;
+  z-index: -1;
+  background: conic-gradient(
+    #2f54ff 0deg,
+    #6c46ff 70deg,
+    #ff7a3c 140deg,
+    #ff5b1f 180deg,
+    #ff7a3c 220deg,
+    #6c46ff 290deg,
+    #2f54ff 360deg
+  );
+  -webkit-mask-image: radial-gradient(closest-side, #000 50%, transparent);
+  mask-image: radial-gradient(closest-side, #000 50%, transparent);
+  opacity: 0.85;
+  scale: 0.92;
+  transition:
+    opacity var(--t-mid) var(--ease),
+    scale var(--t-mid) var(--ease);
+}
+.backlight-link:hover::before,
+.backlight-link:focus-visible::before {
+  opacity: 1;
+  scale: 1.08;
+}
+.backlight-link:active {
+  scale: 0.97;
+}
+.backlight-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.backlight-link-tv {
+  width: min(40%, 4.5rem);
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgb(236 236 230 / 12%);
+  border-radius: 0.25rem;
+  background: #000;
 }

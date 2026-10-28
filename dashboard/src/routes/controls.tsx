@@ -33,8 +33,9 @@ function ControlsPage(): React.JSX.Element {
           connectionState={health.state}
           sendCommand={sendLightCommand}
         />
-        <Link to="/backlight" className="backlight-link">
-          LED · TV backlight →
+        <Link to="/backlight" className="backlight-link" title="LED">
+          <span className="backlight-link-tv" aria-hidden="true" />
+          <span className="sr-only">LED · TV backlight</span>
         </Link>
       </div>
       <TvRemote
