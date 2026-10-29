@@ -365,7 +365,7 @@ A user-recorded day weight in kg, one row per date and kept only in the daily bo
 _Avoid_: Workout body_weight, weight log entry
 
 **Profile**:
-The single user configuration row holding height, sex and Max Heart Rate used to interpret fitness data.
+The single user configuration row holding height, sex, birth date and Max Heart Rate used to interpret fitness and nutrition data.
 _Avoid_: User account, settings record
 
 **Max Heart Rate**:
@@ -379,6 +379,97 @@ _Avoid_: Custom zone, heart-rate-reserve zone
 **Journal Entry**:
 A user's answer to one NOOP journal question for the day it was logged against in NOOP.
 _Avoid_: Survey, habit log
+
+### Nutrition
+
+**Food**:
+One entry of the Danish Food Composition Database (formerly Frida) whose energy,
+macronutrients and micronutrients are given per 100 g edible part. Mixed dishes
+are logged as their Foods, never as a user-made food.
+_Avoid_: Ingredient, Custom Food, item
+
+**Product**:
+A packaged food identified by its barcode, linked to the one Food that best
+matches it. Its label supplies energy and macronutrients; the linked Food
+supplies vitamins and minerals.
+_Avoid_: Branded Food, barcode item
+
+**NOVA Class**:
+The processing class (1–4) of a Food or Product, decided once and kept with it.
+Products take Open Food Facts' class; unclassified items are left out of NOVA
+shares rather than guessed.
+_Avoid_: Processing score, food quality score
+
+**Portion**:
+A Food or Product with an eaten amount in grams; its nutrients are the per-100 g
+values scaled to that amount. Grams may be the user's estimate.
+_Avoid_: Serving, food entry
+
+**Meal**:
+A named, reusable set of Portions that can be logged again without analysing a
+photo. Editing a Meal never changes Meal Logs made from it.
+_Avoid_: Meal template, recipe, Meal Log
+
+**Meal Log**:
+One eating occasion at an explicit Copenhagen time, holding its own copy of
+Portions and an optional photo. It counts toward the calendar day of that time,
+which may be in the past when the user says so.
+_Avoid_: Meal, food diary entry, check-in
+
+**Recommended Intake**:
+The NNR 2023 daily amount of a nutrient for the Profile's sex and age band,
+either a recommended or an adequate intake. Reaching or exceeding it is good.
+_Avoid_: RDA, goal, daily value
+
+**Upper Limit**:
+EFSA's Tolerable Upper Intake Level: the highest habitual daily intake unlikely
+to cause harm. Some apply only to the supplement share of a nutrient. A 7-day
+average above it means cut down; a single day above it is only a caution.
+_Avoid_: Overdose threshold, maximum, red line
+
+**Supplement**:
+A labelled product whose amounts are given per dose (tablet, capsule, scoop or
+ml) rather than per 100 g. It may supply vitamins and minerals or other
+compounds such as creatine or omega-3 fatty acids.
+_Avoid_: Pill, Food, medication
+
+**Supplement Dose**:
+A Supplement with a number of doses taken, logged at a time like a Portion and
+able to belong to a Meal.
+_Avoid_: Pill log, intake
+
+**Incomplete Day**:
+A day the user has said was not fully logged. Its intake is left out of the
+Estimated Expenditure until the user says the day is complete; backfilling a
+meal does not clear it.
+_Avoid_: Missed day, partial day
+
+**Trend Weight**:
+Body Weight smoothed over time so daily water and salt swings do not read as
+fat gain or loss.
+_Avoid_: Average weight, scale weight
+
+**Estimated Expenditure**:
+The energy the user burns per day, inferred from logged intake and the change in
+Trend Weight over the last 28 days, starting from a formula estimate until enough
+days are logged. Exercise is already contained in it.
+_Avoid_: Maintenance, TDEE, BMR, burned calories
+
+**Nutrition Goal**:
+The user's chosen direction and weekly rate: lose, maintain or lean bulk. A
+change takes effect from the day it is set.
+_Avoid_: Diet, phase, deficit goal
+
+**Calorie Target**:
+The daily energy to eat: Estimated Expenditure adjusted by the Nutrition Goal's
+rate, set each Copenhagen Monday and held for that week, never below BMR. The
+same target applies on training and rest days.
+_Avoid_: Maintenance, budget, goal
+
+**Macro Targets**:
+The day's protein target of 2.2 g per kg Trend Weight, a fat floor, and carbs as
+whatever energy of the Calorie Target remains.
+_Avoid_: Macro split, macro ratios
 
 ## Relationships
 
