@@ -438,12 +438,6 @@ A Supplement with a number of doses taken, logged at a time like a Portion and
 able to belong to a Meal.
 _Avoid_: Pill log, intake
 
-**Incomplete Day**:
-A day the user has said was not fully logged. Its intake is left out of the
-Estimated Expenditure until the user says the day is complete; backfilling a
-meal does not clear it.
-_Avoid_: Missed day, partial day
-
 **Trend Weight**:
 Body Weight smoothed over time so daily water and salt swings do not read as
 fat gain or loss.
@@ -452,7 +446,8 @@ _Avoid_: Average weight, scale weight
 **Estimated Expenditure**:
 The energy the user burns per day, inferred from logged intake and the change in
 Trend Weight over the last 28 days, starting from a formula estimate until enough
-days are logged. Exercise is already contained in it.
+days are logged. Days without Meal Logs are left out; backfilled meals count once
+logged. Exercise is already contained in it.
 _Avoid_: Maintenance, TDEE, BMR, burned calories
 
 **Nutrition Goal**:
