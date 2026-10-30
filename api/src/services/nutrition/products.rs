@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use super::food_database::{FoodDatabase, FoodError, FoodSummary};
+use super::nova;
 use super::open_food_facts::{LabelProduct, Lookup, OpenFoodFacts, ProviderError};
 use super::parameters;
 
@@ -286,7 +287,8 @@ pub async fn lookup(
     // A preview leads to linking, which needs Foods: spend no provider read without them.
     foods.check_ready()?;
     let label = fetch(provider, &barcode).await?;
-    let suggested_foods = suggest(foods, &label).await?;
+    let mut suggested_foods = suggest(foods, &label).await?;
+    nova::classify_summaries(db, &mut suggested_foods).await?;
     Ok(ProductLookup {
         linked: false,
         product: Product {

@@ -241,7 +241,8 @@ async fn search_matches_danish_and_english_names_with_key_values_density_and_was
                 "alcohol": {"value": 0.0, "unit": "g"}
             },
             "density": {"value": 1.03, "unit": "g/ml"},
-            "waste": {"value": 0.0, "unit": "%"}
+            "waste": {"value": 0.0, "unit": "%"},
+            "nova_class": null
         }])
     );
 

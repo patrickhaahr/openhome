@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE meal_log_portions SET nova_class = ?1\n        WHERE food_id = ?2 AND dataset_version = ?3 AND product_barcode IS NULL\n            AND nova_class IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "34e995994e22ddaef334057eea3468321d93aa48ae725cfa718b8d2c2d50de36"
+}

@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use super::food_database::{FoodDatabase, FoodError};
 use super::meal_photos::{MealPhotos, PhotoError, Size, Upload};
+use super::nova::{self, NovaClass};
 use super::parameters::{self, Unit};
 use super::products::{self, Barcode, ProductError};
 use crate::services::patch::Patch;
@@ -192,6 +193,9 @@ pub struct Portion {
     pub grams: f64,
     /// The Food database version the values were copied from.
     pub dataset_version: String,
+    /// The Product's Open Food Facts class or the Food's class, as logged; null while
+    /// unclassified.
+    pub nova_class: Option<NovaClass>,
     pub nutrients: KeyNutrients<PortionAmount>,
 }
 
@@ -260,6 +264,7 @@ pub(super) struct StoredPortion {
     name_en: String,
     pub grams: f64,
     dataset_version: String,
+    pub nova_class: Option<NovaClass>,
     pub values: HashMap<String, StoredValue>,
 }
 
@@ -403,6 +408,7 @@ impl StoredLog {
                     name_en: portion.name_en,
                     grams: portion.grams,
                     dataset_version: portion.dataset_version,
+                    nova_class: portion.nova_class,
                 })
                 .collect(),
             totals,
@@ -605,7 +611,7 @@ struct PreparedValue {
     source: ValueSource,
 }
 
-/// A Portion ready to write: its Food, its Product if any, and its snapshot.
+/// A Portion ready to write: its Food, its Product if any, its NOVA Class and its snapshot.
 struct PreparedPortion {
     grams: f64,
     food_id: i64,
@@ -613,11 +619,13 @@ struct PreparedPortion {
     name_en: String,
     dataset_version: String,
     product: Option<PortionProduct>,
+    nova_class: Option<NovaClass>,
     values: Vec<PreparedValue>,
 }
 
 /// Snapshots each Portion: a Product's label values, then its Food's values for every key the
-/// label lacks, then the estimates, which may only fill keys neither has.
+/// label lacks, then the estimates, which may only fill keys neither has. A Product Portion takes
+/// the Product's NOVA Class and a Food Portion the Food's.
 async fn prepare(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -631,6 +639,14 @@ async fn prepare(
         })
         .collect();
     let stored = products::stored(db, &barcodes).await?;
+    let classified_foods: Vec<i64> = portions
+        .iter()
+        .filter_map(|portion| match &portion.item {
+            Item::Food(food_id) => Some(*food_id),
+            Item::Product(_) => None,
+        })
+        .collect();
+    let classes = nova::food_classes(db, &classified_foods).await?;
     let mut items = Vec::with_capacity(portions.len());
     for portion in portions {
         items.push(match &portion.item {
@@ -700,6 +716,12 @@ async fn prepare(
                 name_da: food.name_da.clone(),
                 name_en: food.name_en.clone(),
                 dataset_version: food.dataset_version.clone(),
+                nova_class: match product {
+                    Some(product) => product
+                        .nova_class
+                        .and_then(|class| NovaClass::new(class.into())),
+                    None => classes.get(&food_id).copied(),
+                },
                 product: product.map(|product| PortionProduct {
                     barcode: product.barcode.clone(),
                     name: product.name.clone(),
@@ -723,9 +745,10 @@ async fn insert_portions(
         let barcode = product.map(|product| product.barcode.as_str());
         let name = product.and_then(|product| product.name.as_deref());
         let brand = product.and_then(|product| product.brand.as_deref());
+        let nova_class = portion.nova_class.map(|class| i64::from(class.get()));
         let portion_id = sqlx::query_scalar!(
-            "INSERT INTO meal_log_portions (meal_log_id, position, grams, food_id, name_da, name_en, dataset_version, product_barcode, product_name, product_brand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            meal_log_id, position, portion.grams, portion.food_id, portion.name_da, portion.name_en, portion.dataset_version, barcode, name, brand)
+            "INSERT INTO meal_log_portions (meal_log_id, position, grams, food_id, name_da, name_en, dataset_version, product_barcode, product_name, product_brand, nova_class) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            meal_log_id, position, portion.grams, portion.food_id, portion.name_da, portion.name_en, portion.dataset_version, barcode, name, brand, nova_class)
             .fetch_one(&mut *transaction)
             .await?;
         let values = serde_json::to_string(&portion.values)
@@ -769,7 +792,7 @@ pub(super) async fn load(
     .await?;
     let portions = sqlx::query!(
         r#"SELECT p.id AS "id!", p.meal_log_id, p.grams, p.food_id, p.name_da, p.name_en, p.dataset_version,
-            p.product_barcode, p.product_name, p.product_brand
+            p.product_barcode, p.product_name, p.product_brand, p.nova_class
         FROM meal_log_portions p JOIN meal_logs m ON m.id = p.meal_log_id
         WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2) AND (?3 IS NULL OR m.day <= ?3)
         ORDER BY p.meal_log_id, p.position"#,
@@ -820,6 +843,7 @@ pub(super) async fn load(
                 name_en: row.name_en,
                 grams: row.grams,
                 dataset_version: row.dataset_version,
+                nova_class: row.nova_class.and_then(NovaClass::new),
                 values: values_by_portion.remove(&row.id).unwrap_or_default(),
             });
     }

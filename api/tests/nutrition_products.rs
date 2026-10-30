@@ -654,3 +654,95 @@ async fn unlinked_or_ambiguous_product_portions_are_refused_without_writing() {
     assert_eq!(api.day().await["meal_logs"], json!([]));
     assert_eq!(api.provider_reads().await, 0);
 }
+
+#[tokio::test]
+async fn the_nova_1_share_counts_classified_kcal_with_products_taking_the_open_food_facts_class() {
+    let api = Api::start().await;
+    api.linked_skyr(1693).await;
+    let (_, preview) = api.lookup(SKYR).await;
+    assert_eq!(preview["product"]["nova_class"], 3);
+
+    // Nothing classified yet: no share rather than zero.
+    api.logged(json!([{"food_id": 2, "grams": 100}]), "apple")
+        .await;
+    assert_eq!(
+        api.day().await["nova"],
+        json!({
+            "nova_1_share": null, "nova_1_kcal": 0.0, "classified_kcal": 0.0,
+            "unclassified_portions": 1,
+        })
+    );
+
+    // Classifying the skyr Food leaves the Product on Open Food Facts' class.
+    for (food_id, nova_class) in [(1693, 1), (3, 1), (907, 1)] {
+        let (status, body) = api
+            .send(
+                Method::PUT,
+                &format!("/api/nutrition/foods/{food_id}/nova-class"),
+                Some(json!({"nova_class": nova_class})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+    let meal_log = api
+        .logged(
+            json!([
+                {"barcode": SKYR, "grams": 200},
+                {"food_id": 3, "grams": 100},
+                {"food_id": 907, "grams": 100},
+            ]),
+            "breakfast",
+        )
+        .await;
+    let classes: Vec<&Value> = meal_log["portions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|portion| &portion["nova_class"])
+        .collect();
+    assert_eq!(classes, [&json!(3), &json!(1), &json!(1)]);
+
+    // Banana 90 kcal and chicken 150 kcal are Class 1 of 400 classified kcal, beside the
+    // 160 kcal Class 3 skyr; the unclassified 50 kcal apple is left out.
+    assert_eq!(
+        api.day().await["nova"],
+        json!({
+            "nova_1_share": 0.6, "nova_1_kcal": 240.0, "classified_kcal": 400.0,
+            "unclassified_portions": 1,
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_product_without_an_open_food_facts_class_stays_unclassified_when_its_food_is_classified()
+{
+    let api = Api::start().await;
+    let mut unclassified = skyr_label();
+    unclassified["nova_group"] = Value::Null;
+    api.provider(SKYR, found(&unclassified), 1).await;
+    let (status, linked) = api.link(SKYR, 1693, "link-skyr").await;
+    assert_eq!(status, StatusCode::CREATED, "{linked}");
+    api.logged(json!([{"barcode": SKYR, "grams": 100}]), "skyr")
+        .await;
+
+    let (status, classified) = api
+        .send(
+            Method::PUT,
+            "/api/nutrition/foods/1693/nova-class",
+            Some(json!({"nova_class": 1})),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK, "{classified}");
+    assert_eq!(classified["classified_portions"], 0);
+    let later = api
+        .logged(json!([{"barcode": SKYR, "grams": 100}]), "skyr-2")
+        .await;
+    assert_eq!(later["portions"][0]["nova_class"], Value::Null);
+    let day = api.day().await;
+    assert_eq!(
+        day["meal_logs"][0]["portions"][0]["nova_class"],
+        Value::Null
+    );
+    assert_eq!(day["nova"]["nova_1_share"], Value::Null);
+}
