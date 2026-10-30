@@ -89,7 +89,8 @@ occasion with its Portions (food_id and grams) and an explicit eaten_at: the mes
 describes (\"an hour ago\", \"yesterday morning\") as RFC 3339 with its offset. The Meal Log counts toward the \
 Europe/Copenhagen calendar day of that time, so a forgotten meal is backfilled by giving its real past time. Split a mixed \
 dish (lasagne, a smoothie) into the Foods it is made of with estimated grams for each, and put context such as \"rough \
-estimate\" in the optional note. Generate a unique request_id for each intended meal and reuse the identical arguments and \
+estimate\" in the optional note. When the user sent a photo of the meal, pass the image file as base64 in photo (JPEG \
+or PNG, at most 10 MB) so it shows in the day's log; OpenHome strips its metadata, including location. Generate a unique request_id for each intended meal and reuse the identical arguments and \
 request_id on every retry, including after an uncertain transport failure: an accepted retry returns replayed=true and \
 never logs the meal twice, changed arguments conflict, and a deleted Meal Log cannot be recreated by an old request_id. \
 Each Portion keeps the values it was logged with, so later database updates never change past days. Correct a Meal Log \
@@ -206,14 +207,17 @@ wherever values are shown.";
 
 const LOG_MEAL: &str = "Log one eating occasion as a Meal Log: 1-50 Portions, each a food_id from \
 search_foods with edible grams, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
-describes; never in the future), with an optional note. It counts toward the Europe/Copenhagen calendar day of eaten_at, \
+describes; never in the future), with an optional note and an optional photo (the user's JPEG or PNG as base64, at most \
+10 MB, stored without metadata as AVIF with a thumbnail). It counts toward the Europe/Copenhagen calendar day of eaten_at, \
 so past times backfill earlier days. Each Portion copies every per-100 g value of its Food, so later database updates \
 never change it. Returns meal_log (id, eaten_at in Copenhagen time, day, note, portions with food_id, names, grams, \
 dataset_version and key nutrients energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol as {value, \
-unit, source}, and totals as {value, unit, unknown_portions}) and replayed. Generate a unique request_id per intended meal \
-and reuse identical arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed \
+unit, source}, totals as {value, unit, unknown_portions}, and photo with its size or null) and replayed. Generate a \
+unique request_id per intended meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed \
 arguments conflict (409) and a deleted Meal Log is not recreated. A null value is unknown, never zero. An unknown food_id \
-is a 404 error; while the Food database is unavailable the result is a 503 error with code food_database_unavailable.";
+is a 404 error; while the Food database is unavailable the result is a 503 error with code food_database_unavailable. A \
+photo that is not a JPEG or PNG is a 400 error and one over 10 MB or 12000 px a side is a 413 error; nothing is logged \
+then.";
 
 const MEAL_LOGS: &str = "List Meal Logs for one Europe/Copenhagen calendar day (`day`) or an inclusive range of up \
 to 90 days (`from` and `to`), oldest first. Each has its id, eaten_at in Copenhagen time with its offset, day, note, \
@@ -223,7 +227,8 @@ A null value is unknown, never zero. Works while the Food database is unavailabl
 
 const UPDATE_MEAL_LOG: &str = "Correct one Meal Log by meal_log_id. Supplied fields change together; omitted fields \
 are preserved. eaten_at moves it to that time's Europe/Copenhagen day; note null clears the note; portions replaces \
-every Portion (food_id and edible grams) with fresh values from the current Food database. Returns the updated Meal Log. \
+every Portion (food_id and edible grams) with fresh values from the current Food database; photo (base64 JPEG or PNG, at \
+most 10 MB) replaces the photo and photo null removes it. Returns the updated Meal Log. A rejected photo changes nothing. \
 A missing Meal Log or food_id is a 404 error; replacing Portions while the Food database is unavailable is a 503 error. \
 After an uncertain response, list meal_logs for the day before retrying.";
 
@@ -1217,14 +1222,19 @@ impl ServerHandler for OpenHomeTools {
     }
 }
 
+/// The largest MCP request body: a `log_meal` or `update_meal_log` call carrying a base64 meal
+/// photo of up to 10 MB (about 13.4 MiB encoded) with its JSON-RPC envelope. rmcp's own default
+/// is 4 MiB.
+pub const MAX_REQUEST_BODY_BYTES: usize = 16 * 1024 * 1024;
+
 /// The MCP endpoint at [`MCP_PATH`], answering only clients that present `client_key` as a
-/// bearer token.
+/// bearer token, with bodies up to [`MAX_REQUEST_BODY_BYTES`].
 pub fn router(api: OpenHomeApi, client_key: ApiKey, config: StreamableHttpServerConfig) -> Router {
     let service: StreamableHttpService<OpenHomeTools, LocalSessionManager> =
         StreamableHttpService::new(
             move || Ok(OpenHomeTools::new(api.clone())),
             Arc::default(),
-            config,
+            config.with_max_request_body_bytes(MAX_REQUEST_BODY_BYTES),
         );
     Router::new()
         .nest_service(MCP_PATH, service)
