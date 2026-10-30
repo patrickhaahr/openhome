@@ -380,6 +380,12 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
         </h3>
         <Amount total={meal.totals.energy_kcal} />
       </header>
+      {meal.meal_name === null ? null : (
+        <p className="food-meal-from">
+          <span className="sr-only">Logged from the Meal </span>
+          {meal.meal_name}
+        </p>
+      )}
       {meal.note === null ? null : <p className="food-note">{meal.note}</p>}
       <ul className="food-portions" aria-label="Portions">
         {meal.portions.map((portion, index) => (
