@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE products SET food_id = ?, food_name_da = ?, food_name_en = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE barcode = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "2ff7895f3ab379f982ec46e4b66337d3bcba54d3fca405c1e0f8f8d487c13b2e"
+}

@@ -10,6 +10,7 @@ use openhome_api::services::noop_push;
 use openhome_api::services::nutrition::{
     food_database::{DatasetPin, FoodDatabase},
     meal_photos::MealPhotos,
+    open_food_facts::OpenFoodFacts,
 };
 use openhome_api::{AppState, DockerCache, auth, routes};
 use openhome_mcp::{ApiKey, MCP_PATH, OpenHomeApi, parse_api_url};
@@ -56,6 +57,7 @@ async fn start_api() -> String {
 
 /// The API routes over `foods`, for Food database reads.
 async fn start_api_with_foods(foods: FoodDatabase) -> String {
+    let labels = open_food_facts().await;
     let state = AppState {
         db: training_log().await,
         noop_db: noop_mirror().await,
@@ -73,12 +75,49 @@ async fn start_api_with_foods(foods: FoodDatabase) -> String {
         .merge(routes::nutrition::router(
             foods,
             MealPhotos::new(Path::new(env!("CARGO_TARGET_TMPDIR")).join("meal-photos")),
+            labels,
         ))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, api_key.clone())
         }));
     format!("http://{}", serve(app).await)
+}
+
+/// The barcode of the synthetic product: a restricted-circulation GS1 number, never a package.
+const SYNTHETIC_BARCODE: &str = "2001234567893";
+
+/// Open Food Facts on loopback: it knows one synthetic skyr and nothing else.
+async fn open_food_facts() -> OpenFoodFacts {
+    let provider = Router::new().route(
+        "/api/v2/product/{barcode}",
+        axum::routing::get(
+            |axum::extract::Path(barcode): axum::extract::Path<String>| async move {
+                if barcode != SYNTHETIC_BARCODE {
+                    return (
+                        axum::http::StatusCode::NOT_FOUND,
+                        axum::Json(json!({"code": barcode, "status": 0})),
+                    );
+                }
+                let product = json!({
+                    "product_name": "Vanilla Skyr",
+                    "brands": "Synthetic Dairy",
+                    "generic_name": "Skyr",
+                    "nova_group": 3,
+                    "nutriments": {
+                        "energy-kcal_100g": 76, "proteins_100g": 9.5, "carbohydrates_100g": 8.6,
+                        "fat_100g": 0.4, "salt_100g": 0.1, "vitamin-d_100g": 0.000_001,
+                    },
+                });
+                (
+                    axum::http::StatusCode::OK,
+                    axum::Json(json!({"code": barcode, "product": product, "status": 1})),
+                )
+            },
+        ),
+    );
+    let url = format!("http://{}/", serve(provider).await);
+    OpenFoodFacts::new(url.parse().unwrap()).unwrap()
 }
 
 /// A Food database: when `imported`, one complete import of the pinned dataset holding a

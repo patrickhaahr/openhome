@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT barcode, food_id FROM product_link_receipts WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "barcode",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "food_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "703e62b6481444516a6ebd9999480fbb5610ece2c03009a93623c0db76170ad5"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO meal_log_portion_values (portion_id, key, value, unit, source) SELECT ?, json_extract(value, '$.key'), json_extract(value, '$.value'), json_extract(value, '$.unit'), json_extract(value, '$.source') FROM json_each(?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "669b02c6d1485b1993a20133dcfdbfccaf4b5d0c09cce552263502d9d7556f1e"
+}

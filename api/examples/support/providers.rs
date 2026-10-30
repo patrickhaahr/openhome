@@ -1,5 +1,6 @@
 //! Synthetic loopback upstreams shared by the dashboard examples: openrouteservice-shaped walking
-//! loops and TMDB-shaped titles. Nothing here is a real path, title or household record.
+//! loops, TMDB-shaped titles and an Open Food Facts-shaped product. Nothing here is a real path,
+//! title, product or household record.
 
 use axum::{
     Json,
@@ -7,7 +8,9 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use openhome_api::services::{route_loop::ProviderEndpoint, tmdb::TmdbService};
+use openhome_api::services::{
+    nutrition::open_food_facts::OpenFoodFacts, route_loop::ProviderEndpoint, tmdb::TmdbService,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
@@ -21,6 +24,48 @@ pub async fn synthetic_tmdb() -> anyhow::Result<TmdbService> {
     let url = format!("http://{}/3/", listener.local_addr()?);
     tokio::spawn(async move { axum::serve(listener, provider).await });
     TmdbService::new("synthetic-provider-token", url.parse()?)
+}
+
+/// The barcode of the synthetic product: a restricted-circulation GS1 number, never a real
+/// package.
+pub const SYNTHETIC_BARCODE: &str = "2001234567893";
+
+/// An Open Food Facts client backed by a loopback provider that knows one fictional skyr.
+pub async fn synthetic_open_food_facts() -> anyhow::Result<OpenFoodFacts> {
+    let provider = axum::Router::new().route(
+        "/api/v2/product/{barcode}",
+        get(|Path(barcode): Path<String>| async move { synthetic_product(&barcode) }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let url = format!("http://{}/", listener.local_addr()?);
+    tokio::spawn(async move { axum::serve(listener, provider).await });
+    OpenFoodFacts::new(url.parse()?)
+}
+
+fn synthetic_product(barcode: &str) -> (StatusCode, Json<Value>) {
+    if barcode != SYNTHETIC_BARCODE {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"code": barcode, "status": 0, "status_verbose": "product not found"})),
+        );
+    }
+    let product = json!({
+        "code": barcode,
+        "product_name": "Vanilla Skyr",
+        "brands": "Synthetic Dairy",
+        "generic_name": "Skyr",
+        "categories_tags": ["en:dairies", "en:fermented-milk-products", "da:skyr"],
+        "nova_group": 3,
+        "nutriments": {
+            "energy-kcal_100g": 76, "energy-kj_100g": 318, "proteins_100g": 9.5,
+            "carbohydrates_100g": 8.6, "sugars_100g": 8.1, "fat_100g": 0.4,
+            "salt_100g": 0.1, "calcium_100g": 0.11,
+        },
+    });
+    (
+        StatusCode::OK,
+        Json(json!({"code": barcode, "product": product, "status": 1})),
+    )
 }
 
 /// Answer round trips on loopback in openrouteservice's response shape. Each seed draws a square

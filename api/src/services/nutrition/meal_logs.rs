@@ -1,9 +1,11 @@
 //! Meal Logs (`CONTEXT.md`, Nutrition): what the user ate, at an explicit time.
 //!
 //! A Meal Log belongs to the Europe/Copenhagen calendar day of its time, so a backfilled meal
-//! lands on the day it was eaten. Each Portion copies every known per-100 g value of its Food when
-//! it is logged, tagged with where the value came from (ADR 0012): a later Food database import
-//! never changes a past Meal Log, and replacing a Portion is the only way to correct one.
+//! lands on the day it was eaten. Each Portion copies every known per-100 g value when it is
+//! logged, tagged with where the value came from (ADR 0012): a Product Portion takes its label
+//! values first and its linked Food's values for the rest, and the agent may estimate values no
+//! source has. A later Food database import or re-link never changes a past Meal Log, and
+//! replacing a Portion is the only way to correct one.
 //!
 //! Logging follows the `request_id` receipt pattern: a retry replays the original result, the
 //! same `request_id` with changed arguments is a conflict, and a deleted Meal Log keeps its
@@ -12,16 +14,17 @@
 //! An optional photo is encoded before anything is written and stored before the Meal Log row
 //! that references it, so a rejected photo writes nothing and a failed write removes its files.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use super::food_database::{FoodDatabase, FoodError, FoodSnapshot};
+use super::food_database::{FoodDatabase, FoodError};
 use super::meal_photos::{MealPhotos, PhotoError, Size, Upload};
 use super::parameters::{self, Unit};
+use super::products::{self, Barcode, ProductError};
 use crate::services::patch::Patch;
 use crate::services::training::calendar::{self, CalendarDay};
 
@@ -62,12 +65,19 @@ pub enum ValueSource {
     Estimate,
 }
 
-/// One Portion to log: edible grams of a Food.
+/// One Portion to log: edible grams of a Food (`food_id`) or of a linked Product (`barcode`).
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PortionRequest {
-    pub food_id: i64,
+    #[serde(default)]
+    pub food_id: Option<i64>,
+    #[serde(default)]
+    pub barcode: Option<String>,
     pub grams: f64,
+    /// Agent estimates per 100 g edible part, keyed and united as in the parameter vocabulary,
+    /// for values neither a label nor the Food has.
+    #[serde(default)]
+    pub estimates: BTreeMap<String, f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,7 +95,8 @@ pub struct LogMeal {
 }
 
 /// Omitted fields keep their value; `note: null` clears the note and `photo: null` removes the
-/// photo. `portions` replaces every Portion with new snapshots from the current Food database;
+/// photo. `portions` replaces every Portion with new snapshots of the current Products and Food
+/// database;
 /// `photo` (base64 JPEG or PNG) replaces the photo.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -162,9 +173,20 @@ pub struct Total {
     pub unknown_portions: usize,
 }
 
+/// The Product a Portion was logged as, as it was named then.
+#[derive(Clone, Debug, Serialize)]
+pub struct PortionProduct {
+    pub barcode: String,
+    pub name: Option<String>,
+    pub brand: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Portion {
+    /// The Food, or for a Product the Food it was linked to when logged.
     pub food_id: i64,
+    /// Null for a Food Portion.
+    pub product: Option<PortionProduct>,
     pub name_da: String,
     pub name_en: String,
     pub grams: f64,
@@ -233,6 +255,7 @@ pub(super) struct StoredValue {
 #[derive(Debug)]
 pub(super) struct StoredPortion {
     food_id: i64,
+    product: Option<PortionProduct>,
     name_da: String,
     name_en: String,
     pub grams: f64,
@@ -313,7 +336,9 @@ pub(super) struct StoredLog {
 struct Normalized<'a> {
     eaten_at: &'a str,
     note: Option<&'a str>,
-    portions: Vec<(i64, f64)>,
+    /// `[food_id, grams]` for a Food without estimates, as receipts were first written;
+    /// otherwise an object.
+    portions: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     photo: Option<String>,
 }
@@ -373,6 +398,7 @@ impl StoredLog {
                         }
                     }),
                     food_id: portion.food_id,
+                    product: portion.product,
                     name_da: portion.name_da,
                     name_en: portion.name_en,
                     grams: portion.grams,
@@ -447,25 +473,110 @@ fn note(value: Option<String>) -> Result<Option<String>> {
     Ok(Some(value.to_owned()))
 }
 
-fn portions(requests: &[PortionRequest]) -> Result<()> {
+/// What a Portion is of.
+enum Item {
+    Food(i64),
+    Product(Barcode),
+}
+
+/// A validated Portion request.
+struct ValidPortion {
+    item: Item,
+    grams: f64,
+    estimates: BTreeMap<String, f64>,
+}
+
+impl ValidPortion {
+    /// The receipt form: `[food_id, grams]` for a Food without estimates, as receipts were
+    /// first written, so their retries still match.
+    fn normalized(&self) -> serde_json::Value {
+        match &self.item {
+            Item::Food(food_id) if self.estimates.is_empty() => {
+                serde_json::json!([food_id, self.grams])
+            }
+            Item::Food(food_id) => serde_json::json!({
+                "food_id": food_id, "grams": self.grams, "estimates": self.estimates,
+            }),
+            Item::Product(barcode) => serde_json::json!({
+                "barcode": barcode.as_str(), "grams": self.grams, "estimates": self.estimates,
+            }),
+        }
+    }
+}
+
+/// The most energy 100 g can hold: pure fat.
+const MAX_KCAL_PER_100G: f64 = 900.0;
+const MAX_KJ_PER_100G: f64 = 3_800.0;
+
+/// Checks an estimate: a per-100 g vocabulary key with a plausible, non-negative value.
+fn estimate(key: &str, value: f64) -> Result<()> {
+    let invalid = |reason: &str| {
+        Err(MealLogError::Validation(format!(
+            "estimates.{key} {reason}; estimates are per 100 g edible part, keyed and united as in \
+             the Food database's parameters"
+        )))
+    };
+    let Some(parameter) = parameters::by_key(key).filter(|parameter| parameter.unit.per_100g())
+    else {
+        return invalid("is not a per-100 g parameter key");
+    };
+    let limit = match parameter.unit {
+        Unit::Kilocalorie => MAX_KCAL_PER_100G,
+        Unit::Kilojoule => MAX_KJ_PER_100G,
+        unit => unit
+            .per_gram()
+            .map_or(f64::MAX, |per_gram| 100.0 * per_gram),
+    };
+    if !value.is_finite() || value < 0.0 || value > limit {
+        return invalid(&format!("must be between 0 and {limit}"));
+    }
+    Ok(())
+}
+
+fn portions(requests: Vec<PortionRequest>) -> Result<Vec<ValidPortion>> {
     if requests.is_empty() || requests.len() > MAX_PORTIONS {
         return Err(MealLogError::Validation(format!(
             "portions must list 1-{MAX_PORTIONS} Portions"
         )));
     }
-    for portion in requests {
-        if portion.food_id <= 0 {
-            return Err(MealLogError::Validation(
-                "food_id must be a positive whole number from search_foods".into(),
-            ));
-        }
-        if !portion.grams.is_finite() || portion.grams <= 0.0 || portion.grams > MAX_GRAMS {
-            return Err(MealLogError::Validation(format!(
-                "grams must be edible grams above 0 and at most {MAX_GRAMS}"
-            )));
-        }
-    }
-    Ok(())
+    requests
+        .into_iter()
+        .map(|portion| {
+            let item = match (portion.food_id, portion.barcode) {
+                (Some(food_id), None) if food_id > 0 => Item::Food(food_id),
+                (Some(_), None) => {
+                    return Err(MealLogError::Validation(
+                        "food_id must be a positive whole number from search_foods".into(),
+                    ));
+                }
+                (None, Some(barcode)) => {
+                    Item::Product(Barcode::parse(&barcode).map_err(|error| match error {
+                        ProductError::Validation(message) => MealLogError::Validation(message),
+                        other => MealLogError::Validation(other.to_string()),
+                    })?)
+                }
+                _ => {
+                    return Err(MealLogError::Validation(
+                        "each Portion needs either a food_id or the barcode of a linked Product"
+                            .into(),
+                    ));
+                }
+            };
+            if !portion.grams.is_finite() || portion.grams <= 0.0 || portion.grams > MAX_GRAMS {
+                return Err(MealLogError::Validation(format!(
+                    "grams must be edible grams above 0 and at most {MAX_GRAMS}"
+                )));
+            }
+            for (key, value) in &portion.estimates {
+                estimate(key, *value)?;
+            }
+            Ok(ValidPortion {
+                item,
+                grams: portion.grams,
+                estimates: portion.estimates,
+            })
+        })
+        .collect()
 }
 
 fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
@@ -485,38 +596,143 @@ pub fn parse_day(text: &str, field: &str) -> Result<CalendarDay> {
     })
 }
 
-/// Snapshots the Foods of `requests` from the current Food database.
-async fn snapshots(
-    foods: &FoodDatabase,
-    requests: &[PortionRequest],
-) -> Result<HashMap<i64, FoodSnapshot>> {
-    let ids: Vec<i64> = requests.iter().map(|portion| portion.food_id).collect();
-    Ok(foods.snapshots(&ids).await?)
+/// One snapshotted per-100 g value with its source.
+#[derive(Serialize)]
+struct PreparedValue {
+    key: String,
+    value: f64,
+    unit: String,
+    source: ValueSource,
 }
 
-/// Writes `requests` as the Meal Log's Portions, each with its Food's snapshot.
+/// A Portion ready to write: its Food, its Product if any, and its snapshot.
+struct PreparedPortion {
+    grams: f64,
+    food_id: i64,
+    name_da: String,
+    name_en: String,
+    dataset_version: String,
+    product: Option<PortionProduct>,
+    values: Vec<PreparedValue>,
+}
+
+/// Snapshots each Portion: a Product's label values, then its Food's values for every key the
+/// label lacks, then the estimates, which may only fill keys neither has.
+async fn prepare(
+    db: &SqlitePool,
+    foods: &FoodDatabase,
+    portions: &[ValidPortion],
+) -> Result<Vec<PreparedPortion>> {
+    let barcodes: Vec<&Barcode> = portions
+        .iter()
+        .filter_map(|portion| match &portion.item {
+            Item::Product(barcode) => Some(barcode),
+            Item::Food(_) => None,
+        })
+        .collect();
+    let stored = products::stored(db, &barcodes).await?;
+    let mut items = Vec::with_capacity(portions.len());
+    for portion in portions {
+        items.push(match &portion.item {
+            Item::Food(food_id) => (*food_id, None),
+            Item::Product(barcode) => {
+                let product = stored.get(barcode.as_str()).ok_or_else(|| {
+                    MealLogError::NotFound(format!(
+                        "Product {} is not linked; lookup_product it and link_product it to its \
+                         closest Food first",
+                        barcode.as_str()
+                    ))
+                })?;
+                (product.food_id, Some(product))
+            }
+        });
+    }
+    let food_ids: Vec<i64> = items.iter().map(|(food_id, _)| *food_id).collect();
+    let snapshots = foods.snapshots(&food_ids).await?;
+    portions
+        .iter()
+        .zip(items)
+        .map(|(portion, (food_id, product))| {
+            let food = snapshots
+                .get(&food_id)
+                .ok_or(FoodError::NotFound(food_id))?;
+            let mut values: Vec<PreparedValue> = product
+                .iter()
+                .flat_map(|product| &product.label)
+                .map(|label| PreparedValue {
+                    key: label.key.clone(),
+                    value: label.value,
+                    unit: label.unit.clone(),
+                    source: ValueSource::Label,
+                })
+                .collect();
+            for value in &food.per_100g {
+                if !values.iter().any(|known| known.key == value.key) {
+                    values.push(PreparedValue {
+                        key: value.key.clone(),
+                        value: value.value,
+                        unit: value.unit.clone(),
+                        source: ValueSource::Food,
+                    });
+                }
+            }
+            for (key, value) in &portion.estimates {
+                if let Some(known) = values.iter().find(|known| &known.key == key) {
+                    let holder = match known.source {
+                        ValueSource::Label => "the Product's label",
+                        _ => "the Food",
+                    };
+                    return Err(MealLogError::Validation(format!(
+                        "estimates.{key}: {holder} already has a value; estimate only values no \
+                         source has"
+                    )));
+                }
+                values.push(PreparedValue {
+                    key: key.clone(),
+                    value: *value,
+                    unit: vocabulary_unit(key).unwrap_or_default().to_owned(),
+                    source: ValueSource::Estimate,
+                });
+            }
+            Ok(PreparedPortion {
+                grams: portion.grams,
+                food_id: food.food_id,
+                name_da: food.name_da.clone(),
+                name_en: food.name_en.clone(),
+                dataset_version: food.dataset_version.clone(),
+                product: product.map(|product| PortionProduct {
+                    barcode: product.barcode.clone(),
+                    name: product.name.clone(),
+                    brand: product.brand.clone(),
+                }),
+                values,
+            })
+        })
+        .collect()
+}
+
+/// Writes the Meal Log's Portions, each with its snapshot.
 async fn insert_portions(
     transaction: &mut sqlx::SqliteConnection,
     meal_log_id: &str,
-    requests: &[PortionRequest],
-    snapshots: &HashMap<i64, FoodSnapshot>,
+    portions: &[PreparedPortion],
 ) -> Result<()> {
-    for (position, portion) in requests.iter().enumerate() {
-        let snapshot = snapshots
-            .get(&portion.food_id)
-            .ok_or(FoodError::NotFound(portion.food_id))?;
+    for (position, portion) in portions.iter().enumerate() {
         let position = position as i64;
+        let product = portion.product.as_ref();
+        let barcode = product.map(|product| product.barcode.as_str());
+        let name = product.and_then(|product| product.name.as_deref());
+        let brand = product.and_then(|product| product.brand.as_deref());
         let portion_id = sqlx::query_scalar!(
-            "INSERT INTO meal_log_portions (meal_log_id, position, grams, food_id, name_da, name_en, dataset_version) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            meal_log_id, position, portion.grams, snapshot.food_id, snapshot.name_da, snapshot.name_en, snapshot.dataset_version)
+            "INSERT INTO meal_log_portions (meal_log_id, position, grams, food_id, name_da, name_en, dataset_version, product_barcode, product_name, product_brand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            meal_log_id, position, portion.grams, portion.food_id, portion.name_da, portion.name_en, portion.dataset_version, barcode, name, brand)
             .fetch_one(&mut *transaction)
             .await?;
-        let values = serde_json::to_string(&snapshot.per_100g)
+        let values = serde_json::to_string(&portion.values)
             .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
-        let source = ValueSource::Food;
         sqlx::query!(
-            "INSERT INTO meal_log_portion_values (portion_id, key, value, unit, source) SELECT ?, json_extract(value, '$.key'), json_extract(value, '$.value'), json_extract(value, '$.unit'), ? FROM json_each(?)",
-            portion_id, source, values)
+            "INSERT INTO meal_log_portion_values (portion_id, key, value, unit, source) SELECT ?, json_extract(value, '$.key'), json_extract(value, '$.value'), json_extract(value, '$.unit'), json_extract(value, '$.source') FROM json_each(?)",
+            portion_id, values)
             .execute(&mut *transaction)
             .await?;
     }
@@ -552,7 +768,8 @@ pub(super) async fn load(
     .fetch_all(db)
     .await?;
     let portions = sqlx::query!(
-        r#"SELECT p.id AS "id!", p.meal_log_id, p.grams, p.food_id, p.name_da, p.name_en, p.dataset_version
+        r#"SELECT p.id AS "id!", p.meal_log_id, p.grams, p.food_id, p.name_da, p.name_en, p.dataset_version,
+            p.product_barcode, p.product_name, p.product_brand
         FROM meal_log_portions p JOIN meal_logs m ON m.id = p.meal_log_id
         WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2) AND (?3 IS NULL OR m.day <= ?3)
         ORDER BY p.meal_log_id, p.position"#,
@@ -594,6 +811,11 @@ pub(super) async fn load(
             .or_default()
             .push(StoredPortion {
                 food_id: row.food_id,
+                product: row.product_barcode.map(|barcode| PortionProduct {
+                    barcode,
+                    name: row.product_name,
+                    brand: row.product_brand,
+                }),
                 name_da: row.name_da,
                 name_en: row.name_en,
                 grams: row.grams,
@@ -706,7 +928,7 @@ pub async fn log_meal(
     let request_id = request_id(&request.request_id)?;
     let at = eaten_at(&request.eaten_at, Utc::now())?;
     let note = note(request.note)?;
-    portions(&request.portions)?;
+    let requests = portions(request.portions)?;
     let upload = request
         .photo
         .as_deref()
@@ -716,18 +938,14 @@ pub async fn log_meal(
     let normalized = serde_json::to_string(&Normalized {
         eaten_at: &stored_at,
         note: note.as_deref(),
-        portions: request
-            .portions
-            .iter()
-            .map(|portion| (portion.food_id, portion.grams))
-            .collect(),
+        portions: requests.iter().map(ValidPortion::normalized).collect(),
         photo: upload.as_ref().map(Upload::sha256),
     })
     .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     if let Some(logged) = replay(db, &request_id, &normalized).await? {
         return Ok(logged);
     }
-    let snapshots = snapshots(foods, &request.portions).await?;
+    let prepared = prepare(db, foods, &requests).await?;
     let photo = match upload {
         Some(upload) => Some(store_photo(photos, upload).await?),
         None => None,
@@ -743,7 +961,7 @@ pub async fn log_meal(
         note: note.as_deref(),
         photo: PhotoColumns::of(photo.as_ref()),
     };
-    let inserted = insert_log(db, &row, &request.portions, &snapshots).await;
+    let inserted = insert_log(db, &row, &prepared).await;
     if !matches!(inserted, Ok(true))
         && let Some(photo) = &photo
     {
@@ -778,8 +996,7 @@ struct NewLog<'a> {
 async fn insert_log(
     db: &SqlitePool,
     row: &NewLog<'_>,
-    requests: &[PortionRequest],
-    snapshots: &HashMap<i64, FoodSnapshot>,
+    portions: &[PreparedPortion],
 ) -> Result<bool> {
     let mut transaction = db.begin().await?;
     // Claim first so simultaneous retries serialize on the receipt.
@@ -799,7 +1016,7 @@ async fn insert_log(
         photo.id, photo.width, photo.height, photo.thumbnail_width, photo.thumbnail_height)
     .execute(&mut *transaction)
     .await?;
-    insert_portions(&mut transaction, row.id, requests, snapshots).await?;
+    insert_portions(&mut transaction, row.id, portions).await?;
     transaction.commit().await?;
     Ok(true)
 }
@@ -852,7 +1069,7 @@ struct Changes {
     eaten_at: Option<DateTime<Utc>>,
     /// `Some` when the note is supplied; its value may clear it.
     note: Option<Option<String>>,
-    portions: Option<(Vec<PortionRequest>, HashMap<i64, FoodSnapshot>)>,
+    portions: Option<Vec<PreparedPortion>>,
     photo: PhotoChange,
 }
 
@@ -872,10 +1089,9 @@ pub async fn update_meal_log(
         Patch::Missing => None,
         Patch::Value(value) => Some(note(value)?),
     };
-    let replacement = required(edit.portions, "portions")?;
-    if let Some(requests) = &replacement {
-        portions(requests)?;
-    }
+    let replacement = required(edit.portions, "portions")?
+        .map(portions)
+        .transpose()?;
     let photo = match edit.photo {
         Patch::Missing => PhotoChange::Keep,
         Patch::Value(None) => PhotoChange::Remove,
@@ -885,10 +1101,7 @@ pub async fn update_meal_log(
         return Err(not_found());
     }
     let portions = match replacement {
-        Some(requests) => {
-            let snapshots = snapshots(foods, &requests).await?;
-            Some((requests, snapshots))
-        }
+        Some(requests) => Some(prepare(db, foods, &requests).await?),
         None => None,
     };
     apply(
@@ -968,7 +1181,7 @@ async fn write_changes(
     id: &str,
     at: Option<DateTime<Utc>>,
     note: Option<&Option<String>>,
-    portions: Option<&(Vec<PortionRequest>, HashMap<i64, FoodSnapshot>)>,
+    portions: Option<&Vec<PreparedPortion>>,
     photo: Option<PhotoColumns>,
 ) -> Result<Option<String>> {
     let stored_at = at.map(utc_text);
@@ -1008,11 +1221,11 @@ async fn write_changes(
     )
     .execute(&mut *transaction)
     .await?;
-    if let Some((requests, snapshots)) = portions {
+    if let Some(portions) = portions {
         sqlx::query!("DELETE FROM meal_log_portions WHERE meal_log_id = ?", id)
             .execute(&mut *transaction)
             .await?;
-        insert_portions(&mut transaction, id, requests, snapshots).await?;
+        insert_portions(&mut transaction, id, portions).await?;
     }
     transaction.commit().await?;
     Ok(previous.filter(|_| photo_supplied))

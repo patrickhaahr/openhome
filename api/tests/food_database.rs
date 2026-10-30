@@ -14,6 +14,7 @@ use openhome_api::{
     services::nutrition::{
         food_database::{DatasetPin, FoodDatabase, FoodImport},
         meal_photos::MealPhotos,
+        open_food_facts::OpenFoodFacts,
     },
 };
 use pretty_assertions::assert_eq;
@@ -57,7 +58,9 @@ async fn open(dir: &TempDir, file: &str, pin: DatasetPin) -> (Router, Option<Foo
     let (foods, import) = FoodDatabase::open(pool, pin, cache_dir(dir)).await.unwrap();
     let (_, state) = test_app_with_db().await;
     let photos = MealPhotos::new(dir.path().join("meal-photos"));
-    let app = routes::nutrition::router(foods, photos)
+    // Products are covered in nutrition_products; nothing here reads a barcode.
+    let labels = OpenFoodFacts::new("http://127.0.0.1:9/".parse().unwrap()).unwrap();
+    let app = routes::nutrition::router(foods, photos, labels)
         .with_state(state)
         .layer(axum::middleware::from_fn(|request, next| {
             auth_middleware(request, next, ApiKey::new(API_KEY.into()))

@@ -2,7 +2,8 @@
 //! tests and synthetic previews. Uses production routes, migrations and authentication without
 //! household configuration; the map explicitly serves the unrelated Copenhagen demo origin.
 //!
-//! Nutrition serves a few synthetic Foods; `--food-database=importing` keeps the Food database
+//! Nutrition serves a few synthetic Foods and one synthetic Open Food Facts product
+//! (`providers::SYNTHETIC_BARCODE`); `--food-database=importing` keeps the Food database
 //! importing instead, for unavailable states.
 //!
 //! Loops come from a loopback provider serving synthetic squares that are not real paths. Set
@@ -79,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::nutrition::router(
             foods::synthetic_foods(foods::FoodState::from_args()).await?,
             meal_photos,
+            providers::synthetic_open_food_facts().await?,
         ))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {

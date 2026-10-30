@@ -128,40 +128,63 @@ pub fn synthetic_plate(food: [u8; 3]) -> String {
     base64::engine::general_purpose::STANDARD.encode(png)
 }
 
-/// Hours before now, an optional note, `(food_id, grams)` Portions and an optional plate colour.
+/// A Portion's item: a Food by ID, or the synthetic Open Food Facts product.
+#[derive(Clone, Copy)]
+enum Item {
+    Food(i64),
+    Product,
+}
+
+/// Hours before now, an optional note, `(item, grams)` Portions and an optional plate colour.
 type SyntheticMeal = (
     i64,
     Option<&'static str>,
-    &'static [(i64, f64)],
+    &'static [(Item, f64)],
     Option<[u8; 3]>,
 );
 
 /// Invented Meal Logs over the last two days, logged through the production service so they
-/// carry real snapshots and photos, for previews that should open on a populated day.
+/// carry real snapshots and photos, for previews that should open on a populated day. The
+/// synthetic product is linked to Skyr first, so one meal holds a Product Portion.
 pub async fn seed_meals(
     db: &sqlx::SqlitePool,
     foods: &FoodDatabase,
     photos: &MealPhotos,
+    labels: &openhome_api::services::nutrition::open_food_facts::OpenFoodFacts,
 ) -> anyhow::Result<()> {
+    use Item::{Food, Product};
     use openhome_api::services::nutrition::meal_logs::{self, LogMeal, PortionRequest};
+    use openhome_api::services::nutrition::products::{self, LinkProduct};
 
+    products::link(
+        db,
+        foods,
+        labels,
+        LinkProduct {
+            barcode: crate::providers::SYNTHETIC_BARCODE.into(),
+            food_id: 1693,
+            request_id: "synthetic-product-link".into(),
+        },
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("linking the synthetic product failed: {error}"))?;
     let now = chrono::Utc::now();
     let meals: [SyntheticMeal; 5] = [
-        (27, None, &[(1693, 200.0), (60, 50.0)], None),
+        (27, None, &[(Food(1693), 200.0), (Food(60), 50.0)], None),
         (
             22,
             Some("Synthetic note: dinner out"),
-            &[(907, 180.0), (300, 250.0)],
+            &[(Food(907), 180.0), (Food(300), 250.0)],
             Some([214, 168, 74]),
         ),
         (
             5,
             Some("after the run"),
-            &[(1693, 150.0), (60, 60.0), (3, 120.0)],
+            &[(Product, 150.0), (Food(60), 60.0), (Food(3), 120.0)],
             Some([238, 226, 196]),
         ),
-        (3, None, &[(907, 150.0), (300, 200.0)], None),
-        (1, None, &[(3, 110.0)], None),
+        (3, None, &[(Food(907), 150.0), (Food(300), 200.0)], None),
+        (1, None, &[(Food(3), 110.0)], None),
     ];
     for (index, (hours_ago, note, portions, plate)) in meals.into_iter().enumerate() {
         meal_logs::log_meal(
@@ -173,7 +196,16 @@ pub async fn seed_meals(
                 note: note.map(str::to_owned),
                 portions: portions
                     .iter()
-                    .map(|&(food_id, grams)| PortionRequest { food_id, grams })
+                    .map(|&(item, grams)| PortionRequest {
+                        food_id: match item {
+                            Food(food_id) => Some(food_id),
+                            Product => None,
+                        },
+                        barcode: matches!(item, Product)
+                            .then(|| crate::providers::SYNTHETIC_BARCODE.to_owned()),
+                        grams,
+                        estimates: std::collections::BTreeMap::new(),
+                    })
                     .collect(),
                 request_id: format!("synthetic-meal-{index}"),
                 photo: plate.map(synthetic_plate),

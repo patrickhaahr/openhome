@@ -67,6 +67,19 @@ impl Unit {
         }
     }
 
+    /// How many of this unit one gram is; `None` for energy and for units that are not masses.
+    #[must_use]
+    pub const fn per_gram(self) -> Option<f64> {
+        match self {
+            Self::Gram => Some(1.0),
+            Self::Milligram
+            | Self::MilligramAlphaTocopherolEquivalent
+            | Self::MilligramNiacinEquivalent => Some(1_000.0),
+            Self::Microgram | Self::MicrogramRetinolEquivalent => Some(1_000_000.0),
+            _ => None,
+        }
+    }
+
     /// Whether a value in this unit is an amount per 100 g edible part, which scales with grams
     /// eaten. Waste, density and factors describe the Food instead.
     #[must_use]
