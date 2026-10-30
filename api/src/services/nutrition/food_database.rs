@@ -454,6 +454,30 @@ impl FoodDatabase {
 }
 
 impl FoodDatabase {
+    /// The Danish and English names of the Foods in `food_ids` the current dataset has, by
+    /// `FoodID`; a missing Food is left out.
+    pub async fn names(
+        &self,
+        food_ids: &[i64],
+    ) -> Result<HashMap<i64, (String, String)>, FoodError> {
+        self.ready()?;
+        let mut names = HashMap::new();
+        if food_ids.is_empty() {
+            return Ok(names);
+        }
+        let mut query =
+            QueryBuilder::new("SELECT food_id, name_da, name_en FROM food WHERE food_id IN (");
+        let mut separated = query.separated(", ");
+        for id in food_ids {
+            separated.push_bind(*id);
+        }
+        query.push(")");
+        for row in query.build().fetch_all(&self.pool).await? {
+            names.insert(row.get("food_id"), (row.get("name_da"), row.get("name_en")));
+        }
+        Ok(names)
+    }
+
     /// The known per-100 g values of each Food in `food_ids`, by `FoodID`. A missing Food is
     /// [`FoodError::NotFound`].
     pub async fn snapshots(

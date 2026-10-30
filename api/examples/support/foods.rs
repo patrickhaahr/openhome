@@ -154,6 +154,7 @@ pub async fn seed_meals(
 ) -> anyhow::Result<()> {
     use Item::{Food, Product};
     use openhome_api::services::nutrition::meal_logs::{self, LogMeal, PortionRequest};
+    use openhome_api::services::nutrition::meals;
     use openhome_api::services::nutrition::nova;
     use openhome_api::services::nutrition::products::{self, LinkProduct};
 
@@ -195,19 +196,23 @@ pub async fn seed_meals(
             LogMeal {
                 eaten_at: (now - chrono::TimeDelta::hours(hours_ago)).to_rfc3339(),
                 note: note.map(str::to_owned),
-                portions: portions
-                    .iter()
-                    .map(|&(item, grams)| PortionRequest {
-                        food_id: match item {
-                            Food(food_id) => Some(food_id),
-                            Product => None,
-                        },
-                        barcode: matches!(item, Product)
-                            .then(|| crate::providers::SYNTHETIC_BARCODE.to_owned()),
-                        grams,
-                        estimates: std::collections::BTreeMap::new(),
-                    })
-                    .collect(),
+                portions: Some(
+                    portions
+                        .iter()
+                        .map(|&(item, grams)| PortionRequest {
+                            food_id: match item {
+                                Food(food_id) => Some(food_id),
+                                Product => None,
+                            },
+                            barcode: matches!(item, Product)
+                                .then(|| crate::providers::SYNTHETIC_BARCODE.to_owned()),
+                            grams,
+                            estimates: std::collections::BTreeMap::new(),
+                        })
+                        .collect(),
+                ),
+                meal: None,
+                overrides: None,
                 request_id: format!("synthetic-meal-{index}"),
                 photo: plate.map(synthetic_plate),
             },
@@ -215,6 +220,49 @@ pub async fn seed_meals(
         .await
         .map_err(|error| anyhow::anyhow!("seeding a synthetic meal failed: {error}"))?;
     }
+    // A named Meal, logged again by name with a one-off amount, as the agent logs known meals.
+    meals::save_meal(
+        db,
+        foods,
+        meals::SaveMeal {
+            name: "Protein oats".into(),
+            portions: vec![
+                meals::MealItemRequest {
+                    food_id: Some(1693),
+                    barcode: None,
+                    grams: 150.0,
+                },
+                meals::MealItemRequest {
+                    food_id: Some(60),
+                    barcode: None,
+                    grams: 50.0,
+                },
+            ],
+            request_id: "synthetic-meal-save".into(),
+        },
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("saving the synthetic Meal failed: {error}"))?;
+    meal_logs::log_meal(
+        db,
+        foods,
+        photos,
+        LogMeal {
+            eaten_at: (now - chrono::TimeDelta::hours(8)).to_rfc3339(),
+            note: None,
+            portions: None,
+            meal: Some("protein oats".into()),
+            overrides: Some(vec![meals::MealItemRequest {
+                food_id: Some(60),
+                barcode: None,
+                grams: 70.0,
+            }]),
+            request_id: "synthetic-meal-by-name".into(),
+            photo: None,
+        },
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("logging the synthetic Meal failed: {error}"))?;
     // Classified after logging, as the agent does the first time a Food is eaten; the rice stays
     // unclassified so the preview shows a Portion left out of the NOVA 1 share.
     for food_id in [3, 60, 907, 1693] {
