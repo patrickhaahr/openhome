@@ -1,7 +1,7 @@
 //! Hermes MCP adapter for OpenHome.
 //!
-//! A Streamable HTTP MCP server for read-only training and writable Wishlists, Watchlists and
-//! Important Dates. Each tool
+//! A Streamable HTTP MCP server for read-only training and Food database reads, and writable
+//! Wishlists, Watchlists and Important Dates. Each tool
 //! makes one authenticated API request and passes its JSON unchanged. The adapter has no
 //! database access or domain rules; Axum owns training interpretation, destination resolution
 //! and mutation deduplication (ADRs 0002 and 0005).
@@ -36,12 +36,14 @@ use wishlist::{
 };
 
 mod important_dates;
+mod nutrition;
 mod patch;
 mod watchlist;
 use important_dates::{
     AddImportantDateRequest, ImportantDateRequest, ImportantDatesRequest,
     UpdateImportantDateRequest,
 };
+use nutrition::{FoodRequest, SearchFoodsRequest};
 mod wishlist;
 use watchlist::{
     AddWatchlistEntryRequest, UpdateWatchlistEntryRequest, WatchlistEntriesRequest,
@@ -70,7 +72,15 @@ and ask when unsure. `since` dates count up and `yearly` dates count down to the
 every figure for a Europe/Copenhagen day (today unless `on` is given), and 29 February falls back to 28 February in \
 common years. Keep titles generic. show_when_idle puts a date on the shared idle screen that anyone in the room can \
 see; leave it false unless the user asks. Reuse the exact arguments and request_id on uncertain addition retries; \
-deleted dates cannot be recreated by an old request_id. After an uncertain update or deletion, read the date before retrying.";
+deleted dates cannot be recreated by an old request_id. After an uncertain update or deletion, read the date before retrying. \
+Foods come from the Danish Food Composition Database, which the OpenHome API imports: search_foods finds them by Danish or \
+English name and food reads every parameter of one. Values are per 100 g edible part, so first turn what the user describes \
+into edible grams: millilitres times density (g/ml) are grams, and a gross weight bought or weighed with peel, bones, stones \
+or shell times (1 - waste/100) is the edible weight (a 200 g banana with 35 % waste is 130 g edible); a weight given as eaten \
+is already edible. When density is null, use a similar Food's density (water-like drinks are about 1 g/ml) and say it is an \
+estimate. Split a mixed dish into the Foods it is made of rather than searching for the dish. A null value is unknown, never \
+zero. food_database_unavailable with state importing means the database is still being imported, so retry in a few minutes; \
+state failed means the import failed, so tell the user. Credit the returned source.credit wherever you show values.";
 
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
@@ -162,6 +172,22 @@ in minutes, resting heart rate in beats/min, and HRV as RMSSD in ms, each with i
 means no value; before treating a gap as real, check the day's `noop.recovery` (for sleep, resting \
 heart rate and HRV) or `noop.workouts` (for NOOP Workouts) freshness and coverage. Use exercise_history or workouts_on_day for exact Sets and recovery_on_day for sleep \
 sessions.";
+
+const SEARCH_FOODS: &str = "Search Foods in the Danish Food Composition Database by words of their \
+Danish or English name (skyr, kyllingebryst, chicken breast); Danish compounds also match the database's comma-separated \
+names. Returns up to `limit` Foods (1-50, default 20), best match first, each with food_id, name_da, name_en, food_group, \
+`per_100g` key values per 100 g edible part (energy_kcal, energy_kj, protein, fat, available_carbohydrate, sugars, \
+dietary_fibre, alcohol), `density` in g/ml and `waste` as the inedible percentage of the Food as bought, each as {value, \
+unit}; a null value is unknown, never zero. An empty `foods` list means no match: try other words, the other language, or \
+the dish's separate Foods. While the database is being imported, or after an import failed, the result is a 503 error \
+with code food_database_unavailable and state importing or failed. Credit `source.credit` wherever values are shown.";
+
+const FOOD: &str = "One Food by the food_id search_foods returned, with every database parameter in \
+`parameters`, in database order: key, parameter_id, Danish and English name, group, unit, per_100g and value. A per_100g \
+value is an amount per 100 g edible part; waste (%), density (g/ml), conversion factors and pH describe the Food itself. A \
+null value is unknown, never zero. `density` and `waste` are repeated at the top level. An unknown food_id is a 404 error; \
+while the database is unavailable the result is a 503 error with code food_database_unavailable. Credit `source.credit` \
+wherever values are shown.";
 
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
 /// printed.
@@ -435,7 +461,7 @@ pub struct TrainingContextRequest {
     pub to_day: String,
 }
 
-/// Read-only training tools and additive Wishlist tools.
+/// Read-only training and Food tools, and household list and date tools.
 #[derive(Clone)]
 pub struct OpenHomeTools {
     api: OpenHomeApi,
@@ -843,6 +869,41 @@ impl OpenHomeTools {
                 None,
                 &[],
             )
+            .await
+    }
+
+    #[tool(
+        description = SEARCH_FOODS,
+        annotations(title = "Search Foods", read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_foods(
+        &self,
+        Parameters(SearchFoodsRequest { query, limit }): Parameters<SearchFoodsRequest>,
+    ) -> CallToolResult {
+        let mut parameters = vec![("query".to_string(), query)];
+        if let Some(limit) = limit {
+            parameters.push(("limit".into(), limit.to_string()));
+        }
+        self.api
+            .request(
+                reqwest::Method::GET,
+                &["api", "nutrition", "foods"],
+                None,
+                &parameters,
+            )
+            .await
+    }
+
+    #[tool(
+        description = FOOD,
+        annotations(title = "Food", read_only_hint = true, open_world_hint = false)
+    )]
+    async fn food(
+        &self,
+        Parameters(FoodRequest { food_id }): Parameters<FoodRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&["api", "nutrition", "foods", &food_id.to_string()])
             .await
     }
 
