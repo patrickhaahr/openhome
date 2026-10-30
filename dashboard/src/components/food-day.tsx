@@ -16,16 +16,19 @@ import {
   energySplit,
   foodDatabaseCredit,
   formatAmount,
+  hasProducts,
   mealPhotoUrl,
   mealTime,
   nutrientGroups,
   nutritionFailureMessage,
+  portionName,
   shiftDay,
   type MealLog,
   type MealPhoto,
   type NutrientTotal,
   type NutritionDay,
   type NutritionDayState,
+  type Portion,
 } from "@/lib/nutrition"
 
 const macros = [
@@ -62,6 +65,11 @@ export function FoodDay({
           ? `${data.data.source.credit} (${data.data.source.licence})`
           : `${foodDatabaseCredit} (CC BY 4.0)`}
       </p>
+      {data.state === "available" && hasProducts(data.data) ? (
+        <p className="food-credit">
+          {`${data.data.label_source.credit} (${data.data.label_source.licence})`}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -348,7 +356,7 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
       <ul className="food-portions" aria-label="Portions">
         {meal.portions.map((portion, index) => (
           <li key={`${portion.food_id}-${index}`}>
-            <span className="food-portion-name">{portion.name_en}</span>
+            <PortionTitle portion={portion} />
             <span className="food-portion-grams num">
               {formatAmount(portion.grams)} g
             </span>
@@ -365,6 +373,27 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
         ))}
       </ul>
     </>
+  )
+}
+
+/** A Food's name, or a Product's label name with its brand beneath it. */
+function PortionTitle({
+  portion,
+}: {
+  readonly portion: Portion
+}): React.JSX.Element {
+  const { name, brand } = portionName(portion)
+
+  return (
+    <span className="food-portion-name">
+      {name}
+      {brand === null ? null : (
+        <span className="food-portion-brand">
+          <span className="sr-only">, </span>
+          {brand}
+        </span>
+      )}
+    </span>
   )
 }
 

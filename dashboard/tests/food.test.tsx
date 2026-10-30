@@ -126,7 +126,9 @@ async function logMeal(meal: {
   eatenAt: Date
   note?: string
   photo?: string
-  portions: Array<{ food_id: number; grams: number }>
+  portions: Array<
+    { food_id: number; grams: number } | { barcode: string; grams: number }
+  >
 }): Promise<{ id: string; day: string; eaten_at: string }> {
   const response = await fetch(`${ready.url}/api/nutrition/meal-logs`, {
     method: "POST",
@@ -280,6 +282,58 @@ test("opens on today with the day's Meal Logs in time order, totals, all nutrien
   )
   expect(text(".food-credit")).toEqual([
     "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
+  ])
+})
+
+test("a Product Portion is named with its brand and the day credits Open Food Facts", async () => {
+  // The fixture's synthetic Open Food Facts product: a restricted-circulation barcode.
+  const barcode = "2001234567893"
+
+  const linked = await fetch(`${ready.url}/api/nutrition/products`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      barcode,
+      food_id: 1693,
+      request_id: "dashboard-link-skyr",
+    }),
+  })
+
+  expect([200, 201]).toContain(linked.status)
+
+  const meal = await logMeal({
+    eatenAt: new Date(Date.now() - 75_000),
+    portions: [
+      { barcode, grams: 150 },
+      { food_id: 60, grams: 40 },
+    ],
+  })
+
+  await render(await readNutritionDay({ day: meal.day }))
+
+  const portions = [...container.querySelectorAll(".food-meal")]
+    .find(
+      (element) =>
+        element.querySelector("time")?.textContent === mealTime(meal.eaten_at)
+    )
+    ?.querySelectorAll(".food-portions li")
+
+  // The label's 76 kcal per 100 g, not the linked Skyr's 62.
+  expect(
+    [...(portions ?? [])].map((row) =>
+      [...row.children].map((child) => normalize(child.textContent)).join(" ")
+    )
+  ).toEqual([
+    "Vanilla Skyr, Synthetic Dairy 150 g 114 kcal",
+    "Oat flakes 40 g 148 kcal",
+  ])
+  expect(text(".food-portion-brand")).toContain(", Synthetic Dairy")
+  expect(text(".food-credit")).toEqual([
+    "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
+    "Product data © Open Food Facts contributors (ODbL)",
   ])
 })
 

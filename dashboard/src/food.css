@@ -264,6 +264,11 @@ a.food-day-key:active {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.food-portion-brand {
+  display: block;
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+}
 .food-portion-grams,
 .food-portion-kcal {
   color: var(--muted-ink);

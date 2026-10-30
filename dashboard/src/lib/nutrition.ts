@@ -30,8 +30,16 @@ function keyNutrients<T extends z.ZodType>(schema: T) {
   })
 }
 
+/** The Product a Portion was logged as, named as its label named it then. */
+const portionProduct = z.object({
+  barcode: z.string(),
+  name: z.string().nullable(),
+  brand: z.string().nullable(),
+})
+
 const portion = z.object({
   food_id: z.number().int(),
+  product: portionProduct.nullable(),
   name_da: z.string(),
   name_en: z.string(),
   grams: z.number(),
@@ -110,10 +118,49 @@ export const nutritionDay = z.object({
     credit: z.string(),
     licence: z.string(),
   }),
+  label_source: z.object({
+    name: z.string(),
+    url: z.string(),
+    credit: z.string(),
+    licence: z.string(),
+  }),
 })
 
 /** One Copenhagen day of nutrition as Axum serves it. */
 export type NutritionDay = z.infer<typeof nutritionDay>
+
+/** A Portion's display name and, for a Product, its brand. */
+export type PortionName = {
+  readonly name: string
+  readonly brand: string | null
+}
+
+/**
+ * How the Day view names a Portion: a Product by its label name and brand, a Food by its English
+ * name. A Product whose label has no name falls back to the Food it was linked to.
+ *
+ * @param portion - A Meal Log's Portion.
+ * @returns The name and, for a Product, its brand.
+ */
+export function portionName(portion: Portion): PortionName {
+  return {
+    name: portion.product?.name ?? portion.name_en,
+    brand: portion.product?.brand ?? null,
+  }
+}
+
+/**
+ * Whether any Portion of the day was logged as a Product, whose label values Open Food Facts
+ * supplied and must be credited.
+ *
+ * @param day - The Nutrition Day.
+ * @returns True when a Product Portion is shown.
+ */
+export function hasProducts(day: NutritionDay): boolean {
+  return day.meal_logs.some((meal) =>
+    meal.portions.some((portion) => portion.product !== null)
+  )
+}
 
 /** Axum's answer while the Food database is importing or after a failed import. */
 export const foodDatabaseUnavailable = z.object({
