@@ -1,7 +1,9 @@
-//! Food database tool arguments, forwarded unchanged to Axum's nutrition routes.
+//! Food database and Meal Log tool arguments, forwarded unchanged to Axum's nutrition routes.
 
 use rmcp::schemars;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+use super::patch::Patch;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SearchFoodsRequest {
@@ -15,4 +17,75 @@ pub struct SearchFoodsRequest {
 pub struct FoodRequest {
     /// The Food's `food_id`, as `search_foods` lists it.
     pub food_id: u32,
+}
+
+/// One Portion: edible grams of one Food.
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PortionRequest {
+    /// The Food's `food_id` from `search_foods`.
+    pub food_id: u32,
+    /// Edible grams eaten, above 0 and at most 5000; convert millilitres and gross weights first.
+    pub grams: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LogMealRequest {
+    /// When it was eaten: RFC 3339 with an offset, e.g. `2026-10-30T08:15:00+01:00`. Use the
+    /// message's send time unless the user describes another time ("an hour ago", "yesterday
+    /// morning"); never a future time.
+    pub eaten_at: String,
+    /// Optional context, at most 500 characters, e.g. "dinner at a friend's" or "rough estimate".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// 1-50 Portions: a mixed dish split into its Foods.
+    pub portions: Vec<PortionRequest>,
+    /// Unique ID for this intended meal, 1-128 characters. Reuse the identical arguments and ID
+    /// after an uncertain response.
+    pub request_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MealLogsRequest {
+    /// One Europe/Copenhagen day, YYYY-MM-DD. Give either `day` or both `from` and `to`.
+    pub day: Option<String>,
+    /// First Europe/Copenhagen day of a range, YYYY-MM-DD, included.
+    pub from: Option<String>,
+    /// Last Europe/Copenhagen day of a range, YYYY-MM-DD, included (at most 90 days in total).
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateMealLogRequest {
+    /// The Meal Log's `id` from `meal_logs` or `log_meal`.
+    #[serde(skip_serializing)]
+    pub meal_log_id: String,
+    /// Corrected RFC 3339 time with an offset; the Meal Log moves to that time's day. Omit to
+    /// preserve; cannot be null.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub eaten_at: Patch<String>,
+    /// New note; null clears it. Omit to preserve.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub note: Patch<String>,
+    /// The complete replacement list of 1-50 Portions, snapshotted afresh from the current Food
+    /// database. Omit to preserve; cannot be null.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub portions: Patch<Vec<PortionRequest>>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MealLogRequest {
+    /// The Meal Log's `id` from `meal_logs` or `log_meal`.
+    pub meal_log_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NutritionDayRequest {
+    /// The Europe/Copenhagen calendar day, written YYYY-MM-DD.
+    pub day: String,
 }
