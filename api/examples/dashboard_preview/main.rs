@@ -44,6 +44,9 @@ use tokio::net::TcpListener;
 #[allow(dead_code)]
 mod providers;
 
+#[path = "../support/foods.rs"]
+mod foods;
+
 mod media;
 mod noop;
 mod photos;
@@ -83,6 +86,12 @@ async fn main() -> anyhow::Result<()> {
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
     let tmdb = media::tmdb().await?;
+    // `--food-database=importing` previews the Food page's unavailable state.
+    let food_state = foods::FoodState::from_args();
+    let foods = foods::synthetic_foods(food_state).await?;
+    if food_state == foods::FoodState::Ready {
+        foods::seed_meals(&db, &foods).await?;
+    }
 
     let seed_db = db.clone();
     let picture_db = db.clone();
@@ -108,6 +117,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::switchbot::router())
         .merge(routes::fitness::router())
         .merge(routes::training::router())
+        .merge(routes::nutrition::router(foods))
         .with_state(state)
         // Inside the key layer, so the stand-in is authenticated like the route it answers for.
         .layer(axum::middleware::from_fn(move |request, next| {

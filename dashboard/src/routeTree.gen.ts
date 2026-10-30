@@ -14,6 +14,7 @@ import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as BacklightRouteImport } from './routes/backlight'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
+import { Route as FoodRouteImport } from './routes/food'
 import { Route as ListsRouteImport } from './routes/lists'
 import { Route as PhotosRouteImport } from './routes/photos'
 import { Route as RecoveryRouteImport } from './routes/recovery'
@@ -46,6 +47,11 @@ const ConnectionRoute = ConnectionRouteImport.update({
 const ControlsRoute = ControlsRouteImport.update({
   id: '/controls',
   path: '/controls',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FoodRoute = FoodRouteImport.update({
+  id: '/food',
+  path: '/food',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ListsRoute = ListsRouteImport.update({
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/backlight': typeof BacklightRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/food': typeof FoodRoute
   '/lists': typeof ListsRoute
   '/photos': typeof PhotosRoute
   '/recovery': typeof RecoveryRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/backlight': typeof BacklightRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/food': typeof FoodRoute
   '/lists': typeof ListsRoute
   '/photos': typeof PhotosRoute
   '/recovery': typeof RecoveryRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/backlight': typeof BacklightRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
+  '/food': typeof FoodRoute
   '/lists': typeof ListsRoute
   '/photos': typeof PhotosRoute
   '/recovery': typeof RecoveryRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/backlight'
     | '/connection'
     | '/controls'
+    | '/food'
     | '/lists'
     | '/photos'
     | '/recovery'
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
     | '/backlight'
     | '/connection'
     | '/controls'
+    | '/food'
     | '/lists'
     | '/photos'
     | '/recovery'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '/backlight'
     | '/connection'
     | '/controls'
+    | '/food'
     | '/lists'
     | '/photos'
     | '/recovery'
@@ -190,6 +202,7 @@ export interface RootRouteChildren {
   BacklightRoute: typeof BacklightRoute
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
+  FoodRoute: typeof FoodRoute
   ListsRoute: typeof ListsRoute
   PhotosRoute: typeof PhotosRoute
   RecoveryRoute: typeof RecoveryRoute
@@ -235,6 +248,13 @@ declare module '@tanstack/react-router' {
       path: '/controls'
       fullPath: '/controls'
       preLoaderRoute: typeof ControlsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/food': {
+      id: '/food'
+      path: '/food'
+      fullPath: '/food'
+      preLoaderRoute: typeof FoodRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lists': {
@@ -302,6 +322,7 @@ const rootRouteChildren: RootRouteChildren = {
   BacklightRoute: BacklightRoute,
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
+  FoodRoute: FoodRoute,
   ListsRoute: ListsRoute,
   PhotosRoute: PhotosRoute,
   RecoveryRoute: RecoveryRoute,

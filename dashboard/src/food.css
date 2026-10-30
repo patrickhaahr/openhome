@@ -1,0 +1,288 @@
+/* ------------------------------------------------------------------------------------------
+   Food: one Copenhagen day of eating. The day's energy is the big figure, the macros sit
+   beneath it as figures over one energy split, and each Meal Log is a wash plate in time
+   order. Figures first, words for assistive technology. See DESIGN.md.
+   ------------------------------------------------------------------------------------------ */
+
+.food {
+  --macro-protein: var(--sun);
+  --macro-carbs: var(--ink);
+  --macro-fat: var(--chart-4);
+  --macro-alcohol: var(--muted-ink);
+
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2.25rem);
+  max-width: 60rem;
+}
+
+/* ---------- Day navigation: round keys around the day's name ---------- */
+
+.food-days {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.food-day-key {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: var(--wash-strong);
+  color: var(--ink);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    scale var(--t-fast) var(--ease);
+}
+a.food-day-key:hover {
+  background: var(--ink);
+  color: var(--ground);
+}
+a.food-day-key:active {
+  scale: 0.97;
+}
+.food-day-key[data-disabled] {
+  opacity: 0.35;
+}
+.food-day-key:focus-visible,
+.food-today:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.food-day-name {
+  min-width: 10ch;
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  text-align: center;
+}
+.food-today {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  margin-left: auto;
+  padding-inline: 1.125rem;
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.food-today:hover {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+/* ---------- Totals: the energy figure, its split and the macros ---------- */
+
+.food-totals {
+  display: grid;
+  gap: 1rem;
+}
+.food-energy {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--t-xl);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.058em;
+}
+.food-energy-unit {
+  color: var(--muted-ink);
+  font-size: var(--t-m);
+  letter-spacing: -0.03em;
+}
+.food-split {
+  display: flex;
+  gap: 3px;
+  height: 0.625rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--wash);
+}
+.food-split span {
+  flex: var(--share) 1 0;
+  min-width: 3px;
+}
+[data-macro="protein"] {
+  --macro: var(--macro-protein);
+}
+[data-macro="available_carbohydrate"] {
+  --macro: var(--macro-carbs);
+}
+[data-macro="fat"] {
+  --macro: var(--macro-fat);
+}
+[data-macro="alcohol"] {
+  --macro: var(--macro-alcohol);
+}
+.food-split [data-macro] {
+  background: var(--macro);
+}
+.food-macros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.75rem 1.5rem;
+}
+.food-macros dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+}
+.food-macros [data-macro] dt::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: var(--macro, transparent);
+}
+.food-macros [data-macro="dietary_fibre"] dt::before {
+  box-shadow: inset 0 0 0 1.5px var(--muted-ink);
+}
+.food-macros dd {
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.food-unit {
+  color: var(--muted-ink);
+  font-size: 0.6em;
+  letter-spacing: 0;
+}
+
+/* Missing data is a dash; assistive technology still reads "Unknown". */
+.food [data-gap="true"]::before {
+  content: "–";
+  color: var(--muted-ink);
+}
+
+/* ---------- Meal Logs: wash plates in time order ---------- */
+
+.food-meals {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.food-meal {
+  display: grid;
+  gap: 0.75rem;
+  padding: clamp(1.125rem, 2.2vw, 1.5rem);
+  border-radius: 1.5rem;
+  background: var(--wash);
+}
+.food-meal header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.food-meal h3 {
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.food-meal header .food-amount {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.food-note {
+  color: var(--muted-ink);
+}
+.food-portions {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.food-portions li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(4.5rem, auto);
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+.food-portion-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.food-portion-grams,
+.food-portion-kcal {
+  color: var(--muted-ink);
+  text-align: right;
+}
+.food-empty {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  padding-block: 2.5rem;
+}
+.food-empty svg {
+  color: var(--muted-ink);
+}
+.food-empty h3 {
+  font-size: var(--t-l);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+/* ---------- All nutrients: every parameter in the database's groups ---------- */
+
+.food-nutrients {
+  display: grid;
+  justify-items: start;
+  gap: 1.25rem;
+}
+.food-nutrient-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1.5rem 2.5rem;
+  width: 100%;
+}
+.food-nutrient-groups h3 {
+  margin-bottom: 0.5rem;
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.food-nutrient-groups dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.3rem;
+}
+.food-nutrient-groups dl div:nth-child(odd) {
+  background: var(--wash);
+  border-radius: 0.5rem;
+  margin-inline: -0.5rem;
+  padding-inline: 0.5rem;
+}
+
+.food-unavailable {
+  padding-block: clamp(1.5rem, 4vw, 3rem);
+}
+
+.food-credit {
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 640px) {
+  .food-portions li {
+    gap: 0.5rem 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .food-day-key {
+    transition: none;
+  }
+}

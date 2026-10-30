@@ -1,6 +1,9 @@
-//! Isolated, loopback-only health, Wishlist, Watchlist, fitness, map and walking-loop seam for
+//! Isolated, loopback-only health, Wishlist, Watchlist, fitness, map, walking-loop and nutrition seam for
 //! tests and synthetic previews. Uses production routes, migrations and authentication without
 //! household configuration; the map explicitly serves the unrelated Copenhagen demo origin.
+//!
+//! Nutrition serves a few synthetic Foods; `--food-database=importing` keeps the Food database
+//! importing instead, for unavailable states.
 //!
 //! Loops come from a loopback provider serving synthetic squares that are not real paths. Set
 //! `OPENROUTESERVICE_URL` to a household instance to plan real loops from the demo origin instead.
@@ -21,6 +24,11 @@ use tokio::net::TcpListener;
 
 #[path = "support/providers.rs"]
 mod providers;
+
+// The preview also seeds Meal Logs; these tests log their own.
+#[path = "support/foods.rs"]
+#[allow(dead_code)]
+mod foods;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -67,6 +75,9 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::photos::router(None))
         .merge(routes::fitness::router())
         .merge(routes::training::router())
+        .merge(routes::nutrition::router(
+            foods::synthetic_foods(foods::FoodState::from_args()).await?,
+        ))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, key.clone())
