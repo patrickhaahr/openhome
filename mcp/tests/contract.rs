@@ -922,6 +922,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "add_important_date",
             "add_watchlist_entry",
             "add_wishlist_item",
+            "classify_food",
             "create_wishlist",
             "delete_important_date",
             "delete_meal_log",
@@ -977,6 +978,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                     | "update_meal_log"
                     | "delete_meal_log"
                     | "link_product"
+                    | "classify_food"
             )),
             "{}",
             tool.name
@@ -989,6 +991,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 | "add_important_date"
                 | "log_meal"
                 | "link_product"
+                | "classify_food"
         ) {
             let annotations = tool.annotations.as_ref().unwrap();
             assert_eq!(annotations.destructive_hint, Some(false));
@@ -1052,6 +1055,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "log_meal" => json!(["eaten_at", "portions", "request_id"]),
             "lookup_product" => json!(["barcode"]),
             "link_product" => json!(["barcode", "food_id", "request_id"]),
+            "classify_food" => json!(["food_id", "nova_class"]),
             "update_meal_log" | "delete_meal_log" => json!(["meal_log_id"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "noop_workout_detail" => json!(["source", "start"]),
@@ -1081,6 +1085,100 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         }));
     }
 
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn classify_food_forwards_classes_and_api_errors_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let instructions = client
+        .peer_info()
+        .unwrap()
+        .instructions
+        .clone()
+        .unwrap_or_default();
+    assert!(
+        instructions.contains("nova_class null")
+            && instructions.contains("call classify_food once"),
+        "{instructions}"
+    );
+    let http = reqwest::Client::new();
+    let direct = |method: reqwest::Method, path: String, body: Option<Value>| {
+        let mut request = http
+            .request(method, format!("{api}{path}"))
+            .bearer_auth(API_KEY);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        async move { request.send().await.unwrap().json::<Value>().await.unwrap() }
+    };
+    let classify = |food_id: u32, nova_class: u8| {
+        direct(
+            reqwest::Method::PUT,
+            format!("/api/nutrition/foods/{food_id}/nova-class"),
+            Some(json!({"nova_class": nova_class})),
+        )
+    };
+
+    let classified = wishlist_call(
+        &client,
+        "classify_food",
+        json!({"food_id": 1693, "nova_class": 1}),
+    )
+    .await;
+
+    assert_eq!(classified.is_error, Some(false), "{classified:?}");
+    let classified = classified.structured_content.unwrap();
+    assert_eq!(
+        (&classified["food_id"], &classified["nova_class"]),
+        (&json!(1693), &json!(1)),
+        "{classified}"
+    );
+    // Setting the same class again is idempotent and reads the same.
+    assert_eq!(classify(1693, 1).await, classified);
+    let food = direct(
+        reqwest::Method::GET,
+        "/api/nutrition/foods/1693".into(),
+        None,
+    )
+    .await;
+    assert_eq!(food["nova_class"], 1);
+
+    for (food_id, nova_class) in [(1693, 5), (424_242, 2)] {
+        let result = wishlist_call(
+            &client,
+            "classify_food",
+            json!({"food_id": food_id, "nova_class": nova_class}),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(true), "{food_id} {nova_class}");
+        assert_eq!(
+            result.structured_content,
+            Some(classify(food_id, nova_class).await),
+            "{food_id} {nova_class}"
+        );
+    }
+
+    let importing = start_api_with_foods(food_database(false).await).await;
+    let client = connect(&start_mcp(&importing, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let result = wishlist_call(
+        &client,
+        "classify_food",
+        json!({"food_id": 1693, "nova_class": 1}),
+    )
+    .await;
+    assert_eq!(result.is_error, Some(true));
+    let error = result.structured_content.unwrap();
+    assert_eq!(
+        (&error["code"], &error["status"]),
+        (&json!("food_database_unavailable"), &json!(503)),
+        "{error}"
+    );
     client.cancel().await.unwrap();
 }
 

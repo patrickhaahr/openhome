@@ -1,4 +1,4 @@
-//! Food database, Product and Meal Log tool arguments, forwarded unchanged to Axum's nutrition
+//! Food database, NOVA Class, Product and Meal Log tool arguments, forwarded unchanged to Axum's nutrition
 //! routes.
 
 use std::collections::BTreeMap;
@@ -20,6 +20,17 @@ pub struct SearchFoodsRequest {
 pub struct FoodRequest {
     /// The Food's `food_id`, as `search_foods` lists it.
     pub food_id: u32,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ClassifyFoodRequest {
+    /// The Food's `food_id`, as `search_foods` lists it.
+    #[serde(skip_serializing)]
+    pub food_id: u32,
+    /// The Food's NOVA Class: 1 unprocessed or minimally processed, 2 processed culinary
+    /// ingredient, 3 processed, 4 ultra-processed.
+    pub nova_class: u8,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
