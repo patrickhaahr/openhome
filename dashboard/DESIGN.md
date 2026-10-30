@@ -117,6 +117,16 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   a rewind mark with the last push shows only when the sync is not confirmed. Body signals, the
   journal and the strap's workouts follow on scroll; logged workouts stay on Workout. Portrait and
   phone stack rings, week and night. Without ordered stages the night falls back to its totals.
+- **Food is the day's plate**: a round key either side of the day's name (no next day after today,
+  and a "Today" capsule when away from it), then the day's energy as the display figure with one
+  capsule beneath it split by macronutrient energy (protein in sun, carbs in ink, fat blue, alcohol
+  muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each. The Meal Logs
+  follow as wash plates in time order: the clock time large, the meal's kcal on the right, the note
+  muted, then one row per Portion (Food, grams, kcal). Unknown is a dash; a total that leaves out
+  Portions without a value is drawn "≥" with the count in its title and "At least" for assistive
+  technology. "All nutrients" opens every parameter in the database's groups on tone bands. While
+  the Food database imports or fails, the day's place holds a state note and the day keys stay.
+  The Danish Food Composition Database is credited at the foot of the page.
 - **Photos is the pictures**: the albums as cover plates (wash plates, the cover on top, the
   name, then a photo glyph with the count and the months), led by **All photos**, a plate two
   columns by two rows whose cover is a mosaic of the album covers; with one album configured

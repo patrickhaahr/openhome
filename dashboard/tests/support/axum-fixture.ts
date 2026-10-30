@@ -2,14 +2,19 @@ import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { resolve } from "node:path"
 
-/** Production authenticated routes over an isolated migrated synthetic database. */
-export async function startAxumFixture(): Promise<{
+/**
+ * Production authenticated routes over an isolated migrated synthetic database.
+ *
+ * @param args - Fixture options, such as `--food-database=importing`.
+ * @returns The fixture's loopback URL and a stop function.
+ */
+export async function startAxumFixture(args: readonly string[] = []): Promise<{
   url: string
   stop: () => Promise<void>
 }> {
   const child = spawn(
     resolve("../api/target/debug/examples/dashboard_health"),
-    [],
+    [...args],
     {
       stdio: ["ignore", "pipe", "pipe"],
     }

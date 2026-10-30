@@ -2,6 +2,7 @@ import { AtomIcon } from "@phosphor-icons/react/dist/csr/Atom"
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
 import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
 import { ListHeartIcon } from "@phosphor-icons/react/dist/csr/ListHeart"
+import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife"
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
 import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
 import { PathIcon } from "@phosphor-icons/react/dist/csr/Path"
@@ -54,6 +55,15 @@ export const features = [
     description: "Charge, rest and effort, with the night in order.",
     unavailable:
       "Recovery has not been added to this dashboard. Sleep, recovery scores and strap workouts are unavailable.",
+  },
+  {
+    id: "food",
+    label: "Food",
+    title: "Food",
+    icon: ForkKnifeIcon,
+    description: "Each day's meals with their energy and nutrients.",
+    unavailable:
+      "Food is unavailable. Meal Logs and nutrient totals cannot be read.",
   },
   {
     id: "lists",
