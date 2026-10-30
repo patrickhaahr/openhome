@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO meal_log_portions (meal_log_id, position, grams, food_id, name_da, name_en, dataset_version, product_barcode, product_name, product_brand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "76c0a18ca96cf8a7c6aaa5a8850608211c99110a49aa3a489a2dcb23b44d32c4"
+}

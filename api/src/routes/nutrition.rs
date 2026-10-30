@@ -25,15 +25,19 @@ use crate::{
             self, EditMealLog, LogMeal, Logged, MealLog, MealLogError, MealLogs, MealLogsQuery,
         },
         meal_photos::{MealPhotos, PHOTO_BODY_LIMIT, PhotoError, Upload, Variant},
+        open_food_facts::{OpenFoodFacts, ProviderError},
+        products::{self, LinkProduct, Linked, ProductError, ProductLookup},
     },
 };
 
-pub fn router(foods: FoodDatabase, photos: MealPhotos) -> Router<AppState> {
+pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) -> Router<AppState> {
     // Only the routes that carry a photo raise Axum's default body limit.
     let photo_limit = DefaultBodyLimit::max(PHOTO_BODY_LIMIT);
-    // Meal Logs live in app.db, snapshot Foods from food.db and keep photos in the data
-    // directory, so they need all three.
+    // Meal Logs and Products live in app.db and take values from food.db and Open Food Facts;
+    // Meal Logs keep photos in the data directory.
     let meal_logs = Router::new()
+        .route("/api/nutrition/products", axum::routing::post(link_product))
+        .route("/api/nutrition/products/{barcode}", get(lookup_product))
         .route(
             "/api/nutrition/meal-logs",
             get(list_meal_logs).post(log_meal.layer(photo_limit)),
@@ -53,7 +57,8 @@ pub fn router(foods: FoodDatabase, photos: MealPhotos) -> Router<AppState> {
         )
         .route("/api/nutrition/days/{day}", get(nutrition_day))
         .layer(Extension(foods.clone()))
-        .layer(Extension(photos));
+        .layer(Extension(photos))
+        .layer(Extension(labels));
     Router::new()
         .route("/api/nutrition/foods", get(search_foods))
         .route("/api/nutrition/foods/{food_id}", get(food))
@@ -91,6 +96,34 @@ async fn food(
         .filter(|id| *id > 0)
         .ok_or_else(|| FoodError::Validation("food_id must be a positive whole number".into()))?;
     Ok(Json(foods.food(food_id).await?))
+}
+
+async fn lookup_product(
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
+    Extension(labels): Extension<OpenFoodFacts>,
+    Path(barcode): Path<String>,
+) -> Result<Json<ProductLookup>, ProductError> {
+    Ok(Json(
+        products::lookup(&state.db, &foods, &labels, &barcode).await?,
+    ))
+}
+
+async fn link_product(
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
+    Extension(labels): Extension<OpenFoodFacts>,
+    request: Result<Json<LinkProduct>, JsonRejection>,
+) -> Result<(StatusCode, Json<Linked>), ProductError> {
+    let Json(request) =
+        request.map_err(|rejection| ProductError::Validation(rejection.body_text()))?;
+    let linked = products::link(&state.db, &foods, &labels, request).await?;
+    let status = if linked.created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((status, Json(linked)))
 }
 
 fn body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, MealLogError> {
@@ -255,6 +288,45 @@ impl IntoResponse for MealLogError {
             Self::Conflict(message) => AppError::Conflict(message).into_response(),
             Self::Food(error) => error.into_response(),
             Self::Photo(error) => error.into_response(),
+            Self::Database(error) => AppError::Internal(error.into()).into_response(),
+        }
+    }
+}
+
+impl IntoResponse for ProductError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Validation(message) => AppError::Validation(message).into_response(),
+            Self::NotFound(_) => {
+                let status = StatusCode::NOT_FOUND;
+                (
+                    status,
+                    Json(json!({
+                        "error": format!(
+                            "{self}; log the closest Food by food_id instead, with estimates for \
+                             values the package label gives"
+                        ),
+                        "status": status.as_u16(),
+                        "code": "product_not_found",
+                    })),
+                )
+                    .into_response()
+            }
+            Self::Conflict(message) => AppError::Conflict(message).into_response(),
+            Self::Provider(ProviderError::Unavailable) => {
+                let status = StatusCode::SERVICE_UNAVAILABLE;
+                (
+                    status,
+                    Json(json!({
+                        "error": "Open Food Facts did not answer; try again in a minute, or log \
+                                  the closest Food by food_id",
+                        "status": status.as_u16(),
+                        "code": "open_food_facts_unavailable",
+                    })),
+                )
+                    .into_response()
+            }
+            Self::Food(error) => error.into_response(),
             Self::Database(error) => AppError::Internal(error.into()).into_response(),
         }
     }

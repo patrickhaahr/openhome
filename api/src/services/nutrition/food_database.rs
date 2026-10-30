@@ -293,6 +293,11 @@ impl FoodDatabase {
         }
     }
 
+    /// Whether lookups can answer now: [`FoodError::Unavailable`] while importing or failed.
+    pub fn check_ready(&self) -> Result<(), FoodError> {
+        self.ready().map(|_| ())
+    }
+
     /// Foods whose Danish or English name matches `query`, best first, with key values.
     pub async fn search(&self, query: &str, limit: Option<usize>) -> Result<FoodSearch, FoodError> {
         let query = query.trim();

@@ -207,7 +207,15 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::weather::router(weather_service))
         .merge(routes::backlight::router(backlight_service))
         .merge(routes::photos::router(photo_service))
-        .merge(routes::nutrition::router(foods, meal_photos))
+        .merge(routes::nutrition::router(
+            foods,
+            meal_photos,
+            openhome_api::services::nutrition::open_food_facts::OpenFoodFacts::new(
+                url::Url::parse(
+                    openhome_api::services::nutrition::open_food_facts::PRODUCTION_URL,
+                )?,
+            )?,
+        ))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())

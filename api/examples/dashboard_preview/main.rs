@@ -39,7 +39,8 @@ use openhome_api::{
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::net::TcpListener;
 
-// Shared with `dashboard_health`; this preview uses only the route provider (TMDB is `media`).
+// Shared with `dashboard_health`; this preview uses the route and Open Food Facts providers (TMDB
+// is `media`).
 #[path = "../support/providers.rs"]
 #[allow(dead_code)]
 mod providers;
@@ -90,8 +91,9 @@ async fn main() -> anyhow::Result<()> {
     let food_state = foods::FoodState::from_args();
     let foods = foods::synthetic_foods(food_state).await?;
     let (meal_photos, _meal_photo_dir) = foods::photo_store()?;
+    let labels = providers::synthetic_open_food_facts().await?;
     if food_state == foods::FoodState::Ready {
-        foods::seed_meals(&db, &foods, &meal_photos).await?;
+        foods::seed_meals(&db, &foods, &meal_photos, &labels).await?;
     }
 
     let seed_db = db.clone();
@@ -118,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::switchbot::router())
         .merge(routes::fitness::router())
         .merge(routes::training::router())
-        .merge(routes::nutrition::router(foods, meal_photos))
+        .merge(routes::nutrition::router(foods, meal_photos, labels))
         .with_state(state)
         // Inside the key layer, so the stand-in is authenticated like the route it answers for.
         .layer(axum::middleware::from_fn(move |request, next| {

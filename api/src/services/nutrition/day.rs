@@ -11,6 +11,7 @@ use super::meal_logs::{
     self, KeyNutrients, MealLog, MealLogError, Selection, StoredLog, StoredPortion, Total,
     key_totals,
 };
+use super::products::{LABEL_SOURCE, LabelSource};
 use crate::services::training::calendar::{self, CalendarDay};
 
 /// The total of one nutrient over the day's Portions.
@@ -40,6 +41,8 @@ pub struct NutritionDay {
     /// In time order.
     pub meal_logs: Vec<MealLog>,
     pub source: Source,
+    /// Open Food Facts, to credit beside Product Portions' label values.
+    pub label_source: LabelSource,
 }
 
 /// The day's Meal Logs and the totals of every parameter, with units; unknown is null.
@@ -96,5 +99,6 @@ pub async fn nutrition_day(
             .map(StoredLog::into_meal_log)
             .collect::<Result<_, _>>()?,
         source,
+        label_source: LABEL_SOURCE,
     })
 }
