@@ -45,7 +45,8 @@ use important_dates::{
 };
 use nutrition::{
     ClassifyFoodRequest, FoodRequest, LinkProductRequest, LogMealRequest, LookupProductRequest,
-    MealLogRequest, MealLogsRequest, NutritionDayRequest, SearchFoodsRequest, UpdateMealLogRequest,
+    MealLogRequest, MealLogsRequest, MealRequest, NutritionDayRequest, SaveMealRequest,
+    SearchFoodsRequest, UpdateMealLogRequest, UpdateMealRequest,
 };
 mod wishlist;
 use watchlist::{
@@ -110,7 +111,38 @@ and call link_product once with its food_id and a request_id; later scans need n
 macronutrients and the linked Food fills every value the label lacks, including vitamins and minerals; re-link with \
 link_product to correct the Food for future Portions only. When Open Food Facts has no product (product_not_found), log \
 the closest Food by food_id instead. A Portion may carry estimates per 100 g for values no source has, which are tagged as \
-estimates; never estimate a value the label or Food already gives. Credit Open Food Facts wherever label values are shown.";
+estimates; never estimate a value the label or Food already gives. Credit Open Food Facts wherever label values are shown. \
+Meals are named, reusable lists of Food and Product items with grams that the user logs again by name. Call save_meal only \
+when the user names a meal and asks to keep it (\"save this as protein oats\"); never save a one-off meal on your own. When \
+the user logs what looks like the same meal again (the same Foods in similar grams as an earlier Meal Log), offer once to \
+save it under a name they choose. When the user names a known Meal (\"protein oats\", \"my usual breakfast\"), find it with \
+meals if needed and call log_meal with meal set to its name and an explicit eaten_at, without analysing any photo; put a \
+one-off amount in overrides, naming the item by its food_id or barcode, instead of editing the Meal. A logged Meal copies its \
+items with current values and records meal_name; update_meal and delete_meal never change past Meal Logs. On \
+meal_needs_update, search_foods for the Foods it names, update_meal its portions, then log it again.";
+
+const MEALS: &str = "List every saved Meal by name: id, name and portions in order, each with food_id (null for \
+a Product), barcode (null for a Food), grams, the Food's Danish and English name (for a Product, the Food it is linked to) \
+and product (barcode, name, brand) or null. A Meal holds references, not nutrient values: values are copied when it is \
+logged with log_meal and meal. Works while the Food database is unavailable.";
+
+const SAVE_MEAL: &str = "Save a named Meal only when the user names it: 1-50 items in order, each a food_id from \
+search_foods or the barcode of a Product linked with link_product, listed once with edible grams. The name (1-100 \
+characters) is unique in any case. Returns meal (id, name, portions as meals lists them) and replayed. Generate a unique \
+request_id per intended Meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns \
+replayed=true, changed arguments are a 409 error and a deleted Meal is not recreated. A name another Meal has is a 409 \
+error; an unknown food_id or an unlinked barcode is a 404 error; while the Food database is unavailable the result is a 503 \
+error with code food_database_unavailable.";
+
+const UPDATE_MEAL: &str = "Rename a Meal or replace its items by meal_id. Supplied fields change together; omitted \
+fields are preserved. name must stay unique in any case (another Meal's name is a 409 error); portions replaces every item \
+(food_id or a linked Product's barcode with edible grams, each once). Returns the updated Meal. Past Meal Logs made from \
+the Meal keep their Portions and meal_name. A missing Meal, food_id or unlinked barcode is a 404 error; replacing items \
+while the Food database is unavailable is a 503 error. After an uncertain response, list meals before retrying.";
+
+const DELETE_MEAL: &str = "Permanently delete one Meal by meal_id. Meal Logs made from it are unchanged. Returns \
+deleted=true only after the API confirms removal; a missing Meal is a 404 error. An old save_meal retry with its \
+request_id cannot recreate it. After an uncertain response, list meals before retrying.";
 
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
@@ -247,25 +279,28 @@ ID after an uncertain response: an accepted retry returns replayed=true and the 
 food_id is a 409 error. An unknown food_id is a 404 error; a barcode Open Food Facts does not know is a 404 error with \
 code product_not_found; Open Food Facts not answering is a 503 error with code open_food_facts_unavailable.";
 
-const LOG_MEAL: &str = "Log one eating occasion as a Meal Log: 1-50 Portions, each a food_id from \
+const LOG_MEAL: &str = "Log one eating occasion as a Meal Log: either 1-50 Portions, each a food_id from \
 search_foods or the barcode of a Product linked with link_product, with edible grams and optional estimates per 100 g for \
-values no source has, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
+values no source has, or a saved Meal's name in meal (any case; no photo analysis needed) with optional overrides giving \
+one-off grams to items named by their food_id or barcode, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
 describes; never in the future), with an optional note and an optional photo (the user's JPEG or PNG as base64, at most \
 10 MB, stored without metadata as AVIF with a thumbnail). It counts toward the Europe/Copenhagen calendar day of eaten_at, \
 so past times backfill earlier days. Each Portion copies every per-100 g value (a Product's label values first, then its \
-linked Food's, then estimates), so later database updates and re-links never change it. Returns meal_log (id, eaten_at in \
-Copenhagen time, day, note, portions with food_id, product (barcode, name, brand) or null, names, grams, \
+linked Food's, then estimates), so later database updates, re-links and Meal edits never change it. Returns meal_log (id, \
+eaten_at in Copenhagen time, day, meal_name (the Meal it was logged from, or null), note, portions with food_id, product (barcode, name, brand) or null, names, grams, \
 dataset_version, nova_class (the Product's or Food's, null while unclassified) and key nutrients energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol as {value, \
 unit, source}, totals as {value, unit, unknown_portions}, and photo with its size or null) and replayed. Generate a \
 unique request_id per intended meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed \
 arguments conflict (409) and a deleted Meal Log is not recreated. A null value is unknown, never zero. An unknown food_id \
-or unlinked barcode is a 404 error; an estimate for a value the label or Food has is a 400 error; while the Food \
+or unlinked barcode is a 404 error, as is an unknown Meal name; an override naming no item of the Meal is a 400 error; a \
+Meal naming a Food the current Food database no longer has is a 409 error with code meal_needs_update (update_meal it); \
+an estimate for a value the label or Food has is a 400 error; while the Food \
 database is unavailable the result is a 503 error with code food_database_unavailable. A photo that is not a JPEG or PNG is a 400 error and one over 10 MB or 12000 px a side is a 413 error; nothing is logged \
 then.";
 
 const MEAL_LOGS: &str = "List Meal Logs for one Europe/Copenhagen calendar day (`day`) or an inclusive range of up \
-to 90 days (`from` and `to`), oldest first. Each has its id, eaten_at in Copenhagen time with its offset, day, note, \
-portions (food_id, Danish and English name, grams, dataset_version, nova_class and key nutrients as {value, unit, \
+to 90 days (`from` and `to`), oldest first. Each has its id, eaten_at in Copenhagen time with its offset, day, \
+meal_name (the saved Meal it was logged from, or null), note, portions (food_id, Danish and English name, grams, dataset_version, nova_class and key nutrients as {value, unit, \
 source}) and \
 totals as {value, unit, unknown_portions}: the sum of the Portions that have a value and the count of those that do not. \
 A null value is unknown, never zero. Works while the Food database is unavailable.";
@@ -1069,6 +1104,78 @@ impl OpenHomeTools {
     ) -> CallToolResult {
         self.api
             .post(&["api", "nutrition", "products"], json!(request))
+            .await
+    }
+
+    #[tool(
+        description = MEALS,
+        annotations(title = "Meals", read_only_hint = true, open_world_hint = false)
+    )]
+    async fn meals(&self) -> CallToolResult {
+        self.api.get(&["api", "nutrition", "meals"]).await
+    }
+
+    #[tool(
+        description = SAVE_MEAL,
+        annotations(
+            title = "Save a Meal",
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn save_meal(&self, Parameters(request): Parameters<SaveMealRequest>) -> CallToolResult {
+        self.api
+            .post(&["api", "nutrition", "meals"], json!(request))
+            .await
+    }
+
+    #[tool(
+        description = UPDATE_MEAL,
+        annotations(
+            title = "Update a Meal",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn update_meal(
+        &self,
+        Parameters(request): Parameters<UpdateMealRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PATCH,
+                &["api", "nutrition", "meals", &request.meal_id],
+                Some(json!(request)),
+                &[],
+            )
+            .await
+    }
+
+    #[tool(
+        description = DELETE_MEAL,
+        annotations(
+            title = "Delete a Meal",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_meal(
+        &self,
+        Parameters(MealRequest { meal_id }): Parameters<MealRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::DELETE,
+                &["api", "nutrition", "meals", &meal_id],
+                None,
+                &[],
+            )
             .await
     }
 

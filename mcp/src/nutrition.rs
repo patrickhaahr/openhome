@@ -1,5 +1,5 @@
-//! Food database, NOVA Class, Product and Meal Log tool arguments, forwarded unchanged to Axum's nutrition
-//! routes.
+//! Food database, NOVA Class, Product, Meal and Meal Log tool arguments, forwarded unchanged to
+//! Axum's nutrition routes.
 
 use std::collections::BTreeMap;
 
@@ -81,8 +81,18 @@ pub struct LogMealRequest {
     /// Optional context, at most 500 characters, e.g. "dinner at a friend's" or "rough estimate".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
-    /// 1-50 Portions: a mixed dish split into its Foods.
-    pub portions: Vec<PortionRequest>,
+    /// 1-50 Portions: a mixed dish split into its Foods. Give either this or `meal`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub portions: Option<Vec<PortionRequest>>,
+    /// The name of a saved Meal, in any case, to log its items as Portions without analysing a
+    /// photo. Give either this or `portions`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meal: Option<String>,
+    /// Only with `meal`: one-off grams for some of its items, each naming its item by the
+    /// `food_id` or `barcode` that `meals` lists, e.g. `[{"food_id": 1693, "grams": 200}]`. The
+    /// Meal keeps its own grams.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overrides: Option<Vec<MealItemRequest>>,
     /// Unique ID for this intended meal, 1-128 characters. Reuse the identical arguments and ID
     /// after an uncertain response.
     pub request_id: String,
@@ -90,6 +100,55 @@ pub struct LogMealRequest {
     /// encoding. Stored without its metadata as AVIF with a thumbnail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub photo: Option<String>,
+}
+
+/// One Meal item: edible grams of one Food (`food_id`) or one linked Product (`barcode`). In
+/// `log_meal` overrides it names the Meal item whose grams change.
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MealItemRequest {
+    /// The Food's `food_id` from `search_foods`. Give either this or `barcode`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_id: Option<u32>,
+    /// The barcode of a Product linked with `link_product`. Give either this or `food_id`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub barcode: Option<String>,
+    /// Edible grams, above 0 and at most 5000.
+    pub grams: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SaveMealRequest {
+    /// The name the user gave the Meal, 1-100 characters, unique in any case, e.g. "protein
+    /// oats".
+    pub name: String,
+    /// 1-50 items in the user's order, each Food or Product once.
+    pub portions: Vec<MealItemRequest>,
+    /// Unique ID for this Meal, 1-128 characters. Reuse the identical arguments and ID after an
+    /// uncertain response.
+    pub request_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateMealRequest {
+    /// The Meal's `id` from `meals` or `save_meal`.
+    #[serde(skip_serializing)]
+    pub meal_id: String,
+    /// A new name, unique in any case. Omit to preserve; cannot be null.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub name: Patch<String>,
+    /// The complete replacement list of 1-50 items. Omit to preserve; cannot be null.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub portions: Patch<Vec<MealItemRequest>>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MealRequest {
+    /// The Meal's `id` from `meals` or `save_meal`.
+    pub meal_id: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
