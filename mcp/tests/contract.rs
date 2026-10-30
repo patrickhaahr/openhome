@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use openhome_api::services::noop_push;
+use openhome_api::services::nutrition::food_database::{DatasetPin, FoodDatabase};
 use openhome_api::{AppState, DockerCache, auth, routes};
 use openhome_mcp::{ApiKey, MCP_PATH, OpenHomeApi, parse_api_url};
 use pretty_assertions::assert_eq;
@@ -46,6 +47,11 @@ async fn memory_db() -> SqlitePool {
 /// namespaces pushed 2026-09-14 (the real rows: imported strain 3.1, computed strain 0.0, and an
 /// evening NOOP Workout) and a training log with one Workout that day.
 async fn start_api() -> String {
+    start_api_with_foods(food_database(true).await).await
+}
+
+/// The API routes over `foods`, for Food database reads.
+async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let state = AppState {
         db: training_log().await,
         noop_db: noop_mirror().await,
@@ -60,11 +66,57 @@ async fn start_api() -> String {
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(None))
         .merge(routes::important_dates::router())
+        .merge(routes::nutrition::router(foods))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, api_key.clone())
         }));
     format!("http://{}", serve(app).await)
+}
+
+/// A Food database: when `imported`, one complete import of the pinned dataset holding a
+/// synthetic Skyr; otherwise empty, so lookups report importing.
+async fn food_database(imported: bool) -> FoodDatabase {
+    let db = memory_db().await;
+    let pin = DatasetPin::pinned();
+    if imported {
+        sqlx::migrate!("../api/food_migrations")
+            .run(&db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO dataset (id, version, sha256, imported_at) \
+             VALUES (1, ?, ?, '2026-10-30T00:00:00Z')",
+        )
+        .bind(&pin.version)
+        .bind(&pin.sha256)
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::raw_sql(
+            "INSERT INTO parameter (parameter_id, key, name_da, name_en, group_da, group_en, unit, \
+                 per_100g, sort_key) VALUES \
+                 (356, 'energy_kcal', 'Energi (kcal)', 'Energy (kcal)', 'Makronæringstoffer m.m.', \
+                     'Macro nutrients etc.', 'kcal', 1, 1030), \
+                 (218, 'protein', 'Protein', 'Protein', 'Makronæringstoffer m.m.', \
+                     'Macro nutrients etc.', 'g', 1, 1110), \
+                 (252, 'waste', 'Svind', 'Waste', 'Faktorer m.m.', 'Factors etc.', '%', 0, 20010), \
+                 (363, 'density', 'Massefylde', 'Density', 'Faktorer m.m.', 'Factors etc.', 'g/ml', \
+                     0, 20210); \
+             INSERT INTO food (food_id, name_da, name_en, food_group_id, food_group_da, food_group_en) \
+                 VALUES (1693, 'Skyr, 0.2 % fedt', 'Skyr, 0.2 % fat', 3, 'Syrnede mælkeprodukter', \
+                     'Fermented milk products'); \
+             INSERT INTO food_value (food_id, parameter_id, value) VALUES \
+                 (1693, 356, 62.0), (1693, 218, 11.0), (1693, 252, 0.0), (1693, 363, 1.03);",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+    }
+    let unused_cache = std::env::temp_dir().join("openhome-mcp-contract-food-dataset");
+    let (foods, import) = FoodDatabase::open(db, pin, unused_cache).await.unwrap();
+    assert_eq!(import.is_some(), !imported);
+    foods
 }
 
 /// The NOOP mirror: both strap namespaces' 2026-09-14 rows and replacement coverage.
@@ -829,12 +881,14 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "delete_watchlist_entry",
             "delete_wishlist_item",
             "exercise_history",
+            "food",
             "household_users",
             "important_date",
             "important_dates",
             "metric_trend",
             "noop_workout_detail",
             "recovery_on_day",
+            "search_foods",
             "sleep_recent",
             "training_context",
             "update_important_date",
@@ -920,6 +974,8 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 json!(["owner_id", "list_id", "item_id"])
             }
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
+            "search_foods" => json!(["query"]),
+            "food" => json!(["food_id"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "noop_workout_detail" => json!(["source", "start"]),
             "sleep_recent" => json!(["n"]),
@@ -941,11 +997,107 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             (description.contains("Europe/Copenhagen")
                 || tool.name.contains("wishlist")
                 || tool.name.contains("watchlist")
-                || tool.name.contains("important_date"))
+                || tool.name.contains("important_date")
+                || tool.name.contains("food"))
                 && !description.contains('\n')
         }));
     }
 
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn food_tools_forward_searches_reads_and_api_errors_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let instructions = client
+        .peer_info()
+        .unwrap()
+        .instructions
+        .clone()
+        .unwrap_or_default();
+    assert!(
+        instructions.contains("density (g/ml) are grams")
+            && instructions.contains("(1 - waste/100) is the edible weight"),
+        "{instructions}"
+    );
+    let http = reqwest::Client::new();
+    let direct = |path: &'static str| {
+        let http = http.clone();
+        let url = format!("{api}{path}");
+        async move {
+            http.get(url)
+                .bearer_auth(API_KEY)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+
+    let search = wishlist_call(
+        &client,
+        "search_foods",
+        json!({"query": "skyr", "limit": 5}),
+    )
+    .await;
+    assert_eq!(search.is_error, Some(false));
+    let expected = direct("/api/nutrition/foods?query=skyr&limit=5").await;
+    assert_eq!(expected["foods"][0]["food_id"], 1693, "{expected}");
+    assert_eq!(search.structured_content, Some(expected));
+
+    let food = wishlist_call(&client, "food", json!({"food_id": 1693})).await;
+    assert_eq!(food.is_error, Some(false));
+    let expected = direct("/api/nutrition/foods/1693").await;
+    assert_eq!(expected["density"]["value"], 1.03, "{expected}");
+    assert_eq!(food.structured_content, Some(expected));
+
+    for (tool, arguments, path) in [
+        (
+            "food",
+            json!({"food_id": 424_242}),
+            "/api/nutrition/foods/424242",
+        ),
+        (
+            "search_foods",
+            json!({"query": " "}),
+            "/api/nutrition/foods?query=%20",
+        ),
+    ] {
+        let result = wishlist_call(&client, tool, arguments).await;
+        assert_eq!(result.is_error, Some(true), "{tool}");
+        assert_eq!(
+            result.structured_content,
+            Some(direct(path).await),
+            "{tool}"
+        );
+    }
+
+    let importing = start_api_with_foods(food_database(false).await).await;
+    let client = connect(&start_mcp(&importing, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    for (tool, arguments) in [
+        ("search_foods", json!({"query": "skyr"})),
+        ("food", json!({"food_id": 1693})),
+    ] {
+        let result = wishlist_call(&client, tool, arguments).await;
+        assert_eq!(result.is_error, Some(true), "{tool}");
+        let error = result.structured_content.unwrap();
+        assert_eq!(
+            (&error["code"], &error["state"], &error["status"]),
+            (
+                &json!("food_database_unavailable"),
+                &json!("importing"),
+                &json!(503)
+            ),
+            "{tool}: {error}"
+        );
+    }
     client.cancel().await.unwrap();
 }
 
