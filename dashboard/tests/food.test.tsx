@@ -38,6 +38,8 @@ let container: HTMLDivElement
 
 const logged: string[] = []
 
+const savedMeals: string[] = []
+
 beforeAll(async () => {
   ready = await startAxumFixture()
   importing = await startAxumFixture(["--food-database=importing"])
@@ -63,6 +65,12 @@ afterEach(async () => {
 
   for (const id of logged.splice(0))
     await fetch(`${ready.url}/api/nutrition/meal-logs/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
+
+  for (const id of savedMeals.splice(0))
+    await fetch(`${ready.url}/api/nutrition/meals/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     })
@@ -339,6 +347,87 @@ test("a Product Portion is named with its brand and the day credits Open Food Fa
     "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
     "Product data © Open Food Facts contributors (ODbL)",
   ])
+})
+
+test("a Meal Log copied from a saved Meal names the Meal, and a one-off meal names none", async () => {
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  }
+
+  const saved = await fetch(`${ready.url}/api/nutrition/meals`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name: "Protein oats",
+      portions: [
+        { food_id: 1693, grams: 150 },
+        { food_id: 60, grams: 50 },
+      ],
+      request_id: crypto.randomUUID(),
+    }),
+  })
+
+  expect(saved.status).toBe(201)
+  savedMeals.push(
+    z.object({ meal: z.object({ id: z.string() }) }).parse(await saved.json())
+      .meal.id
+  )
+
+  const response = await fetch(`${ready.url}/api/nutrition/meal-logs`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      eaten_at: new Date(Date.now() - 90_000).toISOString(),
+      meal: "protein oats",
+      overrides: [{ food_id: 60, grams: 70 }],
+      request_id: crypto.randomUUID(),
+    }),
+  })
+
+  expect(response.status).toBe(201)
+
+  const fromMeal = z
+    .object({
+      meal_log: z.object({
+        id: z.string(),
+        day: z.string(),
+        eaten_at: z.string(),
+      }),
+    })
+    .parse(await response.json()).meal_log
+
+  logged.push(fromMeal.id)
+
+  const oneOff = await logMeal({
+    eatenAt: new Date(Date.now() - 30_000),
+    portions: [{ food_id: 3, grams: 120 }],
+  })
+
+  await render(await readNutritionDay({ day: fromMeal.day }))
+
+  const plate = (eatenAt: string) =>
+    [...container.querySelectorAll(".food-meal")].find(
+      (element) =>
+        element.querySelector("time")?.textContent === mealTime(eatenAt)
+    )
+
+  expect(
+    normalize(
+      plate(fromMeal.eaten_at)?.querySelector(".food-meal-from")?.textContent
+    )
+  ).toBe("Logged from the Meal Protein oats")
+  expect(
+    [
+      ...(plate(fromMeal.eaten_at)?.querySelectorAll(".food-portions li") ??
+        []),
+    ].map((row) =>
+      [...row.children].map((child) => normalize(child.textContent)).join(" ")
+    )
+  ).toEqual(["Skyr, 0.2 % fat 150 g 93 kcal", "Oat flakes 70 g 259 kcal"])
+
+  if (oneOff.day === fromMeal.day)
+    expect(plate(oneOff.eaten_at)?.querySelector(".food-meal-from")).toBeNull()
 })
 
 test("a backfilled meal shows on its own earlier day, which can step forward again", async () => {

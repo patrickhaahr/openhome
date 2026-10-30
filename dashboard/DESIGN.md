@@ -123,7 +123,8 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each, then the NOVA 1
   share as a figure with the classified kcal it is a share of and the unclassified Portions it
   leaves out beneath it (a dash until something is classified). The Meal Logs
-  follow as wash plates in time order: the clock time large, the meal's kcal on the right, the note
+  follow as wash plates in time order: the clock time large, the meal's kcal on the right, the name
+  of the saved Meal it was logged from as a capsule beneath (none for a one-off meal), the note
   muted, then one row per Portion (Food, grams, kcal); a Product Portion shows its label name with
   its brand muted beneath it, and a classified Portion carries a small "NOVA n" capsule after its
   name (ink for Class 1, muted otherwise). A Meal Log with a photo carries its

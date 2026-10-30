@@ -267,6 +267,19 @@ a.food-day-key:active {
   font-size: 1.125rem;
   font-weight: 600;
 }
+/* A Meal Log copied from a saved Meal names that Meal in a capsule beneath its time. */
+.food-meal-from {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0.125rem 0.625rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--wash-strong);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .food-note {
   color: var(--muted-ink);
 }

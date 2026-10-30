@@ -102,6 +102,7 @@ const mealLog = z.object({
   id: z.string(),
   eaten_at: z.iso.datetime({ offset: true }),
   day: z.iso.date(),
+  meal_name: z.string().nullable(),
   note: z.string().nullable(),
   photo: mealPhoto.nullable(),
   portions: z.array(portion),
