@@ -44,6 +44,10 @@ pub struct LogMealRequest {
     /// Unique ID for this intended meal, 1-128 characters. Reuse the identical arguments and ID
     /// after an uncertain response.
     pub request_id: String,
+    /// Optional photo of the meal: the user's JPEG or PNG file as base64, at most 10 MB before
+    /// encoding. Stored without its metadata as AVIF with a thumbnail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub photo: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -74,6 +78,10 @@ pub struct UpdateMealLogRequest {
     /// database. Omit to preserve; cannot be null.
     #[serde(default, skip_serializing_if = "Patch::missing")]
     pub portions: Patch<Vec<PortionRequest>>,
+    /// A replacement photo: a base64 JPEG or PNG, at most 10 MB before encoding; null removes
+    /// the photo. Omit to preserve.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub photo: Patch<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
