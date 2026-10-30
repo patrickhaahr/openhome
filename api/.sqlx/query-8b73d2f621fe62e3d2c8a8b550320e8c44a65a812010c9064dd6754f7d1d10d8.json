@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT v.portion_id, v.key, v.value, v.unit, v.source AS \"source: ValueSource\"\n        FROM meal_log_portion_values v\n        JOIN meal_log_portions p ON p.id = v.portion_id JOIN meal_logs m ON m.id = p.meal_log_id\n        WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2) AND (?3 IS NULL OR m.day <= ?3)\n            AND (?4 OR v.key IN ('energy_kcal', 'protein', 'available_carbohydrate', 'fat', 'dietary_fibre', 'alcohol'))",
+  "describe": {
+    "columns": [
+      {
+        "name": "portion_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "key",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "unit",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "source: ValueSource",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8b73d2f621fe62e3d2c8a8b550320e8c44a65a812010c9064dd6754f7d1d10d8"
+}

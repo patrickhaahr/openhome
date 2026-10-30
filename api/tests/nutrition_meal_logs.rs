@@ -1,0 +1,690 @@
+//! Meal Logs and the Nutrition Day through the nutrition routes, over a real `app.db` and a real
+//! `food.db` imported from a synthetic DTU-shaped workbook served by `wiremock`.
+
+mod common;
+
+use axum::{
+    Router,
+    http::{Method, StatusCode},
+};
+use common::food_workbook::{first_dataset, second_dataset, sha256};
+use common::{send_request_with_method, test_app_with_db};
+use openhome_api::{
+    AppState,
+    auth::{ApiKey, auth_middleware},
+    db, routes,
+    services::nutrition::food_database::{DatasetPin, FoodDatabase},
+};
+use pretty_assertions::assert_eq;
+use serde_json::{Value, json};
+use tempfile::TempDir;
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
+
+const API_KEY: &str = "test-api-key";
+
+/// The nutrition routes over one `app.db` and a `food.db` in a temporary directory.
+struct Nutrition {
+    server: MockServer,
+    dir: TempDir,
+    state: AppState,
+    app: Router,
+}
+
+impl Nutrition {
+    /// Imports the first synthetic dataset as version "1".
+    async fn start() -> Self {
+        let server = MockServer::start().await;
+        let dir = TempDir::new().unwrap();
+        let (_, state) = test_app_with_db().await;
+        let app = Self::import(&server, &dir, &state, "1", first_dataset()).await;
+        Self {
+            server,
+            dir,
+            state,
+            app,
+        }
+    }
+
+    /// Imports `bytes` as `version` into the same `food.db`, as a pin change on restart does.
+    async fn import(
+        server: &MockServer,
+        dir: &TempDir,
+        state: &AppState,
+        version: &str,
+        bytes: Vec<u8>,
+    ) -> Router {
+        Mock::given(method("GET"))
+            .and(path(format!("/files/{version}.xlsx")))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(bytes.clone()))
+            .mount(server)
+            .await;
+        let pin = DatasetPin {
+            version: version.into(),
+            url: format!("{}/files/{version}.xlsx", server.uri())
+                .parse()
+                .unwrap(),
+            sha256: sha256(&bytes),
+        };
+        let (foods, import) = open(dir, pin).await;
+        import.expect("a new pin imports").run().await;
+        app(foods, state.clone())
+    }
+
+    async fn reimport(&mut self, version: &str, bytes: Vec<u8>) {
+        self.app = Self::import(&self.server, &self.dir, &self.state, version, bytes).await;
+    }
+
+    async fn send(&self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+        send_request_with_method(self.app.clone(), uri, method, body, Some(API_KEY)).await
+    }
+
+    async fn get(&self, uri: &str) -> (StatusCode, Value) {
+        self.send(Method::GET, uri, None).await
+    }
+
+    async fn log(&self, body: Value) -> (StatusCode, Value) {
+        self.send(Method::POST, "/api/nutrition/meal-logs", Some(body))
+            .await
+    }
+
+    /// Logs `body`, expecting a new Meal Log, and returns it.
+    async fn logged(&self, body: Value) -> Value {
+        let (status, logged) = self.log(body).await;
+        assert_eq!(status, StatusCode::CREATED, "{logged}");
+        assert_eq!(logged["replayed"], false);
+        logged["meal_log"].clone()
+    }
+
+    async fn day(&self, day: &str) -> Vec<Value> {
+        let (status, body) = self
+            .get(&format!("/api/nutrition/meal-logs?day={day}"))
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        body["meal_logs"].as_array().unwrap().clone()
+    }
+}
+
+async fn open(
+    dir: &TempDir,
+    pin: DatasetPin,
+) -> (
+    FoodDatabase,
+    Option<openhome_api::services::nutrition::food_database::FoodImport>,
+) {
+    let url = format!("sqlite:{}", dir.path().join("food.db").display());
+    let pool = db::connect_sqlite(&url).await.unwrap();
+    FoodDatabase::open(pool, pin, dir.path().join("food-dataset"))
+        .await
+        .unwrap()
+}
+
+fn app(foods: FoodDatabase, state: AppState) -> Router {
+    routes::nutrition::router(foods)
+        .with_state(state)
+        .layer(axum::middleware::from_fn(|request, next| {
+            auth_middleware(request, next, ApiKey::new(API_KEY.into()))
+        }))
+}
+
+fn breakfast(request_id: &str) -> Value {
+    json!({
+        "eaten_at": "2026-10-29T08:15:00+01:00",
+        "note": "  after the run ",
+        "portions": [{"food_id": 1693, "grams": 150}, {"food_id": 907, "grams": 120}],
+        "request_id": request_id,
+    })
+}
+
+fn at(eaten_at: &str, request_id: &str) -> Value {
+    json!({
+        "eaten_at": eaten_at,
+        "portions": [{"food_id": 1693, "grams": 100}],
+        "request_id": request_id,
+    })
+}
+
+fn nutrient<'a>(day: &'a Value, key: &str) -> &'a Value {
+    day["nutrients"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|nutrient| nutrient["key"] == key)
+        .unwrap_or_else(|| panic!("{key} is missing from {day}"))
+}
+
+#[tokio::test]
+async fn a_logged_meal_keeps_scaled_snapshots_with_sources_and_totals() {
+    let api = Nutrition::start().await;
+
+    let meal_log = api.logged(breakfast("breakfast-1")).await;
+
+    assert_eq!(meal_log["eaten_at"], "2026-10-29T08:15:00+01:00");
+    assert_eq!(meal_log["day"], "2026-10-29");
+    assert_eq!(meal_log["note"], "after the run");
+    let skyr = &meal_log["portions"][0];
+    assert_eq!(
+        (
+            &skyr["food_id"],
+            &skyr["name_en"],
+            &skyr["grams"],
+            &skyr["dataset_version"]
+        ),
+        (
+            &json!(1693),
+            &json!("Skyr, 0.2 % fat"),
+            &json!(150.0),
+            &json!("1")
+        )
+    );
+    assert_eq!(
+        skyr["nutrients"],
+        json!({
+            "energy_kcal": {"value": 93.0, "unit": "kcal", "source": "food"},
+            "protein": {"value": 16.5, "unit": "g", "source": "food"},
+            "available_carbohydrate": {"value": 6.0, "unit": "g", "source": "food"},
+            "fat": {"value": 0.3, "unit": "g", "source": "food"},
+            "dietary_fibre": {"value": 0.0, "unit": "g", "source": "food"},
+            "alcohol": {"value": 0.0, "unit": "g", "source": "food"},
+        })
+    );
+    // The chicken has no carbohydrate, fibre or alcohol value: unknown, never zero.
+    assert_eq!(
+        meal_log["portions"][1]["nutrients"]["available_carbohydrate"],
+        json!({"value": null, "unit": "g", "source": null})
+    );
+    assert_eq!(
+        meal_log["totals"],
+        json!({
+            "energy_kcal": {"value": 273.0, "unit": "kcal", "unknown_portions": 0},
+            "protein": {"value": 41.7, "unit": "g", "unknown_portions": 0},
+            "available_carbohydrate": {"value": 6.0, "unit": "g", "unknown_portions": 1},
+            "fat": {"value": 8.7, "unit": "g", "unknown_portions": 0},
+            "dietary_fibre": {"value": 0.0, "unit": "g", "unknown_portions": 1},
+            "alcohol": {"value": 0.0, "unit": "g", "unknown_portions": 1},
+        })
+    );
+    assert_eq!(api.day("2026-10-29").await, [meal_log]);
+}
+
+#[tokio::test]
+async fn nutrition_day_totals_every_parameter_with_units_and_credits_the_dataset() {
+    let api = Nutrition::start().await;
+    api.logged(breakfast("breakfast-1")).await;
+    let lunch = api
+        .logged(json!({
+            "eaten_at": "2026-10-29T12:30:00+01:00",
+            "portions": [{"food_id": 3, "grams": 100}],
+            "request_id": "lunch-1",
+        }))
+        .await;
+
+    let (status, day) = api.get("/api/nutrition/days/2026-10-29").await;
+
+    assert_eq!(status, StatusCode::OK, "{day}");
+    assert_eq!(
+        (
+            &day["day"],
+            &day["time_zone"],
+            &day["day_start"],
+            &day["day_end"]
+        ),
+        (
+            &json!("2026-10-29"),
+            &json!("Europe/Copenhagen"),
+            &json!("2026-10-29T00:00:00+01:00"),
+            &json!("2026-10-30T00:00:00+01:00")
+        )
+    );
+    assert_eq!(
+        day["totals"]["energy_kcal"],
+        json!({"value": 363.0, "unit": "kcal", "unknown_portions": 0})
+    );
+    assert_eq!(
+        day["totals"]["available_carbohydrate"],
+        json!({"value": 26.0, "unit": "g", "unknown_portions": 1})
+    );
+    // Every per-100 g parameter, in database order; waste, density and pH describe the Food.
+    let keys: Vec<&str> = day["nutrients"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|nutrient| nutrient["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "energy_kj",
+            "energy_kcal",
+            "protein",
+            "available_carbohydrate",
+            "dietary_fibre",
+            "fat",
+            "alcohol",
+            "vitamin_d",
+            "glycerol",
+            "epa"
+        ]
+    );
+    assert_eq!(
+        nutrient(&day, "vitamin_d"),
+        &json!({
+            "key": "vitamin_d", "name_da": "D-vitamin", "name_en": "Vitamin D",
+            "group": {"name_da": "Vitaminer", "name_en": "Vitamins"},
+            "unit": "µg", "value": 0.0, "unknown_portions": 2
+        })
+    );
+    assert_eq!(nutrient(&day, "epa")["value"], 0.012);
+    assert_eq!(
+        (
+            &nutrient(&day, "glycerol")["value"],
+            &nutrient(&day, "glycerol")["unknown_portions"]
+        ),
+        (&Value::Null, &json!(3))
+    );
+    assert_eq!(day["meal_logs"].as_array().unwrap().len(), 2);
+    assert_eq!(day["meal_logs"][1], lunch);
+    assert_eq!(
+        day["source"]["credit"],
+        "© The Danish Food Composition Database, version 1"
+    );
+
+    let (_, empty) = api.get("/api/nutrition/days/2026-10-28").await;
+    assert_eq!(empty["meal_logs"], json!([]));
+    assert_eq!(
+        empty["totals"]["energy_kcal"],
+        json!({"value": null, "unit": "kcal", "unknown_portions": 0})
+    );
+    let (status, _) = api.get("/api/nutrition/days/2026-10-32").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn a_reimported_food_database_never_changes_past_meal_logs() {
+    let mut api = Nutrition::start().await;
+    let breakfast = api.logged(breakfast("breakfast-1")).await;
+    let banana = api
+        .logged(json!({
+            "eaten_at": "2026-10-29T15:00:00+01:00",
+            "portions": [{"food_id": 3, "grams": 120}],
+            "request_id": "banana-1",
+        }))
+        .await;
+    let (_, day_before) = api.get("/api/nutrition/days/2026-10-29").await;
+
+    // Version 2 changes Skyr's protein and drops the Banana.
+    api.reimport("2", second_dataset()).await;
+
+    assert_eq!(api.day("2026-10-29").await, [breakfast, banana]);
+    let (_, day_after) = api.get("/api/nutrition/days/2026-10-29").await;
+    assert_eq!(day_after["totals"], day_before["totals"]);
+    assert_eq!(day_after["nutrients"], day_before["nutrients"]);
+    let later = api
+        .logged(json!({
+            "eaten_at": "2026-10-29T20:00:00+01:00",
+            "portions": [{"food_id": 1693, "grams": 150}],
+            "request_id": "breakfast-2",
+        }))
+        .await;
+    assert_eq!(later["portions"][0]["nutrients"]["protein"]["value"], 18.0);
+    assert_eq!(later["portions"][0]["dataset_version"], "2");
+}
+
+#[tokio::test]
+async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a_deleted_log() {
+    let api = Nutrition::start().await;
+    let meal_log = api.logged(breakfast("breakfast-1")).await;
+
+    // The same instant written in UTC with the same note after trimming is the same request.
+    let mut retry = breakfast("breakfast-1");
+    retry["eaten_at"] = json!("2026-10-29T07:15:00Z");
+    retry["note"] = json!("after the run");
+    let (status, replayed) = api.log(retry).await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed, json!({"meal_log": meal_log, "replayed": true}));
+
+    let mut changed = breakfast("breakfast-1");
+    changed["portions"][0]["grams"] = json!(200);
+    let (status, body) = api.log(changed).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(api.day("2026-10-29").await.len(), 1);
+
+    let id = meal_log["id"].as_str().unwrap().to_owned();
+    let (status, _) = api
+        .send(
+            Method::DELETE,
+            &format!("/api/nutrition/meal-logs/{id}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, body) = api.log(breakfast("breakfast-1")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"].as_str().unwrap().contains("deleted"),
+        "{body}"
+    );
+    assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
+
+    // A rejected request consumes no request_id.
+    let mut unknown = at("2026-10-29T09:00:00+01:00", "rejected-first");
+    unknown["portions"][0]["food_id"] = json!(424_242);
+    let (status, body) = api.log(unknown).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    let (status, _) = api
+        .log(at("2026-10-29T09:00:00+01:00", "rejected-first"))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn meal_logs_belong_to_the_copenhagen_day_of_their_time_across_midnight_and_daylight_saving()
+{
+    let api = Nutrition::start().await;
+    // (eaten_at, Copenhagen time it is shown in, Copenhagen day)
+    let cases = [
+        // Midnight in winter time (UTC+1).
+        (
+            "2026-10-29T23:59:59+01:00",
+            "2026-10-29T23:59:59+01:00",
+            "2026-10-29",
+        ),
+        (
+            "2026-10-29T23:30:00Z",
+            "2026-10-30T00:30:00+01:00",
+            "2026-10-30",
+        ),
+        // Summer time ends on 2026-10-25: that day lasts 25 hours.
+        (
+            "2026-10-24T22:00:00Z",
+            "2026-10-25T00:00:00+02:00",
+            "2026-10-25",
+        ),
+        (
+            "2026-10-25T00:30:00Z",
+            "2026-10-25T02:30:00+02:00",
+            "2026-10-25",
+        ),
+        (
+            "2026-10-25T01:30:00Z",
+            "2026-10-25T02:30:00+01:00",
+            "2026-10-25",
+        ),
+        (
+            "2026-10-25T22:59:59Z",
+            "2026-10-25T23:59:59+01:00",
+            "2026-10-25",
+        ),
+        // Summer time starts on 2026-03-29: that day lasts 23 hours.
+        (
+            "2026-03-28T23:00:00Z",
+            "2026-03-29T00:00:00+01:00",
+            "2026-03-29",
+        ),
+        (
+            "2026-03-29T21:59:59Z",
+            "2026-03-29T23:59:59+02:00",
+            "2026-03-29",
+        ),
+        (
+            "2026-03-29T22:00:00Z",
+            "2026-03-30T00:00:00+02:00",
+            "2026-03-30",
+        ),
+    ];
+    for (index, (eaten_at, shown, day)) in cases.into_iter().enumerate() {
+        let meal_log = api.logged(at(eaten_at, &format!("day-{index}"))).await;
+        assert_eq!(
+            (&meal_log["eaten_at"], &meal_log["day"]),
+            (&json!(shown), &json!(day)),
+            "{eaten_at}"
+        );
+    }
+
+    let times = |logs: Vec<Value>| -> Vec<String> {
+        logs.iter()
+            .map(|log| log["eaten_at"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert_eq!(
+        times(api.day("2026-10-25").await),
+        [
+            "2026-10-25T00:00:00+02:00",
+            "2026-10-25T02:30:00+02:00",
+            "2026-10-25T02:30:00+01:00",
+            "2026-10-25T23:59:59+01:00"
+        ]
+    );
+    let (_, day) = api.get("/api/nutrition/days/2026-03-29").await;
+    assert_eq!(
+        (&day["day_start"], &day["day_end"]),
+        (
+            &json!("2026-03-29T00:00:00+01:00"),
+            &json!("2026-03-30T00:00:00+02:00")
+        )
+    );
+    assert_eq!(day["meal_logs"].as_array().unwrap().len(), 2);
+
+    let (status, range) = api
+        .get("/api/nutrition/meal-logs?from=2026-10-25&to=2026-10-30")
+        .await;
+    assert_eq!(status, StatusCode::OK, "{range}");
+    assert_eq!(
+        (&range["from"], &range["to"], &range["time_zone"]),
+        (
+            &json!("2026-10-25"),
+            &json!("2026-10-30"),
+            &json!("Europe/Copenhagen")
+        )
+    );
+    assert_eq!(range["meal_logs"].as_array().unwrap().len(), 6);
+}
+
+#[tokio::test]
+async fn backfilled_times_are_accepted_and_future_or_offsetless_times_are_refused() {
+    let api = Nutrition::start().await;
+    let a_year_ago = chrono::Utc::now() - chrono::TimeDelta::days(365);
+    let backfilled = api
+        .logged(at(&a_year_ago.to_rfc3339(), "forgotten-dinner"))
+        .await;
+    let day = openhome_api::services::training::CalendarDay::of(a_year_ago).to_string();
+    assert_eq!(backfilled["day"], day);
+    assert_eq!(api.day(&day).await, [backfilled]);
+
+    let tomorrow = chrono::Utc::now() + chrono::TimeDelta::days(1);
+    for (eaten_at, request_id) in [
+        (tomorrow.to_rfc3339(), "tomorrow"),
+        ("2026-10-29T08:15:00".to_owned(), "no-offset"),
+        ("yesterday morning".to_owned(), "words"),
+    ] {
+        let (status, body) = api.log(at(&eaten_at, request_id)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{eaten_at}: {body}");
+        assert!(
+            body["error"].as_str().unwrap().contains("eaten_at"),
+            "{body}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn invalid_requests_are_rejected_without_writing() {
+    let api = Nutrition::start().await;
+    let valid = at("2026-10-29T08:00:00+01:00", "invalid-1");
+    let with = |field: &str, value: Value| {
+        let mut body = valid.clone();
+        body[field] = value;
+        body
+    };
+    for body in [
+        with("portions", json!([])),
+        with("portions", json!([{"food_id": 1693, "grams": 0}])),
+        with("portions", json!([{"food_id": 1693, "grams": -5}])),
+        with("portions", json!([{"food_id": 1693, "grams": 5001}])),
+        with("portions", json!([{"food_id": 0, "grams": 100}])),
+        with("portions", json!([{"food_id": 1693}])),
+        with(
+            "portions",
+            json!([{"food_id": 1693, "grams": 100, "kcal": 5}]),
+        ),
+        with("request_id", json!(" ")),
+        with("note", json!("x".repeat(501))),
+        with("calories", json!(500)),
+    ] {
+        let (status, response) = api.log(body.clone()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}: {response}");
+        assert_eq!(response["status"], 400, "{response}");
+    }
+    for uri in [
+        "/api/nutrition/meal-logs",
+        "/api/nutrition/meal-logs?day=29-10-2026",
+        "/api/nutrition/meal-logs?day=2026-10-29&from=2026-10-29&to=2026-10-29",
+        "/api/nutrition/meal-logs?from=2026-10-29",
+        "/api/nutrition/meal-logs?from=2026-10-29&to=2026-10-28",
+        "/api/nutrition/meal-logs?from=2026-01-01&to=2026-10-29",
+        "/api/nutrition/meal-logs?day=2026-10-29&owner=me",
+    ] {
+        let (status, response) = api.get(uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {response}");
+    }
+    assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
+    let (status, _) = send_request_with_method(
+        api.app.clone(),
+        "/api/nutrition/meal-logs?day=2026-10-29",
+        Method::GET,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn an_update_changes_time_note_or_portions_and_a_delete_removes_the_log() {
+    let mut api = Nutrition::start().await;
+    let meal_log = api.logged(breakfast("breakfast-1")).await;
+    let id = meal_log["id"].as_str().unwrap().to_owned();
+    let uri = format!("/api/nutrition/meal-logs/{id}");
+
+    // Moving it to the evening before moves it to that day; omitted fields stay.
+    let (status, moved) = api
+        .send(
+            Method::PATCH,
+            &uri,
+            Some(json!({"eaten_at": "2026-10-28T21:00:00+01:00"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{moved}");
+    assert_eq!(
+        (&moved["day"], &moved["note"], &moved["portions"]),
+        (
+            &json!("2026-10-28"),
+            &meal_log["note"],
+            &meal_log["portions"]
+        )
+    );
+    assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
+    assert_eq!(api.day("2026-10-28").await, std::slice::from_ref(&moved));
+
+    // Replacing Portions snapshots the current database; null clears the note.
+    api.reimport("2", second_dataset()).await;
+    let (status, corrected) = api
+        .send(
+            Method::PATCH,
+            &uri,
+            Some(json!({"note": null, "portions": [{"food_id": 1693, "grams": 200}]})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{corrected}");
+    assert_eq!(corrected["note"], Value::Null);
+    assert_eq!(corrected["eaten_at"], moved["eaten_at"]);
+    assert_eq!(corrected["portions"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        corrected["portions"][0]["nutrients"]["protein"]["value"],
+        24.0
+    );
+    assert_eq!(corrected["totals"]["energy_kcal"]["value"], 124.0);
+
+    for body in [
+        json!({"eaten_at": null}),
+        json!({"portions": null}),
+        json!({"portions": []}),
+        json!({"portions": [{"food_id": 1693, "grams": 0}]}),
+        json!({"eaten_at": "2026-10-28 21:00"}),
+        json!({"request_id": "x"}),
+    ] {
+        let (status, response) = api.send(Method::PATCH, &uri, Some(body.clone())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}: {response}");
+    }
+    let (status, unknown) = api
+        .send(
+            Method::PATCH,
+            &uri,
+            Some(json!({"portions": [{"food_id": 3, "grams": 100}]})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "a dropped Food: {unknown}");
+    assert_eq!(api.day("2026-10-28").await, [corrected]);
+
+    let (status, _) = api.send(Method::DELETE, &uri, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(api.day("2026-10-28").await, Vec::<Value>::new());
+    for method in [Method::DELETE, Method::PATCH] {
+        let (status, body) = api
+            .send(method.clone(), &uri, Some(json!({"note": "late"})))
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method}: {body}");
+    }
+}
+
+#[tokio::test]
+async fn while_the_food_database_is_unavailable_logs_stay_readable_and_editable() {
+    let api = Nutrition::start().await;
+    let meal_log = api.logged(breakfast("breakfast-1")).await;
+    let id = meal_log["id"].as_str().unwrap().to_owned();
+    // The next start re-imports a new pin; until it completes, Food lookups are unavailable.
+    let pin = DatasetPin {
+        version: "2".into(),
+        url: format!("{}/files/never.xlsx", api.server.uri())
+            .parse()
+            .unwrap(),
+        sha256: sha256(b"never served"),
+    };
+    let (foods, import) = open(&api.dir, pin).await;
+    assert!(import.is_some());
+    let importing = Nutrition {
+        app: app(foods, api.state.clone()),
+        ..api
+    };
+
+    for (status, body) in [
+        importing
+            .log(at("2026-10-29T12:00:00+01:00", "lunch-1"))
+            .await,
+        importing.get("/api/nutrition/days/2026-10-29").await,
+        importing
+            .send(
+                Method::PATCH,
+                &format!("/api/nutrition/meal-logs/{id}"),
+                Some(json!({"portions": [{"food_id": 1693, "grams": 10}]})),
+            )
+            .await,
+    ] {
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+        assert_eq!(
+            (&body["code"], &body["state"]),
+            (&json!("food_database_unavailable"), &json!("importing"))
+        );
+    }
+    assert_eq!(importing.day("2026-10-29").await, [meal_log]);
+    let (status, edited) = importing
+        .send(
+            Method::PATCH,
+            &format!("/api/nutrition/meal-logs/{id}"),
+            Some(json!({"note": "rough estimate"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["note"], "rough estimate");
+}
