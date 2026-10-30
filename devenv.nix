@@ -14,6 +14,10 @@
     pkg-config
     sqlx-cli
     sqlite
+    # Meal photo AVIF encoding: libavif-sys and libaom-sys build vendored C with CMake.
+    # aom prefers yasm; nasm 3's help text fails aom 3.11's nasm capability probe.
+    cmake
+    yasm
 
     # Expo / React Native
     bun

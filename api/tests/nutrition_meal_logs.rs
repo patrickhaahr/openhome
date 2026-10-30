@@ -5,7 +5,8 @@ mod common;
 
 use axum::{
     Router,
-    http::{Method, StatusCode},
+    body::Body,
+    http::{Method, Request, StatusCode, header},
 };
 use common::food_workbook::{first_dataset, second_dataset, sha256};
 use common::{send_request_with_method, test_app_with_db};
@@ -13,11 +14,15 @@ use openhome_api::{
     AppState,
     auth::{ApiKey, auth_middleware},
     db, routes,
-    services::nutrition::food_database::{DatasetPin, FoodDatabase},
+    services::nutrition::{
+        food_database::{DatasetPin, FoodDatabase},
+        meal_photos::MealPhotos,
+    },
 };
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
 use tempfile::TempDir;
+use tower::ServiceExt;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},
@@ -70,7 +75,7 @@ impl Nutrition {
         };
         let (foods, import) = open(dir, pin).await;
         import.expect("a new pin imports").run().await;
-        app(foods, state.clone())
+        app(foods, photos(dir), state.clone())
     }
 
     async fn reimport(&mut self, version: &str, bytes: Vec<u8>) {
@@ -105,6 +110,162 @@ impl Nutrition {
         assert_eq!(status, StatusCode::OK, "{body}");
         body["meal_logs"].as_array().unwrap().clone()
     }
+
+    /// GETs a media route: its status, content type and bytes.
+    async fn media(&self, uri: &str) -> (StatusCode, Option<String>, Vec<u8>) {
+        let request = Request::get(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {API_KEY}"))
+            .body(Body::empty())
+            .unwrap();
+        let response = self.app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let content_type = response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .map(|value| value.to_str().unwrap().to_owned());
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, content_type, bytes.to_vec())
+    }
+
+    /// PUTs `bytes` as the multipart file field `field` of a Meal Log's photo.
+    async fn upload(&self, id: &str, field: &str, bytes: &[u8]) -> (StatusCode, Value) {
+        let mut body = format!(
+            "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nignored\r\n\
+             --{BOUNDARY}\r\nContent-Disposition: form-data; name=\"{field}\"; \
+             filename=\"meal\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        )
+        .into_bytes();
+        body.extend_from_slice(bytes);
+        body.extend_from_slice(format!("\r\n--{BOUNDARY}--\r\n").as_bytes());
+        let request = Request::put(format!("/api/nutrition/meal-logs/{id}/photo"))
+            .header(header::AUTHORIZATION, format!("Bearer {API_KEY}"))
+            .header(
+                header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={BOUNDARY}"),
+            )
+            .body(Body::from(body))
+            .unwrap();
+        let response = self.app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    /// Every file in the photo directory, sorted.
+    fn photo_files(&self) -> Vec<String> {
+        let Ok(entries) = std::fs::read_dir(self.dir.path().join("meal-photos")) else {
+            return Vec::new();
+        };
+        let mut files: Vec<String> = entries
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        files.sort();
+        files
+    }
+}
+
+const BOUNDARY: &str = "openhome-test-boundary";
+
+/// Synthetic photos: no real photo is ever committed.
+mod synthetic {
+    use base64::Engine;
+    use image::{ImageEncoder, Rgb, RgbImage, codecs::jpeg::JpegEncoder, codecs::png::PngEncoder};
+
+    /// The camera make written into the EXIF block, to look for in stored files.
+    pub const CAMERA: &[u8] = b"OpenHomeTestCam";
+
+    /// A frame whose left half is red and right half blue, as the sensor recorded it.
+    fn frame(width: u32, height: u32) -> RgbImage {
+        RgbImage::from_fn(width, height, |x, y| {
+            let shade = (y * 255 / height) as u8;
+            if x < width / 2 {
+                Rgb([230, shade / 4, 30])
+            } else {
+                Rgb([30, shade / 4, 230])
+            }
+        })
+    }
+
+    /// A JPEG of `frame` carrying EXIF with `orientation`, a camera make and a GPS latitude.
+    pub fn jpeg_with_gps(width: u32, height: u32, orientation: u16) -> Vec<u8> {
+        let mut jpeg = Vec::new();
+        JpegEncoder::new_with_quality(&mut jpeg, 85)
+            .write_image(
+                frame(width, height).as_raw(),
+                width,
+                height,
+                image::ExtendedColorType::Rgb8,
+            )
+            .unwrap();
+        // A little-endian TIFF: IFD0 (Make, Orientation, GPS pointer), its Make string, then a
+        // GPS IFD with GPSLatitudeRef "N" and GPSLatitude 55 deg 40' 30".
+        let mut tiff = b"II\x2a\x00\x08\x00\x00\x00".to_vec();
+        let entry = |tiff: &mut Vec<u8>, tag: u16, kind: u16, count: u32, value: u32| {
+            tiff.extend_from_slice(&tag.to_le_bytes());
+            tiff.extend_from_slice(&kind.to_le_bytes());
+            tiff.extend_from_slice(&count.to_le_bytes());
+            tiff.extend_from_slice(&value.to_le_bytes());
+        };
+        let make_at = 8 + 2 + 3 * 12 + 4;
+        let gps_at = make_at + CAMERA.len() as u32 + 1;
+        tiff.extend_from_slice(&3_u16.to_le_bytes());
+        entry(&mut tiff, 0x010F, 2, CAMERA.len() as u32 + 1, make_at);
+        entry(&mut tiff, 0x0112, 3, 1, u32::from(orientation));
+        entry(&mut tiff, 0x8825, 4, 1, gps_at);
+        tiff.extend_from_slice(&0_u32.to_le_bytes());
+        tiff.extend_from_slice(CAMERA);
+        tiff.push(0);
+        let latitude_at = gps_at + 2 + 2 * 12 + 4;
+        tiff.extend_from_slice(&2_u16.to_le_bytes());
+        entry(&mut tiff, 0x0001, 2, 2, u32::from(b'N'));
+        entry(&mut tiff, 0x0002, 5, 3, latitude_at);
+        tiff.extend_from_slice(&0_u32.to_le_bytes());
+        for (numerator, denominator) in [(55_u32, 1_u32), (40, 1), (3000, 100)] {
+            tiff.extend_from_slice(&numerator.to_le_bytes());
+            tiff.extend_from_slice(&denominator.to_le_bytes());
+        }
+        let mut app1 = vec![0xFF, 0xE1];
+        app1.extend_from_slice(&(2 + 6 + tiff.len() as u16).to_be_bytes());
+        app1.extend_from_slice(b"Exif\0\0");
+        app1.extend_from_slice(&tiff);
+        jpeg.splice(2..2, app1);
+        jpeg
+    }
+
+    pub fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut png = Vec::new();
+        PngEncoder::new(&mut png)
+            .write_image(
+                frame(width, height).as_raw(),
+                width,
+                height,
+                image::ExtendedColorType::Rgb8,
+            )
+            .unwrap();
+        png
+    }
+
+    pub fn base64(bytes: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    pub fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+    }
+
+    /// Decodes a stored AVIF: its size and the RGBA pixel at (`x`, `y`).
+    pub fn avif_pixel(avif: &[u8], x: u32, y: u32) -> ((u32, u32), (u8, u8, u8)) {
+        assert!(libavif::is_avif(avif), "not an AVIF file");
+        let pixels = libavif::decode_rgb(avif).unwrap();
+        let (red, green, blue, _) = pixels.pixel(x, y);
+        ((pixels.width(), pixels.height()), (red, green, blue))
+    }
 }
 
 async fn open(
@@ -121,8 +282,12 @@ async fn open(
         .unwrap()
 }
 
-fn app(foods: FoodDatabase, state: AppState) -> Router {
-    routes::nutrition::router(foods)
+fn photos(dir: &TempDir) -> MealPhotos {
+    MealPhotos::new(dir.path().join("meal-photos"))
+}
+
+fn app(foods: FoodDatabase, photos: MealPhotos, state: AppState) -> Router {
+    routes::nutrition::router(foods, photos)
         .with_state(state)
         .layer(axum::middleware::from_fn(|request, next| {
             auth_middleware(request, next, ApiKey::new(API_KEY.into()))
@@ -654,7 +819,7 @@ async fn while_the_food_database_is_unavailable_logs_stay_readable_and_editable(
     let (foods, import) = open(&api.dir, pin).await;
     assert!(import.is_some());
     let importing = Nutrition {
-        app: app(foods, api.state.clone()),
+        app: app(foods, photos(&api.dir), api.state.clone()),
         ..api
     };
 
@@ -687,4 +852,328 @@ async fn while_the_food_database_is_unavailable_logs_stay_readable_and_editable(
         .await;
     assert_eq!(status, StatusCode::OK, "{edited}");
     assert_eq!(edited["note"], "rough estimate");
+}
+
+fn with_photo(mut body: Value, photo: &[u8]) -> Value {
+    body["photo"] = json!(synthetic::base64(photo));
+    body
+}
+
+#[tokio::test]
+async fn a_photo_is_stored_upright_without_metadata_as_avif_with_a_thumbnail() {
+    let api = Nutrition::start().await;
+    // A 2400x1200 sensor frame the camera held a quarter turn (EXIF orientation 6), with a GPS
+    // position and a camera make.
+    let jpeg = synthetic::jpeg_with_gps(2400, 1200, 6);
+    assert!(synthetic::contains(&jpeg, synthetic::CAMERA));
+
+    let meal_log = api.logged(with_photo(breakfast("photo-1"), &jpeg)).await;
+
+    let photo = &meal_log["photo"];
+    let id = photo["id"].as_str().unwrap();
+    assert_eq!(
+        *photo,
+        json!({
+            "id": id,
+            "width": 800,
+            "height": 1600,
+            "url": format!("/api/nutrition/meal-photos/{id}"),
+            "thumbnail": {
+                "width": 200,
+                "height": 400,
+                "url": format!("/api/nutrition/meal-photos/{id}/thumbnail"),
+            },
+        })
+    );
+    for (url, size, top, bottom) in [
+        (&photo["url"], (800, 1600), (400, 200), (400, 1400)),
+        (
+            &photo["thumbnail"]["url"],
+            (200, 400),
+            (100, 50),
+            (100, 350),
+        ),
+    ] {
+        let (status, content_type, avif) = api.media(url.as_str().unwrap()).await;
+        assert_eq!(
+            (status, content_type.as_deref()),
+            (StatusCode::OK, Some("image/avif"))
+        );
+        // Re-encoded from pixels: no EXIF block, camera make or GPS position survives.
+        assert!(!synthetic::contains(&avif, b"Exif"), "{url}");
+        assert!(!synthetic::contains(&avif, synthetic::CAMERA), "{url}");
+        // Upright: the sensor's red left half is now the top, its blue right half the bottom.
+        let (decoded, (red, _, blue)) = synthetic::avif_pixel(&avif, top.0, top.1);
+        assert_eq!(decoded, size, "{url}");
+        assert!(red > 180 && blue < 80, "top of {url} is ({red}, {blue})");
+        let (_, (red, _, blue)) = synthetic::avif_pixel(&avif, bottom.0, bottom.1);
+        assert!(blue > 180 && red < 80, "bottom of {url} is ({red}, {blue})");
+    }
+    // Only the AVIF photo and thumbnail are kept, never the uploaded JPEG.
+    assert_eq!(
+        api.photo_files(),
+        [format!("{id}.avif"), format!("{id}.thumbnail.avif")]
+    );
+    assert_eq!(api.day("2026-10-29").await, std::slice::from_ref(&meal_log));
+    let (status, nutrition_day) = api.get("/api/nutrition/days/2026-10-29").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(nutrition_day["meal_logs"], json!([meal_log]));
+}
+
+#[tokio::test]
+async fn photos_are_scaled_down_to_their_long_side_and_never_up() {
+    let api = Nutrition::start().await;
+    for (index, (width, height, photo, thumbnail)) in [
+        (3200, 800, (1600, 400), (400, 100)),
+        (1000, 800, (1000, 800), (400, 320)),
+        (300, 200, (300, 200), (300, 200)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut body = at("2026-10-29T12:00:00+01:00", &format!("scaled-{index}"));
+        // A data URL, as some agents send it, is accepted too.
+        body["photo"] = json!(format!(
+            "data:image/png;base64,{}",
+            synthetic::base64(&synthetic::png(width, height))
+        ));
+        let logged = api.logged(body).await["photo"].clone();
+        assert_eq!(
+            (
+                (&logged["width"], &logged["height"]),
+                (
+                    &logged["thumbnail"]["width"],
+                    &logged["thumbnail"]["height"]
+                )
+            ),
+            (
+                (&json!(photo.0), &json!(photo.1)),
+                (&json!(thumbnail.0), &json!(thumbnail.1))
+            ),
+            "{width}x{height}"
+        );
+        let (_, _, avif) = api.media(logged["url"].as_str().unwrap()).await;
+        assert_eq!(synthetic::avif_pixel(&avif, 0, 0).0, photo);
+    }
+}
+
+#[tokio::test]
+async fn an_undecodable_or_oversized_photo_rejects_the_whole_request_and_writes_nothing() {
+    let api = Nutrition::start().await;
+    let existing = api
+        .logged(at("2026-10-28T12:00:00+01:00", "existing"))
+        .await;
+    let existing_uri = format!(
+        "/api/nutrition/meal-logs/{}",
+        existing["id"].as_str().unwrap()
+    );
+    let jpeg_start = |length: usize| {
+        let mut bytes = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        bytes.resize(length, 0x42);
+        bytes
+    };
+    let ten_mb = 10 * 1024 * 1024;
+    let cases: [(&str, Value, StatusCode); 7] = [
+        ("not base64", json!("not base64!"), StatusCode::BAD_REQUEST),
+        (
+            "a GIF",
+            json!(synthetic::base64(b"GIF89a\x01\x00\x01\x00")),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "a broken JPEG",
+            json!(synthetic::base64(&jpeg_start(2_000))),
+            StatusCode::BAD_REQUEST,
+        ),
+        ("not a string", json!(42), StatusCode::BAD_REQUEST),
+        (
+            "wider than 12000 px",
+            json!(synthetic::base64(&synthetic::png(12_001, 1))),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "over 10 MB, inside the body limit",
+            json!(synthetic::base64(&jpeg_start(ten_mb + 1))),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "over the 15 MB body limit",
+            json!(synthetic::base64(&jpeg_start(12 * 1024 * 1024))),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+    ];
+    for (case, photo, expected) in cases {
+        let mut body = at("2026-10-29T12:00:00+01:00", "rejected");
+        body["photo"] = photo.clone();
+        let (status, response) = api.log(body).await;
+        assert_eq!(status, expected, "log_meal with {case}: {response}");
+        assert_eq!(response["status"], expected.as_u16(), "{case}: {response}");
+
+        let (status, response) = api
+            .send(
+                Method::PATCH,
+                &existing_uri,
+                Some(json!({"note": "changed", "photo": photo})),
+            )
+            .await;
+        assert_eq!(status, expected, "update with {case}: {response}");
+    }
+    let (status, response) = api
+        .upload(
+            existing["id"].as_str().unwrap(),
+            "photo",
+            &jpeg_start(2_000),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+    let (status, response) = api
+        .upload(
+            existing["id"].as_str().unwrap(),
+            "picture",
+            &synthetic::png(10, 10),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "no photo field: {response}"
+    );
+
+    // Nothing was written: no Meal Log, no change, no file, and no request_id consumed.
+    assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
+    assert_eq!(api.day("2026-10-28").await, [existing]);
+    assert_eq!(api.photo_files(), Vec::<String>::new());
+    let logged = api
+        .logged(with_photo(
+            at("2026-10-29T12:00:00+01:00", "rejected"),
+            &synthetic::png(20, 10),
+        ))
+        .await;
+    assert_eq!(logged["photo"]["width"], 20);
+}
+
+#[tokio::test]
+async fn a_retried_log_with_a_photo_replays_and_another_photo_conflicts() {
+    let api = Nutrition::start().await;
+    let body = with_photo(breakfast("photo-retry"), &synthetic::png(640, 480));
+    let meal_log = api.logged(body.clone()).await;
+
+    let (status, replayed) = api.log(body.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed, json!({"meal_log": meal_log, "replayed": true}));
+    assert_eq!(api.photo_files().len(), 2, "the retry stored nothing");
+
+    for changed in [
+        with_photo(breakfast("photo-retry"), &synthetic::png(641, 480)),
+        breakfast("photo-retry"),
+    ] {
+        let (status, response) = api.log(changed).await;
+        assert_eq!(status, StatusCode::CONFLICT, "{response}");
+    }
+    assert_eq!(api.photo_files().len(), 2);
+}
+
+#[tokio::test]
+async fn a_photo_is_attached_replaced_or_removed_and_leaves_with_its_meal_log() {
+    let api = Nutrition::start().await;
+    let meal_log = api.logged(breakfast("no-photo")).await;
+    assert_eq!(meal_log["photo"], Value::Null);
+    let id = meal_log["id"].as_str().unwrap().to_owned();
+    let uri = format!("/api/nutrition/meal-logs/{id}");
+
+    // The app uploads a file as multipart.
+    let (status, attached) = api.upload(&id, "photo", &synthetic::png(1000, 800)).await;
+    assert_eq!(status, StatusCode::OK, "{attached}");
+    assert_eq!(
+        (&attached["portions"], &attached["note"]),
+        (&meal_log["portions"], &meal_log["note"])
+    );
+    let first = attached["photo"].clone();
+    assert_eq!(
+        (&first["width"], &first["height"]),
+        (&json!(1000), &json!(800))
+    );
+
+    // The agent replaces it with base64; the replaced files are removed.
+    let (status, replaced) = api
+        .send(
+            Method::PATCH,
+            &uri,
+            Some(json!({"photo": synthetic::base64(&synthetic::jpeg_with_gps(600, 600, 1))})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{replaced}");
+    let second = replaced["photo"].clone();
+    assert_ne!(second["id"], first["id"]);
+    let second_id = second["id"].as_str().unwrap();
+    assert_eq!(
+        api.photo_files(),
+        [
+            format!("{second_id}.avif"),
+            format!("{second_id}.thumbnail.avif")
+        ]
+    );
+    for url in [&first["url"], &first["thumbnail"]["url"]] {
+        assert_eq!(
+            api.media(url.as_str().unwrap()).await.0,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    // Other corrections keep the photo; null removes it.
+    let (_, noted) = api
+        .send(Method::PATCH, &uri, Some(json!({"note": "late"})))
+        .await;
+    assert_eq!(noted["photo"], second);
+    let (status, removed) = api
+        .send(Method::PATCH, &uri, Some(json!({"photo": null})))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{removed}");
+    assert_eq!(removed["photo"], Value::Null);
+    assert_eq!(api.photo_files(), Vec::<String>::new());
+    assert_eq!(
+        api.media(second["url"].as_str().unwrap()).await.0,
+        StatusCode::NOT_FOUND
+    );
+
+    // Deleting the Meal Log deletes its files.
+    let (_, attached) = api.upload(&id, "photo", &synthetic::png(50, 50)).await;
+    assert_eq!(api.photo_files().len(), 2);
+    let (status, _) = api.send(Method::DELETE, &uri, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(api.photo_files(), Vec::<String>::new());
+    assert_eq!(
+        api.media(attached["photo"]["url"].as_str().unwrap())
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+
+    let (status, missing) = api.upload(&id, "photo", &synthetic::png(50, 50)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{missing}");
+    assert_eq!(api.photo_files(), Vec::<String>::new());
+    for uri in [
+        "/api/nutrition/meal-photos/not-a-photo",
+        "/api/nutrition/meal-photos/..%2Fapp.db",
+        "/api/nutrition/meal-photos/3f2b8c1e-0000-4000-8000-000000000000/thumbnail",
+    ] {
+        assert_eq!(api.media(uri).await.0, StatusCode::NOT_FOUND, "{uri}");
+    }
+}
+
+#[tokio::test]
+async fn photo_media_requires_the_api_key() {
+    let api = Nutrition::start().await;
+    let meal_log = api
+        .logged(with_photo(breakfast("photo-auth"), &synthetic::png(40, 30)))
+        .await;
+    let (status, _) = send_request_with_method(
+        api.app.clone(),
+        meal_log["photo"]["url"].as_str().unwrap(),
+        Method::GET,
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

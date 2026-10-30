@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT photo_id FROM meal_logs WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "photo_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9deefc333d30bdaaefd3f211a60124ea3e1ef4878dfb7afee97adc974caea879"
+}

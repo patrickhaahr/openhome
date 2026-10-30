@@ -8,6 +8,9 @@
 //! Logging follows the `request_id` receipt pattern: a retry replays the original result, the
 //! same `request_id` with changed arguments is a conflict, and a deleted Meal Log keeps its
 //! receipt so an old retry cannot recreate it.
+//!
+//! An optional photo is encoded before anything is written and stored before the Meal Log row
+//! that references it, so a rejected photo writes nothing and a failed write removes its files.
 
 use std::collections::HashMap;
 
@@ -17,6 +20,7 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use super::food_database::{FoodDatabase, FoodError, FoodSnapshot};
+use super::meal_photos::{MealPhotos, PhotoError, Size, Upload};
 use super::parameters::{self, Unit};
 use crate::services::patch::Patch;
 use crate::services::training::calendar::{self, CalendarDay};
@@ -40,6 +44,8 @@ pub enum MealLogError {
     Conflict(String),
     #[error(transparent)]
     Food(#[from] FoodError),
+    #[error(transparent)]
+    Photo(#[from] PhotoError),
     #[error("Meal Log database operation failed")]
     Database(#[from] sqlx::Error),
 }
@@ -73,10 +79,14 @@ pub struct LogMeal {
     pub note: Option<String>,
     pub portions: Vec<PortionRequest>,
     pub request_id: String,
+    /// A base64 JPEG or PNG of the meal.
+    #[serde(default)]
+    pub photo: Option<String>,
 }
 
-/// Omitted fields keep their value; `note: null` clears the note. `portions` replaces every
-/// Portion with new snapshots from the current Food database.
+/// Omitted fields keep their value; `note: null` clears the note and `photo: null` removes the
+/// photo. `portions` replaces every Portion with new snapshots from the current Food database;
+/// `photo` (base64 JPEG or PNG) replaces the photo.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditMealLog {
@@ -86,6 +96,8 @@ pub struct EditMealLog {
     pub note: Patch<String>,
     #[serde(default)]
     pub portions: Patch<Vec<PortionRequest>>,
+    #[serde(default)]
+    pub photo: Patch<String>,
 }
 
 /// One day, or an inclusive range of days.
@@ -161,6 +173,26 @@ pub struct Portion {
     pub nutrients: KeyNutrients<PortionAmount>,
 }
 
+/// Where the photo media routes serve stored photos, by photo ID.
+pub const PHOTO_PATH: &str = "/api/nutrition/meal-photos";
+
+#[derive(Debug, Serialize)]
+pub struct PhotoThumbnail {
+    pub width: u32,
+    pub height: u32,
+    pub url: String,
+}
+
+/// A Meal Log's AVIF photo; a new photo gets a new `id`, so its URLs never change content.
+#[derive(Debug, Serialize)]
+pub struct Photo {
+    pub id: String,
+    pub width: u32,
+    pub height: u32,
+    pub url: String,
+    pub thumbnail: PhotoThumbnail,
+}
+
 #[derive(Debug, Serialize)]
 pub struct MealLog {
     pub id: String,
@@ -169,6 +201,7 @@ pub struct MealLog {
     /// The Europe/Copenhagen calendar day it counts toward.
     pub day: String,
     pub note: Option<String>,
+    pub photo: Option<Photo>,
     pub portions: Vec<Portion>,
     pub totals: KeyNutrients<Total>,
 }
@@ -216,6 +249,53 @@ impl StoredPortion {
     }
 }
 
+/// A stored photo: its ID names its files.
+#[derive(Debug)]
+struct StoredPhoto {
+    id: String,
+    size: Size,
+    thumbnail_size: Size,
+}
+
+impl StoredPhoto {
+    /// The photo when every column is set; the columns are written together.
+    fn from_columns(
+        id: Option<String>,
+        width: Option<i64>,
+        height: Option<i64>,
+        thumbnail_width: Option<i64>,
+        thumbnail_height: Option<i64>,
+    ) -> Option<Self> {
+        let side = |value: Option<i64>| value.and_then(|value| u32::try_from(value).ok());
+        Some(Self {
+            id: id?,
+            size: Size {
+                width: side(width)?,
+                height: side(height)?,
+            },
+            thumbnail_size: Size {
+                width: side(thumbnail_width)?,
+                height: side(thumbnail_height)?,
+            },
+        })
+    }
+
+    fn into_photo(self) -> Photo {
+        let url = format!("{PHOTO_PATH}/{}", self.id);
+        Photo {
+            thumbnail: PhotoThumbnail {
+                width: self.thumbnail_size.width,
+                height: self.thumbnail_size.height,
+                url: format!("{url}/thumbnail"),
+            },
+            id: self.id,
+            width: self.size.width,
+            height: self.size.height,
+            url,
+        }
+    }
+}
+
 /// A stored Meal Log with its Portions in order.
 #[derive(Debug)]
 pub(super) struct StoredLog {
@@ -223,15 +303,19 @@ pub(super) struct StoredLog {
     eaten_at: String,
     day: String,
     note: Option<String>,
+    photo: Option<StoredPhoto>,
     pub portions: Vec<StoredPortion>,
 }
 
-/// The arguments a receipt compares on retry.
+/// The arguments a receipt compares on retry. `photo` is the upload's SHA-256, left out when
+/// there is none so receipts written before photos existed still match their retries.
 #[derive(Serialize)]
 struct Normalized<'a> {
     eaten_at: &'a str,
     note: Option<&'a str>,
     portions: Vec<(i64, f64)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    photo: Option<String>,
 }
 
 /// Rounds away floating-point noise from scaled and summed values.
@@ -275,6 +359,7 @@ impl StoredLog {
             eaten_at: calendar::iso(eaten_at),
             day: self.day,
             note: self.note,
+            photo: self.photo.map(StoredPhoto::into_photo),
             portions: self
                 .portions
                 .into_iter()
@@ -456,7 +541,8 @@ pub(super) async fn load(
         Selection::Days(from, to) => (None, Some(from.to_string()), Some(to.to_string())),
     };
     let logs = sqlx::query!(
-        r#"SELECT id AS "id!", eaten_at, day, note FROM meal_logs
+        r#"SELECT id AS "id!", eaten_at, day, note, photo_id, photo_width, photo_height,
+            photo_thumbnail_width, photo_thumbnail_height FROM meal_logs
         WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR day >= ?2) AND (?3 IS NULL OR day <= ?3)
         ORDER BY eaten_at, created_at, id"#,
         id,
@@ -519,6 +605,13 @@ pub(super) async fn load(
         .into_iter()
         .map(|row| StoredLog {
             portions: portions_by_log.remove(&row.id).unwrap_or_default(),
+            photo: StoredPhoto::from_columns(
+                row.photo_id,
+                row.photo_width,
+                row.photo_height,
+                row.photo_thumbnail_width,
+                row.photo_thumbnail_height,
+            ),
             id: row.id,
             eaten_at: row.eaten_at,
             day: row.day,
@@ -568,13 +661,57 @@ async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Opti
     }))
 }
 
-/// Logs a meal: its Portions with snapshots of their Foods, at its time, with an immutable
-/// receipt for its `request_id`. Rejected requests consume no `request_id`.
-pub async fn log_meal(db: &SqlitePool, foods: &FoodDatabase, request: LogMeal) -> Result<Logged> {
+/// The photo columns of a Meal Log row: all set for a stored photo, all null without one.
+#[derive(Default)]
+struct PhotoColumns {
+    id: Option<String>,
+    width: Option<i64>,
+    height: Option<i64>,
+    thumbnail_width: Option<i64>,
+    thumbnail_height: Option<i64>,
+}
+
+impl PhotoColumns {
+    fn of(photo: Option<&StoredPhoto>) -> Self {
+        photo.map_or_else(Self::default, |photo| Self {
+            id: Some(photo.id.clone()),
+            width: Some(photo.size.width.into()),
+            height: Some(photo.size.height.into()),
+            thumbnail_width: Some(photo.thumbnail_size.width.into()),
+            thumbnail_height: Some(photo.thumbnail_size.height.into()),
+        })
+    }
+}
+
+/// Encodes and stores `upload`, waiting for any encode already running.
+async fn store_photo(photos: &MealPhotos, upload: Upload) -> Result<StoredPhoto> {
+    let encoded = photos.encode(upload).await?;
+    let id = photos.store(&encoded).await?;
+    Ok(StoredPhoto {
+        id,
+        size: encoded.size,
+        thumbnail_size: encoded.thumbnail_size,
+    })
+}
+
+/// Logs a meal: its Portions with snapshots of their Foods and its optional photo, at its time,
+/// with an immutable receipt for its `request_id`. Rejected requests consume no `request_id` and
+/// write nothing.
+pub async fn log_meal(
+    db: &SqlitePool,
+    foods: &FoodDatabase,
+    photos: &MealPhotos,
+    request: LogMeal,
+) -> Result<Logged> {
     let request_id = request_id(&request.request_id)?;
     let at = eaten_at(&request.eaten_at, Utc::now())?;
     let note = note(request.note)?;
     portions(&request.portions)?;
+    let upload = request
+        .photo
+        .as_deref()
+        .map(Upload::from_base64)
+        .transpose()?;
     let stored_at = utc_text(at);
     let normalized = serde_json::to_string(&Normalized {
         eaten_at: &stored_at,
@@ -584,45 +721,87 @@ pub async fn log_meal(db: &SqlitePool, foods: &FoodDatabase, request: LogMeal) -
             .iter()
             .map(|portion| (portion.food_id, portion.grams))
             .collect(),
+        photo: upload.as_ref().map(Upload::sha256),
     })
     .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     if let Some(logged) = replay(db, &request_id, &normalized).await? {
         return Ok(logged);
     }
     let snapshots = snapshots(foods, &request.portions).await?;
+    let photo = match upload {
+        Some(upload) => Some(store_photo(photos, upload).await?),
+        None => None,
+    };
 
     let id = Uuid::new_v4().to_string();
-    let day = CalendarDay::of(at).to_string();
-    let mut transaction = db.begin().await?;
-    // Claim first so simultaneous retries serialize on the receipt.
-    let claimed = sqlx::query_scalar!(
-        "INSERT INTO meal_log_receipts (request_id, meal_log_id, request) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
-        request_id, id, normalized)
-        .fetch_optional(&mut *transaction)
-        .await?;
-    if claimed.is_none() {
-        transaction.rollback().await?;
+    let row = NewLog {
+        id: &id,
+        request_id: &request_id,
+        normalized: &normalized,
+        eaten_at: &stored_at,
+        day: CalendarDay::of(at).to_string(),
+        note: note.as_deref(),
+        photo: PhotoColumns::of(photo.as_ref()),
+    };
+    let inserted = insert_log(db, &row, &request.portions, &snapshots).await;
+    if !matches!(inserted, Ok(true))
+        && let Some(photo) = &photo
+    {
+        photos.remove(&photo.id).await;
+    }
+    if !inserted? {
         return replay(db, &request_id, &normalized).await?.ok_or_else(|| {
             MealLogError::Conflict(
                 "Retry receipt unavailable; list meal_logs before retrying".into(),
             )
         });
     }
-    sqlx::query!(
-        "INSERT INTO meal_logs (id, eaten_at, day, note) VALUES (?, ?, ?, ?)",
-        id,
-        stored_at,
-        day,
-        note
-    )
-    .execute(&mut *transaction)
-    .await?;
-    insert_portions(&mut transaction, &id, &request.portions, &snapshots).await?;
-    transaction.commit().await?;
     Ok(Logged {
         meal_log: find(db, &id).await?.ok_or_else(not_found)?,
         replayed: false,
     })
+}
+
+/// A Meal Log row to insert with its receipt.
+struct NewLog<'a> {
+    id: &'a str,
+    request_id: &'a str,
+    normalized: &'a str,
+    eaten_at: &'a str,
+    day: String,
+    note: Option<&'a str>,
+    photo: PhotoColumns,
+}
+
+/// Inserts the receipt, Meal Log and Portions together. `false` when a simultaneous retry
+/// claimed the receipt first; nothing is written then.
+async fn insert_log(
+    db: &SqlitePool,
+    row: &NewLog<'_>,
+    requests: &[PortionRequest],
+    snapshots: &HashMap<i64, FoodSnapshot>,
+) -> Result<bool> {
+    let mut transaction = db.begin().await?;
+    // Claim first so simultaneous retries serialize on the receipt.
+    let claimed = sqlx::query_scalar!(
+        "INSERT INTO meal_log_receipts (request_id, meal_log_id, request) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
+        row.request_id, row.id, row.normalized)
+        .fetch_optional(&mut *transaction)
+        .await?;
+    if claimed.is_none() {
+        transaction.rollback().await?;
+        return Ok(false);
+    }
+    let photo = &row.photo;
+    sqlx::query!(
+        "INSERT INTO meal_logs (id, eaten_at, day, note, photo_id, photo_width, photo_height, photo_thumbnail_width, photo_thumbnail_height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        row.id, row.eaten_at, row.day, row.note,
+        photo.id, photo.width, photo.height, photo.thumbnail_width, photo.thumbnail_height)
+    .execute(&mut *transaction)
+    .await?;
+    insert_portions(&mut transaction, row.id, requests, snapshots).await?;
+    transaction.commit().await?;
+    Ok(true)
 }
 
 /// Meal Logs of one day, or of an inclusive range of up to [`MAX_RANGE_DAYS`] days, in time
@@ -661,65 +840,196 @@ pub async fn meal_logs(db: &SqlitePool, query: &MealLogsQuery) -> Result<MealLog
     })
 }
 
-/// Applies the supplied fields together. Replacing Portions snapshots their Foods afresh.
+/// What an edit does to the photo.
+enum PhotoChange {
+    Keep,
+    Remove,
+    Replace(Upload),
+}
+
+/// The validated changes of one edit, applied together.
+struct Changes {
+    eaten_at: Option<DateTime<Utc>>,
+    /// `Some` when the note is supplied; its value may clear it.
+    note: Option<Option<String>>,
+    portions: Option<(Vec<PortionRequest>, HashMap<i64, FoodSnapshot>)>,
+    photo: PhotoChange,
+}
+
+/// Applies the supplied fields together. Replacing Portions snapshots their Foods afresh;
+/// replacing the photo encodes it before anything is written and removes the replaced files.
 pub async fn update_meal_log(
     db: &SqlitePool,
     foods: &FoodDatabase,
+    photos: &MealPhotos,
     id: &str,
     edit: EditMealLog,
 ) -> Result<MealLog> {
     let at = required(edit.eaten_at, "eaten_at")?
         .map(|value| eaten_at(&value, Utc::now()))
         .transpose()?;
-    let note_supplied = edit.note.supplied();
-    let note = note(edit.note.value())?;
+    let note = match edit.note {
+        Patch::Missing => None,
+        Patch::Value(value) => Some(note(value)?),
+    };
     let replacement = required(edit.portions, "portions")?;
     if let Some(requests) = &replacement {
         portions(requests)?;
     }
+    let photo = match edit.photo {
+        Patch::Missing => PhotoChange::Keep,
+        Patch::Value(None) => PhotoChange::Remove,
+        Patch::Value(Some(text)) => PhotoChange::Replace(Upload::from_base64(&text)?),
+    };
     if find(db, id).await?.is_none() {
         return Err(not_found());
     }
-    let snapshots = match &replacement {
-        Some(requests) => Some(snapshots(foods, requests).await?),
+    let portions = match replacement {
+        Some(requests) => {
+            let snapshots = snapshots(foods, &requests).await?;
+            Some((requests, snapshots))
+        }
         None => None,
     };
+    apply(
+        db,
+        photos,
+        id,
+        Changes {
+            eaten_at: at,
+            note,
+            portions,
+            photo,
+        },
+    )
+    .await
+}
+
+/// Attaches `upload` as the Meal Log's photo, replacing and removing any earlier photo.
+pub async fn replace_photo(
+    db: &SqlitePool,
+    photos: &MealPhotos,
+    id: &str,
+    upload: Upload,
+) -> Result<MealLog> {
+    if find(db, id).await?.is_none() {
+        return Err(not_found());
+    }
+    let changes = Changes {
+        eaten_at: None,
+        note: None,
+        portions: None,
+        photo: PhotoChange::Replace(upload),
+    };
+    apply(db, photos, id, changes).await
+}
+
+/// Stores a replacement photo, writes `changes`, then removes the photo they replaced. A failed
+/// write removes the new photo instead, so a rejected edit leaves no file behind.
+async fn apply(
+    db: &SqlitePool,
+    photos: &MealPhotos,
+    id: &str,
+    changes: Changes,
+) -> Result<MealLog> {
+    let (photo_supplied, photo) = match changes.photo {
+        PhotoChange::Keep => (false, None),
+        PhotoChange::Remove => (true, None),
+        PhotoChange::Replace(upload) => (true, Some(store_photo(photos, upload).await?)),
+    };
+    let written = write_changes(
+        db,
+        id,
+        changes.eaten_at,
+        changes.note.as_ref(),
+        changes.portions.as_ref(),
+        photo_supplied.then(|| PhotoColumns::of(photo.as_ref())),
+    )
+    .await;
+    match written {
+        Ok(replaced) => {
+            if let Some(replaced) = replaced {
+                photos.remove(&replaced).await;
+            }
+        }
+        Err(error) => {
+            if let Some(photo) = &photo {
+                photos.remove(&photo.id).await;
+            }
+            return Err(error);
+        }
+    }
+    find(db, id).await?.ok_or_else(not_found)
+}
+
+/// Writes one edit in a transaction. Returns the ID of the photo it replaced or removed.
+async fn write_changes(
+    db: &SqlitePool,
+    id: &str,
+    at: Option<DateTime<Utc>>,
+    note: Option<&Option<String>>,
+    portions: Option<&(Vec<PortionRequest>, HashMap<i64, FoodSnapshot>)>,
+    photo: Option<PhotoColumns>,
+) -> Result<Option<String>> {
     let stored_at = at.map(utc_text);
     let day = at.map(|at| CalendarDay::of(at).to_string());
+    let note_supplied = note.is_some();
+    let note = note.cloned().flatten();
+    let photo_supplied = photo.is_some();
+    let photo = photo.unwrap_or_default();
     let mut transaction = db.begin().await?;
-    let updated = sqlx::query_scalar!(
-        r#"UPDATE meal_logs SET eaten_at = COALESCE(?, eaten_at), day = COALESCE(?, day),
-        note = CASE WHEN ? THEN ? ELSE note END,
+    let Some(previous) = sqlx::query_scalar!("SELECT photo_id FROM meal_logs WHERE id = ?", id)
+        .fetch_optional(&mut *transaction)
+        .await?
+    else {
+        return Err(not_found());
+    };
+    sqlx::query!(
+        r#"UPDATE meal_logs SET eaten_at = COALESCE(?1, eaten_at), day = COALESCE(?2, day),
+        note = CASE WHEN ?3 THEN ?4 ELSE note END,
+        photo_id = CASE WHEN ?5 THEN ?6 ELSE photo_id END,
+        photo_width = CASE WHEN ?5 THEN ?7 ELSE photo_width END,
+        photo_height = CASE WHEN ?5 THEN ?8 ELSE photo_height END,
+        photo_thumbnail_width = CASE WHEN ?5 THEN ?9 ELSE photo_thumbnail_width END,
+        photo_thumbnail_height = CASE WHEN ?5 THEN ?10 ELSE photo_thumbnail_height END,
         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-        WHERE id = ? RETURNING id AS "id!""#,
+        WHERE id = ?11"#,
         stored_at,
         day,
         note_supplied,
         note,
+        photo_supplied,
+        photo.id,
+        photo.width,
+        photo.height,
+        photo.thumbnail_width,
+        photo.thumbnail_height,
         id
     )
-    .fetch_optional(&mut *transaction)
+    .execute(&mut *transaction)
     .await?;
-    if updated.is_none() {
-        return Err(not_found());
-    }
-    if let (Some(requests), Some(snapshots)) = (&replacement, &snapshots) {
+    if let Some((requests, snapshots)) = portions {
         sqlx::query!("DELETE FROM meal_log_portions WHERE meal_log_id = ?", id)
             .execute(&mut *transaction)
             .await?;
         insert_portions(&mut transaction, id, requests, snapshots).await?;
     }
     transaction.commit().await?;
-    find(db, id).await?.ok_or_else(not_found)
+    Ok(previous.filter(|_| photo_supplied))
 }
 
-/// Deletes a Meal Log and its Portions. Its receipt stays, so an old retry cannot recreate it.
-pub async fn delete_meal_log(db: &SqlitePool, id: &str) -> Result<()> {
-    let deleted = sqlx::query!("DELETE FROM meal_logs WHERE id = ?", id)
-        .execute(db)
-        .await?;
-    if deleted.rows_affected() == 0 {
+/// Deletes a Meal Log, its Portions and its photo files. Its receipt stays, so an old retry
+/// cannot recreate it.
+pub async fn delete_meal_log(db: &SqlitePool, photos: &MealPhotos, id: &str) -> Result<()> {
+    let Some(photo_id) =
+        sqlx::query_scalar!("DELETE FROM meal_logs WHERE id = ? RETURNING photo_id", id)
+            .fetch_optional(db)
+            .await?
+    else {
         return Err(not_found());
+    };
+    if let Some(photo_id) = photo_id {
+        photos.remove(&photo_id).await;
     }
     Ok(())
 }

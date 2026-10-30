@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM meal_logs WHERE id = ? RETURNING photo_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "photo_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "6d7e473e497b2b2a2b2310bd1b6b58d8afb036563e881172e15dcaaab0e669b7"
+}

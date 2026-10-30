@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
     let backlight =
         openhome_api::services::backlight::BacklightService::new(state.db.clone(), None, None)
             .await?;
+    let (meal_photos, _meal_photo_dir) = foods::photo_store()?;
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(Some(tmdb)))
@@ -77,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::training::router())
         .merge(routes::nutrition::router(
             foods::synthetic_foods(foods::FoodState::from_args()).await?,
+            meal_photos,
         ))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {

@@ -2,7 +2,10 @@
 //! plausible values, recorded as a complete import of the pinned dataset so lookups answer
 //! without downloading anything. Not real DTU values.
 
-use openhome_api::services::nutrition::food_database::{DatasetPin, FoodDatabase};
+use openhome_api::services::nutrition::{
+    food_database::{DatasetPin, FoodDatabase},
+    meal_photos::MealPhotos,
+};
 use sqlx::sqlite::SqlitePoolOptions;
 
 /// The Food database's state in a fixture.
@@ -86,34 +89,85 @@ pub async fn synthetic_foods(state: FoodState) -> anyhow::Result<FoodDatabase> {
     Ok(foods)
 }
 
-/// Hours before now, an optional note and `(food_id, grams)` Portions.
-type SyntheticMeal = (i64, Option<&'static str>, &'static [(i64, f64)]);
+/// Meal photos in a temporary directory that lives as long as the returned guard.
+pub fn photo_store() -> anyhow::Result<(MealPhotos, tempfile::TempDir)> {
+    let dir = tempfile::Builder::new()
+        .prefix("openhome-fixture-meal-photos")
+        .tempdir()?;
+    Ok((MealPhotos::new(dir.path().to_path_buf()), dir))
+}
+
+/// A drawn plate of `(red, green, blue)` food on a wooden table, as a base64 PNG: no real photo.
+pub fn synthetic_plate(food: [u8; 3]) -> String {
+    use base64::Engine;
+    use image::ImageEncoder;
+
+    let (width, height) = (1200_u32, 900_u32);
+    let plate = image::RgbImage::from_fn(width, height, |x, y| {
+        let (dx, dy) = (f64::from(x) - 600.0, f64::from(y) - 450.0);
+        let distance = dx.hypot(dy);
+        if distance < 220.0 + 30.0 * (dx.atan2(dy) * 5.0).sin() {
+            image::Rgb(food)
+        } else if distance < 380.0 {
+            image::Rgb([236, 232, 224])
+        } else {
+            // Wood grain: bands of six shades running across the table.
+            let grain = ((x / 90 + y / 14) % 6) as u8 * 4;
+            image::Rgb([138 + grain, 92 + grain, 60 + grain / 2])
+        }
+    });
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut png)
+        .write_image(
+            plate.as_raw(),
+            width,
+            height,
+            image::ExtendedColorType::Rgb8,
+        )
+        .expect("a synthetic PNG always encodes");
+    base64::engine::general_purpose::STANDARD.encode(png)
+}
+
+/// Hours before now, an optional note, `(food_id, grams)` Portions and an optional plate colour.
+type SyntheticMeal = (
+    i64,
+    Option<&'static str>,
+    &'static [(i64, f64)],
+    Option<[u8; 3]>,
+);
 
 /// Invented Meal Logs over the last two days, logged through the production service so they
-/// carry real snapshots, for previews that should open on a populated day.
-pub async fn seed_meals(db: &sqlx::SqlitePool, foods: &FoodDatabase) -> anyhow::Result<()> {
+/// carry real snapshots and photos, for previews that should open on a populated day.
+pub async fn seed_meals(
+    db: &sqlx::SqlitePool,
+    foods: &FoodDatabase,
+    photos: &MealPhotos,
+) -> anyhow::Result<()> {
     use openhome_api::services::nutrition::meal_logs::{self, LogMeal, PortionRequest};
 
     let now = chrono::Utc::now();
     let meals: [SyntheticMeal; 5] = [
-        (27, None, &[(1693, 200.0), (60, 50.0)]),
+        (27, None, &[(1693, 200.0), (60, 50.0)], None),
         (
             22,
             Some("Synthetic note: dinner out"),
             &[(907, 180.0), (300, 250.0)],
+            Some([214, 168, 74]),
         ),
         (
             5,
             Some("after the run"),
             &[(1693, 150.0), (60, 60.0), (3, 120.0)],
+            Some([238, 226, 196]),
         ),
-        (3, None, &[(907, 150.0), (300, 200.0)]),
-        (1, None, &[(3, 110.0)]),
+        (3, None, &[(907, 150.0), (300, 200.0)], None),
+        (1, None, &[(3, 110.0)], None),
     ];
-    for (index, (hours_ago, note, portions)) in meals.into_iter().enumerate() {
+    for (index, (hours_ago, note, portions, plate)) in meals.into_iter().enumerate() {
         meal_logs::log_meal(
             db,
             foods,
+            photos,
             LogMeal {
                 eaten_at: (now - chrono::TimeDelta::hours(hours_ago)).to_rfc3339(),
                 note: note.map(str::to_owned),
@@ -122,6 +176,7 @@ pub async fn seed_meals(db: &sqlx::SqlitePool, foods: &FoodDatabase) -> anyhow::
                     .map(|&(food_id, grams)| PortionRequest { food_id, grams })
                     .collect(),
                 request_id: format!("synthetic-meal-{index}"),
+                photo: plate.map(synthetic_plate),
             },
         )
         .await

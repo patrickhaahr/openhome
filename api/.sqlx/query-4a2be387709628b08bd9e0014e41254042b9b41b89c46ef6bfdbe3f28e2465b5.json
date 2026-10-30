@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", eaten_at, day, note, photo_id, photo_width, photo_height,\n            photo_thumbnail_width, photo_thumbnail_height FROM meal_logs\n        WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR day >= ?2) AND (?3 IS NULL OR day <= ?3)\n        ORDER BY eaten_at, created_at, id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "eaten_at",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "day",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "note",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "photo_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "photo_width",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "photo_height",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "photo_thumbnail_width",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "photo_thumbnail_height",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "4a2be387709628b08bd9e0014e41254042b9b41b89c46ef6bfdbe3f28e2465b5"
+}

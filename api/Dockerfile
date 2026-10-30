@@ -1,19 +1,25 @@
 FROM --platform=$BUILDPLATFORM rust:1.91-bookworm AS builder
 
+# cmake, nasm and the C++ cross compilers build the vendored libaom and libavif (meal photos).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu \
+        g++-aarch64-linux-gnu g++-x86-64-linux-gnu cmake nasm \
         libc6-dev-arm64-cross libc6-dev-amd64-cross \
     && rm -rf /var/lib/apt/lists/* \
     && rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
+    CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu=/app/cmake/aarch64-linux-gnu.cmake \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
-    CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc
+    CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc \
+    CXX_x86_64_unknown_linux_gnu=x86_64-linux-gnu-g++
 
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
+COPY cmake ./cmake
 COPY src ./src
 COPY migrations ./migrations
 COPY noop_migrations ./noop_migrations

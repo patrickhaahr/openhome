@@ -11,7 +11,10 @@ use common::{send_request, test_app_with_db};
 use openhome_api::{
     auth::{ApiKey, auth_middleware},
     db, routes,
-    services::nutrition::food_database::{DatasetPin, FoodDatabase, FoodImport},
+    services::nutrition::{
+        food_database::{DatasetPin, FoodDatabase, FoodImport},
+        meal_photos::MealPhotos,
+    },
 };
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
@@ -53,7 +56,8 @@ async fn open(dir: &TempDir, file: &str, pin: DatasetPin) -> (Router, Option<Foo
     let pool = db::connect_sqlite(&url).await.unwrap();
     let (foods, import) = FoodDatabase::open(pool, pin, cache_dir(dir)).await.unwrap();
     let (_, state) = test_app_with_db().await;
-    let app = routes::nutrition::router(foods)
+    let photos = MealPhotos::new(dir.path().join("meal-photos"));
+    let app = routes::nutrition::router(foods, photos)
         .with_state(state)
         .layer(axum::middleware::from_fn(|request, next| {
             auth_middleware(request, next, ApiKey::new(API_KEY.into()))
