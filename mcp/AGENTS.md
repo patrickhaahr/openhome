@@ -8,6 +8,8 @@
 
 - Food tools (`search_foods`, `food`) are read-only forwards of `/api/nutrition/foods`; Axum owns the Food database import, name search, units and the `food_database_unavailable` state. Keep the global instructions' density and waste conversions (millilitres and gross weights to edible grams) in step with the API's fields.
 
+- Meal Log tools (`log_meal`, `meal_logs`, `update_meal_log`, `delete_meal_log`, `nutrition_day`) forward `/api/nutrition/meal-logs` and `/api/nutrition/days/{day}` unchanged. Axum owns Copenhagen days, Portion snapshots, totals and `request_id` deduplication. Logging is non-destructive and idempotent; corrections and deletions are destructive and idempotent. Keep the global instructions on explicit eaten-at times, splitting dishes into Foods and reusing `request_id` on retries in step with the API.
+
 - Read `../docs/training-context.md` before changing training tools or their contracts.
 - Keep training tools read-only: each call makes one authenticated API GET and passes its JSON unchanged. Add an API endpoint before adding a tool that needs new interpretation; database access and domain rules belong in the API.
 - Percent-encode path arguments, reject literal `.` and `..` segments, and keep API redirects disabled so requests stay on the intended endpoint.
