@@ -1,5 +1,5 @@
 //! Nutrition Day: one Europe/Copenhagen calendar day's Meal Logs and the totals of every
-//! nutrient eaten, summed from the Portions' snapshots.
+//! nutrient eaten, summed from the Portions' snapshots, with the NOVA 1 share.
 
 use std::collections::BTreeMap;
 
@@ -11,6 +11,7 @@ use super::meal_logs::{
     self, KeyNutrients, MealLog, MealLogError, Selection, StoredLog, StoredPortion, Total,
     key_totals,
 };
+use super::nova::{NovaEnergy, NovaShare};
 use super::products::{LABEL_SOURCE, LabelSource};
 use crate::services::training::calendar::{self, CalendarDay};
 
@@ -38,6 +39,8 @@ pub struct NutritionDay {
     pub totals: KeyNutrients<Total>,
     /// Every per-100 g parameter in database order.
     pub nutrients: Vec<NutrientTotal>,
+    /// The share of classified energy from NOVA Class 1 Portions.
+    pub nova: NovaShare,
     /// In time order.
     pub meal_logs: Vec<MealLog>,
     pub source: Source,
@@ -94,6 +97,7 @@ pub async fn nutrition_day(
         day_end: calendar::iso(day.end()),
         totals,
         nutrients,
+        nova: NovaEnergy::of(&portions).summary(),
         meal_logs: logs
             .into_iter()
             .map(StoredLog::into_meal_log)

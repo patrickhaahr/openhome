@@ -25,6 +25,7 @@ use crate::{
             self, EditMealLog, LogMeal, Logged, MealLog, MealLogError, MealLogs, MealLogsQuery,
         },
         meal_photos::{MealPhotos, PHOTO_BODY_LIMIT, PhotoError, Upload, Variant},
+        nova::{self, ClassifiedFood, ClassifyFood},
         open_food_facts::{OpenFoodFacts, ProviderError},
         products::{self, LinkProduct, Linked, ProductError, ProductLookup},
     },
@@ -33,9 +34,16 @@ use crate::{
 pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) -> Router<AppState> {
     // Only the routes that carry a photo raise Axum's default body limit.
     let photo_limit = DefaultBodyLimit::max(PHOTO_BODY_LIMIT);
-    // Meal Logs and Products live in app.db and take values from food.db and Open Food Facts;
-    // Meal Logs keep photos in the data directory.
-    let meal_logs = Router::new()
+    // Foods come from food.db with their NOVA Classes from app.db; Meal Logs and Products live
+    // in app.db and take values from food.db and Open Food Facts; Meal Logs keep photos in the
+    // data directory.
+    Router::new()
+        .route("/api/nutrition/foods", get(search_foods))
+        .route("/api/nutrition/foods/{food_id}", get(food))
+        .route(
+            "/api/nutrition/foods/{food_id}/nova-class",
+            put(classify_food),
+        )
         .route("/api/nutrition/products", axum::routing::post(link_product))
         .route("/api/nutrition/products/{barcode}", get(lookup_product))
         .route(
@@ -56,14 +64,9 @@ pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) ->
             get(thumbnail),
         )
         .route("/api/nutrition/days/{day}", get(nutrition_day))
-        .layer(Extension(foods.clone()))
+        .layer(Extension(foods))
         .layer(Extension(photos))
-        .layer(Extension(labels));
-    Router::new()
-        .route("/api/nutrition/foods", get(search_foods))
-        .route("/api/nutrition/foods/{food_id}", get(food))
-        .with_state(foods)
-        .merge(meal_logs)
+        .layer(Extension(labels))
 }
 
 #[derive(Deserialize)]
@@ -74,7 +77,8 @@ struct SearchQuery {
 }
 
 async fn search_foods(
-    State(foods): State<FoodDatabase>,
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
     query: Result<Query<SearchQuery>, QueryRejection>,
 ) -> Result<Json<FoodSearch>, FoodError> {
     let Query(SearchQuery { query, limit }) = query.map_err(|_| {
@@ -83,19 +87,39 @@ async fn search_foods(
                 .into(),
         )
     })?;
-    Ok(Json(foods.search(&query, limit).await?))
+    Ok(Json(
+        nova::search_foods(&state.db, &foods, &query, limit).await?,
+    ))
+}
+
+fn food_id(text: &str) -> Result<i64, FoodError> {
+    text.parse::<i64>()
+        .ok()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| FoodError::Validation("food_id must be a positive whole number".into()))
 }
 
 async fn food(
-    State(foods): State<FoodDatabase>,
-    Path(food_id): Path<String>,
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
+    Path(id): Path<String>,
 ) -> Result<Json<Food>, FoodError> {
-    let food_id = food_id
-        .parse::<i64>()
-        .ok()
-        .filter(|id| *id > 0)
-        .ok_or_else(|| FoodError::Validation("food_id must be a positive whole number".into()))?;
-    Ok(Json(foods.food(food_id).await?))
+    Ok(Json(nova::food(&state.db, &foods, food_id(&id)?).await?))
+}
+
+/// Sets or changes a Food's NOVA Class.
+async fn classify_food(
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
+    Path(id): Path<String>,
+    request: Result<Json<ClassifyFood>, JsonRejection>,
+) -> Result<Json<ClassifiedFood>, FoodError> {
+    let food_id = food_id(&id)?;
+    let Json(request) =
+        request.map_err(|rejection| FoodError::Validation(rejection.body_text()))?;
+    Ok(Json(
+        nova::classify_food(&state.db, &foods, food_id, request).await?,
+    ))
 }
 
 async fn lookup_product(

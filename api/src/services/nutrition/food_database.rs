@@ -27,6 +27,7 @@ use thiserror::Error;
 pub use import::{DatasetPin, ImportError};
 use search::{FoodIdentity, SearchIndex};
 
+use super::nova::NovaClass;
 use super::parameters::{self, Unit};
 
 /// File name of the Food database, placed next to the main database by default.
@@ -146,6 +147,8 @@ pub struct FoodSummary {
     pub density: Amount,
     /// Inedible percentage of the Food as bought.
     pub waste: Amount,
+    /// The user's NOVA Class for the Food, kept in `app.db`; null while unclassified.
+    pub nova_class: Option<NovaClass>,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,6 +185,8 @@ pub struct Food {
     pub food_group: Option<FoodGroup>,
     pub density: Amount,
     pub waste: Amount,
+    /// The user's NOVA Class for the Food, kept in `app.db`; null while unclassified.
+    pub nova_class: Option<NovaClass>,
     /// Every parameter of the dataset in its sort order, including unknown (null) values.
     pub parameters: Vec<ParameterValue>,
     pub source: Source,
@@ -342,6 +347,7 @@ impl FoodDatabase {
                     },
                     density: take(parameters::DENSITY),
                     waste: take(parameters::WASTE),
+                    nova_class: None,
                 }
             })
             .collect();
@@ -440,6 +446,7 @@ impl FoodDatabase {
             food_group: identity.food_group,
             density: value_of(parameters::DENSITY),
             waste: value_of(parameters::WASTE),
+            nova_class: None,
             parameters,
             source: source(&ready.version),
         })
