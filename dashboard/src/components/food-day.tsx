@@ -20,6 +20,8 @@ import {
   mealPhotoUrl,
   mealTime,
   nutrientGroups,
+  novaClassMeaning,
+  novaDetail,
   nutritionFailureMessage,
   portionName,
   shiftDay,
@@ -241,6 +243,7 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
             </div>
           ))}
         </dl>
+        <NovaShare nova={day.nova} />
       </section>
       <section aria-labelledby="food-meals-heading">
         <h2 id="food-meals-heading" className="sr-only">
@@ -267,6 +270,31 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
       </section>
       <AllNutrients day={day} />
     </>
+  )
+}
+
+/** The share of the day's classified energy from NOVA Class 1, with what it leaves out. */
+function NovaShare({
+  nova,
+}: {
+  readonly nova: NutritionDay["nova"]
+}): React.JSX.Element {
+  return (
+    <div className="food-nova">
+      <p className="food-nova-share">
+        {nova.nova_1_share === null ? (
+          <span className="food-amount" data-gap="true">
+            <span className="sr-only">Unknown</span>
+          </span>
+        ) : (
+          <span className="food-amount num">
+            {Math.round(nova.nova_1_share * 100)} %
+          </span>
+        )}{" "}
+        <span className="food-nova-name">NOVA 1</span>
+      </p>
+      <p className="food-nova-detail">{novaDetail(nova)}</p>
+    </div>
   )
 }
 
@@ -376,7 +404,10 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
   )
 }
 
-/** A Food's name, or a Product's label name with its brand beneath it. */
+/**
+ * A Food's name, or a Product's label name with its brand beneath it, and the NOVA Class it was
+ * logged with; an unclassified Portion has no class mark.
+ */
 function PortionTitle({
   portion,
 }: {
@@ -387,6 +418,16 @@ function PortionTitle({
   return (
     <span className="food-portion-name">
       {name}
+      {portion.nova_class === null ? null : (
+        <span
+          className="food-portion-nova"
+          data-nova={portion.nova_class}
+          title={`NOVA ${portion.nova_class}: ${novaClassMeaning[portion.nova_class]}`}
+        >
+          <span className="sr-only">, </span>
+          NOVA {portion.nova_class}
+        </span>
+      )}
       {brand === null ? null : (
         <span className="food-portion-brand">
           <span className="sr-only">, </span>

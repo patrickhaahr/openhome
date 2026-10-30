@@ -37,6 +37,25 @@ const portionProduct = z.object({
   brand: z.string().nullable(),
 })
 
+/** A NOVA processing class: 1 unprocessed or minimally processed through 4 ultra-processed. */
+const novaClass = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+])
+
+/** A NOVA Class as Axum reports it for a Food, Product or Portion. */
+export type NovaClass = z.infer<typeof novaClass>
+
+/** What each NOVA Class means, as the Day view explains a Portion's class. */
+export const novaClassMeaning: Record<NovaClass, string> = {
+  1: "unprocessed or minimally processed",
+  2: "processed culinary ingredient",
+  3: "processed",
+  4: "ultra-processed",
+}
+
 const portion = z.object({
   food_id: z.number().int(),
   product: portionProduct.nullable(),
@@ -44,6 +63,7 @@ const portion = z.object({
   name_en: z.string(),
   grams: z.number(),
   dataset_version: z.string(),
+  nova_class: novaClass.nullable(),
   nutrients: keyNutrients(amount),
 })
 
@@ -111,6 +131,12 @@ export const nutritionDay = z.object({
   day_end: z.iso.datetime({ offset: true }),
   totals: keyNutrients(total),
   nutrients: z.array(nutrient),
+  nova: z.object({
+    nova_1_share: z.number().min(0).max(1).nullable(),
+    nova_1_kcal: z.number().nonnegative(),
+    classified_kcal: z.number().nonnegative(),
+    unclassified_portions: z.number().int().nonnegative(),
+  }),
   meal_logs: z.array(mealLog),
   source: z.object({
     name: z.string(),
@@ -160,6 +186,30 @@ export function hasProducts(day: NutritionDay): boolean {
   return day.meal_logs.some((meal) =>
     meal.portions.some((portion) => portion.product !== null)
   )
+}
+
+/**
+ * How the Day view explains its NOVA 1 share: the classified energy it is a share of and the
+ * Portions it leaves out, or that nothing is classified yet.
+ *
+ * @param nova - The day's NOVA 1 share and the energy behind it.
+ * @returns One line beneath the share.
+ */
+export function novaDetail(nova: NutritionDay["nova"]): string {
+  const count = nova.unclassified_portions
+
+  const unclassified =
+    count === 0
+      ? ""
+      : ` · ${count} unclassified ${count === 1 ? "portion" : "portions"} left out`
+
+  if (nova.nova_1_share === null) {
+    return count === 0
+      ? "Nothing classified yet"
+      : `Nothing classified yet${unclassified}`
+  }
+
+  return `Unprocessed or minimally processed, of ${formatAmount(nova.classified_kcal)} classified kcal${unclassified}`
 }
 
 /** Axum's answer while the Food database is importing or after a failed import. */
