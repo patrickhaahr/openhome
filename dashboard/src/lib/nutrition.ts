@@ -42,11 +42,40 @@ const portion = z.object({
 /** One Portion of a Meal Log with its key nutrients scaled to the grams eaten. */
 export type Portion = z.infer<typeof portion>
 
+const mealPhoto = z.object({
+  id: z.uuid(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  thumbnail: z.object({
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  }),
+})
+
+/** A Meal Log's stored AVIF photo and its thumbnail, with their pixel sizes. */
+export type MealPhoto = z.infer<typeof mealPhoto>
+
+/** Which stored file of a meal photo to show. */
+export type MealPhotoSize = "photo" | "thumbnail"
+
+/**
+ * A meal photo relayed through the dashboard, so the API key stays on the server. A photo ID
+ * always names the same image, so the address never needs a version.
+ *
+ * @param photo - The Meal Log's photo.
+ * @param size - The full photo or its thumbnail.
+ * @returns The dashboard path of the image.
+ */
+export function mealPhotoUrl(photo: MealPhoto, size: MealPhotoSize): string {
+  return `/meal-photo/${photo.id}/${size}`
+}
+
 const mealLog = z.object({
   id: z.string(),
   eaten_at: z.iso.datetime({ offset: true }),
   day: z.iso.date(),
   note: z.string().nullable(),
+  photo: mealPhoto.nullable(),
   portions: z.array(portion),
   totals: keyNutrients(total),
 })

@@ -141,3 +141,50 @@ export async function readErrorMessage(
     return undefined
   }
 }
+
+/**
+ * Read a relayed media body whole, holding at most `limit` bytes.
+ *
+ * @param response - Axum's response, already checked for status and content type.
+ * @param limit - The most bytes to accept.
+ * @returns The body, or undefined when it is larger than `limit`, missing or fails mid-stream.
+ */
+export async function readBoundedBody(
+  response: Response,
+  limit: number
+): Promise<Uint8Array<ArrayBuffer> | undefined> {
+  const reader = response.body?.getReader()
+
+  if (reader === undefined) return undefined
+  const chunks: Uint8Array[] = []
+  let length = 0
+
+  try {
+    for (;;) {
+      const chunk = await reader.read()
+
+      if (chunk.done) break
+      length += chunk.value.byteLength
+
+      if (length > limit) {
+        await reader.cancel()
+
+        return undefined
+      }
+
+      chunks.push(chunk.value)
+    }
+  } catch {
+    return undefined
+  }
+
+  const body = new Uint8Array(length)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return body
+}

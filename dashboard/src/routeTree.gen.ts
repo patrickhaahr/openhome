@@ -21,6 +21,7 @@ import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as TravelRouteImport } from './routes/travel'
 import { Route as WeatherRouteImport } from './routes/weather'
 import { Route as WorkoutRouteImport } from './routes/workout'
+import { Route as MealPhotoPhotoSizeRouteImport } from './routes/meal-photo.$photo.$size'
 import { Route as PhotoMediaAlbumAssetSizeRouteImport } from './routes/photo-media.$album.$asset.$size'
 import { Route as WishImageOwnerListItemRouteImport } from './routes/wish-image.$owner.$list.$item'
 
@@ -84,6 +85,11 @@ const WorkoutRoute = WorkoutRouteImport.update({
   path: '/workout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MealPhotoPhotoSizeRoute = MealPhotoPhotoSizeRouteImport.update({
+  id: '/meal-photo/$photo/$size',
+  path: '/meal-photo/$photo/$size',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PhotoMediaAlbumAssetSizeRoute =
   PhotoMediaAlbumAssetSizeRouteImport.update({
     id: '/photo-media/$album/$asset/$size',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/travel': typeof TravelRoute
   '/weather': typeof WeatherRoute
   '/workout': typeof WorkoutRoute
+  '/meal-photo/$photo/$size': typeof MealPhotoPhotoSizeRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
   '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
 }
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/travel': typeof TravelRoute
   '/weather': typeof WeatherRoute
   '/workout': typeof WorkoutRoute
+  '/meal-photo/$photo/$size': typeof MealPhotoPhotoSizeRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
   '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
 }
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/travel': typeof TravelRoute
   '/weather': typeof WeatherRoute
   '/workout': typeof WorkoutRoute
+  '/meal-photo/$photo/$size': typeof MealPhotoPhotoSizeRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
   '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
 }
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/travel'
     | '/weather'
     | '/workout'
+    | '/meal-photo/$photo/$size'
     | '/photo-media/$album/$asset/$size'
     | '/wish-image/$owner/$list/$item'
   fileRoutesByTo: FileRoutesByTo
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/travel'
     | '/weather'
     | '/workout'
+    | '/meal-photo/$photo/$size'
     | '/photo-media/$album/$asset/$size'
     | '/wish-image/$owner/$list/$item'
   id:
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/travel'
     | '/weather'
     | '/workout'
+    | '/meal-photo/$photo/$size'
     | '/photo-media/$album/$asset/$size'
     | '/wish-image/$owner/$list/$item'
   fileRoutesById: FileRoutesById
@@ -209,6 +221,7 @@ export interface RootRouteChildren {
   TravelRoute: typeof TravelRoute
   WeatherRoute: typeof WeatherRoute
   WorkoutRoute: typeof WorkoutRoute
+  MealPhotoPhotoSizeRoute: typeof MealPhotoPhotoSizeRoute
   PhotoMediaAlbumAssetSizeRoute: typeof PhotoMediaAlbumAssetSizeRoute
   WishImageOwnerListItemRoute: typeof WishImageOwnerListItemRoute
 }
@@ -299,6 +312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/meal-photo/$photo/$size': {
+      id: '/meal-photo/$photo/$size'
+      path: '/meal-photo/$photo/$size'
+      fullPath: '/meal-photo/$photo/$size'
+      preLoaderRoute: typeof MealPhotoPhotoSizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/photo-media/$album/$asset/$size': {
       id: '/photo-media/$album/$asset/$size'
       path: '/photo-media/$album/$asset/$size'
@@ -329,6 +349,7 @@ const rootRouteChildren: RootRouteChildren = {
   TravelRoute: TravelRoute,
   WeatherRoute: WeatherRoute,
   WorkoutRoute: WorkoutRoute,
+  MealPhotoPhotoSizeRoute: MealPhotoPhotoSizeRoute,
   PhotoMediaAlbumAssetSizeRoute: PhotoMediaAlbumAssetSizeRoute,
   WishImageOwnerListItemRoute: WishImageOwnerListItemRoute,
 }

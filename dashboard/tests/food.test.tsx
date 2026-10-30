@@ -8,6 +8,7 @@ import {
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router"
+import { deflateSync } from "node:zlib"
 import { createRoot, type Root } from "react-dom/client"
 import {
   afterAll,
@@ -21,7 +22,7 @@ import {
 import { z } from "zod"
 import { FoodDay } from "@/components/food-day"
 import { mealTime, shiftDay, type NutritionDayState } from "@/lib/nutrition"
-import { readNutritionDay } from "@/lib/nutrition.server"
+import { readMealPhoto, readNutritionDay } from "@/lib/nutrition.server"
 import { trainingDayOn } from "@/lib/workout"
 import { startAxumFixture } from "./support/axum-fixture"
 
@@ -69,12 +70,64 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let crc = index
+
+  for (let bit = 0; bit < 8; bit++)
+    crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+
+  return crc >>> 0
+})
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff
+
+  for (const byte of bytes)
+    crc = (crcTable[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8)
+
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+/** A synthetic RGB PNG of a gradient plate, base64-encoded as the agent sends photos. */
+function syntheticPng(width: number, height: number): string {
+  const chunk = (type: string, data: Uint8Array): Buffer => {
+    const body = Buffer.concat([Buffer.from(type, "latin1"), data])
+    const framed = Buffer.alloc(body.length + 8)
+    framed.writeUInt32BE(data.length, 0)
+    body.copy(framed, 4)
+    framed.writeUInt32BE(crc32(body), body.length + 4)
+
+    return framed
+  }
+
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(width, 0)
+  header.writeUInt32BE(height, 4)
+  header.set([8, 2, 0, 0, 0], 8)
+  const rows = Buffer.alloc((width * 3 + 1) * height)
+
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      rows.set(
+        [(x * 255) / width, 180, (y * 255) / height],
+        y * (width * 3 + 1) + 1 + x * 3
+      )
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", new Uint8Array()),
+  ]).toString("base64")
+}
+
 /** Logs a synthetic meal through the API, as the agent does, and returns its day. */
 async function logMeal(meal: {
   eatenAt: Date
   note?: string
+  photo?: string
   portions: Array<{ food_id: number; grams: number }>
-}): Promise<{ day: string; eaten_at: string }> {
+}): Promise<{ id: string; day: string; eaten_at: string }> {
   const response = await fetch(`${ready.url}/api/nutrition/meal-logs`, {
     method: "POST",
     headers: {
@@ -84,6 +137,7 @@ async function logMeal(meal: {
     body: JSON.stringify({
       eaten_at: meal.eatenAt.toISOString(),
       note: meal.note,
+      photo: meal.photo,
       portions: meal.portions,
       request_id: crypto.randomUUID(),
     }),
@@ -281,4 +335,65 @@ test("the Day view stays whole while the Food database is importing or OpenHome 
   vi.stubEnv("OPENHOME_API_URL", "http://127.0.0.1:1")
   await render(await readNutritionDay({ day: "2026-01-15" }))
   expect(text(".food-unavailable h2")).toEqual(["Food unavailable"])
+})
+
+test("a meal's photo shows as a thumbnail, opens in full on selection and is relayed as AVIF", async () => {
+  const meal = await logMeal({
+    eatenAt: new Date(Date.now() - 90_000),
+    photo: syntheticPng(800, 600),
+    portions: [{ food_id: 300, grams: 200 }],
+  })
+
+  await render(await readNutritionDay({ day: meal.day }))
+
+  const thumbnail = [...container.querySelectorAll(".food-meal")]
+    .find(
+      (element) =>
+        element.querySelector("time")?.textContent === mealTime(meal.eaten_at)
+    )
+    ?.querySelector<HTMLButtonElement>("button.food-photo")
+
+  expect(thumbnail?.getAttribute("aria-label")).toBe(
+    `Show the photo of the meal at ${mealTime(meal.eaten_at)}`
+  )
+  const small = thumbnail?.querySelector("img")
+  const photoId = small?.getAttribute("src")?.split("/")[2] ?? ""
+  expect(small?.getAttribute("src")).toBe(`/meal-photo/${photoId}/thumbnail`)
+  expect([small?.getAttribute("width"), small?.getAttribute("height")]).toEqual(
+    ["400", "300"]
+  )
+  expect(document.querySelector(".food-photo-viewer")).toBeNull()
+
+  await act(async () => thumbnail?.click())
+  const full = document.querySelector(".food-photo-viewer img")
+  expect(full?.getAttribute("src")).toBe(`/meal-photo/${photoId}/photo`)
+  expect(full?.getAttribute("alt")).toBe(
+    `The meal at ${mealTime(meal.eaten_at)}`
+  )
+  expect([full?.getAttribute("width"), full?.getAttribute("height")]).toEqual([
+    "800",
+    "600",
+  ])
+
+  // The relay holds the API key server-side and passes only the AVIF bytes on.
+  for (const size of ["thumbnail", "photo"]) {
+    const relayed = await readMealPhoto({ photo: photoId, size })
+    expect(relayed.status).toBe(200)
+    expect(relayed.headers.get("content-type")).toBe("image/avif")
+    expect(relayed.headers.get("cache-control")).toBe(
+      "private, max-age=31536000, immutable"
+    )
+    const bytes = new Uint8Array(await relayed.arrayBuffer())
+    expect(new TextDecoder().decode(bytes.subarray(4, 12))).toBe("ftypavif")
+  }
+
+  for (const input of [
+    { photo: photoId, size: "original" },
+    { photo: "not-an-id", size: "photo" },
+    { photo: crypto.randomUUID(), size: "thumbnail" },
+  ]) {
+    const missing = await readMealPhoto(input)
+    expect(missing.status).toBe(404)
+    expect(missing.headers.get("cache-control")).toBe("no-store")
+  }
 })

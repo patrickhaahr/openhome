@@ -3,17 +3,26 @@ import { Link } from "@tanstack/react-router"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife"
+import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   dayName,
   energySplit,
   foodDatabaseCredit,
   formatAmount,
+  mealPhotoUrl,
   mealTime,
   nutrientGroups,
   nutritionFailureMessage,
   shiftDay,
   type MealLog,
+  type MealPhoto,
   type NutrientTotal,
   type NutritionDay,
   type NutritionDayState,
@@ -255,7 +264,80 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
 
 function Meal({ meal }: { readonly meal: MealLog }): React.JSX.Element {
   return (
-    <article className="food-meal">
+    <article
+      className="food-meal"
+      data-photo={meal.photo === null ? undefined : ""}
+    >
+      <div className="food-meal-body">
+        <MealDetails meal={meal} />
+      </div>
+      {meal.photo === null ? null : (
+        <MealPhotoKey photo={meal.photo} time={mealTime(meal.eaten_at)} />
+      )}
+    </article>
+  )
+}
+
+/** The meal's thumbnail; selecting it shows the full photo over the page. */
+function MealPhotoKey({
+  photo,
+  time,
+}: {
+  readonly photo: MealPhoto
+  readonly time: string
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <button
+        type="button"
+        className="food-photo"
+        aria-label={`Show the photo of the meal at ${time}`}
+        onClick={() => setOpen(true)}
+      >
+        <img
+          src={mealPhotoUrl(photo, "thumbnail")}
+          width={photo.thumbnail.width}
+          height={photo.thumbnail.height}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent variant="fullscreen" showCloseButton={false}>
+          <div className="photo-viewer food-photo-viewer">
+            <DialogTitle className="sr-only">Meal at {time}</DialogTitle>
+            <div className="photo-stage">
+              <img
+                src={mealPhotoUrl(photo, "photo")}
+                width={photo.width}
+                height={photo.height}
+                alt={`The meal at ${time}`}
+                decoding="async"
+              />
+            </div>
+            <div className="photo-viewer-bar">
+              <span className="photo-viewer-where">Meal at {time}</span>
+              <DialogClose
+                render={<Button variant="outline" size="key-icon" />}
+                title="Close photo"
+              >
+                <XIcon size={22} aria-hidden="true" />
+                <span className="sr-only">Close photo</span>
+              </DialogClose>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
+  return (
+    <>
       <header>
         <h3>
           <time dateTime={meal.eaten_at}>{mealTime(meal.eaten_at)}</time>
@@ -282,7 +364,7 @@ function Meal({ meal }: { readonly meal: MealLog }): React.JSX.Element {
           </li>
         ))}
       </ul>
-    </article>
+    </>
   )
 }
 
