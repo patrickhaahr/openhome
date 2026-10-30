@@ -299,6 +299,12 @@ api-noop-migrate:
     sqlx database create --database-url "$url"
     sqlx migrate run --source noop_migrations --database-url "$url"
 
+# Create a reversible Food database migration (just api-food-migration-add search_terms); the API applies them on start
+[group('api')]
+[working-directory: 'api']
+api-food-migration-add name:
+    sqlx migrate add -r --source food_migrations {{name}}
+
 # Build the API image for amd64 + arm64 (Raspberry Pi) locally
 [group('api')]
 [working-directory: 'api']

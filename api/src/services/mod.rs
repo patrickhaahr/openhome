@@ -6,6 +6,7 @@ pub mod important_dates;
 pub mod ir;
 pub mod map;
 pub mod noop_push;
+pub mod nutrition;
 mod patch;
 pub mod route_loop;
 pub mod switchbot;

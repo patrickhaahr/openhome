@@ -104,29 +104,8 @@ pub fn resolve_db_url(
     database_url: &str,
     noop_db_url: Option<&str>,
 ) -> Result<String, PushConfigError> {
-    if let Some(url) = noop_db_url.map(str::trim).filter(|url| !url.is_empty()) {
-        return Ok(url.to_string());
-    }
-
-    let (location, query) = match database_url.split_once('?') {
-        Some((location, query)) => (location, Some(query)),
-        None => (database_url, None),
-    };
-    let path = location
-        .strip_prefix("sqlite:")
-        .ok_or(PushConfigError::UnderivableDbUrl)?;
-    let file_start = path.rfind('/').map_or(0, |index| index + 1);
-    let file_name = &path[file_start..];
-    if file_name.is_empty() || file_name == ":memory:" || file_name == NOOP_DB_FILE_NAME {
-        return Err(PushConfigError::UnderivableDbUrl);
-    }
-
-    let mut url = format!("sqlite:{}{NOOP_DB_FILE_NAME}", &path[..file_start]);
-    if let Some(query) = query {
-        url.push('?');
-        url.push_str(query);
-    }
-    Ok(url)
+    crate::db::sibling_db_url(database_url, noop_db_url, NOOP_DB_FILE_NAME)
+        .ok_or(PushConfigError::UnderivableDbUrl)
 }
 
 /// Opens the push database, applies its migrations, and seeds the receiver state.
