@@ -44,8 +44,8 @@ use important_dates::{
     UpdateImportantDateRequest,
 };
 use nutrition::{
-    FoodRequest, LinkProductRequest, LogMealRequest, LookupProductRequest, MealLogRequest,
-    MealLogsRequest, NutritionDayRequest, SearchFoodsRequest, UpdateMealLogRequest,
+    ClassifyFoodRequest, FoodRequest, LinkProductRequest, LogMealRequest, LookupProductRequest,
+    MealLogRequest, MealLogsRequest, NutritionDayRequest, SearchFoodsRequest, UpdateMealLogRequest,
 };
 mod wishlist;
 use watchlist::{
@@ -84,6 +84,12 @@ is already edible. When density is null, use a similar Food's density (water-lik
 estimate. Split a mixed dish into the Foods it is made of rather than searching for the dish. A null value is unknown, never \
 zero. food_database_unavailable with state importing means the database is still being imported, so retry in a few minutes; \
 state failed means the import failed, so tell the user. Credit the returned source.credit wherever you show values. \
+Foods carry the user's nova_class (1-4): the first time the user eats a Food that search_foods or food shows with \
+nova_class null, log it and then call classify_food once with its NOVA Class (1 unprocessed or minimally processed, 2 \
+processed culinary ingredient, 3 processed, 4 ultra-processed); OpenHome keeps it and gives it to that Food's Portions, \
+so never classify a Food that already has a class unless the user corrects it. Products take Open Food Facts' class and \
+are never classified. nutrition_day reports nova.nova_1_share, the share of classified energy from NOVA Class 1, \
+leaving unclassified Portions out. \
 To log what the user ate, search_foods for each Food, turn amounts into edible grams, and call log_meal once per eating \
 occasion with its Portions (food_id and grams) and an explicit eaten_at: the message's send time, or the time the user \
 describes (\"an hour ago\", \"yesterday morning\") as RFC 3339 with its offset. The Meal Log counts toward the \
@@ -202,16 +208,26 @@ Danish or English name (skyr, kyllingebryst, chicken breast); Danish compounds a
 names. Returns up to `limit` Foods (1-50, default 20), best match first, each with food_id, name_da, name_en, food_group, \
 `per_100g` key values per 100 g edible part (energy_kcal, energy_kj, protein, fat, available_carbohydrate, sugars, \
 dietary_fibre, alcohol), `density` in g/ml and `waste` as the inedible percentage of the Food as bought, each as {value, \
-unit}; a null value is unknown, never zero. An empty `foods` list means no match: try other words, the other language, or \
+unit}, and the user's `nova_class` (1-4, null while unclassified); a null value is unknown, never zero. An empty `foods` list means no match: try other words, the other language, or \
 the dish's separate Foods. While the database is being imported, or after an import failed, the result is a 503 error \
 with code food_database_unavailable and state importing or failed. Credit `source.credit` wherever values are shown.";
 
 const FOOD: &str = "One Food by the food_id search_foods returned, with every database parameter in \
 `parameters`, in database order: key, parameter_id, Danish and English name, group, unit, per_100g and value. A per_100g \
 value is an amount per 100 g edible part; waste (%), density (g/ml), conversion factors and pH describe the Food itself. A \
-null value is unknown, never zero. `density` and `waste` are repeated at the top level. An unknown food_id is a 404 error; \
+null value is unknown, never zero. `density`, `waste` and the user's `nova_class` (1-4, null while unclassified) are at \
+the top level. An unknown food_id is a 404 error; \
 while the database is unavailable the result is a 503 error with code food_database_unavailable. Credit `source.credit` \
 wherever values are shown.";
+
+const CLASSIFY_FOOD: &str = "Set or change a Food's NOVA Class by food_id: 1 unprocessed or minimally processed, 2 \
+processed culinary ingredient, 3 processed, 4 ultra-processed. Classify a Food once, the first time it is logged while \
+search_foods shows nova_class null; OpenHome keeps the class with the user's data, so a Food database update never loses \
+it. The Food's past Portions that were still unclassified take the class; a changed class applies to Portions logged \
+afterwards. Products use Open Food Facts' class instead. Returns food_id, name_da, name_en, nova_class and \
+classified_portions (past Portions that took the class). Setting the same class again changes nothing. A class outside 1-4 \
+is a 400 error, an unknown food_id a 404 error, and while the Food database is unavailable the result is a 503 error with \
+code food_database_unavailable.";
 
 const LOOKUP_PRODUCT: &str = "Look up a packaged food by the 8, 12, 13 or 14 digits under its bars. A \
 barcode already linked returns linked=true and the stored Product (barcode, name, brand, nova_class, label_per_100g as \
@@ -239,7 +255,7 @@ describes; never in the future), with an optional note and an optional photo (th
 so past times backfill earlier days. Each Portion copies every per-100 g value (a Product's label values first, then its \
 linked Food's, then estimates), so later database updates and re-links never change it. Returns meal_log (id, eaten_at in \
 Copenhagen time, day, note, portions with food_id, product (barcode, name, brand) or null, names, grams, \
-dataset_version and key nutrients energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol as {value, \
+dataset_version, nova_class (the Product's or Food's, null while unclassified) and key nutrients energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol as {value, \
 unit, source}, totals as {value, unit, unknown_portions}, and photo with its size or null) and replayed. Generate a \
 unique request_id per intended meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed \
 arguments conflict (409) and a deleted Meal Log is not recreated. A null value is unknown, never zero. An unknown food_id \
@@ -249,7 +265,8 @@ then.";
 
 const MEAL_LOGS: &str = "List Meal Logs for one Europe/Copenhagen calendar day (`day`) or an inclusive range of up \
 to 90 days (`from` and `to`), oldest first. Each has its id, eaten_at in Copenhagen time with its offset, day, note, \
-portions (food_id, Danish and English name, grams, dataset_version and key nutrients as {value, unit, source}) and \
+portions (food_id, Danish and English name, grams, dataset_version, nova_class and key nutrients as {value, unit, \
+source}) and \
 totals as {value, unit, unknown_portions}: the sum of the Portions that have a value and the count of those that do not. \
 A null value is unknown, never zero. Works while the Food database is unavailable.";
 
@@ -267,8 +284,10 @@ log_meal retry with its request_id cannot recreate it. After an uncertain respon
 
 const NUTRITION_DAY: &str = "One Europe/Copenhagen calendar day of nutrition: day_start and day_end (a day can last 23 \
 or 25 hours), `totals` for energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol, `nutrients` \
-with the total of every per-100 g database parameter in database order (key, Danish and English name, group, unit), and \
-the day's meal_logs in time order. Each total is {value, unit, unknown_portions}: value adds the Portions that have a \
+with the total of every per-100 g database parameter in database order (key, Danish and English name, group, unit), \
+`nova` with nova_1_share (kcal from NOVA Class 1 Portions divided by kcal from classified Portions, 0-1; null when \
+nothing classified has energy), nova_1_kcal, classified_kcal and unclassified_portions (left out of the share), and the \
+day's meal_logs in time order. Each total is {value, unit, unknown_portions}: value adds the Portions that have a \
 value, unknown_portions counts those that do not, and value is null when none has one, including a day without Meal \
 Logs. While the Food database is unavailable the result is a 503 error with code food_database_unavailable. Credit \
 `source.credit` wherever values are shown.";
@@ -988,6 +1007,36 @@ impl OpenHomeTools {
     ) -> CallToolResult {
         self.api
             .get(&["api", "nutrition", "foods", &food_id.to_string()])
+            .await
+    }
+
+    #[tool(
+        description = CLASSIFY_FOOD,
+        annotations(
+            title = "Classify a Food",
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn classify_food(
+        &self,
+        Parameters(request): Parameters<ClassifyFoodRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PUT,
+                &[
+                    "api",
+                    "nutrition",
+                    "foods",
+                    &request.food_id.to_string(),
+                    "nova-class",
+                ],
+                Some(json!(request)),
+                &[],
+            )
             .await
     }
 
