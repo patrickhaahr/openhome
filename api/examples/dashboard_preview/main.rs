@@ -89,8 +89,9 @@ async fn main() -> anyhow::Result<()> {
     // `--food-database=importing` previews the Food page's unavailable state.
     let food_state = foods::FoodState::from_args();
     let foods = foods::synthetic_foods(food_state).await?;
+    let (meal_photos, _meal_photo_dir) = foods::photo_store()?;
     if food_state == foods::FoodState::Ready {
-        foods::seed_meals(&db, &foods).await?;
+        foods::seed_meals(&db, &foods, &meal_photos).await?;
     }
 
     let seed_db = db.clone();
@@ -117,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::switchbot::router())
         .merge(routes::fitness::router())
         .merge(routes::training::router())
-        .merge(routes::nutrition::router(foods))
+        .merge(routes::nutrition::router(foods, meal_photos))
         .with_state(state)
         // Inside the key layer, so the stand-in is authenticated like the route it answers for.
         .layer(axum::middleware::from_fn(move |request, next| {

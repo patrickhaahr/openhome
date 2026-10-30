@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE meal_logs SET eaten_at = COALESCE(?1, eaten_at), day = COALESCE(?2, day),\n        note = CASE WHEN ?3 THEN ?4 ELSE note END,\n        photo_id = CASE WHEN ?5 THEN ?6 ELSE photo_id END,\n        photo_width = CASE WHEN ?5 THEN ?7 ELSE photo_width END,\n        photo_height = CASE WHEN ?5 THEN ?8 ELSE photo_height END,\n        photo_thumbnail_width = CASE WHEN ?5 THEN ?9 ELSE photo_thumbnail_width END,\n        photo_thumbnail_height = CASE WHEN ?5 THEN ?10 ELSE photo_thumbnail_height END,\n        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n        WHERE id = ?11",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "cab5be0d07002612e4739e7542ee50f07d3d6377196ca31545a5b487acc05e42"
+}

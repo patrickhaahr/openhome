@@ -45,6 +45,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(import) = food_import {
         tokio::spawn(import.run());
     }
+    let meal_photos = openhome_api::services::nutrition::meal_photos::MealPhotos::new(
+        openhome_api::services::nutrition::meal_photos::dir_beside(&database_url)?,
+    );
 
     let adguard_host = std::env::var("ADGUARD_HOST").unwrap_or_default();
     let adguard_username = std::env::var("ADGUARD_USERNAME").unwrap_or_default();
@@ -204,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::weather::router(weather_service))
         .merge(routes::backlight::router(backlight_service))
         .merge(routes::photos::router(photo_service))
-        .merge(routes::nutrition::router(foods))
+        .merge(routes::nutrition::router(foods, meal_photos))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())

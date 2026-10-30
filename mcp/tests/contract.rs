@@ -2,11 +2,15 @@
 //! an MCP Streamable HTTP client.
 
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
 use openhome_api::services::noop_push;
-use openhome_api::services::nutrition::food_database::{DatasetPin, FoodDatabase};
+use openhome_api::services::nutrition::{
+    food_database::{DatasetPin, FoodDatabase},
+    meal_photos::MealPhotos,
+};
 use openhome_api::{AppState, DockerCache, auth, routes};
 use openhome_mcp::{ApiKey, MCP_PATH, OpenHomeApi, parse_api_url};
 use pretty_assertions::assert_eq;
@@ -66,7 +70,10 @@ async fn start_api_with_foods(foods: FoodDatabase) -> String {
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(None))
         .merge(routes::important_dates::router())
-        .merge(routes::nutrition::router(foods))
+        .merge(routes::nutrition::router(
+            foods,
+            MealPhotos::new(Path::new(env!("CARGO_TARGET_TMPDIR")).join("meal-photos")),
+        ))
         .with_state(state)
         .layer(axum::middleware::from_fn(move |request, next| {
             auth::auth_middleware(request, next, api_key.clone())
