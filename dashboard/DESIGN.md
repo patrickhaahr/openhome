@@ -122,7 +122,9 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   capsule beneath it split by macronutrient energy (protein in sun, carbs in ink, fat blue, alcohol
   muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each. The Meal Logs
   follow as wash plates in time order: the clock time large, the meal's kcal on the right, the note
-  muted, then one row per Portion (Food, grams, kcal). Unknown is a dash; a total that leaves out
+  muted, then one row per Portion (Food, grams, kcal). A Meal Log with a photo carries its
+  thumbnail as a rounded key beside the figures (leading the plate on narrow screens); selecting
+  it opens the full photo in the night viewer Photos uses. Unknown is a dash; a total that leaves out
   Portions without a value is drawn "≥" with the count in its title and "At least" for assistive
   technology. "All nutrients" opens every parameter in the database's groups on tone bands. While
   the Food database imports or fails, the day's place holds a state note and the day keys stay.

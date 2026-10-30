@@ -1,5 +1,6 @@
 import "@tanstack/react-start/server-only"
-import { requestOpenHome } from "./openhome.server"
+import { z } from "zod"
+import { readBoundedBody, requestOpenHome } from "./openhome.server"
 import { trainingDayOn } from "./workout"
 import {
   foodDatabaseUnavailable,
@@ -57,4 +58,69 @@ export async function readNutritionDay(
   return parsed.success
     ? { day, today, state: "available", data: parsed.data }
     : { day, today, state: "unavailable", reason: "unavailable" }
+}
+
+const mealPhotoInput = z.object({
+  photo: z.uuid(),
+  size: z.enum(["photo", "thumbnail"]),
+})
+
+// A 1,600 px AVIF is a few hundred kilobytes; anything far larger is not one of Axum's photos.
+const mealPhotoLimit = 5 * 1024 * 1024
+
+/**
+ * Relay one stored meal photo or thumbnail as bounded AVIF bytes, never upstream headers or
+ * error bodies, the way wish pictures are relayed.
+ *
+ * @param input - The photo ID and size from the dashboard path.
+ * @returns The image, or an empty 404 or 503.
+ */
+export async function readMealPhoto(input: {
+  photo: string
+  size: string
+}): Promise<Response> {
+  const headers = {
+    // A photo ID always names the same image; a replaced photo gets a new ID.
+    "Cache-Control": "private, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy":
+      "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  }
+
+  const failed = (status: number): Response =>
+    new Response(null, {
+      status,
+      headers: { ...headers, "Cache-Control": "no-store" },
+    })
+
+  const parsed = mealPhotoInput.safeParse(input)
+
+  if (!parsed.success) return failed(404)
+  const { photo, size } = parsed.data
+
+  const result = await requestOpenHome({
+    path:
+      size === "photo"
+        ? `/api/nutrition/meal-photos/${photo}`
+        : `/api/nutrition/meal-photos/${photo}/thumbnail`,
+    method: "GET",
+    timeoutMs: 12000,
+  })
+
+  if (result.state !== "received") return failed(503)
+  const response = result.response
+
+  if (!response.ok || response.headers.get("content-type") !== "image/avif") {
+    await response.body?.cancel()
+
+    return failed(response.status === 404 ? 404 : 503)
+  }
+
+  const body = await readBoundedBody(response, mealPhotoLimit)
+
+  if (body === undefined) return failed(503)
+
+  return new Response(body, {
+    headers: { ...headers, "Content-Type": "image/avif" },
+  })
 }

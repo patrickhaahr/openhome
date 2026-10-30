@@ -1,6 +1,6 @@
 import "@tanstack/react-start/server-only"
 import { z } from "zod"
-import { requestOpenHome } from "./openhome.server"
+import { readBoundedBody, requestOpenHome } from "./openhome.server"
 import {
   householdUser,
   wishlist,
@@ -275,38 +275,9 @@ export async function readWishImage(input: {
     return failed(response.status === 404 ? 404 : 503)
   }
 
-  const reader = response.body?.getReader()
+  const body = await readBoundedBody(response, wishImageLimit)
 
-  if (reader === undefined) return failed(503)
-  const chunks: Uint8Array[] = []
-  let length = 0
-
-  try {
-    for (;;) {
-      const chunk = await reader.read()
-
-      if (chunk.done) break
-      length += chunk.value.byteLength
-
-      if (length > wishImageLimit) {
-        await reader.cancel()
-
-        return failed(503)
-      }
-
-      chunks.push(chunk.value)
-    }
-  } catch {
-    return failed(503)
-  }
-
-  const body = new Uint8Array(length)
-  let offset = 0
-
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
+  if (body === undefined) return failed(503)
 
   return new Response(body, {
     headers: { ...headers, "Content-Type": contentType },
