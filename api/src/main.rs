@@ -8,7 +8,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use openhome_api::auth;
 use openhome_api::routes;
 use openhome_api::services::{
-    adguard, backlight, docker, feed, ir, map, noop_push, route_loop, switchbot, weather,
+    adguard, backlight, docker, feed, ir, map, noop_push, nutrition::food_database, route_loop,
+    switchbot, weather,
 };
 
 #[tokio::main]
@@ -31,6 +32,19 @@ async fn main() -> anyhow::Result<()> {
     let noop_db_url =
         noop_push::resolve_db_url(&database_url, std::env::var("NOOP_DB_URL").ok().as_deref())?;
     let noop_db = noop_push::connect(&noop_db_url).await?;
+
+    // Lookups answer once the pinned dataset is imported; the import runs in the background.
+    let food_db_url =
+        food_database::resolve_db_url(&database_url, non_empty_env("FOOD_DB_URL").as_deref())?;
+    let (foods, food_import) = food_database::FoodDatabase::open(
+        openhome_api::db::connect_sqlite(&food_db_url).await?,
+        food_database::DatasetPin::pinned(),
+        food_database::cache_dir(&food_db_url)?,
+    )
+    .await?;
+    if let Some(import) = food_import {
+        tokio::spawn(import.run());
+    }
 
     let adguard_host = std::env::var("ADGUARD_HOST").unwrap_or_default();
     let adguard_username = std::env::var("ADGUARD_USERNAME").unwrap_or_default();
@@ -190,6 +204,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::weather::router(weather_service))
         .merge(routes::backlight::router(backlight_service))
         .merge(routes::photos::router(photo_service))
+        .merge(routes::nutrition::router(foods))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())
