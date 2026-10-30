@@ -44,8 +44,8 @@ use important_dates::{
     UpdateImportantDateRequest,
 };
 use nutrition::{
-    FoodRequest, LogMealRequest, MealLogRequest, MealLogsRequest, NutritionDayRequest,
-    SearchFoodsRequest, UpdateMealLogRequest,
+    FoodRequest, LinkProductRequest, LogMealRequest, LookupProductRequest, MealLogRequest,
+    MealLogsRequest, NutritionDayRequest, SearchFoodsRequest, UpdateMealLogRequest,
 };
 mod wishlist;
 use watchlist::{
@@ -96,7 +96,15 @@ never logs the meal twice, changed arguments conflict, and a deleted Meal Log ca
 Each Portion keeps the values it was logged with, so later database updates never change past days. Correct a Meal Log \
 with update_meal_log (time, note or a full replacement of its Portions) and remove a duplicate with delete_meal_log; after \
 an uncertain update or deletion, list meal_logs for that day before retrying. nutrition_day gives a day's Meal Logs and \
-totals.";
+totals. \
+For a packaged food, read its barcode digits from the photo or the user and call lookup_product. A linked barcode returns \
+the stored Product at once: log it as a Portion with barcode and edible grams, with no matching. A new barcode returns a \
+preview from Open Food Facts with suggested_foods and stores nothing: pick the closest Food (search_foods when none fits) \
+and call link_product once with its food_id and a request_id; later scans need no matching. The label supplies energy and \
+macronutrients and the linked Food fills every value the label lacks, including vitamins and minerals; re-link with \
+link_product to correct the Food for future Portions only. When Open Food Facts has no product (product_not_found), log \
+the closest Food by food_id instead. A Portion may carry estimates per 100 g for values no source has, which are tagged as \
+estimates; never estimate a value the label or Food already gives. Credit Open Food Facts wherever label values are shown.";
 
 const RECOVERY_ON_DAY: &str = "Sleep and recovery for one Europe/Copenhagen calendar day, from \
 the NOOP strap mirror. `sleep` is the Sleep Night that wakes on `day`: NOOP's daily totals plus the \
@@ -205,18 +213,38 @@ null value is unknown, never zero. `density` and `waste` are repeated at the top
 while the database is unavailable the result is a 503 error with code food_database_unavailable. Credit `source.credit` \
 wherever values are shown.";
 
+const LOOKUP_PRODUCT: &str = "Look up a packaged food by the 8, 12, 13 or 14 digits under its bars. A \
+barcode already linked returns linked=true and the stored Product (barcode, name, brand, nova_class, label_per_100g as \
+{key, value, unit} in Food database units, and its linked food) without calling Open Food Facts. Otherwise it returns \
+linked=false: a preview read from Open Food Facts with food null and up to 5 suggested_foods (as search_foods lists them) \
+to link it to; nothing is stored until link_product. A malformed barcode or wrong check digit is a 400 error; a barcode \
+Open Food Facts does not know is a 404 error with code product_not_found (log the closest Food instead); Open Food Facts \
+not answering is a 503 error with code open_food_facts_unavailable; a preview while the Food database is unavailable is a \
+503 error with code food_database_unavailable. Credit `source.credit` (Open Food Facts, ODbL) wherever label values are \
+shown.";
+
+const LINK_PRODUCT: &str = "Link a barcode to its closest Food once, storing the Product with its label values per \
+100 g, NOVA Class and food_id; later lookups and Portions use it without calling Open Food Facts. Linking a stored Product \
+again re-links it to another Food for future Portions only; past Meal Logs keep their values. Returns product (as \
+lookup_product shows it) and replayed. Generate a unique request_id per intended link and reuse identical arguments and \
+ID after an uncertain response: an accepted retry returns replayed=true and the same request_id with another barcode or \
+food_id is a 409 error. An unknown food_id is a 404 error; a barcode Open Food Facts does not know is a 404 error with \
+code product_not_found; Open Food Facts not answering is a 503 error with code open_food_facts_unavailable.";
+
 const LOG_MEAL: &str = "Log one eating occasion as a Meal Log: 1-50 Portions, each a food_id from \
-search_foods with edible grams, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
+search_foods or the barcode of a Product linked with link_product, with edible grams and optional estimates per 100 g for \
+values no source has, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
 describes; never in the future), with an optional note and an optional photo (the user's JPEG or PNG as base64, at most \
 10 MB, stored without metadata as AVIF with a thumbnail). It counts toward the Europe/Copenhagen calendar day of eaten_at, \
-so past times backfill earlier days. Each Portion copies every per-100 g value of its Food, so later database updates \
-never change it. Returns meal_log (id, eaten_at in Copenhagen time, day, note, portions with food_id, names, grams, \
+so past times backfill earlier days. Each Portion copies every per-100 g value (a Product's label values first, then its \
+linked Food's, then estimates), so later database updates and re-links never change it. Returns meal_log (id, eaten_at in \
+Copenhagen time, day, note, portions with food_id, product (barcode, name, brand) or null, names, grams, \
 dataset_version and key nutrients energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol as {value, \
 unit, source}, totals as {value, unit, unknown_portions}, and photo with its size or null) and replayed. Generate a \
 unique request_id per intended meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed \
 arguments conflict (409) and a deleted Meal Log is not recreated. A null value is unknown, never zero. An unknown food_id \
-is a 404 error; while the Food database is unavailable the result is a 503 error with code food_database_unavailable. A \
-photo that is not a JPEG or PNG is a 400 error and one over 10 MB or 12000 px a side is a 413 error; nothing is logged \
+or unlinked barcode is a 404 error; an estimate for a value the label or Food has is a 400 error; while the Food \
+database is unavailable the result is a 503 error with code food_database_unavailable. A photo that is not a JPEG or PNG is a 400 error and one over 10 MB or 12000 px a side is a 413 error; nothing is logged \
 then.";
 
 const MEAL_LOGS: &str = "List Meal Logs for one Europe/Copenhagen calendar day (`day`) or an inclusive range of up \
@@ -227,7 +255,8 @@ A null value is unknown, never zero. Works while the Food database is unavailabl
 
 const UPDATE_MEAL_LOG: &str = "Correct one Meal Log by meal_log_id. Supplied fields change together; omitted fields \
 are preserved. eaten_at moves it to that time's Europe/Copenhagen day; note null clears the note; portions replaces \
-every Portion (food_id and edible grams) with fresh values from the current Food database; photo (base64 JPEG or PNG, at \
+every Portion (food_id or a linked Product's barcode, edible grams and optional estimates) with fresh values from the \
+current Products and Food database; photo (base64 JPEG or PNG, at \
 most 10 MB) replaces the photo and photo null removes it. Returns the updated Meal Log. A rejected photo changes nothing. \
 A missing Meal Log or food_id is a 404 error; replacing Portions while the Food database is unavailable is a 503 error. \
 After an uncertain response, list meal_logs for the day before retrying.";
@@ -959,6 +988,38 @@ impl OpenHomeTools {
     ) -> CallToolResult {
         self.api
             .get(&["api", "nutrition", "foods", &food_id.to_string()])
+            .await
+    }
+
+    #[tool(
+        description = LOOKUP_PRODUCT,
+        annotations(title = "Look up a Product", read_only_hint = true, open_world_hint = true)
+    )]
+    async fn lookup_product(
+        &self,
+        Parameters(LookupProductRequest { barcode }): Parameters<LookupProductRequest>,
+    ) -> CallToolResult {
+        self.api
+            .get(&["api", "nutrition", "products", &barcode])
+            .await
+    }
+
+    #[tool(
+        description = LINK_PRODUCT,
+        annotations(
+            title = "Link a Product",
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = true
+        )
+    )]
+    async fn link_product(
+        &self,
+        Parameters(request): Parameters<LinkProductRequest>,
+    ) -> CallToolResult {
+        self.api
+            .post(&["api", "nutrition", "products"], json!(request))
             .await
     }
 
