@@ -1,4 +1,7 @@
-//! Food database and Meal Log tool arguments, forwarded unchanged to Axum's nutrition routes.
+//! Food database, Product and Meal Log tool arguments, forwarded unchanged to Axum's nutrition
+//! routes.
+
+use std::collections::BTreeMap;
 
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
@@ -19,14 +22,42 @@ pub struct FoodRequest {
     pub food_id: u32,
 }
 
-/// One Portion: edible grams of one Food.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LookupProductRequest {
+    /// The 8, 12, 13 or 14 digits printed under the package's bars.
+    pub barcode: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LinkProductRequest {
+    /// The package's barcode digits, as given to `lookup_product`.
+    pub barcode: String,
+    /// The `food_id` of the closest Food, from `suggested_foods` or `search_foods`.
+    pub food_id: u32,
+    /// Unique ID for this link, 1-128 characters. Reuse the identical arguments and ID after an
+    /// uncertain response.
+    pub request_id: String,
+}
+
+/// One Portion: edible grams of one Food (`food_id`) or of one linked Product (`barcode`).
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PortionRequest {
-    /// The Food's `food_id` from `search_foods`.
-    pub food_id: u32,
+    /// The Food's `food_id` from `search_foods`. Give either this or `barcode`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_id: Option<u32>,
+    /// The barcode of a Product linked with `link_product`. Give either this or `food_id`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub barcode: Option<String>,
     /// Edible grams eaten, above 0 and at most 5000; convert millilitres and gross weights first.
     pub grams: f64,
+    /// Optional estimates per 100 g edible part for values no source has, keyed and united as
+    /// the Food database's parameters (e.g. `{"dietary_fibre": 2.5}` in g). A key the label or
+    /// Food already has is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimates: Option<BTreeMap<String, f64>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
