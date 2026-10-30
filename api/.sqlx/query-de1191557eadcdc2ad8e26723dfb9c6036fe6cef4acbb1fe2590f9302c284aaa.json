@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id!\", eaten_at, day, note, photo_id, photo_width, photo_height,\n            photo_thumbnail_width, photo_thumbnail_height FROM meal_logs\n        WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR day >= ?2) AND (?3 IS NULL OR day <= ?3)\n        ORDER BY eaten_at, created_at, id",
+  "query": "SELECT id AS \"id!\", eaten_at, day, meal_name, note, photo_id, photo_width, photo_height,\n            photo_thumbnail_width, photo_thumbnail_height FROM meal_logs\n        WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR day >= ?2) AND (?3 IS NULL OR day <= ?3)\n        ORDER BY eaten_at, created_at, id",
   "describe": {
     "columns": [
       {
@@ -19,33 +19,38 @@
         "type_info": "Text"
       },
       {
-        "name": "note",
+        "name": "meal_name",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "photo_id",
+        "name": "note",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "photo_width",
+        "name": "photo_id",
         "ordinal": 5,
-        "type_info": "Integer"
+        "type_info": "Text"
       },
       {
-        "name": "photo_height",
+        "name": "photo_width",
         "ordinal": 6,
         "type_info": "Integer"
       },
       {
-        "name": "photo_thumbnail_width",
+        "name": "photo_height",
         "ordinal": 7,
         "type_info": "Integer"
       },
       {
-        "name": "photo_thumbnail_height",
+        "name": "photo_thumbnail_width",
         "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "photo_thumbnail_height",
+        "ordinal": 9,
         "type_info": "Integer"
       }
     ],
@@ -61,8 +66,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "4a2be387709628b08bd9e0014e41254042b9b41b89c46ef6bfdbe3f28e2465b5"
+  "hash": "de1191557eadcdc2ad8e26723dfb9c6036fe6cef4acbb1fe2590f9302c284aaa"
 }

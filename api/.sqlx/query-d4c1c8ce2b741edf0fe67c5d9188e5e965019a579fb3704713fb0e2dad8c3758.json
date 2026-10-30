@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT i.meal_id, i.grams, i.food_id, i.food_name_da, i.food_name_en,\n            i.product_barcode AS barcode, p.name AS product_name, p.brand AS product_brand,\n            p.food_name_da AS \"linked_name_da?\", p.food_name_en AS \"linked_name_en?\"\n        FROM meal_portions i LEFT JOIN products p ON p.barcode = i.product_barcode\n        WHERE ?1 IS NULL OR i.meal_id = ?1\n        ORDER BY i.meal_id, i.position",
+  "describe": {
+    "columns": [
+      {
+        "name": "meal_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "grams",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "food_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "food_name_da",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "food_name_en",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "barcode",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "product_name",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "product_brand",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "linked_name_da?",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "linked_name_en?",
+        "ordinal": 9,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d4c1c8ce2b741edf0fe67c5d9188e5e965019a579fb3704713fb0e2dad8c3758"
+}

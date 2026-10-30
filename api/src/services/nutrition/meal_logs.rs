@@ -23,9 +23,10 @@ use uuid::Uuid;
 
 use super::food_database::{FoodDatabase, FoodError};
 use super::meal_photos::{MealPhotos, PhotoError, Size, Upload};
+use super::meals::{self, MealError, MealItemRequest, MealName};
 use super::nova::{self, NovaClass};
 use super::parameters::{self, Unit};
-use super::products::{self, Barcode, ProductError};
+use super::products::{self, Barcode};
 use crate::services::patch::Patch;
 use crate::services::training::calendar::{self, CalendarDay};
 
@@ -50,6 +51,8 @@ pub enum MealLogError {
     Food(#[from] FoodError),
     #[error(transparent)]
     Photo(#[from] PhotoError),
+    #[error(transparent)]
+    Meal(#[from] MealError),
     #[error("Meal Log database operation failed")]
     Database(#[from] sqlx::Error),
 }
@@ -81,6 +84,9 @@ pub struct PortionRequest {
     pub estimates: BTreeMap<String, f64>,
 }
 
+/// A meal to log: its `portions`, or the name of a saved Meal (`meal`) whose items are copied as
+/// Portions, with `overrides` replacing the grams of the items they name by `food_id` or
+/// `barcode`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LogMeal {
@@ -88,7 +94,14 @@ pub struct LogMeal {
     pub eaten_at: String,
     #[serde(default)]
     pub note: Option<String>,
-    pub portions: Vec<PortionRequest>,
+    #[serde(default)]
+    pub portions: Option<Vec<PortionRequest>>,
+    /// A saved Meal's name, in any case.
+    #[serde(default)]
+    pub meal: Option<String>,
+    /// One-off grams for items of `meal`, each naming its item by `food_id` or `barcode`.
+    #[serde(default)]
+    pub overrides: Option<Vec<MealItemRequest>>,
     pub request_id: String,
     /// A base64 JPEG or PNG of the meal.
     #[serde(default)]
@@ -226,6 +239,8 @@ pub struct MealLog {
     pub eaten_at: String,
     /// The Europe/Copenhagen calendar day it counts toward.
     pub day: String,
+    /// The name of the Meal it was logged from, as named then; null otherwise.
+    pub meal_name: Option<String>,
     pub note: Option<String>,
     pub photo: Option<Photo>,
     pub portions: Vec<Portion>,
@@ -330,20 +345,28 @@ pub(super) struct StoredLog {
     id: String,
     eaten_at: String,
     day: String,
+    meal_name: Option<String>,
     note: Option<String>,
     photo: Option<StoredPhoto>,
     pub portions: Vec<StoredPortion>,
 }
 
 /// The arguments a receipt compares on retry. `photo` is the upload's SHA-256, left out when
-/// there is none so receipts written before photos existed still match their retries.
+/// there is none so receipts written before photos existed still match their retries. A log by
+/// Meal name has `meal` (its lowercased name) and `overrides` instead of `portions`, so a retry
+/// replays even after the Meal was edited.
 #[derive(Serialize)]
 struct Normalized<'a> {
     eaten_at: &'a str,
     note: Option<&'a str>,
     /// `[food_id, grams]` for a Food without estimates, as receipts were first written;
     /// otherwise an object.
-    portions: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    portions: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    meal: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    overrides: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     photo: Option<String>,
 }
@@ -388,6 +411,7 @@ impl StoredLog {
             id: self.id,
             eaten_at: calendar::iso(eaten_at),
             day: self.day,
+            meal_name: self.meal_name,
             note: self.note,
             photo: self.photo.map(StoredPhoto::into_photo),
             portions: self
@@ -479,10 +503,56 @@ fn note(value: Option<String>) -> Result<Option<String>> {
     Ok(Some(value.to_owned()))
 }
 
-/// What a Portion is of.
-enum Item {
+/// What a Portion is of: a Food or a linked Product. A Meal names its items the same way.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) enum Item {
     Food(i64),
     Product(Barcode),
+}
+
+impl Item {
+    /// How an error message names the item.
+    pub(super) fn describe(&self) -> String {
+        match self {
+            Self::Food(food_id) => format!("food_id {food_id}"),
+            Self::Product(barcode) => format!("barcode {}", barcode.as_str()),
+        }
+    }
+
+    /// The receipt form of the item with `grams`.
+    pub(super) fn normalized(&self, grams: f64) -> serde_json::Value {
+        match self {
+            Self::Food(food_id) => serde_json::json!({"food_id": food_id, "grams": grams}),
+            Self::Product(barcode) => {
+                serde_json::json!({"barcode": barcode.as_str(), "grams": grams})
+            }
+        }
+    }
+}
+
+/// Parses a reference to exactly one Food (`food_id`) or Product (`barcode`).
+pub(super) fn parse_item(
+    food_id: Option<i64>,
+    barcode: Option<String>,
+) -> std::result::Result<Item, String> {
+    match (food_id, barcode) {
+        (Some(food_id), None) if food_id > 0 => Ok(Item::Food(food_id)),
+        (Some(_), None) => Err("food_id must be a positive whole number from search_foods".into()),
+        (None, Some(barcode)) => Barcode::parse(&barcode)
+            .map(Item::Product)
+            .map_err(|error| error.to_string()),
+        _ => Err("each item needs either a food_id or the barcode of a linked Product".into()),
+    }
+}
+
+/// Checks an amount of edible grams.
+pub(super) fn check_grams(grams: f64) -> std::result::Result<(), String> {
+    if !grams.is_finite() || grams <= 0.0 || grams > MAX_GRAMS {
+        return Err(format!(
+            "grams must be edible grams above 0 and at most {MAX_GRAMS}"
+        ));
+    }
+    Ok(())
 }
 
 /// A validated Portion request.
@@ -548,31 +618,9 @@ fn portions(requests: Vec<PortionRequest>) -> Result<Vec<ValidPortion>> {
     requests
         .into_iter()
         .map(|portion| {
-            let item = match (portion.food_id, portion.barcode) {
-                (Some(food_id), None) if food_id > 0 => Item::Food(food_id),
-                (Some(_), None) => {
-                    return Err(MealLogError::Validation(
-                        "food_id must be a positive whole number from search_foods".into(),
-                    ));
-                }
-                (None, Some(barcode)) => {
-                    Item::Product(Barcode::parse(&barcode).map_err(|error| match error {
-                        ProductError::Validation(message) => MealLogError::Validation(message),
-                        other => MealLogError::Validation(other.to_string()),
-                    })?)
-                }
-                _ => {
-                    return Err(MealLogError::Validation(
-                        "each Portion needs either a food_id or the barcode of a linked Product"
-                            .into(),
-                    ));
-                }
-            };
-            if !portion.grams.is_finite() || portion.grams <= 0.0 || portion.grams > MAX_GRAMS {
-                return Err(MealLogError::Validation(format!(
-                    "grams must be edible grams above 0 and at most {MAX_GRAMS}"
-                )));
-            }
+            let item =
+                parse_item(portion.food_id, portion.barcode).map_err(MealLogError::Validation)?;
+            check_grams(portion.grams).map_err(MealLogError::Validation)?;
             for (key, value) in &portion.estimates {
                 estimate(key, *value)?;
             }
@@ -583,6 +631,91 @@ fn portions(requests: Vec<PortionRequest>) -> Result<Vec<ValidPortion>> {
             })
         })
         .collect()
+}
+
+/// What a log holds: its own Portions, or a saved Meal's items with one-off grams.
+enum Contents {
+    Portions(Vec<ValidPortion>),
+    Meal {
+        name: MealName,
+        overrides: Vec<(Item, f64)>,
+    },
+}
+
+impl Contents {
+    fn normalized<'a>(
+        &'a self,
+        eaten_at: &'a str,
+        note: Option<&'a str>,
+        photo: Option<String>,
+    ) -> Normalized<'a> {
+        let (portions, meal, overrides) = match self {
+            Self::Portions(requests) => (
+                Some(requests.iter().map(ValidPortion::normalized).collect()),
+                None,
+                None,
+            ),
+            Self::Meal { name, overrides } => {
+                let mut overrides: Vec<serde_json::Value> = overrides
+                    .iter()
+                    .map(|(item, grams)| item.normalized(*grams))
+                    .collect();
+                // Overrides name distinct items, so their order carries no meaning.
+                overrides.sort_by_key(ToString::to_string);
+                (None, Some(name.key.as_str()), Some(overrides))
+            }
+        };
+        Normalized {
+            eaten_at,
+            note,
+            portions,
+            meal,
+            overrides,
+            photo,
+        }
+    }
+}
+
+/// Parses either `portions`, or a Meal name with optional overrides that each name a different
+/// item.
+fn contents(
+    requests: Option<Vec<PortionRequest>>,
+    meal: Option<String>,
+    overrides: Option<Vec<MealItemRequest>>,
+) -> Result<Contents> {
+    match (requests, meal) {
+        (Some(requests), None) => {
+            if overrides.is_some() {
+                return Err(MealLogError::Validation(
+                    "overrides change the grams of a Meal's items; give them with meal, or put \
+                     the grams in portions"
+                        .into(),
+                ));
+            }
+            Ok(Contents::Portions(portions(requests)?))
+        }
+        (None, Some(meal)) => {
+            let name = MealName::parse(&meal, "meal").map_err(MealLogError::Validation)?;
+            let overrides = overrides
+                .unwrap_or_default()
+                .into_iter()
+                .map(meals::item)
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|message| MealLogError::Validation(format!("overrides: {message}")))?;
+            for (index, (item, _)) in overrides.iter().enumerate() {
+                if overrides[..index].iter().any(|(other, _)| other == item) {
+                    return Err(MealLogError::Validation(format!(
+                        "overrides name {} twice; give each item one gram amount",
+                        item.describe()
+                    )));
+                }
+            }
+            Ok(Contents::Meal { name, overrides })
+        }
+        _ => Err(MealLogError::Validation(
+            "give either portions, or the name of a saved Meal in meal".into(),
+        )),
+    }
 }
 
 fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
@@ -780,7 +913,7 @@ pub(super) async fn load(
         Selection::Days(from, to) => (None, Some(from.to_string()), Some(to.to_string())),
     };
     let logs = sqlx::query!(
-        r#"SELECT id AS "id!", eaten_at, day, note, photo_id, photo_width, photo_height,
+        r#"SELECT id AS "id!", eaten_at, day, meal_name, note, photo_id, photo_width, photo_height,
             photo_thumbnail_width, photo_thumbnail_height FROM meal_logs
         WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR day >= ?2) AND (?3 IS NULL OR day <= ?3)
         ORDER BY eaten_at, created_at, id"#,
@@ -861,6 +994,7 @@ pub(super) async fn load(
             id: row.id,
             eaten_at: row.eaten_at,
             day: row.day,
+            meal_name: row.meal_name,
             note: row.note,
         })
         .collect())
@@ -952,23 +1086,38 @@ pub async fn log_meal(
     let request_id = request_id(&request.request_id)?;
     let at = eaten_at(&request.eaten_at, Utc::now())?;
     let note = note(request.note)?;
-    let requests = portions(request.portions)?;
+    let contents = contents(request.portions, request.meal, request.overrides)?;
     let upload = request
         .photo
         .as_deref()
         .map(Upload::from_base64)
         .transpose()?;
     let stored_at = utc_text(at);
-    let normalized = serde_json::to_string(&Normalized {
-        eaten_at: &stored_at,
-        note: note.as_deref(),
-        portions: requests.iter().map(ValidPortion::normalized).collect(),
-        photo: upload.as_ref().map(Upload::sha256),
-    })
+    let normalized = serde_json::to_string(&contents.normalized(
+        &stored_at,
+        note.as_deref(),
+        upload.as_ref().map(Upload::sha256),
+    ))
     .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     if let Some(logged) = replay(db, &request_id, &normalized).await? {
         return Ok(logged);
     }
+    let (requests, meal_name) = match contents {
+        Contents::Portions(requests) => (requests, None),
+        Contents::Meal { name, overrides } => {
+            let meal = meals::resolve(db, foods, &name, &overrides).await?;
+            let requests = meal
+                .items
+                .into_iter()
+                .map(|(item, grams)| ValidPortion {
+                    item,
+                    grams,
+                    estimates: BTreeMap::new(),
+                })
+                .collect();
+            (requests, Some(meal.name))
+        }
+    };
     let prepared = prepare(db, foods, &requests).await?;
     let photo = match upload {
         Some(upload) => Some(store_photo(photos, upload).await?),
@@ -982,6 +1131,7 @@ pub async fn log_meal(
         normalized: &normalized,
         eaten_at: &stored_at,
         day: CalendarDay::of(at).to_string(),
+        meal_name: meal_name.as_deref(),
         note: note.as_deref(),
         photo: PhotoColumns::of(photo.as_ref()),
     };
@@ -1011,6 +1161,7 @@ struct NewLog<'a> {
     normalized: &'a str,
     eaten_at: &'a str,
     day: String,
+    meal_name: Option<&'a str>,
     note: Option<&'a str>,
     photo: PhotoColumns,
 }
@@ -1035,8 +1186,8 @@ async fn insert_log(
     }
     let photo = &row.photo;
     sqlx::query!(
-        "INSERT INTO meal_logs (id, eaten_at, day, note, photo_id, photo_width, photo_height, photo_thumbnail_width, photo_thumbnail_height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        row.id, row.eaten_at, row.day, row.note,
+        "INSERT INTO meal_logs (id, eaten_at, day, meal_name, note, photo_id, photo_width, photo_height, photo_thumbnail_width, photo_thumbnail_height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        row.id, row.eaten_at, row.day, row.meal_name, row.note,
         photo.id, photo.width, photo.height, photo.thumbnail_width, photo.thumbnail_height)
     .execute(&mut *transaction)
     .await?;

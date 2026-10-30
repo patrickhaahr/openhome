@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO meal_logs (id, eaten_at, day, meal_name, note, photo_id, photo_width, photo_height, photo_thumbnail_width, photo_thumbnail_height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "343ce158b162882281bdcc7993aeaefe8e7da2cde9d6392d10bcfebfabc09c63"
+}

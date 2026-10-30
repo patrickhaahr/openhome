@@ -25,6 +25,7 @@ use crate::{
             self, EditMealLog, LogMeal, Logged, MealLog, MealLogError, MealLogs, MealLogsQuery,
         },
         meal_photos::{MealPhotos, PHOTO_BODY_LIMIT, PhotoError, Upload, Variant},
+        meals::{self, EditMeal, Meal, MealError, Meals, SaveMeal, Saved},
         nova::{self, ClassifiedFood, ClassifyFood},
         open_food_facts::{OpenFoodFacts, ProviderError},
         products::{self, LinkProduct, Linked, ProductError, ProductLookup},
@@ -34,9 +35,9 @@ use crate::{
 pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) -> Router<AppState> {
     // Only the routes that carry a photo raise Axum's default body limit.
     let photo_limit = DefaultBodyLimit::max(PHOTO_BODY_LIMIT);
-    // Foods come from food.db with their NOVA Classes from app.db; Meal Logs and Products live
-    // in app.db and take values from food.db and Open Food Facts; Meal Logs keep photos in the
-    // data directory.
+    // Foods come from food.db with their NOVA Classes from app.db; Meals, Meal Logs and Products
+    // live in app.db and take values from food.db and Open Food Facts; Meal Logs keep photos in
+    // the data directory.
     Router::new()
         .route("/api/nutrition/foods", get(search_foods))
         .route("/api/nutrition/foods/{food_id}", get(food))
@@ -46,6 +47,11 @@ pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) ->
         )
         .route("/api/nutrition/products", axum::routing::post(link_product))
         .route("/api/nutrition/products/{barcode}", get(lookup_product))
+        .route("/api/nutrition/meals", get(list_meals).post(save_meal))
+        .route(
+            "/api/nutrition/meals/{id}",
+            axum::routing::patch(update_meal).delete(delete_meal),
+        )
         .route(
             "/api/nutrition/meal-logs",
             get(list_meal_logs).post(log_meal.layer(photo_limit)),
@@ -148,6 +154,48 @@ async fn link_product(
         StatusCode::OK
     };
     Ok((status, Json(linked)))
+}
+
+fn meal_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, MealError> {
+    body.map(|Json(body)| body)
+        .map_err(|rejection| MealError::Validation(rejection.body_text()))
+}
+
+async fn list_meals(State(state): State<AppState>) -> Result<Json<Meals>, MealError> {
+    Ok(Json(meals::meals(&state.db).await?))
+}
+
+async fn save_meal(
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
+    request: Result<Json<SaveMeal>, JsonRejection>,
+) -> Result<(StatusCode, Json<Saved>), MealError> {
+    let saved = meals::save_meal(&state.db, &foods, meal_body(request)?).await?;
+    let status = if saved.replayed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    Ok((status, Json(saved)))
+}
+
+async fn update_meal(
+    State(state): State<AppState>,
+    Extension(foods): Extension<FoodDatabase>,
+    Path(id): Path<String>,
+    request: Result<Json<EditMeal>, JsonRejection>,
+) -> Result<Json<Meal>, MealError> {
+    Ok(Json(
+        meals::update_meal(&state.db, &foods, &id, meal_body(request)?).await?,
+    ))
+}
+
+async fn delete_meal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, MealError> {
+    meals::delete_meal(&state.db, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, MealLogError> {
@@ -312,6 +360,31 @@ impl IntoResponse for MealLogError {
             Self::Conflict(message) => AppError::Conflict(message).into_response(),
             Self::Food(error) => error.into_response(),
             Self::Photo(error) => error.into_response(),
+            Self::Meal(error) => error.into_response(),
+            Self::Database(error) => AppError::Internal(error.into()).into_response(),
+        }
+    }
+}
+
+impl IntoResponse for MealError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Validation(message) => AppError::Validation(message).into_response(),
+            Self::NotFound(message) => AppError::NotFound(message).into_response(),
+            Self::Conflict(message) => AppError::Conflict(message).into_response(),
+            Self::NeedsUpdate(message) => {
+                let status = StatusCode::CONFLICT;
+                (
+                    status,
+                    Json(json!({
+                        "error": message,
+                        "status": status.as_u16(),
+                        "code": "meal_needs_update",
+                    })),
+                )
+                    .into_response()
+            }
+            Self::Food(error) => error.into_response(),
             Self::Database(error) => AppError::Internal(error.into()).into_response(),
         }
     }
