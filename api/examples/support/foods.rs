@@ -154,6 +154,7 @@ pub async fn seed_meals(
 ) -> anyhow::Result<()> {
     use Item::{Food, Product};
     use openhome_api::services::nutrition::meal_logs::{self, LogMeal, PortionRequest};
+    use openhome_api::services::nutrition::nova;
     use openhome_api::services::nutrition::products::{self, LinkProduct};
 
     products::link(
@@ -213,6 +214,13 @@ pub async fn seed_meals(
         )
         .await
         .map_err(|error| anyhow::anyhow!("seeding a synthetic meal failed: {error}"))?;
+    }
+    // Classified after logging, as the agent does the first time a Food is eaten; the rice stays
+    // unclassified so the preview shows a Portion left out of the NOVA 1 share.
+    for food_id in [3, 60, 907, 1693] {
+        nova::classify_food(db, foods, food_id, nova::ClassifyFood { nova_class: 1 })
+            .await
+            .map_err(|error| anyhow::anyhow!("classifying a synthetic Food failed: {error}"))?;
     }
     Ok(())
 }

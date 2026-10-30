@@ -155,6 +155,29 @@ a.food-day-key:active {
   letter-spacing: 0;
 }
 
+/* The NOVA 1 share: a figure with its name, the classified energy it is a share of beneath. */
+.food-nova {
+  display: grid;
+  gap: 0.25rem;
+}
+.food-nova-share {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.food-nova-name,
+.food-nova-detail {
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+  letter-spacing: 0;
+}
+.food-nova-detail {
+  font-size: 0.875rem;
+}
+
 /* Missing data is a dash; assistive technology still reads "Unknown". */
 .food [data-gap="true"]::before {
   content: "–";
@@ -263,6 +286,21 @@ a.food-day-key:active {
 .food-portion-name {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.food-portion-nova {
+  display: inline-block;
+  margin-inline-start: 0.5rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  background: var(--wash-strong);
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: 0.125em;
+}
+.food-portion-nova[data-nova="1"] {
+  color: var(--ink);
 }
 .food-portion-brand {
   display: block;

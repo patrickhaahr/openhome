@@ -123,6 +123,7 @@ function syntheticPng(width: number, height: number): string {
 
 /** Logs a synthetic meal through the API, as the agent does, and returns its day. */
 async function logMeal(meal: {
+  api?: string
   eatenAt: Date
   note?: string
   photo?: string
@@ -130,20 +131,23 @@ async function logMeal(meal: {
     { food_id: number; grams: number } | { barcode: string; grams: number }
   >
 }): Promise<{ id: string; day: string; eaten_at: string }> {
-  const response = await fetch(`${ready.url}/api/nutrition/meal-logs`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      eaten_at: meal.eatenAt.toISOString(),
-      note: meal.note,
-      photo: meal.photo,
-      portions: meal.portions,
-      request_id: crypto.randomUUID(),
-    }),
-  })
+  const response = await fetch(
+    `${meal.api ?? ready.url}/api/nutrition/meal-logs`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        eaten_at: meal.eatenAt.toISOString(),
+        note: meal.note,
+        photo: meal.photo,
+        portions: meal.portions,
+        request_id: crypto.randomUUID(),
+      }),
+    }
+  )
 
   expect(response.status).toBe(201)
 
@@ -327,7 +331,7 @@ test("a Product Portion is named with its brand and the day credits Open Food Fa
       [...row.children].map((child) => normalize(child.textContent)).join(" ")
     )
   ).toEqual([
-    "Vanilla Skyr, Synthetic Dairy 150 g 114 kcal",
+    "Vanilla Skyr, NOVA 3, Synthetic Dairy 150 g 114 kcal",
     "Oat flakes 40 g 148 kcal",
   ])
   expect(text(".food-portion-brand")).toContain(", Synthetic Dairy")
@@ -449,5 +453,88 @@ test("a meal's photo shows as a thumbnail, opens in full on selection and is rel
     const missing = await readMealPhoto(input)
     expect(missing.status).toBe(404)
     expect(missing.headers.get("cache-control")).toBe("no-store")
+  }
+})
+
+/** Sends an authenticated JSON write to an Axum fixture, as the agent's tools do. */
+async function write(
+  api: string,
+  method: "POST" | "PUT",
+  path: string,
+  body: Readonly<Record<string, string | number>>
+): Promise<number> {
+  const response = await fetch(`${api}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+
+  return response.status
+}
+
+test("the day shows its NOVA 1 share of classified energy and each Portion's NOVA Class", async () => {
+  // Classes outlive Meal Logs, so this day gets a fixture of its own.
+  const nova = await startAxumFixture()
+
+  try {
+    vi.stubEnv("OPENHOME_API_URL", nova.url)
+    const empty = await readNutritionDay({ day: "2026-01-15" })
+    await render(empty)
+    expect(rows(".food-nova")).toEqual([
+      "Unknown NOVA 1 Nothing classified yet",
+    ])
+
+    const barcode = "2001234567893"
+    expect(
+      await write(nova.url, "POST", "/api/nutrition/products", {
+        barcode,
+        food_id: 1693,
+        request_id: "dashboard-nova-link",
+      })
+    ).toBe(201)
+
+    for (const food of [3, 907])
+      expect(
+        await write(
+          nova.url,
+          "PUT",
+          `/api/nutrition/foods/${food}/nova-class`,
+          {
+            nova_class: 1,
+          }
+        )
+      ).toBe(200)
+
+    const meal = await logMeal({
+      api: nova.url,
+      eatenAt: new Date(Date.now() - 60_000),
+      portions: [
+        { food_id: 3, grams: 100 },
+        { food_id: 907, grams: 100 },
+        { barcode, grams: 100 },
+        { food_id: 300, grams: 100 },
+      ],
+    })
+
+    await render(await readNutritionDay({ day: meal.day }))
+
+    // Banana 90 and chicken 110 kcal are NOVA 1 of 276 classified kcal; the skyr Product is
+    // Open Food Facts' Class 3 and the rice is left out unclassified.
+    expect(rows(".food-nova")).toEqual([
+      "72 % NOVA 1 Unprocessed or minimally processed, of 276 classified kcal · 1 unclassified portion left out",
+    ])
+    expect(text(".food-portions .food-portion-nova")).toEqual([
+      ", NOVA 1",
+      ", NOVA 1",
+      ", NOVA 3",
+    ])
+    expect(
+      container.querySelector(".food-portion-nova")?.getAttribute("title")
+    ).toBe("NOVA 1: unprocessed or minimally processed")
+  } finally {
+    await nova.stop()
   }
 })
