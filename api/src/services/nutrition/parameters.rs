@@ -106,6 +106,12 @@ pub fn by_id(id: i64) -> Option<&'static Parameter> {
     PARAMETERS.iter().find(|parameter| parameter.id == id)
 }
 
+/// The vocabulary entry for a key.
+#[must_use]
+pub fn by_key(key: &str) -> Option<&'static Parameter> {
+    PARAMETERS.iter().find(|parameter| parameter.key == key)
+}
+
 const fn p(id: i64, key: &'static str, unit: Unit) -> Parameter {
     Parameter { id, key, unit }
 }
