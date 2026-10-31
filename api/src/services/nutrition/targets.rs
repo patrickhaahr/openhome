@@ -94,16 +94,16 @@ impl TrendWeight {
     }
 }
 
-/// Sex as the Mifflin–St Jeor formula takes it.
-#[derive(Clone, Copy, Debug)]
-enum Sex {
+/// Sex as the Mifflin–St Jeor formula and the NNR 2023 references take it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sex {
     Male,
     Female,
 }
 
 impl Sex {
     /// `male` or `female` in any case; the Profile stores free text, and nothing else is guessed.
-    fn parse(text: &str) -> Option<Self> {
+    pub(super) fn parse(text: &str) -> Option<Self> {
         match text.trim().to_lowercase().as_str() {
             "male" => Some(Self::Male),
             "female" => Some(Self::Female),

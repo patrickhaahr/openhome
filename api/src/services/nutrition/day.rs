@@ -1,7 +1,7 @@
 //! Nutrition Day: one Europe/Copenhagen calendar day's Meal Logs and the totals of every
 //! nutrient eaten and taken, summed from the Portions' and Supplement Doses' snapshots and split
-//! into food and supplement shares, with the compounds and Supplement Doses taken and the NOVA 1
-//! share.
+//! into food and supplement shares, with the compounds and Supplement Doses taken, the NOVA 1
+//! share and the micronutrient panel.
 
 use std::collections::BTreeMap;
 
@@ -14,6 +14,7 @@ use super::meal_logs::{
     self, KeyNutrients, MealLog, MealLogError, Selection, StoredLog, StoredPortion, Total,
     key_totals,
 };
+use super::micronutrients::{Diary, Micronutrients, Person};
 use super::nova::{NovaEnergy, NovaShare};
 use super::products::{LABEL_SOURCE, LabelSource};
 use super::supplements::{self, Compound, DoseSummary, StoredDose};
@@ -49,6 +50,9 @@ pub struct NutritionDay {
     pub totals: KeyNutrients<Total>,
     /// Calorie Target, Macro Targets and what was eaten against them, or why there are none.
     pub targets: Targets,
+    /// Vitamins and minerals against their Recommended Intakes and Upper Limits, or why the
+    /// panel is unavailable.
+    pub micronutrients: Micronutrients,
     /// Every per-100 g parameter in database order.
     pub nutrients: Vec<NutrientTotal>,
     /// Compounds without a database parameter, with the amounts taken, in the order first taken.
@@ -131,6 +135,12 @@ pub async fn nutrition_day(
 
     let totals = key_totals(&portions, &doses);
     let targets = Targets::new(targets::plan_day(db, day, today).await?, &totals);
+    let person = Person::read(db).await?;
+    let micronutrients = if person.is_ok() {
+        Diary::load(db, day, day).await?.evaluate(&person, day)
+    } else {
+        Diary::default().evaluate(&person, day)
+    };
     Ok(NutritionDay {
         day: day.to_string(),
         time_zone: calendar::TIME_ZONE_NAME,
@@ -138,6 +148,7 @@ pub async fn nutrition_day(
         day_end: calendar::iso(day.end()),
         totals,
         targets,
+        micronutrients,
         nutrients,
         compounds: Compounds::of(&doses).into_amounts(),
         supplement_doses: supplements::dose_totals(&doses),
