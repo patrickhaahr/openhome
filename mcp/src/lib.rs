@@ -1,7 +1,7 @@
 //! Hermes MCP adapter for OpenHome.
 //!
 //! A Streamable HTTP MCP server for read-only training and Food database reads, and writable
-//! Wishlists, Watchlists, Important Dates and Meal Logs. Each tool
+//! Wishlists, Watchlists, Important Dates, Meals, Supplements and Meal Logs. Each tool
 //! makes one authenticated API request and passes its JSON unchanged. The adapter has no
 //! database access or domain rules; Axum owns training interpretation, destination resolution
 //! and mutation deduplication (ADRs 0002 and 0005).
@@ -44,9 +44,10 @@ use important_dates::{
     UpdateImportantDateRequest,
 };
 use nutrition::{
-    ClassifyFoodRequest, FoodRequest, LinkProductRequest, LogMealRequest, LookupProductRequest,
-    MealLogRequest, MealLogsRequest, MealRequest, NutritionDayRequest, SaveMealRequest,
-    SearchFoodsRequest, UpdateMealLogRequest, UpdateMealRequest,
+    AddSupplementRequest, ClassifyFoodRequest, FoodRequest, LinkProductRequest, LogMealRequest,
+    LookupProductRequest, MealLogRequest, MealLogsRequest, MealRequest, NutritionDayRequest,
+    SaveMealRequest, SearchFoodsRequest, SupplementRequest, UpdateMealLogRequest,
+    UpdateMealRequest, UpdateSupplementRequest,
 };
 mod wishlist;
 use watchlist::{
@@ -119,25 +120,67 @@ save it under a name they choose. When the user names a known Meal (\"protein oa
 meals if needed and call log_meal with meal set to its name and an explicit eaten_at, without analysing any photo; put a \
 one-off amount in overrides, naming the item by its food_id or barcode, instead of editing the Meal. A logged Meal copies its \
 items with current values and records meal_name; update_meal and delete_meal never change past Meal Logs. On \
-meal_needs_update, search_foods for the Foods it names, update_meal its portions, then log it again.";
+meal_needs_update, search_foods for the Foods it names, update_meal its portions, then log it again. \
+Supplements are labelled products counted per dose (tablet, capsule, scoop or ml): vitamins, minerals, fish oil, creatine. \
+Protein powder, gainers and other packaged foods eaten by the scoop are Products, not Supplements: lookup_product and log \
+them as Portions in grams so their label's protein counts. Register a Supplement once from its label with add_supplement: \
+each per-dose amount the Food database has a parameter for goes in amounts by its key (vitamin_d, zinc, magnesium, epa, \
+dha, and energy_kcal or protein when the label states them) with the label's unit; anything else (creatine) goes in \
+compounds with g, mg or µg. Vitamin A, folate and niacin need their form from the ingredients (retinol or beta_carotene, \
+folic_acid or methylfolate, nicotinamide or nicotinic_acid) because supplement-only Upper Limits apply to those forms; \
+when the label does not say, assume retinol, folic_acid and nicotinamide. List supplements before adding to reuse a known \
+one. Log what the user took as supplement_doses (supplement_id and doses) in log_meal, beside any Portions or alone, at an \
+explicit eaten_at; a routine such as a morning stack can be a Meal with supplement_doses. A logged dose copies the label, \
+so update_supplement and delete_supplement never change past days; a Supplement a Meal takes cannot be deleted until \
+update_meal removes it. nutrition_day splits every total into food and supplements (fish and capsule EPA add up), gives \
+supplement_forms for vitamin A, folate and niacin, and lists compounds as amounts taken.";
 
-const MEALS: &str = "List every saved Meal by name: id, name and portions in order, each with food_id (null for \
+const SUPPLEMENTS: &str = "List every Supplement by name: id, name, dose_unit (tablet, capsule, scoop or ml), \
+amounts per dose (key, form or null, value, unit in the Food database parameter's unit) and compounds per dose (name, \
+value, unit). Works while the Food database is unavailable.";
+
+const ADD_SUPPLEMENT: &str = "Register a Supplement from its label once, before logging its first dose: a name unique in \
+any case, dose_unit (tablet, capsule, scoop or ml) and at least one per-dose amount or compound. amounts take Food database \
+parameter keys (vitamin_d, vitamin_b12, zinc, magnesium, iodine, epa, dha, energy_kcal, protein, ...) with the label's unit \
+(the parameter's unit, or g, mg or µg for masses; convert IU first); vitamin_a, folate, niacin_equivalent and niacin need \
+form. Other compounds (creatine) go in compounds with g, mg or µg; a parameter named as a compound is refused. Energy in kcal \
+or kJ is completed from the other. Never register protein powder: it is a Product logged in grams. Returns supplement (id, \
+name, dose_unit, amounts, compounds) and replayed. Generate a unique request_id per intended Supplement and reuse identical \
+arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed arguments are a 409 error \
+and a deleted Supplement is not recreated. A name another Supplement has is a 409 error; an unknown key, wrong unit or \
+missing form is a 400 error.";
+
+const UPDATE_SUPPLEMENT: &str = "Correct a Supplement by supplement_id: name, dose_unit, or a full replacement of its \
+amounts or compounds. Supplied fields change together; omitted fields are preserved; none may be null, and at least one \
+amount or compound must remain. Returns the updated Supplement. Past Meal Logs keep the doses they copied; Meals that take \
+it log its new label from now on. A missing Supplement is a 404 error and another Supplement's name a 409 error. After an \
+uncertain response, list supplements before retrying.";
+
+const DELETE_SUPPLEMENT: &str = "Permanently delete one Supplement by supplement_id. Past Meal Logs keep the doses they \
+copied. Returns deleted=true only after the API confirms removal; a missing Supplement is a 404 error, and a Supplement a \
+Meal takes is a 409 error naming the Meals (update_meal them first). An old add_supplement retry with its request_id \
+cannot recreate it. After an uncertain response, list supplements before retrying.";
+
+const MEALS: &str = "List every saved Meal by name: id, name, portions in order, each with food_id (null for \
 a Product), barcode (null for a Food), grams, the Food's Danish and English name (for a Product, the Food it is linked to) \
-and product (barcode, name, brand) or null. A Meal holds references, not nutrient values: values are copied when it is \
+and product (barcode, name, brand) or null, and supplement_doses in order (supplement_id, name, dose_unit, doses). A Meal \
+holds references, not nutrient values: values are copied when it is \
 logged with log_meal and meal. Works while the Food database is unavailable.";
 
-const SAVE_MEAL: &str = "Save a named Meal only when the user names it: 1-50 items in order, each a food_id from \
-search_foods or the barcode of a Product linked with link_product, listed once with edible grams. The name (1-100 \
+const SAVE_MEAL: &str = "Save a named Meal only when the user names it: up to 50 portions in order, each a food_id \
+from search_foods or the barcode of a Product linked with link_product, listed once with edible grams, and up to 50 \
+supplement_doses (supplement_id and doses, each Supplement once); at least one of either. The name (1-100 \
 characters) is unique in any case. Returns meal (id, name, portions as meals lists them) and replayed. Generate a unique \
 request_id per intended Meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns \
 replayed=true, changed arguments are a 409 error and a deleted Meal is not recreated. A name another Meal has is a 409 \
-error; an unknown food_id or an unlinked barcode is a 404 error; while the Food database is unavailable the result is a 503 \
-error with code food_database_unavailable.";
+error; an unknown food_id, unlinked barcode or unknown supplement_id is a 404 error; while the Food database is \
+unavailable, a Meal with portions is a 503 error with code food_database_unavailable.";
 
 const UPDATE_MEAL: &str = "Rename a Meal or replace its items by meal_id. Supplied fields change together; omitted \
 fields are preserved. name must stay unique in any case (another Meal's name is a 409 error); portions replaces every item \
-(food_id or a linked Product's barcode with edible grams, each once). Returns the updated Meal. Past Meal Logs made from \
-the Meal keep their Portions and meal_name. A missing Meal, food_id or unlinked barcode is a 404 error; replacing items \
+(food_id or a linked Product's barcode with edible grams, each once) and supplement_doses every dose (supplement_id and \
+doses); at least one item or dose must remain. Returns the updated Meal. Past Meal Logs made from \
+the Meal keep their Portions and meal_name. A missing Meal, food_id, unlinked barcode or supplement_id is a 404 error; replacing items \
 while the Food database is unavailable is a 503 error. After an uncertain response, list meals before retrying.";
 
 const DELETE_MEAL: &str = "Permanently delete one Meal by meal_id. Meal Logs made from it are unchanged. Returns \
@@ -279,20 +322,23 @@ ID after an uncertain response: an accepted retry returns replayed=true and the 
 food_id is a 409 error. An unknown food_id is a 404 error; a barcode Open Food Facts does not know is a 404 error with \
 code product_not_found; Open Food Facts not answering is a 503 error with code open_food_facts_unavailable.";
 
-const LOG_MEAL: &str = "Log one eating occasion as a Meal Log: either 1-50 Portions, each a food_id from \
+const LOG_MEAL: &str = "Log one eating occasion as a Meal Log: either up to 50 Portions, each a food_id from \
 search_foods or the barcode of a Product linked with link_product, with edible grams and optional estimates per 100 g for \
-values no source has, or a saved Meal's name in meal (any case; no photo analysis needed) with optional overrides giving \
-one-off grams to items named by their food_id or barcode, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
+values no source has, and/or up to 50 supplement_doses (supplement_id from supplements and doses), at least one in all, or \
+a saved Meal's name in meal (any case; no photo analysis needed) with optional overrides giving one-off grams to items \
+named by their food_id or barcode, or one-off doses to Supplements named by supplement_id, at an explicit eaten_at (RFC 3339 with an offset: the send time or the time the user \
 describes; never in the future), with an optional note and an optional photo (the user's JPEG or PNG as base64, at most \
 10 MB, stored without metadata as AVIF with a thumbnail). It counts toward the Europe/Copenhagen calendar day of eaten_at, \
 so past times backfill earlier days. Each Portion copies every per-100 g value (a Product's label values first, then its \
-linked Food's, then estimates), so later database updates, re-links and Meal edits never change it. Returns meal_log (id, \
+linked Food's, then estimates) and each Supplement Dose copies its label's per-dose amounts, so later database updates, \
+re-links, Supplement edits and Meal edits never change it. Returns meal_log (id, \
 eaten_at in Copenhagen time, day, meal_name (the Meal it was logged from, or null), note, portions with food_id, product (barcode, name, brand) or null, names, grams, \
 dataset_version, nova_class (the Product's or Food's, null while unclassified) and key nutrients energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol as {value, \
-unit, source}, totals as {value, unit, unknown_portions}, and photo with its size or null) and replayed. Generate a \
+unit, source}, supplement_doses (supplement_id, name, dose_unit, doses, amounts and compounds taken: per dose times doses), \
+totals as {value, unit, unknown_portions, food, supplements}, and photo with its size or null) and replayed. Generate a \
 unique request_id per intended meal and reuse identical arguments and ID after an uncertain response: an accepted retry returns replayed=true, changed \
 arguments conflict (409) and a deleted Meal Log is not recreated. A null value is unknown, never zero. An unknown food_id \
-or unlinked barcode is a 404 error, as is an unknown Meal name; an override naming no item of the Meal is a 400 error; a \
+, unlinked barcode or unknown supplement_id is a 404 error, as is an unknown Meal name; an override naming no item of the Meal is a 400 error; a \
 Meal naming a Food the current Food database no longer has is a 409 error with code meal_needs_update (update_meal it); \
 an estimate for a value the label or Food has is a 400 error; while the Food \
 database is unavailable the result is a 503 error with code food_database_unavailable. A photo that is not a JPEG or PNG is a 400 error and one over 10 MB or 12000 px a side is a 413 error; nothing is logged \
@@ -301,17 +347,19 @@ then.";
 const MEAL_LOGS: &str = "List Meal Logs for one Europe/Copenhagen calendar day (`day`) or an inclusive range of up \
 to 90 days (`from` and `to`), oldest first. Each has its id, eaten_at in Copenhagen time with its offset, day, \
 meal_name (the saved Meal it was logged from, or null), note, portions (food_id, Danish and English name, grams, dataset_version, nova_class and key nutrients as {value, unit, \
-source}) and \
-totals as {value, unit, unknown_portions}: the sum of the Portions that have a value and the count of those that do not. \
+source}), supplement_doses (supplement_id, name, dose_unit, doses, amounts and compounds taken) and \
+totals as {value, unit, unknown_portions, food, supplements}: food sums the Portions that have a value, unknown_portions \
+counts those that do not, supplements sums the doses whose label lists it, and value adds both. \
 A null value is unknown, never zero. Works while the Food database is unavailable.";
 
 const UPDATE_MEAL_LOG: &str = "Correct one Meal Log by meal_log_id. Supplied fields change together; omitted fields \
 are preserved. eaten_at moves it to that time's Europe/Copenhagen day; note null clears the note; portions replaces \
 every Portion (food_id or a linked Product's barcode, edible grams and optional estimates) with fresh values from the \
-current Products and Food database; photo (base64 JPEG or PNG, at \
+current Products and Food database; supplement_doses replaces every dose with the current Supplements' labels (at least one \
+Portion or dose must remain); photo (base64 JPEG or PNG, at \
 most 10 MB) replaces the photo and photo null removes it. Returns the updated Meal Log. A rejected photo changes nothing. \
-A missing Meal Log or food_id is a 404 error; replacing Portions while the Food database is unavailable is a 503 error. \
-After an uncertain response, list meal_logs for the day before retrying.";
+A missing Meal Log, food_id or supplement_id is a 404 error; replacing Portions while the Food database is unavailable is \
+a 503 error. After an uncertain response, list meal_logs for the day before retrying.";
 
 const DELETE_MEAL_LOG: &str = "Permanently delete one Meal Log by meal_log_id, removing it from its Europe/Copenhagen \
 day's totals. Returns deleted=true only after the API confirms removal; a missing Meal Log is a 404 error. An old \
@@ -320,11 +368,15 @@ log_meal retry with its request_id cannot recreate it. After an uncertain respon
 const NUTRITION_DAY: &str = "One Europe/Copenhagen calendar day of nutrition: day_start and day_end (a day can last 23 \
 or 25 hours), `totals` for energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol, `nutrients` \
 with the total of every per-100 g database parameter in database order (key, Danish and English name, group, unit), \
-`nova` with nova_1_share (kcal from NOVA Class 1 Portions divided by kcal from classified Portions, 0-1; null when \
-nothing classified has energy), nova_1_kcal, classified_kcal and unclassified_portions (left out of the share), and the \
-day's meal_logs in time order. Each total is {value, unit, unknown_portions}: value adds the Portions that have a \
-value, unknown_portions counts those that do not, and value is null when none has one, including a day without Meal \
-Logs. While the Food database is unavailable the result is a 503 error with code food_database_unavailable. Credit \
+`compounds` (named compounds without a parameter, such as creatine, with the amounts taken), `supplement_doses` (each \
+Supplement's doses that day added together: supplement_id, name, dose_unit, doses), `nova` with nova_1_share (kcal from \
+NOVA Class 1 Portions divided by kcal from classified Portions, 0-1; null when nothing classified has energy; Supplements \
+are left out), nova_1_kcal, classified_kcal and unclassified_portions (left out of the share), and the day's meal_logs in \
+time order. Each total is {value, unit, unknown_portions, food, supplements}: food adds the Portions that have a value, \
+unknown_portions counts those that do not, supplements adds the Supplement Doses whose label lists it, value adds both \
+(so energy and protein a label states count toward eaten), and each is null when nothing has one, including a day \
+without Meal Logs. Nutrients a Supplement names by form also give supplement_forms [{form, value}], the supplement share \
+of folic_acid, retinol, nicotinamide and so on. While the Food database is unavailable the result is a 503 error with code food_database_unavailable. Credit \
 `source.credit` wherever values are shown.";
 
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
@@ -1173,6 +1225,81 @@ impl OpenHomeTools {
             .request(
                 reqwest::Method::DELETE,
                 &["api", "nutrition", "meals", &meal_id],
+                None,
+                &[],
+            )
+            .await
+    }
+
+    #[tool(
+        description = SUPPLEMENTS,
+        annotations(title = "Supplements", read_only_hint = true, open_world_hint = false)
+    )]
+    async fn supplements(&self) -> CallToolResult {
+        self.api.get(&["api", "nutrition", "supplements"]).await
+    }
+
+    #[tool(
+        description = ADD_SUPPLEMENT,
+        annotations(
+            title = "Add a Supplement",
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn add_supplement(
+        &self,
+        Parameters(request): Parameters<AddSupplementRequest>,
+    ) -> CallToolResult {
+        self.api
+            .post(&["api", "nutrition", "supplements"], json!(request))
+            .await
+    }
+
+    #[tool(
+        description = UPDATE_SUPPLEMENT,
+        annotations(
+            title = "Update a Supplement",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn update_supplement(
+        &self,
+        Parameters(request): Parameters<UpdateSupplementRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PATCH,
+                &["api", "nutrition", "supplements", &request.supplement_id],
+                Some(json!(request)),
+                &[],
+            )
+            .await
+    }
+
+    #[tool(
+        description = DELETE_SUPPLEMENT,
+        annotations(
+            title = "Delete a Supplement",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_supplement(
+        &self,
+        Parameters(SupplementRequest { supplement_id }): Parameters<SupplementRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::DELETE,
+                &["api", "nutrition", "supplements", &supplement_id],
                 None,
                 &[],
             )
