@@ -84,6 +84,17 @@ impl CalendarDay {
         Some((monday, sunday))
     }
 
+    /// The first and last day of the calendar month containing this day, if both are
+    /// representable.
+    #[must_use]
+    pub fn month_bounds(self) -> Option<(Self, Self)> {
+        let first = self.0.with_day(1)?;
+        let last = first
+            .checked_add_months(chrono::Months::new(1))?
+            .pred_opt()?;
+        Some((Self(first), Self(last)))
+    }
+
     /// Local midnight at the start of the day.
     #[must_use]
     pub fn start(self) -> DateTime<Utc> {

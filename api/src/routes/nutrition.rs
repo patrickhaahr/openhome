@@ -30,6 +30,7 @@ use crate::{
         nova::{self, ClassifiedFood, ClassifyFood},
         open_food_facts::{OpenFoodFacts, ProviderError},
         products::{self, LinkProduct, Linked, ProductError, ProductLookup},
+        summary::{self, NutritionSummary, SummaryQuery},
         supplements::{
             self, AddSupplement, Added, EditSupplement, Supplement, SupplementError, Supplements,
         },
@@ -83,6 +84,7 @@ pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) ->
             get(thumbnail),
         )
         .route("/api/nutrition/days/{day}", get(nutrition_day))
+        .route("/api/nutrition/summary", get(nutrition_summary))
         .route(
             "/api/nutrition/goal",
             get(nutrition_goal).put(set_nutrition_goal),
@@ -410,6 +412,23 @@ async fn nutrition_day(
     let day = meal_logs::parse_day(&day, "day")?;
     Ok(Json(
         day::nutrition_day(&state.db, &foods, day, today()).await?,
+    ))
+}
+
+/// Every Trends series over a range of up to 365 days, by day, ISO week or calendar month.
+async fn nutrition_summary(
+    State(state): State<AppState>,
+    query: Result<Query<SummaryQuery>, QueryRejection>,
+) -> Result<Json<NutritionSummary>, MealLogError> {
+    let Query(query) = query.map_err(|_| {
+        MealLogError::Validation(
+            "give from and to (YYYY-MM-DD) and aggregation day, week or month; no other \
+             parameters are accepted"
+                .into(),
+        )
+    })?;
+    Ok(Json(
+        summary::nutrition_summary(&state.db, &query, today()).await?,
     ))
 }
 

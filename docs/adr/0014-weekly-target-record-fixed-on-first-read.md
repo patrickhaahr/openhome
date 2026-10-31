@@ -17,6 +17,13 @@ Calorie Target applies the Nutrition Goal in effect on each day to the week's
 stored expenditure, so a mid-week change applies from its day, and earlier days
 keep the goal they had.
 
+A Nutrition Summary over a range reads each of its days, so it fixes every
+unstored week up to the current one exactly as the Nutrition Day does. Computing
+summary weeks without storing them was rejected: a backfill between two reads
+would make the Trends view and a later Day view disagree about the same past
+Calorie Target, which is the rewrite this record exists to prevent. A year's
+range stores at most 53 rows on its first read and none after that.
+
 ## Considered Options
 
 - A Monday job: needs a scheduler and misses Mondays while the API is down;

@@ -46,9 +46,9 @@ const FULL_BLEND_DAYS: usize = 14;
 const ACTIVITY_FACTOR: f64 = 1.5;
 const PROTEIN_G_PER_KG: f64 = 2.2;
 const FAT_FLOOR_G_PER_KG: f64 = 0.7;
-const KCAL_PER_G_PROTEIN: f64 = 4.0;
-const KCAL_PER_G_CARBS: f64 = 4.0;
-const KCAL_PER_G_FAT: f64 = 9.0;
+pub(super) const KCAL_PER_G_PROTEIN: f64 = 4.0;
+pub(super) const KCAL_PER_G_CARBS: f64 = 4.0;
+pub(super) const KCAL_PER_G_FAT: f64 = 9.0;
 
 /// Trend Weight by day: the moving average after each weigh-in, in date order.
 #[derive(Clone, Debug, Default)]
@@ -408,7 +408,7 @@ pub async fn plan_day(
 }
 
 /// Body Weight up to `to`, in date order.
-async fn weigh_ins(
+pub(super) async fn weigh_ins(
     db: &SqlitePool,
     to: CalendarDay,
 ) -> Result<Vec<(CalendarDay, f64)>, sqlx::Error> {
@@ -600,7 +600,7 @@ pub struct AvailableTargets {
     pub macros: MacroTargets,
 }
 
-fn round_to(value: f64, places: i32) -> f64 {
+pub(super) fn round_to(value: f64, places: i32) -> f64 {
     let scale = 10f64.powi(places);
     (value * scale).round() / scale
 }
