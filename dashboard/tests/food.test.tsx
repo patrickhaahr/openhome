@@ -902,3 +902,202 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
     await targets.stop()
   }
 })
+
+/** A JSON value as a test request body holds it. */
+type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly Json[]
+  | { readonly [key: string]: Json }
+
+/** A Supplement or Meal Log write as the agent sends it, with its request ID. */
+type AgentWrite = {
+  readonly request_id: string
+  readonly [field: string]: Json
+}
+
+/** Posts `body` to the fixture as the agent does and returns the answer `schema` parses. */
+async function post<T>(
+  api: string,
+  path: string,
+  body: AgentWrite,
+  schema: z.ZodType<T>
+): Promise<T> {
+  const response = await fetch(`${api}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+
+  expect(response.status).toBe(201)
+
+  return schema.parse(await response.json())
+}
+
+/** One panel row's part, by the row's nutrient key. */
+function micro(key: string, part: string): string {
+  return normalize(
+    container.querySelector(`.food-micro-list li[data-key="${key}"] ${part}`)
+      ?.textContent
+  )
+}
+
+test("the day shows vitamins and minerals against their Recommended Intakes, adequate intakes, the supplement split, a caution and a red cut down", async () => {
+  // The Profile outlives Meal Logs, so this day gets a fixture of its own.
+  const micros = await startAxumFixture()
+
+  try {
+    vi.stubEnv("OPENHOME_API_URL", micros.url)
+    const today = trainingDayOn(new Date())
+    await render(await readNutritionDay({ day: today }))
+    expect(text(".food-micros h2")).toEqual([
+      "No vitamin and mineral panel yet",
+    ])
+    expect(text(".food-micros p")).toEqual([
+      "The micronutrient panel needs the Profile's sex (male or female) and birth date.",
+      "Sex and birth date are set on the Workout page's Body view.",
+    ])
+
+    // A woman who turned 30 120 days ago.
+    const birthday = shiftDay(today, -120)
+
+    const birthDate =
+      `${Number(birthday.slice(0, 4)) - 30}${birthday.slice(4)}`.replace(
+        "-02-29",
+        "-02-28"
+      )
+
+    expect(
+      await write(micros.url, "PATCH", "/api/profile", {
+        sex: "female",
+        birth_date: birthDate,
+      })
+    ).toBe(200)
+
+    const supplementId = z.object({ supplement: z.object({ id: z.string() }) })
+
+    const vitaminD = (
+      await post(
+        micros.url,
+        "/api/nutrition/supplements",
+        {
+          name: "Vitamin D 150",
+          dose_unit: "capsule",
+          amounts: [{ key: "vitamin_d", value: 150, unit: "µg" }],
+          request_id: crypto.randomUUID(),
+        },
+        supplementId
+      )
+    ).supplement.id
+
+    const magnesium = (
+      await post(
+        micros.url,
+        "/api/nutrition/supplements",
+        {
+          name: "Magnesium",
+          dose_unit: "tablet",
+          amounts: [{ key: "magnesium", value: 300, unit: "mg" }],
+          request_id: crypto.randomUUID(),
+        },
+        supplementId
+      )
+    ).supplement.id
+
+    // Two days ago a 150 µg vitamin D capsule alone; today another, a magnesium tablet and
+    // 200 g of banana. Vitamin D averages 150 µg over the 2 logged days, above its 100 µg Upper
+    // Limit: cut down. Magnesium's supplement-only limit of 250 mg is passed today only.
+    const mealLog = z.object({ meal_log: z.object({ day: z.string() }) })
+
+    await post(
+      micros.url,
+      "/api/nutrition/meal-logs",
+      {
+        eaten_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        supplement_doses: [{ supplement_id: vitaminD, doses: 1 }],
+        request_id: crypto.randomUUID(),
+      },
+      mealLog
+    )
+
+    const meal = (
+      await post(
+        micros.url,
+        "/api/nutrition/meal-logs",
+        {
+          eaten_at: new Date(Date.now() - 1000).toISOString(),
+          portions: [{ food_id: 3, grams: 200 }],
+          supplement_doses: [
+            { supplement_id: vitaminD, doses: 1 },
+            { supplement_id: magnesium, doses: 1 },
+          ],
+          request_id: crypto.randomUUID(),
+        },
+        mealLog
+      )
+    ).meal_log
+
+    await render(await readNutritionDay({ day: meal.day }))
+
+    expect(text(".food-micros > h2")).toEqual(["Vitamins and minerals"])
+    expect(text(".food-micros > .food-micros-basis")[0]).toBe(
+      "Recommended Intakes for women 25–50 years · Upper Limits on 2 logged days of the last 7"
+    )
+    expect(text(".food-micro-group h3")).toEqual([
+      "Vitamins",
+      "Minerals",
+      "Omega-3",
+    ])
+
+    // Banana's 18 mg vitamin C of 95 mg: a recommended intake, no Upper Limit.
+    expect(micro("vitamin_c", ".food-micro-name")).toBe("Vitamin C")
+    expect(micro("vitamin_c", ".food-micro-percent")).toBe("18 %")
+    expect(micro("vitamin_c", ".food-micro-amount")).toBe("18 / 95 mg")
+    expect(
+      container
+        .querySelector('.food-micro-list li[data-key="vitamin_c"]')
+        ?.hasAttribute("data-limit")
+    ).toBe(false)
+
+    // Vitamin D: far past its Recommended Intake, which is fine, but habitually above its limit.
+    expect(micro("vitamin_d", ".food-micro-percent")).toBe("1,500 %")
+    expect(micro("vitamin_d", ".food-micro-amount")).toBe("150 / 10 µg")
+    expect(micro("vitamin_d", ".food-micro-split")).toBe(
+      "Food unknown · supplements 150 µg"
+    )
+    expect(micro("vitamin_d", ".food-micro-limit")).toBe(
+      "Cut down: 7-day average 150 of 100 µg"
+    )
+
+    // Magnesium: an adequate intake, above its supplement-only limit today only.
+    expect(micro("magnesium", ".food-micro-name")).toBe(
+      "Magnesium, adequate intake AI"
+    )
+    expect(micro("magnesium", ".food-micro-percent")).toBe("100 %")
+    expect(micro("magnesium", ".food-micro-limit")).toBe(
+      "Above the Upper Limit today: 300 of 250 mg from supplements"
+    )
+
+    expect(
+      [...container.querySelectorAll(".food-micro-list li[data-limit]")].map(
+        (row) => [row.getAttribute("data-key"), row.getAttribute("data-limit")]
+      )
+    ).toEqual([
+      ["vitamin_d", "cut_down"],
+      ["magnesium", "caution"],
+    ])
+
+    // Nothing logged has a vitamin K value: a dash, never zero.
+    expect(micro("vitamin_k", ".food-micro-percent")).toBe("Unknown")
+    expect(micro("epa_dha", ".food-micro-name")).toBe(
+      "EPA+DHA, adequate intake AI"
+    )
+  } finally {
+    await micros.stop()
+  }
+})
