@@ -944,9 +944,11 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "metric_trend",
             "noop_workout_detail",
             "nutrition_day",
+            "nutrition_goal",
             "recovery_on_day",
             "save_meal",
             "search_foods",
+            "set_nutrition_goal",
             "sleep_recent",
             "supplements",
             "training_context",
@@ -993,6 +995,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                     | "delete_supplement"
                     | "link_product"
                     | "classify_food"
+                    | "set_nutrition_goal"
             )),
             "{}",
             tool.name
@@ -1008,6 +1011,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 | "add_supplement"
                 | "link_product"
                 | "classify_food"
+                | "set_nutrition_goal"
         ) {
             let annotations = tool.annotations.as_ref().unwrap();
             assert_eq!(annotations.destructive_hint, Some(false));
@@ -1050,7 +1054,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         }
         let required = match tool.name.as_ref() {
             "household_users" | "wishlists" | "watchlist_entries" | "important_dates"
-            | "meal_logs" | "meals" | "supplements" => {
+            | "meal_logs" | "meals" | "supplements" | "nutrition_goal" => {
                 assert!(tool.input_schema.get("required").is_none());
                 continue;
             }
@@ -1080,6 +1084,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "lookup_product" => json!(["barcode"]),
             "link_product" => json!(["barcode", "food_id", "request_id"]),
             "classify_food" => json!(["food_id", "nova_class"]),
+            "set_nutrition_goal" => json!(["direction"]),
             "update_meal_log" | "delete_meal_log" => json!(["meal_log_id"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "noop_workout_detail" => json!(["source", "start"]),
@@ -1106,11 +1111,98 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 || tool.name.contains("food")
                 || tool.name.contains("product")
                 || tool.name.contains("meal")
-                || tool.name.contains("supplement"))
+                || tool.name.contains("supplement")
+                || tool.name.contains("nutrition_goal"))
                 && !description.contains('\n')
         }));
     }
 
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn nutrition_goal_tools_read_and_set_the_goal_and_pass_errors_and_targets_through() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let instructions = client
+        .peer_info()
+        .unwrap()
+        .instructions
+        .clone()
+        .unwrap_or_default();
+    assert!(
+        instructions.contains("set_nutrition_goal") && instructions.contains("remaining_kcal"),
+        "{instructions}"
+    );
+    let http = reqwest::Client::new();
+    let direct = |method: reqwest::Method, path: &'static str, body: Option<Value>| {
+        let mut request = http
+            .request(method, format!("{api}{path}"))
+            .bearer_auth(API_KEY);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        async move { request.send().await.unwrap().json::<Value>().await.unwrap() }
+    };
+
+    let goal = wishlist_call(&client, "nutrition_goal", json!({})).await;
+    assert_eq!(goal.is_error, Some(false), "{goal:?}");
+    assert_eq!(
+        goal.structured_content.unwrap(),
+        json!({
+            "goal": {"direction": "lose", "rate_kg_per_week": 0.5, "effective_from": null},
+            "history": [],
+        })
+    );
+
+    let set = wishlist_call(
+        &client,
+        "set_nutrition_goal",
+        json!({"direction": "lean_bulk", "rate_kg_per_week": 0.25}),
+    )
+    .await;
+    assert_eq!(set.is_error, Some(false), "{set:?}");
+    let set = set.structured_content.unwrap();
+    assert_eq!(set["goal"]["direction"], "lean_bulk", "{set}");
+    assert_eq!(set["goal"]["rate_kg_per_week"], 0.25, "{set}");
+    assert_eq!(
+        direct(reqwest::Method::GET, "/api/nutrition/goal", None).await,
+        set
+    );
+    let maintain = wishlist_call(
+        &client,
+        "set_nutrition_goal",
+        json!({"direction": "maintain"}),
+    )
+    .await;
+    assert_eq!(maintain.is_error, Some(false), "{maintain:?}");
+    assert_eq!(
+        maintain.structured_content.unwrap()["goal"]["direction"],
+        "maintain"
+    );
+
+    let invalid = json!({"direction": "lean_bulk", "rate_kg_per_week": 0.5});
+    let result = wishlist_call(&client, "set_nutrition_goal", invalid.clone()).await;
+    assert_eq!(result.is_error, Some(true));
+    let error = result.structured_content.unwrap();
+    assert_eq!(error["status"], 400, "{error}");
+    assert_eq!(
+        direct(reqwest::Method::PUT, "/api/nutrition/goal", Some(invalid)).await,
+        error
+    );
+
+    // Without a Profile the day's targets say what they need.
+    let day = wishlist_call(&client, "nutrition_day", json!({"day": "2026-10-29"}))
+        .await
+        .structured_content
+        .unwrap();
+    assert_eq!(day["targets"]["state"], "unavailable", "{day}");
+    assert_eq!(
+        day["targets"]["missing"],
+        json!(["height", "sex", "birth_date", "body_weight"])
+    );
     client.cancel().await.unwrap();
 }
 

@@ -1,5 +1,5 @@
-//! Food database, NOVA Class, Product, Meal, Supplement and Meal Log tool arguments, forwarded
-//! unchanged to Axum's nutrition routes.
+//! Food database, NOVA Class, Product, Meal, Supplement, Meal Log and Nutrition Goal tool
+//! arguments, forwarded unchanged to Axum's nutrition routes.
 
 use std::collections::BTreeMap;
 
@@ -337,4 +337,24 @@ pub struct UpdateSupplementRequest {
 pub struct SupplementRequest {
     /// The Supplement's `id` from `supplements` or `add_supplement`.
     pub supplement_id: String,
+}
+
+/// Losing, keeping or gaining weight.
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GoalDirection {
+    Lose,
+    Maintain,
+    LeanBulk,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetNutritionGoalRequest {
+    /// `lose`, `maintain` or `lean_bulk`.
+    pub direction: GoalDirection,
+    /// Kilograms per week: 0.25, 0.5 or 0.75 to lose, 0.1 or 0.25 to lean bulk; omit or 0 to
+    /// maintain.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_kg_per_week: Option<f64>,
 }

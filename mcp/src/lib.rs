@@ -46,8 +46,8 @@ use important_dates::{
 use nutrition::{
     AddSupplementRequest, ClassifyFoodRequest, FoodRequest, LinkProductRequest, LogMealRequest,
     LookupProductRequest, MealLogRequest, MealLogsRequest, MealRequest, NutritionDayRequest,
-    SaveMealRequest, SearchFoodsRequest, SupplementRequest, UpdateMealLogRequest,
-    UpdateMealRequest, UpdateSupplementRequest,
+    SaveMealRequest, SearchFoodsRequest, SetNutritionGoalRequest, SupplementRequest,
+    UpdateMealLogRequest, UpdateMealRequest, UpdateSupplementRequest,
 };
 mod wishlist;
 use watchlist::{
@@ -133,7 +133,13 @@ one. Log what the user took as supplement_doses (supplement_id and doses) in log
 explicit eaten_at; a routine such as a morning stack can be a Meal with supplement_doses. A logged dose copies the label, \
 so update_supplement and delete_supplement never change past days; a Supplement a Meal takes cannot be deleted until \
 update_meal removes it. nutrition_day splits every total into food and supplements (fish and capsule EPA add up), gives \
-supplement_forms for vitamin A, folate and niacin, and lists compounds as amounts taken.";
+supplement_forms for vitamin A, folate and niacin, and lists compounds as amounts taken. \
+nutrition_day also gives the day's targets: calorie_target_kcal, eaten_kcal and remaining_kcal, the protein target \
+(met once reached), the fat floor and carbs, so answer \"what can I still eat today?\" from remaining_kcal and the \
+macros still below target. The Calorie Target is fixed each Monday from the Estimated Expenditure and follows the \
+Nutrition Goal; when targets are unavailable, tell the user what the reason says is missing (the Profile's height, sex \
+or birth date, or a Body Weight) instead of guessing. Read the goal with nutrition_goal and change it with \
+set_nutrition_goal only when the user asks; it applies from today and never changes past days.";
 
 const SUPPLEMENTS: &str = "List every Supplement by name: id, name, dose_unit (tablet, capsule, scoop or ml), \
 amounts per dose (key, form or null, value, unit in the Food database parameter's unit) and compounds per dose (name, \
@@ -366,7 +372,11 @@ day's totals. Returns deleted=true only after the API confirms removal; a missin
 log_meal retry with its request_id cannot recreate it. After an uncertain response, list meal_logs before retrying.";
 
 const NUTRITION_DAY: &str = "One Europe/Copenhagen calendar day of nutrition: day_start and day_end (a day can last 23 \
-or 25 hours), `totals` for energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol, `nutrients` \
+or 25 hours), `totals` for energy_kcal, protein, available_carbohydrate, fat, dietary_fibre and alcohol, `targets` \
+(state available: trend_weight_kg, bmr_kcal, estimated_expenditure_kcal with its expenditure_basis, the goal in effect, \
+calorie_target_kcal (the week's expenditure plus the goal's rate, never below BMR), eaten_kcal, remaining_kcal and \
+macros: protein target_g with status met or below, fat floor_g with status (below means under the floor) and carbs \
+target_g, never graded; state unavailable: missing [height, sex, birth_date, body_weight] and a reason), `nutrients` \
 with the total of every per-100 g database parameter in database order (key, Danish and English name, group, unit), \
 `compounds` (named compounds without a parameter, such as creatine, with the amounts taken), `supplement_doses` (each \
 Supplement's doses that day added together: supplement_id, name, dose_unit, doses), `nova` with nova_1_share (kcal from \
@@ -378,6 +388,16 @@ unknown_portions counts those that do not, supplements adds the Supplement Doses
 without Meal Logs. Nutrients a Supplement names by form also give supplement_forms [{form, value}], the supplement share \
 of folic_acid, retinol, nicotinamide and so on. While the Food database is unavailable the result is a 503 error with code food_database_unavailable. Credit \
 `source.credit` wherever values are shown.";
+
+const NUTRITION_GOAL: &str = "The user's Nutrition Goal in effect today (direction lose, maintain or lean_bulk with \
+rate_kg_per_week, and effective_from, the Europe/Copenhagen day it was set, null for the default of losing 0.5 kg per \
+week) and its history of changes, oldest first.";
+
+const SET_NUTRITION_GOAL: &str = "Set the user's Nutrition Goal from today (Europe/Copenhagen), only when the user asks: \
+direction lose with rate_kg_per_week 0.25, 0.5 or 0.75; maintain (no rate); or lean_bulk with 0.1 or 0.25. Earlier days \
+keep the goal they had, and a second change today replaces the first. Calorie Targets from today use the week's fixed \
+Estimated Expenditure plus the rate x 7,700 kcal / 7, never below BMR. Returns the goal and its history like \
+nutrition_goal; any other rate is a 400 error.";
 
 /// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
 /// printed.
@@ -1401,6 +1421,38 @@ impl OpenHomeTools {
         Parameters(NutritionDayRequest { day }): Parameters<NutritionDayRequest>,
     ) -> CallToolResult {
         self.api.get(&["api", "nutrition", "days", &day]).await
+    }
+
+    #[tool(
+        description = NUTRITION_GOAL,
+        annotations(title = "Nutrition Goal", read_only_hint = true, open_world_hint = false)
+    )]
+    async fn nutrition_goal(&self) -> CallToolResult {
+        self.api.get(&["api", "nutrition", "goal"]).await
+    }
+
+    #[tool(
+        description = SET_NUTRITION_GOAL,
+        annotations(
+            title = "Set the Nutrition Goal",
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn set_nutrition_goal(
+        &self,
+        Parameters(request): Parameters<SetNutritionGoalRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PUT,
+                &["api", "nutrition", "goal"],
+                Some(json!(request)),
+                &[],
+            )
+            .await
     }
 
     #[tool(
