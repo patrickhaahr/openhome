@@ -440,7 +440,8 @@ _Avoid_: Pill log, intake
 
 **Trend Weight**:
 Body Weight smoothed over time so daily water and salt swings do not read as
-fat gain or loss.
+fat gain or loss. It starts at the first weigh-in, moves a tenth of the way to
+each later weigh-in, and holds on days without one.
 _Avoid_: Average weight, scale weight
 
 **Estimated Expenditure**:
@@ -458,7 +459,8 @@ _Avoid_: Diet, phase, deficit goal
 **Calorie Target**:
 The daily energy to eat: Estimated Expenditure adjusted by the Nutrition Goal's
 rate, set each Copenhagen Monday and held for that week, never below BMR. The
-same target applies on training and rest days.
+same target applies on training and rest days. A week's Estimated Expenditure is
+fixed the first time any of its days is read, from the data before its Monday.
 _Avoid_: Maintenance, budget, goal
 
 **Macro Targets**:

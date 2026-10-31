@@ -379,7 +379,7 @@ impl StoredPhoto {
 pub(super) struct StoredLog {
     id: String,
     eaten_at: String,
-    day: String,
+    pub day: String,
     meal_name: Option<String>,
     note: Option<String>,
     photo: Option<StoredPhoto>,

@@ -17,6 +17,7 @@ use super::meal_logs::{
 use super::nova::{NovaEnergy, NovaShare};
 use super::products::{LABEL_SOURCE, LabelSource};
 use super::supplements::{self, Compound, DoseSummary, StoredDose};
+use super::targets::{self, Targets};
 use crate::services::training::calendar::{self, CalendarDay};
 
 /// The total of one nutrient over the day's Portions and Supplement Doses.
@@ -46,6 +47,8 @@ pub struct NutritionDay {
     pub day_end: String,
     /// Energy and macronutrients.
     pub totals: KeyNutrients<Total>,
+    /// Calorie Target, Macro Targets and what was eaten against them, or why there are none.
+    pub targets: Targets,
     /// Every per-100 g parameter in database order.
     pub nutrients: Vec<NutrientTotal>,
     /// Compounds without a database parameter, with the amounts taken, in the order first taken.
@@ -61,11 +64,14 @@ pub struct NutritionDay {
     pub label_source: LabelSource,
 }
 
-/// The day's Meal Logs and the totals of every parameter, with units; unknown is null.
+/// The day's Meal Logs and the totals of every parameter, with units (unknown is null), and its
+/// targets; reading a day may fix its week's target record (`targets`), with `today` deciding
+/// whether the week has started.
 pub async fn nutrition_day(
     db: &SqlitePool,
     foods: &FoodDatabase,
     day: CalendarDay,
+    today: CalendarDay,
 ) -> Result<NutritionDay, MealLogError> {
     let (parameters, source) = foods.nutrient_parameters().await?;
     let logs = meal_logs::load(db, &Selection::Days(day, day), true).await?;
@@ -124,12 +130,14 @@ pub async fn nutrition_day(
     }
 
     let totals = key_totals(&portions, &doses);
+    let targets = Targets::new(targets::plan_day(db, day, today).await?, &totals);
     Ok(NutritionDay {
         day: day.to_string(),
         time_zone: calendar::TIME_ZONE_NAME,
         day_start: calendar::iso(day.start()),
         day_end: calendar::iso(day.end()),
         totals,
+        targets,
         nutrients,
         compounds: Compounds::of(&doses).into_amounts(),
         supplement_doses: supplements::dose_totals(&doses),

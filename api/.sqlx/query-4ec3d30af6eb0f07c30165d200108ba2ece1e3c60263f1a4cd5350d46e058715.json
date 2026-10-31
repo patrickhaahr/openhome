@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO nutrition_goals (effective_from, direction, rate_kg_per_week)\n        VALUES (?1, ?2, ?3)\n        ON CONFLICT (effective_from) DO UPDATE SET direction = excluded.direction,\n            rate_kg_per_week = excluded.rate_kg_per_week,\n            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "4ec3d30af6eb0f07c30165d200108ba2ece1e3c60263f1a4cd5350d46e058715"
+}
