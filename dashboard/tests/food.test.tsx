@@ -27,7 +27,11 @@ import {
   type DoseUnit,
   type NutritionDayState,
 } from "@/lib/nutrition"
-import { readMealPhoto, readNutritionDay } from "@/lib/nutrition.server"
+import {
+  readMealPhoto,
+  readNutritionDay,
+  writeNutritionGoal,
+} from "@/lib/nutrition.server"
 import { trainingDayOn } from "@/lib/workout"
 import { startAxumFixture } from "./support/axum-fixture"
 
@@ -187,6 +191,11 @@ async function logMeal(meal: {
   return body.meal_log
 }
 
+let refreshWork: Promise<void> = Promise.resolve()
+
+let goalWork: Promise<unknown> = Promise.resolve()
+
+/** Renders the Day view; after a goal change it reads the same day again, as the page does. */
 async function render(data: NutritionDayState): Promise<void> {
   const router = createRouter({
     routeTree: createRootRoute(),
@@ -197,7 +206,20 @@ async function render(data: NutritionDayState): Promise<void> {
   await act(async () =>
     root.render(
       <RouterContextProvider router={router}>
-        <FoodDay data={data} />
+        <FoodDay
+          data={data}
+          saveGoal={(goal) => {
+            const work = writeNutritionGoal(goal)
+            goalWork = work
+
+            return work
+          }}
+          reload={() => {
+            refreshWork = readNutritionDay({ day: data.day }).then(render)
+
+            return refreshWork
+          }}
+        />
       </RouterContextProvider>
     )
   )
@@ -678,7 +700,7 @@ test("a meal's photo shows as a thumbnail, opens in full on selection and is rel
 /** Sends an authenticated JSON write to an Axum fixture, as the agent's tools do. */
 async function write(
   api: string,
-  method: "POST" | "PUT",
+  method: "POST" | "PUT" | "PATCH",
   path: string,
   body: Readonly<Record<string, string | number>>
 ): Promise<number> {
@@ -755,5 +777,128 @@ test("the day shows its NOVA 1 share of classified energy and each Portion's NOV
     ).toBe("NOVA 1: unprocessed or minimally processed")
   } finally {
     await nova.stop()
+  }
+})
+
+test("the day shows its Calorie Target, eaten and remaining with macro progress, and saves the goal from today", async () => {
+  // The Profile, Body Weight and goal outlive Meal Logs, so this day gets a fixture of its own.
+  const targets = await startAxumFixture()
+
+  try {
+    vi.stubEnv("OPENHOME_API_URL", targets.url)
+    const today = trainingDayOn(new Date())
+    await render(await readNutritionDay({ day: today }))
+    expect(text(".food-targets h2")).toEqual(["No Calorie Target yet"])
+    expect(text(".food-targets p")[0]).toBe(
+      `Targets need the Profile's height, sex (male or female) and birth date, and a Body Weight on or before ${today}.`
+    )
+
+    // A man of 180 cm and 80 kg who turned 30 120 days ago: BMR 1,780 kcal, so with no logged
+    // days the Estimated Expenditure is 1.5 × BMR and losing 0.5 kg a week takes 550 kcal off.
+    const birthday = shiftDay(today, -120)
+
+    const birthDate =
+      `${Number(birthday.slice(0, 4)) - 30}${birthday.slice(4)}`.replace(
+        "-02-29",
+        "-02-28"
+      )
+
+    expect(
+      await write(targets.url, "PATCH", "/api/profile", {
+        height_cm: 180,
+        sex: "male",
+        birth_date: birthDate,
+      })
+    ).toBe(200)
+    expect(
+      await write(targets.url, "POST", "/api/body_weight", {
+        date: shiftDay(today, -20),
+        weight_kg: 80,
+      })
+    ).toBe(201)
+    // 1,000 g of chicken breast: 1,100 kcal, 230 g protein and 15 g fat.
+
+    const meal = await logMeal({
+      api: targets.url,
+      eatenAt: new Date(Date.now() - 1000),
+      portions: [{ food_id: 907, grams: 1000 }],
+    })
+
+    await render(await readNutritionDay({ day: meal.day }))
+
+    expect(rows(".food-target-strip > div")).toEqual([
+      "Target 2,120 kcal",
+      "Eaten 1,100 kcal",
+      "Remaining 1,020 kcal",
+    ])
+    expect(text(".food-target-basis")).toEqual([
+      "Lose 0.5 kg a week · Estimated Expenditure 2,670 kcal · Trend Weight 80 kg",
+    ])
+    expect(text(".food-macro-target-name")).toEqual(["Protein", "Fat", "Carbs"])
+    expect(text(".food-macro-target-amount")).toEqual([
+      "230 / 176 g",
+      "15 / 56 g",
+      "0 / 228 g",
+    ])
+    expect(text(".food-macro-target-status")).toEqual([
+      "met",
+      "below floor",
+      "",
+    ])
+
+    const settled = refreshWork
+    const goal = container.querySelector("select")
+
+    if (!(goal instanceof HTMLSelectElement)) throw new Error("Missing goal")
+    expect(goal.value).toBe("lose-0.5")
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value"
+      )?.set?.call(goal, "maintain")
+      goal.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+
+    const save = [...container.querySelectorAll("button")].find(
+      (element) => element.textContent === "Save goal"
+    )
+
+    expect(save?.hasAttribute("disabled")).toBe(false)
+    await act(async () => {
+      save?.click()
+      await goalWork
+    })
+    // The control reads the day again once Axum confirms the goal.
+    await act(async () => {
+      await vi.waitFor(() => expect(refreshWork).not.toBe(settled))
+      await refreshWork
+    })
+    expect(text(".food-goal-feedback")).toEqual([
+      "Goal saved: Maintain from today.",
+    ])
+
+    expect(rows(".food-target-strip > div")).toEqual([
+      "Target 2,670 kcal",
+      "Eaten 1,100 kcal",
+      "Remaining 1,570 kcal",
+    ])
+    expect(text(".food-target-basis")[0]).toMatch(/^Maintain · /)
+
+    const saved = await fetch(`${targets.url}/api/nutrition/goal`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
+
+    expect(await saved.json()).toEqual({
+      goal: {
+        direction: "maintain",
+        rate_kg_per_week: 0,
+        effective_from: today,
+      },
+      history: [
+        { direction: "maintain", rate_kg_per_week: 0, effective_from: today },
+      ],
+    })
+  } finally {
+    await targets.stop()
   }
 })

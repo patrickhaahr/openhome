@@ -75,6 +75,138 @@ a.food-day-key:active {
   color: var(--ground);
 }
 
+/* ---------- Targets: target, eaten and remaining, then the macros against their targets ---------- */
+
+.food-targets {
+  --below-floor: #d99a00;
+
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--wash);
+}
+.food-targets[data-state="unavailable"] h2 {
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.food-targets-hint,
+.food-target-basis {
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+}
+.food-target-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.food-target-strip dt {
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+}
+.food-target-strip dd {
+  font-size: var(--t-l);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+.food-target-strip [data-over] dd {
+  color: var(--sun);
+}
+.food-macro-targets {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.food-macro-targets li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+.food-macro-target-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.food-macro-target-name::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: var(--macro);
+}
+.food-macro-target-amount {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.food-macro-target-status {
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+}
+.food-macro-targets [data-status="below floor"] .food-macro-target-status {
+  color: var(--ink);
+  font-weight: 600;
+}
+.food-macro-target-bar {
+  grid-column: 1 / -1;
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--wash-strong);
+}
+.food-macro-target-bar::before {
+  content: "";
+  display: block;
+  width: calc(var(--share) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--macro);
+}
+.food-macro-targets [data-status="below floor"] .food-macro-target-bar::before {
+  background: var(--below-floor);
+}
+
+/* The goal control: the Day view's only write. */
+.food-goal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.food-goal label {
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+}
+.food-goal select {
+  min-height: 2.75rem;
+  padding-inline: 0.875rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+.food-goal select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.food-goal-feedback {
+  flex-basis: 100%;
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+}
+.food-goal-feedback:empty {
+  display: none;
+}
+.food-goal-feedback[data-failed="true"] {
+  color: var(--danger);
+}
+
 /* ---------- Totals: the energy figure, its split and the macros ---------- */
 
 .food-totals {

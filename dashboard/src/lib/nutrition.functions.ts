@@ -3,6 +3,7 @@ import { setResponseHeader } from "@tanstack/react-start/server"
 import { trainingDayOn } from "./workout"
 import {
   nutritionSearch,
+  setGoalInput,
   type NutritionDayState,
   type NutritionSearch,
 } from "./nutrition"
@@ -15,6 +16,16 @@ export const getNutritionDay = createServerFn({ method: "GET" })
     const { readNutritionDay } = await import("./nutrition.server")
 
     return readNutritionDay(data)
+  })
+
+/** Set the Nutrition Goal from today, with the credential kept on the server. */
+export const saveNutritionGoal = createServerFn({ method: "POST" })
+  .validator(setGoalInput)
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { writeNutritionGoal } = await import("./nutrition.server")
+
+    return writeNutritionGoal(data)
   })
 
 /**

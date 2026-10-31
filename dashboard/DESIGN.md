@@ -118,7 +118,15 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   journal and the strap's workouts follow on scroll; logged workouts stay on Workout. Portrait and
   phone stack rings, week and night. Without ordered stages the night falls back to its totals.
 - **Food is the day's plate**: a round key either side of the day's name (no next day after today,
-  and a "Today" capsule when away from it), then the day's energy as the display figure with one
+  and a "Today" capsule when away from it), then a wash plate with the day's Calorie Target, eaten
+  and remaining as three large figures ("Over" in sun once past the target), the goal, Estimated
+  Expenditure and Trend Weight muted beneath ("held at BMR" when the floor applies), and protein,
+  fat and carbs as rows of eaten / target grams over a bar in the macro's colour: protein says
+  "met" once reached, fat below its floor turns the bar amber and says "below floor", carbs are
+  never graded. Without the Profile's height, sex and birth date or a Body Weight the plate says
+  "No Calorie Target yet" with Axum's reason. The goal control follows as one line ("Goal from
+  today", a capsule select of the six offered goals and an outline "Save goal" key), the Day
+  view's only write. Then the day's energy as the display figure with one
   capsule beneath it split by macronutrient energy (protein in sun, carbs in ink, fat blue, alcohol
   muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each, then the NOVA 1
   share as a figure with the classified kcal it is a share of and the unclassified Portions it

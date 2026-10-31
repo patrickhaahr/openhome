@@ -169,6 +169,66 @@ const nutrient = total.extend({
 /** One parameter's total for the day, named as the Food database names it. */
 export type Nutrient = z.infer<typeof nutrient>
 
+const goalDirection = z.enum(["lose", "maintain", "lean_bulk"])
+
+/** A Nutrition Goal from the day it took effect; `effective_from` is null for the default. */
+const datedGoal = z.object({
+  direction: goalDirection,
+  rate_kg_per_week: z.number().nonnegative(),
+  effective_from: z.iso.date().nullable(),
+})
+
+/** A Nutrition Goal as Axum reports it with the day it took effect. */
+export type DatedGoal = z.infer<typeof datedGoal>
+
+const macroStatus = z.enum(["met", "below"])
+
+/** A day's Calorie Target and Macro Targets beside what was eaten, or what they need. */
+const targets = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("available"),
+    week_start: z.iso.date(),
+    week_fixed: z.boolean(),
+    trend_weight_kg: z.number().positive(),
+    bmr_kcal: z.number(),
+    estimated_expenditure_kcal: z.number(),
+    expenditure_basis: z.object({
+      window_start: z.iso.date(),
+      window_end: z.iso.date(),
+      logged_days: z.number().int().nonnegative(),
+      data_estimate_kcal: z.number().nullable(),
+      prior_kcal: z.number(),
+      blend_weight: z.number().min(0).max(1),
+    }),
+    goal: datedGoal,
+    calorie_target_kcal: z.number(),
+    bmr_floor_applied: z.boolean(),
+    eaten_kcal: z.number(),
+    remaining_kcal: z.number(),
+    macros: z.object({
+      protein: z.object({
+        target_g: z.number(),
+        eaten_g: z.number(),
+        status: macroStatus,
+      }),
+      fat: z.object({
+        floor_g: z.number(),
+        eaten_g: z.number(),
+        status: macroStatus,
+      }),
+      carbs: z.object({ target_g: z.number(), eaten_g: z.number() }),
+    }),
+  }),
+  z.object({
+    state: z.literal("unavailable"),
+    missing: z.array(z.enum(["height", "sex", "birth_date", "body_weight"])),
+    reason: z.string(),
+  }),
+])
+
+/** A day's targets as Axum computes them; the dashboard only formats them. */
+export type DayTargets = z.infer<typeof targets>
+
 /** Axum's Nutrition Day: the day's Meal Logs and totals; the dashboard only formats them. */
 export const nutritionDay = z.object({
   day: z.iso.date(),
@@ -176,6 +236,7 @@ export const nutritionDay = z.object({
   day_start: z.iso.datetime({ offset: true }),
   day_end: z.iso.datetime({ offset: true }),
   totals: keyNutrients(total),
+  targets,
   nutrients: z.array(nutrient),
   compounds: z.array(compound),
   supplement_doses: z.array(
@@ -314,6 +375,77 @@ export function supplementShare(total: NutrientTotal): string | null {
   return `${formatAmount(total.supplements)}${unit} from supplements`
 }
 
+/** The goal in effect today and every change, as Axum serves them. */
+export const nutritionGoal = z.object({
+  goal: datedGoal,
+  history: z.array(datedGoal),
+})
+
+/** The Nutrition Goal today and its history. */
+export type NutritionGoal = z.infer<typeof nutritionGoal>
+
+/** The goals the user can choose, in the order the goal control offers them. */
+export const goalChoices = [
+  { key: "lose-0.75", direction: "lose", rate_kg_per_week: 0.75 },
+  { key: "lose-0.5", direction: "lose", rate_kg_per_week: 0.5 },
+  { key: "lose-0.25", direction: "lose", rate_kg_per_week: 0.25 },
+  { key: "maintain", direction: "maintain", rate_kg_per_week: 0 },
+  { key: "lean_bulk-0.1", direction: "lean_bulk", rate_kg_per_week: 0.1 },
+  { key: "lean_bulk-0.25", direction: "lean_bulk", rate_kg_per_week: 0.25 },
+] as const
+
+/** One goal the user can choose. */
+export type GoalChoice = (typeof goalChoices)[number]
+
+/** A goal to set from today, as the goal control sends it. */
+export const setGoalInput = z.object({
+  direction: goalDirection,
+  rate_kg_per_week: z.number().nonnegative(),
+})
+
+/** A goal to set from today. */
+export type SetGoalInput = z.infer<typeof setGoalInput>
+
+/** A goal write is confirmed only by Axum's parsed answer. */
+export type GoalMutation =
+  | { readonly state: "saved"; readonly goal: NutritionGoal }
+  | { readonly state: "failed"; readonly reason: NutritionFailure }
+
+/**
+ * The choice matching a goal, so the control can show the goal in effect.
+ *
+ * @param goal - A goal's direction and rate.
+ * @returns The matching choice, or undefined for a rate the control does not offer.
+ */
+export function goalChoice(
+  goal: Pick<DatedGoal, "direction" | "rate_kg_per_week">
+): GoalChoice | undefined {
+  return goalChoices.find(
+    (choice) =>
+      choice.direction === goal.direction &&
+      choice.rate_kg_per_week === goal.rate_kg_per_week
+  )
+}
+
+/**
+ * A goal in words: "Lose 0.5 kg a week", "Maintain" or "Lean bulk 0.25 kg a week".
+ *
+ * @param goal - A goal's direction and rate.
+ * @returns The goal's name.
+ */
+export function goalName(
+  goal: Pick<DatedGoal, "direction" | "rate_kg_per_week">
+): string {
+  switch (goal.direction) {
+    case "maintain":
+      return "Maintain"
+    case "lose":
+      return `Lose ${goal.rate_kg_per_week} kg a week`
+    case "lean_bulk":
+      return `Lean bulk ${goal.rate_kg_per_week} kg a week`
+  }
+}
+
 /** Axum's answer while the Food database is importing or after a failed import. */
 export const foodDatabaseUnavailable = z.object({
   code: z.literal("food_database_unavailable"),
@@ -342,7 +474,12 @@ export type NutritionDayState = {
   readonly day: string
   readonly today: string
 } & (
-  | { readonly state: "available"; readonly data: NutritionDay }
+  | {
+      readonly state: "available"
+      readonly data: NutritionDay
+      /** Today's goal for the goal control; null when it could not be read. */
+      readonly goal: NutritionGoal | null
+    }
   | {
       readonly state: "food-database-unavailable"
       readonly database: z.infer<typeof foodDatabaseUnavailable>["state"]
