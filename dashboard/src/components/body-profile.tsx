@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react"
 import { z } from "zod"
+import { CakeIcon } from "@phosphor-icons/react/dist/csr/Cake"
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check"
 import { GenderIntersexIcon } from "@phosphor-icons/react/dist/csr/GenderIntersex"
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
@@ -49,6 +50,13 @@ type ProfileEditing = {
 const numberFormat = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 3,
   useGrouping: false,
+})
+
+const birthDay = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "UTC",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
 })
 
 const oneDecimal = new Intl.NumberFormat("en-GB", {
@@ -325,6 +333,19 @@ export function BodyProfile({
                         )}
                       </dd>
                     </div>
+                    <div>
+                      <dt>
+                        <CakeIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">Birth date</span>
+                      </dt>
+                      <dd data-gap={data.profile.birth_date === null}>
+                        {data.profile.birth_date === null
+                          ? "Not configured"
+                          : birthDay.format(
+                              new Date(`${data.profile.birth_date}T12:00:00Z`)
+                            )}
+                      </dd>
+                    </div>
                   </dl>
                   <div className="body-profile-edit">
                     <Button
@@ -344,7 +365,8 @@ export function BodyProfile({
                   </div>
                   <p className="sr-only">
                     Maximum heart rate defines the NOOP heart rate zones. It is
-                    set by you, never inferred from recorded workouts.
+                    set by you, never inferred from recorded workouts. Height,
+                    sex and birth date set the Food page's Calorie Target.
                   </p>
                   <FeedbackMessage
                     feedback={
@@ -421,6 +443,13 @@ function FeedbackMessage({
   )
 }
 
+/** A real `YYYY-MM-DD` day no later than today in Copenhagen. */
+function isPastDay(value: string): boolean {
+  return (
+    z.iso.date().safeParse(value).success && value <= trainingDayOn(new Date())
+  )
+}
+
 type ProfileEditorProps = {
   readonly original: ProfileEditing["original"]
   readonly draft: ProfileEditing["draft"]
@@ -441,7 +470,7 @@ function ProfileEditor({
   failure,
 }: ProfileEditorProps): React.JSX.Element {
   const [problem, setProblem] = useState<{
-    field: "height" | "heart"
+    field: "height" | "heart" | "birth"
     message: string
   }>()
 
@@ -484,6 +513,21 @@ function ProfileEditor({
               "Enter a whole maximum heart rate from 100 to 240 bpm, or leave it empty to clear.",
           })
           document.getElementById(`${id}-heart`)?.focus()
+
+          return
+        }
+
+        if (
+          patch.birth_date !== undefined &&
+          patch.birth_date !== null &&
+          !isPastDay(patch.birth_date)
+        ) {
+          setProblem({
+            field: "birth",
+            message:
+              "Enter a birth date written YYYY-MM-DD that is not in the future, or leave it empty to clear.",
+          })
+          document.getElementById(`${id}-birth`)?.focus()
 
           return
         }
@@ -535,6 +579,23 @@ function ProfileEditor({
           disabled={disabled}
           onChange={(event) => {
             update({ ...draft, heartRate: event.target.value })
+            setProblem(undefined)
+          }}
+        />
+      </div>
+      <div className="workout-field">
+        <label htmlFor={`${id}-birth`}>Birth date</label>
+        <Input
+          id={`${id}-birth`}
+          type="date"
+          aria-invalid={problem?.field === "birth"}
+          aria-describedby={
+            problem?.field === "birth" ? `${id}-problem` : undefined
+          }
+          value={draft.birthDate}
+          disabled={disabled}
+          onChange={(event) => {
+            update({ ...draft, birthDate: event.target.value })
             setProblem(undefined)
           }}
         />

@@ -57,7 +57,12 @@ afterEach(async () => {
 async function api<T>(
   schema: z.ZodType<T>,
   path: string,
-  json?: { height_cm?: number; sex?: string; hr_max_bpm?: number }
+  json?: {
+    height_cm?: number
+    sex?: string
+    hr_max_bpm?: number
+    birth_date?: string
+  }
 ): Promise<T> {
   const response = await fetch(`${fixture.url}${path}`, {
     method: json === undefined ? "GET" : "PATCH",
@@ -148,19 +153,22 @@ async function click(name: string): Promise<void> {
 
 test("configures the shared Profile, preserves concurrent untouched fields, and explicitly clears each value", async () => {
   await render()
-  expect(container.textContent?.match(/Not configured/g)).toHaveLength(3)
+  expect(container.textContent?.match(/Not configured/g)).toHaveLength(4)
   await click("Edit profile")
   await type("Height (cm)", "181,12345")
   await type("Sex (optional)", "female")
   await type("Maximum heart rate (bpm)", "190")
+  await type("Birth date", "1994-05-17")
   await click("Save profile")
 
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: 181.12345,
     sex: "female",
     hr_max_bpm: 190,
+    birth_date: "1994-05-17",
   })
   expect(container.textContent).toContain("Maximum heart rate190 max")
+  expect(container.textContent).toContain("Birth date17 May 1994")
   expect(container.textContent).toContain("Profile saved to OpenHome.")
 
   await click("Edit profile")
@@ -172,19 +180,22 @@ test("configures the shared Profile, preserves concurrent untouched fields, and 
     height_cm: 181.12345,
     sex: null,
     hr_max_bpm: 195,
+    birth_date: "1994-05-17",
   })
 
   await click("Edit profile")
   await type("Height (cm)", "")
   await type("Maximum heart rate (bpm)", "")
+  await type("Birth date", "")
   await click("Save profile")
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: null,
     sex: null,
     hr_max_bpm: null,
+    birth_date: null,
   })
   await render()
-  expect(container.textContent?.match(/Not configured/g)).toHaveLength(3)
+  expect(container.textContent?.match(/Not configured/g)).toHaveLength(4)
 })
 
 test("logs decimal-comma Body Weight, rejects duplicates without replacing stored values, and charts ranges ending today", async () => {
@@ -272,10 +283,16 @@ test("invalid fields keep drafts and stored values; API validation also remains 
   await click("Save profile")
   expect(input("Height (cm)").value).toBe("181")
   expect(document.activeElement).toBe(input("Maximum heart rate (bpm)"))
+  await type("Maximum heart rate (bpm)", "185")
+  await type("Birth date", shiftDay(trainingDayOn(new Date()), 1))
+  await click("Save profile")
+  expect(document.activeElement).toBe(input("Birth date"))
+  expect(container.textContent).toContain("not in the future")
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: 180.5,
     sex: "male",
     hr_max_bpm: 185,
+    birth_date: null,
   })
 
   await type("Body weight (kg)", "0")
@@ -297,6 +314,7 @@ test("invalid fields keep drafts and stored values; API validation also remains 
     height_cm: 180.5,
     sex: "male",
     hr_max_bpm: 185,
+    birth_date: null,
   })
 })
 

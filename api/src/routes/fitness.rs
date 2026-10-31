@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use crate::error::{AppError, Result};
 use crate::services::exercise_progress::{self, CombinedProgress, Period, Selection};
+use crate::services::training::calendar::CalendarDay;
 
 #[derive(Debug, Deserialize)]
 pub struct ListExercises {
@@ -905,6 +906,8 @@ pub struct Profile {
     height_cm: Option<f64>,
     sex: Option<String>,
     hr_max_bpm: Option<i64>,
+    /// `YYYY-MM-DD`; the BMR formula and the NNR age bands need it.
+    birth_date: Option<String>,
 }
 
 const HR_MAX_BPM_RANGE: std::ops::RangeInclusive<i64> = 100..=240;
@@ -917,13 +920,30 @@ pub struct UpdateProfile {
     sex: Option<Option<String>>,
     #[serde(default, with = "double_option")]
     hr_max_bpm: Option<Option<i64>>,
+    #[serde(default, with = "double_option")]
+    birth_date: Option<Option<String>>,
+}
+
+/// A birth date: a canonical `YYYY-MM-DD` day from 1900 up to today in Copenhagen.
+fn parse_birth_date(text: &str) -> Result<String> {
+    let invalid = || {
+        AppError::Validation(
+            "birth_date must be a date written YYYY-MM-DD, from 1900-01-01 up to today".to_string(),
+        )
+    };
+    let day = CalendarDay::parse(text).ok_or_else(invalid)?;
+    let first = CalendarDay::parse("1900-01-01").ok_or_else(invalid)?;
+    if day < first || day > CalendarDay::of(chrono::Utc::now()) {
+        return Err(invalid());
+    }
+    Ok(day.to_string())
 }
 
 async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profile>> {
     let row = sqlx::query_as!(
         Profile,
         r#"
-        SELECT height_cm, sex, hr_max_bpm
+        SELECT height_cm, sex, hr_max_bpm, birth_date AS "birth_date?"
         FROM profile
         WHERE id = 1
         "#
@@ -937,6 +957,7 @@ async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profil
         height_cm: None,
         sex: None,
         hr_max_bpm: None,
+        birth_date: None,
     })))
 }
 
@@ -960,6 +981,13 @@ async fn update_profile(
         ));
     }
 
+    let birth_date_set = payload.birth_date.is_some();
+    let birth_date = payload
+        .birth_date
+        .flatten()
+        .map(|text| parse_birth_date(&text))
+        .transpose()?;
+
     // Clearable upsert: absent field keeps the current value (stays NULL on
     // first create), explicit null sets NULL (documented in api/AGENTS.md).
     // Single statement keeps concurrent first PATCHes atomic.
@@ -972,21 +1000,24 @@ async fn update_profile(
     let profile = sqlx::query_as!(
         Profile,
         r#"
-        INSERT INTO profile (id, height_cm, sex, hr_max_bpm)
-        VALUES (1, $1, $2, $5)
+        INSERT INTO profile (id, height_cm, sex, hr_max_bpm, birth_date)
+        VALUES (1, $1, $2, $5, $7)
         ON CONFLICT(id) DO UPDATE SET
             height_cm = CASE WHEN $3 THEN $1 ELSE height_cm END,
             sex = CASE WHEN $4 THEN $2 ELSE sex END,
             hr_max_bpm = CASE WHEN $6 THEN $5 ELSE hr_max_bpm END,
+            birth_date = CASE WHEN $8 THEN $7 ELSE birth_date END,
             updated_at = CURRENT_TIMESTAMP
-        RETURNING height_cm, sex, hr_max_bpm
+        RETURNING height_cm, sex, hr_max_bpm, birth_date AS "birth_date?"
         "#,
         height_cm,
         sex,
         height_set,
         sex_set,
         hr_max_bpm,
-        hr_max_set
+        hr_max_set,
+        birth_date,
+        birth_date_set
     )
     .fetch_one(&state.db)
     .await
