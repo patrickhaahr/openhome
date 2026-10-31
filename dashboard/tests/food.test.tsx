@@ -21,7 +21,12 @@ import {
 } from "vitest"
 import { z } from "zod"
 import { FoodDay } from "@/components/food-day"
-import { mealTime, shiftDay, type NutritionDayState } from "@/lib/nutrition"
+import {
+  mealTime,
+  shiftDay,
+  type DoseUnit,
+  type NutritionDayState,
+} from "@/lib/nutrition"
 import { readMealPhoto, readNutritionDay } from "@/lib/nutrition.server"
 import { trainingDayOn } from "@/lib/workout"
 import { startAxumFixture } from "./support/axum-fixture"
@@ -39,6 +44,8 @@ let container: HTMLDivElement
 const logged: string[] = []
 
 const savedMeals: string[] = []
+
+const addedSupplements: string[] = []
 
 beforeAll(async () => {
   ready = await startAxumFixture()
@@ -71,6 +78,12 @@ afterEach(async () => {
 
   for (const id of savedMeals.splice(0))
     await fetch(`${ready.url}/api/nutrition/meals/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
+
+  for (const id of addedSupplements.splice(0))
+    await fetch(`${ready.url}/api/nutrition/supplements/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     })
@@ -428,6 +441,123 @@ test("a Meal Log copied from a saved Meal names the Meal, and a one-off meal nam
 
   if (oneOff.day === fromMeal.day)
     expect(plate(oneOff.eaten_at)?.querySelector(".food-meal-from")).toBeNull()
+})
+
+/** A synthetic Supplement's label, per dose. */
+type SyntheticSupplement = {
+  readonly name: string
+  readonly dose_unit: DoseUnit
+  readonly amounts?: ReadonlyArray<{ key: string; value: number; unit: string }>
+  readonly compounds?: ReadonlyArray<{
+    name: string
+    value: number
+    unit: string
+  }>
+}
+
+/** Adds a synthetic Supplement through the API, as the agent does from a label. */
+async function addSupplement(body: SyntheticSupplement): Promise<string> {
+  const response = await fetch(`${ready.url}/api/nutrition/supplements`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ...body, request_id: crypto.randomUUID() }),
+  })
+
+  expect(response.status).toBe(201)
+
+  const id = z
+    .object({ supplement: z.object({ id: z.string() }) })
+    .parse(await response.json()).supplement.id
+
+  addedSupplements.push(id)
+
+  return id
+}
+
+test("the day shows a Supplements row, each meal's Supplement Doses and the supplement share of its totals", async () => {
+  const fishOil = await addSupplement({
+    name: "Fish oil",
+    dose_unit: "capsule",
+    amounts: [
+      { key: "epa", value: 180, unit: "mg" },
+      { key: "energy_kcal", value: 9, unit: "kcal" },
+      { key: "fat", value: 1, unit: "g" },
+    ],
+  })
+
+  const vitaminD = await addSupplement({
+    name: "Vitamin D3",
+    dose_unit: "capsule",
+    amounts: [{ key: "vitamin_d", value: 25, unit: "µg" }],
+  })
+
+  const creatine = await addSupplement({
+    name: "Creatine",
+    dose_unit: "scoop",
+    compounds: [{ name: "Creatine monohydrate", value: 3, unit: "g" }],
+  })
+
+  const response = await fetch(`${ready.url}/api/nutrition/meal-logs`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      eaten_at: new Date(Date.now() - 45_000).toISOString(),
+      portions: [{ food_id: 1693, grams: 150 }],
+      supplement_doses: [
+        { supplement_id: fishOil, doses: 2 },
+        { supplement_id: vitaminD, doses: 1 },
+        { supplement_id: creatine, doses: 1 },
+      ],
+      request_id: crypto.randomUUID(),
+    }),
+  })
+
+  expect(response.status).toBe(201)
+
+  const meal = z
+    .object({ meal_log: z.object({ id: z.string(), day: z.string() }) })
+    .parse(await response.json()).meal_log
+
+  logged.push(meal.id)
+  await render(await readNutritionDay({ day: meal.day }))
+
+  expect(
+    normalize(container.querySelector(".food-supplements h3")?.textContent)
+  ).toBe("Supplements")
+  expect(rows(".food-supplements li")).toEqual([
+    "Fish oil 2 capsules",
+    "Vitamin D3 1 capsule",
+    "Creatine 1 scoop",
+    "Creatine monohydrate 3 g",
+  ])
+  expect(rows(".food-meal .food-doses li").map((row) => row.trim())).toEqual([
+    "Fish oil 2 capsules 18 kcal",
+    "Vitamin D3 1 capsule",
+    "Creatine 1 scoop",
+  ])
+  // The skyr's 93 kcal and 0.3 g fat, plus what the fish oil's label states.
+  expect(text(".food-meal header .food-amount")).toContain("111 kcal")
+  expect(text(".food-energy-supplements")).toEqual(["18 kcal from supplements"])
+  expect(rows('.food-macros > div[data-macro="fat"]')).toEqual([
+    "Fat 2.3 g 2 g from supplements",
+  ])
+
+  await act(async () => {
+    const button = [...container.querySelectorAll("button")].find(
+      (element) => element.textContent === "All nutrients"
+    )
+
+    button?.click()
+  })
+  expect(rows(".food-nutrient-groups dl div")).toContain(
+    "Vitamin D 25 µg Food 0 µg · supplements 25 µg"
+  )
 })
 
 test("a backfilled meal shows on its own earlier day, which can step forward again", async () => {

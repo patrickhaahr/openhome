@@ -122,16 +122,22 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   capsule beneath it split by macronutrient energy (protein in sun, carbs in ink, fat blue, alcohol
   muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each, then the NOVA 1
   share as a figure with the classified kcal it is a share of and the unclassified Portions it
-  leaves out beneath it (a dash until something is classified). The Meal Logs
+  leaves out beneath it (a dash until something is classified). A total that Supplement Doses add
+  to notes their share muted beneath its figure ("2 g from supplements"), and a day with
+  Supplements ends the totals with a Supplements row: one capsule per Supplement with its doses
+  added up ("Fish oil 2 capsules"), then one per compound without a database parameter with the
+  amount taken ("Creatine monohydrate 3 g"). The Meal Logs
   follow as wash plates in time order: the clock time large, the meal's kcal on the right, the name
   of the saved Meal it was logged from as a capsule beneath (none for a one-off meal), the note
   muted, then one row per Portion (Food, grams, kcal); a Product Portion shows its label name with
   its brand muted beneath it, and a classified Portion carries a small "NOVA n" capsule after its
-  name (ink for Class 1, muted otherwise). A Meal Log with a photo carries its
+  name (ink for Class 1, muted otherwise). The meal's Supplement Doses follow the Portions in the
+  same columns (Supplement, doses in its dose unit, kcal when the label states energy). A Meal Log with a photo carries its
   thumbnail as a rounded key beside the figures (leading the plate on narrow screens); selecting
   it opens the full photo in the night viewer Photos uses. Unknown is a dash; a total that leaves out
   Portions without a value is drawn "≥" with the count in its title and "At least" for assistive
-  technology. "All nutrients" opens every parameter in the database's groups on tone bands. While
+  technology. "All nutrients" opens every parameter in the database's groups on tone bands, with a muted
+  "Food … · supplements …" line under any nutrient a Supplement adds to. While
   the Food database imports or fails, the day's place holds a state note and the day keys stay.
   The Danish Food Composition Database is credited at the foot of the page, and Open Food Facts
   (ODbL) beneath it whenever the day shows a Product.
