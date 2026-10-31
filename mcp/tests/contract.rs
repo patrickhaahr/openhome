@@ -1136,6 +1136,10 @@ async fn nutrition_goal_tools_read_and_set_the_goal_and_pass_errors_and_targets_
         instructions.contains("set_nutrition_goal") && instructions.contains("remaining_kcal"),
         "{instructions}"
     );
+    assert!(
+        instructions.contains("micronutrients") && instructions.contains("cut_down"),
+        "{instructions}"
+    );
     let http = reqwest::Client::new();
     let direct = |method: reqwest::Method, path: &'static str, body: Option<Value>| {
         let mut request = http
@@ -1202,6 +1206,12 @@ async fn nutrition_goal_tools_read_and_set_the_goal_and_pass_errors_and_targets_
     assert_eq!(
         day["targets"]["missing"],
         json!(["height", "sex", "birth_date", "body_weight"])
+    );
+    // So does the micronutrient panel.
+    assert_eq!(day["micronutrients"]["state"], "unavailable", "{day}");
+    assert_eq!(
+        day["micronutrients"]["missing"],
+        json!(["sex", "birth_date"])
     );
     client.cancel().await.unwrap();
 }
