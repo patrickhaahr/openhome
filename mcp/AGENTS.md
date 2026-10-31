@@ -15,6 +15,8 @@
 
 - Supplement tools (`supplements`, `add_supplement`, `update_supplement`, `delete_supplement`) forward `/api/nutrition/supplements` unchanged; `log_meal`, `update_meal_log`, `save_meal` and `update_meal` take `supplement_doses` (`supplement_id`, `doses`) and `log_meal` overrides may give `{supplement_id, doses}`. Axum owns parameter keys, unit conversion, required forms (vitamin A, folate, niacin), dose snapshots, the food/supplement split and `request_id` deduplication. Listing is read-only; adding is non-destructive and idempotent; updates and deletions are destructive and idempotent. Keep the global instructions (protein powder is a Product; register from the label once; forms for supplement-only Upper Limits; doses beside Portions or as a Meal) in step with the API.
 
+- `nutrition_summary` is a read-only forward of `/api/nutrition/summary` (`from`, `to`, `aggregation` day, week or month). Axum owns the 365-day limit, ISO weeks, partial edge periods, logged and missing days, means and weekly rates. Like `nutrition_day`, its first read of a past week stores that week's target record (ADR 0014), which is internal memoisation, so it keeps `read_only_hint`. Keep the global instructions on missing days and the goal rate in step with the API.
+
 - Read `../docs/training-context.md` before changing training tools or their contracts.
 - Keep training tools read-only: each call makes one authenticated API GET and passes its JSON unchanged. Add an API endpoint before adding a tool that needs new interpretation; database access and domain rules belong in the API.
 - Percent-encode path arguments, reject literal `.` and `..` segments, and keep API redirects disabled so requests stay on the intended endpoint.

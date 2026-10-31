@@ -945,6 +945,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "noop_workout_detail",
             "nutrition_day",
             "nutrition_goal",
+            "nutrition_summary",
             "recovery_on_day",
             "save_meal",
             "search_foods",
@@ -1085,6 +1086,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "link_product" => json!(["barcode", "food_id", "request_id"]),
             "classify_food" => json!(["food_id", "nova_class"]),
             "set_nutrition_goal" => json!(["direction"]),
+            "nutrition_summary" => json!(["from", "to", "aggregation"]),
             "update_meal_log" | "delete_meal_log" => json!(["meal_log_id"]),
             "metric_trend" => json!(["metric", "from_day", "to_day"]),
             "noop_workout_detail" => json!(["source", "start"]),
@@ -1212,6 +1214,69 @@ async fn nutrition_goal_tools_read_and_set_the_goal_and_pass_errors_and_targets_
     assert_eq!(
         day["micronutrients"]["missing"],
         json!(["sex", "birth_date"])
+    );
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn nutrition_summary_forwards_each_aggregation_and_range_errors_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let instructions = client
+        .peer_info()
+        .unwrap()
+        .instructions
+        .clone()
+        .unwrap_or_default();
+    assert!(
+        instructions.contains("nutrition_summary") && instructions.contains("missing_days"),
+        "{instructions}"
+    );
+    let http = reqwest::Client::new();
+    let direct = |path: String| {
+        let request = http.get(format!("{api}{path}")).bearer_auth(API_KEY);
+        async move { request.send().await.unwrap().json::<Value>().await.unwrap() }
+    };
+    let logged = wishlist_call(
+        &client,
+        "log_meal",
+        json!({
+            "eaten_at": "2026-10-28T08:15:00+01:00",
+            "portions": [{"food_id": 1693, "grams": 150}],
+            "request_id": "mcp-summary-meal",
+        }),
+    )
+    .await;
+    assert_eq!(logged.is_error, Some(false), "{logged:?}");
+
+    for aggregation in ["day", "week", "month"] {
+        let arguments =
+            json!({"from": "2026-10-01", "to": "2026-10-29", "aggregation": aggregation});
+        let summary = wishlist_call(&client, "nutrition_summary", arguments).await;
+        assert_eq!(summary.is_error, Some(false), "{summary:?}");
+        let expected = direct(format!(
+            "/api/nutrition/summary?from=2026-10-01&to=2026-10-29&aggregation={aggregation}"
+        ))
+        .await;
+        assert_eq!(expected["logged_days"], 1, "{expected}");
+        assert_eq!(summary.structured_content, Some(expected), "{aggregation}");
+    }
+
+    let too_long = wishlist_call(
+        &client,
+        "nutrition_summary",
+        json!({"from": "2025-10-01", "to": "2026-10-29", "aggregation": "month"}),
+    )
+    .await;
+    assert_eq!(too_long.is_error, Some(true));
+    let error = too_long.structured_content.unwrap();
+    assert_eq!(error["status"], 400, "{error}");
+    assert_eq!(
+        direct("/api/nutrition/summary?from=2025-10-01&to=2026-10-29&aggregation=month".into())
+            .await,
+        error
     );
     client.cancel().await.unwrap();
 }

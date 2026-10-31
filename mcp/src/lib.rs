@@ -46,8 +46,8 @@ use important_dates::{
 use nutrition::{
     AddSupplementRequest, ClassifyFoodRequest, FoodRequest, LinkProductRequest, LogMealRequest,
     LookupProductRequest, MealLogRequest, MealLogsRequest, MealRequest, NutritionDayRequest,
-    SaveMealRequest, SearchFoodsRequest, SetNutritionGoalRequest, SupplementRequest,
-    UpdateMealLogRequest, UpdateMealRequest, UpdateSupplementRequest,
+    NutritionSummaryRequest, SaveMealRequest, SearchFoodsRequest, SetNutritionGoalRequest,
+    SupplementRequest, UpdateMealLogRequest, UpdateMealRequest, UpdateSupplementRequest,
 };
 mod wishlist;
 use watchlist::{
@@ -146,7 +146,12 @@ Only EFSA Upper Limits matter for excess: a caution means that day was above one
 means the 7-day average over logged days is above it, so suggest cutting down, usually the Supplement named by the \
 limit's applies_to (magnesium, folic acid, nicotinic acid and nicotinamide limits count supplements only; preformed \
 vitamin A counts retinol from food and supplements, not beta-carotene). Compounds without a reference, such as creatine, \
-are amounts taken without a grade.";
+are amounts taken without a grade. \
+For trends (\"how has my week gone?\", \"am I losing at the goal rate?\") call nutrition_summary over a range of up to \
+365 days ending today at the latest, by day, week (ISO Monday to Sunday) or month. Intake figures are means per logged day: \
+days without Meal Logs are counted in missing_days and left out, never treated as zero, so mention missing days when \
+they are many. Compare weight_change.kg_per_week (the Trend Weight's change) with goal_kg_per_week rather than single \
+weigh-ins.";
 
 const SUPPLEMENTS: &str = "List every Supplement by name: id, name, dose_unit (tablet, capsule, scoop or ml), \
 amounts per dose (key, form or null, value, unit in the Food database parameter's unit) and compounds per dose (name, \
@@ -402,6 +407,20 @@ unknown_portions counts those that do not, supplements adds the Supplement Doses
 without Meal Logs. Nutrients a Supplement names by form also give supplement_forms [{form, value}], the supplement share \
 of folic_acid, retinol, nicotinamide and so on. While the Food database is unavailable the result is a 503 error with code food_database_unavailable. Credit \
 `source.credit` wherever values are shown.";
+
+const NUTRITION_SUMMARY: &str = "Every nutrition trend over Europe/Copenhagen days from `from` through `to` (1 to 365 \
+days, ending today at the latest), grouped by aggregation: day, week (ISO, Monday to Sunday) or month (calendar). The \
+first and last week or month cover only their days inside the range and say partial=true. Returns logged_days and \
+missing_days for the range and `periods` in date order, each with start, end, days, partial, logged_days (days whose \
+Meal Logs have known energy) and missing_days (left out of intake means, never counted as zero); energy \
+{eaten_kcal (mean per logged day), calorie_target_kcal, estimated_expenditure_kcal (means of each day's value)}; \
+protein {eaten_g, target_g}; macro_energy {protein_kcal, carbohydrate_kcal, fat_kcal, alcohol_kcal} per logged day at \
+4/4/9/7 kcal per gram; nova {nova_1_share, nova_1_kcal, classified_kcal, unclassified_portions} summed over the period; \
+weight {trend_weight_kg on the last day, scale_weight_kg (mean of the period's weigh-ins), weigh_ins}; and \
+weight_change {kg_per_week, the Trend Weight's change over the period (or the 7 days ending on its last day when \
+shorter) per week; goal_kg_per_week, the Nutrition Goal's change, negative to lose}. Null means unknown: no logged day, \
+no target (Profile or Body Weight missing; see nutrition_day for the reason) or no Trend Weight. Works while the Food \
+database is unavailable.";
 
 const NUTRITION_GOAL: &str = "The user's Nutrition Goal in effect today (direction lose, maintain or lean_bulk with \
 rate_kg_per_week, and effective_from, the Europe/Copenhagen day it was set, null for the default of losing 0.5 kg per \
@@ -1435,6 +1454,37 @@ impl OpenHomeTools {
         Parameters(NutritionDayRequest { day }): Parameters<NutritionDayRequest>,
     ) -> CallToolResult {
         self.api.get(&["api", "nutrition", "days", &day]).await
+    }
+
+    #[tool(
+        description = NUTRITION_SUMMARY,
+        annotations(
+            title = "Nutrition Summary",
+            read_only_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn nutrition_summary(
+        &self,
+        Parameters(NutritionSummaryRequest {
+            from,
+            to,
+            aggregation,
+        }): Parameters<NutritionSummaryRequest>,
+    ) -> CallToolResult {
+        let query = [
+            ("from".to_string(), from),
+            ("to".to_string(), to),
+            ("aggregation".to_string(), aggregation.as_str().to_string()),
+        ];
+        self.api
+            .request(
+                reqwest::Method::GET,
+                &["api", "nutrition", "summary"],
+                None,
+                &query,
+            )
+            .await
     }
 
     #[tool(

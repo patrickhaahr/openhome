@@ -252,6 +252,37 @@ pub struct NutritionDayRequest {
     pub day: String,
 }
 
+/// How `nutrition_summary` groups days.
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SummaryAggregation {
+    Day,
+    Week,
+    Month,
+}
+
+impl SummaryAggregation {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Day => "day",
+            Self::Week => "week",
+            Self::Month => "month",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NutritionSummaryRequest {
+    /// First Europe/Copenhagen day of the range, YYYY-MM-DD, included.
+    pub from: String,
+    /// Last Europe/Copenhagen day of the range, YYYY-MM-DD, included: today at the latest, and at
+    /// most 365 days in total.
+    pub to: String,
+    /// `day`, `week` (ISO weeks, Monday to Sunday) or `month` (calendar months).
+    pub aggregation: SummaryAggregation,
+}
+
 /// What one dose of a Supplement is.
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
