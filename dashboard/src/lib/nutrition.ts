@@ -229,6 +229,85 @@ const targets = z.discriminatedUnion("state", [
 /** A day's targets as Axum computes them; the dashboard only formats them. */
 export type DayTargets = z.infer<typeof targets>
 
+const limitStatus = z.enum(["none", "caution", "cut_down"])
+
+/**
+ * Where a nutrient stands against an EFSA Upper Limit: clear, above it that day, or above it on
+ * the trailing 7-day average.
+ */
+export type LimitStatus = z.infer<typeof limitStatus>
+
+const limitShare = z.enum([
+  "total",
+  "supplements",
+  "preformed_vitamin_a",
+  "supplemental_folate",
+  "nicotinic_acid",
+  "nicotinamide",
+])
+
+/** The share of intake an Upper Limit applies to. */
+export type LimitShare = z.infer<typeof limitShare>
+
+const upperLimit = z.object({
+  applies_to: limitShare,
+  limit: z.number(),
+  amount: z.number().nullable(),
+  seven_day_average: z.number().nullable(),
+  averaged_days: z.number().int().nonnegative(),
+  status: limitStatus,
+  source: z.string(),
+})
+
+/** One Upper Limit with the day's amount of its share and the share's trailing average. */
+export type UpperLimit = z.infer<typeof upperLimit>
+
+const micronutrient = z.object({
+  key: z.string(),
+  name: z.string(),
+  group: z.enum(["vitamins", "minerals", "fatty_acids"]),
+  unit: z.string(),
+  amount: z.number().nullable(),
+  food: z.number().nullable(),
+  supplements: z.number().nullable(),
+  unknown_portions: z.number().int().nonnegative(),
+  recommended_intake: z.number().positive(),
+  adequate_intake: z.boolean(),
+  percent_of_recommended: z.number().nullable(),
+  source: z.string(),
+  upper_limits: z.array(upperLimit),
+  upper_limit_status: limitStatus.nullable(),
+})
+
+/** One vitamin, mineral or EPA+DHA against its Recommended Intake and Upper Limits. */
+export type Micronutrient = z.infer<typeof micronutrient>
+
+/** The day's micronutrient panel as Axum evaluates it, or why there is none. */
+const micronutrients = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("available"),
+    sex: z.enum(["female", "male"]),
+    age: z.number().int().nonnegative(),
+    age_band: z.string(),
+    reference_energy_mj: z.number().positive(),
+    trailing_window: z.object({
+      from: z.iso.date(),
+      to: z.iso.date(),
+      logged_days: z.number().int().nonnegative(),
+    }),
+    nutrients: z.array(micronutrient),
+    sources: z.array(z.object({ name: z.string(), citation: z.string() })),
+  }),
+  z.object({
+    state: z.literal("unavailable"),
+    missing: z.array(z.enum(["sex", "birth_date"])),
+    reason: z.string(),
+  }),
+])
+
+/** A day's micronutrient panel; the dashboard only formats it. */
+export type Micronutrients = z.infer<typeof micronutrients>
+
 /** Axum's Nutrition Day: the day's Meal Logs and totals; the dashboard only formats them. */
 export const nutritionDay = z.object({
   day: z.iso.date(),
@@ -237,6 +316,7 @@ export const nutritionDay = z.object({
   day_end: z.iso.datetime({ offset: true }),
   totals: keyNutrients(total),
   targets,
+  micronutrients,
   nutrients: z.array(nutrient),
   compounds: z.array(compound),
   supplement_doses: z.array(
@@ -648,4 +728,107 @@ export function formatAmount(value: number): string {
   if (magnitude >= 10) return oneDecimalAmount.format(value)
 
   return twoDecimals.format(value)
+}
+
+/** One list of the micronutrient panel. */
+export type MicronutrientGroup = {
+  readonly name: string
+  readonly nutrients: readonly Micronutrient[]
+}
+
+const micronutrientGroupNames: Record<Micronutrient["group"], string> = {
+  vitamins: "Vitamins",
+  minerals: "Minerals",
+  fatty_acids: "Omega-3",
+}
+
+/**
+ * The panel's nutrients in its lists, keeping Axum's order: vitamins, minerals, then EPA+DHA.
+ *
+ * @param nutrients - The panel's nutrients.
+ * @returns The non-empty lists in order.
+ */
+export function micronutrientGroups(
+  nutrients: readonly Micronutrient[]
+): MicronutrientGroup[] {
+  return (["vitamins", "minerals", "fatty_acids"] as const).flatMap((group) => {
+    const members = nutrients.filter((nutrient) => nutrient.group === group)
+
+    return members.length === 0
+      ? []
+      : [{ name: micronutrientGroupNames[group], nutrients: members }]
+  })
+}
+
+/**
+ * Whom the panel's references are for: "women 25–50 years", "men over 70".
+ *
+ * @param sex - The Profile's sex.
+ * @param band - Axum's NNR 2023 age band, such as "25-50" or "71+".
+ * @returns The group in words.
+ */
+export function referenceGroup(sex: "female" | "male", band: string): string {
+  const people = sex === "female" ? "women" : "men"
+
+  if (band === "71+") return `${people} over 70`
+
+  return `${people} ${band.replace("-", "–")} years`
+}
+
+/**
+ * How far the day reached the Recommended Intake, as the panel's bar fills: full at 100 % and
+ * beyond, since passing it is good.
+ *
+ * @param nutrient - A panel nutrient.
+ * @returns The bar's fill from 0 to 1, or null when the amount is unknown.
+ */
+export function intakeShare(nutrient: Micronutrient): number | null {
+  if (nutrient.percent_of_recommended === null) return null
+
+  return Math.min(nutrient.percent_of_recommended / 100, 1)
+}
+
+/**
+ * The percentage of the Recommended Intake as the panel shows it: "64 %", "113 %".
+ *
+ * @param percent - Axum's percentage.
+ * @returns The whole percentage reached.
+ */
+export function formatPercent(percent: number): string {
+  return `${wholeAmount.format(Math.floor(percent))} %`
+}
+
+const limitShareNames: Record<LimitShare, string> = {
+  total: "",
+  supplements: " from supplements",
+  preformed_vitamin_a: " as retinol",
+  supplemental_folate: " as folic acid from supplements",
+  nicotinic_acid: " as nicotinic acid from supplements",
+  nicotinamide: " as nicotinamide from supplements",
+}
+
+/**
+ * The panel's line for a nutrient's most serious Upper Limit: "Cut down: 7-day average 150 of
+ * 100 µg" or "Above the Upper Limit today: 300 of 250 mg from supplements". Nothing while every
+ * limit is clear or the nutrient has none.
+ *
+ * @param nutrient - A panel nutrient.
+ * @returns The line, or null.
+ */
+export function upperLimitNote(nutrient: Micronutrient): string | null {
+  const worst =
+    nutrient.upper_limits.find((limit) => limit.status === "cut_down") ??
+    nutrient.upper_limits.find((limit) => limit.status === "caution")
+
+  if (worst === undefined) return null
+
+  const share = limitShareNames[worst.applies_to]
+  const limit = `${formatAmount(worst.limit)} ${nutrient.unit}${share}`
+
+  if (worst.status === "cut_down" && worst.seven_day_average !== null)
+    return `Cut down: 7-day average ${formatAmount(worst.seven_day_average)} of ${limit}`
+
+  if (worst.amount === null) return null
+
+  return `Above the Upper Limit today: ${formatAmount(worst.amount)} of ${limit}`
 }

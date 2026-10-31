@@ -144,7 +144,16 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   thumbnail as a rounded key beside the figures (leading the plate on narrow screens); selecting
   it opens the full photo in the night viewer Photos uses. Unknown is a dash; a total that leaves out
   Portions without a value is drawn "≥" with the count in its title and "At least" for assistive
-  technology. "All nutrients" opens every parameter in the database's groups on tone bands, with a muted
+  technology. After the Meal Logs, "Vitamins and minerals" lists each nutrient of the NNR 2023
+  panel in Vitamins, Minerals and Omega-3 columns: its name (an "AI" capsule marks an adequate
+  intake), the whole percentage of its Recommended Intake over a thin bar that fills in ink once
+  reached (passing it is never flagged), the amount over the reference muted beneath, the
+  "Food … · supplements …" split when a Supplement adds to it, and one line for an Upper Limit:
+  an amber dot and "Above the Upper Limit today" for a caution, red text and bar with "Cut down:
+  7-day average …" when the week's average is above it. A muted line above names whom the
+  references are for and how many of the last 7 days are logged; the sources are credited
+  beneath. Without the Profile's sex or birth date, or under 18, the panel says "No vitamin and
+  mineral panel yet" with Axum's reason. "All nutrients" opens every parameter in the database's groups on tone bands, with a muted
   "Food … · supplements …" line under any nutrient a Supplement adds to. While
   the Food database imports or fails, the day's place holds a state note and the day keys stay.
   The Danish Food Composition Database is credited at the foot of the page, and Open Food Facts
