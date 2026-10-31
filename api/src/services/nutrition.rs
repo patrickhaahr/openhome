@@ -4,6 +4,7 @@
 //! from it, the micronutrient evaluation against NNR 2023 and EFSA references, and the Nutrition
 //! Day and Nutrition Summary built from them.
 
+pub mod coverage;
 pub mod day;
 pub mod food_database;
 pub mod goals;

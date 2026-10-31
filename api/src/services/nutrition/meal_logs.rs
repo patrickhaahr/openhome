@@ -1046,12 +1046,20 @@ pub(super) enum Selection<'a> {
     Days(CalendarDay, CalendarDay),
 }
 
-/// Loads Meal Logs in time order with their Portions and Supplement Doses; with `all_values`
-/// every snapshotted Portion value, otherwise only the key nutrients. Doses keep every amount.
+/// Which snapshotted Portion values to load.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Values<'a> {
+    All,
+    /// Only these keys, so a long range never reads the hundreds of values it does not use.
+    Only(&'a [&'a str]),
+}
+
+/// Loads Meal Logs in time order with their Portions and Supplement Doses, with the Portion
+/// values `values` selects. Doses keep every amount.
 pub(super) async fn load(
     db: &SqlitePool,
     selection: &Selection<'_>,
-    all_values: bool,
+    values: Values<'_>,
 ) -> Result<Vec<StoredLog>> {
     let (id, from, to) = match selection {
         Selection::One(id) => (Some((*id).to_owned()), None, None),
@@ -1080,16 +1088,20 @@ pub(super) async fn load(
     )
     .fetch_all(db)
     .await?;
+    let keys = match values {
+        Values::All => None,
+        Values::Only(keys) => Some(serde_json::Value::from(keys).to_string()),
+    };
     let values = sqlx::query!(
         r#"SELECT v.portion_id, v.key, v.value, v.unit, v.source AS "source: ValueSource"
         FROM meal_log_portion_values v
         JOIN meal_log_portions p ON p.id = v.portion_id JOIN meal_logs m ON m.id = p.meal_log_id
         WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2) AND (?3 IS NULL OR m.day <= ?3)
-            AND (?4 OR v.key IN ('energy_kcal', 'protein', 'available_carbohydrate', 'fat', 'dietary_fibre', 'alcohol'))"#,
+            AND (?4 IS NULL OR v.key IN (SELECT value FROM json_each(?4)))"#,
         id,
         from,
         to,
-        all_values
+        keys
     )
     .fetch_all(db)
     .await?;
@@ -1151,7 +1163,7 @@ pub(super) async fn load(
 
 /// One Meal Log, or `None` when it does not exist.
 async fn find(db: &SqlitePool, id: &str) -> Result<Option<MealLog>> {
-    load(db, &Selection::One(id), false)
+    load(db, &Selection::One(id), Values::Only(&KEY_NUTRIENTS))
         .await?
         .into_iter()
         .next()
@@ -1380,7 +1392,7 @@ pub async fn meal_logs(db: &SqlitePool, query: &MealLogsQuery) -> Result<MealLog
             ));
         }
     };
-    let meal_logs = load(db, &Selection::Days(from, to), false)
+    let meal_logs = load(db, &Selection::Days(from, to), Values::Only(&KEY_NUTRIENTS))
         .await?
         .into_iter()
         .map(StoredLog::into_meal_log)

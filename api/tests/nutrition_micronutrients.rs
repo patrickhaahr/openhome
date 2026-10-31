@@ -1,6 +1,6 @@
-//! The micronutrient panel through the Nutrition Day: NNR 2023 Recommended Intakes by the
-//! Profile's sex and age band, and EFSA Upper Limits checked against the day and against the
-//! trailing 7-day average, from a real `app.db` seeded through the Profile, Supplement and Meal
+//! The micronutrient panel through the Nutrition Day, and micronutrient coverage through the
+//! Nutrition Summary: NNR 2023 Recommended Intakes by the Profile's sex and age band, and EFSA
+//! Upper Limits checked against the day and against the trailing 7-day average, from a real `app.db` seeded through the Profile, Supplement and Meal
 //! Log routes, and a real `food.db` imported from a synthetic DTU-shaped workbook served by
 //! `wiremock`. Every Food and value here is invented.
 
@@ -241,6 +241,18 @@ impl Api {
     /// One nutrient of the day's panel.
     async fn nutrient(&self, day: &str, key: &str) -> Value {
         nutrient(&self.panel(day).await, key)
+    }
+
+    async fn summary(&self, from: &str, to: &str, aggregation: &str) -> Value {
+        let (status, body) = self
+            .send(
+                Method::GET,
+                &format!("/api/nutrition/summary?from={from}&to={to}&aggregation={aggregation}"),
+                None,
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        body
     }
 }
 
@@ -731,4 +743,255 @@ async fn epa_and_dha_from_food_and_supplements_add_up_against_the_efsa_adequate_
         .map(|nutrient| &nutrient["key"])
         .collect();
     assert!(!keys.contains(&&json!("creatine_monohydrate")), "{keys:?}");
+}
+
+/// One nutrient's coverage: the mean percentage of its Recommended Intake, the days averaged, the
+/// days above an Upper Limit and whether a trailing 7-day average was above one.
+fn period_coverage(coverage: &Value, key: &str) -> Value {
+    let nutrient = nutrient(coverage, key);
+    json!([
+        nutrient["percent_of_recommended"],
+        nutrient["averaged_days"],
+        nutrient["days_above_upper_limit"],
+        nutrient["seven_day_average_above_upper_limit"],
+    ])
+}
+
+/// One nutrient's days above an Upper Limit and whether a trailing 7-day average was above one.
+fn limit_flags(coverage: &Value, key: &str) -> Value {
+    let nutrient = nutrient(coverage, key);
+    json!([
+        nutrient["days_above_upper_limit"],
+        nutrient["seven_day_average_above_upper_limit"],
+    ])
+}
+
+#[tokio::test]
+async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only() {
+    let api = Api::start().await;
+    woman(&api).await;
+    let vitamin_d = api
+        .supplement(
+            "Vitamin D3",
+            json!({"amounts": [{"key": "vitamin_d", "value": 20, "unit": "µg"}]}),
+        )
+        .await;
+    // Monday 200 g of Orange (100 mg vitamin C, 105.3 %) and Wednesday 100 g (50 mg, 52.6 %).
+    // Friday logs only a vitamin D capsule: no known energy, so it is not a logged day.
+    api.eat("2026-04-06", &[(1001, 200.0)], &[]).await;
+    api.eat("2026-04-08", &[(1001, 100.0)], &[]).await;
+    api.eat("2026-04-10", &[], &[(&vitamin_d, 1.0)]).await;
+
+    let week = api.summary("2026-04-06", "2026-04-12", "week").await;
+    let coverage = &week["periods"][0]["micronutrients"];
+    assert_eq!(coverage["logged_days"], 2);
+    // The five days without food leave the mean alone instead of counting as zero.
+    assert_eq!(
+        period_coverage(coverage, "vitamin_c"),
+        json!([78.9, 2, null, null])
+    );
+    assert_eq!(
+        period_coverage(coverage, "folate"),
+        json!([13.6, 2, 0, false])
+    );
+    // No Orange has a vitamin K or vitamin D value: unknown, not zero.
+    assert_eq!(
+        period_coverage(coverage, "vitamin_k"),
+        json!([null, 0, null, null])
+    );
+    assert_eq!(
+        period_coverage(coverage, "vitamin_d"),
+        json!([null, 0, 0, false])
+    );
+
+    // By day, a day without Meal Logs has no coverage.
+    let days = api.summary("2026-04-06", "2026-04-08", "day").await;
+    let percents: Vec<Value> = days["periods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|period| {
+            json!([
+                period["micronutrients"]["logged_days"],
+                nutrient(&period["micronutrients"], "vitamin_c")["percent_of_recommended"],
+            ])
+        })
+        .collect();
+    assert_eq!(
+        percents,
+        vec![json!([1, 105.3]), json!([0, null]), json!([1, 52.6])]
+    );
+
+    // The range carries the same means beside each nutrient's reference.
+    let range = &week["micronutrients"];
+    assert_eq!(range["state"], "available");
+    assert_eq!(range["logged_days"], 2);
+    let vitamin_c = nutrient(range, "vitamin_c");
+    assert_eq!(
+        json!([
+            vitamin_c["name"],
+            vitamin_c["group"],
+            vitamin_c["unit"],
+            vitamin_c["adequate_intake"],
+            vitamin_c["percent_of_recommended"],
+            vitamin_c["averaged_days"],
+        ]),
+        json!(["Vitamin C", "vitamins", "mg", false, 78.9, 2])
+    );
+    assert_eq!(nutrient(range, "epa_dha")["unit"], "mg");
+}
+
+#[tokio::test]
+async fn a_lasting_shortfall_is_a_range_mean_below_70_percent_over_at_least_7_logged_days() {
+    let api = Api::start().await;
+    woman(&api).await;
+    // 100 g of Orange a day: 50 mg vitamin C (52.6 %) and 30 µg folate (9.1 %).
+    let days = [
+        "2026-04-01",
+        "2026-04-02",
+        "2026-04-03",
+        "2026-04-05",
+        "2026-04-06",
+        "2026-04-08",
+    ];
+    for day in days {
+        api.eat(day, &[(1001, 100.0)], &[]).await;
+    }
+
+    let range = api.summary("2026-04-01", "2026-04-10", "week").await["micronutrients"].clone();
+    assert_eq!(
+        range["shortfall"],
+        json!({"below_percent": 70.0, "min_logged_days": 7})
+    );
+    // Six logged days are too few to call it lasting.
+    assert_eq!(nutrient(&range, "vitamin_c")["lasting_shortfall"], false);
+
+    api.eat("2026-04-09", &[(1001, 100.0)], &[]).await;
+    let range = api.summary("2026-04-01", "2026-04-10", "week").await["micronutrients"].clone();
+    let shortfall = |key| {
+        let nutrient = nutrient(&range, key);
+        json!([
+            nutrient["percent_of_recommended"],
+            nutrient["lasting_shortfall"]
+        ])
+    };
+    assert_eq!(shortfall("vitamin_c"), json!([52.6, true]));
+    assert_eq!(shortfall("folate"), json!([9.1, true]));
+    // Unknown is never a shortfall.
+    assert_eq!(shortfall("vitamin_d"), json!([null, false]));
+
+    // 900 g on an eighth day (450 mg) lifts the mean above the threshold.
+    api.eat("2026-04-10", &[(1001, 900.0)], &[]).await;
+    let range = api.summary("2026-04-01", "2026-04-10", "week").await["micronutrients"].clone();
+    let vitamin_c = nutrient(&range, "vitamin_c");
+    assert_eq!(
+        json!([
+            vitamin_c["percent_of_recommended"],
+            vitamin_c["lasting_shortfall"]
+        ]),
+        json!([105.3, false])
+    );
+}
+
+#[tokio::test]
+async fn summary_counts_days_above_upper_limits_and_cut_down_windows_as_the_day_view_does() {
+    let api = Api::start().await;
+    woman(&api).await;
+    let strong = api
+        .supplement(
+            "Vitamin D 150",
+            json!({"amounts": [{"key": "vitamin_d", "value": 150, "unit": "µg"}]}),
+        )
+        .await;
+    let magnesium = api
+        .supplement(
+            "Magnesium",
+            json!({"amounts": [{"key": "magnesium", "value": 300, "unit": "mg"}]}),
+        )
+        .await;
+    // Week of 6 April: 10 g of Salmon (1 µg vitamin D) on Monday, a 150 µg capsule alone on
+    // Tuesday and Thursday, and 100 g of Pumpkin seeds (600 mg magnesium from food) on Wednesday.
+    api.eat("2026-04-06", &[(1002, 10.0)], &[]).await;
+    api.eat("2026-04-07", &[], &[(&strong, 1.0)]).await;
+    api.eat("2026-04-08", &[(1003, 100.0)], &[]).await;
+    api.eat("2026-04-09", &[], &[(&strong, 1.0)]).await;
+    // Week of 13 April: Pumpkin seeds with a 300 mg magnesium capsule on Wednesday.
+    api.eat("2026-04-15", &[(1003, 100.0)], &[(&magnesium, 1.0)])
+        .await;
+    // The Day view agrees: Tuesday is a caution, Thursday's average of 100.3 µg is a cut down.
+    assert_eq!(
+        api.nutrient("2026-04-07", "vitamin_d").await["upper_limit_status"],
+        "caution"
+    );
+    assert_eq!(
+        api.nutrient("2026-04-09", "vitamin_d").await["upper_limit_status"],
+        "cut_down"
+    );
+
+    let summary = api.summary("2026-04-06", "2026-04-26", "week").await;
+    let weeks: Vec<Value> = summary["periods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|period| {
+            let coverage = &period["micronutrients"];
+            json!([
+                period["start"],
+                limit_flags(coverage, "vitamin_d"),
+                limit_flags(coverage, "magnesium"),
+            ])
+        })
+        .collect();
+    assert_eq!(
+        weeks,
+        vec![
+            // Two capsule days above 100 µg, and Thursday's window averages above it. The 600 mg
+            // of magnesium from food is not checked against the supplements-only limit.
+            json!(["2026-04-06", [2, true], [0, false]]),
+            // No day above, but Wednesday's window still reaches back to Thursday's capsule; the
+            // 300 mg capsule is above the 250 mg supplement limit for a day only. Windows ending
+            // on the days after it, without Meal Logs, are not counted.
+            json!(["2026-04-13", [0, true], [1, false]]),
+            // Nothing logged: never flagged.
+            json!(["2026-04-20", [0, false], [0, false]]),
+        ]
+    );
+
+    let range = &summary["micronutrients"];
+    assert_eq!(limit_flags(range, "vitamin_d"), json!([2, true]));
+    assert_eq!(limit_flags(range, "magnesium"), json!([1, false]));
+    // Without an Upper Limit there is nothing to count.
+    assert_eq!(limit_flags(range, "vitamin_c"), json!([null, null]));
+}
+
+#[tokio::test]
+async fn summary_coverage_is_unavailable_with_the_reason_while_the_rest_still_works() {
+    let api = Api::start().await;
+    api.eat("2026-04-08", &[(1001, 200.0)], &[]).await;
+
+    let summary = api.summary("2026-04-06", "2026-04-12", "week").await;
+    assert_eq!(
+        summary["micronutrients"],
+        json!({
+            "state": "unavailable",
+            "missing": ["sex", "birth_date"],
+            "reason": "The micronutrient panel needs the Profile's sex (male or female) and birth date",
+        })
+    );
+    let period = &summary["periods"][0];
+    assert_eq!(period["micronutrients"], Value::Null);
+    assert_eq!(period["energy"]["eaten_kcal"], 94.0);
+
+    // Under 18 for the whole range.
+    api.profile(json!({"sex": "female", "birth_date": "2010-01-01"}))
+        .await;
+    let summary = api.summary("2026-04-06", "2026-04-12", "week").await;
+    assert_eq!(summary["micronutrients"]["state"], "unavailable");
+    assert_eq!(summary["micronutrients"]["missing"], json!([]));
+    assert_eq!(
+        summary["micronutrients"]["reason"],
+        "The micronutrient panel covers adults from 18; on 2026-04-12 the Profile's birth date \
+         gives 16"
+    );
+    assert_eq!(summary["periods"][0]["micronutrients"], Value::Null);
 }

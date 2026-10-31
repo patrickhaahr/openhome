@@ -29,7 +29,7 @@ use sqlx::SqlitePool;
 
 use super::goals::{self, DatedGoal};
 use super::intake::Intake;
-use super::meal_logs::{self, KeyNutrients, MealLogError, Selection, StoredPortion, Total};
+use super::meal_logs::{self, KeyNutrients, MealLogError, Selection, StoredPortion, Total, Values};
 use super::parameters;
 use super::supplements::StoredDose;
 use crate::services::training::calendar::CalendarDay;
@@ -436,7 +436,12 @@ async fn logged_energy(
     if to < from {
         return Ok(BTreeMap::new());
     }
-    let logs = meal_logs::load(db, &Selection::Days(from, to), false).await?;
+    let logs = meal_logs::load(
+        db,
+        &Selection::Days(from, to),
+        Values::Only(&meal_logs::KEY_NUTRIENTS),
+    )
+    .await?;
     let mut by_day: BTreeMap<CalendarDay, Intake> = BTreeMap::new();
     for log in &logs {
         let Some(day) = CalendarDay::parse(&log.day) else {

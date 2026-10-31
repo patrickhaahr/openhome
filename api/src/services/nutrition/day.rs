@@ -11,7 +11,7 @@ use sqlx::SqlitePool;
 use super::food_database::{FoodDatabase, ParameterGroup, Source};
 use super::intake::{Compounds, FormAmount, Intake};
 use super::meal_logs::{
-    self, KeyNutrients, MealLog, MealLogError, Selection, StoredLog, StoredPortion, Total,
+    self, KeyNutrients, MealLog, MealLogError, Selection, StoredLog, StoredPortion, Total, Values,
     key_totals,
 };
 use super::micronutrients::{Diary, Micronutrients, Person};
@@ -78,7 +78,7 @@ pub async fn nutrition_day(
     today: CalendarDay,
 ) -> Result<NutritionDay, MealLogError> {
     let (parameters, source) = foods.nutrient_parameters().await?;
-    let logs = meal_logs::load(db, &Selection::Days(day, day), true).await?;
+    let logs = meal_logs::load(db, &Selection::Days(day, day), Values::All).await?;
     let portions: Vec<&StoredPortion> = logs.iter().flat_map(|log| &log.portions).collect();
     let doses: Vec<&StoredDose> = logs.iter().flat_map(|log| &log.doses).collect();
     let nutrient = |key: &str| {

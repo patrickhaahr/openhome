@@ -20,7 +20,9 @@
 //!   amounts taken.
 //!
 //! [`Diary`] holds every logged day's intake of the panel's nutrients and evaluates any of its
-//! days, so a range is loaded once and each day is evaluated from it.
+//! days, so a range is loaded once and each day is evaluated from it: as the Nutrition Day's
+//! panel ([`Diary::evaluate`]), or unrounded for the Nutrition Summary to add up
+//! ([`Diary::assess`]).
 
 pub mod references;
 
@@ -33,13 +35,33 @@ use self::references::{
     AgeBand, Group, Measure, REFERENCE_ENERGY_MJ, REFERENCES, Reference, Share,
 };
 use super::intake::Intake;
-use super::meal_logs::{self, MealLogError, Selection, StoredLog, StoredPortion, round};
+use super::meal_logs::{self, MealLogError, Selection, StoredLog, StoredPortion, Values, round};
 use super::supplements::StoredDose;
 use super::targets::{Missing, Sex};
 use crate::services::training::calendar::CalendarDay;
 
 /// Days the trailing average spans, ending with the day evaluated.
 pub const TRAILING_DAYS: u64 = 7;
+const EPA: &str = "epa";
+const DHA: &str = "dha";
+/// Preformed vitamin A in food.
+const RETINOL: &str = "retinol";
+
+/// Every Portion value the panel reads: its parameters, EPA and DHA, and food retinol.
+/// Supplement Doses always carry every amount, chemical forms included.
+pub(super) fn value_keys() -> Vec<&'static str> {
+    let mut keys: Vec<&'static str> = REFERENCES
+        .iter()
+        .filter_map(|reference| match reference.measure {
+            Measure::Parameter(key) => Some(key),
+            Measure::EpaDha => None,
+        })
+        .chain([EPA, DHA, RETINOL])
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    keys
+}
 
 /// The Profile values the references depend on.
 #[derive(Clone, Copy, Debug)]
@@ -115,8 +137,8 @@ impl DayIntake {
             }
             Measure::EpaDha => {
                 let (epa, dha) = (
-                    Intake::of("epa", portions, doses),
-                    Intake::of("dha", portions, doses),
+                    Intake::of(EPA, portions, doses),
+                    Intake::of(DHA, portions, doses),
                 );
                 let mg = |grams: Option<f64>| grams.map(|grams| grams * 1000.0);
                 (
@@ -135,7 +157,7 @@ impl DayIntake {
                 Share::Supplements => Some(supplements.unwrap_or(0.0)),
                 // Retinol in food, and retinol taken as vitamin A or listed as retinol itself.
                 Share::PreformedVitaminA => add(
-                    Intake::of("retinol", portions, doses).total(),
+                    Intake::of(RETINOL, portions, doses).total(),
                     Intake::of("vitamin_a", portions, doses).supplement_form("retinol"),
                 ),
                 Share::SupplementalFolate => Some(
@@ -217,6 +239,43 @@ pub struct NutrientStatus {
     pub upper_limit_status: Option<LimitStatus>,
 }
 
+impl NutrientStatus {
+    fn new(reference: &'static Reference, day: NutrientDay, intake: Option<&DayIntake>) -> Self {
+        let upper_limits: Vec<UpperLimitStatus> = reference
+            .upper_limits
+            .iter()
+            .zip(day.limits)
+            .map(|(limit, limit_day)| UpperLimitStatus {
+                applies_to: limit.share,
+                limit: limit.value,
+                amount: limit_day.amount.map(round),
+                seven_day_average: limit_day.average.map(round),
+                averaged_days: limit_day.averaged_days,
+                status: limit_day.status,
+                source: limit.source,
+            })
+            .collect();
+        Self {
+            key: reference.key,
+            name: reference.name,
+            group: reference.group,
+            unit: reference.unit,
+            amount: day.amount.map(round),
+            food: intake.and_then(|intake| intake.food).map(round),
+            supplements: intake.and_then(|intake| intake.supplements).map(round),
+            unknown_portions: intake.map_or(0, |intake| intake.unknown_portions),
+            recommended_intake: round(day.recommended),
+            adequate_intake: reference.adequate,
+            percent_of_recommended: day
+                .amount
+                .map(|amount| (amount / day.recommended * 1000.0).round() / 10.0),
+            source: reference.source,
+            upper_limit_status: upper_limits.iter().map(|limit| limit.status).max(),
+            upper_limits,
+        }
+    }
+}
+
 /// The trailing window the averages span.
 #[derive(Debug, Serialize)]
 pub struct TrailingWindow {
@@ -264,16 +323,76 @@ pub struct Panel {
     pub sources: &'static [Citation],
 }
 
+/// Why there is no panel.
+#[derive(Debug, Serialize)]
+pub struct Unavailable {
+    /// Profile values to add; empty when the age is outside the adult references.
+    pub missing: Vec<Missing>,
+    pub reason: String,
+}
+
 /// A day's micronutrient panel, or why there is none.
 #[derive(Debug, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Micronutrients {
     Available(Box<Panel>),
-    Unavailable {
-        /// Profile values to add; empty when the age is outside the adult references.
-        missing: Vec<Missing>,
-        reason: String,
-    },
+    Unavailable(Unavailable),
+}
+
+/// One Upper Limit on one day, before rounding.
+#[derive(Debug)]
+struct LimitDay {
+    limit: f64,
+    /// The day's amount of the share the limit applies to.
+    amount: Option<f64>,
+    average: Option<f64>,
+    averaged_days: usize,
+    status: LimitStatus,
+}
+
+/// One nutrient on one day, before rounding: what the panel shows and a summary adds up.
+#[derive(Debug)]
+pub(super) struct NutrientDay {
+    amount: Option<f64>,
+    recommended: f64,
+    /// In the order of the reference's Upper Limits.
+    limits: Vec<LimitDay>,
+}
+
+impl NutrientDay {
+    /// The percentage of the Recommended Intake; `None` when the amount is unknown.
+    pub(super) fn percent_of_recommended(&self) -> Option<f64> {
+        self.amount.map(|amount| amount / self.recommended * 100.0)
+    }
+
+    /// Whether the day is above any of the nutrient's Upper Limits (the Day view's caution, or
+    /// a day above within a cut down); `None` for a nutrient without one.
+    pub(super) fn above_upper_limit(&self) -> Option<bool> {
+        (!self.limits.is_empty()).then(|| {
+            self.limits
+                .iter()
+                .any(|limit| limit.amount.is_some_and(|amount| amount > limit.limit))
+        })
+    }
+
+    /// Whether the trailing 7-day average is above any of its Upper Limits; `None` for a
+    /// nutrient without one.
+    pub(super) fn cut_down(&self) -> Option<bool> {
+        (!self.limits.is_empty()).then(|| {
+            self.limits
+                .iter()
+                .any(|limit| limit.status == LimitStatus::CutDown)
+        })
+    }
+}
+
+/// One day against the references, before rounding.
+#[derive(Debug)]
+pub(super) struct DayAssessment {
+    /// The day has at least one Meal Log.
+    pub(super) has_meal_logs: bool,
+    /// In the order of [`REFERENCES`].
+    pub(super) nutrients: Vec<NutrientDay>,
 }
 
 /// Every logged day's intake of the panel's nutrients.
@@ -315,8 +434,13 @@ impl Diary {
         from: CalendarDay,
         to: CalendarDay,
     ) -> Result<Self, MealLogError> {
-        let start = window(from).0;
-        let logs = meal_logs::load(db, &Selection::Days(start, to), true).await?;
+        let keys = value_keys();
+        let logs = meal_logs::load(
+            db,
+            &Selection::Days(trailing_start(from), to),
+            Values::Only(&keys),
+        )
+        .await?;
         Ok(Self::of(&logs))
     }
 
@@ -327,46 +451,18 @@ impl Diary {
         person: &Result<Person, Vec<Missing>>,
         day: CalendarDay,
     ) -> Micronutrients {
-        let person = match person {
-            Ok(person) => *person,
-            Err(missing) => {
-                return Micronutrients::Unavailable {
-                    reason: missing_reason(missing),
-                    missing: missing.clone(),
-                };
-            }
-        };
-        let Some(age) = day.years_since(person.birth_date) else {
-            return Micronutrients::Unavailable {
-                missing: Vec::new(),
-                reason: format!(
-                    "The micronutrient panel needs a day on or after the Profile's birth date, not {day}"
-                ),
-            };
-        };
-        let Some(band) = AgeBand::of(age) else {
-            return Micronutrients::Unavailable {
-                missing: Vec::new(),
-                reason: format!(
-                    "The micronutrient panel covers adults from 18; on {day} the Profile's birth \
-                     date gives {age}"
-                ),
-            };
+        let (person, age, band) = match references_on(person, day) {
+            Ok(references) => references,
+            Err(unavailable) => return Micronutrients::Unavailable(unavailable),
         };
         let (from, to) = window(day);
         let intakes = self.days.get(&day);
         let nutrients = REFERENCES
             .iter()
+            .zip(self.nutrients(person.sex, band, day))
             .enumerate()
-            .map(|(index, reference)| {
-                self.status(
-                    index,
-                    reference,
-                    intakes.map(|intakes| &intakes[index]),
-                    person.sex,
-                    band,
-                    day,
-                )
+            .map(|(index, (reference, nutrient))| {
+                NutrientStatus::new(reference, nutrient, intakes.map(|intakes| &intakes[index]))
             })
             .collect();
         Micronutrients::Available(Box::new(Panel {
@@ -387,59 +483,59 @@ impl Diary {
         }))
     }
 
-    fn status(
+    /// `day` against the references, unrounded, exactly as [`Self::evaluate`] judges it; or why
+    /// there is no panel that day. `day` must lie in the range the diary was loaded for.
+    pub(super) fn assess(
         &self,
-        index: usize,
-        reference: &'static Reference,
-        intake: Option<&DayIntake>,
-        sex: Sex,
-        band: AgeBand,
+        person: &Result<Person, Vec<Missing>>,
         day: CalendarDay,
-    ) -> NutrientStatus {
-        let recommended = reference.recommended.daily(sex, band);
-        let amount = intake.and_then(|intake| intake.amount);
-        let upper_limits: Vec<UpperLimitStatus> = reference
-            .upper_limits
+    ) -> Result<DayAssessment, Unavailable> {
+        let (person, _, band) = references_on(person, day)?;
+        Ok(DayAssessment {
+            has_meal_logs: self.days.contains_key(&day),
+            nutrients: self.nutrients(person.sex, band, day),
+        })
+    }
+
+    /// Each nutrient of `day` in the order of [`REFERENCES`].
+    fn nutrients(&self, sex: Sex, band: AgeBand, day: CalendarDay) -> Vec<NutrientDay> {
+        let intakes = self.days.get(&day);
+        REFERENCES
             .iter()
             .enumerate()
-            .map(|(limit_index, limit)| {
-                let day_amount = intake.and_then(|intake| intake.limited[limit_index]);
-                let (average, averaged_days) = self.trailing_average(index, limit_index, day);
-                let status = if average.is_some_and(|average| average > limit.value) {
-                    LimitStatus::CutDown
-                } else if day_amount.is_some_and(|amount| amount > limit.value) {
-                    LimitStatus::Caution
-                } else {
-                    LimitStatus::Clear
-                };
-                UpperLimitStatus {
-                    applies_to: limit.share,
-                    limit: limit.value,
-                    amount: day_amount.map(round),
-                    seven_day_average: average.map(round),
-                    averaged_days,
-                    status,
-                    source: limit.source,
+            .map(|(index, reference)| {
+                let intake = intakes.map(|intakes| &intakes[index]);
+                let limits = reference
+                    .upper_limits
+                    .iter()
+                    .enumerate()
+                    .map(|(limit_index, limit)| {
+                        let amount = intake.and_then(|intake| intake.limited[limit_index]);
+                        let (average, averaged_days) =
+                            self.trailing_average(index, limit_index, day);
+                        let status = if average.is_some_and(|average| average > limit.value) {
+                            LimitStatus::CutDown
+                        } else if amount.is_some_and(|amount| amount > limit.value) {
+                            LimitStatus::Caution
+                        } else {
+                            LimitStatus::Clear
+                        };
+                        LimitDay {
+                            limit: limit.value,
+                            amount,
+                            average,
+                            averaged_days,
+                            status,
+                        }
+                    })
+                    .collect();
+                NutrientDay {
+                    amount: intake.and_then(|intake| intake.amount),
+                    recommended: reference.recommended.daily(sex, band),
+                    limits,
                 }
             })
-            .collect();
-        NutrientStatus {
-            key: reference.key,
-            name: reference.name,
-            group: reference.group,
-            unit: reference.unit,
-            amount: amount.map(round),
-            food: intake.and_then(|intake| intake.food).map(round),
-            supplements: intake.and_then(|intake| intake.supplements).map(round),
-            unknown_portions: intake.map_or(0, |intake| intake.unknown_portions),
-            recommended_intake: round(recommended),
-            adequate_intake: reference.adequate,
-            percent_of_recommended: amount
-                .map(|amount| (amount / recommended * 1000.0).round() / 10.0),
-            source: reference.source,
-            upper_limit_status: upper_limits.iter().map(|limit| limit.status).max(),
-            upper_limits,
-        }
+            .collect()
     }
 
     /// The mean of one Upper Limit's share over the logged days of `day`'s trailing window that
@@ -464,6 +560,54 @@ impl Diary {
 /// The trailing window ending with `day`.
 fn window(day: CalendarDay) -> (CalendarDay, CalendarDay) {
     (day.checked_sub_days(TRAILING_DAYS - 1).unwrap_or(day), day)
+}
+
+/// The first day whose Meal Logs evaluating `day` reads.
+pub(super) fn trailing_start(day: CalendarDay) -> CalendarDay {
+    window(day).0
+}
+
+/// The person, their age and age band on `day`, or why the references do not cover them.
+fn references_on(
+    person: &Result<Person, Vec<Missing>>,
+    day: CalendarDay,
+) -> Result<(Person, u32, AgeBand), Unavailable> {
+    let person = match person {
+        Ok(person) => *person,
+        Err(missing) => {
+            return Err(Unavailable {
+                reason: missing_reason(missing),
+                missing: missing.clone(),
+            });
+        }
+    };
+    let Some(age) = day.years_since(person.birth_date) else {
+        return Err(Unavailable {
+            missing: Vec::new(),
+            reason: format!(
+                "The micronutrient panel needs a day on or after the Profile's birth date, not {day}"
+            ),
+        });
+    };
+    let Some(band) = AgeBand::of(age) else {
+        return Err(Unavailable {
+            missing: Vec::new(),
+            reason: format!(
+                "The micronutrient panel covers adults from 18; on {day} the Profile's birth \
+                 date gives {age}"
+            ),
+        });
+    };
+    Ok((person, age, band))
+}
+
+/// Why there is no panel on `day`, if there is none. A panel on the last day of a range means
+/// every earlier day the person was an adult has one too, since age only grows.
+pub(super) fn unavailable_on(
+    person: &Result<Person, Vec<Missing>>,
+    day: CalendarDay,
+) -> Option<Unavailable> {
+    references_on(person, day).err()
 }
 
 /// Why the panel is unavailable, naming the Profile values to add.

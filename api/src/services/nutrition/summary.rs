@@ -22,20 +22,29 @@
 //!   the day before it to its last day, or over the 7 days ending on its last day when the period
 //!   is shorter than a week; null without a Trend Weight at both ends. The goal rate is the mean
 //!   of each day's Nutrition Goal change in kg per week, negative to lose.
+//! - **Micronutrients**: each period's and the range's coverage of the micronutrient panel
+//!   (`coverage`), or, without the Profile's sex or birth date or below 18 years on the range's
+//!   last day, why there is none; the rest of the summary does not depend on it.
+//!
+//! One read of the Meal Logs serves everything: the key nutrients and the panel's values, from
+//! the 6 days before `from` that the first trailing 7-day averages need through `to`.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
+use super::coverage::{MicronutrientCoverage, PeriodCoverage, Tally};
 use super::goals::{self, GoalHistory};
 use super::intake::Intake;
-use super::meal_logs::{self, MealLogError, Selection, StoredPortion};
+use super::meal_logs::{self, MealLogError, Selection, StoredPortion, Values};
+use super::micronutrients::{self, Diary, Person};
 use super::nova::{NovaEnergy, NovaShare};
 use super::parameters;
 use super::supplements::StoredDose;
 use super::targets::{
-    self, KCAL_PER_G_CARBS, KCAL_PER_G_FAT, KCAL_PER_G_PROTEIN, Plan, TrendWeight, round_to,
+    self, KCAL_PER_G_CARBS, KCAL_PER_G_FAT, KCAL_PER_G_PROTEIN, Missing, Plan, TrendWeight,
+    round_to,
 };
 use crate::services::training::calendar::{self, CalendarDay};
 
@@ -86,6 +95,8 @@ pub struct NutritionSummary {
     pub logged_days: usize,
     /// Days left out of intake means.
     pub missing_days: usize,
+    /// Micronutrient coverage over the whole range, or why there is none.
+    pub micronutrients: MicronutrientCoverage,
     /// In date order.
     pub periods: Vec<Period>,
 }
@@ -108,6 +119,8 @@ pub struct Period {
     pub nova: NovaShare,
     pub weight: WeightSummary,
     pub weight_change: WeightChange,
+    /// Null when the range has no micronutrient coverage.
+    pub micronutrients: Option<PeriodCoverage>,
 }
 
 /// kcal per day; null when no day has the value.
@@ -224,10 +237,11 @@ struct Sums {
 
 impl Sums {
     /// A day's intake: its NOVA energy always, its macronutrients only when its energy is known.
-    fn add_eaten(&mut self, eaten: &Eaten<'_>) {
+    /// Returns whether the day counts as logged.
+    fn add_eaten(&mut self, eaten: &Eaten<'_>) -> bool {
         self.nova = self.nova + NovaEnergy::of(&eaten.portions);
         let Some(kcal) = eaten.total(parameters::ENERGY_KCAL) else {
-            return;
+            return false;
         };
         self.logged_days += 1;
         self.energy.add(Some(kcal));
@@ -236,7 +250,14 @@ impl Sums {
             .add(eaten.total(parameters::AVAILABLE_CARBOHYDRATE));
         self.fat.add(eaten.total(parameters::FAT));
         self.alcohol.add(eaten.total(parameters::ALCOHOL));
+        true
     }
+}
+
+/// What micronutrient coverage is judged from, when the panel is available.
+struct CoverageInputs {
+    person: Result<Person, Vec<Missing>>,
+    diary: Diary,
 }
 
 /// Everything read for the range, by day.
@@ -246,17 +267,25 @@ struct Inputs<'a> {
     weigh_ins: BTreeMap<CalendarDay, f64>,
     trend: TrendWeight,
     goals: GoalHistory,
+    coverage: Option<CoverageInputs>,
 }
 
 impl Inputs<'_> {
-    /// One period from its days, which share calendar bounds.
-    fn period(&self, days: &[(CalendarDay, Plan)]) -> Option<Period> {
+    /// One period from its days, which share calendar bounds, with its micronutrient tally.
+    fn period(&self, days: &[(CalendarDay, Plan)]) -> Option<(Period, Option<Tally>)> {
         let (start, end) = (days.first()?.0, days.last()?.0);
         let (calendar_start, calendar_end) = self.aggregation.bounds(start);
         let mut sums = Sums::default();
+        let mut tally = self.coverage.as_ref().map(|_| Tally::default());
         for (day, plan) in days {
-            if let Some(eaten) = self.eaten.get(day) {
-                sums.add_eaten(eaten);
+            let logged = self
+                .eaten
+                .get(day)
+                .is_some_and(|eaten| sums.add_eaten(eaten));
+            if let (Some(tally), Some(coverage)) = (tally.as_mut(), &self.coverage)
+                && let Ok(assessment) = coverage.diary.assess(&coverage.person, *day)
+            {
+                tally.add(&assessment, logged);
             }
             if let Plan::Available(plan) = plan {
                 sums.calorie_target.add(Some(plan.calorie_target_kcal));
@@ -270,7 +299,7 @@ impl Inputs<'_> {
 
         let logged = sums.logged_days;
         let rounded = |mean: Mean, places| mean.get().map(|value| round_to(value, places));
-        Some(Period {
+        let period = Period {
             start,
             end,
             days: days.len(),
@@ -302,7 +331,9 @@ impl Inputs<'_> {
                 kg_per_week: self.weekly_change(end, days.len()),
                 goal_kg_per_week: rounded(sums.goal, 2).unwrap_or_default(),
             },
-        })
+            micronutrients: tally.as_ref().map(Tally::period),
+        };
+        Some((period, tally))
     }
 
     /// The Trend Weight change in kg per week over the `days` ending on `end`, or over the week
@@ -346,13 +377,22 @@ pub async fn nutrition_summary(
 ) -> Result<NutritionSummary, MealLogError> {
     let (from, to) = range(query, today)?;
     let plans = targets::plan(db, from, to, today).await?;
-    let logs = meal_logs::load(db, &Selection::Days(from, to), false).await?;
+    let person = Person::read(db).await?;
+    let unavailable = micronutrients::unavailable_on(&person, to);
+    let (first_day, keys) = if unavailable.is_some() {
+        (from, meal_logs::KEY_NUTRIENTS.to_vec())
+    } else {
+        let mut keys = micronutrients::value_keys();
+        keys.extend(meal_logs::KEY_NUTRIENTS);
+        (micronutrients::trailing_start(from), keys)
+    };
+    let logs = meal_logs::load(db, &Selection::Days(first_day, to), Values::Only(&keys)).await?;
     let weigh_ins = targets::weigh_ins(db, to).await?;
     let goals = goals::history(db).await?;
 
     let mut eaten: BTreeMap<CalendarDay, Eaten<'_>> = BTreeMap::new();
     for log in &logs {
-        let Some(day) = CalendarDay::parse(&log.day) else {
+        let Some(day) = CalendarDay::parse(&log.day).filter(|day| *day >= from) else {
             continue;
         };
         let entry = eaten.entry(day).or_default();
@@ -369,13 +409,28 @@ pub async fn nutrition_summary(
             .collect(),
         trend: TrendWeight::of(&weigh_ins),
         goals,
+        coverage: unavailable.is_none().then(|| CoverageInputs {
+            person,
+            diary: Diary::of(&logs),
+        }),
     };
+    let mut range_tally = Tally::default();
     let periods: Vec<Period> = plans
         .chunk_by(|(left, _), (right, _)| {
             query.aggregation.bounds(*left) == query.aggregation.bounds(*right)
         })
         .filter_map(|days| inputs.period(days))
+        .map(|(period, tally)| {
+            if let Some(tally) = &tally {
+                range_tally += tally;
+            }
+            period
+        })
         .collect();
+    let micronutrients = match unavailable {
+        Some(unavailable) => MicronutrientCoverage::Unavailable(unavailable),
+        None => MicronutrientCoverage::Available(Box::new(range_tally.range())),
+    };
     let logged_days = periods.iter().map(|period| period.logged_days).sum();
     let missing_days = periods.iter().map(|period| period.missing_days).sum();
     Ok(NutritionSummary {
@@ -385,6 +440,7 @@ pub async fn nutrition_summary(
         time_zone: calendar::TIME_ZONE_NAME,
         logged_days,
         missing_days,
+        micronutrients,
         periods,
     })
 }

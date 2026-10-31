@@ -429,6 +429,13 @@ average covers the days with Meal Logs among the last seven, so untracked days
 never dilute it.
 _Avoid_: Overdose threshold, maximum, red line
 
+**Lasting Shortfall**:
+A nutrient whose mean over a range's logged days stays below 70 % of its
+Recommended Intake, over at least 7 logged days with a known amount. A low day
+or a short stretch of logs is never one, and unknown amounts are never counted
+as short.
+_Avoid_: Deficiency, deficit, low day
+
 **Supplement**:
 A labelled product whose amounts are given per dose (tablet, capsule, scoop or
 ml) rather than per 100 g. It may supply vitamins and minerals or other
