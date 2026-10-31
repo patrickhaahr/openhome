@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT a.dose_id, a.key, a.form, a.value, a.unit FROM meal_log_dose_amounts a\n        JOIN meal_log_supplement_doses d ON d.id = a.dose_id JOIN meal_logs m ON m.id = d.meal_log_id\n        WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2) AND (?3 IS NULL OR m.day <= ?3)\n        ORDER BY a.dose_id, a.position",
+  "describe": {
+    "columns": [
+      {
+        "name": "dose_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "key",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "form",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 3,
+        "type_info": "Float"
+      },
+      {
+        "name": "unit",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d0c385c11abeb0e82f3c21dd7370b83af73180b6b75b69c3570e1e4807ce1719"
+}

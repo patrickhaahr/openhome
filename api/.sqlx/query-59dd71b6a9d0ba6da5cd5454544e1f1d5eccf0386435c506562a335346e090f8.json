@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM supplement_amounts WHERE supplement_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "59dd71b6a9d0ba6da5cd5454544e1f1d5eccf0386435c506562a335346e090f8"
+}

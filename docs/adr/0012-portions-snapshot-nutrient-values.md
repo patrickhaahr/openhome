@@ -22,3 +22,7 @@ Food Portions logged from the same dataset version (a `FoodID` from another vers
 another Food). Already classified Portions keep their class: a changed class applies to
 Portions logged afterwards, and a past Meal Log is corrected by replacing its Portions. Product
 Portions never take their linked Food's class.
+
+A Supplement Dose copies its Supplement's name, dose unit and per-dose amounts the same way, so
+editing or deleting a Supplement changes only later doses; a Meal names its Supplements by ID and
+picks up an edited label at its next log.

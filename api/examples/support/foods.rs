@@ -153,10 +153,15 @@ pub async fn seed_meals(
     labels: &openhome_api::services::nutrition::open_food_facts::OpenFoodFacts,
 ) -> anyhow::Result<()> {
     use Item::{Food, Product};
-    use openhome_api::services::nutrition::meal_logs::{self, LogMeal, PortionRequest};
+    use openhome_api::services::nutrition::meal_logs::{
+        self, LogMeal, OverrideRequest, PortionRequest,
+    };
     use openhome_api::services::nutrition::meals;
     use openhome_api::services::nutrition::nova;
     use openhome_api::services::nutrition::products::{self, LinkProduct};
+    use openhome_api::services::nutrition::supplements::{
+        self, AddSupplement, AmountRequest, CompoundRequest, DoseRequest, DoseUnit,
+    };
 
     products::link(
         db,
@@ -170,6 +175,46 @@ pub async fn seed_meals(
     )
     .await
     .map_err(|error| anyhow::anyhow!("linking the synthetic product failed: {error}"))?;
+    // Two Supplements, taken with the meal after the run: a vitamin by parameter key and a
+    // compound without one.
+    let mut supplement_ids = Vec::new();
+    for (name, dose_unit, amounts, compounds) in [
+        (
+            "Vitamin D3",
+            DoseUnit::Capsule,
+            vec![AmountRequest {
+                key: "vitamin_d".into(),
+                value: 25.0,
+                unit: "µg".into(),
+                form: None,
+            }],
+            vec![],
+        ),
+        (
+            "Creatine",
+            DoseUnit::Scoop,
+            vec![],
+            vec![CompoundRequest {
+                name: "Creatine monohydrate".into(),
+                value: 3.0,
+                unit: "g".into(),
+            }],
+        ),
+    ] {
+        let added = supplements::add_supplement(
+            db,
+            AddSupplement {
+                name: name.into(),
+                dose_unit,
+                amounts,
+                compounds,
+                request_id: format!("synthetic-supplement-{name}"),
+            },
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("adding a synthetic Supplement failed: {error}"))?;
+        supplement_ids.push(added.supplement.id);
+    }
     let now = chrono::Utc::now();
     let meals: [SyntheticMeal; 5] = [
         (27, None, &[(Food(1693), 200.0), (Food(60), 50.0)], None),
@@ -211,6 +256,15 @@ pub async fn seed_meals(
                         })
                         .collect(),
                 ),
+                supplement_doses: (index == 2).then(|| {
+                    supplement_ids
+                        .iter()
+                        .map(|id| DoseRequest {
+                            supplement_id: id.clone(),
+                            doses: 1.0,
+                        })
+                        .collect()
+                }),
                 meal: None,
                 overrides: None,
                 request_id: format!("synthetic-meal-{index}"),
@@ -238,6 +292,7 @@ pub async fn seed_meals(
                     grams: 50.0,
                 },
             ],
+            supplement_doses: vec![],
             request_id: "synthetic-meal-save".into(),
         },
     )
@@ -251,11 +306,14 @@ pub async fn seed_meals(
             eaten_at: (now - chrono::TimeDelta::hours(8)).to_rfc3339(),
             note: None,
             portions: None,
+            supplement_doses: None,
             meal: Some("protein oats".into()),
-            overrides: Some(vec![meals::MealItemRequest {
+            overrides: Some(vec![OverrideRequest {
                 food_id: Some(60),
                 barcode: None,
-                grams: 70.0,
+                grams: Some(70.0),
+                supplement_id: None,
+                doses: None,
             }]),
             request_id: "synthetic-meal-by-name".into(),
             photo: None,

@@ -1374,7 +1374,10 @@ async fn meal_log_tools_forward_logs_receipts_days_and_errors_unchanged() {
     let expected = direct("/api/nutrition/days/2026-10-29".into()).await;
     assert_eq!(
         expected["totals"]["protein"],
-        json!({"value": 16.5, "unit": "g", "unknown_portions": 0})
+        json!({
+            "value": 16.5, "unit": "g", "unknown_portions": 0,
+            "food": 16.5, "supplements": null,
+        })
     );
     assert_eq!(nutrition_day.structured_content, Some(expected));
 

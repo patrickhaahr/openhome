@@ -2,7 +2,9 @@
 //! without analysing a photo.
 //!
 //! A Meal holds references, never values: each Portion is grams of a Food (by `FoodID`) or of a
-//! linked Product (by barcode), in the order the user gave. Logging a Meal snapshots its items
+//! linked Product (by barcode), and each Supplement Dose a number of doses of a Supplement, in the
+//! order the user gave. A Meal holds at least one of either, so a morning supplement stack is a
+//! Meal too. Logging a Meal snapshots its items
 //! afresh (ADR 0012), so a re-linked Product or a corrected Food reaches the next log, and
 //! editing or deleting a Meal never changes a Meal Log made from it.
 //!
@@ -25,6 +27,7 @@ use uuid::Uuid;
 use super::food_database::{FoodDatabase, FoodError};
 use super::meal_logs::{self, Item, MAX_PORTIONS, PortionProduct};
 use super::products::{self, Barcode};
+use super::supplements::{self, DoseRequest, DoseSummary, SupplementError};
 use crate::services::patch::Patch;
 
 pub const MAX_NAME_CHARS: usize = 100;
@@ -43,6 +46,8 @@ pub enum MealError {
     NeedsUpdate(String),
     #[error(transparent)]
     Food(#[from] FoodError),
+    #[error(transparent)]
+    Supplement(#[from] SupplementError),
     #[error("Meal database operation failed")]
     Database(#[from] sqlx::Error),
 }
@@ -65,11 +70,15 @@ pub struct MealItemRequest {
 #[serde(deny_unknown_fields)]
 pub struct SaveMeal {
     pub name: String,
+    #[serde(default)]
     pub portions: Vec<MealItemRequest>,
+    #[serde(default)]
+    pub supplement_doses: Vec<DoseRequest>,
     pub request_id: String,
 }
 
-/// Omitted fields keep their value. `portions` replaces every item.
+/// Omitted fields keep their value. `portions` replaces every Food and Product item, and
+/// `supplement_doses` every dose.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditMeal {
@@ -77,6 +86,8 @@ pub struct EditMeal {
     pub name: Patch<String>,
     #[serde(default)]
     pub portions: Patch<Vec<MealItemRequest>>,
+    #[serde(default)]
+    pub supplement_doses: Patch<Vec<DoseRequest>>,
 }
 
 /// One item of a Meal as it is shown: its reference and grams, with names to recognise it by.
@@ -100,6 +111,8 @@ pub struct Meal {
     pub name: String,
     /// In the order they were given.
     pub portions: Vec<MealPortion>,
+    /// In the order they were given, each Supplement named as it is now.
+    pub supplement_doses: Vec<DoseSummary>,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,28 +127,31 @@ pub struct Meals {
     pub meals: Vec<Meal>,
 }
 
-/// A Meal to log: its name as saved and its items with the grams to log.
+/// A Meal to log: its name as saved, its items with the grams to log and its Supplements with
+/// the doses to log.
 pub(super) struct Resolved {
     pub name: String,
     pub items: Vec<(Item, f64)>,
+    pub doses: Vec<(String, f64)>,
 }
 
-/// A Meal name trimmed with inner whitespace collapsed, and the lowercased key names are unique
-/// by.
-pub(super) struct MealName {
+/// A Meal or Supplement name trimmed with inner whitespace collapsed, and the lowercased key
+/// names are unique by.
+pub(super) struct UniqueName {
     pub name: String,
     pub key: String,
 }
 
-impl MealName {
-    pub(super) fn parse(text: &str, field: &str) -> std::result::Result<Self, String> {
+impl UniqueName {
+    /// Parses the name of a `noun` ("Meal", "Supplement") given in `field`.
+    pub(super) fn parse(text: &str, field: &str, noun: &str) -> std::result::Result<Self, String> {
         let name = text.split_whitespace().collect::<Vec<_>>().join(" ");
         if name.is_empty()
             || name.chars().count() > MAX_NAME_CHARS
             || name.chars().any(char::is_control)
         {
             return Err(format!(
-                "{field} must be a Meal name of 1-{MAX_NAME_CHARS} characters without control \
+                "{field} must be a {noun} name of 1-{MAX_NAME_CHARS} characters without control \
                  characters"
             ));
         }
@@ -168,11 +184,11 @@ pub(super) fn item(request: MealItemRequest) -> std::result::Result<(Item, f64),
     Ok((item, request.grams))
 }
 
-/// Parses 1-50 items, each Food or Product listed once.
+/// Parses up to 50 items, each Food or Product listed once.
 fn items(requests: Vec<MealItemRequest>) -> Result<Vec<(Item, f64)>> {
-    if requests.is_empty() || requests.len() > MAX_PORTIONS {
+    if requests.len() > MAX_PORTIONS {
         return Err(validation(format!(
-            "portions must list 1-{MAX_PORTIONS} Food or Product items"
+            "portions must list at most {MAX_PORTIONS} Food or Product items"
         )));
     }
     let items = requests
@@ -192,6 +208,20 @@ fn items(requests: Vec<MealItemRequest>) -> Result<Vec<(Item, f64)>> {
     Ok(items)
 }
 
+fn doses(requests: Vec<DoseRequest>) -> Result<Vec<(String, f64)>> {
+    supplements::parse_doses(requests).map_err(validation)
+}
+
+/// A Meal holds at least one Food, Product or Supplement Dose.
+fn check_items(items: usize, doses: usize) -> Result<()> {
+    if items + doses == 0 {
+        return Err(validation(
+            "a Meal needs at least one Portion or Supplement Dose".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// A Meal item ready to write: a Food with the names it is saved with, or a linked Product.
 enum CheckedItem {
     Food {
@@ -207,12 +237,16 @@ enum CheckedItem {
     },
 }
 
-/// Checks every item against the current Food database and the linked Products.
+/// Checks every item against the current Food database and the linked Products; Supplement
+/// Doses alone need no Food database.
 async fn check(
     db: &SqlitePool,
     foods: &FoodDatabase,
     items: Vec<(Item, f64)>,
 ) -> Result<Vec<CheckedItem>> {
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
     let food_ids: Vec<i64> = items
         .iter()
         .filter_map(|(item, _)| match item {
@@ -258,14 +292,27 @@ async fn check(
         .collect()
 }
 
-/// The arguments a receipt compares on retry.
-fn normalized(name: &str, items: &[(Item, f64)]) -> Result<String> {
+/// The arguments a receipt compares on retry. Doses are left out when there are none, so
+/// receipts written before Supplements existed still match.
+fn normalized(name: &str, items: &[(Item, f64)], doses: &[(String, f64)]) -> Result<String> {
     let portions: Vec<serde_json::Value> = items
         .iter()
         .map(|(item, grams)| item.normalized(*grams))
         .collect();
-    serde_json::to_string(&serde_json::json!({"name": name, "portions": portions}))
-        .map_err(|error| sqlx::Error::Encode(Box::new(error)).into())
+    let mut request = serde_json::json!({"name": name, "portions": portions});
+    if !doses.is_empty() {
+        request["supplement_doses"] = doses
+            .iter()
+            .map(|(id, doses)| supplements::normalized(id, *doses))
+            .collect();
+    }
+    serde_json::to_string(&request).map_err(|error| sqlx::Error::Encode(Box::new(error)).into())
+}
+
+/// Checks that every dose names a stored Supplement.
+async fn check_doses(db: &SqlitePool, doses: &[(String, f64)]) -> Result<()> {
+    supplements::resolve(db, doses).await?;
+    Ok(())
 }
 
 /// A stored item as `load` reads it.
@@ -337,10 +384,12 @@ async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Meal>> {
             .or_default()
             .push(item.into_portion());
     }
+    let mut doses = supplements::meal_doses(db, id).await?;
     Ok(meals
         .into_iter()
         .map(|row| Meal {
             portions: items.remove(&row.id).unwrap_or_default(),
+            supplement_doses: doses.remove(&row.id).unwrap_or_default(),
             id: row.id,
             name: row.name,
         })
@@ -441,13 +490,16 @@ async fn insert_items(
 /// `request_id`. Rejected requests consume no `request_id` and write nothing.
 pub async fn save_meal(db: &SqlitePool, foods: &FoodDatabase, request: SaveMeal) -> Result<Saved> {
     let request_id = request_id(&request.request_id)?;
-    let name = MealName::parse(&request.name, "name").map_err(validation)?;
+    let name = UniqueName::parse(&request.name, "name", "Meal").map_err(validation)?;
     let items = items(request.portions)?;
-    let normalized = normalized(&name.name, &items)?;
+    let doses = doses(request.supplement_doses)?;
+    check_items(items.len(), doses.len())?;
+    let normalized = normalized(&name.name, &items, &doses)?;
     if let Some(saved) = replay(db, &request_id, &normalized).await? {
         return Ok(saved);
     }
     let checked = check(db, foods, items).await?;
+    check_doses(db, &doses).await?;
 
     let id = Uuid::new_v4().to_string();
     let mut transaction = db.begin().await?;
@@ -473,6 +525,7 @@ pub async fn save_meal(db: &SqlitePool, foods: &FoodDatabase, request: SaveMeal)
     .await
     .map_err(|error| unique_name(error, &name.name))?;
     insert_items(&mut transaction, &id, &checked).await?;
+    supplements::insert_meal_doses(&mut transaction, &id, &doses).await?;
     transaction.commit().await?;
     Ok(Saved {
         meal: find(db, &id).await?.ok_or_else(not_found)?,
@@ -488,7 +541,7 @@ fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
     }
 }
 
-/// Renames a Meal or replaces its items, together. Meal Logs made from it keep their Portions
+/// Renames a Meal or replaces its items or doses, together. Meal Logs made from it keep their Portions
 /// and the name they were logged with.
 pub async fn update_meal(
     db: &SqlitePool,
@@ -497,18 +550,28 @@ pub async fn update_meal(
     edit: EditMeal,
 ) -> Result<Meal> {
     let name = required(edit.name, "name")?
-        .map(|name| MealName::parse(&name, "name").map_err(validation))
+        .map(|name| UniqueName::parse(&name, "name", "Meal").map_err(validation))
         .transpose()?;
     let items = required(edit.portions, "portions")?
         .map(items)
         .transpose()?;
-    if find(db, id).await?.is_none() {
-        return Err(not_found());
-    }
+    let doses = required(edit.supplement_doses, "supplement_doses")?
+        .map(doses)
+        .transpose()?;
+    let current = find(db, id).await?.ok_or_else(not_found)?;
+    check_items(
+        items.as_ref().map_or(current.portions.len(), Vec::len),
+        doses
+            .as_ref()
+            .map_or(current.supplement_doses.len(), Vec::len),
+    )?;
     let checked = match items {
         Some(items) => Some(check(db, foods, items).await?),
         None => None,
     };
+    if let Some(doses) = &doses {
+        check_doses(db, doses).await?;
+    }
 
     let mut transaction = db.begin().await?;
     let (display, key) = name
@@ -534,6 +597,12 @@ pub async fn update_meal(
             .await?;
         insert_items(&mut transaction, id, checked).await?;
     }
+    if let Some(doses) = &doses {
+        sqlx::query!("DELETE FROM meal_supplement_doses WHERE meal_id = ?", id)
+            .execute(&mut *transaction)
+            .await?;
+        supplements::insert_meal_doses(&mut transaction, id, doses).await?;
+    }
     transaction.commit().await?;
     find(db, id).await?.ok_or_else(not_found)
 }
@@ -550,14 +619,15 @@ pub async fn delete_meal(db: &SqlitePool, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// The Meal named `name` (case-insensitively) with its items to log, each override replacing
-/// the grams of the item it names. A Food the current dataset no longer has, or now names
-/// differently, must be replaced with `update_meal` first.
+/// The Meal named `name` (case-insensitively) with its items and doses to log, each override
+/// replacing the grams of the item or the doses of the Supplement it names. A Food the current
+/// dataset no longer has, or now names differently, must be replaced with `update_meal` first.
 pub(super) async fn resolve(
     db: &SqlitePool,
     foods: &FoodDatabase,
-    name: &MealName,
+    name: &UniqueName,
     overrides: &[(Item, f64)],
+    dose_overrides: &[(String, f64)],
 ) -> Result<Resolved> {
     let Some(meal) = sqlx::query!(
         r#"SELECT id AS "id!", name FROM meals WHERE name_key = ?"#,
@@ -600,8 +670,32 @@ pub(super) async fn resolve(
         };
         *item_grams = *grams;
     }
+    let mut doses: Vec<(String, f64)> = supplements::meal_doses(db, Some(&meal.id))
+        .await?
+        .remove(&meal.id)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|dose| (dose.supplement_id, dose.doses))
+        .collect();
+    for (target, count) in dose_overrides {
+        let Some((_, doses)) = doses.iter_mut().find(|(id, _)| id == target) else {
+            return Err(validation(format!(
+                "The Meal {} has no Supplement Dose with supplement_id {target}; overrides name a \
+                 dose by the supplement_id meals lists for it",
+                meal.name
+            )));
+        };
+        *doses = *count;
+    }
 
     let food_ids: Vec<i64> = stored.iter().filter_map(|item| item.food_id).collect();
+    if food_ids.is_empty() {
+        return Ok(Resolved {
+            name: meal.name,
+            items,
+            doses,
+        });
+    }
     let current = foods.names(&food_ids).await?;
     let stale: Vec<String> = stored
         .iter()
@@ -626,5 +720,6 @@ pub(super) async fn resolve(
     Ok(Resolved {
         name: meal.name,
         items,
+        doses,
     })
 }
