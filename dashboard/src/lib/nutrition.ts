@@ -9,14 +9,19 @@ const amount = z.object({
   source: source.nullable(),
 })
 
-/** A sum over Portions: the known values added, the Portions without one counted. */
+/**
+ * A sum over Portions and Supplement Doses: the known values added, the Portions without one
+ * counted, and the food and supplement shares of the sum.
+ */
 const total = z.object({
   value: z.number().nullable(),
   unit: z.string().nullable(),
   unknown_portions: z.number().int().nonnegative(),
+  food: z.number().nullable(),
+  supplements: z.number().nullable(),
 })
 
-/** One nutrient's total over Portions, as Axum adds them. */
+/** One nutrient's total over Portions and Supplement Doses, as Axum adds them. */
 export type NutrientTotal = z.infer<typeof total>
 
 function keyNutrients<T extends z.ZodType>(schema: T) {
@@ -98,6 +103,39 @@ export function mealPhotoUrl(photo: MealPhoto, size: MealPhotoSize): string {
   return `/meal-photo/${photo.id}/${size}`
 }
 
+const doseUnit = z.enum(["tablet", "capsule", "scoop", "ml"])
+
+/** What one dose of a Supplement is. */
+export type DoseUnit = z.infer<typeof doseUnit>
+
+const compound = z.object({
+  name: z.string(),
+  value: z.number(),
+  unit: z.string(),
+})
+
+/** A named compound without a database parameter, such as creatine, with the amount taken. */
+export type Compound = z.infer<typeof compound>
+
+const supplementDose = z.object({
+  supplement_id: z.string(),
+  name: z.string(),
+  dose_unit: doseUnit,
+  doses: z.number().positive(),
+  amounts: z.array(
+    z.object({
+      key: z.string(),
+      form: z.string().nullable(),
+      value: z.number(),
+      unit: z.string(),
+    })
+  ),
+  compounds: z.array(compound),
+})
+
+/** A Supplement Dose of a Meal Log: the Supplement as logged, with its amounts taken. */
+export type SupplementDose = z.infer<typeof supplementDose>
+
 const mealLog = z.object({
   id: z.string(),
   eaten_at: z.iso.datetime({ offset: true }),
@@ -106,10 +144,14 @@ const mealLog = z.object({
   note: z.string().nullable(),
   photo: mealPhoto.nullable(),
   portions: z.array(portion),
+  supplement_doses: z.array(supplementDose),
   totals: keyNutrients(total),
 })
 
-/** One eating occasion at its Copenhagen time, holding its own copy of its Portions. */
+/**
+ * One eating occasion at its Copenhagen time, holding its own copy of its Portions and Supplement
+ * Doses.
+ */
 export type MealLog = z.infer<typeof mealLog>
 
 const group = z.object({ name_da: z.string(), name_en: z.string() })
@@ -119,6 +161,9 @@ const nutrient = total.extend({
   name_da: z.string().nullable(),
   name_en: z.string().nullable(),
   group: group.nullable(),
+  supplement_forms: z
+    .array(z.object({ form: z.string(), value: z.number() }))
+    .optional(),
 })
 
 /** One parameter's total for the day, named as the Food database names it. */
@@ -132,6 +177,15 @@ export const nutritionDay = z.object({
   day_end: z.iso.datetime({ offset: true }),
   totals: keyNutrients(total),
   nutrients: z.array(nutrient),
+  compounds: z.array(compound),
+  supplement_doses: z.array(
+    z.object({
+      supplement_id: z.string(),
+      name: z.string(),
+      dose_unit: doseUnit,
+      doses: z.number().positive(),
+    })
+  ),
   nova: z.object({
     nova_1_share: z.number().min(0).max(1).nullable(),
     nova_1_kcal: z.number().nonnegative(),
@@ -211,6 +265,53 @@ export function novaDetail(nova: NutritionDay["nova"]): string {
   }
 
   return `Unprocessed or minimally processed, of ${formatAmount(nova.classified_kcal)} classified kcal${unclassified}`
+}
+
+const doseUnitNames: Record<DoseUnit, readonly [string, string]> = {
+  tablet: ["tablet", "tablets"],
+  capsule: ["capsule", "capsules"],
+  scoop: ["scoop", "scoops"],
+  ml: ["ml", "ml"],
+}
+
+/**
+ * How many doses were taken, in the Supplement's dose unit: "1 capsule", "2 tablets", "5 ml".
+ *
+ * @param doses - The doses taken.
+ * @param unit - The Supplement's dose unit.
+ * @returns The count with its unit.
+ */
+export function doseCount(doses: number, unit: DoseUnit): string {
+  const [one, many] = doseUnitNames[unit]
+
+  return `${formatAmount(doses)} ${doses === 1 ? one : many}`
+}
+
+/**
+ * The energy a Supplement Dose adds, when its label states it.
+ *
+ * @param dose - A Meal Log's Supplement Dose.
+ * @returns The kcal taken, or null when the label gives no energy.
+ */
+export function doseEnergy(dose: SupplementDose): number | null {
+  return (
+    dose.amounts.find((amount) => amount.key === "energy_kcal")?.value ?? null
+  )
+}
+
+/**
+ * The supplement share of a total as the Day view notes it beneath the figure, such as "2 g from
+ * supplements"; nothing when no Supplement Dose adds to it.
+ *
+ * @param total - A day or nutrient total.
+ * @returns The note, or null.
+ */
+export function supplementShare(total: NutrientTotal): string | null {
+  if (total.supplements === null || total.supplements === 0) return null
+
+  const unit = total.unit === null ? "" : ` ${total.unit}`
+
+  return `${formatAmount(total.supplements)}${unit} from supplements`
 }
 
 /** Axum's answer while the Food database is importing or after a failed import. */

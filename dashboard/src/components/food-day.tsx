@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog"
 import {
   dayName,
+  doseCount,
+  doseEnergy,
   energySplit,
   foodDatabaseCredit,
   formatAmount,
@@ -25,6 +27,7 @@ import {
   nutritionFailureMessage,
   portionName,
   shiftDay,
+  supplementShare,
   type MealLog,
   type MealPhoto,
   type NutrientTotal,
@@ -50,7 +53,8 @@ const splitNames = {
 
 /**
  * The Food page's Day view: one Copenhagen day's Meal Logs in time order with the day's energy
- * and macronutrient totals, every nutrient on request, and the Food database's credit.
+ * and macronutrient totals and their supplement share, the Supplements taken, every nutrient on
+ * request, and the Food database's credit.
  */
 export function FoodDay({
   data,
@@ -199,6 +203,23 @@ function Amount({
   )
 }
 
+/** The supplement share beneath a total's figure; nothing when no dose adds to it. */
+function SupplementShare({
+  total,
+  as: Element,
+  className,
+}: {
+  readonly total: NutrientTotal
+  readonly as: "p" | "dd"
+  readonly className: string
+}): React.JSX.Element | null {
+  const share = supplementShare(total)
+
+  return share === null ? null : (
+    <Element className={className}>{share}</Element>
+  )
+}
+
 function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
   const split = energySplit(day.totals)
 
@@ -209,6 +230,11 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
           <Amount total={day.totals.energy_kcal} unit={false} />
           <span className="food-energy-unit">kcal</span>
         </p>
+        <SupplementShare
+          total={day.totals.energy_kcal}
+          as="p"
+          className="food-energy-supplements"
+        />
         {split.length === 0 ? null : (
           <div
             className="food-split"
@@ -240,10 +266,16 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
               <dd>
                 <Amount total={day.totals[key]} />
               </dd>
+              <SupplementShare
+                total={day.totals[key]}
+                as="dd"
+                className="food-macro-supplements"
+              />
             </div>
           ))}
         </dl>
         <NovaShare nova={day.nova} />
+        <Supplements day={day} />
       </section>
       <section aria-labelledby="food-meals-heading">
         <h2 id="food-meals-heading" className="sr-only">
@@ -270,6 +302,46 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
       </section>
       <AllNutrients day={day} />
     </>
+  )
+}
+
+/**
+ * The day's Supplements: each Supplement's doses added together, then the compounds without a
+ * database parameter as amounts taken. Nothing when no Supplement was taken.
+ */
+function Supplements({
+  day,
+}: {
+  readonly day: NutritionDay
+}): React.JSX.Element | null {
+  if (day.supplement_doses.length === 0 && day.compounds.length === 0)
+    return null
+
+  return (
+    <section
+      className="food-supplements"
+      aria-labelledby="food-supplements-heading"
+    >
+      <h3 id="food-supplements-heading">Supplements</h3>
+      <ul>
+        {day.supplement_doses.map((dose) => (
+          <li key={dose.supplement_id}>
+            <span className="food-supplement-name">{dose.name}</span>
+            <span className="food-supplement-amount num">
+              {doseCount(dose.doses, dose.dose_unit)}
+            </span>
+          </li>
+        ))}
+        {day.compounds.map((compound) => (
+          <li key={compound.name} data-compound="">
+            <span className="food-supplement-name">{compound.name}</span>
+            <span className="food-supplement-amount num">
+              {formatAmount(compound.value)} {compound.unit}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -406,6 +478,25 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
           </li>
         ))}
       </ul>
+      {meal.supplement_doses.length === 0 ? null : (
+        <ul className="food-doses" aria-label="Supplement Doses">
+          {meal.supplement_doses.map((dose) => {
+            const kcal = doseEnergy(dose)
+
+            return (
+              <li key={dose.supplement_id}>
+                <span className="food-portion-name">{dose.name}</span>
+                <span className="food-portion-grams num">
+                  {doseCount(dose.doses, dose.dose_unit)}
+                </span>
+                <span className="food-portion-kcal num">
+                  {kcal === null ? null : `${formatAmount(kcal)} kcal`}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </>
   )
 }
@@ -474,6 +565,16 @@ function AllNutrients({
                     <dd>
                       <Amount total={nutrient} />
                     </dd>
+                    {nutrient.supplements === null ? null : (
+                      <dd className="food-nutrient-split">
+                        Food{" "}
+                        {nutrient.food === null
+                          ? "unknown"
+                          : `${formatAmount(nutrient.food)} ${nutrient.unit ?? ""}`.trim()}{" "}
+                        · supplements{" "}
+                        {`${formatAmount(nutrient.supplements)} ${nutrient.unit ?? ""}`.trim()}
+                      </dd>
+                    )}
                   </div>
                 ))}
               </dl>
