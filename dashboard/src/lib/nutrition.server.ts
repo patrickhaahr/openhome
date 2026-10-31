@@ -5,9 +5,13 @@ import { trainingDayOn } from "./workout"
 import {
   foodDatabaseUnavailable,
   nutritionDay,
+  nutritionGoal,
+  type GoalMutation,
   type NutritionDayState,
   type NutritionFailure,
+  type NutritionGoal,
   type NutritionSearch,
+  type SetGoalInput,
 } from "./nutrition"
 
 function reason(status: number): NutritionFailure {
@@ -28,11 +32,14 @@ export async function readNutritionDay(
   const today = trainingDayOn(new Date())
   const day = search.day ?? today
 
-  const result = await requestOpenHome({
-    path: `/api/nutrition/days/${day}`,
-    method: "GET",
-    timeoutMs: 5000,
-  })
+  const [result, goal] = await Promise.all([
+    requestOpenHome({
+      path: `/api/nutrition/days/${day}`,
+      method: "GET",
+      timeoutMs: 5000,
+    }),
+    readNutritionGoal(),
+  ])
 
   if (result.state !== "received")
     return { day, today, state: "unavailable", reason: result.state }
@@ -56,8 +63,53 @@ export async function readNutritionDay(
   const parsed = nutritionDay.safeParse(body)
 
   return parsed.success
-    ? { day, today, state: "available", data: parsed.data }
+    ? { day, today, state: "available", data: parsed.data, goal }
     : { day, today, state: "unavailable", reason: "unavailable" }
+}
+
+/** Today's Nutrition Goal, or null when it cannot be read; the day still shows without it. */
+async function readNutritionGoal(): Promise<NutritionGoal | null> {
+  const result = await requestOpenHome({
+    path: "/api/nutrition/goal",
+    method: "GET",
+    timeoutMs: 5000,
+  })
+
+  if (result.state !== "received" || !result.response.ok) return null
+  const body: unknown = await result.response.json().catch(() => undefined)
+  const parsed = nutritionGoal.safeParse(body)
+
+  return parsed.success ? parsed.data : null
+}
+
+/**
+ * Set the Nutrition Goal from today through the server-held Axum credential; Axum owns the
+ * offered rates and the day it takes effect.
+ *
+ * @param input - The goal's direction and weekly rate.
+ * @returns The saved goal and history, or a sanitized failure.
+ */
+export async function writeNutritionGoal(
+  input: SetGoalInput
+): Promise<GoalMutation> {
+  const result = await requestOpenHome({
+    path: "/api/nutrition/goal",
+    method: "PUT",
+    json: input,
+    timeoutMs: 5000,
+  })
+
+  if (result.state !== "received")
+    return { state: "failed", reason: result.state }
+  const { response } = result
+
+  if (!response.ok) return { state: "failed", reason: reason(response.status) }
+  const body: unknown = await response.json().catch(() => undefined)
+  const parsed = nutritionGoal.safeParse(body)
+
+  return parsed.success
+    ? { state: "saved", goal: parsed.data }
+    : { state: "failed", reason: "unavailable" }
 }
 
 const mealPhotoInput = z.object({

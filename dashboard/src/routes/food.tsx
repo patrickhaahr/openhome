@@ -3,10 +3,10 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { FoodDay } from "@/components/food-day"
 import { PageHead } from "@/components/page-head"
 import { nutritionSearch } from "@/lib/nutrition"
-import { loadNutritionDay } from "@/lib/nutrition.functions"
+import { loadNutritionDay, saveNutritionGoal } from "@/lib/nutrition.functions"
 import { useCopenhagenDay } from "@/lib/use-copenhagen-day"
 
-/** Food: one Copenhagen day's Meal Logs and totals, opening on today. */
+/** Food: one Copenhagen day's targets, Meal Logs and totals, opening on today. */
 export const Route = createFileRoute("/food")({
   head: () => ({ meta: [{ title: "Food · OpenHome" }] }),
   validateSearch: nutritionSearch,
@@ -35,7 +35,11 @@ function FoodPage(): React.JSX.Element {
   return (
     <>
       <PageHead title="Food" />
-      <FoodDay data={data} />
+      <FoodDay
+        data={data}
+        saveGoal={(goal) => saveNutritionGoal({ data: goal })}
+        reload={() => router.invalidate({ sync: true })}
+      />
     </>
   )
 }
