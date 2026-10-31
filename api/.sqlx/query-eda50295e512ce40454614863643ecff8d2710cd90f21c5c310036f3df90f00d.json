@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT d.meal_id, d.supplement_id, s.name, s.dose_unit AS \"dose_unit: DoseUnit\", d.doses\n        FROM meal_supplement_doses d JOIN supplements s ON s.id = d.supplement_id\n        WHERE ?1 IS NULL OR d.meal_id = ?1 ORDER BY d.meal_id, d.position",
+  "describe": {
+    "columns": [
+      {
+        "name": "meal_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "supplement_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "dose_unit: DoseUnit",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "doses",
+        "ordinal": 4,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eda50295e512ce40454614863643ecff8d2710cd90f21c5c310036f3df90f00d"
+}

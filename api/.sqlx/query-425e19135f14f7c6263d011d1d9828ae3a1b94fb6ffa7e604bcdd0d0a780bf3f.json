@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO meal_log_supplement_doses (meal_log_id, position, supplement_id, name, dose_unit, doses) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "425e19135f14f7c6263d011d1d9828ae3a1b94fb6ffa7e604bcdd0d0a780bf3f"
+}

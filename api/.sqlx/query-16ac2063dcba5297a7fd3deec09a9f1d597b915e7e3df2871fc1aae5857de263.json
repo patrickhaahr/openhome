@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", name, dose_unit AS \"dose_unit: DoseUnit\" FROM supplements\n        WHERE ?1 IS NULL OR id = ?1 ORDER BY name_key",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "dose_unit: DoseUnit",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "16ac2063dcba5297a7fd3deec09a9f1d597b915e7e3df2871fc1aae5857de263"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO supplement_amounts (supplement_id, position, key, form, value, unit) VALUES (?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "23425dad586a52143925fc1a8f081aa19ef47e7cedc04e74bc6d022679a78945"
+}

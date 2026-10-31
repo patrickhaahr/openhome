@@ -384,7 +384,10 @@ async fn logging_a_meal_by_name_copies_its_items_as_portions_with_overrides_and_
     );
     assert_eq!(
         meal_log["totals"]["energy_kcal"],
-        json!({"value": 304.0, "unit": "kcal", "unknown_portions": 0})
+        json!({
+            "value": 304.0, "unit": "kcal", "unknown_portions": 0,
+            "food": 304.0, "supplements": null,
+        })
     );
     let day = api.day("2026-10-29").await;
     assert_eq!(day["meal_logs"], json!([meal_log]));

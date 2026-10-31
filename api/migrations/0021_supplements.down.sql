@@ -1,0 +1,9 @@
+DROP TABLE meal_log_dose_compounds;
+DROP TABLE meal_log_dose_amounts;
+DROP TABLE meal_log_supplement_doses;
+DROP INDEX meal_supplement_doses_supplement;
+DROP TABLE meal_supplement_doses;
+DROP TABLE supplement_receipts;
+DROP TABLE supplement_compounds;
+DROP TABLE supplement_amounts;
+DROP TABLE supplements;

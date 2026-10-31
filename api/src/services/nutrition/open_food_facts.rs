@@ -301,7 +301,7 @@ fn category(tag: &str) -> Option<String> {
 }
 
 /// Six significant digits, so a unit conversion (`0.0000015 g` to `1.5 µg`) leaves no float noise.
-fn significant(value: f64) -> f64 {
+pub(super) fn significant(value: f64) -> f64 {
     if value == 0.0 {
         return 0.0;
     }

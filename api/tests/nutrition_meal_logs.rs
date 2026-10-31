@@ -366,12 +366,12 @@ async fn a_logged_meal_keeps_scaled_snapshots_with_sources_and_totals() {
     assert_eq!(
         meal_log["totals"],
         json!({
-            "energy_kcal": {"value": 273.0, "unit": "kcal", "unknown_portions": 0},
-            "protein": {"value": 41.7, "unit": "g", "unknown_portions": 0},
-            "available_carbohydrate": {"value": 6.0, "unit": "g", "unknown_portions": 1},
-            "fat": {"value": 8.7, "unit": "g", "unknown_portions": 0},
-            "dietary_fibre": {"value": 0.0, "unit": "g", "unknown_portions": 1},
-            "alcohol": {"value": 0.0, "unit": "g", "unknown_portions": 1},
+            "energy_kcal": {"value": 273.0, "unit": "kcal", "unknown_portions": 0, "food": 273.0, "supplements": null},
+            "protein": {"value": 41.7, "unit": "g", "unknown_portions": 0, "food": 41.7, "supplements": null},
+            "available_carbohydrate": {"value": 6.0, "unit": "g", "unknown_portions": 1, "food": 6.0, "supplements": null},
+            "fat": {"value": 8.7, "unit": "g", "unknown_portions": 0, "food": 8.7, "supplements": null},
+            "dietary_fibre": {"value": 0.0, "unit": "g", "unknown_portions": 1, "food": 0.0, "supplements": null},
+            "alcohol": {"value": 0.0, "unit": "g", "unknown_portions": 1, "food": 0.0, "supplements": null},
         })
     );
     assert_eq!(api.day("2026-10-29").await, [meal_log]);
@@ -408,11 +408,11 @@ async fn nutrition_day_totals_every_parameter_with_units_and_credits_the_dataset
     );
     assert_eq!(
         day["totals"]["energy_kcal"],
-        json!({"value": 363.0, "unit": "kcal", "unknown_portions": 0})
+        json!({"value": 363.0, "unit": "kcal", "unknown_portions": 0, "food": 363.0, "supplements": null})
     );
     assert_eq!(
         day["totals"]["available_carbohydrate"],
-        json!({"value": 26.0, "unit": "g", "unknown_portions": 1})
+        json!({"value": 26.0, "unit": "g", "unknown_portions": 1, "food": 26.0, "supplements": null})
     );
     // Every per-100 g parameter, in database order; waste, density and pH describe the Food.
     let keys: Vec<&str> = day["nutrients"]
@@ -441,7 +441,7 @@ async fn nutrition_day_totals_every_parameter_with_units_and_credits_the_dataset
         &json!({
             "key": "vitamin_d", "name_da": "D-vitamin", "name_en": "Vitamin D",
             "group": {"name_da": "Vitaminer", "name_en": "Vitamins"},
-            "unit": "µg", "value": 0.0, "unknown_portions": 2
+            "unit": "µg", "value": 0.0, "unknown_portions": 2, "food": 0.0, "supplements": null,
         })
     );
     assert_eq!(nutrient(&day, "epa")["value"], 0.012);
@@ -463,7 +463,7 @@ async fn nutrition_day_totals_every_parameter_with_units_and_credits_the_dataset
     assert_eq!(empty["meal_logs"], json!([]));
     assert_eq!(
         empty["totals"]["energy_kcal"],
-        json!({"value": null, "unit": "kcal", "unknown_portions": 0})
+        json!({"value": null, "unit": "kcal", "unknown_portions": 0, "food": null, "supplements": null})
     );
     let (status, _) = api.get("/api/nutrition/days/2026-10-32").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);

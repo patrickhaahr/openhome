@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO meal_supplement_doses (meal_id, position, supplement_id, doses) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "73524cbd16de545f4d4599856ccfe282cbf9c854755a8084dee49ec1efb9224e"
+}

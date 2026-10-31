@@ -29,14 +29,17 @@ use crate::{
         nova::{self, ClassifiedFood, ClassifyFood},
         open_food_facts::{OpenFoodFacts, ProviderError},
         products::{self, LinkProduct, Linked, ProductError, ProductLookup},
+        supplements::{
+            self, AddSupplement, Added, EditSupplement, Supplement, SupplementError, Supplements,
+        },
     },
 };
 
 pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) -> Router<AppState> {
     // Only the routes that carry a photo raise Axum's default body limit.
     let photo_limit = DefaultBodyLimit::max(PHOTO_BODY_LIMIT);
-    // Foods come from food.db with their NOVA Classes from app.db; Meals, Meal Logs and Products
-    // live in app.db and take values from food.db and Open Food Facts; Meal Logs keep photos in
+    // Foods come from food.db with their NOVA Classes from app.db; Meals, Supplements, Meal Logs
+    // and Products live in app.db and take values from food.db and Open Food Facts; Meal Logs keep photos in
     // the data directory.
     Router::new()
         .route("/api/nutrition/foods", get(search_foods))
@@ -51,6 +54,14 @@ pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) ->
         .route(
             "/api/nutrition/meals/{id}",
             axum::routing::patch(update_meal).delete(delete_meal),
+        )
+        .route(
+            "/api/nutrition/supplements",
+            get(list_supplements).post(add_supplement),
+        )
+        .route(
+            "/api/nutrition/supplements/{id}",
+            axum::routing::patch(update_supplement).delete(delete_supplement),
         )
         .route(
             "/api/nutrition/meal-logs",
@@ -195,6 +206,48 @@ async fn delete_meal(
     Path(id): Path<String>,
 ) -> Result<StatusCode, MealError> {
     meals::delete_meal(&state.db, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn supplement_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, SupplementError> {
+    body.map(|Json(body)| body)
+        .map_err(|rejection| SupplementError::Validation(rejection.body_text()))
+}
+
+async fn list_supplements(
+    State(state): State<AppState>,
+) -> Result<Json<Supplements>, SupplementError> {
+    Ok(Json(supplements::supplements(&state.db).await?))
+}
+
+async fn add_supplement(
+    State(state): State<AppState>,
+    request: Result<Json<AddSupplement>, JsonRejection>,
+) -> Result<(StatusCode, Json<Added>), SupplementError> {
+    let added = supplements::add_supplement(&state.db, supplement_body(request)?).await?;
+    let status = if added.replayed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    Ok((status, Json(added)))
+}
+
+async fn update_supplement(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    request: Result<Json<EditSupplement>, JsonRejection>,
+) -> Result<Json<Supplement>, SupplementError> {
+    Ok(Json(
+        supplements::update_supplement(&state.db, &id, supplement_body(request)?).await?,
+    ))
+}
+
+async fn delete_supplement(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, SupplementError> {
+    supplements::delete_supplement(&state.db, &id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -361,6 +414,7 @@ impl IntoResponse for MealLogError {
             Self::Food(error) => error.into_response(),
             Self::Photo(error) => error.into_response(),
             Self::Meal(error) => error.into_response(),
+            Self::Supplement(error) => error.into_response(),
             Self::Database(error) => AppError::Internal(error.into()).into_response(),
         }
     }
@@ -385,6 +439,18 @@ impl IntoResponse for MealError {
                     .into_response()
             }
             Self::Food(error) => error.into_response(),
+            Self::Supplement(error) => error.into_response(),
+            Self::Database(error) => AppError::Internal(error.into()).into_response(),
+        }
+    }
+}
+
+impl IntoResponse for SupplementError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Validation(message) => AppError::Validation(message).into_response(),
+            Self::NotFound(message) => AppError::NotFound(message).into_response(),
+            Self::Conflict(message) => AppError::Conflict(message).into_response(),
             Self::Database(error) => AppError::Internal(error.into()).into_response(),
         }
     }

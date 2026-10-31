@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT supplement_id, key, form, value, unit FROM supplement_amounts\n        WHERE ?1 IS NULL OR supplement_id = ?1 ORDER BY supplement_id, position",
+  "describe": {
+    "columns": [
+      {
+        "name": "supplement_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "key",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "form",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 3,
+        "type_info": "Float"
+      },
+      {
+        "name": "unit",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "379c94df5ab598673d11a175bc02c70830af8d9456e27a6d0b71220206b89a54"
+}

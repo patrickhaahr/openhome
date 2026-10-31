@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT m.name FROM meal_supplement_doses d JOIN meals m ON m.id = d.meal_id\n        WHERE d.supplement_id = ? ORDER BY m.name_key",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "896df998004b7d20a90eb548edb2f0efaa437d10ee8eeec082a09bb81343b9b1"
+}

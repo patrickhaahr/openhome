@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT supplement_id, request FROM supplement_receipts WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "supplement_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "request",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "94d2aa1c6258cf406d41a3563b3bf01c6b516aa70d27b5893a03e732e0ae5b62"
+}
