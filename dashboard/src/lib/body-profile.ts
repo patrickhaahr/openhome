@@ -5,6 +5,8 @@ export const profile = z.object({
   height_cm: z.number().nullable(),
   sex: z.string().nullable(),
   hr_max_bpm: z.number().int().nullable(),
+  /** `YYYY-MM-DD`; nutrition targets need it for BMR. */
+  birth_date: z.iso.date().nullable(),
 })
 
 /** Shared fitness configuration as served by Axum. */
@@ -77,7 +79,7 @@ export const bodyFailureMessage: Record<BodyFailure, string> = {
   unavailable:
     "OpenHome could not confirm the result. Reload before trying again.",
   invalid:
-    "OpenHome rejected the values. Check the date, positive height or weight, and a whole maximum heart rate from 100 to 240 bpm.",
+    "OpenHome rejected the values. Check the date, positive height or weight, a whole maximum heart rate from 100 to 240 bpm, and a birth date that is not in the future.",
   "duplicate-date":
     "Body weight is already recorded for this date. Reload to review it, or choose another date. The existing record has not been replaced.",
 }
@@ -87,6 +89,7 @@ type ProfileDraft = {
   height: string
   sex: string
   heartRate: string
+  birthDate: string
 }
 
 /** Text inputs retain exact stored numbers until a user changes them. */
@@ -95,6 +98,7 @@ export function profileDraft(value: Profile): ProfileDraft {
     height: value.height_cm === null ? "" : String(value.height_cm),
     sex: value.sex ?? "",
     heartRate: value.hr_max_bpm?.toString() ?? "",
+    birthDate: value.birth_date ?? "",
   }
 }
 
@@ -121,6 +125,9 @@ export function profilePatch(
 
   if (draft.heartRate !== initial.heartRate)
     patch.hr_max_bpm = optionalNumber(draft.heartRate)
+
+  if (draft.birthDate !== initial.birthDate)
+    patch.birth_date = draft.birthDate === "" ? null : draft.birthDate
 
   return patch
 }

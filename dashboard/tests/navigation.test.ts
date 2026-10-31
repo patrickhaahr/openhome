@@ -30,7 +30,12 @@ test("opens focused views through persistent navigation, restores browser histor
           view: "body",
           data: {
             state: "available",
-            profile: { height_cm: null, sex: null, hr_max_bpm: null },
+            profile: {
+              height_cm: null,
+              sex: null,
+              hr_max_bpm: null,
+              birth_date: null,
+            },
             history: [],
           },
         }

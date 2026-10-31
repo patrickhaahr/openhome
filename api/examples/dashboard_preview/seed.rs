@@ -83,6 +83,7 @@ pub async fn household(base: &str, key: &str, db: &sqlx::SqlitePool) -> anyhow::
 struct Body {
     height_cm: f64,
     sex: String,
+    birth_date: String,
     weights_kg_oldest_first: Vec<f64>,
 }
 
@@ -91,7 +92,12 @@ async fn body(api: &Api) -> anyhow::Result<()> {
     let training: Value = serde_json::from_str(include_str!("seed/training.json"))?;
     api.patch(
         "/api/profile",
-        json!({ "height_cm": seed.height_cm, "sex": seed.sex, "hr_max_bpm": training["hr_max_bpm"] }),
+        json!({
+            "height_cm": seed.height_cm,
+            "sex": seed.sex,
+            "birth_date": seed.birth_date,
+            "hr_max_bpm": training["hr_max_bpm"],
+        }),
     )
     .await?;
     let count = seed.weights_kg_oldest_first.len() as u64;
