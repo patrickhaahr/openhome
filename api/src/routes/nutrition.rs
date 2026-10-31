@@ -21,6 +21,7 @@ use crate::{
     services::nutrition::{
         day::{self, NutritionDay},
         food_database::{Food, FoodDatabase, FoodError, FoodSearch, Unavailable},
+        goals::{self, GoalError, NutritionGoal, SetGoal},
         meal_logs::{
             self, EditMealLog, LogMeal, Logged, MealLog, MealLogError, MealLogs, MealLogsQuery,
         },
@@ -33,6 +34,7 @@ use crate::{
             self, AddSupplement, Added, EditSupplement, Supplement, SupplementError, Supplements,
         },
     },
+    services::training::calendar::CalendarDay,
 };
 
 pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) -> Router<AppState> {
@@ -81,6 +83,10 @@ pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) ->
             get(thumbnail),
         )
         .route("/api/nutrition/days/{day}", get(nutrition_day))
+        .route(
+            "/api/nutrition/goal",
+            get(nutrition_goal).put(set_nutrition_goal),
+        )
         .layer(Extension(foods))
         .layer(Extension(photos))
         .layer(Extension(labels))
@@ -402,7 +408,39 @@ async fn nutrition_day(
     Path(day): Path<String>,
 ) -> Result<Json<NutritionDay>, MealLogError> {
     let day = meal_logs::parse_day(&day, "day")?;
-    Ok(Json(day::nutrition_day(&state.db, &foods, day).await?))
+    Ok(Json(
+        day::nutrition_day(&state.db, &foods, day, today()).await?,
+    ))
+}
+
+/// Today in Copenhagen: the day a goal change takes effect from.
+fn today() -> CalendarDay {
+    CalendarDay::of(chrono::Utc::now())
+}
+
+async fn nutrition_goal(State(state): State<AppState>) -> Result<Json<NutritionGoal>, GoalError> {
+    Ok(Json(goals::nutrition_goal(&state.db, today()).await?))
+}
+
+/// Sets the Nutrition Goal from today.
+async fn set_nutrition_goal(
+    State(state): State<AppState>,
+    request: Result<Json<SetGoal>, JsonRejection>,
+) -> Result<Json<NutritionGoal>, GoalError> {
+    let Json(request) =
+        request.map_err(|rejection| GoalError::Validation(rejection.body_text()))?;
+    Ok(Json(
+        goals::set_nutrition_goal(&state.db, today(), request).await?,
+    ))
+}
+
+impl IntoResponse for GoalError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Validation(message) => AppError::Validation(message).into_response(),
+            Self::Database(error) => AppError::Internal(error.into()).into_response(),
+        }
+    }
 }
 
 impl IntoResponse for MealLogError {

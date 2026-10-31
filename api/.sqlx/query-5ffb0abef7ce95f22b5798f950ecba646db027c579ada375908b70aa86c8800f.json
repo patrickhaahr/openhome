@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT CAST(date AS TEXT) AS \"date!: String\", weight_kg FROM body_weight\n        WHERE date <= ?1 ORDER BY date",
+  "describe": {
+    "columns": [
+      {
+        "name": "date!: String",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "weight_kg",
+        "ordinal": 1,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "5ffb0abef7ce95f22b5798f950ecba646db027c579ada375908b70aa86c8800f"
+}

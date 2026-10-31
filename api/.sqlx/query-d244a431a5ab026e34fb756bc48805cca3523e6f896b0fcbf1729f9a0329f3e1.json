@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO nutrition_weeks (monday, expenditure_kcal, bmr_kcal, prior_kcal,\n            data_estimate_kcal, logged_days, blend_weight, trend_weight_kg, trend_weight_day)\n        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (monday) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "d244a431a5ab026e34fb756bc48805cca3523e6f896b0fcbf1729f9a0329f3e1"
+}

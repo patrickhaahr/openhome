@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT effective_from, direction AS \"direction: Direction\", rate_kg_per_week\n        FROM nutrition_goals ORDER BY effective_from",
+  "describe": {
+    "columns": [
+      {
+        "name": "effective_from",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "direction: Direction",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "rate_kg_per_week",
+        "ordinal": 2,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fa07cb0e48eceea93ec09ac17383d7a41ed14047468311bb62ae9fd5bbf16ede"
+}

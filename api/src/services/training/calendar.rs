@@ -55,6 +55,25 @@ impl CalendarDay {
         other.0.signed_duration_since(self.0).num_days()
     }
 
+    /// The day `days` calendar days earlier, if representable.
+    #[must_use]
+    pub fn checked_sub_days(self, days: u64) -> Option<Self> {
+        self.0.checked_sub_days(Days::new(days)).map(Self)
+    }
+
+    /// The day `days` calendar days later, if representable.
+    #[must_use]
+    pub fn checked_add_days(self, days: u64) -> Option<Self> {
+        self.0.checked_add_days(Days::new(days)).map(Self)
+    }
+
+    /// Whole years from `earlier` to this day, as an age is counted; `None` when `earlier` is
+    /// later.
+    #[must_use]
+    pub fn years_since(self, earlier: Self) -> Option<u32> {
+        self.0.years_since(earlier.0)
+    }
+
     /// Monday and Sunday of the ISO week containing this day, if both are representable.
     #[must_use]
     pub fn iso_week_bounds(self) -> Option<(Self, Self)> {
@@ -93,6 +112,13 @@ impl CalendarDay {
 impl fmt::Display for CalendarDay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.format("%Y-%m-%d"))
+    }
+}
+
+/// Written `YYYY-MM-DD`.
+impl serde::Serialize for CalendarDay {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
     }
 }
 
