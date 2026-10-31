@@ -12,7 +12,13 @@ import {
   type NutritionGoal,
   type NutritionSearch,
   type SetGoalInput,
+  shiftDay,
 } from "./nutrition"
+import {
+  nutritionSummary,
+  type NutritionSummaryState,
+  type TrendsChoice,
+} from "./nutrition-trends"
 
 function reason(status: number): NutritionFailure {
   if (status === 400 || status === 404 || status === 422) return "invalid"
@@ -65,6 +71,48 @@ export async function readNutritionDay(
   return parsed.success
     ? { day, today, state: "available", data: parsed.data, goal }
     : { day, today, state: "unavailable", reason: "unavailable" }
+}
+
+/**
+ * Read the Nutrition Summary of the chosen range, ending today in Copenhagen, through the
+ * server-held Axum credential.
+ *
+ * @param choice - The range in days and the aggregation.
+ * @returns The summary, or a sanitized failure.
+ */
+export async function readNutritionSummary(
+  choice: TrendsChoice
+): Promise<NutritionSummaryState> {
+  const today = trainingDayOn(new Date())
+
+  const result = await requestOpenHome({
+    path: "/api/nutrition/summary",
+    method: "GET",
+    query: {
+      from: shiftDay(today, 1 - choice.range),
+      to: today,
+      aggregation: choice.by,
+    },
+    timeoutMs: 10000,
+  })
+
+  if (result.state !== "received")
+    return { ...choice, today, state: "unavailable", reason: result.state }
+  const { response } = result
+
+  if (!response.ok)
+    return {
+      ...choice,
+      today,
+      state: "unavailable",
+      reason: reason(response.status),
+    }
+  const body: unknown = await response.json().catch(() => undefined)
+  const parsed = nutritionSummary.safeParse(body)
+
+  return parsed.success
+    ? { ...choice, today, state: "available", data: parsed.data }
+    : { ...choice, today, state: "unavailable", reason: "unavailable" }
 }
 
 /** Today's Nutrition Goal, or null when it cannot be read; the day still shows without it. */

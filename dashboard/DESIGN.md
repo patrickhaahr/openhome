@@ -158,6 +158,21 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   the Food database imports or fails, the day's place holds a state note and the day keys stay.
   The Danish Food Composition Database is credited at the foot of the page, and Open Food Facts
   (ODbL) beneath it whenever the day shows a Product.
+- **Food Trends is the range in plates**: the Day and Trends switch heads the Food page (the
+  Workout capsule). Trends sets the range (30, 90, 180 or 365 days, ending today) and the grouping
+  (days, ISO weeks, calendar months) as two capsule tracks, then "n of N days logged" with the
+  figures in ink, then one wash plate per series: calories across the width (eaten as ink
+  columns, the Calorie Target as a sun line, Estimated Expenditure as a dashed muted line), protein
+  (sun columns under an ink target line), energy by macronutrient (stacked columns in the Day
+  view's macro colours), the NOVA 1 share (an ink line from 0 to 100 %), weight (each period's
+  scale weight as a faint dot under the sun Trend Weight line) and the weekly change (ink columns
+  from zero against the goal rate as a sun line). Each plate names its series in a small legend
+  and carries one muted line over the whole range (means per logged day). Bands of alternating
+  tone replace gridlines. A period without a value stays empty and a line stops at it instead of
+  bridging it, so a day without Meal Logs is a gap, never a zero; an edge week or month that covers
+  only part of itself is drawn lighter. The drawings are hidden from assistive technology, which
+  reads each summary and a table of every period ("Not logged" for a missing day). No chart
+  library: plain SVG with the page's tokens.
 - **Photos is the pictures**: the albums as cover plates (wash plates, the cover on top, the
   name, then a photo glyph with the count and the months), led by **All photos**, a plate two
   columns by two rows whose cover is a mosaic of the album covers; with one album configured

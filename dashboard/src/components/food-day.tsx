@@ -4,6 +4,7 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
+import { FoodViews } from "@/components/food-views"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -87,6 +88,7 @@ export function FoodDay({
 }: FoodDayProps): React.JSX.Element {
   return (
     <div className="food">
+      <FoodViews view="day" />
       <DayNav day={data.day} today={data.today} />
       {data.state === "available" ? (
         <>

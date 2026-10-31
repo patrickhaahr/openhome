@@ -695,3 +695,176 @@ a.food-day-key:active {
     transition: none;
   }
 }
+
+/* ---------- Day and Trends: one switch at the head of both views ---------- */
+
+.food-views.view-tabs {
+  margin-bottom: 0;
+}
+
+/* ---------- Trends: the range and grouping, then one plate per series ---------- */
+
+.food-trend-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+.food-trend-controls .view-tabs {
+  margin-bottom: 0;
+}
+.food-trend-unit {
+  color: inherit;
+  opacity: 0.7;
+}
+/* On a phone the range keys show only their number; "days" stays in their accessible name. */
+@media (max-width: 30rem) {
+  .food-trend-unit {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.food-trend-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: clamp(1rem, 2.4vw, 1.5rem);
+}
+.food-trend-coverage {
+  grid-column: 1 / -1;
+  color: var(--muted-ink);
+  font-variant-numeric: tabular-nums;
+}
+.food-trend-coverage .num {
+  color: var(--ink);
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.trend-chart {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--wash);
+}
+.trend-chart[data-chart="calories"] {
+  grid-column: 1 / -1;
+}
+.trend-chart figcaption {
+  display: grid;
+  gap: 0.25rem;
+}
+.trend-chart h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.trend-summary {
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+.trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+  list-style: none;
+}
+.trend-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.trend-legend li::before {
+  content: "";
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 3px;
+  background: var(--tone);
+}
+.trend-legend li[data-kind="line"]::before {
+  height: 3px;
+  border-radius: 999px;
+}
+.trend-legend li[data-kind="dashed"]::before {
+  height: 0;
+  border-top: 3px dashed var(--tone);
+  border-radius: 0;
+  background: none;
+}
+.trend-legend li[data-kind="dots"]::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+.trend-chart [data-tone="ink"] {
+  --tone: var(--ink);
+}
+.trend-chart [data-tone="sun"] {
+  --tone: var(--sun);
+}
+.trend-chart [data-tone="fat"] {
+  --tone: var(--macro-fat);
+}
+.trend-chart [data-tone="muted"] {
+  --tone: var(--muted-ink);
+}
+.trend-chart [data-tone="faint"] {
+  --tone: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.trend-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.trend-band[data-dark="true"] {
+  fill: var(--wash);
+}
+.trend-band[data-dark="false"] {
+  fill: transparent;
+}
+.trend-tick,
+.trend-label {
+  fill: var(--muted-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.trend-tick {
+  text-anchor: end;
+}
+.trend-label {
+  text-anchor: middle;
+}
+.trend-chart rect[data-tone] {
+  fill: var(--tone);
+}
+/* An edge week or month covers only part of itself, so its bar is lighter. */
+.trend-chart rect[data-partial] {
+  opacity: 0.45;
+}
+.trend-line {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.trend-line[data-dashed] {
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+}
+.trend-point,
+.trend-dot {
+  fill: var(--tone);
+}

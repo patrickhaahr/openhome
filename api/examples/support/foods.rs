@@ -274,6 +274,64 @@ pub async fn seed_meals(
         .await
         .map_err(|error| anyhow::anyhow!("seeding a synthetic meal failed: {error}"))?;
     }
+    // Eight weeks of backfilled meals for the Trends view, with some days left
+    // unlogged so its gaps show.
+    for days_ago in 2..=56_i64 {
+        if days_ago % 5 == 0 || days_ago % 11 == 0 {
+            continue;
+        }
+        let day = (now - chrono::TimeDelta::days(days_ago)).date_naive();
+        let midnight = day.and_time(chrono::NaiveTime::MIN).and_utc();
+        let vary = |step: i64, spread: i64| ((days_ago * step) % spread) as f64;
+        // About 2,000 kcal and 160 g protein a day across breakfast, lunch and dinner.
+        let history: [(i64, Vec<(i64, f64)>); 3] = [
+            (
+                7,
+                vec![(1693, 220.0 + vary(37, 80)), (60, 80.0 + vary(13, 30))],
+            ),
+            (
+                11,
+                vec![(907, 180.0 + vary(23, 60)), (300, 260.0 + vary(31, 90))],
+            ),
+            (
+                17,
+                vec![
+                    (907, 220.0 + vary(53, 80)),
+                    (300, 300.0 + vary(29, 120)),
+                    (3, 120.0 + vary(17, 60)),
+                ],
+            ),
+        ];
+        for (meal, (hour, portions)) in history.into_iter().enumerate() {
+            meal_logs::log_meal(
+                db,
+                foods,
+                photos,
+                LogMeal {
+                    eaten_at: (midnight + chrono::TimeDelta::hours(hour)).to_rfc3339(),
+                    note: None,
+                    portions: Some(
+                        portions
+                            .into_iter()
+                            .map(|(food_id, grams)| PortionRequest {
+                                food_id: Some(food_id),
+                                barcode: None,
+                                grams,
+                                estimates: std::collections::BTreeMap::new(),
+                            })
+                            .collect(),
+                    ),
+                    supplement_doses: None,
+                    meal: None,
+                    overrides: None,
+                    request_id: format!("synthetic-history-{days_ago}-{meal}"),
+                    photo: None,
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("seeding a synthetic past meal failed: {error}"))?;
+        }
+    }
     // A named Meal, logged again by name with a one-off amount, as the agent logs known meals.
     meals::save_meal(
         db,
