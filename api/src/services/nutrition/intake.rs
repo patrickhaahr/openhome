@@ -76,6 +76,12 @@ impl Intake {
         self.supplements
     }
 
+    /// Portions without a value for the parameter.
+    #[must_use]
+    pub fn unknown_portions(&self) -> usize {
+        self.unknown_portions
+    }
+
     /// Both shares; `None` when neither is known.
     #[must_use]
     pub fn total(&self) -> Option<f64> {

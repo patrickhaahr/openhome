@@ -424,7 +424,9 @@ _Avoid_: RDA, goal, daily value
 **Upper Limit**:
 EFSA's Tolerable Upper Intake Level: the highest habitual daily intake unlikely
 to cause harm. Some apply only to the supplement share of a nutrient. A 7-day
-average above it means cut down; a single day above it is only a caution.
+average above it means cut down; a single day above it is only a caution. The
+average covers the days with Meal Logs among the last seven, so untracked days
+never dilute it.
 _Avoid_: Overdose threshold, maximum, red line
 
 **Supplement**:

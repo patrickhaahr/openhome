@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sex, birth_date AS \"birth_date?\" FROM profile WHERE id = 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "sex",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "birth_date?",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "8fa295d38964901903cdb45edb5e3823af4a4761c8b90bbb0e37cbdbdc72ce09"
+}
