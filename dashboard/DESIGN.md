@@ -172,7 +172,19 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   bridging it, so a day without Meal Logs is a gap, never a zero; an edge week or month that covers
   only part of itself is drawn lighter. The drawings are hidden from assistive technology, which
   reads each summary and a table of every period ("Not logged" for a missing day). No chart
-  library: plain SVG with the page's tokens.
+  library: plain SVG with the page's tokens. Last comes "Vitamins and minerals" across the width:
+  a summary naming Axum's Lasting Shortfalls and the nutrients to cut down, a muted basis line
+  with the rule, then the Day view's Vitamins, Minerals and Omega-3 lists as rows: the name (with
+  the "AI" capsule), a strip of one column per period on a wash-strong track whose top is 100 % of
+  the Recommended Intake (muted below it, ink once reached, never drawn past it, empty for a
+  period without a logged day, lighter for a partial edge), and the range mean on the right. A
+  Lasting Shortfall adds an amber "Short" capsule to the mean; a cut down period is a red column
+  and the row says "Cut down in n weeks" in red; a period with only a day above an Upper Limit
+  gets an amber dot under its column, and the row counts those days. Without the Profile's sex or
+  birth date, or under 18, the plate says "No vitamin and mineral coverage yet" with Axum's
+  reason while every other plate stays. The strips are hidden from assistive technology, which
+  reads the summary and a table of every nutrient (mean and logged days, shortfall, days above
+  an Upper Limit and the cut down periods by name).
 - **Photos is the pictures**: the albums as cover plates (wash plates, the cover on top, the
   name, then a photo glyph with the count and the months), led by **All photos**, a plate two
   columns by two rows whose cover is a mosaic of the album covers; with one album configured

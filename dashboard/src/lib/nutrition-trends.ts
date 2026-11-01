@@ -64,6 +64,50 @@ export function trendsChoiceOf(
 
 const kcal = z.number().nullable()
 
+const nutrientCoverage = z.object({
+  key: z.string(),
+  percent_of_recommended: z.number().nonnegative().nullable(),
+  averaged_days: z.number().int().nonnegative(),
+  days_above_upper_limit: z.number().int().nonnegative().nullable(),
+  seven_day_average_above_upper_limit: z.boolean().nullable(),
+})
+
+/** One nutrient over a period: its mean share of the Recommended Intake and its Upper Limit days. */
+export type NutrientCoverage = z.infer<typeof nutrientCoverage>
+
+const rangeNutrient = nutrientCoverage.extend({
+  name: z.string(),
+  group: z.enum(["vitamins", "minerals", "fatty_acids"]),
+  unit: z.string(),
+  adequate_intake: z.boolean(),
+  lasting_shortfall: z.boolean(),
+})
+
+/** One nutrient over the whole range, named, with Axum's lasting shortfall verdict. */
+export type RangeNutrient = z.infer<typeof rangeNutrient>
+
+/** The range's micronutrient coverage as Axum judges it, or why there is none. */
+const micronutrientCoverage = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("available"),
+    logged_days: z.number().int().nonnegative(),
+    shortfall: z.object({
+      below_percent: z.number().positive(),
+      min_logged_days: z.number().int().positive(),
+    }),
+    nutrients: z.array(rangeNutrient),
+    sources: z.array(z.object({ name: z.string(), citation: z.string() })),
+  }),
+  z.object({
+    state: z.literal("unavailable"),
+    missing: z.array(z.enum(["sex", "birth_date"])),
+    reason: z.string(),
+  }),
+])
+
+/** The range's micronutrient coverage; the dashboard only draws it. */
+export type MicronutrientCoverage = z.infer<typeof micronutrientCoverage>
+
 const summaryPeriod = z.object({
   start: z.iso.date(),
   end: z.iso.date(),
@@ -101,6 +145,12 @@ const summaryPeriod = z.object({
     kg_per_week: z.number().nullable(),
     goal_kg_per_week: z.number(),
   }),
+  micronutrients: z
+    .object({
+      logged_days: z.number().int().nonnegative(),
+      nutrients: z.array(nutrientCoverage),
+    })
+    .nullable(),
 })
 
 /** One day, week or month of the Nutrition Summary. */
@@ -114,6 +164,7 @@ export const nutritionSummary = z.object({
   time_zone: z.literal("Europe/Copenhagen"),
   logged_days: z.number().int().nonnegative(),
   missing_days: z.number().int().nonnegative(),
+  micronutrients: micronutrientCoverage,
   periods: z.array(summaryPeriod),
 })
 
@@ -240,6 +291,74 @@ export function novaShareOf(periods: readonly SummaryPeriod[]): number | null {
   )
 
   return classified > 0 ? unprocessed / classified : null
+}
+
+/** How a period stands against a nutrient's Upper Limits. */
+export type PeriodLimit = "cut_down" | "above" | "clear"
+
+/** One nutrient's row of the coverage plate: the range figures and each period's cell. */
+export type CoverageRow = RangeNutrient & {
+  /** Per period, in order: the mean share of the Recommended Intake and its Upper Limit state. */
+  readonly cells: ReadonlyArray<{
+    readonly percent: number | null
+    readonly limit: PeriodLimit
+  }>
+}
+
+function periodLimit(coverage: NutrientCoverage | undefined): PeriodLimit {
+  if (coverage?.seven_day_average_above_upper_limit === true) return "cut_down"
+
+  return (coverage?.days_above_upper_limit ?? 0) > 0 ? "above" : "clear"
+}
+
+/**
+ * Each nutrient of the range with its cell in every period, matched by key so Axum's order holds.
+ *
+ * @param nutrients - The range's nutrients.
+ * @param periods - The summary's periods.
+ * @returns One row per nutrient.
+ */
+export function coverageRows(
+  nutrients: readonly RangeNutrient[],
+  periods: readonly SummaryPeriod[]
+): CoverageRow[] {
+  const byPeriod = periods.map(
+    (period) =>
+      new Map(
+        (period.micronutrients?.nutrients ?? []).map((nutrient) => [
+          nutrient.key,
+          nutrient,
+        ])
+      )
+  )
+
+  return nutrients.map((nutrient) => ({
+    ...nutrient,
+    cells: byPeriod.map((coverage) => {
+      const cell = coverage.get(nutrient.key)
+
+      return {
+        percent: cell?.percent_of_recommended ?? null,
+        limit: periodLimit(cell),
+      }
+    }),
+  }))
+}
+
+/**
+ * The periods a nutrient's trailing 7-day average was above an Upper Limit, by name.
+ *
+ * @param row - A coverage row.
+ * @param names - Each period's full name.
+ * @returns The names of its cut down periods, in order.
+ */
+export function cutDownPeriods(
+  row: CoverageRow,
+  names: readonly string[]
+): string[] {
+  return row.cells.flatMap((cell, index) =>
+    cell.limit === "cut_down" ? [names[index] ?? ""] : []
+  )
 }
 
 /**

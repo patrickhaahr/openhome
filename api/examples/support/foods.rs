@@ -176,7 +176,8 @@ pub async fn seed_meals(
     .await
     .map_err(|error| anyhow::anyhow!("linking the synthetic product failed: {error}"))?;
     // Two Supplements, taken with the meal after the run: a vitamin by parameter key and a
-    // compound without one.
+    // compound without one. A third, far above vitamin D's Upper Limit, is taken on a few
+    // backfilled days so the Trends view shows a cut down.
     let mut supplement_ids = Vec::new();
     for (name, dose_unit, amounts, compounds) in [
         (
@@ -199,6 +200,17 @@ pub async fn seed_meals(
                 value: 3.0,
                 unit: "g".into(),
             }],
+        ),
+        (
+            "Vitamin D 250",
+            DoseUnit::Capsule,
+            vec![AmountRequest {
+                key: "vitamin_d".into(),
+                value: 250.0,
+                unit: "µg".into(),
+                form: None,
+            }],
+            vec![],
         ),
     ] {
         let added = supplements::add_supplement(
@@ -257,7 +269,7 @@ pub async fn seed_meals(
                         .collect(),
                 ),
                 supplement_doses: (index == 2).then(|| {
-                    supplement_ids
+                    supplement_ids[..2]
                         .iter()
                         .map(|id| DoseRequest {
                             supplement_id: id.clone(),
@@ -321,7 +333,12 @@ pub async fn seed_meals(
                             })
                             .collect(),
                     ),
-                    supplement_doses: None,
+                    supplement_doses: (meal == 0 && (17..=20).contains(&days_ago)).then(|| {
+                        vec![DoseRequest {
+                            supplement_id: supplement_ids[2].clone(),
+                            doses: 1.0,
+                        }]
+                    }),
                     meal: None,
                     overrides: None,
                     request_id: format!("synthetic-history-{days_ago}-{meal}"),

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { exactSearch, FoodViews } from "@/components/food-views"
 import { TrendChart } from "@/components/trend-chart"
+import { CoverageTrends } from "@/components/trend-coverage"
 import { formatDecimal, formatSigned, formatWhole } from "@/lib/number-format"
 import { foodDatabaseCredit } from "@/lib/nutrition"
 import {
@@ -32,7 +33,8 @@ const aggregationNames: Record<Aggregation, string> = {
  * The Food page's Trends view: the range and aggregation choices, then each series as its own
  * chart (calories against the Calorie Target and Estimated Expenditure, protein against its
  * target, energy by macronutrient, the NOVA 1 share, Trend Weight against scale weight, and the
- * weekly change against the Nutrition Goal), with the Food database's credit.
+ * weekly change against the Nutrition Goal), then the vitamins and minerals against their
+ * Recommended Intakes and Upper Limits, with the Food database's credit.
  */
 export function FoodTrends({
   data,
@@ -421,6 +423,13 @@ function Trends({
             values: periods.map((p) => p.weight_change.goal_kg_per_week),
           },
         ]}
+      />
+      <CoverageTrends
+        coverage={summary.micronutrients}
+        periods={periods}
+        by={by}
+        names={common.names}
+        labels={common.labels}
       />
     </div>
   )

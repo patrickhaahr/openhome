@@ -868,3 +868,171 @@ a.food-day-key:active {
 .trend-dot {
   fill: var(--tone);
 }
+
+/* ---------- Trends: vitamins and minerals as one strip of period columns per nutrient ---------- */
+
+.trend-coverage {
+  --caution: #d99a00;
+
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 1rem;
+  min-width: 0;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--wash);
+}
+.trend-coverage header {
+  display: grid;
+  gap: 0.25rem;
+}
+.trend-coverage h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.trend-coverage-basis {
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+}
+.trend-coverage-legend [data-tone="ink"] {
+  --tone: var(--ink);
+}
+.trend-coverage-legend [data-tone="muted"] {
+  --tone: var(--muted-ink);
+}
+.trend-coverage-legend [data-tone="danger"] {
+  --tone: var(--danger);
+}
+.trend-coverage-legend [data-tone="caution"] {
+  --tone: var(--caution);
+}
+.trend-coverage-legend li[data-kind="dots"]::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+.trend-coverage-group h4 {
+  margin-bottom: 0.5rem;
+  color: var(--muted-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.trend-coverage-rows {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trend-coverage-rows li {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr) 6.5rem;
+  align-items: end;
+  gap: 0.125rem 1rem;
+}
+.trend-coverage-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+/* The strip's height is 100 % of the Recommended Intake; passing it is never drawn higher. */
+.trend-coverage-strip {
+  display: grid;
+  grid-template-columns: repeat(var(--periods), minmax(0, 1fr));
+  align-items: end;
+  column-gap: var(--gap);
+  height: 1.75rem;
+  border-radius: 3px;
+  background: var(--wash-strong);
+}
+.trend-coverage-strip > span {
+  position: relative;
+  height: calc(var(--fill) * 100%);
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--muted-ink);
+}
+.trend-coverage-strip > [data-met] {
+  background: var(--ink);
+}
+/* A period without a logged day stays empty, never a zero. */
+.trend-coverage-strip > [data-gap] {
+  min-height: 0;
+  background: none;
+}
+.trend-coverage-strip > [data-partial] {
+  opacity: 0.45;
+}
+/* A cut down period is red; a period with only a day above the Upper Limit gets an amber dot. */
+.trend-coverage-strip > [data-limit="cut_down"] {
+  min-height: 0.375rem;
+  background: var(--danger);
+}
+.trend-coverage-strip > [data-limit="above"]::after {
+  content: "";
+  position: absolute;
+  bottom: -0.5rem;
+  left: 50%;
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: var(--caution);
+  transform: translateX(-50%);
+}
+.trend-coverage-percent {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+/* A lasting shortfall: an amber capsule beside the range mean, the Day view's "below floor" tone. */
+.trend-coverage-short {
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  background: var(--caution);
+  color: #121418;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.trend-coverage-limit {
+  grid-column: 2 / -1;
+  margin-top: 0.5rem;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.trend-coverage-rows [data-limit="cut_down"] .trend-coverage-limit {
+  color: var(--danger);
+}
+.trend-coverage-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: -0.25rem 0 0;
+  padding: 0 7.5rem 0 calc(min(11rem, 30%) + 1rem);
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 40rem) {
+  .trend-coverage-rows li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .trend-coverage-strip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .trend-coverage-limit {
+    grid-column: 1 / -1;
+  }
+  .trend-coverage-axis {
+    padding: 0;
+  }
+}
