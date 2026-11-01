@@ -151,7 +151,11 @@ For trends (\"how has my week gone?\", \"am I losing at the goal rate?\") call n
 365 days ending today at the latest, by day, week (ISO Monday to Sunday) or month. Intake figures are means per logged day: \
 days without Meal Logs are counted in missing_days and left out, never treated as zero, so mention missing days when \
 they are many. Compare weight_change.kg_per_week (the Trend Weight's change) with goal_kg_per_week rather than single \
-weigh-ins.";
+weigh-ins. nutrition_summary's micronutrients give each vitamin and mineral's mean percent_of_recommended per logged day \
+for the range and per period: name a lasting_shortfall (below 70 % over at least 7 logged days) as a habit worth fixing \
+with food, never a single low day; seven_day_average_above_upper_limit means a habitual excess to cut down, usually a \
+Supplement, while days_above_upper_limit alone is only a caution. For a long range prefer week or month: by day the \
+micronutrients make the result large.";
 
 const SUPPLEMENTS: &str = "List every Supplement by name: id, name, dose_unit (tablet, capsule, scoop or ml), \
 amounts per dose (key, form or null, value, unit in the Food database parameter's unit) and compounds per dose (name, \
@@ -418,9 +422,19 @@ protein {eaten_g, target_g}; macro_energy {protein_kcal, carbohydrate_kcal, fat_
 4/4/9/7 kcal per gram; nova {nova_1_share, nova_1_kcal, classified_kcal, unclassified_portions} summed over the period; \
 weight {trend_weight_kg on the last day, scale_weight_kg (mean of the period's weigh-ins), weigh_ins}; and \
 weight_change {kg_per_week, the Trend Weight's change over the period (or the 7 days ending on its last day when \
-shorter) per week; goal_kg_per_week, the Nutrition Goal's change, negative to lose}. Null means unknown: no logged day, \
-no target (Profile or Body Weight missing; see nutrition_day for the reason) or no Trend Weight. Works while the Food \
-database is unavailable.";
+shorter) per week; goal_kg_per_week, the Nutrition Goal's change, negative to lose}; and micronutrients {logged_days, \
+nutrients [{key, percent_of_recommended, averaged_days, days_above_upper_limit, seven_day_average_above_upper_limit}]} \
+(null when the range has none). The range's `micronutrients` (state available: logged_days, shortfall {below_percent, \
+min_logged_days}, nutrients with name, group, unit, adequate_intake and lasting_shortfall, and sources; state \
+unavailable: missing [sex, birth_date] and a reason, also below 18 years) covers every vitamin and mineral of \
+nutrition_day's panel plus epa_dha: percent_of_recommended is the mean of each logged day's percentage of the NNR 2023 \
+Recommended Intake, leaving out days without Meal Logs and unknown amounts; days_above_upper_limit counts days above an \
+EFSA Upper Limit, judged on the same share as nutrition_day (supplements only for magnesium, folic acid and the niacin \
+forms); seven_day_average_above_upper_limit is true when a trailing 7-day average ending on a day with Meal Logs was \
+above one (cut down); both are null for a nutrient without an Upper Limit. lasting_shortfall is true when the range's \
+mean is below shortfall.below_percent over at least shortfall.min_logged_days logged days. Null means unknown: no \
+logged day, no target (Profile or Body Weight missing; see nutrition_day for the reason) or no Trend Weight. Works \
+while the Food database is unavailable.";
 
 const NUTRITION_GOAL: &str = "The user's Nutrition Goal in effect today (direction lose, maintain or lean_bulk with \
 rate_kg_per_week, and effective_from, the Europe/Copenhagen day it was set, null for the default of losing 0.5 kg per \

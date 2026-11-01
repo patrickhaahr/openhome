@@ -1231,7 +1231,10 @@ async fn nutrition_summary_forwards_each_aggregation_and_range_errors_unchanged(
         .clone()
         .unwrap_or_default();
     assert!(
-        instructions.contains("nutrition_summary") && instructions.contains("missing_days"),
+        instructions.contains("nutrition_summary")
+            && instructions.contains("missing_days")
+            && instructions.contains("lasting_shortfall")
+            && instructions.contains("seven_day_average_above_upper_limit"),
         "{instructions}"
     );
     let http = reqwest::Client::new();
@@ -1261,6 +1264,11 @@ async fn nutrition_summary_forwards_each_aggregation_and_range_errors_unchanged(
         ))
         .await;
         assert_eq!(expected["logged_days"], 1, "{expected}");
+        // Without the Profile's sex and birth date the coverage says why.
+        assert_eq!(
+            expected["micronutrients"]["state"], "unavailable",
+            "{expected}"
+        );
         assert_eq!(summary.structured_content, Some(expected), "{aggregation}");
     }
 
