@@ -221,7 +221,7 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
   return (
     <figure className="trend-chart" data-chart={props.chart} ref={figure}>
       <figcaption>
-        <h3>{props.title}</h3>
+        <h2>{props.title}</h2>
         <p className="trend-summary">{props.summary}</p>
         <ul className="trend-legend" aria-hidden="true">
           {marks.flatMap((mark) =>
@@ -357,35 +357,39 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
           }
         })}
       </svg>
-      <table className="sr-only">
-        <caption>{props.title}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Period</th>
-            {series.map((part) => (
-              <th key={part.key} scope="col">
-                {part.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {props.names.map((name, index) => (
-            <tr key={name}>
-              <th scope="row">{name}</th>
-              {series.map((part) => {
-                const value = part.values[index] ?? null
-
-                return (
-                  <td key={part.key}>
-                    {value === null ? (part.gap ?? "No value") : format(value)}
-                  </td>
-                )
-              })}
+      <div className="sr-only">
+        <table>
+          <caption>{props.title}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Period</th>
+              {series.map((part) => (
+                <th key={part.key} scope="col">
+                  {part.name}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {props.names.map((name, index) => (
+              <tr key={name}>
+                <th scope="row">{name}</th>
+                {series.map((part) => {
+                  const value = part.values[index] ?? null
+
+                  return (
+                    <td key={part.key}>
+                      {value === null
+                        ? (part.gap ?? "No value")
+                        : format(value)}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   )
 }

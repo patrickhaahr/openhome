@@ -276,6 +276,10 @@ async fn linking_stores_the_product_once_and_a_linked_barcode_skips_open_food_fa
         product["label_per_100g"]
     );
     assert_eq!(api.lookup(SKYR).await.1["product"], relinked["product"]);
+    let (status, replayed) = api.link(SKYR, 1693, "link-skyr").await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed["product"], product);
+    assert_eq!(api.lookup(SKYR).await.1["product"], relinked["product"]);
     assert_eq!(api.provider_reads().await, 2);
 }
 
@@ -498,6 +502,25 @@ async fn a_product_portion_takes_label_values_first_and_its_linked_food_fills_th
     );
     assert_eq!(day["label_source"]["licence"], "ODbL");
     assert_eq!(day["meal_logs"], json!([meal_log]));
+    // A summary over the day credits both sources too.
+    let (status, summary) = api
+        .send(
+            Method::GET,
+            "/api/nutrition/summary?from=2026-10-29&to=2026-10-29&aggregation=day",
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{summary}");
+    assert_eq!(
+        (
+            &summary["sources"][0]["credit"],
+            &summary["label_source"]["credit"]
+        ),
+        (
+            &json!("© The Danish Food Composition Database, version 1"),
+            &json!("Product data © Open Food Facts contributors")
+        )
+    );
     assert_eq!(api.provider_reads().await, 1);
 }
 

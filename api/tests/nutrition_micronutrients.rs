@@ -810,7 +810,8 @@ async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only(
     let vitamin_d = api
         .supplement(
             "Vitamin D3",
-            json!({"amounts": [{"key": "vitamin_d", "value": 20, "unit": "µg"}]}),
+            json!({"amounts": [{"key": "vitamin_d", "value": 20, "unit": "µg"},
+                {"key": "protein", "value": 12, "unit": "g"}]}),
         )
         .await;
     // Monday 200 g of Orange (100 mg vitamin C, 105.3 %) and Wednesday 100 g (50 mg, 52.6 %).
@@ -832,6 +833,10 @@ async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only(
     // Energy is the mean over the days that know it (94 and 47 kcal), so the capsule day is not
     // a day of 0 kcal.
     assert_eq!(period["energy"]["eaten_kcal"], 71.0);
+    let day = api.summary("2026-04-10", "2026-04-10", "day").await;
+    assert_eq!(day["periods"][0]["energy"]["eaten_kcal"], Value::Null);
+    assert_eq!(day["periods"][0]["protein"]["eaten_g"], 12.0);
+    assert_eq!(day["periods"][0]["macro_energy"]["protein_kcal"], 48.0);
     let coverage = &period["micronutrients"];
     assert_eq!(coverage["logged_days"], 3);
     // The four days without Meal Logs, and Friday's unknown vitamin C, leave the mean alone

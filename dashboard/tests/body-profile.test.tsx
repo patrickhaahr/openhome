@@ -137,6 +137,27 @@ async function type(label: string, value: string): Promise<void> {
   })
 }
 
+function select(label: string): HTMLSelectElement {
+  const fieldLabel = Array.from(container.querySelectorAll("label")).find(
+    (element) => element.textContent === label
+  )
+
+  const element = document.getElementById(fieldLabel?.htmlFor ?? "")
+
+  if (!(element instanceof HTMLSelectElement))
+    throw new Error(`Missing select: ${label}`)
+
+  return element
+}
+
+async function choose(label: string, value: string): Promise<void> {
+  await act(async () => {
+    const field = select(label)
+    field.value = value
+    field.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+}
+
 async function click(name: string): Promise<void> {
   const button = Array.from(container.querySelectorAll("button")).find(
     (element) => element.textContent === name
@@ -156,7 +177,10 @@ test("configures the shared Profile, preserves concurrent untouched fields, and 
   expect(container.textContent?.match(/Not configured/g)).toHaveLength(4)
   await click("Edit profile")
   await type("Height (cm)", "181,12345")
-  await type("Sex (optional)", "female")
+  expect(
+    [...select("Sex (optional)").options].map((option) => option.text)
+  ).toEqual(["Not set", "Male", "Female"])
+  await choose("Sex (optional)", "female")
   await type("Maximum heart rate (bpm)", "190")
   await type("Birth date", "1994-05-17")
   await click("Save profile")
@@ -174,7 +198,7 @@ test("configures the shared Profile, preserves concurrent untouched fields, and 
   await click("Edit profile")
   // Another client changes a field this draft leaves untouched.
   await api(profile, "/api/profile", { hr_max_bpm: 195 })
-  await type("Sex (optional)", "")
+  await choose("Sex (optional)", "")
   await click("Save profile")
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: 181.12345,
@@ -368,4 +392,33 @@ test("a confirmed Profile save remains visible if its follow-up read is unavaila
   expect(container.textContent).toContain("Profile & weight unavailable")
   expect(container.textContent).toContain("Profile saved to OpenHome.")
   expect(await api(profile, "/api/profile")).toMatchObject({ hr_max_bpm: 180 })
+})
+
+test("shows a sex the targets cannot use instead of replacing it, and keeps it until changed", async () => {
+  // Another client stored free text.
+  await api(profile, "/api/profile", { sex: "unspecified", height_cm: 180 })
+  await render()
+  await click("Edit profile")
+
+  const sex = select("Sex (optional)")
+  expect(sex.value).toBe("unspecified")
+  expect([...sex.options].map((option) => option.text)).toEqual([
+    "Not set",
+    "Male",
+    "Female",
+    "“unspecified” (not used for targets)",
+  ])
+
+  // Saving another field leaves it alone.
+  await type("Height (cm)", "181")
+  await click("Save profile")
+  expect(await api(profile, "/api/profile")).toMatchObject({
+    height_cm: 181,
+    sex: "unspecified",
+  })
+
+  await click("Edit profile")
+  await choose("Sex (optional)", "male")
+  await click("Save profile")
+  expect(await api(profile, "/api/profile")).toMatchObject({ sex: "male" })
 })

@@ -35,11 +35,14 @@ dbus = { version = "0.9.12", features = ["vendored"] }
 calamine = { version = "0.37.0", default-features = false }
 # Meal photos: decode JPEG/PNG, then libavif with only the aom codec (vendored, built with CMake).
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-libavif = { version = "0.14", default-features = false, features = ["codec-aom"] }
+# Use the native API to set colour information before RGB-to-YUV conversion.
+libavif-sys = { version = "0.17", default-features = false, features = ["codec-aom"] }
+moxcms = "0.8"
 
 [dev-dependencies]
 axum = { version = "0.8.8", features = ["macros"] }
 hyper = "1.8.1"
+libavif = { version = "0.14", default-features = false, features = ["codec-aom"] }
 pretty_assertions = "1"
 rust_xlsxwriter = "0.102.0"
 serde = "1.0.228"

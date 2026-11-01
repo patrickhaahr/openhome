@@ -8,11 +8,10 @@
 //!   alone. Other days are missing: their intake is left out of the means, never counted as zero,
 //!   and a period without a logged day has null intake.
 //! - **Intake** (energy, protein and energy per macronutrient at 4/4/9/7 kcal per gram) is the
-//!   mean over the logged days whose energy is known, so a day of Supplement Doses without energy
-//!   is never a day of 0 kcal; the Estimated Expenditure learns from the same days (`targets`).
-//!   On those days a macronutrient no Portion has a value for adds nothing, as on the Nutrition
-//!   Day, so the macronutrients' energy always shares one set of days; a mean is null when no
-//!   such day has a value.
+//!   mean over the logged days that know each metric (`known_days`); `intake_days` counts
+//!   known-energy days. Each metric is independent, so unknown energy never erases known
+//!   protein and an unknown value never contributes a zero. Estimated Expenditure still learns
+//!   from known-energy days only (`targets`).
 //! - **NOVA 1 share**: Class 1 and classified energy are summed over the period first, then
 //!   divided (`NovaEnergy`); daily shares are never averaged.
 //! - **Targets**: the Calorie Target, Estimated Expenditure and protein target are the mean of
@@ -25,6 +24,9 @@
 //!   the day before it to its last day, or over the 7 days ending on its last day when the period
 //!   is shorter than a week; null without a Trend Weight at both ends. The goal rate is the mean
 //!   of each day's Nutrition Goal change in kg per week, negative to lose.
+//! - **Sources**: the Danish Food Composition Database versions the range's Portions copied
+//!   their values from, and Open Food Facts when a Product Portion is in the range, to credit
+//!   wherever the summary is shown.
 //! - **Micronutrients**: each period's and the range's coverage of the micronutrient panel
 //!   (`coverage`), or, without the Profile's sex or birth date or below 18 years on the range's
 //!   last day, why there is none; the rest of the summary does not depend on it.
@@ -39,12 +41,14 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use super::coverage::{MicronutrientCoverage, PeriodCoverage, Tally};
+use super::food_database::{self, Source};
 use super::goals::{self, GoalHistory};
 use super::intake::Intake;
 use super::meal_logs::{self, MealLogError, Selection, StoredPortion, Values};
 use super::micronutrients::{self, Diary, Person};
 use super::nova::{NovaEnergy, NovaShare};
 use super::parameters;
+use super::products::{LABEL_SOURCE, LabelSource};
 use super::supplements::StoredDose;
 use super::targets::{
     self, KCAL_PER_G_CARBS, KCAL_PER_G_FAT, KCAL_PER_G_PROTEIN, Missing, Plan, TrendWeight,
@@ -101,6 +105,11 @@ pub struct NutritionSummary {
     pub missing_days: usize,
     /// Micronutrient coverage over the whole range, or why there is none.
     pub micronutrients: MicronutrientCoverage,
+    /// The Danish Food Composition Database versions the range's Portions copied their values
+    /// from, sorted by version; empty without Portions.
+    pub sources: Vec<Source>,
+    /// Open Food Facts when a Product Portion is in the range; null otherwise.
+    pub label_source: Option<LabelSource>,
     /// In date order.
     pub periods: Vec<Period>,
 }
@@ -116,11 +125,13 @@ pub struct Period {
     pub partial: bool,
     pub logged_days: usize,
     pub missing_days: usize,
-    /// Logged days whose energy is known: the days the intake means cover.
+    /// Logged days whose energy is known: the days the energy mean covers.
     pub intake_days: usize,
+    /// Known logged days for each metric; an unknown value is never a day of zero intake.
+    pub known_days: KnownDays,
     pub energy: EnergySummary,
     pub protein: ProteinSummary,
-    /// Mean energy from each macronutrient over the logged days whose energy is known.
+    /// Mean energy from each macronutrient over the logged days that know each value.
     pub macro_energy: MacroEnergy,
     pub nova: NovaShare,
     pub weight: WeightSummary,
@@ -129,10 +140,19 @@ pub struct Period {
     pub micronutrients: Option<PeriodCoverage>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct KnownDays {
+    pub energy: usize,
+    pub protein: usize,
+    pub carbohydrate: usize,
+    pub fat: usize,
+    pub alcohol: usize,
+}
+
 /// kcal per day; null when no day has the value.
 #[derive(Debug, Serialize)]
 pub struct EnergySummary {
-    /// Mean over the logged days whose energy is known.
+    /// Mean over the logged days that know each value.
     pub eaten_kcal: Option<f64>,
     pub calorie_target_kcal: Option<f64>,
     pub estimated_expenditure_kcal: Option<f64>,
@@ -141,12 +161,12 @@ pub struct EnergySummary {
 /// Grams per day; null when no day has the value.
 #[derive(Debug, Serialize)]
 pub struct ProteinSummary {
-    /// Mean over the logged days whose energy is known.
+    /// Mean over the logged days that know each value.
     pub eaten_g: Option<f64>,
     pub target_g: Option<f64>,
 }
 
-/// kcal per day at 4/4/9/7 kcal per gram, over the logged days whose energy is known.
+/// kcal per day at 4/4/9/7 kcal per gram, over the logged days that know each value.
 #[derive(Debug, Serialize)]
 pub struct MacroEnergy {
     pub protein_kcal: Option<f64>,
@@ -193,21 +213,17 @@ impl Mean {
     }
 }
 
-/// A sum of known values; `None` until one is added.
+/// A mean of the days that know this metric; an unknown day never contributes a zero.
 #[derive(Clone, Copy, Debug, Default)]
-struct Known(Option<f64>);
+struct Known(Mean);
 
 impl Known {
     fn add(&mut self, value: Option<f64>) {
-        if let Some(value) = value {
-            *self.0.get_or_insert(0.0) += value;
-        }
+        self.0.add(value);
     }
 
-    /// Per day over `days`, scaled by `factor` and rounded to `places`.
-    fn per_day(self, days: usize, factor: f64, places: i32) -> Option<f64> {
-        let sum = self.0.filter(|_| days > 0)?;
-        Some(round_to(sum * factor / days as f64, places))
+    fn per_day(self, factor: f64, places: i32) -> Option<f64> {
+        self.0.get().map(|mean| round_to(mean * factor, places))
     }
 }
 
@@ -228,7 +244,7 @@ impl Eaten<'_> {
 #[derive(Default)]
 struct Sums {
     logged_days: usize,
-    /// Logged days whose energy is known: the days intake is averaged over.
+    /// Logged days whose energy is known.
     intake_days: usize,
     energy: Known,
     protein: Known,
@@ -244,15 +260,13 @@ struct Sums {
 }
 
 impl Sums {
-    /// A logged day: its NOVA energy always, its macronutrients only when its energy is known.
+    /// A logged day contributes each known metric independently of its energy.
     fn add_eaten(&mut self, eaten: &Eaten<'_>) {
         self.logged_days += 1;
         self.nova = self.nova + NovaEnergy::of(&eaten.portions);
-        let Some(kcal) = eaten.total(parameters::ENERGY_KCAL) else {
-            return;
-        };
-        self.intake_days += 1;
-        self.energy.add(Some(kcal));
+        let energy = eaten.total(parameters::ENERGY_KCAL);
+        self.intake_days += usize::from(energy.is_some());
+        self.energy.add(energy);
         self.protein.add(eaten.total(parameters::PROTEIN));
         self.carbs
             .add(eaten.total(parameters::AVAILABLE_CARBOHYDRATE));
@@ -313,20 +327,27 @@ impl Inputs<'_> {
             logged_days: logged,
             missing_days: days.len() - logged,
             intake_days,
+            known_days: KnownDays {
+                energy: sums.energy.0.count,
+                protein: sums.protein.0.count,
+                carbohydrate: sums.carbs.0.count,
+                fat: sums.fat.0.count,
+                alcohol: sums.alcohol.0.count,
+            },
             energy: EnergySummary {
-                eaten_kcal: sums.energy.per_day(intake_days, 1.0, 0),
+                eaten_kcal: sums.energy.per_day(1.0, 0),
                 calorie_target_kcal: rounded(sums.calorie_target, 0),
                 estimated_expenditure_kcal: rounded(sums.expenditure, 0),
             },
             protein: ProteinSummary {
-                eaten_g: sums.protein.per_day(intake_days, 1.0, 1),
+                eaten_g: sums.protein.per_day(1.0, 1),
                 target_g: rounded(sums.protein_target, 1),
             },
             macro_energy: MacroEnergy {
-                protein_kcal: sums.protein.per_day(intake_days, KCAL_PER_G_PROTEIN, 0),
-                carbohydrate_kcal: sums.carbs.per_day(intake_days, KCAL_PER_G_CARBS, 0),
-                fat_kcal: sums.fat.per_day(intake_days, KCAL_PER_G_FAT, 0),
-                alcohol_kcal: sums.alcohol.per_day(intake_days, KCAL_PER_G_ALCOHOL, 0),
+                protein_kcal: sums.protein.per_day(KCAL_PER_G_PROTEIN, 0),
+                carbohydrate_kcal: sums.carbs.per_day(KCAL_PER_G_CARBS, 0),
+                fat_kcal: sums.fat.per_day(KCAL_PER_G_FAT, 0),
+                alcohol_kcal: sums.alcohol.per_day(KCAL_PER_G_ALCOHOL, 0),
             },
             nova: sums.nova.summary(),
             weight: WeightSummary {
@@ -395,6 +416,15 @@ pub async fn nutrition_summary(
     let weigh_ins = targets::weigh_ins(db, to).await?;
     let goals = goals::history(db).await?;
 
+    let portions = || logs.iter().flat_map(|log| &log.portions);
+    let mut versions: Vec<&str> = portions().map(StoredPortion::dataset_version).collect();
+    versions.sort_unstable();
+    versions.dedup();
+    let sources = versions.into_iter().map(food_database::source).collect();
+    let label_source = portions()
+        .any(StoredPortion::is_product)
+        .then_some(LABEL_SOURCE);
+
     let mut eaten: BTreeMap<CalendarDay, Eaten<'_>> = BTreeMap::new();
     for log in &logs {
         let Some(day) = CalendarDay::parse(&log.day) else {
@@ -449,6 +479,8 @@ pub async fn nutrition_summary(
         logged_days,
         missing_days,
         micronutrients,
+        sources,
+        label_source,
         periods,
     })
 }

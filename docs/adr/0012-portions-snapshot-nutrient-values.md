@@ -13,13 +13,17 @@ Calorie Targets' adherence and the Estimated Expenditure derived from them.
 Correcting a Product's linked Food or upgrading the database affects only
 future Portions. Past Meal Logs are corrected one at a time by replacing their
 Portions. Meals keep references, not values, so the next log of a Meal picks up
-the corrected data.
+the corrected data. A Product keeps the names of the Food it was linked to, so
+when a later dataset drops that `FoodID` or gives it to another Food, logging
+the Product is refused until it is linked again, as a Meal naming such a Food
+is.
 
 A Portion also copies its NOVA Class when it is logged: its Product's Open Food Facts class,
 or its Food's class from `app.db`. The agent classifies a Food the first time it is eaten,
 usually just after logging it, so classifying a Food also fills that Food's still-unclassified
 Food Portions logged from the same dataset version (a `FoodID` from another version may name
-another Food). Already classified Portions keep their class: a changed class applies to
+another Food). For the same reason a Food's class records the dataset version it was given in
+and is read only while `food.db` holds that version. Already classified Portions keep their class: a changed class applies to
 Portions logged afterwards, and a past Meal Log is corrected by replacing its Portions. Product
 Portions never take their linked Food's class.
 

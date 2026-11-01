@@ -168,14 +168,14 @@ test("shows each nutrient's coverage with lasting shortfalls and cut down period
   expect(data.state).toBe("available")
   await render(data)
 
-  expect(text(".trend-coverage h3")).toEqual(["Vitamins and minerals"])
+  expect(text(".trend-coverage h2")).toEqual(["Vitamins and minerals"])
   expect(text(".trend-coverage .trend-summary")).toEqual([
     "Lasting shortfall: Calcium · Cut down: Vitamin D",
   ])
   expect(text(".trend-coverage-basis")[0]).toMatch(
     /over 9 logged days · a lasting shortfall is below 70 % over at least 7 logged days/
   )
-  expect(text(".trend-coverage-group h4")).toEqual([
+  expect(text(".trend-coverage-group h3")).toEqual([
     "Vitamins",
     "Minerals",
     "Omega-3",
@@ -241,14 +241,14 @@ test("without the Profile's sex and birth date the coverage says why and the tre
     expect(data.state).toBe("available")
     await render(data)
 
-    expect(text(".trend-coverage h3")).toEqual([
+    expect(text(".trend-coverage h2")).toEqual([
       "No vitamin and mineral coverage yet",
     ])
     expect(text('.trend-coverage[data-state="unavailable"] p')).toEqual([
       "The micronutrient panel needs the Profile's sex (male or female) and birth date.",
       "Sex and birth date are set on the Workout page's Body view.",
     ])
-    expect(text(".trend-chart h3")).toContain("Calories")
+    expect(text(".trend-chart h2")).toContain("Calories")
   } finally {
     await bare.stop()
   }

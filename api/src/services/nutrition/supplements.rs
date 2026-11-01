@@ -147,7 +147,7 @@ pub struct EditSupplement {
 }
 
 /// An amount of a parameter, in the parameter's unit.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Amount {
     pub key: String,
     /// One of the parameter's [`FORMS`]; null for parameters without forms.
@@ -157,14 +157,14 @@ pub struct Amount {
 }
 
 /// An amount of a named compound.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Compound {
     pub name: String,
     pub value: f64,
     pub unit: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Supplement {
     pub id: String,
     pub name: String,
@@ -370,12 +370,16 @@ fn check_label(amounts: &[Amount], compounds: &[Compound]) -> Result<()> {
 
 /// Every Supplement by name, or the one with `id`.
 async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Supplement>> {
+    load_on(&mut *db.acquire().await?, id).await
+}
+
+async fn load_on(db: &mut sqlx::SqliteConnection, id: Option<&str>) -> Result<Vec<Supplement>> {
     let rows = sqlx::query!(
         r#"SELECT id AS "id!", name, dose_unit AS "dose_unit: DoseUnit" FROM supplements
         WHERE ?1 IS NULL OR id = ?1 ORDER BY name_key"#,
         id
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?;
     let mut amounts: HashMap<String, Vec<Amount>> = HashMap::new();
     for row in sqlx::query!(
@@ -383,7 +387,7 @@ async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Supplement>> {
         WHERE ?1 IS NULL OR supplement_id = ?1 ORDER BY supplement_id, position",
         id
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?
     {
         amounts.entry(row.supplement_id).or_default().push(Amount {
@@ -399,7 +403,7 @@ async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Supplement>> {
         WHERE ?1 IS NULL OR supplement_id = ?1 ORDER BY supplement_id, position",
         id
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?
     {
         compounds
@@ -453,7 +457,7 @@ pub async fn supplements(db: &SqlitePool) -> Result<Supplements> {
 
 async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Option<Added>> {
     let Some(receipt) = sqlx::query!(
-        "SELECT supplement_id, request FROM supplement_receipts WHERE request_id = ?",
+        "SELECT supplement_id, request, result FROM supplement_receipts WHERE request_id = ?",
         request_id
     )
     .fetch_optional(db)
@@ -468,11 +472,15 @@ async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Opti
                 .into(),
         ));
     }
-    let supplement = find(db, &receipt.supplement_id).await?.ok_or_else(|| {
+    find(db, &receipt.supplement_id).await?.ok_or_else(|| {
         SupplementError::Conflict(
             "The retried Supplement was deleted; use a new request_id to add it again".into(),
         )
     })?;
+    let result = receipt.result.ok_or_else(|| SupplementError::Conflict(
+        "This legacy receipt has no original result; read the current supplement before retrying".into()))?;
+    let supplement =
+        serde_json::from_str(&result).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
     Ok(Some(Added {
         supplement,
         replayed: true,
@@ -565,9 +573,23 @@ pub async fn add_supplement(db: &SqlitePool, request: AddSupplement) -> Result<A
     .await
     .map_err(|error| unique_name(error, &name.name))?;
     insert_label(&mut transaction, &id, &amounts, &compounds).await?;
+    let supplement = load_on(&mut transaction, Some(&id))
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(not_found)?;
+    let result =
+        serde_json::to_string(&supplement).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    sqlx::query!(
+        "UPDATE supplement_receipts SET result = ? WHERE request_id = ?",
+        result,
+        request_id
+    )
+    .execute(&mut *transaction)
+    .await?;
     transaction.commit().await?;
     Ok(Added {
-        supplement: find(db, &id).await?.ok_or_else(not_found)?,
+        supplement,
         replayed: false,
     })
 }
@@ -751,7 +773,7 @@ pub(super) async fn resolve(
 }
 
 /// A dose as a Meal lists it, and a day's doses of one Supplement added together.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DoseSummary {
     pub supplement_id: String,
     /// The Supplement as it is named now in a Meal, or as it was logged in a day.
@@ -779,7 +801,7 @@ pub(super) async fn insert_meal_doses(
 
 /// Every Meal's doses, or one Meal's, in order and by Meal ID, named as the Supplements are now.
 pub(super) async fn meal_doses(
-    db: &SqlitePool,
+    db: &mut sqlx::SqliteConnection,
     meal_id: Option<&str>,
 ) -> Result<HashMap<String, Vec<DoseSummary>>> {
     let mut doses: HashMap<String, Vec<DoseSummary>> = HashMap::new();
@@ -789,7 +811,7 @@ pub(super) async fn meal_doses(
         WHERE ?1 IS NULL OR d.meal_id = ?1 ORDER BY d.meal_id, d.position"#,
         meal_id
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?
     {
         doses.entry(row.meal_id).or_default().push(DoseSummary {
@@ -864,7 +886,7 @@ impl StoredDose {
 }
 
 /// A Supplement Dose of a Meal Log: the Supplement as named when logged, and the amounts taken.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SupplementDose {
     /// The Supplement, which may since have been edited or deleted.
     pub supplement_id: String,
@@ -933,6 +955,15 @@ pub(super) async fn log_doses(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<HashMap<String, Vec<StoredDose>>> {
+    log_doses_on(&mut *db.acquire().await?, id, from, to).await
+}
+
+pub(super) async fn log_doses_on(
+    db: &mut sqlx::SqliteConnection,
+    id: Option<&str>,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<HashMap<String, Vec<StoredDose>>> {
     let rows = sqlx::query!(
         r#"SELECT d.id AS "id!", d.meal_log_id, d.supplement_id, d.name,
             d.dose_unit AS "dose_unit: DoseUnit", d.doses
@@ -943,7 +974,7 @@ pub(super) async fn log_doses(
         from,
         to
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?;
     if rows.is_empty() {
         return Ok(HashMap::new());
@@ -958,7 +989,7 @@ pub(super) async fn log_doses(
         from,
         to
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?
     {
         amounts.entry(row.dose_id).or_default().push(Amount {
@@ -978,7 +1009,7 @@ pub(super) async fn log_doses(
         from,
         to
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?
     {
         compounds.entry(row.dose_id).or_default().push(Compound {

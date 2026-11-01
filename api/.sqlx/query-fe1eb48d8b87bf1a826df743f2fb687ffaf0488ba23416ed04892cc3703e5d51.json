@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT meal_log_id, request FROM meal_log_receipts WHERE request_id = ?",
+  "query": "SELECT meal_log_id, request, result FROM meal_log_receipts WHERE request_id = ?",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "name": "request",
         "ordinal": 1,
         "type_info": "Text"
+      },
+      {
+        "name": "result",
+        "ordinal": 2,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -19,8 +24,9 @@
     },
     "nullable": [
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "d53dbb457dd2abbfd18fea7530c561b29721079f012231fc05d9566d4c1555c1"
+  "hash": "fe1eb48d8b87bf1a826df743f2fb687ffaf0488ba23416ed04892cc3703e5d51"
 }

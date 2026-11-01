@@ -207,6 +207,17 @@ async fn weeks_run_monday_to_sunday_and_edge_weeks_cover_only_the_range() {
     assert_eq!(summary["time_zone"], "Europe/Copenhagen");
     assert_eq!(summary["logged_days"], 3);
     assert_eq!(summary["missing_days"], 11);
+    // The values' credit: the Food database version the Portions copied, and no Product.
+    assert_eq!(
+        summary["sources"],
+        json!([{
+            "name": "The Danish Food Composition Database",
+            "version": "1",
+            "credit": "© The Danish Food Composition Database, version 1",
+            "licence": "CC BY 4.0",
+        }])
+    );
+    assert_eq!(summary["label_source"], Value::Null);
     let periods = summary["periods"].as_array().unwrap();
     let bounds: Vec<Value> = periods
         .iter()
@@ -238,9 +249,16 @@ async fn weeks_run_monday_to_sunday_and_edge_weeks_cover_only_the_range() {
         first["macro_energy"],
         json!({
             "protein_kcal": 672.0,
-            "carbohydrate_kcal": 200.0,
+            "carbohydrate_kcal": 400.0,
             "fat_kcal": 504.0,
             "alcohol_kcal": null,
+        })
+    );
+    // Only Saturday knows carbohydrate (100 g); Thursday is unknown rather than zero.
+    assert_eq!(
+        first["known_days"],
+        json!({
+            "energy": 2, "protein": 2, "carbohydrate": 1, "fat": 2, "alcohol": 0,
         })
     );
     // NOVA 1 energy is summed over the period before taking the share: 2,400 of 2,850 kcal.

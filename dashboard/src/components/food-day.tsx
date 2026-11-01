@@ -879,6 +879,14 @@ function MacroProgress({
   )
 }
 
+/** Identifies the goal Axum serves; null when it could not be read. */
+function goalSignature(goal: NutritionGoal | null): string | null {
+  if (goal === null) return null
+  const { direction, rate_kg_per_week, effective_from } = goal.goal
+
+  return `${direction} ${rate_kg_per_week} ${effective_from ?? ""}`
+}
+
 /** The Nutrition Goal from today: the Day view's only write. */
 function GoalControl({
   goal,
@@ -892,6 +900,16 @@ function GoalControl({
   const id = useId()
   const current = goal === null ? undefined : goalChoice(goal.goal)
   const [chosen, setChosen] = useState<string>(current?.key ?? "")
+  // The choice starts again from the goal Axum serves whenever that goal changes, such as when
+  // it could first not be read; adjusting during render keeps the save feedback.
+  const signature = goalSignature(goal)
+  const [shown, setShown] = useState(signature)
+
+  if (shown !== signature) {
+    setShown(signature)
+    setChosen(current?.key ?? "")
+  }
+
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
 

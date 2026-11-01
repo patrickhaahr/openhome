@@ -53,6 +53,9 @@ pub enum MealLogError {
     NotFound(String),
     #[error("{0}")]
     Conflict(String),
+    /// A Product's linked `FoodID` names another Food, or none, in the current Food database.
+    #[error("{0}")]
+    ProductNeedsRelink(String),
     #[error(transparent)]
     Food(#[from] FoodError),
     #[error(transparent)]
@@ -176,7 +179,7 @@ pub const KEY_NUTRIENTS: [&str; 6] = [
 ];
 
 /// Energy and macronutrients, in a fixed order.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KeyNutrients<T> {
     pub energy_kcal: T,
     pub protein: T,
@@ -201,10 +204,10 @@ impl<T> KeyNutrients<T> {
 
 /// A Portion's amount of one nutrient: its per-100 g value scaled to the grams eaten. `value` and
 /// `source` are null when the value is unknown, never zero.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PortionAmount {
     pub value: Option<f64>,
-    pub unit: Option<&'static str>,
+    pub unit: Option<String>,
     pub source: Option<ValueSource>,
 }
 
@@ -212,7 +215,7 @@ pub struct PortionAmount {
 /// `unknown_portions` counts those that do not; `supplements` adds the doses whose label lists
 /// the value; `value` adds both. Each is null when nothing has a value, including when nothing
 /// was eaten.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Total {
     pub value: Option<f64>,
     pub unit: Option<String>,
@@ -222,14 +225,14 @@ pub struct Total {
 }
 
 /// The Product a Portion was logged as, as it was named then.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PortionProduct {
     pub barcode: String,
     pub name: Option<String>,
     pub brand: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Portion {
     /// The Food, or for a Product the Food it was linked to when logged.
     pub food_id: i64,
@@ -249,7 +252,7 @@ pub struct Portion {
 /// Where the photo media routes serve stored photos, by photo ID.
 pub const PHOTO_PATH: &str = "/api/nutrition/meal-photos";
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PhotoThumbnail {
     pub width: u32,
     pub height: u32,
@@ -257,7 +260,7 @@ pub struct PhotoThumbnail {
 }
 
 /// A Meal Log's AVIF photo; a new photo gets a new `id`, so its URLs never change content.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Photo {
     pub id: String,
     pub width: u32,
@@ -266,7 +269,7 @@ pub struct Photo {
     pub thumbnail: PhotoThumbnail,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MealLog {
     pub id: String,
     /// When it was eaten, in Copenhagen time with its offset.
@@ -319,6 +322,16 @@ pub(super) struct StoredPortion {
 }
 
 impl StoredPortion {
+    /// The Food database version its values were copied from.
+    pub(super) fn dataset_version(&self) -> &str {
+        &self.dataset_version
+    }
+
+    /// Whether it was logged as a Product, so its label values are Open Food Facts'.
+    pub(super) fn is_product(&self) -> bool {
+        self.product.is_some()
+    }
+
     /// The amount eaten of `key`, if known: the per-100 g value scaled to the grams.
     pub(super) fn amount(&self, key: &str) -> Option<f64> {
         self.values
@@ -452,7 +465,7 @@ impl StoredLog {
                         let stored = portion.values.get(key);
                         PortionAmount {
                             value: portion.amount(key).map(round),
-                            unit: vocabulary_unit(key),
+                            unit: vocabulary_unit(key).map(str::to_owned),
                             source: stored.map(|stored| stored.source),
                         }
                     }),
@@ -891,6 +904,15 @@ struct PreparedPortion {
 /// Snapshots each Portion: a Product's label values, then its Food's values for every key the
 /// label lacks, then the estimates, which may only fill keys neither has. A Product Portion takes
 /// the Product's NOVA Class and a Food Portion the Food's.
+fn product_needs_relink(product: &products::StoredProduct) -> MealLogError {
+    MealLogError::ProductNeedsRelink(format!(
+        "Product {} is linked to Food {} \"{}\", which the current Food database no longer has under that food_id; search_foods for its closest Food, link_product it again, then log it",
+        product.barcode,
+        product.food_id,
+        product.food_name_en()
+    ))
+}
+
 async fn prepare(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -915,7 +937,6 @@ async fn prepare(
             Item::Product(_) => None,
         })
         .collect();
-    let classes = nova::food_classes(db, &classified_foods).await?;
     let mut items = Vec::with_capacity(portions.len());
     for portion in portions {
         items.push(match &portion.item {
@@ -933,14 +954,31 @@ async fn prepare(
         });
     }
     let food_ids: Vec<i64> = items.iter().map(|(food_id, _)| *food_id).collect();
-    let snapshots = foods.snapshots(&food_ids).await?;
+    let snapshots = foods.snapshots(&food_ids).await.map_err(|error| {
+        if let FoodError::NotFound(food_id) = &error
+            && let Some(product) = stored.values().find(|product| product.food_id == *food_id)
+        {
+            return product_needs_relink(product);
+        }
+        MealLogError::Food(error)
+    })?;
+    // Classifications must match the dataset that actually supplied the snapshots, even if a
+    // background import completed between this request's earlier reads.
+    let classes = match snapshots.values().next() {
+        Some(food) => nova::food_classes(db, &food.dataset_version, &classified_foods).await?,
+        None => HashMap::new(),
+    };
     portions
         .iter()
         .zip(items)
         .map(|(portion, (food_id, product))| {
-            let food = snapshots
-                .get(&food_id)
-                .ok_or(FoodError::NotFound(food_id))?;
+            let food = snapshots.get(&food_id);
+            if let Some(product) = product
+                && !food.is_some_and(|food| product.links(food))
+            {
+                return Err(product_needs_relink(product));
+            }
+            let food = food.ok_or(FoodError::NotFound(food_id))?;
             let mut values: Vec<PreparedValue> = product
                 .iter()
                 .flat_map(|product| &product.label)
@@ -1070,6 +1108,14 @@ pub(super) async fn load(
     selection: &Selection<'_>,
     values: Values<'_>,
 ) -> Result<Vec<StoredLog>> {
+    load_on(&mut *db.acquire().await?, selection, values).await
+}
+
+pub(super) async fn load_on(
+    db: &mut sqlx::SqliteConnection,
+    selection: &Selection<'_>,
+    values: Values<'_>,
+) -> Result<Vec<StoredLog>> {
     let (id, from, to) = match selection {
         Selection::One(id) => (Some((*id).to_owned()), None, None),
         Selection::Days(from, to) => (None, Some(from.to_string()), Some(to.to_string())),
@@ -1083,7 +1129,7 @@ pub(super) async fn load(
         from,
         to
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?;
     let portions = sqlx::query!(
         r#"SELECT p.id AS "id!", p.meal_log_id, p.grams, p.food_id, p.name_da, p.name_en, p.dataset_version,
@@ -1095,7 +1141,7 @@ pub(super) async fn load(
         from,
         to
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?;
     // Driven from the Meal Logs to each Portion's values by primary key, so a range reads only
     // its own Portions' values, and for a key list one seek per Portion and key.
@@ -1113,7 +1159,7 @@ pub(super) async fn load(
                 from,
                 to
             )
-            .fetch_all(db)
+            .fetch_all(&mut *db)
             .await?
         }
         Values::Only(keys) => {
@@ -1133,13 +1179,13 @@ pub(super) async fn load(
                 to,
                 keys
             )
-            .fetch_all(db)
+            .fetch_all(&mut *db)
             .await?
         }
     };
 
     let mut doses =
-        supplements::log_doses(db, id.as_deref(), from.as_deref(), to.as_deref()).await?;
+        supplements::log_doses_on(db, id.as_deref(), from.as_deref(), to.as_deref()).await?;
 
     let mut values_by_portion: HashMap<i64, HashMap<String, StoredValue>> = HashMap::new();
     for row in values {
@@ -1209,7 +1255,7 @@ fn not_found() -> MealLogError {
 
 async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Option<Logged>> {
     let Some(receipt) = sqlx::query!(
-        "SELECT meal_log_id, request FROM meal_log_receipts WHERE request_id = ?",
+        "SELECT meal_log_id, request, result FROM meal_log_receipts WHERE request_id = ?",
         request_id
     )
     .fetch_optional(db)
@@ -1223,11 +1269,19 @@ async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Opti
                 .into(),
         ));
     }
-    let meal_log = find(db, &receipt.meal_log_id).await?.ok_or_else(|| {
+    find(db, &receipt.meal_log_id).await?.ok_or_else(|| {
         MealLogError::Conflict(
             "The retried Meal Log was deleted; use a new request_id to log it again".into(),
         )
     })?;
+    let result = receipt.result.ok_or_else(|| {
+        MealLogError::Conflict(
+            "This legacy receipt has no original result; read the current meal_log before retrying"
+                .into(),
+        )
+    })?;
+    let meal_log =
+        serde_json::from_str(&result).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
     Ok(Some(Logged {
         meal_log,
         replayed: true,
@@ -1339,20 +1393,20 @@ pub async fn log_meal(
         photo: PhotoColumns::of(photo.as_ref()),
     };
     let inserted = insert_log(db, &row, &prepared, &prepared_doses).await;
-    if !matches!(inserted, Ok(true))
+    if !matches!(inserted, Ok(Some(_)))
         && let Some(photo) = &photo
     {
         photos.remove(&photo.id).await;
     }
-    if !inserted? {
+    let Some(meal_log) = inserted? else {
         return replay(db, &request_id, &normalized).await?.ok_or_else(|| {
             MealLogError::Conflict(
                 "Retry receipt unavailable; list meal_logs before retrying".into(),
             )
         });
-    }
+    };
     Ok(Logged {
-        meal_log: find(db, &id).await?.ok_or_else(not_found)?,
+        meal_log,
         replayed: false,
     })
 }
@@ -1369,14 +1423,14 @@ struct NewLog<'a> {
     photo: PhotoColumns,
 }
 
-/// Inserts the receipt, Meal Log, Portions and doses together. `false` when a simultaneous retry
-/// claimed the receipt first; nothing is written then.
+/// Inserts the receipt and all Meal Log data together and returns its accepted snapshot.
+/// `None` means a simultaneous retry claimed the receipt first; nothing is written then.
 async fn insert_log(
     db: &SqlitePool,
     row: &NewLog<'_>,
     portions: &[PreparedPortion],
     doses: &[StoredDose],
-) -> Result<bool> {
+) -> Result<Option<MealLog>> {
     let mut transaction = db.begin().await?;
     // Claim first so simultaneous retries serialize on the receipt.
     let claimed = sqlx::query_scalar!(
@@ -1386,7 +1440,7 @@ async fn insert_log(
         .await?;
     if claimed.is_none() {
         transaction.rollback().await?;
-        return Ok(false);
+        return Ok(None);
     }
     let photo = &row.photo;
     sqlx::query!(
@@ -1397,8 +1451,27 @@ async fn insert_log(
     .await?;
     insert_portions(&mut transaction, row.id, portions).await?;
     supplements::insert_log_doses(&mut transaction, row.id, doses).await?;
+    let meal_log = load_on(
+        &mut transaction,
+        &Selection::One(row.id),
+        Values::Only(&KEY_NUTRIENTS),
+    )
+    .await?
+    .into_iter()
+    .next()
+    .ok_or_else(not_found)?
+    .into_meal_log()?;
+    let result =
+        serde_json::to_string(&meal_log).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    sqlx::query!(
+        "UPDATE meal_log_receipts SET result = ? WHERE request_id = ?",
+        result,
+        row.request_id
+    )
+    .execute(&mut *transaction)
+    .await?;
     transaction.commit().await?;
-    Ok(true)
+    Ok(Some(meal_log))
 }
 
 /// Meal Logs of one day, or of an inclusive range of up to [`MAX_RANGE_DAYS`] days, in time

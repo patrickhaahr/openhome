@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT food_id AS \"food_id!\", nova_class FROM food_nova_classes\n        WHERE food_id IN (SELECT value FROM json_each(?))",
+  "query": "SELECT food_id AS \"food_id!\", nova_class FROM food_nova_classes\n        WHERE food_id IN (SELECT value FROM json_each(?1)) AND dataset_version = ?2",
   "describe": {
     "columns": [
       {
@@ -15,12 +15,12 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [
       false,
       false
     ]
   },
-  "hash": "e93aa49ee50d18b95516c32f64488de368a79a763b2e8372d87357035e78dc3e"
+  "hash": "0a4afab835cae92ac8798cac47e6fa405f9dd02156434f8c60d54293bb6536ca"
 }

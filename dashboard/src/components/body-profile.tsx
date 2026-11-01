@@ -10,12 +10,14 @@ import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales"
 import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { WeightChart } from "@/components/weight-chart"
 import {
   bodyFailureMessage,
   optionalNumber,
   profileDraft,
   profilePatch,
+  profileSexes,
   type BodyCommand,
   type BodyMutation,
   type BodyRange,
@@ -476,6 +478,13 @@ function ProfileEditor({
 
   const id = useId()
 
+  // A sex stored by another client that the targets cannot use stays selectable until changed.
+  const unsupportedSex =
+    original.sex === "" ||
+    profileSexes.some((sex) => sex.value === original.sex)
+      ? undefined
+      : original.sex
+
   return (
     <form
       className="workout-editor"
@@ -559,12 +568,24 @@ function ProfileEditor({
       </div>
       <div className="workout-field">
         <label htmlFor={`${id}-sex`}>Sex (optional)</label>
-        <Input
+        <NativeSelect
           id={`${id}-sex`}
           value={draft.sex}
           disabled={disabled}
           onChange={(event) => update({ ...draft, sex: event.target.value })}
-        />
+        >
+          <NativeSelectOption value="">Not set</NativeSelectOption>
+          {profileSexes.map((sex) => (
+            <NativeSelectOption key={sex.value} value={sex.value}>
+              {sex.label}
+            </NativeSelectOption>
+          ))}
+          {unsupportedSex === undefined ? null : (
+            <NativeSelectOption value={unsupportedSex}>
+              {`“${unsupportedSex}” (not used for targets)`}
+            </NativeSelectOption>
+          )}
+        </NativeSelect>
       </div>
       <div className="workout-field">
         <label htmlFor={`${id}-heart`}>Maximum heart rate (bpm)</label>

@@ -3,7 +3,9 @@
 //! Danish names are written as comma-separated parts ("Kylling, bryst, rå") while people type
 //! compounds ("kyllingebryst"), so a query word matches a name when it occurs in the name's words
 //! or in the name with spaces removed, or, for words of five or more letters, when most of its
-//! letter triples occur in the name. Exact and leading matches rank first.
+//! letter triples occur in the name. Exact names and comma-separated Food names rank before
+//! derivatives ("Tomato, raw" before "Tomato juice"); a plain raw Food wins a tie. Explicit
+//! processed queries still match their own names first.
 
 use std::collections::HashSet;
 
@@ -36,6 +38,8 @@ struct Entry {
 struct IndexedName {
     /// Lower-case words separated by single spaces.
     words: String,
+    head: String,
+    plain: bool,
     /// `words` without spaces, so "kylling bryst" also reads "kyllingbryst".
     compact: String,
     triples: HashSet<[char; 3]>,
@@ -46,8 +50,17 @@ impl IndexedName {
         let words = normalize(name);
         let compact: String = words.chars().filter(|c| *c != ' ').collect();
         let triples = triples(&compact).collect();
+        let head = normalize(name.split(',').next().unwrap_or_default());
+        let plain = words
+            .split(' ')
+            .any(|word| matches!(word, "raw" | "rå" | "uspec"))
+            && !words
+                .split(' ')
+                .any(|word| matches!(word, "canned" | "konserves" | "dried" | "tørret"));
         Self {
             words,
+            head,
+            plain,
             compact,
             triples,
         }
@@ -69,6 +82,14 @@ impl IndexedName {
             } else {
                 3.0 + (1.0 - self.fuzzy_share(word)?)
             };
+        }
+        // The whole first name component identifies the Food itself, whereas a prefix can
+        // also name a derivative such as juice. Bonuses stay below an exact-name match (-1).
+        if self.head == query {
+            score -= 0.5;
+            if self.plain {
+                score -= 0.1;
+            }
         }
         Some(score)
     }
@@ -107,6 +128,12 @@ impl SearchIndex {
     #[must_use]
     pub fn search(&self, query: &str, limit: usize) -> Vec<&FoodIdentity> {
         let query = normalize(query);
+        // DTU calls oatmeal "Oats, rolled". Keep cooked porridge queries distinct: their water
+        // changes per-100 g values, so they must never be aliased to dry oats.
+        let query = match query.as_str() {
+            "oatmeal" | "rolled oats" => "oats rolled".to_owned(),
+            _ => query,
+        };
         let words: Vec<&str> = query.split(' ').filter(|word| !word.is_empty()).collect();
         if words.is_empty() {
             return Vec::new();
@@ -153,4 +180,45 @@ fn triples(text: &str) -> impl Iterator<Item = [char; 3]> {
     let chars: Vec<char> = text.chars().collect();
     (0..chars.len().saturating_sub(2))
         .map(move |start| [chars[start], chars[start + 1], chars[start + 2]])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn everyday_searches_lead_with_plain_foods_and_preserve_explicit_processed_queries() {
+        let foods = [
+            (1, "Tomatpure", "Tomato puree"),
+            (2, "Tomatjuice", "Tomato juice"),
+            (3, "Tomat, flået, konserves", "Tomato, peeled, canned"),
+            (4, "Tomat, dansk, rå", "Tomato, Danish, ripe, raw"),
+            (5, "Havregryn, uspec.", "Oats, rolled, average values"),
+        ];
+        let index = SearchIndex::new(
+            foods
+                .into_iter()
+                .map(|(food_id, da, en)| FoodIdentity {
+                    food_id,
+                    name_da: da.into(),
+                    name_en: en.into(),
+                    food_group: None,
+                })
+                .collect(),
+        );
+        for (query, first) in [
+            ("tomato", 4),
+            ("tomat", 4),
+            ("tomato juice", 2),
+            ("tomato puree", 1),
+            ("oatmeal", 5),
+            ("rolled oats", 5),
+        ] {
+            assert_eq!(
+                index.search(query, 5).first().map(|food| food.food_id),
+                Some(first),
+                "{query}"
+            );
+        }
+    }
 }

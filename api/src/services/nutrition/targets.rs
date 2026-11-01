@@ -353,15 +353,19 @@ pub async fn plan(
         )
         .await?;
         let today_monday = monday_of(today);
-        for monday in unstored {
-            let Some(mut week) = Week::compute(monday, last_read[&monday], *body, &trend, &energy)
-            else {
-                continue;
-            };
-            if monday <= today_monday {
-                week = store_week(db, &week).await?;
-            }
-            weeks.insert(monday, week);
+        let (started, future): (Vec<Week>, Vec<Week>) = unstored
+            .into_iter()
+            .filter_map(|monday| Week::compute(monday, last_read[&monday], *body, &trend, &energy))
+            .partition(|week| week.monday <= today_monday);
+        let mut stored = store_weeks(db, &started).await?;
+        for week in started {
+            let stored = stored
+                .remove(&week.monday)
+                .ok_or(sqlx::Error::RowNotFound)?;
+            weeks.insert(stored.monday, stored);
+        }
+        for week in future {
+            weeks.insert(week.monday, week);
         }
     }
 
@@ -501,8 +505,28 @@ async fn stored_weeks(
         .collect()
 }
 
-/// Stores `week` unless a concurrent read stored it first, and returns the stored record.
-async fn store_week(db: &SqlitePool, week: &Week) -> Result<Week, sqlx::Error> {
+/// Stores each of `weeks`, in Monday order, unless a concurrent read stored it first, in one
+/// transaction so a long first read writes once; returns the stored records from their first to
+/// their last Monday.
+async fn store_weeks(
+    db: &SqlitePool,
+    weeks: &[Week],
+) -> Result<BTreeMap<CalendarDay, Week>, sqlx::Error> {
+    let (Some(first), Some(last)) = (weeks.first(), weeks.last()) else {
+        return Ok(BTreeMap::new());
+    };
+    let mut transaction = db.begin().await?;
+    for week in weeks {
+        insert_week(&mut transaction, week).await?;
+    }
+    transaction.commit().await?;
+    stored_weeks(db, first.monday, last.monday).await
+}
+
+async fn insert_week(
+    transaction: &mut sqlx::SqliteConnection,
+    week: &Week,
+) -> Result<(), sqlx::Error> {
     let monday = week.monday.to_string();
     let trend_weight_day = week.trend_weight_day.to_string();
     let logged_days = week.logged_days as i64;
@@ -520,12 +544,9 @@ async fn store_week(db: &SqlitePool, week: &Week) -> Result<Week, sqlx::Error> {
         week.trend_weight_kg,
         trend_weight_day
     )
-    .execute(db)
+    .execute(transaction)
     .await?;
-    stored_weeks(db, week.monday, week.monday)
-        .await?
-        .remove(&week.monday)
-        .ok_or(sqlx::Error::RowNotFound)
+    Ok(())
 }
 
 /// A macro eaten against its target or floor.

@@ -58,7 +58,7 @@ export function CoverageTrends({
         data-state="unavailable"
         aria-labelledby="trend-coverage-heading"
       >
-        <h3 id="trend-coverage-heading">No vitamin and mineral coverage yet</h3>
+        <h2 id="trend-coverage-heading">No vitamin and mineral coverage yet</h2>
         <p>{coverage.reason}.</p>
         {coverage.missing.length === 0 ? null : (
           <p className="trend-summary">
@@ -94,7 +94,7 @@ export function CoverageTrends({
       aria-labelledby="trend-coverage-heading"
     >
       <header>
-        <h3 id="trend-coverage-heading">Vitamins and minerals</h3>
+        <h2 id="trend-coverage-heading">Vitamins and minerals</h2>
         <p className="trend-summary">{summary}</p>
         <p className="trend-coverage-basis">
           Mean share of the Recommended Intake a logged day over{" "}
@@ -116,7 +116,7 @@ export function CoverageTrends({
 
         return members.length === 0 ? null : (
           <section key={group} className="trend-coverage-group">
-            <h4>{groupNames[group]}</h4>
+            <h3>{groupNames[group]}</h3>
             <ul className="trend-coverage-rows">
               {members.map((row) => (
                 <CoverageRowItem
@@ -136,50 +136,52 @@ export function CoverageTrends({
         <span>{labels.at(0)}</span>
         <span>{labels.at(-1)}</span>
       </p>
-      <table className="sr-only">
-        <caption>Vitamins and minerals over the range</caption>
-        <thead>
-          <tr>
-            <th scope="col">Nutrient</th>
-            <th scope="col">Mean of the Recommended Intake</th>
-            <th scope="col">Lasting shortfall</th>
-            <th scope="col">Days above an Upper Limit</th>
-            <th scope="col">Cut down in</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const periodsCut = cutDownPeriods(row, names)
+      <div className="sr-only">
+        <table>
+          <caption>Vitamins and minerals over the range</caption>
+          <thead>
+            <tr>
+              <th scope="col">Nutrient</th>
+              <th scope="col">Mean of the Recommended Intake</th>
+              <th scope="col">Lasting shortfall</th>
+              <th scope="col">Days above an Upper Limit</th>
+              <th scope="col">Cut down in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const periodsCut = cutDownPeriods(row, names)
 
-            return (
-              <tr key={row.key}>
-                <th scope="row">
-                  {row.name}
-                  {row.adequate_intake ? ", adequate intake" : ""}
-                </th>
-                <td>
-                  {row.percent_of_recommended === null
-                    ? "Unknown"
-                    : `${formatPercent(row.percent_of_recommended)} over ${count(row.averaged_days, ["logged day", "logged days"])}`}
-                </td>
-                <td>{row.lasting_shortfall ? "Yes" : "No"}</td>
-                <td>
-                  {row.days_above_upper_limit === null
-                    ? "No Upper Limit"
-                    : row.days_above_upper_limit}
-                </td>
-                <td>
-                  {row.seven_day_average_above_upper_limit === null
-                    ? "No Upper Limit"
-                    : periodsCut.length === 0
-                      ? "None"
-                      : periodsCut.join(", ")}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+              return (
+                <tr key={row.key}>
+                  <th scope="row">
+                    {row.name}
+                    {row.adequate_intake ? ", adequate intake" : ""}
+                  </th>
+                  <td>
+                    {row.percent_of_recommended === null
+                      ? "Unknown"
+                      : `${formatPercent(row.percent_of_recommended)} over ${count(row.averaged_days, ["logged day", "logged days"])}`}
+                  </td>
+                  <td>{row.lasting_shortfall ? "Yes" : "No"}</td>
+                  <td>
+                    {row.days_above_upper_limit === null
+                      ? "No Upper Limit"
+                      : row.days_above_upper_limit}
+                  </td>
+                  <td>
+                    {row.seven_day_average_above_upper_limit === null
+                      ? "No Upper Limit"
+                      : periodsCut.length === 0
+                        ? "None"
+                        : periodsCut.join(", ")}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
       <p className="trend-coverage-basis">
         {coverage.sources.map((source) => source.citation).join(" · ")}
       </p>

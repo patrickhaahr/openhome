@@ -303,6 +303,11 @@ impl FoodDatabase {
         self.ready().map(|_| ())
     }
 
+    /// The version of the dataset Foods are read from; `FoodIDs` change between versions.
+    pub(super) fn version(&self) -> Result<String, FoodError> {
+        Ok(self.ready()?.version.clone())
+    }
+
     /// Foods whose Danish or English name matches `query`, best first, with key values.
     pub async fn search(&self, query: &str, limit: Option<usize>) -> Result<FoodSearch, FoodError> {
         let query = query.trim();
@@ -636,7 +641,9 @@ fn amount(key: &'static str, value: Option<f64>) -> Amount {
     }
 }
 
-fn source(version: &str) -> Source {
+/// The credit for values from `version` of the Danish Food Composition Database.
+#[must_use]
+pub(super) fn source(version: &str) -> Source {
     Source {
         name: SOURCE_NAME,
         version: version.to_owned(),

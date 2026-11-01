@@ -120,7 +120,9 @@ save it under a name they choose. When the user names a known Meal (\"protein oa
 meals if needed and call log_meal with meal set to its name and an explicit eaten_at, without analysing any photo; put a \
 one-off amount in overrides, naming the item by its food_id or barcode, instead of editing the Meal. A logged Meal copies its \
 items with current values and records meal_name; update_meal and delete_meal never change past Meal Logs. On \
-meal_needs_update, search_foods for the Foods it names, update_meal its portions, then log it again. \
+meal_needs_update, search_foods for the Foods it names, update_meal its portions, then log it again. On \
+product_needs_relink, the Product's linked Food is gone from the current Food database: search_foods for its closest \
+Food, link_product it again, then log it. \
 Supplements are labelled products counted per dose (tablet, capsule, scoop or ml): vitamins, minerals, fish oil, creatine. \
 Protein powder, gainers and other packaged foods eaten by the scoop are Products, not Supplements: lookup_product and log \
 them as Portions in grams so their label's protein counts. Register a Supplement once from its label with add_supplement: \
@@ -362,6 +364,8 @@ unique request_id per intended meal and reuse identical arguments and ID after a
 arguments conflict (409) and a deleted Meal Log is not recreated. A null value is unknown, never zero. An unknown food_id \
 , unlinked barcode or unknown supplement_id is a 404 error, as is an unknown Meal name; an override naming no item of the Meal is a 400 error; a \
 Meal naming a Food the current Food database no longer has is a 409 error with code meal_needs_update (update_meal it); \
+a Product whose linked Food the current Food database no longer has is a 409 error with code product_needs_relink \
+(link_product it again); \
 an estimate for a value the label or Food has is a 400 error; while the Food \
 database is unavailable the result is a 503 error with code food_database_unavailable. A photo that is not a JPEG or PNG is a 400 error and one over 10 MB or 12000 px a side is a 413 error; nothing is logged \
 then.";
@@ -420,8 +424,9 @@ missing_days for the range and `periods` in date order, each with start, end, da
 Meal Logs, Supplement Doses alone included), missing_days (no Meal Logs; never counted as zero) and intake_days \
 (logged days whose energy is known; a day of Supplement Doses without energy is never 0 kcal); energy {eaten_kcal \
 (mean per intake day), calorie_target_kcal, estimated_expenditure_kcal (means of each day's value)}; protein {eaten_g, \
-target_g}; macro_energy {protein_kcal, carbohydrate_kcal, fat_kcal, alcohol_kcal} per intake day at 4/4/9/7 kcal per \
-gram; nova {nova_1_share, nova_1_kcal, classified_kcal, unclassified_portions} summed over the period; \
+target_g}; protein and macro_energy {protein_kcal, carbohydrate_kcal, fat_kcal, alcohol_kcal} each average over \
+the logged days that know that metric, independently of energy, at 4/4/9/7 kcal per gram. known_days gives \
+energy, protein, carbohydrate, fat and alcohol's separate averaged-day counts; nova {nova_1_share, nova_1_kcal, classified_kcal, unclassified_portions} summed over the period; \
 weight {trend_weight_kg on the last day, scale_weight_kg (mean of the period's weigh-ins), weigh_ins}; and \
 weight_change {kg_per_week, the Trend Weight's change over the period (or the 7 days ending on its last day when \
 shorter) per week; goal_kg_per_week, the Nutrition Goal's change, negative to lose}; and micronutrients {logged_days, \
@@ -435,8 +440,10 @@ EFSA Upper Limit, judged on the same share as nutrition_day (supplements only fo
 forms); seven_day_average_above_upper_limit is true when a trailing 7-day average ending on a day with Meal Logs was \
 above one (cut down); both are null for a nutrient without an Upper Limit. lasting_shortfall is true when the range's \
 mean is below shortfall.below_percent over at least shortfall.min_logged_days logged days. Null means unknown: no \
-logged day, no target (Profile or Body Weight missing; see nutrition_day for the reason) or no Trend Weight. Works \
-while the Food database is unavailable.";
+logged day, no target (Profile or Body Weight missing; see nutrition_day for the reason) or no Trend Weight. sources \
+lists the Danish Food Composition Database versions the range's values come from and label_source is Open Food Facts \
+when a Product was eaten (else null): credit each wherever values are shown. Works while the Food database is \
+unavailable.";
 
 const NUTRITION_GOAL: &str = "The user's Nutrition Goal in effect today (direction lose, maintain or lean_bulk with \
 rate_kg_per_week, and effective_from, the Europe/Copenhagen day it was set, null for the default of losing 0.5 kg per \

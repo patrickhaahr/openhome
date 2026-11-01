@@ -217,6 +217,12 @@ api-test:
 api-test-one name:
     cargo test {{name}} -- --exact
 
+# Run one API unit test without rebuilding every integration-test binary
+[group('api')]
+[working-directory: 'api']
+api-test-unit name:
+    cargo test --lib {{name}} -- --exact
+
 # Run one API integration test file (just api-test-integration my_integration)
 [group('api')]
 [working-directory: 'api']

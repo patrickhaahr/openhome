@@ -383,6 +383,17 @@ async fn a_retried_addition_replays_conflicts_on_changes_and_never_recreates_a_d
     let (status, body) = api.add(changed).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
 
+    let (status, _) = api
+        .update(
+            &oil["id"],
+            json!({"name": "Changed oil", "dose_unit": "ml"}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, replayed) = api.add(fish_oil("oil-1")).await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed["supplement"], oil);
+
     let (status, _) = api.delete(&oil["id"]).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
     let (status, body) = api.add(fish_oil("oil-1")).await;

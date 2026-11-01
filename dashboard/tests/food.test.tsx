@@ -780,6 +780,53 @@ test("the day shows its NOVA 1 share of classified energy and each Portion's NOV
   }
 })
 
+test("the goal control starts from the goal once it can be read", async () => {
+  const data = await readNutritionDay({ day: trainingDayOn(new Date()) })
+
+  if (data.state !== "available") throw new Error(`The day is ${data.state}`)
+  await render({ ...data, goal: null })
+  expect(text(".food-goal")).toEqual([
+    "The Nutrition Goal could not be read. Reopen the page to change it.",
+  ])
+
+  await render(data)
+
+  const goal = container.querySelector(".food-goal select")
+
+  if (!(goal instanceof HTMLSelectElement)) throw new Error("Missing goal")
+
+  if (data.goal === null) throw new Error("Missing authoritative goal")
+
+  expect(goal.value).toBe(
+    data.goal.goal.direction === "maintain"
+      ? "maintain"
+      : `${data.goal.goal.direction}-${data.goal.goal.rate_kg_per_week}`
+  )
+
+  const save = [...container.querySelectorAll("button")].find(
+    (element) => element.textContent === "Save goal"
+  )
+
+  expect(save?.hasAttribute("disabled")).toBe(true)
+  await render({
+    ...data,
+    goal: {
+      ...data.goal,
+      goal: {
+        ...data.goal.goal,
+        direction: "lose",
+        rate_kg_per_week: 0.5,
+      },
+    },
+  })
+  expect(goal.value).toBe("lose-0.5")
+  await act(async () => {
+    goal.value = "lose-0.75"
+    goal.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(save?.hasAttribute("disabled")).toBe(false)
+})
+
 test("the day shows its Calorie Target, eaten and remaining with macro progress, and saves the goal from today", async () => {
   // The Profile, Body Weight and goal outlive Meal Logs, so this day gets a fixture of its own.
   const targets = await startAxumFixture()

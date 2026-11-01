@@ -3,7 +3,9 @@
 //! A JPEG or PNG upload is decoded, turned upright from its EXIF orientation, limited to
 //! [`LONG_SIDE`] px on its long side and re-encoded as AVIF with a [`THUMBNAIL_LONG_SIDE`] px
 //! thumbnail. Re-encoding from pixels removes every piece of metadata (EXIF, GPS, XMP, ICC), and
-//! the original upload is never written. Encoding uses libavif's aom encoder at speed 8 on one
+//! the original upload is never written. Embedded RGB/gray ICC profiles are converted to sRGB
+//! before stripping the profile; untagged uploads are treated as sRGB. Encoding uses libavif's
+//! aom encoder at speed 8 on one
 //! thread, on a blocking worker outside the async runtime and one photo at a time, so the other
 //! services on the host keep their CPU.
 
@@ -17,11 +19,18 @@ use image::{
     DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits, RgbImage,
     imageops::FilterType, metadata::Orientation,
 };
+use moxcms::{ColorProfile, DataColorSpace, Layout, TransformOptions};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::sqlite::SqliteConnectOptions;
 use tokio::sync::Semaphore;
 use uuid::Uuid;
+
+#[expect(
+    unsafe_code,
+    reason = "libavif's safe wrapper cannot set colour information; this module owns and checks native allocations"
+)]
+mod avif;
 
 /// The largest photo accepted, before base64 encoding.
 pub const MAX_PHOTO_BYTES: usize = 10 * 1024 * 1024;
@@ -241,11 +250,24 @@ impl MealPhotos {
 /// Writes through a temporary name, so a crash never leaves a partial photo under its real name.
 async fn write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let partial = path.with_extension("partial");
-    tokio::fs::write(&partial, bytes).await?;
-    tokio::fs::rename(&partial, path).await
+    let written = async {
+        tokio::fs::write(&partial, bytes).await?;
+        tokio::fs::rename(&partial, path).await
+    }
+    .await;
+    if written.is_err() {
+        match tokio::fs::remove_file(&partial).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                tracing::warn!(path = %partial.display(), error = %error, "Could not remove a partial meal photo");
+            }
+        }
+    }
+    written
 }
 
-fn decode(upload: &Upload) -> Result<DynamicImage, PhotoError> {
+fn decode(upload: &Upload) -> Result<RgbImage, PhotoError> {
     let classify = |error: ImageError| match error {
         ImageError::Limits(_) => PhotoError::TooLarge,
         _ => PhotoError::Undecodable,
@@ -259,9 +281,34 @@ fn decode(upload: &Upload) -> Result<DynamicImage, PhotoError> {
     let mut decoder = reader.into_decoder().map_err(classify)?;
     // Metadata is about to be dropped, so turn the pixels the way the camera meant them first.
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    let profile = decoder.icc_profile().map_err(classify)?;
     let mut image = DynamicImage::from_decoder(decoder).map_err(classify)?;
     image.apply_orientation(orientation);
-    Ok(image)
+    let (width, height) = (image.width(), image.height());
+    let Some(profile) = profile else {
+        return Ok(image.into_rgb8());
+    };
+    let profile = ColorProfile::new_from_slice(&profile).map_err(|_| PhotoError::Undecodable)?;
+    let (pixels, layout) = match profile.color_space {
+        DataColorSpace::Rgb => (image.into_rgb8().into_raw(), Layout::Rgb),
+        DataColorSpace::Gray => (image.into_luma8().into_raw(), Layout::Gray),
+        // The JPEG decoder has already converted CMYK pixels to RGB; applying the original
+        // CMYK profile to them would be wrong. Refuse it rather than mislabel its colours.
+        _ => return Err(PhotoError::Undecodable),
+    };
+    let transform = profile
+        .create_transform_8bit(
+            layout,
+            &ColorProfile::new_srgb(),
+            Layout::Rgb,
+            TransformOptions::default(),
+        )
+        .map_err(|_| PhotoError::Undecodable)?;
+    let mut converted = vec![0; pixels.len() / layout.channels() * 3];
+    transform
+        .transform(&pixels, &mut converted)
+        .map_err(|_| PhotoError::Undecodable)?;
+    RgbImage::from_raw(width, height, converted).ok_or(PhotoError::Undecodable)
 }
 
 /// `size` scaled down so its long side is at most `long_side`, never up.
@@ -295,30 +342,31 @@ fn resized(image: &RgbImage, long_side: u32) -> (RgbImage, Size) {
     (resized, size)
 }
 
-fn avif(image: &RgbImage) -> Result<Vec<u8>, PhotoError> {
-    let pixels = libavif::RgbPixels::new(image.width(), image.height(), image.as_raw())
-        .map_err(|_| PhotoError::Encode)?;
-    let mut encoder = libavif::Encoder::new();
-    encoder
-        .set_speed(SPEED)
-        .set_max_threads(1)
-        .set_quality(QUALITY);
-    let data = encoder
-        .encode(&pixels.to_image(libavif::YuvFormat::Yuv420))
-        .map_err(|_| PhotoError::Encode)?;
-    Ok(data.to_vec())
-}
-
 fn encode(upload: &Upload) -> Result<Encoded, PhotoError> {
     // Transparency has no meaning in a meal photo; RGB drops alpha along with the metadata.
-    let image = decode(upload)?.into_rgb8();
+    let image = decode(upload)?;
     let (photo, size) = resized(&image, LONG_SIDE);
     drop(image);
     let (thumbnail, thumbnail_size) = resized(&photo, THUMBNAIL_LONG_SIDE);
     Ok(Encoded {
-        photo: avif(&photo)?,
-        thumbnail: avif(&thumbnail)?,
+        photo: avif::encode(&photo, SPEED, QUALITY)?,
+        thumbnail: avif::encode(&thumbnail, SPEED, QUALITY)?,
         size,
         thumbnail_size,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_failed_photo_rename_removes_its_temporary_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("photo.avif");
+        // This real filesystem failure happens after bytes reached the temporary file.
+        std::fs::create_dir(&path).unwrap();
+        assert!(write(&path, b"private photo bytes").await.is_err());
+        assert!(!directory.path().join("photo.partial").exists());
+    }
 }

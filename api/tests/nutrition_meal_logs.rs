@@ -37,6 +37,8 @@ struct Nutrition {
     dir: TempDir,
     state: AppState,
     app: Router,
+    /// The first dataset's bytes; a workbook's bytes differ each time it is written.
+    first: Vec<u8>,
 }
 
 impl Nutrition {
@@ -45,12 +47,14 @@ impl Nutrition {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
         let (_, state) = test_app_with_db().await;
-        let app = Self::import(&server, &dir, &state, "1", first_dataset()).await;
+        let first = first_dataset();
+        let app = Self::import(&server, &dir, &state, "1", first.clone()).await;
         Self {
             server,
             dir,
             state,
             app,
+            first,
         }
     }
 
@@ -81,6 +85,19 @@ impl Nutrition {
 
     async fn reimport(&mut self, version: &str, bytes: Vec<u8>) {
         self.app = Self::import(&self.server, &self.dir, &self.state, version, bytes).await;
+    }
+
+    /// Imports the first synthetic dataset again as version "1", as a lost or rebuilt `food.db`
+    /// does: forgetting the recorded dataset makes the next start import its pin afresh.
+    async fn rebuild(&mut self) {
+        let url = format!("sqlite:{}", self.dir.path().join("food.db").display());
+        let pool = db::connect_sqlite(&url).await.unwrap();
+        sqlx::query("DELETE FROM dataset")
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+        self.reimport("1", self.first.clone()).await;
     }
 
     async fn send(&self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
@@ -518,6 +535,20 @@ async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a
     let (status, body) = api.log(changed).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(api.day("2026-10-29").await.len(), 1);
+    let (status, _) = api
+        .send(
+            Method::PATCH,
+            &format!(
+                "/api/nutrition/meal-logs/{}",
+                meal_log["id"].as_str().unwrap()
+            ),
+            Some(json!({"note": "corrected later", "portions": [{"food_id": 1693, "grams": 200}]})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, replayed) = api.log(breakfast("breakfast-1")).await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed["meal_log"], meal_log);
 
     let id = meal_log["id"].as_str().unwrap().to_owned();
     let (status, _) = api
@@ -1211,7 +1242,7 @@ impl Nutrition {
 }
 
 #[tokio::test]
-async fn a_food_nova_class_is_set_changed_read_back_and_survives_a_reimport() {
+async fn a_food_nova_class_is_set_changed_read_back_and_kept_only_for_its_dataset_version() {
     let mut api = Nutrition::start().await;
     assert_eq!(
         api.read_class("skyr", 1693).await,
@@ -1236,8 +1267,22 @@ async fn a_food_nova_class_is_set_changed_read_back_and_survives_a_reimport() {
         (Value::Null, Value::Null)
     );
 
-    // The class is the user's, kept in app.db: a rebuilt Food database keeps it.
+    // The class is the user's, kept in app.db: a rebuilt Food database of the same version
+    // keeps it.
+    api.rebuild().await;
+    assert_eq!(api.read_class("skyr", 1693).await, (json!(1), json!(1)));
+
+    // Another version may give FoodID 1693 to another Food, so the class waits for the agent to
+    // classify the Food again.
     api.reimport("2", second_dataset()).await;
+    assert_eq!(
+        api.read_class("skyr", 1693).await,
+        (Value::Null, Value::Null)
+    );
+    let skyr = api.logged(at("2026-10-29T20:00:00+01:00", "skyr-v2")).await;
+    assert_eq!(skyr["portions"][0]["nova_class"], Value::Null);
+    let (status, _) = api.classify(1693, json!(1)).await;
+    assert_eq!(status, StatusCode::OK);
     assert_eq!(api.read_class("skyr", 1693).await, (json!(1), json!(1)));
 }
 
@@ -1304,4 +1349,38 @@ async fn classifying_a_food_fills_its_unclassified_past_portions_and_later_porti
         api.day("2026-10-29").await[0]["portions"][1]["nova_class"],
         Value::Null
     );
+}
+
+#[tokio::test]
+async fn wide_gamut_photo_pixels_are_normalized_and_tagged_srgb_without_retaining_the_profile() {
+    use image::{ImageEncoder, codecs::png::PngEncoder};
+    let api = Nutrition::start().await;
+    // Display P3 (128, 200, 64) maps to approximately sRGB (103, 202, 19).
+    // This patch is inside both gamuts, so the test distinguishes conversion from relabelling.
+    let pixels = image::RgbImage::from_pixel(32, 32, image::Rgb([128, 200, 64]));
+    let profile = moxcms::ColorProfile::new_display_p3().encode().unwrap();
+    let mut png = Vec::new();
+    let mut encoder = PngEncoder::new(&mut png);
+    encoder.set_icc_profile(profile).unwrap();
+    encoder
+        .write_image(pixels.as_raw(), 32, 32, image::ExtendedColorType::Rgb8)
+        .unwrap();
+    let log = api.logged(with_photo(breakfast("wide-gamut"), &png)).await;
+    for url in [&log["photo"]["url"], &log["photo"]["thumbnail"]["url"]] {
+        let (_, _, avif) = api.media(url.as_str().unwrap()).await;
+        let (_, (r, g, b)) = synthetic::avif_pixel(&avif, 16, 16);
+        assert!(
+            (i16::from(r) - 103).abs() < 6
+                && (i16::from(g) - 202).abs() < 6
+                && (i16::from(b) - 19).abs() < 6,
+            "decoded sRGB patch: {r} {g} {b}"
+        );
+        let colr = avif
+            .windows(8)
+            .position(|bytes| bytes == b"colrnclx")
+            .unwrap()
+            + 8;
+        assert_eq!(&avif[colr..colr + 7], &[0, 1, 0, 13, 0, 6, 128]);
+        assert!(!avif.windows(4).any(|bytes| bytes == b"prof"));
+    }
 }

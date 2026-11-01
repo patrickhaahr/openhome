@@ -1889,6 +1889,8 @@ dependencies = [
  "hyper",
  "image",
  "libavif",
+ "libavif-sys",
+ "moxcms",
  "pretty_assertions",
  "reqwest",
  "rust_xlsxwriter",

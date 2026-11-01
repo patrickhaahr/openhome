@@ -84,6 +84,27 @@ export const bodyFailureMessage: Record<BodyFailure, string> = {
     "Body weight is already recorded for this date. Reload to review it, or choose another date. The existing record has not been replaced.",
 }
 
+/** The sexes the Calorie Target and micronutrient references are defined for, as stored. */
+export const profileSexes = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+] as const
+
+/**
+ * The editor's value for a stored sex: a supported sex in its canonical spelling (Axum reads it
+ * case-insensitively and trimmed), "" when unset, and any other text unchanged so the editor
+ * can show it rather than silently replace it.
+ *
+ * @param value - The Profile's stored sex.
+ * @returns The value the sex select starts from.
+ */
+export function profileSex(value: string | null): string {
+  if (value === null) return ""
+  const canonical = value.trim().toLowerCase()
+
+  return profileSexes.some((sex) => sex.value === canonical) ? canonical : value
+}
+
 /** Editable Profile fields, preserving exact stored number text. */
 type ProfileDraft = {
   height: string
@@ -96,7 +117,7 @@ type ProfileDraft = {
 export function profileDraft(value: Profile): ProfileDraft {
   return {
     height: value.height_cm === null ? "" : String(value.height_cm),
-    sex: value.sex ?? "",
+    sex: profileSex(value.sex),
     heartRate: value.hr_max_bpm?.toString() ?? "",
     birthDate: value.birth_date ?? "",
   }

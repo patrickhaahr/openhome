@@ -151,6 +151,11 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
   expect(data.state).toBe("available")
   await render(data)
 
+  // The values' Food database version is credited; no Product was eaten.
+  expect(text(".food-credit")).toEqual([
+    "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
+  ])
+
   expect(text('nav[aria-label="Food views"] a')).toEqual(["Day", "Trends"])
   expect(text('nav[aria-label="Food views"] [aria-current="page"]')).toEqual([
     "Trends",
@@ -178,7 +183,7 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
   ).toBe("/food?view=trends&by=month")
 
   expect(text(".food-trend-coverage")[0]).toMatch(/^2 of 30 days logged/)
-  expect(text(".trend-chart h3")).toEqual([
+  expect(text(".trend-chart h2")).toEqual([
     "Calories",
     "Protein",
     "Energy by macronutrient",
@@ -280,4 +285,56 @@ test("an unreachable or rejected read shows the state note and keeps the control
   expect(text('nav[aria-label="Range"] [aria-current="page"]')).toEqual([
     "180 days",
   ])
+})
+
+type ProductWrite =
+  | { barcode: string; food_id: number; request_id: string }
+  | {
+      eaten_at: string
+      portions: { barcode: string; grams: number }[]
+      request_id: string
+    }
+
+test("a range with a Product credits Open Food Facts beside the Food database", async () => {
+  // Its own fixture: a linked Product outlives the test.
+  const products = await startAxumFixture()
+
+  try {
+    vi.stubEnv("OPENHOME_API_URL", products.url)
+
+    const write = async (path: string, body: ProductWrite): Promise<void> => {
+      const response = await fetch(`${products.url}${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+
+      expect(response.ok, await response.clone().text()).toBe(true)
+    }
+
+    // The fixture's synthetic Open Food Facts product: a restricted-circulation barcode.
+    const barcode = "2001234567893"
+    await write("/api/nutrition/products", {
+      barcode,
+      food_id: 1693,
+      request_id: crypto.randomUUID(),
+    })
+    await write("/api/nutrition/meal-logs", {
+      eaten_at: `${shiftDay(today, -1)}T11:00:00Z`,
+      portions: [{ barcode, grams: 150 }],
+      request_id: crypto.randomUUID(),
+    })
+
+    await render(await readNutritionSummary({ range: 30, by: "day" }))
+
+    expect(text(".food-credit")).toEqual([
+      "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
+      "Product data © Open Food Facts contributors (ODbL)",
+    ])
+  } finally {
+    await products.stop()
+  }
 })

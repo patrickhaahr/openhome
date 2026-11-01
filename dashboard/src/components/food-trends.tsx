@@ -53,10 +53,39 @@ export function FoodTrends({
           <p>{trendsFailureMessage[data.reason]}</p>
         </div>
       )}
-      <p className="food-credit">
-        Nutrient values {foodDatabaseCredit} (CC BY 4.0)
-      </p>
+      <Credits data={data} />
     </div>
+  )
+}
+
+/**
+ * The summary's sources, as the Day view credits them: each Food database version its values
+ * came from, and Open Food Facts when a Product is in the range.
+ */
+function Credits({
+  data,
+}: {
+  readonly data: NutritionSummaryState
+}): React.JSX.Element {
+  const summary = data.state === "available" ? data.data : undefined
+  const sources = summary?.sources ?? []
+
+  return (
+    <>
+      <p className="food-credit">
+        Nutrient values{" "}
+        {sources.length === 0
+          ? `${foodDatabaseCredit} (CC BY 4.0)`
+          : sources
+              .map((source) => `${source.credit} (${source.licence})`)
+              .join("; ")}
+      </p>
+      {summary?.label_source == null ? null : (
+        <p className="food-credit">
+          {`${summary.label_source.credit} (${summary.label_source.licence})`}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -189,7 +218,12 @@ function Trends({
     .filter((part): part is string => part !== null)
     .join(" · ")
 
-  const protein = weightedMean(periods, (p) => p.protein.eaten_g, intakeDays)
+  const protein = weightedMean(
+    periods,
+    (p) => p.protein.eaten_g,
+    (p) => p.known_days.protein
+  )
+
   const proteinTarget = weightedMean(periods, (p) => p.protein.target_g, all)
 
   const proteinSummary = [
@@ -204,24 +238,28 @@ function Trends({
   const macros = [
     {
       key: "protein",
+      days: (p: SummaryPeriod) => p.known_days.protein,
       name: "Protein",
       tone: "sun",
       pick: (p: SummaryPeriod) => p.macro_energy.protein_kcal,
     },
     {
       key: "carbs",
+      days: (p: SummaryPeriod) => p.known_days.carbohydrate,
       name: "Carbs",
       tone: "ink",
       pick: (p: SummaryPeriod) => p.macro_energy.carbohydrate_kcal,
     },
     {
       key: "fat",
+      days: (p: SummaryPeriod) => p.known_days.fat,
       name: "Fat",
       tone: "fat",
       pick: (p: SummaryPeriod) => p.macro_energy.fat_kcal,
     },
     {
       key: "alcohol",
+      days: (p: SummaryPeriod) => p.known_days.alcohol,
       name: "Alcohol",
       tone: "muted",
       pick: (p: SummaryPeriod) => p.macro_energy.alcohol_kcal,
@@ -230,7 +268,7 @@ function Trends({
 
   const macroMeans = macros.map((macro) => ({
     name: macro.name,
-    kcal: weightedMean(periods, macro.pick, intakeDays) ?? 0,
+    kcal: weightedMean(periods, macro.pick, macro.days) ?? 0,
   }))
 
   const macroTotal = macroMeans.reduce((sum, macro) => sum + macro.kcal, 0)

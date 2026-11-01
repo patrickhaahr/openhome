@@ -283,6 +283,13 @@ async fn a_retried_save_replays_conflicts_on_changes_and_never_recreates_a_delet
     let (status, body) = api.save(changed).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(api.meals().await, std::slice::from_ref(&meal));
+    let (status, _) = api
+        .update(&meal["id"], json!({"name": "Changed bowl"}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, replayed) = api.save(protein_bowl("bowl-1")).await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed["meal"], meal);
 
     assert_eq!(api.delete(&meal["id"]).await, StatusCode::NO_CONTENT);
     let (status, body) = api.save(protein_bowl("bowl-1")).await;
@@ -532,6 +539,76 @@ async fn a_meal_references_a_linked_product_by_barcode_so_a_relink_reaches_its_n
         api.meals().await[0]["portions"][0]["name_en"],
         "Chicken, breast, flesh and skin, raw"
     );
+}
+
+/// Logs `barcode` alone at `eaten_at` on 2026-10-29.
+fn product_at(barcode: &str, eaten_at: &str, request_id: &str) -> Value {
+    json!({
+        "eaten_at": format!("2026-10-29T{eaten_at}+01:00"),
+        "portions": [{"barcode": barcode, "grams": 150}],
+        "request_id": request_id,
+    })
+}
+
+#[tokio::test]
+async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_before_it_is_logged() {
+    let mut api = Api::start().await;
+    api.link(SKYR, 3, "link-banana").await;
+    api.saved(json!({
+        "name": "Skyr snack",
+        "portions": [{"barcode": SKYR, "grams": 150}],
+        "request_id": "skyr-snack",
+    }))
+    .await;
+    // Version 2 drops the Banana the Product is linked to.
+    api.reimport("2", second_dataset()).await;
+
+    let relink = |body: &Value, food: &str| {
+        assert_eq!(body["code"], "product_needs_relink", "{body}");
+        let error = body["error"].as_str().unwrap();
+        assert!(
+            error.contains(&format!("Product {SKYR} is linked to Food {food}"))
+                && error.contains("link_product"),
+            "{body}"
+        );
+    };
+    let (status, body) = api.log(product_at(SKYR, "08:00:00", "direct-1")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    relink(&body, "3 \"Banana, raw\"");
+    // A saved Meal reaches the Product through the same snapshot.
+    let mut snack = by_name("Skyr snack", "by-name-1");
+    snack["eaten_at"] = json!("2026-10-29T09:00:00+01:00");
+    let (status, body) = api.log(snack).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    relink(&body, "3 \"Banana, raw\"");
+    assert_eq!(api.day("2026-10-29").await["meal_logs"], json!([]));
+
+    // Relinked to the Apple, it logs again.
+    api.link(SKYR, 2, "link-apple").await;
+    let logged = api.logged(product_at(SKYR, "10:00:00", "direct-2")).await;
+    assert_eq!(
+        logged["portions"][0]["name_en"],
+        "Apple, raw, all varieties"
+    );
+
+    // Version 3 gives FoodID 2 to another Food: the Product must not take its values.
+    api.reimport(
+        "3",
+        common::food_workbook::workbook(
+            &common::food_workbook::parameters("g/100g"),
+            &[
+                common::food_workbook::SyntheticFood {
+                    id: 2,
+                    ..common::food_workbook::rye_bread()
+                },
+                common::food_workbook::skyr(12.0),
+            ],
+        ),
+    )
+    .await;
+    let (status, body) = api.log(product_at(SKYR, "11:00:00", "direct-3")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    relink(&body, "2 \"Apple, raw, all varieties\"");
 }
 
 #[tokio::test]

@@ -468,6 +468,18 @@ impl IntoResponse for MealLogError {
             Self::Validation(message) => AppError::Validation(message).into_response(),
             Self::NotFound(message) => AppError::NotFound(message).into_response(),
             Self::Conflict(message) => AppError::Conflict(message).into_response(),
+            Self::ProductNeedsRelink(message) => {
+                let status = StatusCode::CONFLICT;
+                (
+                    status,
+                    Json(json!({
+                        "error": message,
+                        "status": status.as_u16(),
+                        "code": "product_needs_relink",
+                    })),
+                )
+                    .into_response()
+            }
             Self::Food(error) => error.into_response(),
             Self::Photo(error) => error.into_response(),
             Self::Meal(error) => error.into_response(),

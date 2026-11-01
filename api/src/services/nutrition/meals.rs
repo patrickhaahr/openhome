@@ -9,7 +9,7 @@
 //! editing or deleting a Meal never changes a Meal Log made from it.
 //!
 //! Names are unique case-insensitively, including non-ASCII letters. Saving follows the
-//! `request_id` receipt pattern: a retry replays the current Meal, the same `request_id` with
+//! `request_id` receipt pattern: a retry replays the accepted Meal, the same `request_id` with
 //! changed arguments is a conflict, and a deleted Meal keeps its receipt so an old retry cannot
 //! recreate it.
 //!
@@ -91,7 +91,7 @@ pub struct EditMeal {
 }
 
 /// One item of a Meal as it is shown: its reference and grams, with names to recognise it by.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MealPortion {
     /// The Food; null for a Product.
     pub food_id: Option<i64>,
@@ -105,7 +105,7 @@ pub struct MealPortion {
     pub product: Option<PortionProduct>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Meal {
     pub id: String,
     pub name: String,
@@ -354,7 +354,10 @@ impl StoredItem {
 }
 
 /// Every stored item of one Meal, or of every Meal, in order.
-async fn stored_items(db: &SqlitePool, id: Option<&str>) -> Result<Vec<StoredItem>> {
+async fn stored_items_on(
+    db: &mut sqlx::SqliteConnection,
+    id: Option<&str>,
+) -> Result<Vec<StoredItem>> {
     Ok(sqlx::query_as!(
         StoredItem,
         r#"SELECT i.meal_id, i.grams, i.food_id, i.food_name_da, i.food_name_en,
@@ -365,26 +368,30 @@ async fn stored_items(db: &SqlitePool, id: Option<&str>) -> Result<Vec<StoredIte
         ORDER BY i.meal_id, i.position"#,
         id
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?)
 }
 
 /// One Meal, or every Meal by name.
 async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Meal>> {
+    load_on(&mut *db.acquire().await?, id).await
+}
+
+async fn load_on(db: &mut sqlx::SqliteConnection, id: Option<&str>) -> Result<Vec<Meal>> {
     let meals = sqlx::query!(
         r#"SELECT id AS "id!", name FROM meals WHERE ?1 IS NULL OR id = ?1 ORDER BY name_key"#,
         id
     )
-    .fetch_all(db)
+    .fetch_all(&mut *db)
     .await?;
     let mut items: HashMap<String, Vec<MealPortion>> = HashMap::new();
-    for item in stored_items(db, id).await? {
+    for item in stored_items_on(&mut *db, id).await? {
         items
             .entry(item.meal_id.clone())
             .or_default()
             .push(item.into_portion());
     }
-    let mut doses = supplements::meal_doses(db, id).await?;
+    let mut doses = supplements::meal_doses(&mut *db, id).await?;
     Ok(meals
         .into_iter()
         .map(|row| Meal {
@@ -413,7 +420,7 @@ pub async fn meals(db: &SqlitePool) -> Result<Meals> {
 
 async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Option<Saved>> {
     let Some(receipt) = sqlx::query!(
-        "SELECT meal_id, request FROM meal_receipts WHERE request_id = ?",
+        "SELECT meal_id, request, result FROM meal_receipts WHERE request_id = ?",
         request_id
     )
     .fetch_optional(db)
@@ -426,11 +433,19 @@ async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Opti
             "request_id was already used for a different Meal; use a new ID for a new Meal".into(),
         ));
     }
-    let meal = find(db, &receipt.meal_id).await?.ok_or_else(|| {
+    find(db, &receipt.meal_id).await?.ok_or_else(|| {
         MealError::Conflict(
             "The retried Meal was deleted; use a new request_id to save it again".into(),
         )
     })?;
+    let result = receipt.result.ok_or_else(|| {
+        MealError::Conflict(
+            "This legacy receipt has no original result; read the current meal before retrying"
+                .into(),
+        )
+    })?;
+    let meal =
+        serde_json::from_str(&result).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
     Ok(Some(Saved {
         meal,
         replayed: true,
@@ -526,9 +541,23 @@ pub async fn save_meal(db: &SqlitePool, foods: &FoodDatabase, request: SaveMeal)
     .map_err(|error| unique_name(error, &name.name))?;
     insert_items(&mut transaction, &id, &checked).await?;
     supplements::insert_meal_doses(&mut transaction, &id, &doses).await?;
+    let meal = load_on(&mut transaction, Some(&id))
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(not_found)?;
+    let result =
+        serde_json::to_string(&meal).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    sqlx::query!(
+        "UPDATE meal_receipts SET result = ? WHERE request_id = ?",
+        result,
+        request_id
+    )
+    .execute(&mut *transaction)
+    .await?;
     transaction.commit().await?;
     Ok(Saved {
-        meal: find(db, &id).await?.ok_or_else(not_found)?,
+        meal,
         replayed: false,
     })
 }
@@ -641,7 +670,7 @@ pub(super) async fn resolve(
             name.name
         )));
     };
-    let stored = stored_items(db, Some(&meal.id)).await?;
+    let stored = stored_items_on(&mut *db.acquire().await?, Some(&meal.id)).await?;
     let mut items: Vec<(Item, f64)> = stored
         .iter()
         .map(|item| {
@@ -670,13 +699,14 @@ pub(super) async fn resolve(
         };
         *item_grams = *grams;
     }
-    let mut doses: Vec<(String, f64)> = supplements::meal_doses(db, Some(&meal.id))
-        .await?
-        .remove(&meal.id)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|dose| (dose.supplement_id, dose.doses))
-        .collect();
+    let mut doses: Vec<(String, f64)> =
+        supplements::meal_doses(&mut *db.acquire().await?, Some(&meal.id))
+            .await?
+            .remove(&meal.id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|dose| (dose.supplement_id, dose.doses))
+            .collect();
     for (target, count) in dose_overrides {
         let Some((_, doses)) = doses.iter_mut().find(|(id, _)| id == target) else {
             return Err(validation(format!(

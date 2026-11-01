@@ -6,7 +6,7 @@
 //! Food Facts again. Re-linking changes only the Food future Portions take their gaps from: past
 //! Portions keep their snapshots (ADR 0012).
 //!
-//! Linking follows the `request_id` receipt pattern: a retry replays the current Product and the
+//! Linking follows the `request_id` receipt pattern: a retry replays the accepted Product and the
 //! same `request_id` with another barcode or Food is a conflict.
 
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use super::food_database::{FoodDatabase, FoodError, FoodSummary};
+use super::food_database::{FoodDatabase, FoodError, FoodSnapshot, FoodSummary};
 use super::nova;
 use super::open_food_facts::{LabelProduct, Lookup, OpenFoodFacts, ProviderError};
 use super::parameters;
@@ -114,7 +114,7 @@ pub const LABEL_SOURCE: LabelSource = LabelSource {
 };
 
 /// One label value per 100 g, in its vocabulary key and unit.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LabelAmount {
     pub key: String,
     pub value: f64,
@@ -122,14 +122,14 @@ pub struct LabelAmount {
 }
 
 /// The Food a Product is linked to.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LinkedFood {
     pub food_id: i64,
     pub name_da: String,
     pub name_en: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Product {
     pub barcode: String,
     pub name: Option<String>,
@@ -186,6 +186,19 @@ pub(super) struct StoredProduct {
 }
 
 impl StoredProduct {
+    /// Whether `food`, read under the linked `FoodID`, is still the Food the Product was linked
+    /// to. As for a Meal's Foods, a later dataset that gives the `FoodID` to another Food changes
+    /// both names, while a corrected Food keeps at least one.
+    pub(super) fn links(&self, food: &FoodSnapshot) -> bool {
+        food.food_id == self.food_id
+            && (food.name_da == self.food_name_da || food.name_en == self.food_name_en)
+    }
+
+    /// The linked Food's English name as it was linked.
+    pub(super) fn food_name_en(&self) -> &str {
+        &self.food_name_en
+    }
+
     fn into_product(self) -> Product {
         Product {
             barcode: self.barcode,
@@ -214,6 +227,13 @@ pub(super) async fn stored(
     db: &SqlitePool,
     barcodes: &[&Barcode],
 ) -> std::result::Result<HashMap<String, StoredProduct>, sqlx::Error> {
+    stored_on(&mut *db.acquire().await?, barcodes).await
+}
+
+pub(super) async fn stored_on(
+    db: &mut sqlx::SqliteConnection,
+    barcodes: &[&Barcode],
+) -> std::result::Result<HashMap<String, StoredProduct>, sqlx::Error> {
     let mut products = HashMap::new();
     for barcode in barcodes {
         let barcode = barcode.as_str();
@@ -225,7 +245,7 @@ pub(super) async fn stored(
                 food_name_en FROM products WHERE barcode = ?"#,
             barcode
         )
-        .fetch_optional(db)
+        .fetch_optional(&mut *db)
         .await?
         else {
             continue;
@@ -235,7 +255,7 @@ pub(super) async fn stored(
             "SELECT key, value, unit FROM product_label_values WHERE barcode = ?",
             barcode
         )
-        .fetch_all(db)
+        .fetch_all(&mut *db)
         .await?;
         label.sort_by_key(|value| vocabulary_position(&value.key));
         products.insert(
@@ -288,7 +308,7 @@ pub async fn lookup(
     foods.check_ready()?;
     let label = fetch(provider, &barcode).await?;
     let mut suggested_foods = suggest(foods, &label).await?;
-    nova::classify_summaries(db, &mut suggested_foods).await?;
+    nova::classify_summaries(db, &foods.version()?, &mut suggested_foods).await?;
     Ok(ProductLookup {
         linked: false,
         product: Product {
@@ -374,7 +394,7 @@ async fn replay(
     food_id: i64,
 ) -> Result<Option<Linked>> {
     let Some(receipt) = sqlx::query!(
-        "SELECT barcode, food_id FROM product_link_receipts WHERE request_id = ?",
+        "SELECT barcode, food_id, result FROM product_link_receipts WHERE request_id = ?",
         request_id
     )
     .fetch_optional(db)
@@ -387,11 +407,19 @@ async fn replay(
             "request_id was already used to link another barcode or Food; use a new ID".into(),
         ));
     }
-    let product = find(db, barcode).await?.ok_or_else(|| {
+    find(db, barcode).await?.ok_or_else(|| {
         ProductError::Conflict("The linked Product is no longer stored; link it again".into())
     })?;
+    let result = receipt.result.ok_or_else(|| {
+        ProductError::Conflict(
+            "This legacy receipt has no original result; look the Product up before retrying"
+                .into(),
+        )
+    })?;
+    let product =
+        serde_json::from_str(&result).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
     Ok(Some(Linked {
-        product: product.into_product(),
+        product,
         replayed: true,
         created: false,
         source: LABEL_SOURCE,
@@ -474,12 +502,23 @@ pub async fn link(
             .execute(&mut *transaction)
             .await?;
     }
-    transaction.commit().await?;
-    let product = find(db, &barcode)
+    let product = stored_on(&mut transaction, &[&barcode])
         .await?
-        .ok_or_else(|| ProductError::Conflict("The Product was removed while linking".into()))?;
+        .remove(code)
+        .ok_or_else(|| ProductError::Conflict("The Product was removed while linking".into()))?
+        .into_product();
+    let result =
+        serde_json::to_string(&product).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    sqlx::query!(
+        "UPDATE product_link_receipts SET result = ? WHERE request_id = ?",
+        result,
+        request_id
+    )
+    .execute(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
     Ok(Linked {
-        product: product.into_product(),
+        product,
         replayed: false,
         created,
         source: LABEL_SOURCE,

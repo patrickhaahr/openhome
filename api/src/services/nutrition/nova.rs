@@ -1,8 +1,10 @@
 //! NOVA Classes (`CONTEXT.md`, NOVA Class) and the NOVA 1 share.
 //!
 //! The agent classifies a Food once, the first time it is eaten, and the class is kept: it is the
-//! user's decision, so it lives in `app.db` by `FoodID` and a rebuilt Food database keeps it.
-//! Products take Open Food Facts' class and are never classified from their linked Food.
+//! user's decision, so it lives in `app.db` by `FoodID` with the dataset version it was given in,
+//! and a rebuilt Food database of that version keeps it. Another version may give the `FoodID` to
+//! another Food, so its classes are not read until the Food is classified again. Products take
+//! Open Food Facts' class and are never classified from their linked Food.
 //!
 //! A Portion copies its class when it is logged, like its nutrient values (ADR 0012). Because the
 //! agent logs a new Food before classifying it, classifying a Food also fills that Food's
@@ -29,6 +31,13 @@ use super::parameters;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct NovaClass(u8);
+
+impl<'de> Deserialize<'de> for NovaClass {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(i64::deserialize(deserializer)?)
+            .ok_or_else(|| serde::de::Error::custom("NOVA Class must be 1-4"))
+    }
+}
 
 impl NovaClass {
     /// The class `value` names, if it is 1-4.
@@ -90,10 +99,11 @@ pub async fn classify_food(
     let class = i64::from(nova_class.get());
     let mut transaction = db.begin().await?;
     sqlx::query!(
-        r#"INSERT INTO food_nova_classes (food_id, nova_class) VALUES (?1, ?2)
-        ON CONFLICT (food_id) DO UPDATE SET nova_class = excluded.nova_class,
-            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"#,
+        r#"INSERT INTO food_nova_classes (food_id, dataset_version, nova_class) VALUES (?1, ?2, ?3)
+        ON CONFLICT (food_id) DO UPDATE SET dataset_version = excluded.dataset_version,
+            nova_class = excluded.nova_class, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"#,
         food_id,
+        food.dataset_version,
         class
     )
     .execute(&mut *transaction)
@@ -118,9 +128,10 @@ pub async fn classify_food(
     })
 }
 
-/// The stored classes of the Foods in `food_ids` that have one.
+/// The stored classes of the Foods in `food_ids` that have one given in `dataset_version`.
 pub(super) async fn food_classes(
     db: &SqlitePool,
+    dataset_version: &str,
     food_ids: &[i64],
 ) -> Result<HashMap<i64, NovaClass>, sqlx::Error> {
     if food_ids.is_empty() {
@@ -130,8 +141,9 @@ pub(super) async fn food_classes(
         serde_json::to_string(food_ids).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     let rows = sqlx::query!(
         r#"SELECT food_id AS "food_id!", nova_class FROM food_nova_classes
-        WHERE food_id IN (SELECT value FROM json_each(?))"#,
-        ids
+        WHERE food_id IN (SELECT value FROM json_each(?1)) AND dataset_version = ?2"#,
+        ids,
+        dataset_version
     )
     .fetch_all(db)
     .await?;
@@ -141,13 +153,14 @@ pub(super) async fn food_classes(
         .collect())
 }
 
-/// Gives each summary its Food's stored class.
+/// Gives each summary, read from `dataset_version`, its Food's stored class.
 pub(super) async fn classify_summaries(
     db: &SqlitePool,
+    dataset_version: &str,
     summaries: &mut [FoodSummary],
 ) -> Result<(), sqlx::Error> {
     let ids: Vec<i64> = summaries.iter().map(|food| food.food_id).collect();
-    let classes = food_classes(db, &ids).await?;
+    let classes = food_classes(db, dataset_version, &ids).await?;
     for summary in summaries {
         summary.nova_class = classes.get(&summary.food_id).copied();
     }
@@ -162,14 +175,16 @@ pub async fn search_foods(
     limit: Option<usize>,
 ) -> Result<FoodSearch, FoodError> {
     let mut search = foods.search(query, limit).await?;
-    classify_summaries(db, &mut search.foods).await?;
+    classify_summaries(db, &search.source.version, &mut search.foods).await?;
     Ok(search)
 }
 
 /// One Food with every parameter and its NOVA Class when it has one.
 pub async fn food(db: &SqlitePool, foods: &FoodDatabase, food_id: i64) -> Result<Food, FoodError> {
     let mut food = foods.food(food_id).await?;
-    food.nova_class = food_classes(db, &[food_id]).await?.remove(&food_id);
+    food.nova_class = food_classes(db, &food.source.version, &[food_id])
+        .await?
+        .remove(&food_id);
     Ok(food)
 }
 

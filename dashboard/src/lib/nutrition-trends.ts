@@ -108,6 +108,9 @@ const micronutrientCoverage = z.discriminatedUnion("state", [
 /** The range's micronutrient coverage; the dashboard only draws it. */
 export type MicronutrientCoverage = z.infer<typeof micronutrientCoverage>
 
+/** A source to credit beside the summary's values. */
+const credited = z.object({ credit: z.string(), licence: z.string() })
+
 const summaryPeriod = z.object({
   start: z.iso.date(),
   end: z.iso.date(),
@@ -116,6 +119,13 @@ const summaryPeriod = z.object({
   logged_days: z.number().int().nonnegative(),
   missing_days: z.number().int().nonnegative(),
   intake_days: z.number().int().nonnegative(),
+  known_days: z.object({
+    energy: z.number().int().nonnegative(),
+    protein: z.number().int().nonnegative(),
+    carbohydrate: z.number().int().nonnegative(),
+    fat: z.number().int().nonnegative(),
+    alcohol: z.number().int().nonnegative(),
+  }),
   energy: z.object({
     eaten_kcal: kcal,
     calorie_target_kcal: kcal,
@@ -166,6 +176,10 @@ export const nutritionSummary = z.object({
   logged_days: z.number().int().nonnegative(),
   missing_days: z.number().int().nonnegative(),
   micronutrients: micronutrientCoverage,
+  /** Food database versions the range's values came from; empty without Portions. */
+  sources: z.array(credited),
+  /** Open Food Facts, when a Product Portion is in the range. */
+  label_source: credited.nullable(),
   periods: z.array(summaryPeriod),
 })
 
