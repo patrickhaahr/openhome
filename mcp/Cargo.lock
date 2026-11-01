@@ -1864,7 +1864,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "openhome-api"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "anyhow",
  "axum",
@@ -1902,7 +1902,7 @@ dependencies = [
 
 [[package]]
 name = "openhome-mcp"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "anyhow",
  "axum",
