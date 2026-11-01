@@ -26,7 +26,7 @@
 
 pub mod references;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -35,8 +35,8 @@ use self::references::{
     AgeBand, Group, Measure, REFERENCE_ENERGY_MJ, REFERENCES, Reference, Share,
 };
 use super::intake::Intake;
-use super::meal_logs::{self, MealLogError, Selection, StoredLog, StoredPortion, Values, round};
-use super::supplements::StoredDose;
+use super::meal_logs::{MealLogError, round};
+use super::supplements::{self, StoredDose};
 use super::targets::{Missing, Sex};
 use crate::services::training::calendar::CalendarDay;
 
@@ -100,16 +100,33 @@ fn add(left: Option<f64>, right: Option<f64>) -> Option<f64> {
     }
 }
 
-/// The supplement share of `form` over `keys`, zero when none was taken.
-fn supplement_form(
-    keys: &[&str],
-    form: &str,
-    portions: &[&StoredPortion],
-    doses: &[&StoredDose],
-) -> f64 {
-    keys.iter()
-        .filter_map(|key| Intake::of(key, portions, doses).supplement_form(form))
-        .sum()
+/// One logged day's Portions summed per parameter in SQL, with its Supplement Doses: what the
+/// panel reads, without loading every Portion's values.
+#[derive(Debug, Default)]
+struct DayEaten {
+    /// Per parameter key: the amount from the Portions that have a value, and how many do.
+    food: HashMap<String, (f64, usize)>,
+    portions: usize,
+    doses: Vec<StoredDose>,
+}
+
+impl DayEaten {
+    /// `key` from food and supplements; a Portion without a value is unknown and counted.
+    fn intake(&self, key: &str) -> Intake {
+        let doses: Vec<&StoredDose> = self.doses.iter().collect();
+        let food = match self.food.get(key) {
+            Some(&(amount, known)) => Intake::from_food(Some(amount), self.portions - known),
+            None => Intake::from_food(None, self.portions),
+        };
+        food + Intake::of(key, &[], &doses)
+    }
+
+    /// The supplement share of `form` over `keys`, zero when none was taken.
+    fn supplement_form(&self, keys: &[&str], form: &str) -> f64 {
+        keys.iter()
+            .filter_map(|key| self.intake(key).supplement_form(form))
+            .sum()
+    }
 }
 
 /// One nutrient's intake on one logged day.
@@ -124,10 +141,10 @@ struct DayIntake {
 }
 
 impl DayIntake {
-    fn of(reference: &Reference, portions: &[&StoredPortion], doses: &[&StoredDose]) -> Self {
+    fn of(reference: &Reference, eaten: &DayEaten) -> Self {
         let (amount, food, supplements, unknown_portions) = match reference.measure {
             Measure::Parameter(key) => {
-                let intake = Intake::of(key, portions, doses);
+                let intake = eaten.intake(key);
                 (
                     intake.total(),
                     intake.food(),
@@ -136,10 +153,7 @@ impl DayIntake {
                 )
             }
             Measure::EpaDha => {
-                let (epa, dha) = (
-                    Intake::of(EPA, portions, doses),
-                    Intake::of(DHA, portions, doses),
-                );
+                let (epa, dha) = (eaten.intake(EPA), eaten.intake(DHA));
                 let mg = |grams: Option<f64>| grams.map(|grams| grams * 1000.0);
                 (
                     mg(add(epa.total(), dha.total())),
@@ -157,25 +171,19 @@ impl DayIntake {
                 Share::Supplements => Some(supplements.unwrap_or(0.0)),
                 // Retinol in food, and retinol taken as vitamin A or listed as retinol itself.
                 Share::PreformedVitaminA => add(
-                    Intake::of(RETINOL, portions, doses).total(),
-                    Intake::of("vitamin_a", portions, doses).supplement_form("retinol"),
+                    eaten.intake(RETINOL).total(),
+                    eaten.intake("vitamin_a").supplement_form("retinol"),
                 ),
                 Share::SupplementalFolate => Some(
-                    supplement_form(&["folate"], "folic_acid", portions, doses)
-                        + supplement_form(&["folate"], "methylfolate", portions, doses),
+                    eaten.supplement_form(&["folate"], "folic_acid")
+                        + eaten.supplement_form(&["folate"], "methylfolate"),
                 ),
-                Share::NicotinicAcid => Some(supplement_form(
-                    &["niacin_equivalent", "niacin"],
-                    "nicotinic_acid",
-                    portions,
-                    doses,
-                )),
-                Share::Nicotinamide => Some(supplement_form(
-                    &["niacin_equivalent", "niacin"],
-                    "nicotinamide",
-                    portions,
-                    doses,
-                )),
+                Share::NicotinicAcid => {
+                    Some(eaten.supplement_form(&["niacin_equivalent", "niacin"], "nicotinic_acid"))
+                }
+                Share::Nicotinamide => {
+                    Some(eaten.supplement_form(&["niacin_equivalent", "niacin"], "nicotinamide"))
+                }
             })
             .collect();
         Self {
@@ -402,46 +410,68 @@ pub struct Diary {
 }
 
 impl Diary {
-    /// The logged days of `logs`.
-    pub(super) fn of(logs: &[StoredLog]) -> Self {
-        let mut by_day: BTreeMap<CalendarDay, (Vec<&StoredPortion>, Vec<&StoredDose>)> =
-            BTreeMap::new();
-        for log in logs {
-            let Some(day) = CalendarDay::parse(&log.day) else {
-                continue;
-            };
-            let (portions, doses) = by_day.entry(day).or_default();
-            portions.extend(&log.portions);
-            doses.extend(&log.doses);
-        }
-        let days = by_day
-            .into_iter()
-            .map(|(day, (portions, doses))| {
-                let intakes = REFERENCES
-                    .iter()
-                    .map(|reference| DayIntake::of(reference, &portions, &doses))
-                    .collect();
-                (day, intakes)
-            })
-            .collect();
-        Self { days }
-    }
-
     /// The Meal Logs needed to evaluate every day from `from` through `to`, including the
-    /// trailing window before `from`.
+    /// trailing window before `from`. One query sums each day's Portions per parameter, so a
+    /// year reads one row per day rather than every Portion value.
     pub async fn load(
         db: &SqlitePool,
         from: CalendarDay,
         to: CalendarDay,
     ) -> Result<Self, MealLogError> {
-        let keys = value_keys();
-        let logs = meal_logs::load(
-            db,
-            &Selection::Days(trailing_start(from), to),
-            Values::Only(&keys),
+        let (start, end) = (trailing_start(from).to_string(), to.to_string());
+        let keys = serde_json::Value::from(value_keys()).to_string();
+        let rows = sqlx::query!(
+            r#"WITH k (key) AS MATERIALIZED (SELECT value FROM json_each(?3)),
+            sums AS (
+                SELECT m.day, k.key, SUM(v.value * p.grams / 100.0) AS food, COUNT(*) AS known
+                FROM meal_logs m CROSS JOIN meal_log_portions p ON p.meal_log_id = m.id
+                CROSS JOIN k CROSS JOIN meal_log_portion_values v
+                    ON v.portion_id = p.id AND v.key = k.key
+                WHERE m.day >= ?1 AND m.day <= ?2
+                GROUP BY m.day, k.key
+            ),
+            food AS (
+                SELECT day, json_group_object(key, json_array(food, known)) AS food
+                FROM sums GROUP BY day
+            ),
+            days AS (
+                SELECT m.day, json_group_array(m.id) AS logs,
+                    SUM((SELECT COUNT(*) FROM meal_log_portions p WHERE p.meal_log_id = m.id))
+                        AS portions
+                FROM meal_logs m WHERE m.day >= ?1 AND m.day <= ?2 GROUP BY m.day
+            )
+            SELECT d.day AS "day!", d.logs AS "logs!: String", d.portions AS "portions!: i64",
+                COALESCE(f.food, '{}') AS "food!: String"
+            FROM days d LEFT JOIN food f ON f.day = d.day ORDER BY d.day"#,
+            start,
+            end,
+            keys
         )
+        .fetch_all(db)
         .await?;
-        Ok(Self::of(&logs))
+        let mut doses = supplements::log_doses(db, None, Some(&start), Some(&end)).await?;
+        let mut days = BTreeMap::new();
+        for row in rows {
+            let Some(day) = CalendarDay::parse(&row.day) else {
+                continue;
+            };
+            let logs: Vec<String> = serde_json::from_str(&row.logs).map_err(decode_error)?;
+            let eaten = DayEaten {
+                food: serde_json::from_str(&row.food).map_err(decode_error)?,
+                portions: usize::try_from(row.portions).unwrap_or_default(),
+                doses: logs
+                    .iter()
+                    .filter_map(|log| doses.remove(log))
+                    .flatten()
+                    .collect(),
+            };
+            let intakes = REFERENCES
+                .iter()
+                .map(|reference| DayIntake::of(reference, &eaten))
+                .collect();
+            days.insert(day, intakes);
+        }
+        Ok(Self { days })
     }
 
     /// The panel for `day`, which must lie in the range the diary was loaded for.
@@ -555,6 +585,11 @@ impl Diary {
         let average = (!known.is_empty()).then(|| known.iter().sum::<f64>() / known.len() as f64);
         (average, known.len())
     }
+}
+
+/// SQLite returned JSON the query itself built in another shape.
+fn decode_error(error: serde_json::Error) -> MealLogError {
+    MealLogError::Database(sqlx::Error::Decode(Box::new(error)))
 }
 
 /// The trailing window ending with `day`.

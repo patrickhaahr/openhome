@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH k (key) AS MATERIALIZED (SELECT value FROM json_each(?3)),\n            sums AS (\n                SELECT m.day, k.key, SUM(v.value * p.grams / 100.0) AS food, COUNT(*) AS known\n                FROM meal_logs m CROSS JOIN meal_log_portions p ON p.meal_log_id = m.id\n                CROSS JOIN k CROSS JOIN meal_log_portion_values v\n                    ON v.portion_id = p.id AND v.key = k.key\n                WHERE m.day >= ?1 AND m.day <= ?2\n                GROUP BY m.day, k.key\n            ),\n            food AS (\n                SELECT day, json_group_object(key, json_array(food, known)) AS food\n                FROM sums GROUP BY day\n            ),\n            days AS (\n                SELECT m.day, json_group_array(m.id) AS logs,\n                    SUM((SELECT COUNT(*) FROM meal_log_portions p WHERE p.meal_log_id = m.id))\n                        AS portions\n                FROM meal_logs m WHERE m.day >= ?1 AND m.day <= ?2 GROUP BY m.day\n            )\n            SELECT d.day AS \"day!\", d.logs AS \"logs!: String\", d.portions AS \"portions!: i64\",\n                COALESCE(f.food, '{}') AS \"food!: String\"\n            FROM days d LEFT JOIN food f ON f.day = d.day ORDER BY d.day",
+  "describe": {
+    "columns": [
+      {
+        "name": "day!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "logs!: String",
+        "ordinal": 1,
+        "type_info": "Null"
+      },
+      {
+        "name": "portions!: i64",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "food!: String",
+        "ordinal": 3,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "652fba0928d5025384a5bf92accf032896e824829389097f83e611fd8f91cf79"
+}

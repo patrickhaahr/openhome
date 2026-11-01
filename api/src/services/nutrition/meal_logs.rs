@@ -1046,6 +1046,15 @@ pub(super) enum Selection<'a> {
     Days(CalendarDay, CalendarDay),
 }
 
+/// One snapshotted Portion value as read.
+struct ValueRow {
+    portion_id: i64,
+    key: String,
+    value: f64,
+    unit: String,
+    source: ValueSource,
+}
+
 /// Which snapshotted Portion values to load.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Values<'a> {
@@ -1088,23 +1097,46 @@ pub(super) async fn load(
     )
     .fetch_all(db)
     .await?;
-    let keys = match values {
-        Values::All => None,
-        Values::Only(keys) => Some(serde_json::Value::from(keys).to_string()),
+    // Driven from the Meal Logs to each Portion's values by primary key, so a range reads only
+    // its own Portions' values, and for a key list one seek per Portion and key.
+    let values: Vec<ValueRow> = match values {
+        Values::All => {
+            sqlx::query_as!(
+                ValueRow,
+                r#"SELECT v.portion_id AS "portion_id!", v.key AS "key!", v.value AS "value!",
+                    v.unit AS "unit!", v.source AS "source!: ValueSource"
+                FROM meal_logs m CROSS JOIN meal_log_portions p ON p.meal_log_id = m.id
+                CROSS JOIN meal_log_portion_values v ON v.portion_id = p.id
+                WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2)
+                    AND (?3 IS NULL OR m.day <= ?3)"#,
+                id,
+                from,
+                to
+            )
+            .fetch_all(db)
+            .await?
+        }
+        Values::Only(keys) => {
+            let keys = serde_json::Value::from(keys).to_string();
+            sqlx::query_as!(
+                ValueRow,
+                r#"WITH k (key) AS MATERIALIZED (SELECT value FROM json_each(?4))
+                SELECT v.portion_id AS "portion_id!", v.key AS "key!", v.value AS "value!",
+                    v.unit AS "unit!", v.source AS "source!: ValueSource"
+                FROM meal_logs m CROSS JOIN meal_log_portions p ON p.meal_log_id = m.id
+                CROSS JOIN k CROSS JOIN meal_log_portion_values v
+                    ON v.portion_id = p.id AND v.key = k.key
+                WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2)
+                    AND (?3 IS NULL OR m.day <= ?3)"#,
+                id,
+                from,
+                to,
+                keys
+            )
+            .fetch_all(db)
+            .await?
+        }
     };
-    let values = sqlx::query!(
-        r#"SELECT v.portion_id, v.key, v.value, v.unit, v.source AS "source: ValueSource"
-        FROM meal_log_portion_values v
-        JOIN meal_log_portions p ON p.id = v.portion_id JOIN meal_logs m ON m.id = p.meal_log_id
-        WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2) AND (?3 IS NULL OR m.day <= ?3)
-            AND (?4 IS NULL OR v.key IN (SELECT value FROM json_each(?4)))"#,
-        id,
-        from,
-        to,
-        keys
-    )
-    .fetch_all(db)
-    .await?;
 
     let mut doses =
         supplements::log_doses(db, id.as_deref(), from.as_deref(), to.as_deref()).await?;

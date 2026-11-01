@@ -26,8 +26,9 @@
 //!   (`coverage`), or, without the Profile's sex or birth date or below 18 years on the range's
 //!   last day, why there is none; the rest of the summary does not depend on it.
 //!
-//! One read of the Meal Logs serves everything: the key nutrients and the panel's values, from
-//! the 6 days before `from` that the first trailing 7-day averages need through `to`.
+//! Every input is read once for the whole range: the Meal Logs with their key nutrients, and for
+//! the coverage the panel's day totals (`Diary::load`), from the 6 days before `from` that the
+//! first trailing 7-day averages need through `to`.
 
 use std::collections::BTreeMap;
 
@@ -379,20 +380,18 @@ pub async fn nutrition_summary(
     let plans = targets::plan(db, from, to, today).await?;
     let person = Person::read(db).await?;
     let unavailable = micronutrients::unavailable_on(&person, to);
-    let (first_day, keys) = if unavailable.is_some() {
-        (from, meal_logs::KEY_NUTRIENTS.to_vec())
-    } else {
-        let mut keys = micronutrients::value_keys();
-        keys.extend(meal_logs::KEY_NUTRIENTS);
-        (micronutrients::trailing_start(from), keys)
-    };
-    let logs = meal_logs::load(db, &Selection::Days(first_day, to), Values::Only(&keys)).await?;
+    let logs = meal_logs::load(
+        db,
+        &Selection::Days(from, to),
+        Values::Only(&meal_logs::KEY_NUTRIENTS),
+    )
+    .await?;
     let weigh_ins = targets::weigh_ins(db, to).await?;
     let goals = goals::history(db).await?;
 
     let mut eaten: BTreeMap<CalendarDay, Eaten<'_>> = BTreeMap::new();
     for log in &logs {
-        let Some(day) = CalendarDay::parse(&log.day).filter(|day| *day >= from) else {
+        let Some(day) = CalendarDay::parse(&log.day) else {
             continue;
         };
         let entry = eaten.entry(day).or_default();
@@ -409,10 +408,13 @@ pub async fn nutrition_summary(
             .collect(),
         trend: TrendWeight::of(&weigh_ins),
         goals,
-        coverage: unavailable.is_none().then(|| CoverageInputs {
-            person,
-            diary: Diary::of(&logs),
-        }),
+        coverage: match unavailable {
+            Some(_) => None,
+            None => Some(CoverageInputs {
+                person,
+                diary: Diary::load(db, from, to).await?,
+            }),
+        },
     };
     let mut range_tally = Tally::default();
     let periods: Vec<Period> = plans

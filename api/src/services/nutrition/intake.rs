@@ -64,6 +64,16 @@ impl Intake {
         intake
     }
 
+    /// The food share of Portions already summed: `food` over those with a value, and how many
+    /// lack one.
+    pub(super) fn from_food(food: Option<f64>, unknown_portions: usize) -> Self {
+        Self {
+            food,
+            unknown_portions,
+            ..Self::default()
+        }
+    }
+
     /// From Portions; `None` when no Portion has a value.
     #[must_use]
     pub fn food(&self) -> Option<f64> {
