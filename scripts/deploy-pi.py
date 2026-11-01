@@ -26,6 +26,24 @@ def inspect(kind, name):
     return json.loads(run("docker", kind, "inspect", name, capture_output=True).stdout)[0]
 
 
+def back_up_photos(source, destination, database):
+    """Copy meal photos beside the app.db backup and check every photo it names is there."""
+    destination.mkdir(mode=0o700)
+    for photo in sorted(source.glob("*.avif")):
+        try:
+            shutil.copy2(photo, destination / photo.name)
+        except FileNotFoundError:
+            continue  # Deleted with its Meal Log after the database backup.
+        (destination / photo.name).chmod(0o600)
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as backup:
+        named = [row[0] for row in backup.execute("SELECT photo_id FROM meal_logs WHERE photo_id IS NOT NULL")]
+    missing = [photo for photo in named
+               if not all((destination / f"{photo}{suffix}").is_file() for suffix in (".avif", ".thumbnail.avif"))]
+    if missing:
+        print(f"meal-photos: {len(missing)} photos named in app.db were already gone", flush=True)
+    return len(named) - len(missing)
+
+
 # Resolve every release before downtime; a missing tag leaves production running.
 expected_images = {}
 for area, version in versions.items():
@@ -44,6 +62,12 @@ if not verify_only:
                 if destination.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
                     raise RuntimeError(f"Backup validation failed for {name}")
         print(f"{name}: backup verified", flush=True)
+    # Photos are immutable files named by app.db; copying them after its backup covers every
+    # photo that backup names, so restore meal-photos/ together with app.db from one backup.
+    photos = root / "data" / "meal-photos"
+    if photos.is_dir():
+        kept = back_up_photos(photos, backup / "meal-photos", backup / "app.db")
+        print(f"meal-photos: {kept} photos backed up", flush=True)
     for name in ("compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml",
                  "compose.bluetooth.yml", ".env"):
         if (root / name).exists():

@@ -7,7 +7,7 @@ description: Deploy OpenHome when asked to deploy or release this repository to 
 
 Treat a request to "deploy" in this repository as authorization to release the
 current working tree: patch-bump, publish and restart only the images whose area
-changed, and back up both databases on `pi`.
+changed, and back up both databases and the meal photos on `pi`.
 
 An area (`api/`, `mcp/`, `dashboard/`) is released when it has committed,
 uncommitted or untracked changes since the commit that set its current version.
@@ -36,6 +36,7 @@ If a run fails, diagnose the failed phase before retrying. Use
 Use `devenv shell -- just openhome-verify` to recheck the running release without
 restarting it. Keep backup paths and previous image IDs available when diagnosing
 an activation failure; database restoration requires a deliberate recovery plan.
+Restore a backup's `meal-photos/` together with its `app.db`, never one without the other.
 
 The justfile and scripts are the source of truth for individual commands.
 Builds use the single-node `openhome-local` builder; the Pi runs production
