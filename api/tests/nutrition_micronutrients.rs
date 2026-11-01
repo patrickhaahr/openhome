@@ -525,19 +525,28 @@ async fn a_day_above_an_upper_limit_is_a_caution_and_a_seven_day_average_above_i
         json!([["total", 100.0, null, 38.25, 4, "none"]])
     );
 
-    // Two more 150 µg days, with nothing logged between them, average 150 µg over the 7 days to
-    // 2026-04-08 because untracked days are left out: cut down, even on a day without a dose.
+    // Two more 150 µg days average 150 µg over the 7 days to 2026-04-08, but two logged days
+    // are too few to call it a habit.
     api.eat("2026-04-05", &[], &[(&strong, 1.0)]).await;
     api.eat("2026-04-07", &[], &[(&strong, 1.0)]).await;
+    let vitamin_d = api.nutrient("2026-04-08", "vitamin_d").await;
+    assert_eq!(
+        limits(&vitamin_d),
+        json!([["total", 100.0, null, 150.0, 2, "none"]])
+    );
+
+    // A third, with nothing logged between them, averages 150 µg over 3 logged days because
+    // untracked days are left out: cut down, even on a day without a dose.
+    api.eat("2026-04-06", &[], &[(&strong, 1.0)]).await;
     let panel = api.panel("2026-04-08").await;
     assert_eq!(
         panel["trailing_window"],
-        json!({"from": "2026-04-02", "to": "2026-04-08", "logged_days": 2})
+        json!({"from": "2026-04-02", "to": "2026-04-08", "logged_days": 3})
     );
     let vitamin_d = nutrient(&panel, "vitamin_d");
     assert_eq!(
         limits(&vitamin_d),
-        json!([["total", 100.0, null, 150.0, 2, "cut_down"]])
+        json!([["total", 100.0, null, 150.0, 3, "cut_down"]])
     );
     assert_eq!(vitamin_d["upper_limit_status"], "cut_down");
 
@@ -546,7 +555,35 @@ async fn a_day_above_an_upper_limit_is_a_caution_and_a_seven_day_average_above_i
     let vitamin_d = api.nutrient("2026-04-07", "vitamin_d").await;
     assert_eq!(
         limits(&vitamin_d),
-        json!([["total", 100.0, 150.0, 150.0, 3, "cut_down"]])
+        json!([["total", 100.0, 150.0, 150.0, 4, "cut_down"]])
+    );
+}
+
+#[tokio::test]
+async fn a_single_logged_day_above_an_upper_limit_is_only_a_caution() {
+    let api = Api::start().await;
+    woman(&api).await;
+    let strong = api
+        .supplement(
+            "Vitamin D 150",
+            json!({"amounts": [{"key": "vitamin_d", "value": 150, "unit": "µg"}]}),
+        )
+        .await;
+    api.eat("2026-04-08", &[], &[(&strong, 1.0)]).await;
+
+    // The trailing average is that one day, above the limit, yet one day is not a habit.
+    let vitamin_d = api.nutrient("2026-04-08", "vitamin_d").await;
+    assert_eq!(
+        limits(&vitamin_d),
+        json!([["total", 100.0, 150.0, 150.0, 1, "caution"]])
+    );
+    assert_eq!(vitamin_d["upper_limit_status"], "caution");
+
+    // The summary judges the day the same way: a day above, no cut down.
+    let week = api.summary("2026-04-06", "2026-04-12", "week").await;
+    assert_eq!(
+        limit_flags(&week["periods"][0]["micronutrients"], "vitamin_d"),
+        json!([1, false])
     );
 }
 
@@ -962,10 +999,10 @@ async fn summary_counts_days_above_upper_limits_and_cut_down_windows_as_the_day_
             // Two capsule days above 100 µg, and Thursday's window averages above it. The 600 mg
             // of magnesium from food is not checked against the supplements-only limit.
             json!(["2026-04-06", [2, true], [0, false]]),
-            // No day above, but Wednesday's window still reaches back to Thursday's capsule; the
-            // 300 mg capsule is above the 250 mg supplement limit for a day only. Windows ending
-            // on the days after it, without Meal Logs, are not counted.
-            json!(["2026-04-13", [0, true], [1, false]]),
+            // No day above: Wednesday's window reaches back to Thursday's capsule, but that is
+            // its only known vitamin D, too few days to cut down. The 300 mg capsule is above the
+            // 250 mg supplement limit for a day only.
+            json!(["2026-04-13", [0, false], [1, false]]),
             // Nothing logged: never flagged.
             json!(["2026-04-20", [0, false], [0, false]]),
         ]

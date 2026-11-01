@@ -1009,21 +1009,24 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       )
     ).supplement.id
 
-    // Two days ago a 150 µg vitamin D capsule alone; today another, a magnesium tablet and
-    // 200 g of banana. Vitamin D averages 150 µg over the 2 logged days, above its 100 µg Upper
-    // Limit: cut down. Magnesium's supplement-only limit of 250 mg is passed today only.
+    // Two days ago and yesterday a 150 µg vitamin D capsule alone; today another, a magnesium
+    // tablet and 200 g of banana. Vitamin D averages 150 µg over the 3 logged days, above its
+    // 100 µg Upper Limit: cut down. Magnesium's supplement-only limit of 250 mg is passed today
+    // only.
     const mealLog = z.object({ meal_log: z.object({ day: z.string() }) })
 
-    await post(
-      micros.url,
-      "/api/nutrition/meal-logs",
-      {
-        eaten_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-        supplement_doses: [{ supplement_id: vitaminD, doses: 1 }],
-        request_id: crypto.randomUUID(),
-      },
-      mealLog
-    )
+    for (const daysAgo of [2, 1]) {
+      await post(
+        micros.url,
+        "/api/nutrition/meal-logs",
+        {
+          eaten_at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
+          supplement_doses: [{ supplement_id: vitaminD, doses: 1 }],
+          request_id: crypto.randomUUID(),
+        },
+        mealLog
+      )
+    }
 
     const meal = (
       await post(
@@ -1046,7 +1049,7 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
 
     expect(text(".food-micros > h2")).toEqual(["Vitamins and minerals"])
     expect(text(".food-micros > .food-micros-basis")[0]).toBe(
-      "Recommended Intakes for women 25–50 years · Upper Limits on 2 logged days of the last 7"
+      "Recommended Intakes for women 25–50 years · Upper Limits on 3 logged days of the last 7"
     )
     expect(text(".food-micro-group h3")).toEqual([
       "Vitamins",

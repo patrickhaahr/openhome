@@ -426,7 +426,8 @@ EFSA's Tolerable Upper Intake Level: the highest habitual daily intake unlikely
 to cause harm. Some apply only to the supplement share of a nutrient. A 7-day
 average above it means cut down; a single day above it is only a caution. The
 average covers the days with Meal Logs among the last seven, so untracked days
-never dilute it.
+never dilute it, and says cut down only when at least 3 of those days know the
+amount: one or two days above the limit are a caution, not a habit.
 _Avoid_: Overdose threshold, maximum, red line
 
 **Lasting Shortfall**:

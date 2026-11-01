@@ -9,9 +9,11 @@
 //! - An Upper Limit is checked against the share of intake it applies to ([`Share`]): food and
 //!   supplements, or only the supplement share or one chemical form. A day above it is a
 //!   **caution**. A **cut down** applies when the trailing 7-day average is above it: the mean
-//!   over the days with at least one Meal Log among that day and the 6 before it. Days without
-//!   Meal Logs are left out rather than counted as zero, as they are for the Estimated
-//!   Expenditure, so an untracked day never dilutes a habitual excess. A logged day without
+//!   over the days with at least one Meal Log among that day and the 6 before it, and only when
+//!   at least [`MIN_CUT_DOWN_DAYS`] of them know the amount, so a day or two above the limit stay
+//!   a caution rather than a habit. Days without Meal Logs are left out rather than counted as
+//!   zero, as they are for the Estimated Expenditure, so an untracked day never dilutes a
+//!   habitual excess. A logged day without
 //!   Supplement Doses of the nutrient adds zero to a supplement-only share; a logged day whose
 //!   food value is unknown is left out of a share that includes food, because unknown is never
 //!   zero. Cut down outranks caution. Nutrients without an Upper Limit carry no status at all.
@@ -42,6 +44,9 @@ use crate::services::training::calendar::CalendarDay;
 
 /// Days the trailing average spans, ending with the day evaluated.
 pub const TRAILING_DAYS: u64 = 7;
+/// The fewest logged days with a known amount in the trailing window whose average above an
+/// Upper Limit says cut down; fewer days above it are only a caution.
+pub const MIN_CUT_DOWN_DAYS: usize = 3;
 const EPA: &str = "epa";
 const DHA: &str = "dha";
 /// Preformed vitamin A in food.
@@ -205,7 +210,8 @@ pub enum LimitStatus {
     Clear,
     /// The day is above the limit.
     Caution,
-    /// The trailing 7-day average is above the limit.
+    /// The trailing 7-day average over at least [`MIN_CUT_DOWN_DAYS`] logged days is above the
+    /// limit.
     CutDown,
 }
 
@@ -543,7 +549,9 @@ impl Diary {
                         let amount = intake.and_then(|intake| intake.limited[limit_index]);
                         let (average, averaged_days) =
                             self.trailing_average(index, limit_index, day);
-                        let status = if average.is_some_and(|average| average > limit.value) {
+                        let habitual = averaged_days >= MIN_CUT_DOWN_DAYS
+                            && average.is_some_and(|average| average > limit.value);
+                        let status = if habitual {
                             LimitStatus::CutDown
                         } else if amount.is_some_and(|amount| amount > limit.value) {
                             LimitStatus::Caution

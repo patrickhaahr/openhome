@@ -143,7 +143,7 @@ set_nutrition_goal only when the user asks; it applies from today and never chan
 nutrition_day's micronutrients compare each vitamin and mineral with the NNR 2023 Recommended Intake for the user's sex \
 and age band: reaching or passing 100 % is good, and adequate_intake marks the less certain references. \
 Only EFSA Upper Limits matter for excess: a caution means that day was above one, which is no cause for alarm; cut_down \
-means the 7-day average over logged days is above it, so suggest cutting down, usually the Supplement named by the \
+means the 7-day average over at least 3 logged days is above it, so suggest cutting down, usually the Supplement named by the \
 limit's applies_to (magnesium, folic acid, nicotinic acid and nicotinamide limits count supplements only; preformed \
 vitamin A counts retinol from food and supplements, not beta-carotene). Compounds without a reference, such as creatine, \
 are amounts taken without a grade. \
@@ -397,7 +397,8 @@ target_g, never graded; state unavailable: missing [height, sex, birth_date, bod
 epa_dha: amount with its food and supplements shares, recommended_intake, adequate_intake (true for an NNR adequate \
 intake, less certain), percent_of_recommended, and upper_limits, each with applies_to (total, supplements, \
 preformed_vitamin_a, supplemental_folate, nicotinic_acid or nicotinamide), limit, the day's amount, seven_day_average \
-over logged days and status none, caution (the day is above it) or cut_down (the 7-day average is above it); \
+over logged days and status none, caution (the day is above it) or cut_down (the 7-day average over at least 3 \
+logged days with a known amount is above it); \
 upper_limit_status is null for a nutrient without an Upper Limit; state unavailable: missing [sex, birth_date] and a \
 reason, also below 18 years), `nutrients` \
 with the total of every per-100 g database parameter in database order (key, Danish and English name, group, unit), \
