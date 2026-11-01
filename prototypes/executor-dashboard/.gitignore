@@ -1,5 +1,0 @@
-.runtime/
-app/node_modules/
-app/package-lock.json
-screenshots/*
-!screenshots/final/
