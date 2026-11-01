@@ -415,11 +415,12 @@ of folic_acid, retinol, nicotinamide and so on. While the Food database is unava
 const NUTRITION_SUMMARY: &str = "Every nutrition trend over Europe/Copenhagen days from `from` through `to` (1 to 365 \
 days, ending today at the latest), grouped by aggregation: day, week (ISO, Monday to Sunday) or month (calendar). The \
 first and last week or month cover only their days inside the range and say partial=true. Returns logged_days and \
-missing_days for the range and `periods` in date order, each with start, end, days, partial, logged_days (days whose \
-Meal Logs have known energy) and missing_days (left out of intake means, never counted as zero); energy \
-{eaten_kcal (mean per logged day), calorie_target_kcal, estimated_expenditure_kcal (means of each day's value)}; \
-protein {eaten_g, target_g}; macro_energy {protein_kcal, carbohydrate_kcal, fat_kcal, alcohol_kcal} per logged day at \
-4/4/9/7 kcal per gram; nova {nova_1_share, nova_1_kcal, classified_kcal, unclassified_portions} summed over the period; \
+missing_days for the range and `periods` in date order, each with start, end, days, partial, logged_days (days with \
+Meal Logs, Supplement Doses alone included), missing_days (no Meal Logs; never counted as zero) and intake_days \
+(logged days whose energy is known; a day of Supplement Doses without energy is never 0 kcal); energy {eaten_kcal \
+(mean per intake day), calorie_target_kcal, estimated_expenditure_kcal (means of each day's value)}; protein {eaten_g, \
+target_g}; macro_energy {protein_kcal, carbohydrate_kcal, fat_kcal, alcohol_kcal} per intake day at 4/4/9/7 kcal per \
+gram; nova {nova_1_share, nova_1_kcal, classified_kcal, unclassified_portions} summed over the period; \
 weight {trend_weight_kg on the last day, scale_weight_kg (mean of the period's weigh-ins), weigh_ins}; and \
 weight_change {kg_per_week, the Trend Weight's change over the period (or the 7 days ending on its last day when \
 shorter) per week; goal_kg_per_week, the Nutrition Goal's change, negative to lose}; and micronutrients {logged_days, \

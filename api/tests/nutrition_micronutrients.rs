@@ -777,15 +777,28 @@ async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only(
         )
         .await;
     // Monday 200 g of Orange (100 mg vitamin C, 105.3 %) and Wednesday 100 g (50 mg, 52.6 %).
-    // Friday logs only a vitamin D capsule: no known energy, so it is not a logged day.
+    // Friday logs only a 20 µg vitamin D capsule: a logged day without known energy.
     api.eat("2026-04-06", &[(1001, 200.0)], &[]).await;
     api.eat("2026-04-08", &[(1001, 100.0)], &[]).await;
     api.eat("2026-04-10", &[], &[(&vitamin_d, 1.0)]).await;
 
     let week = api.summary("2026-04-06", "2026-04-12", "week").await;
-    let coverage = &week["periods"][0]["micronutrients"];
-    assert_eq!(coverage["logged_days"], 2);
-    // The five days without food leave the mean alone instead of counting as zero.
+    let period = &week["periods"][0];
+    assert_eq!(
+        json!([
+            period["logged_days"],
+            period["missing_days"],
+            period["intake_days"]
+        ]),
+        json!([3, 4, 2])
+    );
+    // Energy is the mean over the days that know it (94 and 47 kcal), so the capsule day is not
+    // a day of 0 kcal.
+    assert_eq!(period["energy"]["eaten_kcal"], 71.0);
+    let coverage = &period["micronutrients"];
+    assert_eq!(coverage["logged_days"], 3);
+    // The four days without Meal Logs, and Friday's unknown vitamin C, leave the mean alone
+    // instead of counting as zero.
     assert_eq!(
         period_coverage(coverage, "vitamin_c"),
         json!([78.9, 2, null, null])
@@ -794,14 +807,15 @@ async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only(
         period_coverage(coverage, "folate"),
         json!([13.6, 2, 0, false])
     );
-    // No Orange has a vitamin K or vitamin D value: unknown, not zero.
+    // No Orange has a vitamin K value: unknown, not zero.
     assert_eq!(
         period_coverage(coverage, "vitamin_k"),
         json!([null, 0, null, null])
     );
+    // Friday's capsule is the only known vitamin D: 20 µg of the 10 µg Recommended Intake.
     assert_eq!(
         period_coverage(coverage, "vitamin_d"),
-        json!([null, 0, 0, false])
+        json!([200.0, 1, 0, false])
     );
 
     // By day, a day without Meal Logs has no coverage.
@@ -825,7 +839,7 @@ async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only(
     // The range carries the same means beside each nutrient's reference.
     let range = &week["micronutrients"];
     assert_eq!(range["state"], "available");
-    assert_eq!(range["logged_days"], 2);
+    assert_eq!(range["logged_days"], 3);
     let vitamin_c = nutrient(range, "vitamin_c");
     assert_eq!(
         json!([

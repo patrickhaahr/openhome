@@ -4,11 +4,11 @@
 //! supplement-only Upper Limits and EPA+DHA work the same way.
 //!
 //! - **Recommended Intake**: the mean of each logged day's percentage of its Recommended Intake.
-//!   A logged day is one the summary counts as logged (Meal Logs with known energy), so a day
-//!   with only Supplement Doses, or without Meal Logs, is left out rather than counted as a day
-//!   of eating. A logged day whose amount is unknown (no Portion has a value and no dose lists
-//!   it) is left out of that nutrient's mean: unknown is never zero. Each day uses its own age
-//!   band, so a birthday inside the range is handled day by day.
+//!   A logged day is one with a Meal Log, as the summary counts it, so a day of Supplement Doses
+//!   alone counts with the amounts its doses list, and a day without Meal Logs is left out. A
+//!   logged day whose amount is unknown (no Portion has a value and no dose lists it) is left out
+//!   of that nutrient's mean: unknown is never zero. Each day uses its own age band, so a
+//!   birthday inside the range is handled day by day.
 //! - **Upper Limits**: the days whose amount is above any of the nutrient's Upper Limits (the
 //!   Day view's caution, or a day above within a cut down), and whether the trailing 7-day
 //!   average was above one on any day of the period with Meal Logs (the Day view's cut down). A
@@ -132,8 +132,9 @@ impl AddAssign<&Self> for Tally {
 }
 
 impl Tally {
-    /// Adds one day; `logged` when the summary counts it as a logged day.
-    pub(super) fn add(&mut self, day: &DayAssessment, logged: bool) {
+    /// Adds one day; only a day with Meal Logs is a logged day.
+    pub(super) fn add(&mut self, day: &DayAssessment) {
+        let logged = day.has_meal_logs;
         self.logged_days += usize::from(logged);
         for (tally, nutrient) in self.nutrients.iter_mut().zip(&day.nutrients) {
             if let Some(percent) = nutrient.percent_of_recommended().filter(|_| logged) {
@@ -141,7 +142,7 @@ impl Tally {
                 tally.averaged_days += 1;
             }
             tally.days_above += usize::from(nutrient.above_upper_limit() == Some(true));
-            tally.cut_down |= day.has_meal_logs && nutrient.cut_down() == Some(true);
+            tally.cut_down |= logged && nutrient.cut_down() == Some(true);
         }
     }
 

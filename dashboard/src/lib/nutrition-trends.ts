@@ -115,6 +115,7 @@ const summaryPeriod = z.object({
   partial: z.boolean(),
   logged_days: z.number().int().nonnegative(),
   missing_days: z.number().int().nonnegative(),
+  intake_days: z.number().int().nonnegative(),
   energy: z.object({
     eaten_kcal: kcal,
     calorie_target_kcal: kcal,

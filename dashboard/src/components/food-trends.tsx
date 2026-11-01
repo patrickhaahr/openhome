@@ -161,11 +161,12 @@ function Trends({
     partial: periods.map((period) => period.partial),
   }
 
-  const logged = (period: SummaryPeriod) => period.logged_days
+  // Intake means cover the logged days whose energy is known.
+  const intakeDays = (period: SummaryPeriod) => period.intake_days
   const all = (period: SummaryPeriod) => period.days
   const notLogged = "Not logged"
 
-  const eaten = weightedMean(periods, (p) => p.energy.eaten_kcal, logged)
+  const eaten = weightedMean(periods, (p) => p.energy.eaten_kcal, intakeDays)
   const target = weightedMean(periods, (p) => p.energy.calorie_target_kcal, all)
 
   const expenditure = weightedMean(
@@ -188,7 +189,7 @@ function Trends({
     .filter((part): part is string => part !== null)
     .join(" · ")
 
-  const protein = weightedMean(periods, (p) => p.protein.eaten_g, logged)
+  const protein = weightedMean(periods, (p) => p.protein.eaten_g, intakeDays)
   const proteinTarget = weightedMean(periods, (p) => p.protein.target_g, all)
 
   const proteinSummary = [
@@ -229,7 +230,7 @@ function Trends({
 
   const macroMeans = macros.map((macro) => ({
     name: macro.name,
-    kcal: weightedMean(periods, macro.pick, logged) ?? 0,
+    kcal: weightedMean(periods, macro.pick, intakeDays) ?? 0,
   }))
 
   const macroTotal = macroMeans.reduce((sum, macro) => sum + macro.kcal, 0)
