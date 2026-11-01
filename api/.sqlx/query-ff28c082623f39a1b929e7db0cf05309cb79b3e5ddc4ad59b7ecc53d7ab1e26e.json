@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT monday, expenditure_kcal, bmr_kcal, prior_kcal, data_estimate_kcal,\n            logged_days, blend_weight, trend_weight_kg, trend_weight_day\n        FROM nutrition_weeks WHERE monday BETWEEN ?1 AND ?2",
+  "describe": {
+    "columns": [
+      {
+        "name": "monday",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "expenditure_kcal",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "bmr_kcal",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "prior_kcal",
+        "ordinal": 3,
+        "type_info": "Float"
+      },
+      {
+        "name": "data_estimate_kcal",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "logged_days",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "blend_weight",
+        "ordinal": 6,
+        "type_info": "Float"
+      },
+      {
+        "name": "trend_weight_kg",
+        "ordinal": 7,
+        "type_info": "Float"
+      },
+      {
+        "name": "trend_weight_day",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ff28c082623f39a1b929e7db0cf05309cb79b3e5ddc4ad59b7ecc53d7ab1e26e"
+}

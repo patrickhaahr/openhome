@@ -57,7 +57,12 @@ afterEach(async () => {
 async function api<T>(
   schema: z.ZodType<T>,
   path: string,
-  json?: { height_cm?: number; sex?: string; hr_max_bpm?: number }
+  json?: {
+    height_cm?: number
+    sex?: string
+    hr_max_bpm?: number
+    birth_date?: string
+  }
 ): Promise<T> {
   const response = await fetch(`${fixture.url}${path}`, {
     method: json === undefined ? "GET" : "PATCH",
@@ -132,6 +137,27 @@ async function type(label: string, value: string): Promise<void> {
   })
 }
 
+function select(label: string): HTMLSelectElement {
+  const fieldLabel = Array.from(container.querySelectorAll("label")).find(
+    (element) => element.textContent === label
+  )
+
+  const element = document.getElementById(fieldLabel?.htmlFor ?? "")
+
+  if (!(element instanceof HTMLSelectElement))
+    throw new Error(`Missing select: ${label}`)
+
+  return element
+}
+
+async function choose(label: string, value: string): Promise<void> {
+  await act(async () => {
+    const field = select(label)
+    field.value = value
+    field.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+}
+
 async function click(name: string): Promise<void> {
   const button = Array.from(container.querySelectorAll("button")).find(
     (element) => element.textContent === name
@@ -148,43 +174,52 @@ async function click(name: string): Promise<void> {
 
 test("configures the shared Profile, preserves concurrent untouched fields, and explicitly clears each value", async () => {
   await render()
-  expect(container.textContent?.match(/Not configured/g)).toHaveLength(3)
+  expect(container.textContent?.match(/Not configured/g)).toHaveLength(4)
   await click("Edit profile")
   await type("Height (cm)", "181,12345")
-  await type("Sex (optional)", "female")
+  expect(
+    [...select("Sex (optional)").options].map((option) => option.text)
+  ).toEqual(["Not set", "Male", "Female"])
+  await choose("Sex (optional)", "female")
   await type("Maximum heart rate (bpm)", "190")
+  await type("Birth date", "1994-05-17")
   await click("Save profile")
 
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: 181.12345,
     sex: "female",
     hr_max_bpm: 190,
+    birth_date: "1994-05-17",
   })
   expect(container.textContent).toContain("Maximum heart rate190 max")
+  expect(container.textContent).toContain("Birth date17 May 1994")
   expect(container.textContent).toContain("Profile saved to OpenHome.")
 
   await click("Edit profile")
   // Another client changes a field this draft leaves untouched.
   await api(profile, "/api/profile", { hr_max_bpm: 195 })
-  await type("Sex (optional)", "")
+  await choose("Sex (optional)", "")
   await click("Save profile")
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: 181.12345,
     sex: null,
     hr_max_bpm: 195,
+    birth_date: "1994-05-17",
   })
 
   await click("Edit profile")
   await type("Height (cm)", "")
   await type("Maximum heart rate (bpm)", "")
+  await type("Birth date", "")
   await click("Save profile")
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: null,
     sex: null,
     hr_max_bpm: null,
+    birth_date: null,
   })
   await render()
-  expect(container.textContent?.match(/Not configured/g)).toHaveLength(3)
+  expect(container.textContent?.match(/Not configured/g)).toHaveLength(4)
 })
 
 test("logs decimal-comma Body Weight, rejects duplicates without replacing stored values, and charts ranges ending today", async () => {
@@ -272,10 +307,16 @@ test("invalid fields keep drafts and stored values; API validation also remains 
   await click("Save profile")
   expect(input("Height (cm)").value).toBe("181")
   expect(document.activeElement).toBe(input("Maximum heart rate (bpm)"))
+  await type("Maximum heart rate (bpm)", "185")
+  await type("Birth date", shiftDay(trainingDayOn(new Date()), 1))
+  await click("Save profile")
+  expect(document.activeElement).toBe(input("Birth date"))
+  expect(container.textContent).toContain("not in the future")
   expect(await api(profile, "/api/profile")).toEqual({
     height_cm: 180.5,
     sex: "male",
     hr_max_bpm: 185,
+    birth_date: null,
   })
 
   await type("Body weight (kg)", "0")
@@ -297,6 +338,7 @@ test("invalid fields keep drafts and stored values; API validation also remains 
     height_cm: 180.5,
     sex: "male",
     hr_max_bpm: 185,
+    birth_date: null,
   })
 })
 
@@ -350,4 +392,33 @@ test("a confirmed Profile save remains visible if its follow-up read is unavaila
   expect(container.textContent).toContain("Profile & weight unavailable")
   expect(container.textContent).toContain("Profile saved to OpenHome.")
   expect(await api(profile, "/api/profile")).toMatchObject({ hr_max_bpm: 180 })
+})
+
+test("shows a sex the targets cannot use instead of replacing it, and keeps it until changed", async () => {
+  // Another client stored free text.
+  await api(profile, "/api/profile", { sex: "unspecified", height_cm: 180 })
+  await render()
+  await click("Edit profile")
+
+  const sex = select("Sex (optional)")
+  expect(sex.value).toBe("unspecified")
+  expect([...sex.options].map((option) => option.text)).toEqual([
+    "Not set",
+    "Male",
+    "Female",
+    "“unspecified” (not used for targets)",
+  ])
+
+  // Saving another field leaves it alone.
+  await type("Height (cm)", "181")
+  await click("Save profile")
+  expect(await api(profile, "/api/profile")).toMatchObject({
+    height_cm: 181,
+    sex: "unspecified",
+  })
+
+  await click("Edit profile")
+  await choose("Sex (optional)", "male")
+  await click("Save profile")
+  expect(await api(profile, "/api/profile")).toMatchObject({ sex: "male" })
 })

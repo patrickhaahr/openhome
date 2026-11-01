@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO products (barcode, name, brand, nova_class, food_id, food_name_da, food_name_en)\n                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (barcode) DO NOTHING RETURNING barcode AS \"barcode!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "barcode!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5ca4bc0f59747bf9b724fe5d1d9b76647f4592b693883d58a7fc49d8f7ce2f89"
+}

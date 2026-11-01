@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-axum = { version = "0.8.8", features = ["macros"] }
+axum = { version = "0.8.8", features = ["macros", "multipart"] }
 base64 = "0.22"
 bollard = { version = "0.20.0", features = ["chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -32,13 +32,22 @@ sha2 = "0.10"
 scraper = "0.27.0"
 bluer = { version = "0.17.4", default-features = false, features = ["bluetoothd"] }
 dbus = { version = "0.9.12", features = ["vendored"] }
+calamine = { version = "0.37.0", default-features = false }
+# Meal photos: decode JPEG/PNG, then libavif with only the aom codec (vendored, built with CMake).
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# Use the native API to set colour information before RGB-to-YUV conversion.
+libavif-sys = { version = "0.17", default-features = false, features = ["codec-aom"] }
+moxcms = "0.8"
 
 [dev-dependencies]
 axum = { version = "0.8.8", features = ["macros"] }
 hyper = "1.8.1"
+libavif = { version = "0.14", default-features = false, features = ["codec-aom"] }
 pretty_assertions = "1"
+rust_xlsxwriter = "0.102.0"
 serde = "1.0.228"
 serde_json = "1.0.149"
+tempfile = "3.27.0"
 tokio = { version = "1.49.0", features = ["full"] }
 tower = "0.5.3"
 wiremock = "0.6"

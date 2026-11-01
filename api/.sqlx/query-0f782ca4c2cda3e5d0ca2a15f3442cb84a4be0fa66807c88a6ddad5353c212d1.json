@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO food_nova_classes (food_id, dataset_version, nova_class) VALUES (?1, ?2, ?3)\n        ON CONFLICT (food_id) DO UPDATE SET dataset_version = excluded.dataset_version,\n            nova_class = excluded.nova_class, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "0f782ca4c2cda3e5d0ca2a15f3442cb84a4be0fa66807c88a6ddad5353c212d1"
+}

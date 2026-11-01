@@ -424,8 +424,18 @@ _Avoid_: RDA, goal, daily value
 **Upper Limit**:
 EFSA's Tolerable Upper Intake Level: the highest habitual daily intake unlikely
 to cause harm. Some apply only to the supplement share of a nutrient. A 7-day
-average above it means cut down; a single day above it is only a caution.
+average above it means cut down; a single day above it is only a caution. The
+average covers the days with Meal Logs among the last seven, so untracked days
+never dilute it, and says cut down only when at least 3 of those days know the
+amount: one or two days above the limit are a caution, not a habit.
 _Avoid_: Overdose threshold, maximum, red line
+
+**Lasting Shortfall**:
+A nutrient whose mean over a range's logged days stays below 70 % of its
+Recommended Intake, over at least 7 logged days with a known amount. A low day
+or a short stretch of logs is never one, and unknown amounts are never counted
+as short.
+_Avoid_: Deficiency, deficit, low day
 
 **Supplement**:
 A labelled product whose amounts are given per dose (tablet, capsule, scoop or
@@ -440,7 +450,8 @@ _Avoid_: Pill log, intake
 
 **Trend Weight**:
 Body Weight smoothed over time so daily water and salt swings do not read as
-fat gain or loss.
+fat gain or loss. It starts at the first weigh-in, moves a tenth of the way to
+each later weigh-in, and holds on days without one.
 _Avoid_: Average weight, scale weight
 
 **Estimated Expenditure**:
@@ -458,7 +469,8 @@ _Avoid_: Diet, phase, deficit goal
 **Calorie Target**:
 The daily energy to eat: Estimated Expenditure adjusted by the Nutrition Goal's
 rate, set each Copenhagen Monday and held for that week, never below BMR. The
-same target applies on training and rest days.
+same target applies on training and rest days. A week's Estimated Expenditure is
+fixed the first time any of its days is read, from the data before its Monday.
 _Avoid_: Maintenance, budget, goal
 
 **Macro Targets**:

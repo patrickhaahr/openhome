@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE supplements SET name = COALESCE(?1, name), name_key = COALESCE(?2, name_key),\n        dose_unit = COALESCE(?3, dose_unit), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n        WHERE id = ?4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "9ac5043dd21dc3db4d6ff98452b7afec9f6c2cfd1b2f9fbd4dad7afb3b89d93e"
+}

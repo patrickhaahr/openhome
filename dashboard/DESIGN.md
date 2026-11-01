@@ -117,6 +117,74 @@ Owner feedback: Home should be visuals, not sentences; no text for control state
   a rewind mark with the last push shows only when the sync is not confirmed. Body signals, the
   journal and the strap's workouts follow on scroll; logged workouts stay on Workout. Portrait and
   phone stack rings, week and night. Without ordered stages the night falls back to its totals.
+- **Food is the day's plate**: a round key either side of the day's name (no next day after today,
+  and a "Today" capsule when away from it), then a wash plate with the day's Calorie Target, eaten
+  and remaining as three large figures ("Over" in sun once past the target), the goal, Estimated
+  Expenditure and Trend Weight muted beneath ("held at BMR" when the floor applies), and protein,
+  fat and carbs as rows of eaten / target grams over a bar in the macro's colour: protein says
+  "met" once reached, fat below its floor turns the bar amber and says "below floor", carbs are
+  never graded. Without the Profile's height, sex and birth date or a Body Weight the plate says
+  "No Calorie Target yet" with Axum's reason. The goal control follows as one line ("Goal from
+  today", a capsule select of the six offered goals and an outline "Save goal" key), the Day
+  view's only write. Then the day's energy as the display figure with one
+  capsule beneath it split by macronutrient energy (protein in sun, carbs in ink, fat blue, alcohol
+  muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each, then the NOVA 1
+  share as a figure with the classified kcal it is a share of and the unclassified Portions it
+  leaves out beneath it (a dash until something is classified). A total that Supplement Doses add
+  to notes their share muted beneath its figure ("2 g from supplements"), and a day with
+  Supplements ends the totals with a Supplements row: one capsule per Supplement with its doses
+  added up ("Fish oil 2 capsules"), then one per compound without a database parameter with the
+  amount taken ("Creatine monohydrate 3 g"). The Meal Logs
+  follow as wash plates in time order: the clock time large, the meal's kcal on the right, the name
+  of the saved Meal it was logged from as a capsule beneath (none for a one-off meal), the note
+  muted, then one row per Portion (Food, grams, kcal); a Product Portion shows its label name with
+  its brand muted beneath it, and a classified Portion carries a small "NOVA n" capsule after its
+  name (ink for Class 1, muted otherwise). The meal's Supplement Doses follow the Portions in the
+  same columns (Supplement, doses in its dose unit, kcal when the label states energy). A Meal Log with a photo carries its
+  thumbnail as a rounded key beside the figures (leading the plate on narrow screens); selecting
+  it opens the full photo in the night viewer Photos uses. Unknown is a dash; a total that leaves out
+  Portions without a value is drawn "≥" with the count in its title and "At least" for assistive
+  technology. After the Meal Logs, "Vitamins and minerals" lists each nutrient of the NNR 2023
+  panel in Vitamins, Minerals and Omega-3 columns: its name (an "AI" capsule marks an adequate
+  intake), the whole percentage of its Recommended Intake over a thin bar that fills in ink once
+  reached (passing it is never flagged), the amount over the reference muted beneath, the
+  "Food … · supplements …" split when a Supplement adds to it, and one line for an Upper Limit:
+  an amber dot and "Above the Upper Limit today" for a caution, red text and bar with "Cut down:
+  7-day average …" when the week's average is above it. A muted line above names whom the
+  references are for and how many of the last 7 days are logged; the sources are credited
+  beneath. Without the Profile's sex or birth date, or under 18, the panel says "No vitamin and
+  mineral panel yet" with Axum's reason. "All nutrients" opens every parameter in the database's groups on tone bands, with a muted
+  "Food … · supplements …" line under any nutrient a Supplement adds to. While
+  the Food database imports or fails, the day's place holds a state note and the day keys stay.
+  The Danish Food Composition Database is credited at the foot of the page, and Open Food Facts
+  (ODbL) beneath it whenever the day shows a Product.
+- **Food Trends is the range in plates**: the Day and Trends switch heads the Food page (the
+  Workout capsule). Trends sets the range (30, 90, 180 or 365 days, ending today) and the grouping
+  (days, ISO weeks, calendar months) as two capsule tracks, then "n of N days logged" with the
+  figures in ink, then one wash plate per series: calories across the width (eaten as ink
+  columns, the Calorie Target as a sun line, Estimated Expenditure as a dashed muted line), protein
+  (sun columns under an ink target line), energy by macronutrient (stacked columns in the Day
+  view's macro colours), the NOVA 1 share (an ink line from 0 to 100 %), weight (each period's
+  scale weight as a faint dot under the sun Trend Weight line) and the weekly change (ink columns
+  from zero against the goal rate as a sun line). Each plate names its series in a small legend
+  and carries one muted line over the whole range (means per logged day). Bands of alternating
+  tone replace gridlines. A period without a value stays empty and a line stops at it instead of
+  bridging it, so a day without Meal Logs is a gap, never a zero; an edge week or month that covers
+  only part of itself is drawn lighter. The drawings are hidden from assistive technology, which
+  reads each summary and a table of every period ("Not logged" for a missing day). No chart
+  library: plain SVG with the page's tokens. Last comes "Vitamins and minerals" across the width:
+  a summary naming Axum's Lasting Shortfalls and the nutrients to cut down, a muted basis line
+  with the rule, then the Day view's Vitamins, Minerals and Omega-3 lists as rows: the name (with
+  the "AI" capsule), a strip of one column per period on a wash-strong track whose top is 100 % of
+  the Recommended Intake (muted below it, ink once reached, never drawn past it, empty for a
+  period without a logged day, lighter for a partial edge), and the range mean on the right. A
+  Lasting Shortfall adds an amber "Short" capsule to the mean; a cut down period is a red column
+  and the row says "Cut down in n weeks" in red; a period with only a day above an Upper Limit
+  gets an amber dot under its column, and the row counts those days. Without the Profile's sex or
+  birth date, or under 18, the plate says "No vitamin and mineral coverage yet" with Axum's
+  reason while every other plate stays. The strips are hidden from assistive technology, which
+  reads the summary and a table of every nutrient (mean and logged days, shortfall, days above
+  an Upper Limit and the cut down periods by name).
 - **Photos is the pictures**: the albums as cover plates (wash plates, the cover on top, the
   name, then a photo glyph with the count and the months), led by **All photos**, a plate two
   columns by two rows whose cover is a mosaic of the album covers; with one album configured

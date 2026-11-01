@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE product_link_receipts SET result = ? WHERE request_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "902f9af47862e41d33d723b74c8a22bea61384efcb88bdf3ada11bb935ad9e11"
+}

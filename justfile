@@ -217,6 +217,12 @@ api-test:
 api-test-one name:
     cargo test {{name}} -- --exact
 
+# Run one API unit test without rebuilding every integration-test binary
+[group('api')]
+[working-directory: 'api']
+api-test-unit name:
+    cargo test --lib {{name}} -- --exact
+
 # Run one API integration test file (just api-test-integration my_integration)
 [group('api')]
 [working-directory: 'api']
@@ -298,6 +304,12 @@ api-noop-migrate:
     echo "NOOP push database: $url"
     sqlx database create --database-url "$url"
     sqlx migrate run --source noop_migrations --database-url "$url"
+
+# Create a reversible Food database migration (just api-food-migration-add search_terms); the API applies them on start
+[group('api')]
+[working-directory: 'api']
+api-food-migration-add name:
+    sqlx migrate add -r --source food_migrations {{name}}
 
 # Build the API image for amd64 + arm64 (Raspberry Pi) locally
 [group('api')]

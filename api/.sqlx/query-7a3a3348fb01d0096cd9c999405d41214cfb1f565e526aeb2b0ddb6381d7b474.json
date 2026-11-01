@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE meal_log_receipts SET result = ? WHERE request_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "7a3a3348fb01d0096cd9c999405d41214cfb1f565e526aeb2b0ddb6381d7b474"
+}

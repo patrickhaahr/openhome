@@ -1,3 +1,4 @@
+pub mod food_workbook;
 pub mod mirror;
 pub mod reference_run;
 

@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH k (key) AS MATERIALIZED (SELECT value FROM json_each(?4))\n                SELECT v.portion_id AS \"portion_id!\", v.key AS \"key!\", v.value AS \"value!\",\n                    v.unit AS \"unit!\", v.source AS \"source!: ValueSource\"\n                FROM meal_logs m CROSS JOIN meal_log_portions p ON p.meal_log_id = m.id\n                CROSS JOIN k CROSS JOIN meal_log_portion_values v\n                    ON v.portion_id = p.id AND v.key = k.key\n                WHERE (?1 IS NULL OR m.id = ?1) AND (?2 IS NULL OR m.day >= ?2)\n                    AND (?3 IS NULL OR m.day <= ?3)",
+  "describe": {
+    "columns": [
+      {
+        "name": "portion_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "key!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "value!",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "unit!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "source!: ValueSource",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7d66ece4f8e89f1414f845a0c1142e401e50058c9941d0e62126b76baae65947"
+}

@@ -8,6 +8,7 @@
 @import "./sidebar.css";
 @import "./idle.css";
 @import "./backlight.css";
+@import "./food.css";
 @import "./components/idle-milestone.css";
 
 @custom-variant dark (&:is(.dark *));

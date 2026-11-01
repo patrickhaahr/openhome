@@ -46,6 +46,7 @@ export function implementedRoute(
   | "/photos"
   | "/workout"
   | "/recovery"
+  | "/food"
   | undefined {
   switch (id) {
     case "controls":
@@ -62,6 +63,8 @@ export function implementedRoute(
       return "/workout"
     case "recovery":
       return "/recovery"
+    case "food":
+      return "/food"
     case "agent":
     case "server":
       return undefined

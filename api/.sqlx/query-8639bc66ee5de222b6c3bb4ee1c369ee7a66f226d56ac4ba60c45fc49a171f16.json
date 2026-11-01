@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO product_link_receipts (request_id, barcode, food_id) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "request_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8639bc66ee5de222b6c3bb4ee1c369ee7a66f226d56ac4ba60c45fc49a171f16"
+}

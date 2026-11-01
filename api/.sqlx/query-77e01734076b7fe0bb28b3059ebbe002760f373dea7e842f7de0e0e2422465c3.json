@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT barcode AS \"barcode!\", name, brand, nova_class, food_id, food_name_da,\n                food_name_en FROM products WHERE barcode = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "barcode!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "brand",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "nova_class",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "food_id",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "food_name_da",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "food_name_en",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "77e01734076b7fe0bb28b3059ebbe002760f373dea7e842f7de0e0e2422465c3"
+}

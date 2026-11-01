@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT food_id AS \"food_id!\", nova_class FROM food_nova_classes\n        WHERE food_id IN (SELECT value FROM json_each(?1)) AND dataset_version = ?2",
+  "describe": {
+    "columns": [
+      {
+        "name": "food_id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "nova_class",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "0a4afab835cae92ac8798cac47e6fa405f9dd02156434f8c60d54293bb6536ca"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO meal_log_dose_compounds (dose_id, position, name, value, unit) VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "e46a87c0b907237c167d8b5f8e31e92f5e3d0d06e35761b892ce7ad838592e19"
+}
