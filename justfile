@@ -2,7 +2,7 @@ default:
     @just --list
 
 # Full gate across repos
-check: check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
+check: check-api check-mcp check-mobile check-native check-firmware check-cli check-dashboard deployment-check
 
 # Show this help grouped by area
 groups:
@@ -328,6 +328,77 @@ api-docker-push version: docker-builder
 [working-directory: 'mobile-expo']
 mobile-check: expo-format expo-lint expo-check
 
+# Build the native Android app and its device tests
+[group('native')]
+[working-directory: 'mobile']
+native-build:
+    ./gradlew --console=plain :app:assembleDebug :e2e:assembleDebug
+
+# Run Android Lint on the native app (warnings fail)
+[group('native')]
+[working-directory: 'mobile']
+native-lint:
+    ./gradlew --console=plain :app:lintDebug
+
+# Run the native app's device tests on a booted emulator (optionally one class: just native-test SetupFlowTest)
+[group('native')]
+[working-directory: 'mobile']
+native-test class='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Emulators only: the tests clear the debug app's data, which must not reach a real phone's copy.
+    serial="$(adb devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }')"
+    if [ -z "$serial" ]; then
+        echo "native-test needs a booted Android emulator" >&2
+        exit 1
+    fi
+    # Android allows one UiAutomation client; agent-device's snapshot helper holds it while a session is open.
+    if [ -n "$(adb -s "$serial" shell pidof com.callstack.agentdevice.snapshothelper | tr -d '\r')" ]; then
+        echo "native-test needs UiAutomation free: run 'agent-device close' first" >&2
+        exit 1
+    fi
+    filter=()
+    if [ -n {{quote(class)}} ]; then
+        filter=("-Pandroid.testInstrumentationRunnerArguments.class=com.patrickhaahr.openhome.e2e."{{quote(class)}})
+    fi
+    ANDROID_SERIAL="$serial" ./gradlew --console=plain :e2e:connectedDebugAndroidTest "${filter[@]}"
+
+# Install the debug build on a booted emulator or device
+[group('native')]
+[working-directory: 'mobile']
+native-install:
+    ./gradlew --console=plain :app:installDebug
+
+# Run the real API on :8000 with an invented key against a throwaway database (the emulator reaches it at 10.0.2.2:8000)
+[group('native')]
+native-fixture-api key='native-fixture-key':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo="$PWD"
+    (cd api && SQLX_OFFLINE=true cargo build --bin openhome-api)
+    # Outside the repo so the API's dotenv lookup finds no api/.env and stays on invented settings.
+    dir="$(mktemp -d /tmp/openhome-native-fixture.XXXXXX)"
+    cd "$dir"
+    echo "Throwaway database: $dir/app.db"
+    DATABASE_URL="sqlite:$dir/app.db" API_KEY={{quote(key)}} NOOP_PUSH_TOKEN=native-fixture-noop-token \
+        exec "$repo/api/target/debug/openhome-api"
+
+# Fill an empty fixture API with invented fitness data larger than the API's list pages
+[group('native')]
+native-fixture-seed key='native-fixture-key':
+    python3 mobile/tools/seed_fixture.py --api-key {{quote(key)}}
+
+# Lint and build the native app, then run its device tests when an emulator is booted
+[group('native')]
+native-check: native-lint native-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if adb devices | awk '$1 ~ /^emulator-/ && $2 == "device" { found = 1 } END { exit !found }'; then
+        just native-test
+    else
+        echo "native-check: NO EMULATOR BOOTED, device tests NOT run. Boot one and run: just native-test" >&2
+    fi
+
 # Compile both firmware targets in one pass
 [group('firmware')]
 firmware-check: ir-build switchbot-build
@@ -340,6 +411,7 @@ cli-check: cli-format cli-lint cli-test
 check-api: api-fmt api-lint api-test
 check-mcp: mcp-check
 check-mobile: mobile-check
+check-native: native-check
 check-firmware: firmware-check
 check-cli: cli-check
 check-dashboard: dashboard-check
