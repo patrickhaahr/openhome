@@ -7,6 +7,10 @@ edition = "2024"
 name = "openhome"
 path = "src/main.rs"
 
+# Keep dev builds lean: full DWARF bloats target/debug on this SSD.
+[profile.dev]
+debug = "line-tables-only"
+
 [lints.rust]
 unsafe_code = "deny"
 future_incompatible = { level = "warn", priority = -1 }

@@ -4,6 +4,12 @@ default:
 # Full gate across repos
 check: check-api check-mcp check-mobile check-native check-firmware check-cli check-dashboard deployment-check
 
+# Remove API, MCP and CLI Rust build artifacts (next build recompiles)
+[group('build')]
+clean:
+    rm -rf api/target mcp/target cli/target
+    @echo "Rust targets wiped; rebuild will take a while."
+
 # Show this help grouped by area
 groups:
     @just --list --list-heading '' --justfile '{{justfile()}}'
