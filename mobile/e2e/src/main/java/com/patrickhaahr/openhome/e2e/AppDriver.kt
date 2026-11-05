@@ -178,11 +178,23 @@ class AppDriver {
     /** Exactly the Exercises the Active Workout holds, in the order the screen offers them. */
     fun assertExerciseOrder(vararg expected: String) {
         described("Go to ${expected.first()}")
-        val shown =
-            device.findObjects(By.descStartsWith("Go to "))
-                .sortedWith(compareBy({ it.visibleBounds.top }, { it.visibleBounds.left }))
-                .map { it.contentDescription.removePrefix("Go to ") }
-        assertEquals(expected.toList(), shown)
+        assertEquals(expected.toList(), exerciseOrderOnScreen())
+    }
+
+    /** The screen can re-lay out under a read, so a read interrupted by that starts over from a fresh find. */
+    private fun exerciseOrderOnScreen(): List<String> {
+        repeat(TAP_ATTEMPTS) {
+            device.waitForIdle()
+            try {
+                return device.findObjects(By.descStartsWith("Go to "))
+                    .map { Triple(it.visibleBounds.top, it.visibleBounds.left, it.contentDescription) }
+                    .sortedWith(compareBy({ it.first }, { it.second }))
+                    .map { it.third.removePrefix("Go to ") }
+            } catch (_: StaleObjectException) {
+                // Find them all again.
+            }
+        }
+        error("The Exercises kept changing and could not be read")
     }
 
     /** Two taps as a hurried thumb gives them: long enough apart for the screen to have changed under it. */
