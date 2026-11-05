@@ -150,7 +150,15 @@ fun MainNavigation() {
                     )
                 }
                 composable<WorkoutDetail> { entry ->
-                    WorkoutDetailRoute(workoutId = entry.toRoute<WorkoutDetail>().id)
+                    WorkoutDetailRoute(
+                        workoutId = entry.toRoute<WorkoutDetail>().id,
+                        // Back from the session returns to where sessions start, not to this Workout.
+                        onOpenActiveWorkout = {
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate(ActiveWorkoutDestination) { popUpTo(WorkoutHome) }
+                            }
+                        },
+                    )
                 }
             }
             navigation<HomeTab>(startDestination = HomeRoot) {

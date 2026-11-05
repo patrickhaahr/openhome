@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +31,7 @@ import com.patrickhaahr.openhome.fitness.ActiveWorkout
 import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.FitnessOverview
 import com.patrickhaahr.openhome.fitness.FitnessRepository
+import com.patrickhaahr.openhome.fitness.WorkoutSummary
 import com.patrickhaahr.openhome.sync.FitnessSyncStatus
 import com.patrickhaahr.openhome.sync.SyncSnapshot
 import com.patrickhaahr.openhome.sync.SyncStatus
@@ -71,6 +73,12 @@ class WorkoutViewModel(
         }
     }
 
+    fun repeat(workout: WorkoutSummary, onStarted: () -> Unit) {
+        saveScope.launch {
+            if (activeWorkouts.repeat(workout.id, LocalDate.now().toString())) onStarted()
+        }
+    }
+
     fun syncNow() {
         saveScope.launch { syncStatus.syncNow() }
     }
@@ -93,7 +101,15 @@ fun WorkoutRoute(onOpenHistory: () -> Unit, onOpenProfile: () -> Unit, onOpenAct
                 ActiveLookup.Loading -> Unit
                 is ActiveLookup.Loaded ->
                     when (val workout = current.workout) {
-                        null -> StartEmptyAction(onClick = { viewModel.startEmpty(onOpenActiveWorkout) })
+                        // Waits for the overview, so Start Empty is never shown as primary by mistake.
+                        null ->
+                            overview?.let {
+                                StartActions(
+                                    latest = it.latestWorkout,
+                                    onRepeat = { latest -> viewModel.repeat(latest, onOpenActiveWorkout) },
+                                    onStartEmpty = { viewModel.startEmpty(onOpenActiveWorkout) },
+                                )
+                            }
                         else -> ResumeAction(workout, onClick = onOpenActiveWorkout)
                     }
             }
@@ -105,10 +121,20 @@ fun WorkoutRoute(onOpenHistory: () -> Unit, onOpenProfile: () -> Unit, onOpenAct
     }
 }
 
+/** Repeating is the usual session, so it leads; with no History, starting empty is all there is. */
 @Composable
-private fun StartEmptyAction(onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(text = "Start Empty", style = MaterialTheme.typography.titleMedium)
+private fun StartActions(latest: WorkoutSummary?, onRepeat: (WorkoutSummary) -> Unit, onStartEmpty: () -> Unit) {
+    if (latest == null) {
+        Button(onClick = onStartEmpty, modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp)) {
+            Text(text = "Start Empty", style = MaterialTheme.typography.titleMedium)
+        }
+    } else {
+        Button(onClick = { onRepeat(latest) }, modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp)) {
+            Text(text = "Repeat Last Workout", style = MaterialTheme.typography.titleMedium)
+        }
+        OutlinedButton(onClick = onStartEmpty, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            Text(text = "Start Empty", style = MaterialTheme.typography.titleMedium)
+        }
     }
 }
 

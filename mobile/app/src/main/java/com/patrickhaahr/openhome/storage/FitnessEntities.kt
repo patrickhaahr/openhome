@@ -125,3 +125,11 @@ data class EntryWithDetails(
     @Relation(parentColumn = "id", entityColumn = "entry_id")
     val sets: List<WorkoutSetEntity>,
 )
+
+/** One Exercise's sets within a logged Workout, with the day they were performed. */
+data class LoggedEntryWithSets(
+    @Embedded val entry: WorkoutEntryEntity,
+    @ColumnInfo(name = "workout_date") val workoutDate: String,
+    @Relation(parentColumn = "id", entityColumn = "entry_id")
+    val sets: List<WorkoutSetEntity>,
+)

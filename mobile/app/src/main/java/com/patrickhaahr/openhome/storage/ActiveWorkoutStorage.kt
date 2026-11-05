@@ -15,10 +15,14 @@ import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
-/** Whether a Set is logged as reps or as a Timed Hold; a choice per row, not an Exercise type. */
-enum class SetMeasure {
-    REPS,
-    HOLD,
+/**
+ * Whether a Set is logged as reps or as a Timed Hold; a choice per row, not an Exercise type. A past
+ * Set may hold both, which the API allows, and repeating it keeps both.
+ */
+enum class SetMeasure(val usesReps: Boolean, val usesSeconds: Boolean) {
+    REPS(usesReps = true, usesSeconds = false),
+    HOLD(usesReps = false, usesSeconds = true),
+    REPS_AND_HOLD(usesReps = true, usesSeconds = true),
 }
 
 /** The single row is what limits the app to one Active Workout. It is never synchronized. */
@@ -28,6 +32,8 @@ data class ActiveWorkoutEntity(
     val date: String,
     val name: String,
     val notes: String,
+    /** The Exercise being logged, so resuming returns to it. Going to one never confirms anything. */
+    @ColumnInfo(name = "current_entry_id") val currentEntryId: Long? = null,
 )
 
 @Entity(
@@ -121,6 +127,9 @@ interface ActiveWorkoutDao {
     @Query("UPDATE active_workout SET notes = :notes")
     suspend fun setNotes(notes: String)
 
+    @Query("UPDATE active_workout SET current_entry_id = :entryId")
+    suspend fun setCurrentEntry(entryId: Long?)
+
     @Query("DELETE FROM active_workout")
     suspend fun deleteWorkout()
 
@@ -138,6 +147,9 @@ interface ActiveWorkoutDao {
 
     @Update
     suspend fun updateSet(set: ActiveSetEntity)
+
+    @Query("DELETE FROM active_sets WHERE id = :setId")
+    suspend fun deleteSet(setId: Long)
 
     @Query("SELECT * FROM active_sets WHERE id = :setId")
     suspend fun loadSet(setId: Long): ActiveSetEntity?

@@ -7,10 +7,16 @@ data class ActiveWorkout(
     val name: String,
     val notes: String,
     val entries: List<ActiveEntry>,
-)
+    private val currentEntryId: Long?,
+) {
+    /** The Exercise in focus. Null only while the Workout has no Exercises. */
+    val currentEntry: ActiveEntry?
+        get() = entries.firstOrNull { it.id == currentEntryId } ?: entries.firstOrNull()
+}
 
 data class ActiveEntry(
     val id: Long,
+    val exerciseId: Long,
     val exerciseName: String,
     val exerciseCategory: String,
     val sets: List<ActiveSet>,
@@ -34,7 +40,11 @@ data class SetDraft(
     val rpe: String,
 ) {
     fun check(): SetCheck {
-        val amount = amount().let { if (it is AmountCheck.Problem) return it.problem else it as AmountCheck.Valid }
+        val repsCheck = if (measure.usesReps) amount(reps, "reps", "Reps") else AmountCheck.Valid(null)
+        if (repsCheck is AmountCheck.Problem) return repsCheck.problem
+        val secondsCheck =
+            if (measure.usesSeconds) amount(durationSeconds, "seconds", "Seconds") else AmountCheck.Valid(null)
+        if (secondsCheck is AmountCheck.Problem) return secondsCheck.problem
         val weight =
             addedWeightKg.trim().replace(',', '.').let { text ->
                 if (text.isEmpty()) {
@@ -48,18 +58,15 @@ data class SetDraft(
             rpe.trim().let { text ->
                 if (text.isEmpty()) null else text.toLongOrNull()?.takeIf { it in 1..MAX_RPE } ?: return SetCheck.Problem("RPE must be 1 to 10")
             }
-        return when (measure) {
-            SetMeasure.REPS -> SetCheck.Valid(reps = amount.value, durationSeconds = null, weight, rpeValue)
-            SetMeasure.HOLD -> SetCheck.Valid(reps = null, durationSeconds = amount.value, weight, rpeValue)
-        }
+        return SetCheck.Valid(
+            reps = (repsCheck as AmountCheck.Valid).value,
+            durationSeconds = (secondsCheck as AmountCheck.Valid).value,
+            addedWeightKg = weight,
+            rpe = rpeValue,
+        )
     }
 
-    private fun amount(): AmountCheck {
-        val (text, label, unit) =
-            when (measure) {
-                SetMeasure.REPS -> Triple(reps, "reps", "Reps")
-                SetMeasure.HOLD -> Triple(durationSeconds, "seconds", "Seconds")
-            }
+    private fun amount(text: String, label: String, unit: String): AmountCheck {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return AmountCheck.Problem(SetCheck.Problem("Enter $label to confirm", isMissingValue = true))
         val value =
@@ -69,7 +76,7 @@ data class SetDraft(
     }
 
     private sealed interface AmountCheck {
-        data class Valid(val value: Long) : AmountCheck
+        data class Valid(val value: Long?) : AmountCheck
 
         data class Problem(val problem: SetCheck.Problem) : AmountCheck
     }
@@ -91,6 +98,12 @@ sealed interface SetCheck {
     /** [isMissingValue] marks a row not yet filled in, which is only worth mentioning on confirming. */
     data class Problem(val message: String, val isMissingValue: Boolean = false) : SetCheck
 }
+
+/**
+ * What one Complete Exercise did: [confirmed] rows became performed Sets and [refused] rows, which do
+ * not parse, stayed unconfirmed. However many rows it covers, it is one explicit confirmation.
+ */
+data class ExerciseCompletion(val confirmed: Int, val refused: Set<Long>)
 
 sealed interface FinishOutcome {
     data class Finished(val workoutId: Long) : FinishOutcome

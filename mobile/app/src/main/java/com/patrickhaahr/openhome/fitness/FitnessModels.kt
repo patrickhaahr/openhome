@@ -42,6 +42,9 @@ data class WorkoutSet(
     val notes: String?,
 )
 
+/** What an Exercise's most recent logged Workout actually recorded, never a target. */
+data class PreviousPerformance(val exerciseId: Long, val date: String, val sets: List<WorkoutSet>)
+
 data class Exercise(
     val id: Long,
     val name: String,

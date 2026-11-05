@@ -1,13 +1,17 @@
 package com.patrickhaahr.openhome.ui.workout
 
 import android.database.SQLException
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -15,7 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -34,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,9 +47,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,6 +62,8 @@ import com.patrickhaahr.openhome.fitness.ActiveSet
 import com.patrickhaahr.openhome.fitness.ActiveWorkout
 import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.FinishOutcome
+import com.patrickhaahr.openhome.fitness.FitnessRepository
+import com.patrickhaahr.openhome.fitness.PreviousPerformance
 import com.patrickhaahr.openhome.fitness.SetCheck
 import com.patrickhaahr.openhome.fitness.SetField
 import com.patrickhaahr.openhome.storage.SetMeasure
@@ -66,11 +76,15 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -78,6 +92,7 @@ import kotlinx.coroutines.launch
 
 private val SET_NUMBER_WIDTH = 28.dp
 private val CONFIRM_WIDTH = 48.dp
+private const val COMPLETE_GUARD_MILLIS = 400L
 
 sealed interface ActiveLookup {
     data object Loading : ActiveLookup
@@ -93,6 +108,7 @@ private enum class SaveState {
 
 private class ActiveWorkoutViewModel(
     private val repository: ActiveWorkoutRepository,
+    fitness: FitnessRepository,
     private val saveScope: CoroutineScope,
 ) : ViewModel() {
     private val writesInProgress = MutableStateFlow(0)
@@ -103,6 +119,16 @@ private class ActiveWorkoutViewModel(
         repository.observe()
             .map<ActiveWorkout?, ActiveLookup> { ActiveLookup.Loaded(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActiveLookup.Loading)
+
+    /** May briefly be the previous Exercise's after moving on, so check whose it is before showing it. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val previousPerformance: StateFlow<PreviousPerformance?> =
+        workout
+            .map { (it as? ActiveLookup.Loaded)?.workout?.currentEntry?.exerciseId }
+            .distinctUntilChanged()
+            .flatMapLatest { exerciseId ->
+                if (exerciseId == null) flowOf(null) else fitness.observePreviousPerformance(exerciseId)
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Says saved only when every change made so far has committed. */
     val saveState: StateFlow<SaveState> =
@@ -123,7 +149,18 @@ private class ActiveWorkoutViewModel(
 
     fun setNotes(notes: String) = save { repository.setNotes(notes) }
 
+    fun goToEntry(entryId: Long) = save { repository.goToEntry(entryId) }
+
     fun addSet(entryId: Long) = save { repository.addSet(entryId) }
+
+    fun repeatLastSet(entryId: Long) = save { repository.repeatLastSet(entryId) }
+
+    fun removeLastSet(entryId: Long) = save { repository.removeLastSet(entryId) }
+
+    fun completeExercise(entryId: Long) = save {
+        val completion = repository.completeExercise(entryId)
+        refusedConfirmations.update { it + completion.refused }
+    }
 
     fun removeEntry(entryId: Long) = save { repository.removeEntry(entryId) }
 
@@ -166,10 +203,11 @@ private class ActiveWorkoutViewModel(
 /** Leaving this destination, by back or by tab, keeps the Active Workout; it is all in storage. */
 @Composable
 fun ActiveWorkoutRoute(onAddExercise: () -> Unit, onFinished: () -> Unit, onDiscarded: () -> Unit) {
-    val viewModel = appViewModel { ActiveWorkoutViewModel(it.activeWorkout, it.saveScope) }
+    val viewModel = appViewModel { ActiveWorkoutViewModel(it.activeWorkout, it.fitness, it.saveScope) }
     val lookup by viewModel.workout.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     val refusedSets by viewModel.refusedSets.collectAsStateWithLifecycle()
+    val previousPerformance by viewModel.previousPerformance.collectAsStateWithLifecycle()
 
     when (val current = lookup) {
         ActiveLookup.Loading -> Unit
@@ -181,6 +219,7 @@ fun ActiveWorkoutRoute(onAddExercise: () -> Unit, onFinished: () -> Unit, onDisc
                         workout = workout,
                         saveState = saveState,
                         refusedSets = refusedSets,
+                        previousPerformance = previousPerformance,
                         viewModel = viewModel,
                         onAddExercise = onAddExercise,
                         onFinished = onFinished,
@@ -195,6 +234,7 @@ private fun ActiveWorkoutContent(
     workout: ActiveWorkout,
     saveState: SaveState,
     refusedSets: Set<Long>,
+    previousPerformance: PreviousPerformance?,
     viewModel: ActiveWorkoutViewModel,
     onAddExercise: () -> Unit,
     onFinished: () -> Unit,
@@ -203,57 +243,89 @@ private fun ActiveWorkoutContent(
     var choosingDate by rememberSaveable { mutableStateOf(false) }
     var reviewingFinish by rememberSaveable { mutableStateOf(false) }
     var confirmingDiscard by rememberSaveable { mutableStateOf(false) }
+    val current = workout.currentEntry
+    val listState = rememberLazyListState()
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().imePadding(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            ScreenHeader(
-                title = "Active Workout",
-                subtitle =
-                    when (saveState) {
-                        SaveState.SAVING -> "Saving on device"
-                        SaveState.SAVED -> "Saved on device"
-                        SaveState.FAILED -> "Couldn't save on device. Your last change may be lost."
-                    },
-            )
-            SessionFields(
-                workout,
-                viewModel,
-                onChooseDate = { choosingDate = true },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+    // A new Exercise starts from its top, wherever the last one had been scrolled to.
+    var shownEntryId by rememberSaveable { mutableStateOf(current?.id) }
+    LaunchedEffect(current?.id) {
+        if (current?.id != shownEntryId) {
+            shownEntryId = current?.id
+            listState.scrollToItem(0)
         }
-        items(workout.entries, key = { it.id }) { entry ->
-            EntryCard(entry, refusedSets, viewModel)
-        }
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = onAddExercise, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("Add Exercise")
+    }
+
+    Column(Modifier.fillMaxSize().imePadding()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                ScreenHeader(
+                    title = "Active Workout",
+                    subtitle =
+                        when (saveState) {
+                            SaveState.SAVING -> "Saving on device"
+                            SaveState.SAVED -> "Saved on device"
+                            SaveState.FAILED -> "Couldn't save on device. Your last change may be lost."
+                        },
+                )
+                SessionFields(
+                    workout,
+                    viewModel,
+                    onChooseDate = { choosingDate = true },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            if (current != null) {
+                item {
+                    ExerciseNavigator(
+                        workout.entries,
+                        current,
+                        onGoTo = viewModel::goToEntry,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
                 }
-                Button(
-                    onClick = {
+                // Keyed, so each Exercise's rows and their typed text belong to it.
+                item(key = current.id) {
+                    EntryCard(current, previousPerformance, refusedSets, viewModel)
+                }
+            }
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onAddExercise, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text("Add Exercise")
+                    }
+                    val finish = {
                         if (workout.hasOnlyConfirmedSets()) {
                             viewModel.finish(omitUnchecked = false, onFinished)
                         } else {
                             reviewingFinish = true
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                ) {
-                    Text(text = "Finish Workout", style = MaterialTheme.typography.titleMedium)
-                }
-                TextButton(onClick = { confirmingDiscard = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "Discard Workout", color = MaterialTheme.colorScheme.error)
+                    }
+                    val finishModifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    if (workout.hasOnlyConfirmedSets()) {
+                        Button(onClick = finish, modifier = finishModifier) {
+                            Text(text = "Finish Workout", style = MaterialTheme.typography.titleMedium)
+                        }
+                    } else {
+                        OutlinedButton(onClick = finish, modifier = finishModifier) {
+                            Text(text = "Finish Workout", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    TextButton(onClick = { confirmingDiscard = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = "Discard Workout", color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
+        // Pinned, so it stays within reach and the next Exercise cannot put another action under the finger.
+        current?.let { CompleteExerciseButton(it, viewModel, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
     }
 
     if (choosingDate) {
@@ -296,6 +368,7 @@ private fun ActiveWorkoutContent(
 private fun ActiveWorkout.hasOnlyConfirmedSets(): Boolean =
     entries.isNotEmpty() && entries.all { entry -> entry.sets.all { it.completed } }
 
+/** Name and notes stay out of the way while logging; both are optional. */
 @Composable
 private fun SessionFields(
     workout: ActiveWorkout,
@@ -305,41 +378,94 @@ private fun SessionFields(
 ) {
     var name by rememberSaveable { mutableStateOf(workout.name) }
     var notes by rememberSaveable { mutableStateOf(workout.notes) }
+    var editing by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onChooseDate, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(formatDay(workout.date))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onChooseDate, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(formatDay(workout.date))
+            }
+            TextButton(onClick = { editing = !editing }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                Text(
+                    text =
+                        when {
+                            editing -> "Done"
+                            name.isNotBlank() -> name
+                            notes.isNotBlank() -> "Edit notes"
+                            else -> "Add name or notes"
+                        },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        OutlinedTextField(
-            value = name,
-            onValueChange = {
-                name = it
-                viewModel.setName(it)
-            },
-            label = { Text("Name (optional)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = notes,
-            onValueChange = {
-                notes = it
-                viewModel.setNotes(it)
-            },
-            label = { Text("Notes (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (editing) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                    viewModel.setName(it)
+                },
+                label = { Text("Name (optional)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = notes,
+                onValueChange = {
+                    notes = it
+                    viewModel.setNotes(it)
+                },
+                label = { Text("Notes (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
+/** Every Exercise in order and how much of it is confirmed. Going to one only moves the focus. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EntryCard(entry: ActiveEntry, refusedSets: Set<Long>, viewModel: ActiveWorkoutViewModel) {
-    val measure = entry.sets.first().draft.measure
+private fun ExerciseNavigator(
+    entries: List<ActiveEntry>,
+    current: ActiveEntry,
+    onGoTo: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        entries.forEach { entry ->
+            val confirmed = entry.sets.count { it.completed }
+            val isCurrent = entry.id == current.id
+            FilterChip(
+                selected = isCurrent,
+                onClick = { onGoTo(entry.id) },
+                label = { Text("${entry.exerciseName} $confirmed/${entry.sets.size}") },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = "Go to ${entry.exerciseName}"
+                        val progress = "$confirmed of ${entry.sets.size} Sets confirmed"
+                        stateDescription = if (isCurrent) "Current, $progress" else progress
+                    },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EntryCard(
+    entry: ActiveEntry,
+    previousPerformance: PreviousPerformance?,
+    refusedSets: Set<Long>,
+    viewModel: ActiveWorkoutViewModel,
+) {
+    val selectedMeasure = entry.sets.map { it.draft.measure }.distinct().singleOrNull()
+    val columns = AmountColumns(entry)
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
     ) {
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(text = entry.exerciseName, style = MaterialTheme.typography.titleMedium)
@@ -356,20 +482,88 @@ private fun EntryCard(entry: ActiveEntry, refusedSets: Set<Long>, viewModel: Act
                     Text("Remove")
                 }
             }
+            previousPerformance?.takeIf { it.exerciseId == entry.exerciseId }?.let { PreviousPerformanceLines(it) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MeasureChip(entry, SetMeasure.REPS, "Reps", measure, viewModel)
-                MeasureChip(entry, SetMeasure.HOLD, "Hold", measure, viewModel)
+                MeasureChip(entry, SetMeasure.REPS, "Reps", selectedMeasure, viewModel)
+                MeasureChip(entry, SetMeasure.HOLD, "Hold", selectedMeasure, viewModel)
             }
-            SetColumnLabels(measure)
+            SetColumnLabels(columns)
             entry.sets.forEach { set ->
-                SetRow(entry.exerciseName, set, showMissingValue = set.id in refusedSets, viewModel)
+                SetRow(entry.exerciseName, set, columns, showMissingValue = set.id in refusedSets, viewModel)
             }
-            TextButton(
-                onClick = { viewModel.addSet(entry.id) },
-                modifier = Modifier.semantics { contentDescription = "Add set to ${entry.exerciseName}" },
-            ) {
-                Text("Add set")
+            FlowRow {
+                TextButton(
+                    onClick = { viewModel.repeatLastSet(entry.id) },
+                    modifier = Modifier.semantics { contentDescription = "Repeat last set of ${entry.exerciseName}" },
+                ) {
+                    Text("Repeat last set")
+                }
+                TextButton(
+                    onClick = { viewModel.addSet(entry.id) },
+                    modifier = Modifier.semantics { contentDescription = "Add set to ${entry.exerciseName}" },
+                ) {
+                    Text("Add set")
+                }
+                if (entry.sets.size > 1) {
+                    TextButton(
+                        onClick = { viewModel.removeLastSet(entry.id) },
+                        modifier = Modifier.semantics { contentDescription = "Remove last set of ${entry.exerciseName}" },
+                    ) {
+                        Text("Remove last")
+                    }
+                }
             }
+        }
+    }
+}
+
+/**
+ * The explicit confirmation of everything shown. The next Exercise appears under the same button, so
+ * the second half of a double tap must not confirm it unseen.
+ */
+@Composable
+private fun CompleteExerciseButton(entry: ActiveEntry, viewModel: ActiveWorkoutViewModel, modifier: Modifier) {
+    val focusManager = LocalFocusManager.current
+    val shownAt = remember(entry.id) { SystemClock.uptimeMillis() }
+    val onClick = {
+        if (SystemClock.uptimeMillis() - shownAt >= COMPLETE_GUARD_MILLIS) {
+            focusManager.clearFocus()
+            viewModel.completeExercise(entry.id)
+        }
+    }
+    val fullWidth =
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .semantics { contentDescription = "Complete ${entry.exerciseName}" }
+    if (entry.sets.all { it.completed }) {
+        OutlinedButton(onClick = onClick, modifier = fullWidth) {
+            Text(text = "Complete Exercise", style = MaterialTheme.typography.titleMedium)
+        }
+    } else {
+        Button(onClick = onClick, modifier = fullWidth) {
+            Text(text = "Complete Exercise", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun PreviousPerformanceLines(previous: PreviousPerformance) {
+    Column(Modifier.padding(top = 8.dp, bottom = 8.dp, end = 8.dp)) {
+        Text(
+            text = "Last time · ${formatDay(previous.date)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        previous.sets.forEachIndexed { index, set ->
+            Text(
+                text = listOfNotNull(
+                    "Set ${index + 1}: ${describePerformance(set)}",
+                    set.rpe?.let { "RPE $it" },
+                ).joinToString(separator = " · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -379,7 +573,7 @@ private fun MeasureChip(
     entry: ActiveEntry,
     measure: SetMeasure,
     label: String,
-    selected: SetMeasure,
+    selected: SetMeasure?,
     viewModel: ActiveWorkoutViewModel,
 ) {
     FilterChip(
@@ -390,14 +584,21 @@ private fun MeasureChip(
     )
 }
 
+/** Almost always one amount column; an entry mixing reps and holds keeps its columns aligned. */
+private class AmountColumns(entry: ActiveEntry) {
+    val reps = entry.sets.any { it.draft.measure.usesReps }
+    val seconds = entry.sets.any { it.draft.measure.usesSeconds }
+}
+
 @Composable
-private fun SetColumnLabels(measure: SetMeasure) {
+private fun SetColumnLabels(columns: AmountColumns) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ColumnLabel("Set", Modifier.width(SET_NUMBER_WIDTH))
-        ColumnLabel(if (measure == SetMeasure.REPS) "Reps" else "Seconds", Modifier.weight(1f))
+        if (columns.reps) ColumnLabel("Reps", Modifier.weight(1f))
+        if (columns.seconds) ColumnLabel("Seconds", Modifier.weight(1f))
         ColumnLabel("Added kg", Modifier.weight(1f))
         ColumnLabel("RPE", Modifier.weight(1f))
         Box(Modifier.width(CONFIRM_WIDTH))
@@ -415,7 +616,13 @@ private fun ColumnLabel(text: String, modifier: Modifier) {
 }
 
 @Composable
-private fun SetRow(exerciseName: String, set: ActiveSet, showMissingValue: Boolean, viewModel: ActiveWorkoutViewModel) {
+private fun SetRow(
+    exerciseName: String,
+    set: ActiveSet,
+    columns: AmountColumns,
+    showMissingValue: Boolean,
+    viewModel: ActiveWorkoutViewModel,
+) {
     val problem = set.draft.check() as? SetCheck.Problem
     val label = "$exerciseName set ${set.number}"
     Column {
@@ -429,18 +636,22 @@ private fun SetRow(exerciseName: String, set: ActiveSet, showMissingValue: Boole
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.width(SET_NUMBER_WIDTH),
             )
-            when (set.draft.measure) {
-                SetMeasure.REPS ->
-                    SetValueField(set, SetField.REPS, set.draft.reps, "$label reps", KeyboardType.Number, viewModel)
-                SetMeasure.HOLD ->
-                    SetValueField(
-                        set,
-                        SetField.DURATION,
-                        set.draft.durationSeconds,
-                        "$label seconds",
-                        KeyboardType.Number,
-                        viewModel,
-                    )
+            if (set.draft.measure.usesReps) {
+                SetValueField(set, SetField.REPS, set.draft.reps, "$label reps", KeyboardType.Number, viewModel)
+            } else if (columns.reps) {
+                Spacer(Modifier.weight(1f))
+            }
+            if (set.draft.measure.usesSeconds) {
+                SetValueField(
+                    set,
+                    SetField.DURATION,
+                    set.draft.durationSeconds,
+                    "$label seconds",
+                    KeyboardType.Number,
+                    viewModel,
+                )
+            } else if (columns.seconds) {
+                Spacer(Modifier.weight(1f))
             }
             SetValueField(
                 set,

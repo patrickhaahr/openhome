@@ -39,6 +39,24 @@ interface FitnessDao {
     @Query("SELECT * FROM workouts WHERE id = :id")
     fun observeWorkout(id: Long): Flow<WorkoutWithEntries?>
 
+    @Transaction
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    suspend fun loadWorkout(id: Long): WorkoutWithEntries?
+
+    /** The Exercise's most recent logged entry that has Sets, whichever Workout it is in. */
+    @Transaction
+    @Query(
+        """
+        SELECT we.*, w.date AS workout_date FROM workout_entries we
+        JOIN workouts w ON w.id = we.workout_id
+        WHERE we.exercise_id = :exerciseId
+            AND EXISTS (SELECT 1 FROM workout_sets s WHERE s.entry_id = we.id)
+        ORDER BY w.date DESC, w.id DESC, we.order_index DESC, we.id DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestLoggedEntry(exerciseId: Long): Flow<LoggedEntryWithSets?>
+
     @Query("SELECT * FROM profile WHERE id = $SINGLE_ROW_ID")
     fun observeProfile(): Flow<ProfileEntity?>
 

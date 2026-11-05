@@ -26,6 +26,7 @@ private const val SCROLL_ATTEMPTS = 8
 private const val NETWORK_TIMEOUT_MS = 45_000L
 private const val POLL_MS = 500L
 private const val SWIPE_STEPS = 20
+private const val DOUBLE_TAP_GAP_MS = 200L
 private val ANY_TEXT = Pattern.compile(".+", Pattern.DOTALL)
 
 /** Drives the installed app from outside its process, the way the user and Android do. */
@@ -152,6 +153,49 @@ class AppDriver {
             device.swipe(x, device.displayHeight * 2 / 3, x, device.displayHeight / 3, SWIPE_STEPS)
         }
         error("Nothing to tap reading \"$text\"")
+    }
+
+    /** Moves the logging focus; the Exercise's rows are then what the screen shows. */
+    fun goToExercise(name: String) {
+        tapScrolledTo("Go to $name")
+    }
+
+    /** Exactly the Exercises the Active Workout holds, in the order the screen offers them. */
+    fun assertExerciseOrder(vararg expected: String) {
+        described("Go to ${expected.first()}")
+        val shown =
+            device.findObjects(By.descStartsWith("Go to "))
+                .sortedWith(compareBy({ it.visibleBounds.top }, { it.visibleBounds.left }))
+                .map { it.contentDescription.removePrefix("Go to ") }
+        assertEquals(expected.toList(), shown)
+    }
+
+    /** Two taps as a hurried thumb gives them: long enough apart for the screen to have changed under it. */
+    fun doubleTapDescription(description: String) {
+        doubleTap(described(description))
+    }
+
+    fun doubleTap(text: String) {
+        doubleTap(assertVisible(text))
+    }
+
+    private fun doubleTap(target: UiObject2) {
+        val center = target.visibleCenter
+        device.waitForIdle()
+        SystemClock.sleep(SETTLE_MS)
+        device.click(center.x, center.y)
+        SystemClock.sleep(DOUBLE_TAP_GAP_MS)
+        device.click(center.x, center.y)
+    }
+
+    fun assertNotDescribed(description: String) {
+        device.waitForIdle()
+        assertNull("Did not expect \"$description\"", device.wait(Until.findObject(By.desc(description)), ABSENCE_WAIT_MS))
+    }
+
+    fun assertTextAbsent(fragment: String) {
+        device.waitForIdle()
+        assertNull("Did not expect text containing \"$fragment\"", device.wait(Until.findObject(By.textContains(fragment)), ABSENCE_WAIT_MS))
     }
 
     fun assertAbsent(text: String) {

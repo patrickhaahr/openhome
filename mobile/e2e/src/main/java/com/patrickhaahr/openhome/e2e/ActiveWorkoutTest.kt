@@ -94,8 +94,10 @@ class ActiveWorkoutTest {
         app.tapTextContaining(backdated.format(PICKER_DAY))
         app.tap("Set date")
         app.assertVisible(backdated.format(SHOWN_DAY))
+        app.tap("Add name or notes")
         app.enter("Name (optional)", "Gym offline")
         app.enter("Notes (optional)", "No signal in the basement")
+        app.tap("Done")
 
         // A mixed-category session, in the order chosen.
         addExercise("Pull-Up")
@@ -103,6 +105,7 @@ class ActiveWorkoutTest {
         addExercise("Squat")
 
         // Reps with Added Weight and RPE, and bodyweight with no RPE.
+        app.goToExercise("Pull-Up")
         app.enterDescribed("Pull-Up set 1 reps", "8")
         app.enterDescribed("Pull-Up set 1 added kg", "12,5")
         app.enterDescribed("Pull-Up set 1 RPE", "8")
@@ -117,11 +120,13 @@ class ActiveWorkoutTest {
         app.assertChecked("Pull-Up set 2 performed", false)
 
         // Planche Hold was last logged as a Timed Hold, so it opens on seconds without any reps field.
+        app.goToExercise("Planche Hold")
         app.enterDescribed("Planche Hold set 1 seconds", "20")
         app.tapScrolledTo("Planche Hold set 1 performed")
         app.assertChecked("Planche Hold set 1 performed", true)
 
         // Squat has no past Sets to go by, and the user can choose either measure.
+        app.goToExercise("Squat")
         app.enterDescribed("Squat set 1 reps", "5")
         app.tapScrolledTo("Log Squat as Hold")
         app.assertDescribedValue("Squat set 1 seconds", "")
@@ -132,6 +137,7 @@ class ActiveWorkoutTest {
         app.tap("Home")
         app.assertVisible("No Home Controls yet")
         app.tap("Workout")
+        app.goToExercise("Pull-Up")
         app.assertDescribedValue("Pull-Up set 1 reps", "8")
         app.pressBackButton()
         app.assertOnWorkoutTab()
@@ -146,7 +152,9 @@ class ActiveWorkoutTest {
         app.assertChecked("Pull-Up set 1 performed", true)
         app.assertDescribedValue("Pull-Up set 2 reps", "6")
         app.assertChecked("Pull-Up set 2 performed", false)
+        app.goToExercise("Planche Hold")
         app.assertChecked("Planche Hold set 1 performed", true)
+        app.goToExercise("Squat")
         app.assertChecked("Squat set 1 performed", false)
 
         // Finishing names what is left out; returning records nothing.
@@ -155,6 +163,7 @@ class ActiveWorkoutTest {
         app.assertVisible("Pull-Up: 1 unchecked Set")
         app.assertVisible("Squat: 1 unchecked Set")
         app.tap("Return to logging")
+        app.goToExercise("Pull-Up")
         app.assertChecked("Pull-Up set 2 performed", false)
         finish()
         app.tap("Omit and finish")
