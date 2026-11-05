@@ -93,6 +93,13 @@ class AppDriver {
         checkNotNull(device.wait(Until.findObject(By.text(text)), SYNC_TIMEOUT_MS)) { "Expected to see \"$text\" eventually" }
     }
 
+    /** Waits for a line that reads as this, however long the text around it. */
+    fun assertEventuallyContaining(text: String) {
+        checkNotNull(device.wait(Until.findObject(By.textContains(text)), SYNC_TIMEOUT_MS)) {
+            "Expected text containing \"$text\" eventually"
+        }
+    }
+
     /** The field or control with this description, scrolled into view. */
     fun described(description: String): UiObject2 {
         val selector = By.desc(description)
@@ -153,6 +160,14 @@ class AppDriver {
             device.swipe(x, device.displayHeight * 2 / 3, x, device.displayHeight / 3, SWIPE_STEPS)
         }
         error("Nothing to tap reading \"$text\"")
+    }
+
+    /** Exactly [expected] of the names in [among] are on screen now; the rest have been filtered away. */
+    fun assertExercisesShown(vararg expected: String, among: List<String>) {
+        device.waitForIdle()
+        SystemClock.sleep(SETTLE_MS)
+        val shown = among.filter { device.hasObject(By.text(it)) }
+        assertEquals(expected.toList(), shown)
     }
 
     /** Moves the logging focus; the Exercise's rows are then what the screen shows. */

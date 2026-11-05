@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 /** A fitness change Axum has not acknowledged. Add a value here for each new kind of change. */
 enum class OutboxKind {
     CREATE_WORKOUT,
+    CREATE_EXERCISE,
 }
 
 enum class OutboxState {
@@ -30,12 +31,17 @@ enum class SyncProblem {
     API_KEY_UNAVAILABLE,
     EXERCISE_NOT_SYNCED,
     REFUSED,
+
+    /** Axum refused a new Exercise because it already holds one under that exact name. */
+    NAME_TAKEN,
 }
 
 /**
  * One queued change, deleted in the transaction that records its acknowledgement. [payload] is frozen
  * when queued, so a retry repeats the same arguments under the same [requestId] whatever has happened
- * to the local record since. Later corrections are later rows, never edits to this one.
+ * to the local record since. Later corrections are later rows, never edits to this one; the exception
+ * is a refused Exercise, which Axum never accepted: correcting it replaces both here, keeping its place
+ * ahead of the Workouts that depend on it.
  */
 @Entity(
     tableName = "fitness_outbox",
@@ -81,8 +87,26 @@ interface OutboxDao {
     @Query("UPDATE fitness_outbox SET problem = :problem WHERE state = 'PENDING'")
     suspend fun recordProblemOnPending(problem: SyncProblem)
 
-    @Query("UPDATE fitness_outbox SET state = 'REFUSED', problem = 'REFUSED', attempts = attempts + 1 WHERE id = :id")
-    suspend fun markRefused(id: Long)
+    @Query("UPDATE fitness_outbox SET state = 'REFUSED', problem = :problem, attempts = attempts + 1 WHERE id = :id")
+    suspend fun markRefused(id: Long, problem: SyncProblem)
+
+    @Query("SELECT problem FROM fitness_outbox WHERE kind = :kind AND record_id = :recordId AND state = 'REFUSED'")
+    suspend fun refusalOf(kind: OutboxKind, recordId: Long): SyncProblem?
+
+    /** Returns how many rows changed: none when the change is no longer refused. */
+    @Query(
+        """
+        UPDATE fitness_outbox SET request_id = :requestId, payload = :payload, state = 'PENDING', problem = NULL, attempts = 0
+        WHERE kind = :kind AND record_id = :recordId AND state = 'REFUSED'
+        """,
+    )
+    suspend fun replaceRefused(kind: OutboxKind, recordId: Long, requestId: String, payload: String): Int
+
+    @Query("SELECT * FROM fitness_outbox WHERE kind = :kind")
+    suspend fun allOfKind(kind: OutboxKind): List<OutboxEntity>
+
+    @Query("UPDATE fitness_outbox SET payload = :payload WHERE id = :id")
+    suspend fun updatePayload(id: Long, payload: String)
 
     @Query("UPDATE fitness_outbox SET state = 'PENDING', problem = NULL WHERE state = 'REFUSED'")
     suspend fun requeueRefused()

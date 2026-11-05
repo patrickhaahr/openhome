@@ -34,7 +34,10 @@ import com.patrickhaahr.openhome.ui.home.HomeScreen
 import com.patrickhaahr.openhome.ui.profile.ProfileRoute
 import com.patrickhaahr.openhome.ui.workout.ActiveWorkoutRoute
 import com.patrickhaahr.openhome.ui.workout.ExercisePickerRoute
+import com.patrickhaahr.openhome.ui.workout.FixExerciseRoute
 import com.patrickhaahr.openhome.ui.workout.HistoryRoute
+import com.patrickhaahr.openhome.ui.workout.LibraryRoute
+import com.patrickhaahr.openhome.ui.workout.NewExerciseRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutDetailRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutRoute
 import kotlinx.serialization.Serializable
@@ -58,6 +61,16 @@ private data object ActiveWorkoutDestination
 
 @Serializable
 private data object ExercisePicker
+
+@Serializable
+private data object Library
+
+/** [addToWorkout] when opened from the picker: the new Exercise goes straight into the session. */
+@Serializable
+private data class NewExercise(val initialName: String, val addToWorkout: Boolean)
+
+@Serializable
+private data class FixExercise(val id: Long)
 
 @Serializable
 private data object HomeTab
@@ -113,6 +126,12 @@ fun MainNavigation() {
                 composable<WorkoutHome> { entry ->
                     WorkoutRoute(
                         onOpenHistory = dropUnlessResumed { navController.navigate(History) },
+                        onOpenLibrary = dropUnlessResumed { navController.navigate(Library) },
+                        onFixExercise = { id ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate(FixExercise(id))
+                            }
+                        },
                         onOpenProfile = dropUnlessResumed { navController.navigate(Profile) },
                         onOpenActiveWorkout = {
                             if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
@@ -134,6 +153,52 @@ fun MainNavigation() {
                 composable<ExercisePicker> { entry ->
                     ExercisePickerRoute(
                         onPicked = {
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.popBackStack()
+                            }
+                        },
+                        onCreate = { query ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate(NewExercise(query, addToWorkout = true))
+                            }
+                        },
+                    )
+                }
+                composable<Library> { entry ->
+                    LibraryRoute(
+                        onCreate = { query ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate(NewExercise(query, addToWorkout = false))
+                            }
+                        },
+                        onFix = { id ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate(FixExercise(id))
+                            }
+                        },
+                    )
+                }
+                composable<NewExercise> { entry ->
+                    val route = entry.toRoute<NewExercise>()
+                    NewExerciseRoute(
+                        initialName = route.initialName,
+                        addToWorkout = route.addToWorkout,
+                        onSaved = {
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                // From the picker, past it too: the Exercise is already in the session.
+                                if (route.addToWorkout) {
+                                    navController.popBackStack(ActiveWorkoutDestination, inclusive = false)
+                                } else {
+                                    navController.popBackStack()
+                                }
+                            }
+                        },
+                    )
+                }
+                composable<FixExercise> { entry ->
+                    FixExerciseRoute(
+                        exerciseId = entry.toRoute<FixExercise>().id,
+                        onSaved = {
                             if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                                 navController.popBackStack()
                             }

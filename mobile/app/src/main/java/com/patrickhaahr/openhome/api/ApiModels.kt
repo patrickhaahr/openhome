@@ -87,3 +87,13 @@ data class ApiWorkoutCreateEntry(
 
 @Serializable
 data class ApiWorkoutCreated(val id: Long)
+
+/** An Exercise create; [requestId] makes it safe to retry after an uncertain outcome. */
+@Serializable
+data class ApiExerciseCreate(
+    @SerialName("request_id") val requestId: String,
+    val name: String,
+    val category: String,
+    @SerialName("muscle_group") val muscleGroup: String? = null,
+    val equipment: String? = null,
+)

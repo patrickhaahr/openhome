@@ -71,7 +71,7 @@ private fun ProfileAvatar(onClick: () -> Unit) {
 }
 
 @Composable
-fun EmptyState(title: String, message: String) {
+fun EmptyState(title: String, message: String, action: @Composable () -> Unit = {}) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
@@ -85,5 +85,6 @@ fun EmptyState(title: String, message: String) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp),
         )
+        action()
     }
 }

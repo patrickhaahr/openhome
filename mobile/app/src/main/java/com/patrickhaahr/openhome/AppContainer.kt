@@ -3,6 +3,7 @@ package com.patrickhaahr.openhome
 import android.content.Context
 import com.patrickhaahr.openhome.api.newOpenHomeHttpClient
 import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
+import com.patrickhaahr.openhome.fitness.ExerciseLibrary
 import com.patrickhaahr.openhome.fitness.FitnessRepository
 import com.patrickhaahr.openhome.setup.ApiKeyCipher
 import com.patrickhaahr.openhome.setup.SetupService
@@ -32,4 +33,5 @@ class AppContainer(context: Context) {
     val sync = FitnessSync(outbox, setup, wifi, httpClient)
     val syncStatus = FitnessSyncStatus(database.outboxDao(), wifi, sync.sending, outbox, syncScheduler)
     val activeWorkout = ActiveWorkoutRepository(database, outbox, syncScheduler)
+    val exerciseLibrary = ExerciseLibrary(database, outbox, syncScheduler)
 }

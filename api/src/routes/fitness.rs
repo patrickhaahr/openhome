@@ -19,6 +19,8 @@ pub struct ListExercises {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateExercise {
+    /// Makes this create safe to retry: see [`replay_exercise`]. Without it, a repeat is a conflict.
+    request_id: Option<String>,
     name: String,
     category: String,
     muscle_group: Option<String>,
@@ -150,7 +152,11 @@ async fn get_exercise(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<Exercise>> {
-    let exercise = sqlx::query_as!(
+    fetch_exercise(&state, id).await.map(Json)
+}
+
+async fn fetch_exercise(state: &crate::AppState, id: i64) -> Result<Exercise> {
+    sqlx::query_as!(
         Exercise,
         r#"
         SELECT id, name, category, muscle_group, equipment
@@ -162,9 +168,70 @@ async fn get_exercise(
     .fetch_optional(&state.db)
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {e}")))?
-    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))?;
+    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))
+}
 
-    Ok(Json(exercise))
+/// An Exercise create's retry identity: its `request_id` and the arguments a retry must repeat.
+struct ExerciseReceipt {
+    request_id: String,
+    request: String,
+}
+
+impl ExerciseReceipt {
+    fn of(request_id: &str, payload: &CreateExercise) -> Result<Self> {
+        // Absent fields stay out, so a field added later cannot mismatch an earlier receipt's retry.
+        #[derive(Serialize)]
+        struct Normalized<'a> {
+            name: &'a str,
+            category: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            muscle_group: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            equipment: Option<&'a str>,
+        }
+        let request = serde_json::to_string(&Normalized {
+            name: &payload.name,
+            category: &payload.category,
+            muscle_group: payload.muscle_group.as_deref(),
+            equipment: payload.equipment.as_deref(),
+        })
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to encode receipt: {e}")))?;
+        Ok(Self {
+            request_id: parse_request_id(request_id).map_err(AppError::Validation)?,
+            request,
+        })
+    }
+}
+
+/// Follows the `request_id` receipt pattern: a retry answers with the Exercise it already created,
+/// the same `request_id` with changed arguments is a conflict, and a deleted Exercise stays deleted.
+/// `None` means this `request_id` has not been accepted.
+async fn replay_exercise(
+    state: &crate::AppState,
+    receipt: &ExerciseReceipt,
+) -> Result<Option<Exercise>> {
+    let Some(stored) = sqlx::query!(
+        "SELECT exercise_id, request FROM exercise_receipts WHERE request_id = $1",
+        receipt.request_id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read exercise receipt: {e}")))?
+    else {
+        return Ok(None);
+    };
+    if stored.request != receipt.request {
+        return Err(AppError::Conflict(
+            "request_id was already used for a different Exercise; use a new ID for a new Exercise"
+                .into(),
+        ));
+    }
+    let Some(exercise_id) = stored.exercise_id else {
+        return Err(AppError::Conflict(
+            "The retried Exercise was deleted; use a new request_id to create it again".into(),
+        ));
+    };
+    fetch_exercise(state, exercise_id).await.map(Some)
 }
 
 async fn create_exercise(
@@ -172,8 +239,24 @@ async fn create_exercise(
     Json(payload): Json<CreateExercise>,
 ) -> Result<(StatusCode, Json<Exercise>)> {
     validate_category(&payload.category)?;
+    let receipt = payload
+        .request_id
+        .as_deref()
+        .map(|request_id| ExerciseReceipt::of(request_id, &payload))
+        .transpose()?;
+    if let Some(receipt) = &receipt
+        && let Some(exercise) = replay_exercise(&state, receipt).await?
+    {
+        return Ok((StatusCode::OK, Json(exercise)));
+    }
 
-    let exercise = sqlx::query_as!(
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
+
+    let inserted = sqlx::query_as!(
         Exercise,
         r#"
         INSERT INTO exercises (name, category, muscle_group, equipment)
@@ -185,9 +268,53 @@ async fn create_exercise(
         payload.muscle_group,
         payload.equipment
     )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| map_db_error(e, &payload.name))?;
+    .fetch_one(&mut *tx)
+    .await;
+    let exercise = match inserted {
+        Ok(exercise) => exercise,
+        Err(error) => {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            // A simultaneous retry that won the write lock holds this name under this request_id.
+            if let Some(receipt) = &receipt
+                && let Some(exercise) = replay_exercise(&state, receipt).await?
+            {
+                return Ok((StatusCode::OK, Json(exercise)));
+            }
+            return Err(map_db_error(error, &payload.name));
+        }
+    };
+
+    if let Some(receipt) = &receipt {
+        // The insert above holds the write lock, so simultaneous retries serialize here.
+        let claimed = sqlx::query_scalar!(
+            r#"
+            INSERT INTO exercise_receipts (request_id, exercise_id, request)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (request_id) DO NOTHING
+            RETURNING request_id
+            "#,
+            receipt.request_id,
+            exercise.id,
+            receipt.request
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to store receipt: {e}")))?;
+        if claimed.is_none() {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            let exercise = replay_exercise(&state, receipt).await?.ok_or_else(|| {
+                AppError::Conflict("Retry receipt unavailable; list exercises first".into())
+            })?;
+            return Ok((StatusCode::OK, Json(exercise)));
+        }
+    }
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {e}")))?;
 
     Ok((StatusCode::CREATED, Json(exercise)))
 }

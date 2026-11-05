@@ -82,11 +82,62 @@ interface FitnessDao {
     @Query("SELECT server_id FROM exercises WHERE id = :exerciseId")
     suspend fun exerciseServerId(exerciseId: Long): Long?
 
+    @Query("SELECT * FROM exercises WHERE id = :exerciseId")
+    suspend fun loadExercise(exerciseId: Long): ExerciseEntity?
+
+    @Query("SELECT id FROM exercises WHERE server_id = :serverId")
+    suspend fun exerciseHoldingServerId(serverId: Long): Long?
+
+    @Query("SELECT name FROM exercises WHERE id != :exceptId")
+    suspend fun exerciseNamesExcept(exceptId: Long): List<String>
+
+    @Query(
+        """
+        UPDATE exercises SET name = :name, category = :category, muscle_group = :muscleGroup, equipment = :equipment
+        WHERE id = :exerciseId
+        """,
+    )
+    suspend fun updateExerciseDetails(
+        exerciseId: Long,
+        name: String,
+        category: String,
+        muscleGroup: String?,
+        equipment: String?,
+    )
+
+    @Query(
+        """
+        UPDATE exercises
+        SET server_id = :serverId, name = :name, category = :category, muscle_group = :muscleGroup, equipment = :equipment
+        WHERE id = :exerciseId
+        """,
+    )
+    suspend fun applyServerExercise(
+        exerciseId: Long,
+        serverId: Long,
+        name: String,
+        category: String,
+        muscleGroup: String?,
+        equipment: String?,
+    )
+
+    @Query("UPDATE workout_entries SET exercise_id = :to WHERE exercise_id = :from")
+    suspend fun moveWorkoutEntries(from: Long, to: Long)
+
+    @Query("UPDATE active_entries SET exercise_id = :to WHERE exercise_id = :from")
+    suspend fun moveActiveEntries(from: Long, to: Long)
+
+    @Query("DELETE FROM exercises WHERE id = :exerciseId")
+    suspend fun deleteExercise(exerciseId: Long)
+
     @Query("UPDATE workouts SET server_id = :serverId WHERE id = :workoutId")
     suspend fun setWorkoutServerId(workoutId: Long, serverId: Long)
 
     @Insert
     suspend fun insertExercises(exercises: List<ExerciseEntity>): List<Long>
+
+    @Insert
+    suspend fun insertExercise(exercise: ExerciseEntity): Long
 
     @Insert
     suspend fun insertWorkout(workout: WorkoutEntity): Long

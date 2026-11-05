@@ -63,12 +63,19 @@ class OpenHomeApi(
     suspend fun profile(): ApiProfile = get("api/profile")
 
     /** Answers with the same Workout however many times one `request_id` is delivered. */
-    suspend fun createWorkout(workout: ApiWorkoutCreate): ApiWorkoutCreated {
+    suspend fun createWorkout(workout: ApiWorkoutCreate): ApiWorkoutCreated =
+        post("api/workouts", json.encodeToString(workout))
+
+    /** Answers with the same Exercise however many times one `request_id` is delivered. */
+    suspend fun createExercise(exercise: ApiExerciseCreate): ApiExercise =
+        post("api/exercises", json.encodeToString(exercise))
+
+    private suspend inline fun <reified T> post(path: String, body: String): T {
         val request =
             Request.Builder()
-                .url(baseUrl.newBuilder().addPathSegments("api/workouts").build())
+                .url(baseUrl.newBuilder().addPathSegments(path).build())
                 .header("Authorization", "Bearer $apiKey")
-                .post(json.encodeToString(workout).toRequestBody(JSON_MEDIA_TYPE))
+                .post(body.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
         return decode(execute(request))
     }

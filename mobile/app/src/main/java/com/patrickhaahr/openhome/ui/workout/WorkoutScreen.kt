@@ -31,6 +31,7 @@ import com.patrickhaahr.openhome.fitness.ActiveWorkout
 import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.FitnessOverview
 import com.patrickhaahr.openhome.fitness.FitnessRepository
+import com.patrickhaahr.openhome.fitness.RefusedExercise
 import com.patrickhaahr.openhome.fitness.WorkoutSummary
 import com.patrickhaahr.openhome.sync.FitnessSyncStatus
 import com.patrickhaahr.openhome.sync.SyncSnapshot
@@ -43,6 +44,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -66,6 +68,14 @@ class WorkoutViewModel(
             .map<SyncSnapshot, SyncStatus?> { it.overall }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** What only the user can settle; everything queued behind these waits for them. */
+    val refusedExercises: StateFlow<List<RefusedExercise>> =
+        combine(fitness.observeExercises(), syncStatus.observe()) { exercises, snapshot ->
+            exercises.mapNotNull { exercise ->
+                snapshot.exerciseRefusal(exercise.id)?.let { RefusedExercise(exercise, it) }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun startEmpty(onStarted: () -> Unit) {
         saveScope.launch {
             activeWorkouts.startEmpty(LocalDate.now().toString())
@@ -85,12 +95,19 @@ class WorkoutViewModel(
 }
 
 @Composable
-fun WorkoutRoute(onOpenHistory: () -> Unit, onOpenProfile: () -> Unit, onOpenActiveWorkout: () -> Unit) {
+fun WorkoutRoute(
+    onOpenHistory: () -> Unit,
+    onOpenLibrary: () -> Unit,
+    onFixExercise: (Long) -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenActiveWorkout: () -> Unit,
+) {
     val viewModel =
         appViewModel { WorkoutViewModel(it.fitness, it.activeWorkout, it.syncStatus, it.saveScope) }
     val overview by viewModel.overview.collectAsStateWithLifecycle()
     val active by viewModel.activeWorkout.collectAsStateWithLifecycle()
     val sync by viewModel.sync.collectAsStateWithLifecycle()
+    val refusedExercises by viewModel.refusedExercises.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         ScreenHeader(title = "Workout", onOpenProfile = onOpenProfile)
         Column(
@@ -113,7 +130,10 @@ fun WorkoutRoute(onOpenHistory: () -> Unit, onOpenProfile: () -> Unit, onOpenAct
                         else -> ResumeAction(workout, onClick = onOpenActiveWorkout)
                     }
             }
-            overview?.let { WorkoutOverview(it, onOpenHistory) }
+            refusedExercises.forEach { row ->
+                RefusedExerciseCard(row, onClick = { onFixExercise(row.exercise.id) })
+            }
+            overview?.let { WorkoutOverview(it, onOpenHistory, onOpenLibrary) }
             sync?.let {
                 SyncStatusLine(it, onSyncNow = viewModel::syncNow, modifier = Modifier.padding(horizontal = 20.dp))
             }
@@ -153,7 +173,7 @@ private fun ResumeAction(workout: ActiveWorkout, onClick: () -> Unit) {
 }
 
 @Composable
-private fun WorkoutOverview(overview: FitnessOverview, onOpenHistory: () -> Unit) {
+private fun WorkoutOverview(overview: FitnessOverview, onOpenHistory: () -> Unit, onOpenLibrary: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -187,39 +207,79 @@ private fun WorkoutOverview(overview: FitnessOverview, onOpenHistory: () -> Unit
                 }
             }
         }
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            shape = MaterialTheme.shapes.large,
-            modifier = Modifier.fillMaxWidth(),
+        OverviewLink(
+            title = "History",
+            subtitle = "${pluralize(overview.workoutCount, "Workout")} on this device",
+            onClick = onOpenHistory,
+        )
+        OverviewLink(
+            title = "Library",
+            subtitle = "${pluralize(overview.exerciseCount, "Exercise")} in your Library",
+            onClick = onOpenLibrary,
+        )
+    }
+}
+
+@Composable
+private fun OverviewLink(title: String, subtitle: String, onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .clickable(role = Role.Button, onClick = onClick)
+                    .heightIn(min = 72.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .clickable(role = Role.Button, onClick = onOpenHistory)
-                        .heightIn(min = 72.dp)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(text = "History", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "${pluralize(overview.workoutCount, "Workout")} on this device",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(
-                    painterResource(R.drawable.ic_chevron_right),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Icon(
+                painterResource(R.drawable.ic_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Text(
-            text = "${pluralize(overview.exerciseCount, "Exercise")} in your Library",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-        )
+    }
+}
+
+@Composable
+private fun RefusedExerciseCard(row: RefusedExercise, onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .clickable(role = Role.Button, onClickLabel = "Fix Exercise", onClick = onClick)
+                    .heightIn(min = 72.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(text = row.exercise.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = exerciseRefusalMessage(row.problem),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Icon(
+                painterResource(R.drawable.ic_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

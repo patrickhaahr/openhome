@@ -56,6 +56,8 @@ private fun SyncStatus.label(): String =
                 SyncProblem.UNAUTHORIZED -> "Saved on device · OpenHome rejected the API Key"
                 SyncProblem.API_KEY_UNAVAILABLE -> "Saved on device · The saved API Key can't be read"
                 SyncProblem.EXERCISE_NOT_SYNCED -> "Saved on device · Waiting for its Exercise to sync"
-                SyncProblem.REFUSED -> "Saved on device · OpenHome refused this change"
+                SyncProblem.REFUSED,
+                SyncProblem.NAME_TAKEN,
+                -> "Saved on device · OpenHome refused this change"
             }
     }

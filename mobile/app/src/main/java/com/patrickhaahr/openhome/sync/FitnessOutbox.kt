@@ -1,6 +1,8 @@
 package com.patrickhaahr.openhome.sync
 
 import androidx.room.withTransaction
+import com.patrickhaahr.openhome.api.ApiExercise
+import com.patrickhaahr.openhome.api.ApiExerciseCreate
 import com.patrickhaahr.openhome.api.ApiFailure
 import com.patrickhaahr.openhome.api.ApiSet
 import com.patrickhaahr.openhome.api.ApiWorkoutCreate
@@ -16,6 +18,7 @@ import kotlinx.serialization.json.Json
 
 /** Statuses Axum answers only to a request that can never succeed as sent. */
 private val REFUSING_STATUSES = setOf(400, 409, 410, 413, 415, 422)
+private const val CONFLICT = 409
 
 /**
  * A finished Workout as queued. Exercises are local ids, resolved when sent, because an Exercise can
@@ -32,6 +35,19 @@ data class QueuedWorkout(
 @Serializable
 data class QueuedEntry(val localExerciseId: Long, val orderIndex: Long, val sets: List<ApiSet>)
 
+/**
+ * A new Exercise as queued. [useExisting] means the user chose the Exercise Axum already holds under
+ * this exact name, so delivery looks it up rather than creating one.
+ */
+@Serializable
+data class QueuedExercise(
+    val name: String,
+    val category: String,
+    val muscleGroup: String? = null,
+    val equipment: String? = null,
+    val useExisting: Boolean = false,
+)
+
 enum class DeliveryRun {
     /** Nothing is left that a later attempt could deliver. */
     FINISHED,
@@ -43,7 +59,10 @@ private sealed interface Delivery {
 
     data class Retry(val problem: SyncProblem) : Delivery
 
-    data object Refused : Delivery
+    data class Refused(val problem: SyncProblem = SyncProblem.REFUSED) : Delivery
+
+    /** Sending it now would break a reference. It stays queued and costs nothing but its turn. */
+    data object WaitingForExercise : Delivery
 }
 
 /** The durable queue of fitness changes and how each kind is delivered to Axum. */
@@ -63,6 +82,34 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
         )
     }
 
+    /** Call inside the transaction that creates the Exercise, so neither can exist without the other. */
+    suspend fun enqueueExercise(exerciseId: Long, exercise: QueuedExercise) {
+        dao.insert(
+            OutboxEntity(
+                kind = OutboxKind.CREATE_EXERCISE,
+                recordId = exerciseId,
+                requestId = UUID.randomUUID().toString(),
+                payload = Json.encodeToString(exercise),
+            ),
+        )
+    }
+
+    suspend fun refusalOfExercise(exerciseId: Long): SyncProblem? =
+        dao.refusalOf(OutboxKind.CREATE_EXERCISE, exerciseId)
+
+    /**
+     * Sends a refused Exercise again with corrected arguments, from the same place in the queue. A new
+     * `request_id` because the old one may hold a receipt whose Exercise has since been deleted. Returns
+     * false, changing nothing, when the Exercise is no longer refused.
+     */
+    suspend fun replaceRefusedExercise(exerciseId: Long, exercise: QueuedExercise): Boolean =
+        dao.replaceRefused(
+            kind = OutboxKind.CREATE_EXERCISE,
+            recordId = exerciseId,
+            requestId = UUID.randomUUID().toString(),
+            payload = Json.encodeToString(exercise),
+        ) > 0
+
     suspend fun hasPending(): Boolean = dao.pendingCount() > 0
 
     suspend fun recordProblemOnPending(problem: SyncProblem) = dao.recordProblemOnPending(problem)
@@ -71,7 +118,8 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
 
     /**
      * Delivers in queue order and stops at the first change that may yet succeed, so a dependent
-     * change can never overtake what it depends on. A refused change is set aside for the user.
+     * change can never overtake what it depends on. A refused change is set aside for the user, and
+     * only what depends on it waits with it; everything else carries on.
      */
     suspend fun deliverPending(api: OpenHomeApi, onSending: (Long) -> Unit): DeliveryRun {
         var lastId = 0L
@@ -81,7 +129,8 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
             onSending(change.id)
             when (val delivery = deliver(change, api)) {
                 Delivery.Acknowledged -> Unit
-                Delivery.Refused -> dao.markRefused(change.id)
+                is Delivery.Refused -> dao.markRefused(change.id, delivery.problem)
+                Delivery.WaitingForExercise -> dao.recordProblem(change.id, SyncProblem.EXERCISE_NOT_SYNCED)
                 is Delivery.Retry -> {
                     dao.recordProblem(change.id, delivery.problem)
                     return DeliveryRun.RETRY_LATER
@@ -93,15 +142,16 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
     private suspend fun deliver(change: OutboxEntity, api: OpenHomeApi): Delivery =
         when (change.kind) {
             OutboxKind.CREATE_WORKOUT -> deliverWorkout(change, api)
+            OutboxKind.CREATE_EXERCISE -> deliverExercise(change, api)
         }
 
     private suspend fun deliverWorkout(change: OutboxEntity, api: OpenHomeApi): Delivery {
         val queued = Json.decodeFromString<QueuedWorkout>(change.payload)
         val entries =
             queued.entries.map { entry ->
+                // Its Exercise is queued ahead of it, so reaching here without an id means it was refused.
                 val serverId =
-                    fitnessDao.exerciseServerId(entry.localExerciseId)
-                        ?: return Delivery.Retry(SyncProblem.EXERCISE_NOT_SYNCED)
+                    fitnessDao.exerciseServerId(entry.localExerciseId) ?: return Delivery.WaitingForExercise
                 ApiWorkoutCreateEntry(serverId, entry.orderIndex, entry.sets)
             }
         val request = ApiWorkoutCreate(change.requestId, queued.date, queued.name, queued.notes, entries)
@@ -118,12 +168,77 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
         return Delivery.Acknowledged
     }
 
+    private suspend fun deliverExercise(change: OutboxEntity, api: OpenHomeApi): Delivery {
+        val queued = Json.decodeFromString<QueuedExercise>(change.payload)
+        val server =
+            try {
+                if (queued.useExisting) {
+                    api.exercises().firstOrNull { it.name == queued.name } ?: return Delivery.Refused()
+                } else {
+                    api.createExercise(
+                        ApiExerciseCreate(change.requestId, queued.name, queued.category, queued.muscleGroup, queued.equipment),
+                    )
+                }
+            } catch (failure: ApiFailure) {
+                return if (failure is ApiFailure.Rejected && failure.status == CONFLICT) {
+                    whyConflicted(queued, api)
+                } else {
+                    failure.toDelivery()
+                }
+            }
+        database.withTransaction {
+            reconcileExercise(change.recordId, server)
+            dao.delete(change.id)
+        }
+        return Delivery.Acknowledged
+    }
+
+    /** Reads the answer from the Library itself: the name is taken, or its earlier receipt is stale. */
+    private suspend fun whyConflicted(queued: QueuedExercise, api: OpenHomeApi): Delivery =
+        try {
+            val taken = api.exercises().any { it.name == queued.name }
+            Delivery.Refused(if (taken) SyncProblem.NAME_TAKEN else SyncProblem.REFUSED)
+        } catch (failure: ApiFailure) {
+            failure.toDelivery()
+        }
+
+    /**
+     * Records which Axum Exercise this local row is. Should another local row already hold that id,
+     * they are one Exercise: everything moves to that row, so no Workout entry breaks and no duplicate
+     * stays behind.
+     */
+    private suspend fun reconcileExercise(localId: Long, server: ApiExercise) {
+        val holder = fitnessDao.exerciseHoldingServerId(server.id)
+        if (holder != null && holder != localId) mergeExercise(from = localId, into = holder)
+        fitnessDao.applyServerExercise(
+            exerciseId = holder ?: localId,
+            serverId = server.id,
+            name = server.name,
+            category = server.category,
+            muscleGroup = server.muscleGroup,
+            equipment = server.equipment,
+        )
+    }
+
+    /** Queued Workouts are rewritten only in their local ids, which resolve to the same Axum Exercise. */
+    private suspend fun mergeExercise(from: Long, into: Long) {
+        fitnessDao.moveWorkoutEntries(from, into)
+        fitnessDao.moveActiveEntries(from, into)
+        for (row in dao.allOfKind(OutboxKind.CREATE_WORKOUT)) {
+            val queued = Json.decodeFromString<QueuedWorkout>(row.payload)
+            if (queued.entries.none { it.localExerciseId == from }) continue
+            val entries = queued.entries.map { if (it.localExerciseId == from) it.copy(localExerciseId = into) else it }
+            dao.updatePayload(row.id, Json.encodeToString(queued.copy(entries = entries)))
+        }
+        fitnessDao.deleteExercise(from)
+    }
+
     private fun ApiFailure.toDelivery(): Delivery =
         when (this) {
             is ApiFailure.Unreachable -> Delivery.Retry(SyncProblem.UNREACHABLE)
             is ApiFailure.Unauthorized -> Delivery.Retry(SyncProblem.UNAUTHORIZED)
             is ApiFailure.Rejected ->
-                if (status in REFUSING_STATUSES) Delivery.Refused else Delivery.Retry(SyncProblem.SERVER_ERROR)
+                if (status in REFUSING_STATUSES) Delivery.Refused() else Delivery.Retry(SyncProblem.SERVER_ERROR)
             is ApiFailure.UnreadableResponse,
             is ApiFailure.HistoryCannotBePaged,
             -> Delivery.Retry(SyncProblem.SERVER_ERROR)
