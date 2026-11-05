@@ -56,3 +56,19 @@ fun ExercisePickerRoute(onPicked: () -> Unit, onCreate: (String) -> Unit) {
         },
     )
 }
+
+/** Chooses an Exercise for the caller to use, without touching the Active Workout. */
+@Composable
+fun CorrectionExercisePickerRoute(onPicked: (Long) -> Unit) {
+    val viewModel = appViewModel { ExercisePickerViewModel(it.fitness, it.activeWorkout, it.saveScope) }
+    val exercises by viewModel.exercises.collectAsStateWithLifecycle()
+    ExerciseBrowser(
+        title = "Add Exercise",
+        lookup = exercises,
+        exerciseOf = { it },
+        onCreate = null,
+        row = { exercise ->
+            ExerciseRow(exercise, onClick = { onPicked(exercise.id) }, onClickLabel = "Add to Workout")
+        },
+    )
+}

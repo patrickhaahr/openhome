@@ -44,6 +44,7 @@ data class FixtureWorkout(
     val name: String?,
     val notes: String? = null,
     val entries: List<FixtureEntry> = emptyList(),
+    val clientRevision: Long? = null,
 )
 
 data class FixtureBodyWeight(val id: Long, val date: String, val weightKg: Double)
@@ -68,8 +69,10 @@ data class FixtureProfile(
  * `Authorization` check and its list paging (`limit` defaults to 100 and clamps to 1..500, Workouts
  * run newest first with an inclusive `to`, Body Weight oldest first with an inclusive `from`) and
  * Workout and Exercise creates with a `request_id`: a repeat answers 200 with the same record, and the
- * same `request_id` with changed arguments is a 409. Exercise names are unique, also a 409. Its Workouts
- * and Exercises are what a test reads back independently.
+ * same `request_id` with changed arguments is a 409. Exercise names are unique, also a 409. Workout
+ * edits replace the entries they state, keep a name or notes they leave out, and apply only when their
+ * `client_revision` is newer, otherwise answering the Workout as it is. Its Workouts and Exercises are
+ * what a test reads back independently.
  */
 class FakeAxum(
     exercises: Map<Long, String> = emptyMap(),
@@ -92,6 +95,10 @@ class FakeAxum(
     private val exerciseReceipts = HashMap<String, Pair<Long, JsonObject>>()
     private val exerciseDeliveries = CopyOnWriteArrayList<String>()
     private val createOrder = CopyOnWriteArrayList<String>()
+    private val editDeliveries = CopyOnWriteArrayList<Long>()
+
+    @Volatile
+    private var workoutEdits = WorkoutEdits.ANSWERED
 
     @Volatile
     private var exerciseCreates = ExerciseCreates.ANSWERED
@@ -125,7 +132,21 @@ class FakeAxum(
         failDetailsAfter = null
         workoutCreates = WorkoutCreates.ANSWERED
         exerciseCreates = ExerciseCreates.ANSWERED
+        workoutEdits = WorkoutEdits.ANSWERED
     }
+
+    /** Commit each Workout edit, then cut the connection before answering. */
+    fun loseEditResponses() {
+        workoutEdits = WorkoutEdits.COMMITTED_RESPONSE_LOST
+    }
+
+    /** Another client deletes a Workout this app has downloaded. */
+    fun deleteWorkout(id: Long) {
+        workouts.removeAll { it.id == id }
+    }
+
+    /** The `client_revision` of every Workout edit received, in order, including lost ones. */
+    fun editDeliveries(): List<Long> = editDeliveries.toList()
 
     /** Commit each Exercise create, then cut the connection before answering. */
     fun loseExerciseResponses() {
@@ -144,7 +165,7 @@ class FakeAxum(
     /** The `request_id` of every Exercise create received, in order, including lost and refused ones. */
     fun exerciseDeliveries(): List<String> = exerciseDeliveries.toList()
 
-    /** Which kind of create reached Axum and committed, in order: "exercise:<name>" or "workout:<name>". */
+    /** What reached Axum and committed, in order: "exercise:<name>", "workout:<name>" or "edit:<name>". */
     fun commitOrder(): List<String> = createOrder.toList()
 
     /** Commit each Workout create, then cut the connection before answering. */
@@ -210,6 +231,8 @@ class FakeAxum(
                     ),
                 )
             }
+            path.startsWith("/api/workouts/") && request.method == "PATCH" ->
+                editWorkout(path.substringAfterLast('/').toLong(), request)
             path.startsWith("/api/workouts/") -> workoutDetail(path.substringAfterLast('/').toLong())
             path == "/api/body_weight" -> {
                 val from = url.queryParameter("from")
@@ -248,6 +271,31 @@ class FakeAxum(
             }
         }
     }
+
+    private fun editWorkout(id: Long, request: RecordedRequest): MockResponse {
+        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+        val revision = checkNotNull(body["client_revision"]).jsonPrimitive.long
+        editDeliveries += revision
+        val answer = commitEdit(id, revision, body)
+        return if (workoutEdits == WorkoutEdits.COMMITTED_RESPONSE_LOST) disconnected() else answer
+    }
+
+    private fun commitEdit(id: Long, revision: Long, body: JsonObject): MockResponse =
+        synchronized(receipts) {
+            val current =
+                workouts.firstOrNull { it.id == id }
+                    ?: return error(HttpURLConnection.HTTP_NOT_FOUND, "Workout with id $id not found")
+            if ((current.clientRevision ?: 0) >= revision) return ok(detailJson(current))
+            val edited =
+                body.toFixtureWorkout(id).copy(
+                    name = if ("name" in body) body.text("name") else current.name,
+                    notes = if ("notes" in body) body.text("notes") else current.notes,
+                    clientRevision = revision,
+                )
+            workouts[workouts.indexOf(current)] = edited
+            createOrder += "edit:${edited.name}"
+            ok(detailJson(edited))
+        }
 
     private fun createExercise(request: RecordedRequest): MockResponse {
         val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
@@ -414,6 +462,7 @@ class FakeAxum(
             put("date", workout.date)
             put("name", workout.name)
             put("notes", workout.notes)
+            workout.clientRevision?.let { put("client_revision", it) }
             put(
                 "exercises",
                 buildJsonArray {
@@ -452,6 +501,11 @@ class FakeAxum(
 }
 
 private const val UNPROCESSABLE_ENTITY = 422
+
+private enum class WorkoutEdits {
+    ANSWERED,
+    COMMITTED_RESPONSE_LOST,
+}
 
 private enum class ExerciseCreates {
     ANSWERED,

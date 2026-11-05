@@ -70,12 +70,18 @@ class OpenHomeApi(
     suspend fun createExercise(exercise: ApiExerciseCreate): ApiExercise =
         post("api/exercises", json.encodeToString(exercise))
 
-    private suspend inline fun <reified T> post(path: String, body: String): T {
+    /** Delivering the same revision again, or an older one, changes nothing and answers the Workout as it is. */
+    suspend fun editWorkout(id: Long, edit: ApiWorkoutEdit): ApiWorkoutCreated =
+        send("PATCH", "api/workouts/$id", json.encodeToString(edit))
+
+    private suspend inline fun <reified T> post(path: String, body: String): T = send("POST", path, body)
+
+    private suspend inline fun <reified T> send(method: String, path: String, body: String): T {
         val request =
             Request.Builder()
                 .url(baseUrl.newBuilder().addPathSegments(path).build())
                 .header("Authorization", "Bearer $apiKey")
-                .post(body.toRequestBody(JSON_MEDIA_TYPE))
+                .method(method, body.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
         return decode(execute(request))
     }

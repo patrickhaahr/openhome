@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 enum class OutboxKind {
     CREATE_WORKOUT,
     CREATE_EXERCISE,
+    EDIT_WORKOUT,
 }
 
 enum class OutboxState {
@@ -30,6 +31,9 @@ enum class SyncProblem {
     SERVER_ERROR,
     API_KEY_UNAVAILABLE,
     EXERCISE_NOT_SYNCED,
+
+    /** A correction waiting behind the create that gives its Workout a server id. */
+    WORKOUT_NOT_SYNCED,
     REFUSED,
 
     /** Axum refused a new Exercise because it already holds one under that exact name. */
@@ -40,8 +44,8 @@ enum class SyncProblem {
  * One queued change, deleted in the transaction that records its acknowledgement. [payload] is frozen
  * when queued, so a retry repeats the same arguments under the same [requestId] whatever has happened
  * to the local record since. Later corrections are later rows, never edits to this one; the exception
- * is a refused Exercise, which Axum never accepted: correcting it replaces both here, keeping its place
- * ahead of the Workouts that depend on it.
+ * is a refused create, which Axum never accepted: correcting it replaces both here, keeping its place
+ * ahead of whatever depends on it.
  */
 @Entity(
     tableName = "fitness_outbox",
@@ -102,8 +106,11 @@ interface OutboxDao {
     )
     suspend fun replaceRefused(kind: OutboxKind, recordId: Long, requestId: String, payload: String): Int
 
-    @Query("SELECT * FROM fitness_outbox WHERE kind = :kind")
-    suspend fun allOfKind(kind: OutboxKind): List<OutboxEntity>
+    @Query("SELECT * FROM fitness_outbox WHERE kind IN (:kinds)")
+    suspend fun allOfKinds(kinds: List<OutboxKind>): List<OutboxEntity>
+
+    @Query("DELETE FROM fitness_outbox WHERE kind = :kind AND record_id = :recordId")
+    suspend fun deleteAllOf(kind: OutboxKind, recordId: Long)
 
     @Query("UPDATE fitness_outbox SET payload = :payload WHERE id = :id")
     suspend fun updatePayload(id: Long, payload: String)

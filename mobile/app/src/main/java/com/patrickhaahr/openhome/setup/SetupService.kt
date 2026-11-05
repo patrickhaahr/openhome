@@ -189,6 +189,7 @@ class SetupService(
                         date = workout.date,
                         name = workout.name,
                         notes = workout.notes,
+                        clientRevision = workout.clientRevision,
                     ),
                 )
             for (entry in workout.exercises) {

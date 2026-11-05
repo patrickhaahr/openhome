@@ -59,13 +59,13 @@ fun exerciseRefusalMessage(problem: SyncProblem): String =
         else -> "OpenHome refused this Exercise. Tap to check its details."
     }
 
-/** Search, filters, the list and a way to create what is missing: the same for Library and picker. */
+/** Search, filters, the list and, given [onCreate], a way to create what is missing: the same for Library and picker. */
 @Composable
 fun <T> ExerciseBrowser(
     title: String,
     lookup: LibraryLookup<T>,
     exerciseOf: (T) -> Exercise,
-    onCreate: (String) -> Unit,
+    onCreate: ((String) -> Unit)?,
     row: @Composable (T) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -109,12 +109,12 @@ fun <T> ExerciseBrowser(
                         lookup.rows.isEmpty() ->
                             EmptyState(
                                 title = "No Exercises yet",
-                                message = "Create one below, even without a connection.",
+                                message = if (onCreate != null) "Create one below, even without a connection." else "Create one in the Library, even without a connection.",
                             )
                         matches.isEmpty() ->
                             EmptyState(
                                 title = "No matching Exercises",
-                                message = "Try a different search, or create it below.",
+                                message = if (onCreate != null) "Try a different search, or create it below." else "Try a different search, or create it in the Library.",
                             ) {
                                 TextButton(
                                     onClick = {
@@ -137,11 +137,13 @@ fun <T> ExerciseBrowser(
                 }
             }
         }
-        OutlinedButton(
-            onClick = { onCreate(query.trim()) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 56.dp),
-        ) {
-            Text("Create Exercise")
+        if (onCreate != null) {
+            OutlinedButton(
+                onClick = { onCreate(query.trim()) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 56.dp),
+            ) {
+                Text("Create Exercise")
+            }
         }
     }
 }

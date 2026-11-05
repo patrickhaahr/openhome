@@ -1,6 +1,9 @@
 package com.patrickhaahr.openhome.fitness
 
 import com.patrickhaahr.openhome.storage.SetMeasure
+import kotlinx.serialization.Serializable
+
+private const val MAX_RPE = 10L
 
 data class ActiveWorkout(
     val date: String,
@@ -32,6 +35,7 @@ enum class SetField {
 }
 
 /** A row's values exactly as typed. The field its [measure] does not use is not part of the Set. */
+@Serializable
 data class SetDraft(
     val measure: SetMeasure,
     val reps: String,
@@ -79,10 +83,6 @@ data class SetDraft(
         data class Valid(val value: Long?) : AmountCheck
 
         data class Problem(val problem: SetCheck.Problem) : AmountCheck
-    }
-
-    private companion object {
-        const val MAX_RPE = 10L
     }
 }
 

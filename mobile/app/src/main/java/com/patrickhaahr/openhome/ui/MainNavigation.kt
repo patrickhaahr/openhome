@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -33,16 +34,19 @@ import com.patrickhaahr.openhome.R
 import com.patrickhaahr.openhome.ui.home.HomeScreen
 import com.patrickhaahr.openhome.ui.profile.ProfileRoute
 import com.patrickhaahr.openhome.ui.workout.ActiveWorkoutRoute
+import com.patrickhaahr.openhome.ui.workout.CorrectionExercisePickerRoute
 import com.patrickhaahr.openhome.ui.workout.ExercisePickerRoute
 import com.patrickhaahr.openhome.ui.workout.FixExerciseRoute
 import com.patrickhaahr.openhome.ui.workout.HistoryRoute
 import com.patrickhaahr.openhome.ui.workout.LibraryRoute
 import com.patrickhaahr.openhome.ui.workout.NewExerciseRoute
+import com.patrickhaahr.openhome.ui.workout.WorkoutCorrectionRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutDetailRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutRoute
 import kotlinx.serialization.Serializable
 
 private const val TRANSITION_MILLIS = 150
+private const val PICKED_EXERCISE = "pickedExercise"
 
 @Serializable
 private data object WorkoutTab
@@ -55,6 +59,12 @@ private data object History
 
 @Serializable
 private data class WorkoutDetail(val id: Long)
+
+@Serializable
+private data class WorkoutCorrection(val id: Long)
+
+@Serializable
+private data object CorrectionExercisePicker
 
 @Serializable
 private data object ActiveWorkoutDestination
@@ -105,7 +115,10 @@ fun MainNavigation() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
-    val inTab = Tab.entries.any { destination.isIn(it) }
+    // An unsaved correction must not be one tab tap away from being dropped, so its form hides them.
+    val correcting =
+        destination?.hasRoute<WorkoutCorrection>() == true || destination?.hasRoute<CorrectionExercisePicker>() == true
+    val inTab = !correcting && Tab.entries.any { destination.isIn(it) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -217,10 +230,35 @@ fun MainNavigation() {
                 composable<WorkoutDetail> { entry ->
                     WorkoutDetailRoute(
                         workoutId = entry.toRoute<WorkoutDetail>().id,
+                        onEdit =
+                            dropUnlessResumed {
+                                navController.navigate(WorkoutCorrection(entry.toRoute<WorkoutDetail>().id))
+                            },
                         // Back from the session returns to where sessions start, not to this Workout.
                         onOpenActiveWorkout = {
                             if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                                 navController.navigate(ActiveWorkoutDestination) { popUpTo(WorkoutHome) }
+                            }
+                        },
+                    )
+                }
+                composable<WorkoutCorrection> { entry ->
+                    val picked by entry.savedStateHandle.getStateFlow<Long?>(PICKED_EXERCISE, null)
+                        .collectAsStateWithLifecycle()
+                    WorkoutCorrectionRoute(
+                        workoutId = entry.toRoute<WorkoutCorrection>().id,
+                        pickedExercise = picked,
+                        onPickedExerciseUsed = { entry.savedStateHandle[PICKED_EXERCISE] = null },
+                        onAddExercise = dropUnlessResumed { navController.navigate(CorrectionExercisePicker) },
+                        onDone = { navController.popBackStack() },
+                    )
+                }
+                composable<CorrectionExercisePicker> { entry ->
+                    CorrectionExercisePickerRoute(
+                        onPicked = { id ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.previousBackStackEntry?.savedStateHandle?.set(PICKED_EXERCISE, id)
+                                navController.popBackStack()
                             }
                         },
                     )

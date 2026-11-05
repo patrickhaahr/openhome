@@ -8,8 +8,8 @@ import androidx.room.RoomDatabase
 
 /** Add a migration with every schema change; fitness data here may not exist anywhere else yet. */
 @Database(
-    version = 3,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    version = 4,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
     entities =
         [
             ExerciseEntity::class,

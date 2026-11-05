@@ -133,6 +133,21 @@ interface FitnessDao {
     @Query("UPDATE workouts SET server_id = :serverId WHERE id = :workoutId")
     suspend fun setWorkoutServerId(workoutId: Long, serverId: Long)
 
+    @Query("SELECT server_id FROM workouts WHERE id = :workoutId")
+    suspend fun workoutServerId(workoutId: Long): Long?
+
+    @Query(
+        """
+        UPDATE workouts SET date = :date, name = :name, notes = :notes, client_revision = :clientRevision
+        WHERE id = :workoutId
+        """,
+    )
+    suspend fun updateWorkoutDetails(workoutId: Long, date: String, name: String?, notes: String?, clientRevision: Long)
+
+    /** Their Sets go with them. */
+    @Query("DELETE FROM workout_entries WHERE workout_id = :workoutId")
+    suspend fun deleteEntriesOf(workoutId: Long)
+
     @Insert
     suspend fun insertExercises(exercises: List<ExerciseEntity>): List<Long>
 

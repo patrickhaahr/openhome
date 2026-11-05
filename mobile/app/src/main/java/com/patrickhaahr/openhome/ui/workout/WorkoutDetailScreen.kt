@@ -89,7 +89,7 @@ private class WorkoutDetailViewModel(
 }
 
 @Composable
-fun WorkoutDetailRoute(workoutId: Long, onOpenActiveWorkout: () -> Unit) {
+fun WorkoutDetailRoute(workoutId: Long, onEdit: () -> Unit, onOpenActiveWorkout: () -> Unit) {
     val viewModel =
         appViewModel { WorkoutDetailViewModel(it.fitness, it.activeWorkout, it.syncStatus, it.saveScope, workoutId) }
     val lookup by viewModel.lookup.collectAsStateWithLifecycle()
@@ -102,11 +102,19 @@ fun WorkoutDetailRoute(workoutId: Long, onOpenActiveWorkout: () -> Unit) {
                 null -> EmptyState(title = "Workout not found", message = "This Workout isn't saved on this device.")
                 else ->
                     WorkoutDetail(workout, sync, onSyncNow = viewModel::syncNow) {
-                        RepeatAction(
-                            active,
-                            onRepeat = { viewModel.repeat(onOpenActiveWorkout) },
-                            onResume = onOpenActiveWorkout,
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RepeatAction(
+                                active,
+                                onRepeat = { viewModel.repeat(onOpenActiveWorkout) },
+                                onResume = onOpenActiveWorkout,
+                            )
+                            OutlinedButton(
+                                onClick = onEdit,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp),
+                            ) {
+                                Text("Edit Workout")
+                            }
+                        }
                     }
             }
     }

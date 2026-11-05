@@ -33,6 +33,8 @@ data class WorkoutEntity(
     val date: String,
     val name: String?,
     val notes: String?,
+    /** The newest correction's revision, continuing from Axum's on download so a later one still outranks it. */
+    @ColumnInfo(name = "client_revision", defaultValue = "0") val clientRevision: Long = 0,
 )
 
 @Entity(

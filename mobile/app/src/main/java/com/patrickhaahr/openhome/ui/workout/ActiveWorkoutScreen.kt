@@ -606,7 +606,7 @@ private fun SetColumnLabels(columns: AmountColumns) {
 }
 
 @Composable
-private fun ColumnLabel(text: String, modifier: Modifier) {
+internal fun ColumnLabel(text: String, modifier: Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium,
@@ -692,22 +692,41 @@ private fun RowScope.SetValueField(
     viewModel: ActiveWorkoutViewModel,
 ) {
     var text by rememberSaveable(set.id, field) { mutableStateOf(stored) }
-    BasicTextField(
+    CompactValueField(
         value = text,
         onValueChange = {
             text = it
             viewModel.editSet(set.id, field, it)
         },
+        description = description,
+        keyboard = keyboard,
+        highlighted = set.completed,
+        modifier = Modifier.weight(1f),
+    )
+}
+
+/** A compact row's field. Its description labels it the way a visible label would. */
+@Composable
+internal fun CompactValueField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    description: String,
+    keyboard: KeyboardType,
+    highlighted: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions = KeyboardOptions(keyboardType = keyboard),
         modifier =
-            Modifier
-                .weight(1f)
+            modifier
                 .heightIn(min = 48.dp)
                 .background(
-                    if (set.completed) {
+                    if (highlighted) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {
                         MaterialTheme.colorScheme.surfaceContainerHighest
@@ -715,7 +734,6 @@ private fun RowScope.SetValueField(
                     MaterialTheme.shapes.small,
                 ),
         decorationBox = { inner ->
-            // Inside the decoration, the description labels the field the way a visible label would.
             Box(
                 modifier =
                     Modifier
@@ -732,7 +750,7 @@ private fun RowScope.SetValueField(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WorkoutDatePicker(date: String, onChosen: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+internal fun WorkoutDatePicker(date: String, onChosen: (LocalDate) -> Unit, onDismiss: () -> Unit) {
     val today = remember { LocalDate.now() }
     val state =
         rememberDatePickerState(

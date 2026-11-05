@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""Forward the emulator's traffic to a local fixture API, losing some create responses.
+"""Forward the emulator's traffic to a local fixture API, losing some create and edit responses.
 
-The fixture API receives and commits each lost create; the client only sees its connection cut, which
-is the outcome a duplicate-safe retry has to survive. Everything else passes through unchanged, and a
-stopped API looks unreachable. It only ever forwards to loopback; the emulator reaches it via 10.0.2.2.
+The fixture API receives and commits each lost change; the client only sees its connection cut, which
+is the outcome a duplicate-safe retry has to survive. Workout edits are printed whole, so one can be
+replayed later by hand. Everything else passes through unchanged, and a stopped API looks unreachable.
+It only ever forwards to loopback; the emulator reaches it via 10.0.2.2.
 """
 
 import argparse
 import http.client
 import http.server
+import re
 import threading
 
 UPSTREAM = ("127.0.0.1", 8000)
 HOP_BY_HOP = {"connection", "transfer-encoding", "keep-alive"}
+WORKOUT_EDIT = re.compile(r"/api/workouts/\d+")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lose-workout-responses", type=int, default=1)
     parser.add_argument("--lose-exercise-responses", type=int, default=0)
+    parser.add_argument("--lose-edit-responses", type=int, default=0)
     parser.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
 
@@ -26,14 +30,20 @@ def main() -> None:
     remaining = {
         "/api/workouts": args.lose_workout_responses,
         "/api/exercises": args.lose_exercise_responses,
+        "edits": args.lose_edit_responses,
     }
 
-    def lose_this_response(path: str) -> bool:
+    def lose_this_response(kind: str) -> bool:
         with lock:
-            if remaining.get(path, 0) <= 0:
+            if remaining.get(kind, 0) <= 0:
                 return False
-            remaining[path] -= 1
+            remaining[kind] -= 1
             return True
+
+    def response_lost(command: str, path: str) -> bool:
+        if command == "POST":
+            return lose_this_response(path)
+        return command == "PATCH" and WORKOUT_EDIT.fullmatch(path) is not None and lose_this_response("edits")
 
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -53,7 +63,9 @@ def main() -> None:
                 connection.close()
 
             print(f"{self.command} {self.path}: API answered {response.status}", flush=True)
-            if self.command == "POST" and lose_this_response(self.path):
+            if self.command == "PATCH":
+                print(f"  body: {body.decode(errors='replace')}", flush=True)
+            if response_lost(self.command, self.path):
                 print("  response lost: cutting the connection", flush=True)
                 self.close_connection = True
                 return

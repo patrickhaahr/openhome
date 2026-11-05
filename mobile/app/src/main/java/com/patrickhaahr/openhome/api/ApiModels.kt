@@ -28,6 +28,8 @@ data class ApiWorkoutDetail(
     val date: String,
     val name: String? = null,
     val notes: String? = null,
+    /** Where this client's corrections of this Workout continue from. Absent until one has reached Axum. */
+    @SerialName("client_revision") val clientRevision: Long = 0,
     val exercises: List<ApiWorkoutEntry>,
 )
 
@@ -83,10 +85,24 @@ data class ApiWorkoutCreateEntry(
     @SerialName("exercise_id") val exerciseId: Long,
     @SerialName("order_index") val orderIndex: Long,
     val sets: List<ApiSet>,
+    val notes: String? = null,
 )
 
 @Serializable
 data class ApiWorkoutCreated(val id: Long)
+
+/**
+ * A whole correction: Axum applies it only if [clientRevision] is newer than the last it applied. No
+ * defaults, so a null [name] or [notes] is sent and clears the value rather than leaving it as it was.
+ */
+@Serializable
+data class ApiWorkoutEdit(
+    @SerialName("client_revision") val clientRevision: Long,
+    val date: String,
+    val name: String?,
+    val notes: String?,
+    val exercises: List<ApiWorkoutCreateEntry>,
+)
 
 /** An Exercise create; [requestId] makes it safe to retry after an uncertain outcome. */
 @Serializable

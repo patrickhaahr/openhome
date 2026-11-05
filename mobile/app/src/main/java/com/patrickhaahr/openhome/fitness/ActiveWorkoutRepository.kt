@@ -253,7 +253,7 @@ private fun ActiveWorkoutWithEntries.orderedEntries(): List<ActiveEntryWithDetai
 private fun WorkoutWithEntries.orderedEntries(): List<EntryWithDetails> =
     entries.sortedWith(compareBy({ it.entry.orderIndex }, { it.entry.id }))
 
-private fun WorkoutSetEntity.measure(): SetMeasure =
+internal fun WorkoutSetEntity.measure(): SetMeasure =
     when {
         reps != null && durationSeconds != null -> SetMeasure.REPS_AND_HOLD
         durationSeconds != null -> SetMeasure.HOLD
@@ -261,16 +261,27 @@ private fun WorkoutSetEntity.measure(): SetMeasure =
     }
 
 /** A stored zero means bodyweight in older logs; the domain writes that as a blank Added Weight. */
-private fun WorkoutSetEntity.toUnconfirmedRow(entryId: Long, setNumber: Long) =
-    ActiveSetEntity(
-        entryId = entryId,
-        setNumber = setNumber,
+internal fun WorkoutSetEntity.toDraft() =
+    SetDraft(
         measure = measure(),
         reps = reps?.toString().orEmpty(),
-        weightKg = weightKg?.takeIf { it != 0.0 }?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty(),
+        addedWeightKg = weightKg?.takeIf { it != 0.0 }?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty(),
         durationSeconds = durationSeconds?.toString().orEmpty(),
         rpe = rpe?.toString().orEmpty(),
     )
+
+private fun WorkoutSetEntity.toUnconfirmedRow(entryId: Long, setNumber: Long): ActiveSetEntity {
+    val draft = toDraft()
+    return ActiveSetEntity(
+        entryId = entryId,
+        setNumber = setNumber,
+        measure = draft.measure,
+        reps = draft.reps,
+        weightKg = draft.addedWeightKg,
+        durationSeconds = draft.durationSeconds,
+        rpe = draft.rpe,
+    )
+}
 
 private fun ActiveWorkoutWithEntries.performedEntries(): List<PerformedEntry> =
     orderedEntries()

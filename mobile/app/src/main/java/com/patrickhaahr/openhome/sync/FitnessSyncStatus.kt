@@ -36,9 +36,10 @@ class SyncSnapshot(
     val overall: SyncStatus
         get() = if (rows.isEmpty()) SyncStatus.Synced else statusOf(rows)
 
-    fun workout(workoutId: Long): SyncStatus = statusOfRecord(OutboxKind.CREATE_WORKOUT, workoutId)
+    fun workout(workoutId: Long): SyncStatus =
+        statusOfRecord(setOf(OutboxKind.CREATE_WORKOUT, OutboxKind.EDIT_WORKOUT), workoutId)
 
-    fun exercise(exerciseId: Long): SyncStatus = statusOfRecord(OutboxKind.CREATE_EXERCISE, exerciseId)
+    fun exercise(exerciseId: Long): SyncStatus = statusOfRecord(setOf(OutboxKind.CREATE_EXERCISE), exerciseId)
 
     /** Why Axum refused this Exercise, while it waits for the user to act on that. */
     fun exerciseRefusal(exerciseId: Long): SyncProblem? =
@@ -46,8 +47,8 @@ class SyncSnapshot(
             it.kind == OutboxKind.CREATE_EXERCISE && it.recordId == exerciseId && it.state == OutboxState.REFUSED
         }?.problem
 
-    private fun statusOfRecord(kind: OutboxKind, recordId: Long): SyncStatus {
-        val own = rows.filter { it.kind == kind && it.recordId == recordId }
+    private fun statusOfRecord(kinds: Set<OutboxKind>, recordId: Long): SyncStatus {
+        val own = rows.filter { it.kind in kinds && it.recordId == recordId }
         return if (own.isEmpty()) SyncStatus.Synced else statusOf(own)
     }
 

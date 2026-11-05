@@ -436,6 +436,8 @@ pub struct CreateWorkout {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateWorkout {
+    /// Makes this edit safe to replay: see [`update_workout`]. Without it every call applies.
+    client_revision: Option<i64>,
     date: Option<String>,
     #[serde(default, with = "double_option")]
     name: Option<Option<String>>,
@@ -484,6 +486,9 @@ pub struct WorkoutDetail {
     date: String,
     name: Option<String>,
     notes: Option<String>,
+    /// Where a client that downloads this Workout continues its edit revisions from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_revision: Option<i64>,
     exercises: Vec<WorkoutExercise>,
 }
 
@@ -652,7 +657,8 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
         SELECT CAST(id AS INTEGER)  AS id,
                CAST(date AS TEXT)   AS date,
                name,
-               notes
+               notes,
+               client_revision
         FROM workouts
         WHERE id = $1
         "#,
@@ -673,6 +679,7 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
         date: workout.date,
         name: workout.name,
         notes: workout.notes,
+        client_revision: workout.client_revision,
         exercises,
     })
 }
@@ -859,6 +866,10 @@ async fn create_workout(
     Ok((StatusCode::CREATED, Json(workout)))
 }
 
+/// With a `client_revision`, an edit applies only if it is newer than the last one applied. An older
+/// or repeated revision is an edit this client has already superseded or delivered, so it changes
+/// nothing and answers with the current Workout: a retry after a lost response and a late delivery
+/// both end as acknowledged, without restoring an older revision.
 async fn update_workout(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
@@ -867,6 +878,12 @@ async fn update_workout(
     let date = payload.date.as_deref().map(validate_date).transpose()?;
     if let Some(exercises) = &payload.exercises {
         validate_workout_exercises(exercises)?;
+    }
+    let client_revision = payload.client_revision;
+    if client_revision.is_some_and(|revision| revision < 1) {
+        return Err(AppError::Validation(
+            "client_revision must be 1 or greater".to_string(),
+        ));
     }
 
     let mut tx = state
@@ -889,24 +906,29 @@ async fn update_workout(
         SET date = COALESCE($1, date),
             name = CASE WHEN $2 THEN $3 ELSE name END,
             notes = CASE WHEN $4 THEN $5 ELSE notes END,
+            client_revision = COALESCE($7, client_revision),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $6
+          AND ($7 IS NULL OR client_revision IS NULL OR client_revision < $7)
         "#,
         date,
         name_set,
         name,
         notes_set,
         notes,
-        id
+        id,
+        client_revision
     )
     .execute(&mut *tx)
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update workout: {e}")))?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound(format!(
-            "Workout with id {id} not found"
-        )));
+        tx.rollback().await.map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+        })?;
+        // No such Workout, which this read reports, or a revision it has already moved past.
+        return get_workout_detail(&state, id).await.map(Json);
     }
 
     if let Some(exercises) = payload.exercises {
