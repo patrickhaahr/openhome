@@ -1,20 +1,29 @@
 package com.patrickhaahr.openhome.e2e
 
 import java.net.HttpURLConnection
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import mockwebserver3.SocketEffect
 
 const val API_KEY = "e2e-api-key"
 
@@ -49,17 +58,26 @@ data class FixtureProfile(
 /**
  * The app's external boundary: an HTTP server speaking the Axum fitness contract, including its
  * `Authorization` check and its list paging (`limit` defaults to 100 and clamps to 1..500, Workouts
- * run newest first with an inclusive `to`, Body Weight oldest first with an inclusive `from`).
+ * run newest first with an inclusive `to`, Body Weight oldest first with an inclusive `from`) and
+ * Workout creates with a `request_id`: a repeat answers 200 with the same Workout, and the same
+ * `request_id` with changed arguments is a 409. Its Workouts are what a test reads back independently.
  */
 class FakeAxum(
     private val exercises: Map<Long, String> = emptyMap(),
-    private val workouts: List<FixtureWorkout> = emptyList(),
+    workouts: List<FixtureWorkout> = emptyList(),
     private val bodyWeight: List<FixtureBodyWeight> = emptyList(),
     private val profile: FixtureProfile = FixtureProfile(),
+    private val exerciseCategories: Map<Long, String> = emptyMap(),
 ) : AutoCloseable {
     private val server = MockWebServer()
     private val detailRequests = AtomicInteger()
     private val blockedDetails = CountDownLatch(1)
+    private val workouts = CopyOnWriteArrayList(workouts)
+    private val receipts = HashMap<String, Pair<Long, JsonObject>>()
+    private val deliveries = CopyOnWriteArrayList<String>()
+
+    @Volatile
+    private var workoutCreates = WorkoutCreates.ANSWERED
 
     @Volatile
     private var failDetailsAfter: Int? = null
@@ -85,7 +103,34 @@ class FakeAxum(
 
     fun healthy() {
         failDetailsAfter = null
+        workoutCreates = WorkoutCreates.ANSWERED
     }
+
+    /** Commit each Workout create, then cut the connection before answering. */
+    fun loseWorkoutResponses() {
+        workoutCreates = WorkoutCreates.COMMITTED_RESPONSE_LOST
+    }
+
+    /** Cut the connection on each Workout create without committing it, as an unreachable API would. */
+    fun dropWorkoutRequests() {
+        workoutCreates = WorkoutCreates.DROPPED
+    }
+
+    /** Answer each Workout create with a 500 and commit nothing. */
+    fun failWorkoutCreates() {
+        workoutCreates = WorkoutCreates.SERVER_ERROR
+    }
+
+    /** Answer each Workout create with a 422 and commit nothing. */
+    fun refuseWorkoutCreates() {
+        workoutCreates = WorkoutCreates.REFUSED
+    }
+
+    /** The stored Workouts, read independently of anything the app reports. */
+    fun storedWorkouts(): List<FixtureWorkout> = workouts.toList()
+
+    /** The `request_id` of every Workout create received, in order, including lost and refused ones. */
+    fun workoutDeliveries(): List<String> = deliveries.toList()
 
     /** Hang Workout detail reads, so the test can act while the app is still downloading. */
     fun holdWorkoutDetails(): CountDownLatch =
@@ -110,6 +155,7 @@ class FakeAxum(
             path == "/api/health" -> ok(buildJsonObject { put("status", "ok") })
             path == "/api/exercises" -> ok(exercisesJson())
             path == "/api/profile" -> ok(profileJson())
+            path == "/api/workouts" && request.method == "POST" -> createWorkout(request)
             path == "/api/workouts" -> {
                 val to = url.queryParameter("to")
                 ok(
@@ -144,6 +190,78 @@ class FakeAxum(
             else -> error(HttpURLConnection.HTTP_NOT_FOUND, "Not found")
         }
     }
+
+    private fun createWorkout(request: RecordedRequest): MockResponse {
+        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+        val requestId = checkNotNull(body["request_id"]).jsonPrimitive.content
+        deliveries += requestId
+        return when (workoutCreates) {
+            WorkoutCreates.DROPPED -> disconnected()
+            WorkoutCreates.SERVER_ERROR -> error(HttpURLConnection.HTTP_INTERNAL_ERROR, "An internal error occurred")
+            WorkoutCreates.REFUSED -> error(UNPROCESSABLE_ENTITY, "Exercise not found")
+            WorkoutCreates.ANSWERED -> commitWorkout(requestId, body)
+            WorkoutCreates.COMMITTED_RESPONSE_LOST -> {
+                commitWorkout(requestId, body)
+                disconnected()
+            }
+        }
+    }
+
+    private fun commitWorkout(requestId: String, body: JsonObject): MockResponse =
+        synchronized(receipts) {
+            val arguments = JsonObject(body - "request_id")
+            val receipt = receipts[requestId]
+            if (receipt != null) {
+                if (receipt.second != arguments) {
+                    return error(HttpURLConnection.HTTP_CONFLICT, "request_id was already used for a different Workout")
+                }
+                return ok(detailJson(workouts.first { it.id == receipt.first }))
+            }
+            val workout = arguments.toFixtureWorkout(id = (workouts.maxOfOrNull { it.id } ?: 0) + 1)
+            workouts += workout
+            receipts[requestId] = workout.id to arguments
+            MockResponse.Builder()
+                .code(HttpURLConnection.HTTP_CREATED)
+                .addHeader("Content-Type", "application/json")
+                .body(detailJson(workout).toString())
+                .build()
+        }
+
+    private fun JsonObject.toFixtureWorkout(id: Long) =
+        FixtureWorkout(
+            id = id,
+            date = getValue("date").jsonPrimitive.content,
+            name = text("name"),
+            notes = text("notes"),
+            entries =
+                getValue("exercises").jsonArray.map { element ->
+                    val entry = element.jsonObject
+                    FixtureEntry(
+                        exerciseId = entry.getValue("exercise_id").jsonPrimitive.long,
+                        notes = entry.text("notes"),
+                        sets =
+                            entry.getValue("sets").jsonArray.map { setElement ->
+                                val set = setElement.jsonObject
+                                FixtureSet(
+                                    setNumber = set.getValue("set_number").jsonPrimitive.int,
+                                    reps = set.number("reps")?.int,
+                                    weightKg = set.number("weight_kg")?.double,
+                                    durationSeconds = set.number("duration_seconds")?.int,
+                                    rpe = set.number("rpe")?.int,
+                                    notes = set.text("notes"),
+                                )
+                            },
+                    )
+                },
+        )
+
+    private fun JsonObject.text(key: String): String? = number(key)?.content
+
+    private fun JsonObject.number(key: String): JsonPrimitive? =
+        (this[key] as? JsonPrimitive)?.takeUnless { it is JsonNull }
+
+    private fun disconnected(): MockResponse =
+        MockResponse.Builder().onResponseStart(SocketEffect.CloseSocket()).build()
 
     private fun workoutDetail(id: Long): MockResponse {
         releaseBlockedDetails?.let {
@@ -187,7 +305,7 @@ class FakeAxum(
                 buildJsonObject {
                     put("id", id)
                     put("name", name)
-                    put("category", "calisthenics")
+                    put("category", exerciseCategories[id] ?: "calisthenics")
                     put("muscle_group", JsonNull)
                     put("equipment", JsonNull)
                 }
@@ -250,4 +368,14 @@ class FakeAxum(
             put("rpe", set.rpe)
             put("notes", set.notes)
         }
+}
+
+private const val UNPROCESSABLE_ENTITY = 422
+
+private enum class WorkoutCreates {
+    ANSWERED,
+    COMMITTED_RESPONSE_LOST,
+    DROPPED,
+    SERVER_ERROR,
+    REFUSED,
 }

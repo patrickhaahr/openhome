@@ -45,6 +45,28 @@ interface FitnessDao {
     @Query("SELECT * FROM body_weight ORDER BY date DESC")
     fun observeBodyWeight(): Flow<List<BodyWeightEntity>>
 
+    @Query("SELECT * FROM exercises ORDER BY name COLLATE NOCASE, id")
+    fun observeExercises(): Flow<List<ExerciseEntity>>
+
+    /** The most recently logged Set of an Exercise, whichever Workout it is in. */
+    @Query(
+        """
+        SELECT s.* FROM workout_sets s
+        JOIN workout_entries we ON we.id = s.entry_id
+        JOIN workouts w ON w.id = we.workout_id
+        WHERE we.exercise_id = :exerciseId
+        ORDER BY w.date DESC, w.id DESC, we.order_index DESC, s.set_number DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun latestSetOfExercise(exerciseId: Long): WorkoutSetEntity?
+
+    @Query("SELECT server_id FROM exercises WHERE id = :exerciseId")
+    suspend fun exerciseServerId(exerciseId: Long): Long?
+
+    @Query("UPDATE workouts SET server_id = :serverId WHERE id = :workoutId")
+    suspend fun setWorkoutServerId(workoutId: Long, serverId: Long)
+
     @Insert
     suspend fun insertExercises(exercises: List<ExerciseEntity>): List<Long>
 

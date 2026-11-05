@@ -32,6 +32,8 @@ import androidx.navigation.toRoute
 import com.patrickhaahr.openhome.R
 import com.patrickhaahr.openhome.ui.home.HomeScreen
 import com.patrickhaahr.openhome.ui.profile.ProfileRoute
+import com.patrickhaahr.openhome.ui.workout.ActiveWorkoutRoute
+import com.patrickhaahr.openhome.ui.workout.ExercisePickerRoute
 import com.patrickhaahr.openhome.ui.workout.HistoryRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutDetailRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutRoute
@@ -50,6 +52,12 @@ private data object History
 
 @Serializable
 private data class WorkoutDetail(val id: Long)
+
+@Serializable
+private data object ActiveWorkoutDestination
+
+@Serializable
+private data object ExercisePicker
 
 @Serializable
 private data object HomeTab
@@ -102,10 +110,34 @@ fun MainNavigation() {
             exitTransition = { fadeOut(tween(TRANSITION_MILLIS)) },
         ) {
             navigation<WorkoutTab>(startDestination = WorkoutHome) {
-                composable<WorkoutHome> {
+                composable<WorkoutHome> { entry ->
                     WorkoutRoute(
                         onOpenHistory = dropUnlessResumed { navController.navigate(History) },
                         onOpenProfile = dropUnlessResumed { navController.navigate(Profile) },
+                        onOpenActiveWorkout = {
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate(ActiveWorkoutDestination)
+                            }
+                        },
+                    )
+                }
+                composable<ActiveWorkoutDestination> {
+                    ActiveWorkoutRoute(
+                        onAddExercise = dropUnlessResumed { navController.navigate(ExercisePicker) },
+                        // Finishing and discarding replace this destination; back must not return to it.
+                        onFinished = {
+                            navController.navigate(History) { popUpTo(WorkoutHome) }
+                        },
+                        onDiscarded = { navController.popBackStack(WorkoutHome, inclusive = false) },
+                    )
+                }
+                composable<ExercisePicker> { entry ->
+                    ExercisePickerRoute(
+                        onPicked = {
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.popBackStack()
+                            }
+                        },
                     )
                 }
                 composable<History> { entry ->

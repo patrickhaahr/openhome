@@ -485,7 +485,7 @@ impl StoredLog {
 }
 
 /// A retry key trimmed of surrounding whitespace.
-pub(super) fn parse_request_id(value: &str) -> std::result::Result<String, String> {
+pub(crate) fn parse_request_id(value: &str) -> std::result::Result<String, String> {
     let value = value.trim();
     if value.is_empty()
         || value.chars().count() > MAX_REQUEST_ID_CHARS

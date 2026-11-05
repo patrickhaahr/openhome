@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
 private const val CONCURRENT_DETAIL_REQUESTS = 4
@@ -74,11 +75,25 @@ class SetupService(
         }
 
     suspend fun savedConnection(): SavedConnection? {
-        val row = setupDao.observe().first()?.takeIf { it.status == SetupStatus.COMPLETE } ?: return null
+        val row = completedSetup() ?: return null
+        return SavedConnection(row.baseUrl, apiKeyAvailable = openApiKey(row) != null)
+    }
+
+    /** What background work connects with; null when setup is unfinished or the key can't be opened. */
+    suspend fun connection(): Connection? {
+        val row = completedSetup() ?: return null
+        val apiKey = openApiKey(row) ?: return null
+        val baseUrl = row.baseUrl.toHttpUrlOrNull() ?: return null
+        return Connection(baseUrl, apiKey)
+    }
+
+    private suspend fun completedSetup(): SetupStateEntity? =
+        setupDao.observe().first()?.takeIf { it.status == SetupStatus.COMPLETE }
+
+    private fun openApiKey(row: SetupStateEntity): String? {
         val ciphertext = row.apiKeyCiphertext
         val iv = row.apiKeyIv
-        val apiKey = if (ciphertext != null && iv != null) cipher.open(SealedApiKey(ciphertext, iv)) else null
-        return SavedConnection(row.baseUrl, apiKeyAvailable = apiKey != null)
+        return if (ciphertext != null && iv != null) cipher.open(SealedApiKey(ciphertext, iv)) else null
     }
 
     /** @throws ApiFailure when the Axum API cannot be used; storage and Keystore errors propagate too. */

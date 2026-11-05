@@ -25,6 +25,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.patrickhaahr.openhome.fitness.FitnessRepository
 import com.patrickhaahr.openhome.fitness.WorkoutSummary
+import com.patrickhaahr.openhome.sync.FitnessSyncStatus
+import com.patrickhaahr.openhome.sync.SyncStatus
 import com.patrickhaahr.openhome.ui.EmptyState
 import com.patrickhaahr.openhome.ui.ScreenHeader
 import com.patrickhaahr.openhome.ui.appViewModel
@@ -32,16 +34,21 @@ import com.patrickhaahr.openhome.ui.formatDay
 import com.patrickhaahr.openhome.ui.pluralize
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
-class HistoryViewModel(fitness: FitnessRepository) : ViewModel() {
-    val workouts: StateFlow<List<WorkoutSummary>?> =
-        fitness.observeHistory().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+private class HistoryRowModel(val workout: WorkoutSummary, val sync: SyncStatus)
+
+private class HistoryViewModel(fitness: FitnessRepository, syncStatus: FitnessSyncStatus) : ViewModel() {
+    val workouts: StateFlow<List<HistoryRowModel>?> =
+        combine(fitness.observeHistory(), syncStatus.observe()) { workouts, snapshot ->
+            workouts.map { HistoryRowModel(it, snapshot.workout(it.id)) }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
 @Composable
 fun HistoryRoute(onOpenWorkout: (Long) -> Unit) {
-    val viewModel = appViewModel { HistoryViewModel(it.fitness) }
+    val viewModel = appViewModel { HistoryViewModel(it.fitness, it.syncStatus) }
     val workouts by viewModel.workouts.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
@@ -52,12 +59,12 @@ fun HistoryRoute(onOpenWorkout: (Long) -> Unit) {
         )
         when (val rows = workouts) {
             null -> Unit
-            emptyList<WorkoutSummary>() ->
+            emptyList<HistoryRowModel>() ->
                 EmptyState(title = "No Workouts yet", message = "Workouts you log will appear here.")
             else ->
                 LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
-                    items(rows, key = { it.id }) { workout ->
-                        HistoryRow(workout, onClick = { onOpenWorkout(workout.id) })
+                    items(rows, key = { it.workout.id }) { row ->
+                        HistoryRow(row, onClick = { onOpenWorkout(row.workout.id) })
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant,
                             modifier = Modifier.padding(horizontal = 20.dp),
@@ -69,7 +76,8 @@ fun HistoryRoute(onOpenWorkout: (Long) -> Unit) {
 }
 
 @Composable
-private fun HistoryRow(workout: WorkoutSummary, onClick: () -> Unit) {
+private fun HistoryRow(row: HistoryRowModel, onClick: () -> Unit) {
+    val workout = row.workout
     Column(
         modifier =
             Modifier
@@ -90,5 +98,7 @@ private fun HistoryRow(workout: WorkoutSummary, onClick: () -> Unit) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        // Quiet by default: a downloaded or synced Workout says nothing here.
+        if (row.sync != SyncStatus.Synced) SyncStatusLine(row.sync)
     }
 }

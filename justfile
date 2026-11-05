@@ -369,15 +369,16 @@ native-test class='':
 native-install:
     ./gradlew --console=plain :app:installDebug
 
-# Run the real API on :8000 with an invented key against a throwaway database (the emulator reaches it at 10.0.2.2:8000)
+# Run the real API on :8000 with an invented key against a throwaway database, or restart it on an earlier one's directory (the emulator reaches it at 10.0.2.2:8000)
 [group('native')]
-native-fixture-api key='native-fixture-key':
+native-fixture-api key='native-fixture-key' dir='':
     #!/usr/bin/env bash
     set -euo pipefail
     repo="$PWD"
     (cd api && SQLX_OFFLINE=true cargo build --bin openhome-api)
     # Outside the repo so the API's dotenv lookup finds no api/.env and stays on invented settings.
-    dir="$(mktemp -d /tmp/openhome-native-fixture.XXXXXX)"
+    dir={{quote(dir)}}
+    if [ -z "$dir" ]; then dir="$(mktemp -d /tmp/openhome-native-fixture.XXXXXX)"; fi
     cd "$dir"
     echo "Throwaway database: $dir/app.db"
     DATABASE_URL="sqlite:$dir/app.db" API_KEY={{quote(key)}} NOOP_PUSH_TOKEN=native-fixture-noop-token \
@@ -387,6 +388,11 @@ native-fixture-api key='native-fixture-key':
 [group('native')]
 native-fixture-seed key='native-fixture-key':
     python3 mobile/tools/seed_fixture.py --api-key {{quote(key)}}
+
+# Proxy the fixture API on :8001, committing the next N Workout creates but losing their responses (the emulator reaches it at 10.0.2.2:8001)
+[group('native')]
+native-fixture-lossy-proxy lose='1':
+    python3 mobile/tools/lossy_proxy.py --lose-workout-responses {{quote(lose)}}
 
 # Lint and build the native app, then run its device tests when an emulator is booted
 [group('native')]

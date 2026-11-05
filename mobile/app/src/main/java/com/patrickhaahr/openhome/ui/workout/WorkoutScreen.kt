@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,37 +26,109 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.patrickhaahr.openhome.R
+import com.patrickhaahr.openhome.fitness.ActiveWorkout
+import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.FitnessOverview
 import com.patrickhaahr.openhome.fitness.FitnessRepository
+import com.patrickhaahr.openhome.sync.FitnessSyncStatus
+import com.patrickhaahr.openhome.sync.SyncSnapshot
+import com.patrickhaahr.openhome.sync.SyncStatus
 import com.patrickhaahr.openhome.ui.ScreenHeader
 import com.patrickhaahr.openhome.ui.appViewModel
 import com.patrickhaahr.openhome.ui.formatDay
 import com.patrickhaahr.openhome.ui.pluralize
+import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
-class WorkoutViewModel(fitness: FitnessRepository) : ViewModel() {
+class WorkoutViewModel(
+    fitness: FitnessRepository,
+    private val activeWorkouts: ActiveWorkoutRepository,
+    private val syncStatus: FitnessSyncStatus,
+    private val saveScope: CoroutineScope,
+) : ViewModel() {
     val overview: StateFlow<FitnessOverview?> =
         fitness.observeOverview().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val activeWorkout: StateFlow<ActiveLookup> =
+        activeWorkouts.observe()
+            .map<ActiveWorkout?, ActiveLookup> { ActiveLookup.Loaded(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActiveLookup.Loading)
+
+    val sync: StateFlow<SyncStatus?> =
+        syncStatus.observe()
+            .map<SyncSnapshot, SyncStatus?> { it.overall }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun startEmpty(onStarted: () -> Unit) {
+        saveScope.launch {
+            activeWorkouts.startEmpty(LocalDate.now().toString())
+            onStarted()
+        }
+    }
+
+    fun syncNow() {
+        saveScope.launch { syncStatus.syncNow() }
+    }
 }
 
 @Composable
-fun WorkoutRoute(onOpenHistory: () -> Unit, onOpenProfile: () -> Unit) {
-    val viewModel = appViewModel { WorkoutViewModel(it.fitness) }
+fun WorkoutRoute(onOpenHistory: () -> Unit, onOpenProfile: () -> Unit, onOpenActiveWorkout: () -> Unit) {
+    val viewModel =
+        appViewModel { WorkoutViewModel(it.fitness, it.activeWorkout, it.syncStatus, it.saveScope) }
     val overview by viewModel.overview.collectAsStateWithLifecycle()
+    val active by viewModel.activeWorkout.collectAsStateWithLifecycle()
+    val sync by viewModel.sync.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         ScreenHeader(title = "Workout", onOpenProfile = onOpenProfile)
-        overview?.let { WorkoutOverview(it, onOpenHistory) }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when (val current = active) {
+                ActiveLookup.Loading -> Unit
+                is ActiveLookup.Loaded ->
+                    when (val workout = current.workout) {
+                        null -> StartEmptyAction(onClick = { viewModel.startEmpty(onOpenActiveWorkout) })
+                        else -> ResumeAction(workout, onClick = onOpenActiveWorkout)
+                    }
+            }
+            overview?.let { WorkoutOverview(it, onOpenHistory) }
+            sync?.let {
+                SyncStatusLine(it, onSyncNow = viewModel::syncNow, modifier = Modifier.padding(horizontal = 20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StartEmptyAction(onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        Text(text = "Start Empty", style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+private fun ResumeAction(workout: ActiveWorkout, onClick: () -> Unit) {
+    val confirmed = workout.entries.sumOf { entry -> entry.sets.count { it.completed } }
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "Resume Workout", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "${formatDay(workout.date)} · ${pluralize(confirmed, "Set")} confirmed",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }
 
 @Composable
 private fun WorkoutOverview(overview: FitnessOverview, onOpenHistory: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainer,
             shape = MaterialTheme.shapes.large,

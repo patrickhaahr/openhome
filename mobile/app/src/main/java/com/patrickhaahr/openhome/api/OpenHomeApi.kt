@@ -7,11 +7,15 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /** The largest page the Axum list endpoints serve; they clamp `limit` to it and default to 100. */
 private const val PAGE_SIZE = 500
+
+private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
 /** Why a call to the Axum API did not produce a usable answer. */
 sealed class ApiFailure(message: String, cause: Throwable? = null) : Exception(message, cause) {
@@ -33,7 +37,7 @@ fun newOpenHomeHttpClient(): OkHttpClient =
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-/** Authenticated reads of the Axum API; every failure surfaces as an [ApiFailure]. */
+/** Authenticated calls to the Axum API; every failure surfaces as an [ApiFailure]. */
 class OpenHomeApi(
     private val baseUrl: HttpUrl,
     private val apiKey: String,
@@ -57,6 +61,17 @@ class OpenHomeApi(
     suspend fun workoutDetail(id: Long): ApiWorkoutDetail = get("api/workouts/$id")
 
     suspend fun profile(): ApiProfile = get("api/profile")
+
+    /** Answers with the same Workout however many times one `request_id` is delivered. */
+    suspend fun createWorkout(workout: ApiWorkoutCreate): ApiWorkoutCreated {
+        val request =
+            Request.Builder()
+                .url(baseUrl.newBuilder().addPathSegments("api/workouts").build())
+                .header("Authorization", "Bearer $apiKey")
+                .post(json.encodeToString(workout).toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+        return decode(execute(request))
+    }
 
     /** The whole History, newest first: the list endpoint alone returns only its newest page. */
     suspend fun allWorkoutSummaries(): List<ApiWorkoutSummary> =
@@ -105,13 +120,15 @@ class OpenHomeApi(
                 .url(url.build())
                 .header("Authorization", "Bearer $apiKey")
                 .build()
-        val body = execute(request)
-        return try {
+        return decode(execute(request))
+    }
+
+    private inline fun <reified T> decode(body: String): T =
+        try {
             json.decodeFromString<T>(body)
         } catch (error: SerializationException) {
             throw ApiFailure.UnreadableResponse(error)
         }
-    }
 
     private suspend fun execute(request: Request): String =
         runInterruptible(Dispatchers.IO) {

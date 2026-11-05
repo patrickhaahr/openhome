@@ -26,15 +26,20 @@ import com.patrickhaahr.openhome.fitness.FitnessRepository
 import com.patrickhaahr.openhome.fitness.Workout
 import com.patrickhaahr.openhome.fitness.WorkoutEntry
 import com.patrickhaahr.openhome.fitness.WorkoutSet
+import com.patrickhaahr.openhome.sync.FitnessSyncStatus
+import com.patrickhaahr.openhome.sync.SyncSnapshot
+import com.patrickhaahr.openhome.sync.SyncStatus
 import com.patrickhaahr.openhome.ui.EmptyState
 import com.patrickhaahr.openhome.ui.ScreenHeader
 import com.patrickhaahr.openhome.ui.appViewModel
 import com.patrickhaahr.openhome.ui.formatDay
 import com.patrickhaahr.openhome.ui.formatKilograms
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 private val SET_NUMBER_WIDTH = 28.dp
 
@@ -44,29 +49,44 @@ private sealed interface WorkoutLookup {
     data class Loaded(val workout: Workout?) : WorkoutLookup
 }
 
-private class WorkoutDetailViewModel(fitness: FitnessRepository, workoutId: Long) : ViewModel() {
+private class WorkoutDetailViewModel(
+    fitness: FitnessRepository,
+    private val syncStatus: FitnessSyncStatus,
+    private val saveScope: CoroutineScope,
+    workoutId: Long,
+) : ViewModel() {
     val lookup: StateFlow<WorkoutLookup> =
         fitness.observeWorkout(workoutId)
             .map<Workout?, WorkoutLookup> { WorkoutLookup.Loaded(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WorkoutLookup.Loading)
+
+    val sync: StateFlow<SyncStatus?> =
+        syncStatus.observe()
+            .map<SyncSnapshot, SyncStatus?> { it.workout(workoutId) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun syncNow() {
+        saveScope.launch { syncStatus.syncNow() }
+    }
 }
 
 @Composable
 fun WorkoutDetailRoute(workoutId: Long) {
-    val viewModel = appViewModel { WorkoutDetailViewModel(it.fitness, workoutId) }
+    val viewModel = appViewModel { WorkoutDetailViewModel(it.fitness, it.syncStatus, it.saveScope, workoutId) }
     val lookup by viewModel.lookup.collectAsStateWithLifecycle()
+    val sync by viewModel.sync.collectAsStateWithLifecycle()
     when (val current = lookup) {
         WorkoutLookup.Loading -> Unit
         is WorkoutLookup.Loaded ->
             when (val workout = current.workout) {
                 null -> EmptyState(title = "Workout not found", message = "This Workout isn't saved on this device.")
-                else -> WorkoutDetail(workout)
+                else -> WorkoutDetail(workout, sync, onSyncNow = viewModel::syncNow)
             }
     }
 }
 
 @Composable
-private fun WorkoutDetail(workout: Workout) {
+private fun WorkoutDetail(workout: Workout, sync: SyncStatus?, onSyncNow: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -74,6 +94,7 @@ private fun WorkoutDetail(workout: Workout) {
     ) {
         item {
             ScreenHeader(title = formatDay(workout.date), subtitle = workout.name)
+            sync?.let { SyncStatusLine(it, onSyncNow = onSyncNow, modifier = Modifier.padding(horizontal = 20.dp)) }
             workout.notes?.let {
                 Text(
                     text = it,

@@ -2,6 +2,7 @@ package com.patrickhaahr.openhome.fitness
 
 import com.patrickhaahr.openhome.storage.BodyWeightEntity
 import com.patrickhaahr.openhome.storage.EntryWithDetails
+import com.patrickhaahr.openhome.storage.ExerciseEntity
 import com.patrickhaahr.openhome.storage.FitnessDao
 import com.patrickhaahr.openhome.storage.ProfileEntity
 import com.patrickhaahr.openhome.storage.WorkoutSummaryRow
@@ -38,6 +39,9 @@ class FitnessRepository(private val dao: FitnessDao) {
                 )
             }
         }
+
+    fun observeExercises(): Flow<List<Exercise>> =
+        dao.observeExercises().map { rows -> rows.map(ExerciseEntity::toDomain) }
 
     fun observeProfile(): Flow<Profile?> = dao.observeProfile().map { it?.toDomain() }
 
@@ -76,6 +80,8 @@ private fun EntryWithDetails.toDomain() =
                     )
                 },
     )
+
+private fun ExerciseEntity.toDomain() = Exercise(id, name, category, muscleGroup, equipment)
 
 private fun ProfileEntity.toDomain() =
     Profile(

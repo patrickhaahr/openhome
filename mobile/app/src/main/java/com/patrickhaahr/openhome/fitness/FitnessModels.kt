@@ -42,6 +42,14 @@ data class WorkoutSet(
     val notes: String?,
 )
 
+data class Exercise(
+    val id: Long,
+    val name: String,
+    val category: String,
+    val muscleGroup: String?,
+    val equipment: String?,
+)
+
 data class FitnessOverview(
     val workoutCount: Int,
     val exerciseCount: Int,

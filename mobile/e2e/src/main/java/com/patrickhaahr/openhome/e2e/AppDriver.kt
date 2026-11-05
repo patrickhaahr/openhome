@@ -21,6 +21,11 @@ private const val TAP_ATTEMPTS = 5
 private const val SETTLE_MS = 400L
 private const val FLING_STEPS = 3
 private const val END_OF_LIST_PASSES = 3
+private const val SYNC_TIMEOUT_MS = 90_000L
+private const val SCROLL_ATTEMPTS = 8
+private const val NETWORK_TIMEOUT_MS = 45_000L
+private const val POLL_MS = 500L
+private const val SWIPE_STEPS = 20
 private val ANY_TEXT = Pattern.compile(".+", Pattern.DOTALL)
 
 /** Drives the installed app from outside its process, the way the user and Android do. */
@@ -37,6 +42,25 @@ class AppDriver {
         device.executeShellCommand("am force-stop $APP_PACKAGE")
         device.executeShellCommand("am start -W -n $APP_PACKAGE/com.patrickhaahr.openhome.MainActivity")
         assertTrue("App did not reach the foreground", device.wait(Until.hasObject(By.pkg(APP_PACKAGE)), TIMEOUT_MS))
+    }
+
+    /** The real radio: Wi-Fi off leaves the emulator's metered mobile data as the default network. */
+    fun setWifi(enabled: Boolean) {
+        device.executeShellCommand("svc wifi ${if (enabled) "enable" else "disable"}")
+        val wanted = if (enabled) "WIFI" else "CELLULAR"
+        val deadline = SystemClock.uptimeMillis() + NETWORK_TIMEOUT_MS
+        while (defaultNetworkTransport() != wanted) {
+            check(SystemClock.uptimeMillis() < deadline) { "Default network never became $wanted" }
+            SystemClock.sleep(POLL_MS)
+        }
+    }
+
+    /** The default network's transport as Android itself reports it. */
+    private fun defaultNetworkTransport(): String? {
+        val dump = device.executeShellCommand("dumpsys connectivity")
+        val network = Regex("Active default network: (\\d+)").find(dump)?.groupValues?.get(1) ?: return null
+        val agent = dump.lineSequence().firstOrNull { it.contains("NetworkAgentInfo{network{$network}") } ?: return null
+        return Regex("Transports: (\\w+)").find(agent)?.groupValues?.get(1)
     }
 
     fun pressBackButton() {
@@ -63,6 +87,73 @@ class AppDriver {
             "Expected text containing \"$text\""
         }
 
+    /** Synchronization runs in the background, whenever Android lets its job start. */
+    fun assertEventuallyVisible(text: String) {
+        checkNotNull(device.wait(Until.findObject(By.text(text)), SYNC_TIMEOUT_MS)) { "Expected to see \"$text\" eventually" }
+    }
+
+    /** The field or control with this description, scrolled into view. */
+    fun described(description: String): UiObject2 {
+        val selector = By.desc(description)
+        val x = device.displayWidth / 2
+        val high = device.displayHeight * 2 / 3
+        val low = device.displayHeight / 3
+        repeat(SCROLL_ATTEMPTS) { attempt ->
+            device.waitForIdle()
+            device.findObject(selector)?.let { return it }
+            // Downward first, then back up past where it started.
+            if (attempt < SCROLL_ATTEMPTS / 2) device.swipe(x, high, x, low, SWIPE_STEPS) else device.swipe(x, low, x, high, SWIPE_STEPS)
+        }
+        error("Nothing described as \"$description\"")
+    }
+
+    /** A text field whose description labels it, scrolled into view. */
+    private fun describedField(description: String): UiObject2 {
+        described(description)
+        return checkNotNull(
+            device.wait(
+                Until.findObject(By.clazz("android.widget.EditText").hasDescendant(By.desc(description))),
+                TIMEOUT_MS,
+            ),
+        ) { "No field described as \"$description\"" }
+    }
+
+    fun enterDescribed(description: String, value: String) {
+        describedField(description).text = value
+        device.waitForIdle()
+    }
+
+    fun assertDescribedValue(description: String, expected: String) {
+        assertEquals(description, expected, describedField(description).text.orEmpty())
+    }
+
+    fun tapScrolledTo(description: String) {
+        described(description)
+        tapDescription(description)
+    }
+
+    fun assertChecked(description: String, expected: Boolean) {
+        described(description)
+        assertTrue(
+            "\"$description\" should be ${if (expected) "checked" else "unchecked"}",
+            device.wait(Until.hasObject(By.desc(description).checked(expected)), TIMEOUT_MS),
+        )
+    }
+
+    /** Scrolls the current list until a button or line with this text can be tapped. */
+    fun tapBelow(text: String) {
+        val x = device.displayWidth / 2
+        repeat(SCROLL_ATTEMPTS) {
+            device.waitForIdle()
+            if (device.hasObject(By.text(text))) {
+                tap(text)
+                return
+            }
+            device.swipe(x, device.displayHeight * 2 / 3, x, device.displayHeight / 3, SWIPE_STEPS)
+        }
+        error("Nothing to tap reading \"$text\"")
+    }
+
     fun assertAbsent(text: String) {
         device.waitForIdle()
         assertNull("Did not expect to see \"$text\"", device.wait(Until.findObject(By.text(text)), ABSENCE_WAIT_MS))
@@ -70,6 +161,15 @@ class AppDriver {
 
     fun tap(text: String) {
         tapWhenSettled(By.text(text))
+    }
+
+    fun tapTextContaining(text: String) {
+        tapWhenSettled(By.textContains(text))
+    }
+
+    /** For asserting that something does not happen, given time it would need if it did. */
+    fun sleepFor(millis: Long) {
+        SystemClock.sleep(millis)
     }
 
     fun tapDescription(description: String) {

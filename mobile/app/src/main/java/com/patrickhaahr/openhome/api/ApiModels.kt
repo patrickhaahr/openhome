@@ -67,3 +67,23 @@ data class ApiBodyWeight(
     val date: String,
     @SerialName("weight_kg") val weightKg: Double,
 )
+
+/** A Workout create; [requestId] makes it safe to retry after an uncertain outcome. */
+@Serializable
+data class ApiWorkoutCreate(
+    @SerialName("request_id") val requestId: String,
+    val date: String,
+    val name: String? = null,
+    val notes: String? = null,
+    val exercises: List<ApiWorkoutCreateEntry>,
+)
+
+@Serializable
+data class ApiWorkoutCreateEntry(
+    @SerialName("exercise_id") val exerciseId: Long,
+    @SerialName("order_index") val orderIndex: Long,
+    val sets: List<ApiSet>,
+)
+
+@Serializable
+data class ApiWorkoutCreated(val id: Long)
