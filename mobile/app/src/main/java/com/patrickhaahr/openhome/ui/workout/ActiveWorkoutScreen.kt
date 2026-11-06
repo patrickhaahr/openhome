@@ -25,19 +25,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,14 +65,13 @@ import com.patrickhaahr.openhome.fitness.RestTimers
 import com.patrickhaahr.openhome.fitness.SetCheck
 import com.patrickhaahr.openhome.fitness.SetField
 import com.patrickhaahr.openhome.storage.SetMeasure
+import com.patrickhaahr.openhome.ui.DayPicker
 import com.patrickhaahr.openhome.ui.EmptyState
 import com.patrickhaahr.openhome.ui.ScreenHeader
 import com.patrickhaahr.openhome.ui.appViewModel
 import com.patrickhaahr.openhome.ui.formatDay
 import com.patrickhaahr.openhome.ui.pluralize
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -337,7 +331,7 @@ private fun ActiveWorkoutContent(
     }
 
     if (choosingDate) {
-        WorkoutDatePicker(
+        DayPicker(
             date = workout.date,
             onChosen = viewModel::setDate,
             onDismiss = { choosingDate = false },
@@ -787,40 +781,6 @@ internal fun CompactValueField(
         },
     )
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun WorkoutDatePicker(date: String, onChosen: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    val today = remember { LocalDate.now() }
-    val state =
-        rememberDatePickerState(
-            initialSelectedDateMillis = LocalDate.parse(date).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-            selectableDates =
-                object : SelectableDates {
-                    override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis.toUtcDay() <= today
-
-                    override fun isSelectableYear(year: Int) = year <= today.year
-                },
-        )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    state.selectedDateMillis?.let { onChosen(it.toUtcDay()) }
-                    onDismiss()
-                },
-            ) {
-                Text("Set date")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    ) {
-        DatePicker(state = state)
-    }
-}
-
-private fun Long.toUtcDay(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
 
 /** Finishing never silently records or drops a row: this names what is left out and asks. */
 @Composable

@@ -2,8 +2,8 @@
 """Forward the emulator's traffic to a local fixture API, losing some create and edit responses.
 
 The fixture API receives and commits each lost change; the client only sees its connection cut, which
-is the outcome a duplicate-safe retry has to survive. Workout edits are printed whole, so one can be
-replayed later by hand. Everything else passes through unchanged, and a stopped API looks unreachable.
+is the outcome a duplicate-safe retry has to survive. Workout and Profile edits are printed whole, so one
+can be replayed later by hand. Everything else passes through unchanged, and a stopped API looks unreachable.
 It only ever forwards to loopback; the emulator reaches it via 10.0.2.2.
 """
 
@@ -23,6 +23,8 @@ def main() -> None:
     parser.add_argument("--lose-workout-responses", type=int, default=1)
     parser.add_argument("--lose-exercise-responses", type=int, default=0)
     parser.add_argument("--lose-edit-responses", type=int, default=0)
+    parser.add_argument("--lose-body-weight-responses", type=int, default=0)
+    parser.add_argument("--lose-profile-responses", type=int, default=0)
     parser.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
 
@@ -31,6 +33,8 @@ def main() -> None:
         "/api/workouts": args.lose_workout_responses,
         "/api/exercises": args.lose_exercise_responses,
         "edits": args.lose_edit_responses,
+        "/api/body_weight": args.lose_body_weight_responses,
+        "/api/profile": args.lose_profile_responses,
     }
 
     def lose_this_response(kind: str) -> bool:
@@ -43,7 +47,9 @@ def main() -> None:
     def response_lost(command: str, path: str) -> bool:
         if command == "POST":
             return lose_this_response(path)
-        return command == "PATCH" and WORKOUT_EDIT.fullmatch(path) is not None and lose_this_response("edits")
+        if command != "PATCH":
+            return False
+        return lose_this_response("edits" if WORKOUT_EDIT.fullmatch(path) else path)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"

@@ -102,6 +102,8 @@ data class ProfileEntity(
     val sex: String?,
     @ColumnInfo(name = "hr_max_bpm") val hrMaxBpm: Long?,
     @ColumnInfo(name = "birth_date") val birthDate: String?,
+    /** The newest edit's revision, continuing from Axum's on download so a later one still outranks it. */
+    @ColumnInfo(name = "client_revision", defaultValue = "0") val clientRevision: Long = 0,
 )
 
 const val SINGLE_ROW_ID = 1

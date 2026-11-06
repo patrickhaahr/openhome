@@ -5,6 +5,7 @@ import com.patrickhaahr.openhome.api.newOpenHomeHttpClient
 import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.ExerciseLibrary
 import com.patrickhaahr.openhome.fitness.FitnessRepository
+import com.patrickhaahr.openhome.fitness.ProfileRecords
 import com.patrickhaahr.openhome.fitness.RestAlarm
 import com.patrickhaahr.openhome.fitness.RestTimers
 import com.patrickhaahr.openhome.fitness.WorkoutCorrections
@@ -39,4 +40,5 @@ class AppContainer(context: Context) {
     val activeWorkout = ActiveWorkoutRepository(database, outbox, syncScheduler, restTimers)
     val exerciseLibrary = ExerciseLibrary(database, outbox, syncScheduler)
     val corrections = WorkoutCorrections(database, outbox, syncScheduler)
+    val profileRecords = ProfileRecords(database, outbox, syncScheduler)
 }

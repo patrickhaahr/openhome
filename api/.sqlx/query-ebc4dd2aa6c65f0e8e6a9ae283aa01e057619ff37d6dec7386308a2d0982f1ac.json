@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT height_cm, sex, hr_max_bpm, birth_date AS \"birth_date?\"\n        FROM profile\n        WHERE id = 1\n        ",
+  "query": "\n        SELECT height_cm, sex, hr_max_bpm, birth_date AS \"birth_date?\",\n               client_revision AS \"client_revision?\"\n        FROM profile\n        WHERE id = 1\n        ",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "name": "birth_date?",
         "ordinal": 3,
         "type_info": "Text"
+      },
+      {
+        "name": "client_revision?",
+        "ordinal": 4,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -31,8 +36,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "c56dab124ed39d4aef45d72b3da73b9a8b1cac92b23968a077c9b7390c37c5ac"
+  "hash": "ebc4dd2aa6c65f0e8e6a9ae283aa01e057619ff37d6dec7386308a2d0982f1ac"
 }

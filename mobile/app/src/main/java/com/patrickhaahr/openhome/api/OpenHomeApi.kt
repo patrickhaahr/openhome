@@ -74,6 +74,17 @@ class OpenHomeApi(
     suspend fun editWorkout(id: Long, edit: ApiWorkoutEdit): ApiWorkoutCreated =
         send("PATCH", "api/workouts/$id", json.encodeToString(edit))
 
+    /** Answers with the same record however many times one `request_id` is delivered. */
+    suspend fun createBodyWeight(entry: ApiBodyWeightCreate): ApiBodyWeight =
+        post("api/body_weight", json.encodeToString(entry))
+
+    /** Delivering the same revision again, or an older one, changes nothing and answers the Profile as it is. */
+    suspend fun editProfile(edit: ApiProfileEdit): ApiProfile =
+        send("PATCH", "api/profile", json.encodeToString(edit))
+
+    suspend fun bodyWeightOn(date: String): ApiBodyWeight? =
+        get<List<ApiBodyWeight>>("api/body_weight", "from" to date, "to" to date, "limit" to "1").firstOrNull()
+
     private suspend inline fun <reified T> post(path: String, body: String): T = send("POST", path, body)
 
     private suspend inline fun <reified T> send(method: String, path: String, body: String): T {

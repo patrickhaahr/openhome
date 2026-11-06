@@ -93,7 +93,7 @@ private fun List<WorkoutSetEntity>.toOrderedDomain() =
 
 private fun ExerciseEntity.toDomain() = Exercise(id, name, category, muscleGroup, equipment)
 
-private fun ProfileEntity.toDomain() =
+internal fun ProfileEntity.toDomain() =
     Profile(
         heightCm = heightCm,
         sex = sex,
@@ -101,4 +101,4 @@ private fun ProfileEntity.toDomain() =
         maxHeartRateBpm = hrMaxBpm,
     )
 
-private fun BodyWeightEntity.toDomain() = BodyWeight(date, weightKg)
+internal fun BodyWeightEntity.toDomain() = BodyWeight(date, weightKg)

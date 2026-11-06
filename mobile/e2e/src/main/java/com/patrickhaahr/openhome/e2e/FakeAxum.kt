@@ -62,6 +62,7 @@ data class FixtureProfile(
     val sex: String? = null,
     val hrMaxBpm: Int? = null,
     val birthDate: String? = null,
+    val clientRevision: Long? = null,
 )
 
 /**
@@ -71,14 +72,16 @@ data class FixtureProfile(
  * Workout and Exercise creates with a `request_id`: a repeat answers 200 with the same record, and the
  * same `request_id` with changed arguments is a 409. Exercise names are unique, also a 409. Workout
  * edits replace the entries they state, keep a name or notes they leave out, and apply only when their
- * `client_revision` is newer, otherwise answering the Workout as it is. Its Workouts and Exercises are
- * what a test reads back independently.
+ * `client_revision` is newer, otherwise answering the Workout as it is. Body Weight records follow the
+ * same `request_id` rule, and a date recorded under any other is a 409. Profile edits keep what they
+ * leave out, clear what they send as null and follow the same `client_revision` rule. Its stored records
+ * are what a test reads back independently.
  */
 class FakeAxum(
     exercises: Map<Long, String> = emptyMap(),
     workouts: List<FixtureWorkout> = emptyList(),
-    private val bodyWeight: List<FixtureBodyWeight> = emptyList(),
-    private val profile: FixtureProfile = FixtureProfile(),
+    bodyWeight: List<FixtureBodyWeight> = emptyList(),
+    profile: FixtureProfile = FixtureProfile(),
     exerciseCategories: Map<Long, String> = emptyMap(),
     exerciseDetails: List<FixtureExercise> = emptyList(),
 ) : AutoCloseable {
@@ -96,6 +99,19 @@ class FakeAxum(
     private val exerciseDeliveries = CopyOnWriteArrayList<String>()
     private val createOrder = CopyOnWriteArrayList<String>()
     private val editDeliveries = CopyOnWriteArrayList<Long>()
+    private val bodyWeight = CopyOnWriteArrayList(bodyWeight)
+    private val bodyWeightReceipts = HashMap<String, Pair<Long, JsonObject>>()
+    private val bodyWeightDeliveries = CopyOnWriteArrayList<String>()
+    private val profileDeliveries = CopyOnWriteArrayList<Long>()
+
+    @Volatile
+    private var profile = profile
+
+    @Volatile
+    private var losingBodyWeightResponses = false
+
+    @Volatile
+    private var losingProfileResponses = false
 
     @Volatile
     private var workoutEdits = WorkoutEdits.ANSWERED
@@ -133,7 +149,36 @@ class FakeAxum(
         workoutCreates = WorkoutCreates.ANSWERED
         exerciseCreates = ExerciseCreates.ANSWERED
         workoutEdits = WorkoutEdits.ANSWERED
+        losingBodyWeightResponses = false
+        losingProfileResponses = false
     }
+
+    /** Commit each Body Weight record, then cut the connection before answering. */
+    fun loseBodyWeightResponses() {
+        losingBodyWeightResponses = true
+    }
+
+    /** Commit each Profile edit, then cut the connection before answering. */
+    fun loseProfileResponses() {
+        losingProfileResponses = true
+    }
+
+    /** Another client records a Body Weight after this app's Setup Flow. */
+    fun putBodyWeight(date: String, weightKg: Double) {
+        bodyWeight += FixtureBodyWeight((bodyWeight.maxOfOrNull { it.id } ?: 0) + 1, date, weightKg)
+    }
+
+    /** The stored Body Weight records, oldest first, read independently of anything the app reports. */
+    fun storedBodyWeight(): List<FixtureBodyWeight> = bodyWeight.sortedBy { it.date }
+
+    /** The stored Profile, read independently of anything the app reports. */
+    fun storedProfile(): FixtureProfile = profile
+
+    /** The `request_id` of every Body Weight record received, in order, including lost and refused ones. */
+    fun bodyWeightDeliveries(): List<String> = bodyWeightDeliveries.toList()
+
+    /** The `client_revision` of every Profile edit received, in order, including lost ones. */
+    fun profileDeliveries(): List<Long> = profileDeliveries.toList()
 
     /** Commit each Workout edit, then cut the connection before answering. */
     fun loseEditResponses() {
@@ -217,7 +262,9 @@ class FakeAxum(
             path == "/api/health" -> ok(buildJsonObject { put("status", "ok") })
             path == "/api/exercises" && request.method == "POST" -> createExercise(request)
             path == "/api/exercises" -> ok(exercisesJson())
+            path == "/api/profile" && request.method == "PATCH" -> editProfile(request)
             path == "/api/profile" -> ok(profileJson())
+            path == "/api/body_weight" && request.method == "POST" -> createBodyWeight(request)
             path == "/api/workouts" && request.method == "POST" -> createWorkout(request)
             path == "/api/workouts" -> {
                 val to = url.queryParameter("to")
@@ -236,19 +283,14 @@ class FakeAxum(
             path.startsWith("/api/workouts/") -> workoutDetail(path.substringAfterLast('/').toLong())
             path == "/api/body_weight" -> {
                 val from = url.queryParameter("from")
+                val to = url.queryParameter("to")
                 ok(
                     JsonArray(
                         bodyWeight
-                            .filter { from == null || it.date >= from }
+                            .filter { (from == null || it.date >= from) && (to == null || it.date <= to) }
                             .sortedBy { it.date }
                             .take(pageLimit(url.queryParameter("limit")))
-                            .map {
-                                buildJsonObject {
-                                    put("id", it.id)
-                                    put("date", it.date)
-                                    put("weight_kg", it.weightKg)
-                                }
-                            },
+                            .map(::bodyWeightJson),
                     ),
                 )
             }
@@ -296,6 +338,63 @@ class FakeAxum(
             createOrder += "edit:${edited.name}"
             ok(detailJson(edited))
         }
+
+    private fun createBodyWeight(request: RecordedRequest): MockResponse {
+        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+        val requestId = checkNotNull(body["request_id"]).jsonPrimitive.content
+        bodyWeightDeliveries += requestId
+        val answer = commitBodyWeight(requestId, body)
+        return if (losingBodyWeightResponses) disconnected() else answer
+    }
+
+    private fun commitBodyWeight(requestId: String, body: JsonObject): MockResponse =
+        synchronized(bodyWeightReceipts) {
+            val arguments = JsonObject(body - "request_id")
+            val receipt = bodyWeightReceipts[requestId]
+            if (receipt != null) {
+                if (receipt.second != arguments) {
+                    return error(HttpURLConnection.HTTP_CONFLICT, "request_id was already used for a different Body Weight")
+                }
+                return ok(bodyWeightJson(bodyWeight.first { it.id == receipt.first }))
+            }
+            val date = arguments.getValue("date").jsonPrimitive.content
+            if (bodyWeight.any { it.date == date }) {
+                return error(HttpURLConnection.HTTP_CONFLICT, "Body weight for date '$date' already recorded")
+            }
+            val entry =
+                FixtureBodyWeight(
+                    id = (bodyWeight.maxOfOrNull { it.id } ?: 0) + 1,
+                    date = date,
+                    weightKg = arguments.getValue("weight_kg").jsonPrimitive.double,
+                )
+            bodyWeight += entry
+            bodyWeightReceipts[requestId] = entry.id to arguments
+            MockResponse.Builder()
+                .code(HttpURLConnection.HTTP_CREATED)
+                .addHeader("Content-Type", "application/json")
+                .body(bodyWeightJson(entry).toString())
+                .build()
+        }
+
+    private fun editProfile(request: RecordedRequest): MockResponse {
+        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+        val revision = checkNotNull(body["client_revision"]).jsonPrimitive.long
+        profileDeliveries += revision
+        synchronized(profileDeliveries) {
+            val current = profile
+            if ((current.clientRevision ?: 0) < revision) {
+                profile =
+                    FixtureProfile(
+                        heightCm = if ("height_cm" in body) body.number("height_cm")?.double else current.heightCm,
+                        sex = if ("sex" in body) body.text("sex") else current.sex,
+                        hrMaxBpm = if ("hr_max_bpm" in body) body.number("hr_max_bpm")?.int else current.hrMaxBpm,
+                        birthDate = if ("birth_date" in body) body.text("birth_date") else current.birthDate,
+                        clientRevision = revision,
+                    )
+            }
+        }
+        return if (losingProfileResponses) disconnected() else ok(profileJson())
+    }
 
     private fun createExercise(request: RecordedRequest): MockResponse {
         val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
@@ -441,12 +540,20 @@ class FakeAxum(
             put("equipment", exercise.equipment)
         }
 
+    private fun bodyWeightJson(entry: FixtureBodyWeight) =
+        buildJsonObject {
+            put("id", entry.id)
+            put("date", entry.date)
+            put("weight_kg", entry.weightKg)
+        }
+
     private fun profileJson() =
         buildJsonObject {
             put("height_cm", profile.heightCm)
             put("sex", profile.sex)
             put("hr_max_bpm", profile.hrMaxBpm)
             put("birth_date", profile.birthDate)
+            profile.clientRevision?.let { put("client_revision", it) }
         }
 
     private fun summaryJson(workout: FixtureWorkout) =

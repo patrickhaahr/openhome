@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 private const val SUMMARY_COLUMNS =
@@ -60,8 +61,20 @@ interface FitnessDao {
     @Query("SELECT * FROM profile WHERE id = $SINGLE_ROW_ID")
     fun observeProfile(): Flow<ProfileEntity?>
 
+    @Query("SELECT * FROM profile WHERE id = $SINGLE_ROW_ID")
+    suspend fun loadProfile(): ProfileEntity?
+
+    @Upsert
+    suspend fun saveProfile(profile: ProfileEntity)
+
     @Query("SELECT * FROM body_weight ORDER BY date DESC")
     fun observeBodyWeight(): Flow<List<BodyWeightEntity>>
+
+    @Query("SELECT * FROM body_weight WHERE date = :date")
+    suspend fun bodyWeightOn(date: String): BodyWeightEntity?
+
+    @Query("UPDATE body_weight SET weight_kg = :weightKg WHERE date = :date")
+    suspend fun setBodyWeight(date: String, weightKg: Double)
 
     @Query("SELECT * FROM exercises ORDER BY name COLLATE NOCASE, id")
     fun observeExercises(): Flow<List<ExerciseEntity>>

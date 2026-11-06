@@ -59,6 +59,7 @@ private fun SyncStatus.label(): String =
                 SyncProblem.WORKOUT_NOT_SYNCED -> "Saved on device · Waiting for this Workout's first sync"
                 SyncProblem.REFUSED,
                 SyncProblem.NAME_TAKEN,
+                SyncProblem.DATE_TAKEN,
                 -> "Saved on device · OpenHome refused this change"
             }
     }

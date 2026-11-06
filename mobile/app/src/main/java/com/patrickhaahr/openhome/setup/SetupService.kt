@@ -226,6 +226,7 @@ class SetupService(
                 sex = profile.sex,
                 hrMaxBpm = profile.hrMaxBpm,
                 birthDate = profile.birthDate,
+                clientRevision = profile.clientRevision,
             ),
         )
     }

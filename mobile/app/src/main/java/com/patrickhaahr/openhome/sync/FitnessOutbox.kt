@@ -1,9 +1,11 @@
 package com.patrickhaahr.openhome.sync
 
 import androidx.room.withTransaction
+import com.patrickhaahr.openhome.api.ApiBodyWeightCreate
 import com.patrickhaahr.openhome.api.ApiExercise
 import com.patrickhaahr.openhome.api.ApiExerciseCreate
 import com.patrickhaahr.openhome.api.ApiFailure
+import com.patrickhaahr.openhome.api.ApiProfileEdit
 import com.patrickhaahr.openhome.api.ApiSet
 import com.patrickhaahr.openhome.api.ApiWorkoutCreate
 import com.patrickhaahr.openhome.api.ApiWorkoutCreateEntry
@@ -12,7 +14,10 @@ import com.patrickhaahr.openhome.api.OpenHomeApi
 import com.patrickhaahr.openhome.storage.OpenHomeDatabase
 import com.patrickhaahr.openhome.storage.OutboxEntity
 import com.patrickhaahr.openhome.storage.OutboxKind
+import com.patrickhaahr.openhome.storage.SINGLE_ROW_ID
 import com.patrickhaahr.openhome.storage.SyncProblem
+import com.patrickhaahr.openhome.storage.bodyWeightRecordId
+import java.time.LocalDate
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,6 +61,23 @@ data class QueuedExercise(
     val muscleGroup: String? = null,
     val equipment: String? = null,
     val useExisting: Boolean = false,
+)
+
+/**
+ * A new Body Weight as queued. [useExisting] means the user chose the record Axum already holds for
+ * this date, so delivery takes its value rather than recording one.
+ */
+@Serializable
+data class QueuedBodyWeight(val date: String, val weightKg: Double, val useExisting: Boolean = false)
+
+/** A whole Profile as edited, so the newest edit alone is enough. Queued rows outlive app updates: only add optional fields. */
+@Serializable
+data class QueuedProfile(
+    val heightCm: Double?,
+    val sex: String?,
+    val hrMaxBpm: Long?,
+    val birthDate: String?,
+    val clientRevision: Long,
 )
 
 enum class DeliveryRun {
@@ -144,6 +166,47 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
             payload = Json.encodeToString(exercise),
         ) > 0
 
+    /** Call inside the transaction that records the Body Weight, so neither can exist without the other. */
+    suspend fun enqueueBodyWeight(entry: QueuedBodyWeight) {
+        dao.insert(
+            OutboxEntity(
+                kind = OutboxKind.CREATE_BODY_WEIGHT,
+                recordId = bodyWeightRecordId(LocalDate.parse(entry.date)),
+                requestId = UUID.randomUUID().toString(),
+                payload = Json.encodeToString(entry),
+            ),
+        )
+    }
+
+    /**
+     * The user's answer to a taken date: drop this value for the record Axum holds, from the same place
+     * in the queue. A new `request_id`, since this one is only ever sent if Axum turns out to hold none.
+     * Returns false, changing nothing, when the record is no longer refused.
+     */
+    suspend fun useBodyWeightOnServer(date: String, weightKg: Double): Boolean =
+        dao.replaceRefused(
+            kind = OutboxKind.CREATE_BODY_WEIGHT,
+            recordId = bodyWeightRecordId(LocalDate.parse(date)),
+            requestId = UUID.randomUUID().toString(),
+            payload = Json.encodeToString(QueuedBodyWeight(date, weightKg, useExisting = true)),
+        ) > 0
+
+    /**
+     * Call inside the transaction that saves a Profile edit with [profile]'s revision. It supersedes any
+     * edit still queued, even one in flight, which Axum then keeps from taking effect afterwards.
+     */
+    suspend fun enqueueProfileEdit(profile: QueuedProfile) {
+        dao.deleteAllOf(OutboxKind.EDIT_PROFILE, SINGLE_ROW_ID.toLong())
+        dao.insert(
+            OutboxEntity(
+                kind = OutboxKind.EDIT_PROFILE,
+                recordId = SINGLE_ROW_ID.toLong(),
+                requestId = UUID.randomUUID().toString(),
+                payload = Json.encodeToString(profile),
+            ),
+        )
+    }
+
     suspend fun hasPending(): Boolean = dao.pendingCount() > 0
 
     suspend fun recordProblemOnPending(problem: SyncProblem) = dao.recordProblemOnPending(problem)
@@ -178,6 +241,8 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
             OutboxKind.CREATE_WORKOUT -> deliverWorkout(change, api)
             OutboxKind.CREATE_EXERCISE -> deliverExercise(change, api)
             OutboxKind.EDIT_WORKOUT -> deliverWorkoutEdit(change, api)
+            OutboxKind.CREATE_BODY_WEIGHT -> deliverBodyWeight(change, api)
+            OutboxKind.EDIT_PROFILE -> deliverProfileEdit(change, api)
         }
 
     private suspend fun deliverWorkout(change: OutboxEntity, api: OpenHomeApi): Delivery {
@@ -290,6 +355,48 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
             dao.updatePayload(row.id, Json.encodeToString(queued.copy(entries = entries)))
         }
         fitnessDao.deleteExercise(from)
+    }
+
+    /**
+     * A repeat under this `request_id` is acknowledged with the same record, so a lost answer is simply
+     * retried. A conflict is therefore a date Axum holds under some other record, which stays as it is
+     * and leaves this one for the user. The local row is the one being sent, so an answer changes nothing.
+     */
+    private suspend fun deliverBodyWeight(change: OutboxEntity, api: OpenHomeApi): Delivery {
+        val queued = Json.decodeFromString<QueuedBodyWeight>(change.payload)
+        try {
+            val existing = if (queued.useExisting) api.bodyWeightOn(queued.date) else null
+            if (existing != null) {
+                database.withTransaction {
+                    fitnessDao.setBodyWeight(queued.date, existing.weightKg)
+                    dao.delete(change.id)
+                }
+                return Delivery.Acknowledged
+            }
+            api.createBodyWeight(ApiBodyWeightCreate(change.requestId, queued.date, queued.weightKg))
+        } catch (failure: ApiFailure) {
+            return if (failure is ApiFailure.Rejected && failure.status == CONFLICT) {
+                Delivery.Refused(SyncProblem.DATE_TAKEN)
+            } else {
+                failure.toDelivery()
+            }
+        }
+        dao.delete(change.id)
+        return Delivery.Acknowledged
+    }
+
+    /** The revision makes a repeat harmless. The answer is not stored: a newer edit may be saved here by now. */
+    private suspend fun deliverProfileEdit(change: OutboxEntity, api: OpenHomeApi): Delivery {
+        val queued = Json.decodeFromString<QueuedProfile>(change.payload)
+        try {
+            api.editProfile(
+                ApiProfileEdit(queued.clientRevision, queued.heightCm, queued.sex, queued.hrMaxBpm, queued.birthDate),
+            )
+        } catch (failure: ApiFailure) {
+            return failure.toDelivery()
+        }
+        dao.delete(change.id)
+        return Delivery.Acknowledged
     }
 
     private fun ApiFailure.toDelivery(): Delivery =

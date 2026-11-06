@@ -415,10 +415,10 @@ native-fixture-api key='native-fixture-key' dir='':
 native-fixture-seed key='native-fixture-key':
     python3 mobile/tools/seed_fixture.py --api-key {{quote(key)}}
 
-# Proxy the fixture API on :8001, committing the next N Workout creates, M Exercise creates and E Workout edits but losing their responses (the emulator reaches it at 10.0.2.2:8001)
+# Proxy the fixture API on :8001, committing the next N Workout creates, M Exercise creates, E Workout edits, B Body Weight records and P Profile edits but losing their responses (the emulator reaches it at 10.0.2.2:8001)
 [group('native')]
-native-fixture-lossy-proxy lose='1' lose-exercises='0' lose-edits='0':
-    python3 mobile/tools/lossy_proxy.py --lose-workout-responses {{quote(lose)}} --lose-exercise-responses {{quote(lose-exercises)}} --lose-edit-responses {{quote(lose-edits)}}
+native-fixture-lossy-proxy lose='1' lose-exercises='0' lose-edits='0' lose-body-weight='0' lose-profile='0':
+    python3 mobile/tools/lossy_proxy.py --lose-workout-responses {{quote(lose)}} --lose-exercise-responses {{quote(lose-exercises)}} --lose-edit-responses {{quote(lose-edits)}} --lose-body-weight-responses {{quote(lose-body-weight)}} --lose-profile-responses {{quote(lose-profile)}}
 
 # Lint and build the native app, then run its device tests when an emulator is booted
 [group('native')]

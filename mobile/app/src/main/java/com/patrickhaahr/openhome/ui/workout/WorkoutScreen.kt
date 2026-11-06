@@ -76,6 +76,11 @@ class WorkoutViewModel(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val profileNeedsTheUser: StateFlow<Boolean> =
+        syncStatus.observe()
+            .map { it.profileNeedsTheUser }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun startEmpty(onStarted: () -> Unit) {
         saveScope.launch {
             activeWorkouts.startEmpty(LocalDate.now().toString())
@@ -108,6 +113,7 @@ fun WorkoutRoute(
     val active by viewModel.activeWorkout.collectAsStateWithLifecycle()
     val sync by viewModel.sync.collectAsStateWithLifecycle()
     val refusedExercises by viewModel.refusedExercises.collectAsStateWithLifecycle()
+    val profileNeedsTheUser by viewModel.profileNeedsTheUser.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         ScreenHeader(title = "Workout", onOpenProfile = onOpenProfile)
         Column(
@@ -131,7 +137,20 @@ fun WorkoutRoute(
                     }
             }
             refusedExercises.forEach { row ->
-                RefusedExerciseCard(row, onClick = { onFixExercise(row.exercise.id) })
+                RefusedCard(
+                    title = row.exercise.name,
+                    message = exerciseRefusalMessage(row.problem),
+                    onClickLabel = "Fix Exercise",
+                    onClick = { onFixExercise(row.exercise.id) },
+                )
+            }
+            if (profileNeedsTheUser) {
+                RefusedCard(
+                    title = "Profile and Body Weight",
+                    message = "OpenHome refused a change. Tap to review it.",
+                    onClickLabel = "Open Profile",
+                    onClick = onOpenProfile,
+                )
             }
             overview?.let { WorkoutOverview(it, onOpenHistory, onOpenLibrary) }
             sync?.let {
@@ -253,7 +272,7 @@ private fun OverviewLink(title: String, subtitle: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RefusedExerciseCard(row: RefusedExercise, onClick: () -> Unit) {
+private fun RefusedCard(title: String, message: String, onClickLabel: String, onClick: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
@@ -262,15 +281,15 @@ private fun RefusedExerciseCard(row: RefusedExercise, onClick: () -> Unit) {
         Row(
             modifier =
                 Modifier
-                    .clickable(role = Role.Button, onClickLabel = "Fix Exercise", onClick = onClick)
+                    .clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
                     .heightIn(min = 72.dp)
                     .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(text = row.exercise.name, style = MaterialTheme.typography.titleMedium)
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = exerciseRefusalMessage(row.problem),
+                    text = message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )

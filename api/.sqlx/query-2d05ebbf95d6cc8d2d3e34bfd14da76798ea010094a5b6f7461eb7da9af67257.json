@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO body_weight_receipts (request_id, body_weight_id, request)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (request_id) DO NOTHING\n            RETURNING request_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "request_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2d05ebbf95d6cc8d2d3e34bfd14da76798ea010094a5b6f7461eb7da9af67257"
+}

@@ -36,7 +36,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.patrickhaahr.openhome.R
 import com.patrickhaahr.openhome.ui.home.HomeScreen
+import com.patrickhaahr.openhome.ui.profile.EditProfileRoute
 import com.patrickhaahr.openhome.ui.profile.ProfileRoute
+import com.patrickhaahr.openhome.ui.profile.RecordBodyWeightRoute
 import com.patrickhaahr.openhome.ui.workout.ActiveWorkoutRoute
 import com.patrickhaahr.openhome.ui.workout.CorrectionExercisePickerRoute
 import com.patrickhaahr.openhome.ui.workout.ExercisePickerRoute
@@ -95,6 +97,12 @@ private data object HomeRoot
 
 @Serializable
 private data object Profile
+
+@Serializable
+private data object EditProfile
+
+@Serializable
+private data object RecordBodyWeight
 
 private enum class Tab(val graph: Any, val root: Any, val label: String, @param:DrawableRes val icon: Int) {
     Workout(WorkoutTab, WorkoutHome, "Workout", R.drawable.ic_workout),
@@ -278,7 +286,30 @@ fun MainNavigation() {
                     HomeScreen(onOpenProfile = dropUnlessResumed { navController.navigate(Profile) })
                 }
             }
-            composable<Profile> { ProfileRoute() }
+            composable<Profile> {
+                ProfileRoute(
+                    onEdit = dropUnlessResumed { navController.navigate(EditProfile) },
+                    onRecordBodyWeight = dropUnlessResumed { navController.navigate(RecordBodyWeight) },
+                )
+            }
+            composable<EditProfile> { entry ->
+                EditProfileRoute(
+                    onSaved = {
+                        if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.popBackStack()
+                        }
+                    },
+                )
+            }
+            composable<RecordBodyWeight> { entry ->
+                RecordBodyWeightRoute(
+                    onSaved = {
+                        if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            navController.popBackStack()
+                        }
+                    },
+                )
+            }
         }
     }
 }

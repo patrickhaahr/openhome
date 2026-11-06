@@ -460,6 +460,19 @@ class AppDriver {
         field.text = value
     }
 
+    fun assertField(fieldLabel: String, expected: String) {
+        val field =
+            checkNotNull(
+                device.wait(
+                    Until.findObject(By.clazz("android.widget.EditText").hasDescendant(By.text(fieldLabel))),
+                    TIMEOUT_MS,
+                ),
+            ) { "No field labelled \"$fieldLabel\"" }
+        assertEquals(fieldLabel, expected, field.text)
+    }
+
+    fun showsTextContaining(text: String): Boolean = device.hasObject(By.pkg(APP_PACKAGE).textContains(text))
+
     /** Completes the Setup Flow against [api] and waits for the app's launch destination. */
     fun completeSetup(api: FakeAxum) {
         submitSetup(api.baseUrl, API_KEY)

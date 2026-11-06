@@ -61,11 +61,34 @@ data class ApiProfile(
     val sex: String? = null,
     @SerialName("hr_max_bpm") val hrMaxBpm: Long? = null,
     @SerialName("birth_date") val birthDate: String? = null,
+    /** Where this client's Profile edits continue from. Absent until one has reached Axum. */
+    @SerialName("client_revision") val clientRevision: Long = 0,
+)
+
+/**
+ * A whole Profile edit: Axum applies it only if [clientRevision] is newer than the last it applied. No
+ * defaults, so a null value is sent and clears it rather than leaving it as it was.
+ */
+@Serializable
+data class ApiProfileEdit(
+    @SerialName("client_revision") val clientRevision: Long,
+    @SerialName("height_cm") val heightCm: Double?,
+    val sex: String?,
+    @SerialName("hr_max_bpm") val hrMaxBpm: Long?,
+    @SerialName("birth_date") val birthDate: String?,
 )
 
 @Serializable
 data class ApiBodyWeight(
     val id: Long,
+    val date: String,
+    @SerialName("weight_kg") val weightKg: Double,
+)
+
+/** A new Body Weight; [requestId] makes it safe to retry, and a new one for a recorded date is a conflict. */
+@Serializable
+data class ApiBodyWeightCreate(
+    @SerialName("request_id") val requestId: String,
     val date: String,
     @SerialName("weight_kg") val weightKg: Double,
 )

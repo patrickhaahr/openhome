@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT body_weight_id, request FROM body_weight_receipts WHERE request_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "body_weight_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "request",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "e761915c3a4659f6cf35148d09d2f447a664fb0e53b7d32324d2f76f7928124e"
+}

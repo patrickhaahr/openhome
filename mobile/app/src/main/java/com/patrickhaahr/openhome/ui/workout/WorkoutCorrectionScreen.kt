@@ -59,6 +59,7 @@ import com.patrickhaahr.openhome.fitness.SetCheck
 import com.patrickhaahr.openhome.fitness.SetDraft
 import com.patrickhaahr.openhome.fitness.WorkoutCorrections
 import com.patrickhaahr.openhome.storage.SetMeasure
+import com.patrickhaahr.openhome.ui.DayPicker
 import com.patrickhaahr.openhome.ui.EmptyState
 import com.patrickhaahr.openhome.ui.ScreenHeader
 import com.patrickhaahr.openhome.ui.appViewModel
@@ -272,7 +273,7 @@ private fun CorrectionContent(
     }
 
     if (choosingDate) {
-        WorkoutDatePicker(
+        DayPicker(
             date = draft.date,
             onChosen = { date -> onChange { it.copy(date = date.toString()) } },
             onDismiss = { choosingDate = false },

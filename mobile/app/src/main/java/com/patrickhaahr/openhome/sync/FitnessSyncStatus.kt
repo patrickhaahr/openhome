@@ -4,7 +4,9 @@ import com.patrickhaahr.openhome.storage.OutboxDao
 import com.patrickhaahr.openhome.storage.OutboxKind
 import com.patrickhaahr.openhome.storage.OutboxState
 import com.patrickhaahr.openhome.storage.OutboxStatusRow
+import com.patrickhaahr.openhome.storage.SINGLE_ROW_ID
 import com.patrickhaahr.openhome.storage.SyncProblem
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -46,6 +48,29 @@ class SyncSnapshot(
         rows.firstOrNull {
             it.kind == OutboxKind.CREATE_EXERCISE && it.recordId == exerciseId && it.state == OutboxState.REFUSED
         }?.problem
+
+    val profile: SyncStatus
+        get() = statusOfRecord(setOf(OutboxKind.EDIT_PROFILE), SINGLE_ROW_ID.toLong())
+
+    fun bodyWeight(date: String): SyncStatus = bodyWeightRows[date]?.let(::statusOf) ?: SyncStatus.Synced
+
+    /** Why Axum refused this Body Weight, while it waits for the user to act on that. */
+    fun bodyWeightRefusal(date: String): SyncProblem? =
+        bodyWeightRows[date]?.firstOrNull { it.state == OutboxState.REFUSED }?.problem
+
+    /** A refused change the Profile screen is where to settle. */
+    val profileNeedsTheUser: Boolean
+        get() =
+            rows.any {
+                it.state == OutboxState.REFUSED &&
+                    (it.kind == OutboxKind.EDIT_PROFILE || it.kind == OutboxKind.CREATE_BODY_WEIGHT)
+            }
+
+    private val bodyWeightRows: Map<String, List<OutboxStatusRow>> by lazy {
+        rows
+            .filter { it.kind == OutboxKind.CREATE_BODY_WEIGHT }
+            .groupBy { LocalDate.ofEpochDay(it.recordId).toString() }
+    }
 
     private fun statusOfRecord(kinds: Set<OutboxKind>, recordId: Long): SyncStatus {
         val own = rows.filter { it.kind in kinds && it.recordId == recordId }

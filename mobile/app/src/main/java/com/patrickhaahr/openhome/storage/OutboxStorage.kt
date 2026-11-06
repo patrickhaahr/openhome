@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 /** A fitness change Axum has not acknowledged. Add a value here for each new kind of change. */
@@ -14,7 +15,14 @@ enum class OutboxKind {
     CREATE_WORKOUT,
     CREATE_EXERCISE,
     EDIT_WORKOUT,
+
+    /** Its record id is the Body Weight's date as an epoch day: see [bodyWeightRecordId]. */
+    CREATE_BODY_WEIGHT,
+    EDIT_PROFILE,
 }
+
+/** A Body Weight is identified by its date, and an outbox row refers to its record by number. */
+fun bodyWeightRecordId(date: LocalDate): Long = date.toEpochDay()
 
 enum class OutboxState {
     /** Delivered in id order once Wi-Fi and Axum allow it. */
@@ -38,6 +46,9 @@ enum class SyncProblem {
 
     /** Axum refused a new Exercise because it already holds one under that exact name. */
     NAME_TAKEN,
+
+    /** Axum refused a new Body Weight because it already holds one for that date. */
+    DATE_TAKEN,
 }
 
 /**
