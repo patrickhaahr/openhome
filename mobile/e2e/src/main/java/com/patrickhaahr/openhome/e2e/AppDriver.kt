@@ -300,12 +300,21 @@ class AppDriver {
         error("Nothing below reads \"$text\"")
     }
 
-    /** Exactly [expected] of the names in [among] are on screen now; the rest have been filtered away. */
+    /**
+     * Exactly [expected] of the names in [among] end up on screen; the rest have been filtered away.
+     * A filter's result arrives from storage in its own time, so nothing about idleness says it has yet.
+     */
     fun assertExercisesShown(vararg expected: String, among: List<String>) {
         device.waitForIdle()
         SystemClock.sleep(SETTLE_MS)
-        val shown = among.filter { device.hasObject(By.text(it)) }
-        assertEquals(expected.toList(), shown)
+        val wanted = expected.toList()
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT_MS
+        var shown = among.filter { device.hasObject(By.text(it)) }
+        while (shown != wanted && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS)
+            shown = among.filter { device.hasObject(By.text(it)) }
+        }
+        assertEquals(wanted, shown)
     }
 
     /** Moves the logging focus; the Exercise's rows are then what the screen shows. */

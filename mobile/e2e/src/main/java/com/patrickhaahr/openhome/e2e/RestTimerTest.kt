@@ -238,6 +238,27 @@ class RestTimerTest {
         app.assertVisible("Rest · Squat")
     }
 
+    /** The form has no tabs under the bar, and its Save must stay reachable and working above it. */
+    @Test
+    fun theBarLeavesACorrectingFormUsable() {
+        repeatLast()
+        app.tapBelow("Complete Exercise")
+        app.assertRestRemaining(FRESH_DEFAULT_REST)
+        app.pressBackButton()
+        app.tapBelow("History")
+        app.tap("Usual session")
+        app.tap("Edit Workout")
+        app.assertVisible("Rest · Squat")
+        app.assertNoBottomTabs()
+
+        app.enterDescribed("Squat set 1 reps", "6")
+        app.tapBelow("Save Changes")
+        app.assertVisible("Rest · Squat")
+        app.assertVisible("Usual session")
+        app.assertTextContaining("6 reps")
+        app.assertRestRemaining(1L..FRESH_DEFAULT_REST.last)
+    }
+
     /** A force-stop takes the alarm with it, so the restart has to put it back from the stored deadline. */
     @Test
     fun aRestartContinuesTheDeadlineInsteadOfStartingOver() {

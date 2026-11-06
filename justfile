@@ -367,6 +367,26 @@ native-test class='':
     if [ -n {{quote(class)}} ]; then
         filter=("-Pandroid.testInstrumentationRunnerArguments.class=com.patrickhaahr.openhome.e2e."{{quote(class)}})
     fi
+    # The emulator's host process grows with what it renders, past 10 GB over the whole suite, which can starve
+    # the machine and the tests with it. So a run gives it room: built first, build daemons gone, no animations.
+    ./gradlew --console=plain :app:assembleDebug :e2e:assembleDebug
+    ./gradlew --console=plain --stop
+    animations=(window_animation_scale transition_animation_scale animator_duration_scale)
+    declare -A animation_was
+    for scale in "${animations[@]}"; do
+        animation_was[$scale]="$(adb -s "$serial" shell settings get global "$scale" | tr -d '\r')"
+        adb -s "$serial" shell settings put global "$scale" 0
+    done
+    restore_animations() {
+        for scale in "${animations[@]}"; do
+            if [ "${animation_was[$scale]}" = null ]; then
+                adb -s "$serial" shell settings delete global "$scale" >/dev/null || true
+            else
+                adb -s "$serial" shell settings put global "$scale" "${animation_was[$scale]}" || true
+            fi
+        done
+    }
+    trap restore_animations EXIT
     ANDROID_SERIAL="$serial" ./gradlew --console=plain :e2e:connectedDebugAndroidTest "${filter[@]}"
 
 # Install the debug build on a booted emulator or device
