@@ -141,10 +141,16 @@ data class ApiExerciseCreate(
 data class ApiIrStatus(val remotes: ApiIrRemotes)
 
 @Serializable
-data class ApiIrRemotes(val lgtv: List<String>)
+data class ApiIrRemotes(val lgtv: List<String>, val edifier: List<String>)
 
 @Serializable
 data class ApiIrCommand(val command: String)
 
 @Serializable
 data class ApiIrAcknowledgement(val message: String)
+
+/** Axum exposes explicit Light Commands, with no power-state or capability read. */
+enum class LightCommand(val path: String, val label: String) {
+    On("on", "On"),
+    Off("off", "Off"),
+}

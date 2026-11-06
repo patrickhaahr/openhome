@@ -92,6 +92,16 @@ class FakeAxum(
     private val tvRequests = CopyOnWriteArrayList<JsonObject>()
     fun tvRequests(): List<JsonObject> = tvRequests.toList()
 
+    @Volatile var speakerCommands = listOf("power", "mute", "volume-down", "volume-up", "bluetooth", "optical")
+    @Volatile var speakerCommandCode = 200
+    @Volatile var lightCommandCode = 200
+    @Volatile var loseSpeakerResponse = false
+    @Volatile var loseLightResponse = false
+    private val speakerRequests = CopyOnWriteArrayList<JsonObject>()
+    private val lightRequests = CopyOnWriteArrayList<Pair<String, String>>()
+    fun speakerRequests(): List<JsonObject> = speakerRequests.toList()
+    fun lightRequests(): List<Pair<String, String>> = lightRequests.toList()
+
     private val server = MockWebServer()
     private val detailRequests = AtomicInteger()
     private val blockedDetails = CountDownLatch(1)
@@ -268,7 +278,7 @@ class FakeAxum(
         return when {
             path == "/api/ir" -> if (tvStatusCode != 200) error(tvStatusCode, "IR unavailable") else ok(
                 buildJsonObject { put("remotes", buildJsonObject {
-                    put("edifier", buildJsonArray {})
+                    put("edifier", JsonArray(speakerCommands.map(::JsonPrimitive)))
                     put("lgtv", JsonArray(tvCommands.map(::JsonPrimitive)))
                 }) },
             )
@@ -277,6 +287,22 @@ class FakeAxum(
                 when {
                     loseTvResponse -> disconnected()
                     tvCommandCode != 200 -> error(tvCommandCode, "IR unavailable")
+                    else -> ok(buildJsonObject { put("message", "Sent command") })
+                }
+            }
+            path == "/api/ir/edifier" && request.method == "POST" -> {
+                speakerRequests += Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+                when {
+                    loseSpeakerResponse -> disconnected()
+                    speakerCommandCode != 200 -> error(speakerCommandCode, "Speaker unavailable")
+                    else -> ok(buildJsonObject { put("message", "Sent command") })
+                }
+            }
+            path in listOf("/api/lights/on", "/api/lights/off") && request.method == "POST" -> {
+                lightRequests += path to (request.body?.utf8() ?: "")
+                when {
+                    loseLightResponse -> disconnected()
+                    lightCommandCode != 200 -> error(lightCommandCode, "SwitchBot service is not configured")
                     else -> ok(buildJsonObject { put("message", "Sent command") })
                 }
             }

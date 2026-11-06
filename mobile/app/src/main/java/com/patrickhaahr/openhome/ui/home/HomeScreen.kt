@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.patrickhaahr.openhome.api.LightCommand
 import com.patrickhaahr.openhome.ui.ProblemText
 import com.patrickhaahr.openhome.ui.ScreenHeader
 import com.patrickhaahr.openhome.ui.appViewModel
@@ -83,11 +84,10 @@ private fun TvContent(fullRemote: Boolean, onOpenProfile: (() -> Unit)? = null, 
                 TvRows(more, state, model::send)
             } else {
                 Button(onClick = onOpenRemote, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Full TV remote") }
-                for (section in listOf("Speaker", "Lights", "Backlight")) {
-                    Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SectionTitle(section)
-                        Text("Controls aren't available in this version.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                SpeakerLightsSections()
+                Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionTitle("Backlight")
+                    Text("Controls aren't available in this version.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -112,5 +112,51 @@ private fun TvRows(rows: List<List<TvButton?>>, state: TvState, send: (String, S
                 ) { Text(button.label) }
             }
         }
+    }
+}
+
+@Composable
+private fun SpeakerLightsSections() {
+    val model: SpeakerLightsViewModel = appViewModel { SpeakerLightsViewModel(it.setup, it.homeHttpClient) }
+    val speaker by model.speaker.collectAsStateWithLifecycle()
+    val lights by model.lights.collectAsStateWithLifecycle()
+    LaunchedEffect(model) { model.refreshSpeaker() }
+    SectionTitle("Speaker")
+    Text("Speaker input and volume: unobserved", style = MaterialTheme.typography.bodyMedium)
+    TextButton(onClick = model::refreshSpeaker, enabled = !speaker.feedback.busy) { Text("Refresh Speaker controls") }
+    Text("Unavailable commands stay disabled.", style = MaterialTheme.typography.bodySmall)
+    for (row in listOf(
+        listOf(key("volume-down", "Volume −"), key("volume-up", "Volume +")),
+        listOf(key("bluetooth", "Bluetooth"), key("optical", "Optical")),
+        listOf(key("power", "Power"), key("mute", "Mute")),
+    )) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (button in row) Button(
+                onClick = { model.sendSpeaker(button.command, button.label) },
+                enabled = !speaker.feedback.busy && button.command in speaker.commands,
+                modifier = Modifier.weight(1f).heightIn(min = 56.dp).semantics { contentDescription = "Speaker ${button.label}" },
+            ) { Text(button.label) }
+        }
+    }
+    CommandFeedback(speaker.feedback)
+    SectionTitle("Lights")
+    Text("Lights power: unobserved", style = MaterialTheme.typography.bodyMedium)
+    Text("Availability is checked when you send a command.", style = MaterialTheme.typography.bodySmall)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (command in LightCommand.entries) Button(
+            onClick = { model.sendLight(command) },
+            enabled = !lights.busy,
+            modifier = Modifier.weight(1f).heightIn(min = 56.dp).semantics { contentDescription = "Lights ${command.label}" },
+        ) { Text(command.label) }
+    }
+    CommandFeedback(lights)
+}
+
+@Composable
+private fun CommandFeedback(state: HomeCommandState) {
+    Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+        state.message?.let { Text(it) }
+        state.problem?.let { ProblemText(it) }
+        if (state.busy && state.message == null) Text("Loading Speaker controls…")
     }
 }

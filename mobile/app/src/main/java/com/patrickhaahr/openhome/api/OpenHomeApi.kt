@@ -61,6 +61,12 @@ class OpenHomeApi(
     suspend fun sendTvCommand(command: String): ApiIrAcknowledgement =
         post("api/ir/lgtv", json.encodeToString(ApiIrCommand(command)))
 
+    suspend fun sendSpeakerCommand(command: String): ApiIrAcknowledgement =
+        post("api/ir/edifier", json.encodeToString(ApiIrCommand(command)))
+
+    suspend fun sendLightCommand(command: LightCommand): ApiIrAcknowledgement =
+        post("api/lights/${command.path}", "")
+
     suspend fun exercises(): List<ApiExercise> = get("api/exercises")
 
     suspend fun workoutDetail(id: Long): ApiWorkoutDetail = get("api/workouts/$id")
