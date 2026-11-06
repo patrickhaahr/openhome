@@ -367,7 +367,7 @@ class ProfileAndBodyWeightTest {
         app.assertAbsent("0 kg")
 
         app.pressBackButton()
-        app.assertVisible("No Home Controls yet")
+        app.assertVisible("Full TV remote")
         app.pressBackButton()
         app.assertOnWorkoutTab()
 

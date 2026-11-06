@@ -257,6 +257,13 @@ class AppDriver {
         tapDescription(description)
     }
 
+    /** Compose exposes the label below the control's enabled/disabled accessibility node. */
+    fun assertButtonEnabled(description: String, expected: Boolean) {
+        val label = described(description)
+        val control = checkNotNull(label.parent) { "No control for $description" }
+        assertEquals("$description enabled", expected, control.isEnabled)
+    }
+
     /** The described node must itself be the toggle: any other node reads as unchecked whatever the screen shows. */
     fun assertChecked(description: String, expected: Boolean) {
         described(description)
@@ -502,6 +509,10 @@ class AppDriver {
                 .sortedBy { it.visibleBounds.left }
                 .map { it.text }
         assertEquals(expected.toList(), labels)
+        assertTrue(
+            "Expected $selected to become the selected tab",
+            device.wait(Until.hasObject(By.selected(true).hasDescendant(By.text(selected))), TIMEOUT_MS),
+        )
         assertEquals(selected, device.findObject(By.selected(true)).findObject(By.text(ANY_TEXT)).text)
     }
 

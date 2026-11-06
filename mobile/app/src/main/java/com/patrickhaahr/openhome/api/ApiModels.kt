@@ -136,3 +136,15 @@ data class ApiExerciseCreate(
     @SerialName("muscle_group") val muscleGroup: String? = null,
     val equipment: String? = null,
 )
+
+@Serializable
+data class ApiIrStatus(val remotes: ApiIrRemotes)
+
+@Serializable
+data class ApiIrRemotes(val lgtv: List<String>)
+
+@Serializable
+data class ApiIrCommand(val command: String)
+
+@Serializable
+data class ApiIrAcknowledgement(val message: String)

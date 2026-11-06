@@ -30,6 +30,12 @@ class AppContainer(context: Context) {
     /** Outlives every screen, so leaving one cannot cancel a save it just started. */
     val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    // Household commands have a short total deadline and must never be automatically retried.
+    val homeHttpClient = httpClient.newBuilder()
+        .callTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .build()
+
     val fitness = FitnessRepository(database.fitnessDao())
     val setup = SetupService(database, ApiKeyCipher(), httpClient)
     val wifi = WifiNetworks(context)

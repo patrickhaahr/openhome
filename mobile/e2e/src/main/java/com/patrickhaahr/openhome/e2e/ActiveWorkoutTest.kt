@@ -135,7 +135,7 @@ class ActiveWorkoutTest {
 
         // Leaving by tab and by back keeps everything.
         app.tap("Home")
-        app.assertVisible("No Home Controls yet")
+        app.assertVisible("Full TV remote")
         app.tap("Workout")
         app.goToExercise("Pull-Up")
         app.assertDescribedValue("Pull-Up set 1 reps", "8")

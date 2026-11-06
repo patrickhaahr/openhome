@@ -56,6 +56,11 @@ class OpenHomeApi(
         if (health.status != "ok") throw ApiFailure.UnreadableResponse()
     }
 
+    suspend fun irStatus(): ApiIrStatus = get("api/ir")
+
+    suspend fun sendTvCommand(command: String): ApiIrAcknowledgement =
+        post("api/ir/lgtv", json.encodeToString(ApiIrCommand(command)))
+
     suspend fun exercises(): List<ApiExercise> = get("api/exercises")
 
     suspend fun workoutDetail(id: Long): ApiWorkoutDetail = get("api/workouts/$id")

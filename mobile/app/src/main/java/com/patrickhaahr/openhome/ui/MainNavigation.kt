@@ -36,6 +36,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.patrickhaahr.openhome.R
 import com.patrickhaahr.openhome.ui.home.HomeScreen
+import com.patrickhaahr.openhome.ui.home.TvRemoteScreen
 import com.patrickhaahr.openhome.ui.profile.EditProfileRoute
 import com.patrickhaahr.openhome.ui.profile.ProfileRoute
 import com.patrickhaahr.openhome.ui.profile.RecordBodyWeightRoute
@@ -94,6 +95,9 @@ private data object HomeTab
 
 @Serializable
 private data object HomeRoot
+
+@Serializable
+private data object TvRemote
 
 @Serializable
 private data object Profile
@@ -282,8 +286,12 @@ fun MainNavigation() {
                 }
             }
             navigation<HomeTab>(startDestination = HomeRoot) {
+                composable<TvRemote> { TvRemoteScreen() }
                 composable<HomeRoot> {
-                    HomeScreen(onOpenProfile = dropUnlessResumed { navController.navigate(Profile) })
+                    HomeScreen(
+                        onOpenProfile = dropUnlessResumed { navController.navigate(Profile) },
+                        onOpenRemote = dropUnlessResumed { navController.navigate(TvRemote) },
+                    )
                 }
             }
             composable<Profile> {

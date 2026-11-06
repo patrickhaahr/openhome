@@ -75,7 +75,7 @@ class BackNavigationTest {
         app.assertBottomTabs("Workout", "Home", selected = "Workout")
 
         app.tap("Home")
-        app.assertVisible("No Home Controls yet")
+        app.assertVisible("Full TV remote")
         app.assertBottomTabs("Workout", "Home", selected = "Home")
 
         app.pressBackButton()
@@ -90,7 +90,7 @@ class BackNavigationTest {
         app.assertNoBottomTabs()
 
         app.pressBackButton()
-        app.assertVisible("No Home Controls yet")
+        app.assertVisible("Full TV remote")
 
         app.pressBackButton()
         app.assertOnWorkoutTab()
@@ -102,7 +102,7 @@ class BackNavigationTest {
         app.assertVisible("Pull day")
 
         app.tap("Home")
-        app.assertVisible("No Home Controls yet")
+        app.assertVisible("Full TV remote")
         app.tap("Workout")
 
         app.assertVisible("Pull day")

@@ -85,6 +85,13 @@ class FakeAxum(
     exerciseCategories: Map<Long, String> = emptyMap(),
     exerciseDetails: List<FixtureExercise> = emptyList(),
 ) : AutoCloseable {
+    @Volatile var tvCommands: List<String> = listOf("power", "input", "mute", "volume-up", "volume-down", "up", "left", "ok", "right", "down", "back", "home", "exit")
+    @Volatile var tvStatusCode: Int = 200
+    @Volatile var tvCommandCode: Int = 200
+    @Volatile var loseTvResponse: Boolean = false
+    private val tvRequests = CopyOnWriteArrayList<JsonObject>()
+    fun tvRequests(): List<JsonObject> = tvRequests.toList()
+
     private val server = MockWebServer()
     private val detailRequests = AtomicInteger()
     private val blockedDetails = CountDownLatch(1)
@@ -259,6 +266,20 @@ class FakeAxum(
         val url = request.url
         val path = url.encodedPath
         return when {
+            path == "/api/ir" -> if (tvStatusCode != 200) error(tvStatusCode, "IR unavailable") else ok(
+                buildJsonObject { put("remotes", buildJsonObject {
+                    put("edifier", buildJsonArray {})
+                    put("lgtv", JsonArray(tvCommands.map(::JsonPrimitive)))
+                }) },
+            )
+            path == "/api/ir/lgtv" && request.method == "POST" -> {
+                tvRequests += Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+                when {
+                    loseTvResponse -> disconnected()
+                    tvCommandCode != 200 -> error(tvCommandCode, "IR unavailable")
+                    else -> ok(buildJsonObject { put("message", "Sent command") })
+                }
+            }
             path == "/api/health" -> ok(buildJsonObject { put("status", "ok") })
             path == "/api/exercises" && request.method == "POST" -> createExercise(request)
             path == "/api/exercises" -> ok(exercisesJson())
