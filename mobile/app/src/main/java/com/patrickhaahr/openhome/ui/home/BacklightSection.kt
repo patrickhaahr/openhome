@@ -36,7 +36,7 @@ import java.time.Instant
 import kotlinx.coroutines.delay
 
 @Composable
-fun BacklightSection() {
+fun BacklightSection(onOpenAdvanced: () -> Unit = {}, advanced: Boolean = false) {
     val model: BacklightViewModel = appViewModel { BacklightViewModel(it.setup, it.homeHttpClient) }
     val state by model.state.collectAsStateWithLifecycle()
     LaunchedEffect(model) { model.load() }
@@ -46,21 +46,26 @@ fun BacklightSection() {
     val enabled = state.pending == null
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Backlight", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-        if (status != null) {
-            BacklightFacts(status, state.outdated, now)
-        } else Text("Backlight status unavailable. Refresh to try again.")
+        if (advanced) AdvancedBacklightInputs(status, enabled, model::saveBedtime, model::saveProfile)
+        if (!advanced && status != null) BacklightFacts(status, state.outdated, now)
+        if (status == null) Text("Backlight status unavailable. Refresh to try again.")
         Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
             state.pending?.let { Text("$it…") }
             state.problem?.let { ProblemText(it) }
+            state.message?.let { Text(it) }
         }
         TextButton(onClick = model::refresh, enabled = enabled) { Text("Refresh Backlight status") }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ModeButton("Off", enabled, status?.intended == BacklightSelection.Off) { model.select(BacklightSelection.Off) }
-            ModeButton("TV Sync", enabled, status?.intended is BacklightSelection.TvSync) { model.select(BacklightSelection.TvSync()) }
+        if (advanced && status != null) BacklightFacts(status, state.outdated, now)
+        if (!advanced) {
+            TextButton(onClick = onOpenAdvanced, enabled = enabled) { Text("Advanced Backlight") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ModeButton("Off", enabled, status?.intended == BacklightSelection.Off) { model.select(BacklightSelection.Off) }
+                ModeButton("TV Sync", enabled, status?.intended is BacklightSelection.TvSync) { model.select(BacklightSelection.TvSync()) }
+            }
+            ModeButton("Automatic", enabled, status?.control_source == "automatic") { model.automatic() }
+            Text("Automatic returns to the server routine. TV Sync restores its saved brightness.", style = MaterialTheme.typography.bodySmall)
+            BacklightInputs(status, enabled, model::select)
         }
-        ModeButton("Automatic", enabled, status?.control_source == "automatic") { model.automatic() }
-        Text("Automatic returns to the server routine. TV Sync restores its saved brightness.", style = MaterialTheme.typography.bodySmall)
-        BacklightInputs(status, enabled, model::select)
     }
 }
 

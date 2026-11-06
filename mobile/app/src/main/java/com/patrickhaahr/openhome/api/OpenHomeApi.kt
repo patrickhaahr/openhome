@@ -68,6 +68,12 @@ class OpenHomeApi(
 
     suspend fun automaticBacklight(): BacklightStatus = post("api/backlight/automatic", "")
 
+    suspend fun updateBacklightBedtime(settings: BacklightBedtimeUpdate): BacklightStatus =
+        send("PATCH", "api/backlight/bedtime", json.encodeToString(settings))
+
+    suspend fun saveBacklightProfile(source: BacklightProfileSource): BacklightStatus =
+        post("api/backlight/profile", json.encodeToString(BacklightProfileRequest(source)))
+
     suspend fun irStatus(): ApiIrStatus = get("api/ir")
 
     suspend fun sendTvCommand(command: String): ApiIrAcknowledgement =

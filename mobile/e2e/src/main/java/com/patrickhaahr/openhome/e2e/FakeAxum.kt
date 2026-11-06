@@ -119,6 +119,8 @@ class FakeAxum(
     @Volatile var loseBacklightResponse = false
     @Volatile var backlightDelayMillis = 0L
     private val backlightRequests = CopyOnWriteArrayList<Pair<String, String>>()
+    private val backlightMethods = CopyOnWriteArrayList<String>()
+    fun backlightMethods(): List<String> = backlightMethods.toList()
     private val automaticRequest = CountDownLatch(1)
     fun awaitAutomaticRequest() {
         check(automaticRequest.await(15, TimeUnit.SECONDS)) { "Automatic never reached Axum" }
@@ -330,7 +332,10 @@ class FakeAxum(
                 }
             }
             path.startsWith("/api/backlight") -> {
-                if (request.method != "GET") backlightRequests += path to (request.body?.utf8() ?: "")
+                if (request.method != "GET") {
+                    backlightRequests += path to (request.body?.utf8() ?: "")
+                    backlightMethods += request.method.orEmpty()
+                }
                 if (path == "/api/backlight/automatic") automaticRequest.countDown()
                 if (backlightDelayMillis > 0) Thread.sleep(backlightDelayMillis)
                 when {

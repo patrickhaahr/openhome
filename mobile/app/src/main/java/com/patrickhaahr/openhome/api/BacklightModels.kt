@@ -33,3 +33,20 @@ data class BacklightStatus(
     val override_expires_at: String?,
     val next_transition: String?,
 )
+
+@Serializable
+enum class BacklightProfileSource {
+    @SerialName("capture") Capture,
+    @SerialName("backup") Backup,
+}
+
+@Serializable data class BacklightProfileRequest(val source: BacklightProfileSource)
+
+/** Omitting enabled preserves Axum's manual override on a time/brightness edit. */
+@Serializable
+data class BacklightBedtimeUpdate(
+    val enabled: Boolean? = null,
+    val start: String,
+    val end: String,
+    val brightness: Int,
+)

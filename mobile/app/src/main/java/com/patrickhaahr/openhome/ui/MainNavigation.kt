@@ -35,6 +35,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.patrickhaahr.openhome.R
+import com.patrickhaahr.openhome.ui.home.AdvancedBacklightScreen
 import com.patrickhaahr.openhome.ui.home.HomeScreen
 import com.patrickhaahr.openhome.ui.home.TvRemoteScreen
 import com.patrickhaahr.openhome.ui.profile.EditProfileRoute
@@ -95,6 +96,9 @@ private data object HomeTab
 
 @Serializable
 private data object HomeRoot
+
+@Serializable
+private data object AdvancedBacklight
 
 @Serializable
 private data object TvRemote
@@ -287,10 +291,12 @@ fun MainNavigation() {
             }
             navigation<HomeTab>(startDestination = HomeRoot) {
                 composable<TvRemote> { TvRemoteScreen() }
+                composable<AdvancedBacklight> { AdvancedBacklightScreen() }
                 composable<HomeRoot> {
                     HomeScreen(
                         onOpenProfile = dropUnlessResumed { navController.navigate(Profile) },
                         onOpenRemote = dropUnlessResumed { navController.navigate(TvRemote) },
+                        onOpenBacklight = dropUnlessResumed { navController.navigate(AdvancedBacklight) },
                     )
                 }
             }

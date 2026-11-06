@@ -49,8 +49,8 @@ private val more = listOf(
 ) + (1..9).chunked(3).map { row -> row.map { key(it.toString(), it.toString()) } } + listOf(listOf(null, key("0", "0"), null))
 
 @Composable
-fun HomeScreen(onOpenProfile: () -> Unit, onOpenRemote: () -> Unit) {
-    TvContent(fullRemote = false, onOpenProfile = onOpenProfile, onOpenRemote = onOpenRemote)
+fun HomeScreen(onOpenProfile: () -> Unit, onOpenRemote: () -> Unit, onOpenBacklight: () -> Unit) {
+    TvContent(fullRemote = false, onOpenProfile = onOpenProfile, onOpenRemote = onOpenRemote, onOpenBacklight = onOpenBacklight)
 }
 
 @Composable
@@ -59,7 +59,7 @@ fun TvRemoteScreen() {
 }
 
 @Composable
-private fun TvContent(fullRemote: Boolean, onOpenProfile: (() -> Unit)? = null, onOpenRemote: () -> Unit = {}) {
+private fun TvContent(fullRemote: Boolean, onOpenProfile: (() -> Unit)? = null, onOpenRemote: () -> Unit = {}, onOpenBacklight: () -> Unit = {}) {
     val model: TvViewModel = appViewModel { TvViewModel(it.setup, it.homeHttpClient) }
     val state by model.state.collectAsStateWithLifecycle()
     LaunchedEffect(model) { model.refresh() }
@@ -85,7 +85,7 @@ private fun TvContent(fullRemote: Boolean, onOpenProfile: (() -> Unit)? = null, 
             } else {
                 Button(onClick = onOpenRemote, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Full TV remote") }
                 SpeakerLightsSections()
-                BacklightSection()
+                BacklightSection(onOpenAdvanced = onOpenBacklight)
             }
         }
     }
