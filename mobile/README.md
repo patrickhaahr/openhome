@@ -1,6 +1,9 @@
-# Native Android release preparation
+# Native Android
 
-Native acceptance is pending. Expo remains operational and is not deprecated.
+Native Kotlin Android is the supported mobile client after physical Pixel acceptance
+on 6 November 2026. Expo is deprecated for new mobile development; its source and
+recipes remain available during transition. Existing API and Dashboard features
+and stored fitness data are unchanged.
 The native release package is `com.patrickhaahr.openhome`; the debug package is
 `com.patrickhaahr.openhome.debug` and Expo is `com.example.openhome.expo`.
 These installs have separate app data; installing native does not migrate Expo's
@@ -54,13 +57,29 @@ This verifies the existing APK and uses `adb install -r`, preserving the native
 app's data. It does not build, launch, uninstall, clear data or run tests. Do not
 run `native-test` on a physical phone: instrumentation clears the debug app data.
 
-Release preparation is not acceptance. The remaining emulator suite was waived
-in favor of a separate physical Pixel journey: use an isolated fixture API and
-invented credentials/data; verify offline creation/repeat/adjust/complete,
-restart recovery, History corrections, Profile/Body Weight, mobile-data queuing,
-Wi-Fi-only sync and lost-response retries with independent server reads. Check
-Home errors/acknowledgements, nested Android back, the 150-second default and
-remembered per-exercise timer, visible keyboard/layout, accessible targets and
-dark-only two-tab navigation. Do not use real household data or trigger household
-actions without separate authorization. Final acceptance and Expo deprecation
-remain gated on that physical journey.
+## First use and support
+
+Open OpenHome and complete Setup Flow with your Axum Base URL and API Key while
+online. The download makes History, Library, Profile and Body Weight available
+locally. Use HTTPS outside a trusted network. Keep pending work on the device:
+do not uninstall or clear app data before it has synchronized.
+
+Workout opens first. Resume preserves the current session; Repeat Last Workout
+copies performance as unconfirmed sets. Confirm individual sets or Complete Exercise
+before finishing. History, Library and avatar-accessible Profile work offline.
+Fitness saves locally and synchronizes automatically on Wi-Fi. A mobile-data
+connection alone leaves changes pending; an unreachable API leaves them on-device
+with feedback. Reopen the app on working Wi-Fi to check its synchronization status.
+
+Home commands are immediate over any reachable API connection, never queued for
+later. An acknowledgement does not confirm TV, Speaker or Lights state. Backlight
+shows intended, acknowledged and observed facts separately; refresh after an
+unknown outcome. Bedtime scheduling and TV Sync capture/recovery belong to Axum.
+
+The release is installed on the acceptance Pixel with invented fixture data and
+an unfinished fixture Workout retained. Its temporary fixture server is stopped;
+that installation is not configured for the household API. Do not discard real
+pending work to change servers. There is no supported in-app server-switch flow.
+
+See [acceptance and limitations](../docs/native-android-acceptance.md) before
+describing device/network coverage. Release installation alone is not acceptance.

@@ -8,16 +8,22 @@
   <video src="https://github.com/user-attachments/assets/b9dff174-448f-4b85-b109-6cc2e2b53ebe"></video>
 </p>
 
-OpenHome is a self-hosted home control system with a cross-platform Android and iOS app, a household dashboard and a native LG webOS TV launcher. The mobile client is built with React Native and Expo and communicates exclusively with a Rust Axum API.
+OpenHome is a self-hosted home control system with a native Kotlin Android app, a household dashboard and a native LG webOS TV launcher. Mobile clients communicate exclusively with a Rust Axum API. The supported Android app lives in [`mobile/`](mobile/README.md); the Expo client is deprecated for new development but remains available during transition.
 
 The API authenticates the client and forwards HTTP requests to two ESP32 devices:
 
 - **ESP32 IR remote:** sends infrared commands to an LG TV and an Edifier speaker.
 - **ESP32 SwitchBot controller:** drives a servo that physically turns a light switch on or off.
 
-The app can also register a home geofence and automatically ask the API to turn off the lights when the phone leaves the configured area.
+The native app focuses on offline-first Workouts and Home controls. The legacy Expo client retains its broader features, including home geofencing; those features have not been deleted from the API or Dashboard.
 
-## Screenshots
+## Native Android
+
+![Native Workout home with invented acceptance data](assets/native/workout.png)
+
+Repeat and resume Workouts, confirm sets, correct History and record Profile/Body Weight offline. Fitness synchronizes on Wi-Fi; Home commands run immediately without a replay queue. See [installation and support](mobile/README.md) and [acceptance limits](docs/native-android-acceptance.md).
+
+## Legacy Expo screenshots
 
 | Home | Leave home automation |
 | :---: | :---: |
@@ -33,7 +39,7 @@ The app can also register a home geofence and automatically ask the API to turn 
 | :---: | :---: |
 | <img src="assets/expo/esp32-infrared.jpg" alt="ESP32 infrared controller beside an Edifier speaker" width="400"> | <img src="assets/expo/esp32-switchbot.jpg" alt="ESP32 servo controller mounted above a wall light switch" width="400"> |
 
-## Features
+## Legacy Expo features
 
 - Control lights, an LG TV, and an Edifier speaker.
 - Load available infrared commands dynamically from the API.
@@ -82,7 +88,11 @@ See the [TV guide](tv/README.md) for setup, architecture and rollback, and the [
 
 ## Architecture
 
-The Expo client uses a Clean Architecture-inspired structure:
+The native client uses Compose navigation, Room for local fitness state and a
+durable Wi-Fi-only outbox. The Axum API owns device integration and retry receipts;
+Home commands bypass the fitness outbox. Its only bottom tabs are Workout and Home.
+
+The retained Expo client uses a Clean Architecture-inspired structure:
 
 - `domain` contains parsing, validation, and control definitions.
 - `application` owns state transitions and coordinates operations.
