@@ -33,6 +33,7 @@ class ActiveWorkoutRepository(
     private val database: OpenHomeDatabase,
     private val outbox: FitnessOutbox,
     private val scheduler: FitnessSyncScheduler,
+    private val restTimers: RestTimers,
 ) {
     private val dao = database.activeWorkoutDao()
     private val fitnessDao = database.fitnessDao()
@@ -130,25 +131,41 @@ class ActiveWorkoutRepository(
         )
     }
 
-    /** Returns false, changing nothing, when a row that does not parse is being confirmed. */
-    suspend fun setCompleted(setId: Long, completed: Boolean): Boolean = write {
-        val set = dao.loadSet(setId) ?: return@write false
-        if (completed && set.draft().check() !is SetCheck.Valid) return@write false
-        dao.updateSet(set.copy(completed = completed))
-        true
+    /**
+     * Returns false, changing nothing, when a row that does not parse is being confirmed. Only a row
+     * becoming confirmed starts a rest; unchecking one does not.
+     */
+    suspend fun setCompleted(setId: Long, completed: Boolean): Boolean {
+        val saved =
+            write {
+                val set = dao.loadSet(setId) ?: return@write false
+                if (completed && set.draft().check() !is SetCheck.Valid) return@write false
+                dao.updateSet(set.copy(completed = completed))
+                if (completed && !set.completed) restTimers.startFor(dao.exerciseOfEntry(set.entryId))
+                true
+            }
+        restTimers.syncAlarm()
+        return saved
     }
 
     /**
      * The explicit confirmation of an Exercise: in one transaction, every row of [entryId] that parses
      * becomes performed and the focus advances to the next Exercise with an unconfirmed row, wrapping
-     * around. With no row to confirm nothing changes, so the user stays to see what is missing.
+     * around. With no row to confirm nothing changes, so the user stays to see what is missing. However
+     * many rows it confirmed it starts one rest, and none when a repeated press confirmed nothing.
      */
-    suspend fun completeExercise(entryId: Long): ExerciseCompletion = write {
-        val (valid, refused) = dao.loadSets(entryId).partition { it.draft().check() is SetCheck.Valid }
-        val unconfirmed = valid.filterNot { it.completed }
-        unconfirmed.forEach { dao.updateSet(it.copy(completed = true)) }
-        if (valid.isNotEmpty()) nextUnconfirmedEntryAfter(entryId)?.let { dao.setCurrentEntry(it) }
-        ExerciseCompletion(confirmed = unconfirmed.size, refused = refused.mapTo(mutableSetOf()) { it.id })
+    suspend fun completeExercise(entryId: Long): ExerciseCompletion {
+        val completion =
+            write {
+                val (valid, refused) = dao.loadSets(entryId).partition { it.draft().check() is SetCheck.Valid }
+                val unconfirmed = valid.filterNot { it.completed }
+                unconfirmed.forEach { dao.updateSet(it.copy(completed = true)) }
+                if (unconfirmed.isNotEmpty()) restTimers.startFor(dao.exerciseOfEntry(entryId))
+                if (valid.isNotEmpty()) nextUnconfirmedEntryAfter(entryId)?.let { dao.setCurrentEntry(it) }
+                ExerciseCompletion(confirmed = unconfirmed.size, refused = refused.mapTo(mutableSetOf()) { it.id })
+            }
+        restTimers.syncAlarm()
+        return completion
     }
 
     private suspend fun nextUnconfirmedEntryAfter(entryId: Long): Long? {
@@ -160,7 +177,11 @@ class ActiveWorkoutRepository(
             ?.id
     }
 
-    suspend fun discard() = write { dao.deleteWorkout() }
+    /** Ending the Active Workout ends its rest too: storage cascades, and only the alarm is left to drop. */
+    suspend fun discard() {
+        write { dao.deleteWorkout() }
+        restTimers.syncAlarm()
+    }
 
     /**
      * Records only confirmed rows, in one transaction with queuing the sync and ending the Active
@@ -180,7 +201,10 @@ class ActiveWorkoutRepository(
                 }
             }
         // After the commit: if the process dies first, the next app start schedules it from the outbox.
-        if (outcome is FinishOutcome.Finished) scheduler.schedule()
+        if (outcome is FinishOutcome.Finished) {
+            scheduler.schedule()
+            restTimers.syncAlarm()
+        }
         return outcome
     }
 
@@ -312,4 +336,5 @@ private fun ActiveEntryWithDetails.toDomain() =
         exerciseName = exercise.name,
         exerciseCategory = exercise.category,
         sets = sets.sortedBy { it.setNumber }.map { ActiveSet(it.id, it.setNumber, it.draft(), it.completed) },
+        rest = rest.toDomain(),
     )

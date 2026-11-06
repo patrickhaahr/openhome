@@ -79,6 +79,7 @@ private sealed interface Delivery {
 class FitnessOutbox(private val database: OpenHomeDatabase) {
     private val dao = database.outboxDao()
     private val fitnessDao = database.fitnessDao()
+    private val restDao = database.restDao()
 
     /** Call inside the transaction that creates the Workout, so neither can exist without the other. */
     suspend fun enqueueWorkout(workoutId: Long, workout: QueuedWorkout) {
@@ -280,6 +281,8 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
     private suspend fun mergeExercise(from: Long, into: Long) {
         fitnessDao.moveWorkoutEntries(from, into)
         fitnessDao.moveActiveEntries(from, into)
+        restDao.movePreference(from, into)
+        restDao.moveTimer(from, into)
         for (row in dao.allOfKinds(listOf(OutboxKind.CREATE_WORKOUT, OutboxKind.EDIT_WORKOUT))) {
             val queued = Json.decodeFromString<QueuedWorkout>(row.payload)
             if (queued.entries.none { it.localExerciseId == from }) continue

@@ -27,12 +27,21 @@ private const val NETWORK_TIMEOUT_MS = 45_000L
 private const val POLL_MS = 500L
 private const val SWIPE_STEPS = 20
 private const val DOUBLE_TAP_GAP_MS = 200L
+private const val MILLIS_PER_SECOND = 1_000L
+private const val SECONDS_PER_MINUTE = 60L
+private const val VIBRATION_RECORD_TIMEOUT_MS = 10_000L
+private const val VIBRATION_SETTLE_MS = 2_000L
 private val ANY_TEXT = Pattern.compile(".+", Pattern.DOTALL)
+private val REST_COUNTDOWN = Pattern.compile("\\d+:\\d\\d")
 
 /** Drives the installed app from outside its process, the way the user and Android do. */
 class AppDriver {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val device = UiDevice.getInstance(instrumentation)
+    private val restCountdown = By.pkg(APP_PACKAGE).text(REST_COUNTDOWN)
+    private var automaticTimeSetting: String? = null
+    private var clockMovedMillis = 0L
+    private var vibrationsBefore = emptySet<String>()
 
     fun clearAppData() {
         device.executeShellCommand("pm clear $APP_PACKAGE")
@@ -66,6 +75,114 @@ class AppDriver {
 
     fun pressBackButton() {
         device.pressBack()
+    }
+
+    /** Leaves the app and ends its process, as Android does to a background app, and keeps its alarms. */
+    fun killInBackground() {
+        device.pressHome()
+        device.waitForIdle()
+        device.executeShellCommand("am kill $APP_PACKAGE")
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT_MS
+        while (device.executeShellCommand("pidof $APP_PACKAGE").isNotBlank()) {
+            check(SystemClock.uptimeMillis() < deadline) { "The app's process never ended" }
+            SystemClock.sleep(POLL_MS)
+        }
+    }
+
+    /** Opening the app with no force-stop first, so whatever Android was keeping for it is still there. */
+    fun reopen() {
+        device.executeShellCommand("am start -W -n $APP_PACKAGE/com.patrickhaahr.openhome.MainActivity")
+        assertTrue("App did not reach the foreground", device.wait(Until.hasObject(By.pkg(APP_PACKAGE)), TIMEOUT_MS))
+    }
+
+    /** A force-stop, which also drops the app's alarms, leaving the app closed. */
+    fun forceStop() {
+        device.executeShellCommand("am force-stop $APP_PACKAGE")
+    }
+
+    /** Moves the device's real clock, the one the stored deadline and Android's alarms both go by. */
+    fun moveClockForward(seconds: Long) {
+        if (automaticTimeSetting == null) {
+            automaticTimeSetting = device.executeShellCommand("settings get global auto_time").trim()
+            device.executeShellCommand("settings put global auto_time 0")
+        }
+        val millis = seconds * MILLIS_PER_SECOND
+        device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() + millis}")
+        clockMovedMillis += millis
+    }
+
+    /** Gives the device back the time it would have had; time that really passed still counts. */
+    fun restoreClock() {
+        val setting = automaticTimeSetting ?: return
+        device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() - clockMovedMillis}")
+        device.executeShellCommand("settings put global auto_time $setting")
+        clockMovedMillis = 0
+        automaticTimeSetting = null
+    }
+
+    /** From here on, [assertVibrationsPlayed] counts. Android's record outlives tests and clearing the app. */
+    fun startCountingVibrations() {
+        vibrationsBefore = vibrationsOnRecord()
+    }
+
+    /**
+     * Exactly [expected] vibrations by Android's own record: played to the end, not refused by its
+     * background rules. A vibration is recorded when it ends, so more time is given for one to appear.
+     */
+    fun assertVibrationsPlayed(expected: Int) {
+        val deadline = SystemClock.uptimeMillis() + VIBRATION_RECORD_TIMEOUT_MS
+        while ((vibrationsOnRecord() - vibrationsBefore).size < expected && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS)
+        }
+        SystemClock.sleep(VIBRATION_SETTLE_MS)
+        assertEquals("Vibrations played", expected, (vibrationsOnRecord() - vibrationsBefore).size)
+    }
+
+    private fun vibrationsOnRecord(): Set<String> =
+        device.executeShellCommand("dumpsys vibrator_manager")
+            .substringAfter("Recent vibrations:")
+            .substringBefore("Aggregated vibration history:")
+            .lineSequence()
+            .filter { APP_PACKAGE in it && " finished |" in it && "usage: ALARM" in it }
+            .toSet()
+
+    /** The rest bar's countdown: within the app, the one line of text that is nothing but minutes and seconds. */
+    private fun restRemaining(): Long? {
+        repeat(TAP_ATTEMPTS) {
+            try {
+                return device.findObject(restCountdown)?.text?.let { shown ->
+                    val (minutes, seconds) = shown.split(":")
+                    minutes.toLong() * SECONDS_PER_MINUTE + seconds.toLong()
+                }
+            } catch (_: StaleObjectException) {
+                // Find it again.
+            }
+        }
+        error("The rest countdown kept changing and could not be read")
+    }
+
+    /** A moved clock reaches the screen within a second or so; the wide [seconds] allow for a slow device. */
+    fun assertRestRemaining(seconds: LongRange) {
+        val deadline = SystemClock.uptimeMillis() + TIMEOUT_MS
+        var shown = restRemaining()
+        while ((shown == null || shown !in seconds) && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS)
+            shown = restRemaining()
+        }
+        assertTrue("Rest remaining should be within $seconds, was $shown", shown != null && shown in seconds)
+    }
+
+    /** No countdown and no finished rest, given the time one would need to appear. */
+    fun assertNoRest() {
+        device.waitForIdle()
+        assertNull("Did not expect a rest countdown", device.wait(Until.findObject(restCountdown), ABSENCE_WAIT_MS))
+        assertAbsent("Rest over")
+    }
+
+    /** Moves the clock to just past the deadline of the rest on screen. */
+    fun moveClockPastRestDeadline() {
+        moveClockForward(checkNotNull(restRemaining()) { "No rest is running" } + 1)
+        assertVisible("Rest over")
     }
 
     fun usesGestureNavigation(): Boolean =
@@ -140,11 +257,21 @@ class AppDriver {
         tapDescription(description)
     }
 
+    /** The described node must itself be the toggle: any other node reads as unchecked whatever the screen shows. */
     fun assertChecked(description: String, expected: Boolean) {
         described(description)
         assertTrue(
             "\"$description\" should be ${if (expected) "checked" else "unchecked"}",
-            device.wait(Until.hasObject(By.desc(description).checked(expected)), TIMEOUT_MS),
+            device.wait(Until.hasObject(By.desc(description).checkable(true).checked(expected)), TIMEOUT_MS),
+        )
+    }
+
+    /** A Compose Switch has children, so it carries its label on a child node and its state on itself. */
+    fun assertSwitchedOn(description: String, expected: Boolean) {
+        described(description)
+        assertTrue(
+            "\"$description\" should be ${if (expected) "on" else "off"}",
+            device.wait(Until.hasObject(By.checkable(true).checked(expected).hasChild(By.desc(description))), TIMEOUT_MS),
         )
     }
 
@@ -162,6 +289,17 @@ class AppDriver {
         error("Nothing to tap reading \"$text\"")
     }
 
+    /** Scrolls the current list until this line is on screen. */
+    fun assertVisibleBelow(text: String) {
+        val x = device.displayWidth / 2
+        repeat(SCROLL_ATTEMPTS) {
+            device.waitForIdle()
+            if (device.hasObject(By.text(text))) return
+            device.swipe(x, device.displayHeight * 2 / 3, x, device.displayHeight / 3, SWIPE_STEPS)
+        }
+        error("Nothing below reads \"$text\"")
+    }
+
     /** Exactly [expected] of the names in [among] are on screen now; the rest have been filtered away. */
     fun assertExercisesShown(vararg expected: String, among: List<String>) {
         device.waitForIdle()
@@ -173,6 +311,12 @@ class AppDriver {
     /** Moves the logging focus; the Exercise's rows are then what the screen shows. */
     fun goToExercise(name: String) {
         tapScrolledTo("Go to $name")
+    }
+
+    /** What the Exercise's chip says, wherever logging has left the list scrolled. */
+    fun assertExerciseProgress(name: String, progress: String) {
+        described("Go to $name")
+        assertVisible("$name $progress")
     }
 
     /** Exactly the Exercises the Active Workout holds, in the order the screen offers them. */

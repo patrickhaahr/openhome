@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -64,6 +65,8 @@ import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.FinishOutcome
 import com.patrickhaahr.openhome.fitness.FitnessRepository
 import com.patrickhaahr.openhome.fitness.PreviousPerformance
+import com.patrickhaahr.openhome.fitness.REST_STEP_SECONDS
+import com.patrickhaahr.openhome.fitness.RestTimers
 import com.patrickhaahr.openhome.fitness.SetCheck
 import com.patrickhaahr.openhome.fitness.SetField
 import com.patrickhaahr.openhome.storage.SetMeasure
@@ -109,6 +112,7 @@ private enum class SaveState {
 private class ActiveWorkoutViewModel(
     private val repository: ActiveWorkoutRepository,
     fitness: FitnessRepository,
+    private val restTimers: RestTimers,
     private val saveScope: CoroutineScope,
 ) : ViewModel() {
     private val writesInProgress = MutableStateFlow(0)
@@ -175,6 +179,10 @@ private class ActiveWorkoutViewModel(
         if (!repository.setCompleted(setId, completed)) refusedConfirmations.update { it + setId }
     }
 
+    fun adjustRest(exerciseId: Long, deltaSeconds: Long) = save { restTimers.adjust(exerciseId, deltaSeconds) }
+
+    fun setRestEnabled(exerciseId: Long, enabled: Boolean) = save { restTimers.setEnabled(exerciseId, enabled) }
+
     fun finish(omitUnchecked: Boolean, onFinished: () -> Unit) = save {
         if (repository.finish(omitUnchecked) is FinishOutcome.Finished) onFinished()
     }
@@ -203,7 +211,7 @@ private class ActiveWorkoutViewModel(
 /** Leaving this destination, by back or by tab, keeps the Active Workout; it is all in storage. */
 @Composable
 fun ActiveWorkoutRoute(onAddExercise: () -> Unit, onFinished: () -> Unit, onDiscarded: () -> Unit) {
-    val viewModel = appViewModel { ActiveWorkoutViewModel(it.activeWorkout, it.fitness, it.saveScope) }
+    val viewModel = appViewModel { ActiveWorkoutViewModel(it.activeWorkout, it.fitness, it.restTimers, it.saveScope) }
     val lookup by viewModel.workout.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     val refusedSets by viewModel.refusedSets.collectAsStateWithLifecycle()
@@ -513,7 +521,39 @@ private fun EntryCard(
                     }
                 }
             }
+            RestPreferenceRow(entry, viewModel)
         }
+    }
+}
+
+/** What this Exercise's rests will be, remembered from Workout to Workout. */
+@Composable
+private fun RestPreferenceRow(entry: ActiveEntry, viewModel: ActiveWorkoutViewModel) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+        Text(
+            text = if (entry.rest.enabled) "Rest ${formatRest(entry.rest.seconds)}" else "Rest off",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        if (entry.rest.enabled) {
+            TextButton(
+                onClick = { viewModel.adjustRest(entry.exerciseId, -REST_STEP_SECONDS) },
+                modifier = Modifier.semantics { contentDescription = "Less rest for ${entry.exerciseName}" },
+            ) {
+                Text("−15")
+            }
+            TextButton(
+                onClick = { viewModel.adjustRest(entry.exerciseId, REST_STEP_SECONDS) },
+                modifier = Modifier.semantics { contentDescription = "More rest for ${entry.exerciseName}" },
+            ) {
+                Text("+15")
+            }
+        }
+        Switch(
+            checked = entry.rest.enabled,
+            onCheckedChange = { viewModel.setRestEnabled(entry.exerciseId, it) },
+            modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "Rest timer for ${entry.exerciseName}" },
+        )
     }
 }
 

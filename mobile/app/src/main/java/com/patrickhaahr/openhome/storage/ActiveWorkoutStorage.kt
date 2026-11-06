@@ -102,6 +102,8 @@ data class ActiveEntryWithDetails(
     val exercise: ExerciseEntity,
     @Relation(parentColumn = "id", entityColumn = "entry_id")
     val sets: List<ActiveSetEntity>,
+    @Relation(parentColumn = "exercise_id", entityColumn = "exercise_id")
+    val rest: ExerciseRestEntity?,
 )
 
 @Dao
@@ -138,6 +140,9 @@ interface ActiveWorkoutDao {
 
     @Insert
     suspend fun insertEntry(entry: ActiveEntryEntity): Long
+
+    @Query("SELECT exercise_id FROM active_entries WHERE id = :entryId")
+    suspend fun exerciseOfEntry(entryId: Long): Long
 
     @Query("DELETE FROM active_entries WHERE id = :entryId")
     suspend fun deleteEntry(entryId: Long)

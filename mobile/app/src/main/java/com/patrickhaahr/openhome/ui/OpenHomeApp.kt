@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.patrickhaahr.openhome.fitness.RestTimers
 import com.patrickhaahr.openhome.setup.SetupService
 import com.patrickhaahr.openhome.setup.SetupState
 import com.patrickhaahr.openhome.sync.FitnessSyncScheduler
@@ -25,6 +26,7 @@ class AppGateViewModel(
     setup: SetupService,
     wifi: WifiNetworks,
     syncScheduler: FitnessSyncScheduler,
+    restTimers: RestTimers,
 ) : ViewModel() {
     /** Null until storage answers, so a set-up app never flashes the Setup Flow. */
     val state: StateFlow<SetupState?> =
@@ -33,6 +35,8 @@ class AppGateViewModel(
     init {
         // Opening the app or gaining Wi-Fi in front of the user skips any waiting retry.
         viewModelScope.launch { wifi.observeOnWifi().collect { syncScheduler.scheduleIfPending() } }
+        // Android drops alarms on a force-stop or a restart of the phone; the deadline is still stored.
+        viewModelScope.launch { restTimers.syncAlarm() }
     }
 }
 
@@ -40,7 +44,7 @@ class AppGateViewModel(
 @Composable
 fun OpenHomeApp() {
     OpenHomeTheme {
-        val gate = appViewModel { AppGateViewModel(it.setup, it.wifi, it.syncScheduler) }
+        val gate = appViewModel { AppGateViewModel(it.setup, it.wifi, it.syncScheduler, it.restTimers) }
         val state by gate.state.collectAsStateWithLifecycle()
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             when (val current = state) {

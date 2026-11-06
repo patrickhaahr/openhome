@@ -8,8 +8,14 @@ import androidx.room.RoomDatabase
 
 /** Add a migration with every schema change; fitness data here may not exist anywhere else yet. */
 @Database(
-    version = 4,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+    version = 5,
+    autoMigrations =
+        [
+            AutoMigration(from = 1, to = 2),
+            AutoMigration(from = 2, to = 3),
+            AutoMigration(from = 3, to = 4),
+            AutoMigration(from = 4, to = 5),
+        ],
     entities =
         [
             ExerciseEntity::class,
@@ -23,6 +29,8 @@ import androidx.room.RoomDatabase
             ActiveEntryEntity::class,
             ActiveSetEntity::class,
             OutboxEntity::class,
+            ExerciseRestEntity::class,
+            RestTimerEntity::class,
         ],
 )
 abstract class OpenHomeDatabase : RoomDatabase() {
@@ -33,6 +41,8 @@ abstract class OpenHomeDatabase : RoomDatabase() {
     abstract fun activeWorkoutDao(): ActiveWorkoutDao
 
     abstract fun outboxDao(): OutboxDao
+
+    abstract fun restDao(): RestDao
 
     companion object {
         fun open(context: Context): OpenHomeDatabase =

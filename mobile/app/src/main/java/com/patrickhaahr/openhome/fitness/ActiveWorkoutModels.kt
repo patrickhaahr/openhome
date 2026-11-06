@@ -23,6 +23,7 @@ data class ActiveEntry(
     val exerciseName: String,
     val exerciseCategory: String,
     val sets: List<ActiveSet>,
+    val rest: RestPreference,
 )
 
 data class ActiveSet(val id: Long, val number: Long, val draft: SetDraft, val completed: Boolean)

@@ -4,7 +4,11 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -40,6 +44,7 @@ import com.patrickhaahr.openhome.ui.workout.FixExerciseRoute
 import com.patrickhaahr.openhome.ui.workout.HistoryRoute
 import com.patrickhaahr.openhome.ui.workout.LibraryRoute
 import com.patrickhaahr.openhome.ui.workout.NewExerciseRoute
+import com.patrickhaahr.openhome.ui.workout.RestTimerBar
 import com.patrickhaahr.openhome.ui.workout.WorkoutCorrectionRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutDetailRoute
 import com.patrickhaahr.openhome.ui.workout.WorkoutRoute
@@ -123,8 +128,12 @@ fun MainNavigation() {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (inTab) {
-                BottomTabs(destination, onSelect = { tab -> navController.openTab(tab, destination) })
+            Column {
+                // On every destination; without the tabs beneath, it keeps clear of the system's own bar itself.
+                RestTimerBar(if (inTab) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars))
+                if (inTab) {
+                    BottomTabs(destination, onSelect = { tab -> navController.openTab(tab, destination) })
+                }
             }
         },
     ) { padding ->

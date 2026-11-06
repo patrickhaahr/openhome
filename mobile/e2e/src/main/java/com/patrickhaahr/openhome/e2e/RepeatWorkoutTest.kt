@@ -163,9 +163,9 @@ class RepeatWorkoutTest {
         app.tapBelow("Complete Exercise")
         app.described("Planche Hold set 1 performed")
         app.tapBelow("Complete Exercise")
-        app.assertVisible("Squat 3/3")
-        app.assertVisible("Pull-Up 2/2")
-        app.assertVisible("Planche Hold 2/2")
+        app.assertExerciseProgress("Squat", "3/3")
+        app.assertExerciseProgress("Pull-Up", "2/2")
+        app.assertExerciseProgress("Planche Hold", "2/2")
 
         // With every Set confirmed there is nothing to review.
         finish()
@@ -231,9 +231,9 @@ class RepeatWorkoutTest {
         app.goToExercise("Planche Hold")
         app.goToExercise("Squat")
         app.goToExercise("Planche Hold")
-        app.assertVisible("Squat 0/3")
-        app.assertVisible("Pull-Up 0/2")
-        app.assertVisible("Planche Hold 0/2")
+        app.assertExerciseProgress("Squat", "0/3")
+        app.assertExerciseProgress("Pull-Up", "0/2")
+        app.assertExerciseProgress("Planche Hold", "0/2")
         finish()
         app.assertVisible("No confirmed Sets")
         app.tap("Return to logging")
@@ -243,8 +243,8 @@ class RepeatWorkoutTest {
         app.enterDescribed("Squat set 1 added kg", "105")
         app.tapBelow("Complete Exercise")
         app.described("Pull-Up set 1 performed")
-        app.assertVisible("Squat 3/3")
-        app.assertVisible("Pull-Up 0/2")
+        app.assertExerciseProgress("Squat", "3/3")
+        app.assertExerciseProgress("Pull-Up", "0/2")
 
         // Confirmed rows stay editable, and can be taken back one at a time.
         app.goToExercise("Squat")
@@ -253,14 +253,14 @@ class RepeatWorkoutTest {
         app.assertChecked("Squat set 3 performed", false)
         app.enterDescribed("Squat set 2 reps", "6")
         app.assertChecked("Squat set 2 performed", true)
-        app.assertVisible("Squat 2/3")
+        app.assertExerciseProgress("Squat", "2/3")
 
         // The focus, edits and confirmations are all still there after losing the process.
         app.goToExercise("Pull-Up")
         app.relaunch()
         app.tap("Resume Workout")
         app.described("Pull-Up set 1 performed")
-        app.assertVisible("Squat 2/3")
+        app.assertExerciseProgress("Squat", "2/3")
         app.goToExercise("Squat")
         app.assertDescribedValue("Squat set 1 added kg", "105")
         app.assertChecked("Squat set 1 performed", true)
@@ -300,7 +300,7 @@ class RepeatWorkoutTest {
         app.enterDescribed("Pull-Up set 1 reps", "")
         app.tapBelow("Complete Exercise")
         app.described("Planche Hold set 1 performed")
-        app.assertVisible("Pull-Up 1/2")
+        app.assertExerciseProgress("Pull-Up", "1/2")
         app.goToExercise("Pull-Up")
         app.assertChecked("Pull-Up set 1 performed", false)
         app.assertChecked("Pull-Up set 2 performed", true)
@@ -316,9 +316,9 @@ class RepeatWorkoutTest {
 
         // Everything confirmed: no Exercise left to advance to, and it stays put.
         app.described("Squat set 1 performed")
-        app.assertVisible("Squat 3/3")
-        app.assertVisible("Pull-Up 2/2")
-        app.assertVisible("Planche Hold 2/2")
+        app.assertExerciseProgress("Squat", "3/3")
+        app.assertExerciseProgress("Pull-Up", "2/2")
+        app.assertExerciseProgress("Planche Hold", "2/2")
 
         // The second half of a double tap must not silently confirm the Exercise that just appeared.
         app.goToExercise("Squat")
@@ -329,8 +329,8 @@ class RepeatWorkoutTest {
         app.doubleTapDescription("Complete Squat")
         app.described("Pull-Up set 1 performed")
         app.assertAbsent("Return to logging")
-        app.assertVisible("Squat 3/3")
-        app.assertVisible("Pull-Up 1/2")
+        app.assertExerciseProgress("Squat", "3/3")
+        app.assertExerciseProgress("Pull-Up", "1/2")
         app.assertChecked("Pull-Up set 1 performed", false)
     }
 
@@ -347,7 +347,7 @@ class RepeatWorkoutTest {
         app.tapBelow("Complete Exercise")
         app.assertVisible("Enter reps to confirm")
         app.described("Dip set 1 performed")
-        app.assertVisible("Dip 0/1")
+        app.assertExerciseProgress("Dip", "0/1")
         app.assertChecked("Dip set 1 performed", false)
     }
 
