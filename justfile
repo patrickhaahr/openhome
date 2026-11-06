@@ -346,6 +346,28 @@ native-build:
 native-lint:
     ./gradlew --console=plain :app:lintDebug
 
+# Create a persistent user-local release identity once (never replaces an existing key)
+[group('native')]
+native-release-key-init:
+    bash mobile/tools/release.sh init
+
+# Lint and build the release variant, then align, sign and verify without a device
+[group('native')]
+native-release:
+    cd mobile && ./gradlew --console=plain :app:lintRelease :app:assembleRelease
+    bash mobile/tools/release.sh sign
+    just native-release-verify
+
+# Show the APK certificate, release manifest and checksum without accessing a device
+[group('native')]
+native-release-verify:
+    bash mobile/tools/release.sh verify
+
+# Install the verified release on an explicit authorized device, preserving app data
+[group('native')]
+native-release-install serial: native-release-verify
+    adb -s {{quote(serial)}} install -r mobile/app/build/outputs/apk/release/app-release.apk
+
 # Run the native app's device tests on a booted emulator (optionally one class: just native-test SetupFlowTest)
 [group('native')]
 [working-directory: 'mobile']
