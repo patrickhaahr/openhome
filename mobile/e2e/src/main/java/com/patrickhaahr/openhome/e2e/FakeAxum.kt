@@ -102,6 +102,29 @@ class FakeAxum(
     fun speakerRequests(): List<JsonObject> = speakerRequests.toList()
     fun lightRequests(): List<Pair<String, String>> = lightRequests.toList()
 
+    @Volatile var backlightStatus: JsonObject = Json.parseToJsonElement("""
+        {
+          "effects":[{"id":"aurora","name":"Aurora","description":"Cool waves."}],
+          "setup":"ready","reachability":"reachable",
+          "intended":{"mode":"color","rgb":{"red":20,"green":40,"blue":60},"brightness":35},
+          "acknowledged":{"mode":"tv-sync","brightness":70},
+          "observed":{"power":false,"mode":"other","brightness":12,"observed_at":"2026-01-01T12:00:00Z"},
+          "stale":true,"command":"failed","recovery":"retrying",
+          "bedtime":{"enabled":true,"start":"22:30","end":"06:00","brightness":8},
+          "control_source":"manual","override_expires_at":"2026-11-07T05:00:00Z",
+          "next_transition":"2026-11-07T05:00:00Z"
+        }
+    """.trimIndent()).jsonObject
+    @Volatile var backlightCode = 200
+    @Volatile var loseBacklightResponse = false
+    @Volatile var backlightDelayMillis = 0L
+    private val backlightRequests = CopyOnWriteArrayList<Pair<String, String>>()
+    private val automaticRequest = CountDownLatch(1)
+    fun awaitAutomaticRequest() {
+        check(automaticRequest.await(15, TimeUnit.SECONDS)) { "Automatic never reached Axum" }
+    }
+    fun backlightRequests(): List<Pair<String, String>> = backlightRequests.toList()
+
     private val server = MockWebServer()
     private val detailRequests = AtomicInteger()
     private val blockedDetails = CountDownLatch(1)
@@ -304,6 +327,16 @@ class FakeAxum(
                     loseLightResponse -> disconnected()
                     lightCommandCode != 200 -> error(lightCommandCode, "SwitchBot service is not configured")
                     else -> ok(buildJsonObject { put("message", "Sent command") })
+                }
+            }
+            path.startsWith("/api/backlight") -> {
+                if (request.method != "GET") backlightRequests += path to (request.body?.utf8() ?: "")
+                if (path == "/api/backlight/automatic") automaticRequest.countDown()
+                if (backlightDelayMillis > 0) Thread.sleep(backlightDelayMillis)
+                when {
+                    loseBacklightResponse && path != "/api/backlight" -> disconnected()
+                    backlightCode != 200 -> error(backlightCode, "Backlight unavailable")
+                    else -> ok(backlightStatus)
                 }
             }
             path == "/api/health" -> ok(buildJsonObject { put("status", "ok") })

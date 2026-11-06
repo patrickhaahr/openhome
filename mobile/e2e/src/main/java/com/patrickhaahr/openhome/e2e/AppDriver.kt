@@ -218,18 +218,25 @@ class AppDriver {
     }
 
     /** The field or control with this description, scrolled into view. */
-    fun described(description: String): UiObject2 {
-        val selector = By.desc(description)
+    fun described(description: String): UiObject2 = findInScroll(By.desc(description))
+
+    /** Text controls can move above the viewport when a preceding result changes height. */
+    fun tapScrolledText(text: String) {
+        findInScroll(By.text(text))
+        tap(text)
+    }
+
+    private fun findInScroll(selector: BySelector): UiObject2 {
         val x = device.displayWidth / 2
         val high = device.displayHeight * 2 / 3
         val low = device.displayHeight / 3
-        repeat(SCROLL_ATTEMPTS) { attempt ->
+        repeat(SCROLL_ATTEMPTS + SCROLL_ATTEMPTS / 2) { attempt ->
             device.waitForIdle()
             device.findObject(selector)?.let { return it }
             // Downward first, then back up past where it started.
             if (attempt < SCROLL_ATTEMPTS / 2) device.swipe(x, high, x, low, SWIPE_STEPS) else device.swipe(x, low, x, high, SWIPE_STEPS)
         }
-        error("Nothing described as \"$description\"")
+        error("Nothing matching $selector")
     }
 
     /** A text field whose description labels it, scrolled into view. */
@@ -298,13 +305,7 @@ class AppDriver {
 
     /** Scrolls the current list until this line is on screen. */
     fun assertVisibleBelow(text: String) {
-        val x = device.displayWidth / 2
-        repeat(SCROLL_ATTEMPTS) {
-            device.waitForIdle()
-            if (device.hasObject(By.text(text))) return
-            device.swipe(x, device.displayHeight * 2 / 3, x, device.displayHeight / 3, SWIPE_STEPS)
-        }
-        error("Nothing below reads \"$text\"")
+        findInScroll(By.text(text))
     }
 
     /**

@@ -43,7 +43,10 @@ class OpenHomeApi(
     private val apiKey: String,
     private val client: OkHttpClient,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        classDiscriminator = "mode"
+    }
 
     /** `/api/health` sits behind the API Key check, so success proves both the address and the key. */
     suspend fun checkConnection() {
@@ -55,6 +58,15 @@ class OpenHomeApi(
             }
         if (health.status != "ok") throw ApiFailure.UnreadableResponse()
     }
+
+    suspend fun backlightStatus(): BacklightStatus = get("api/backlight")
+
+    suspend fun refreshBacklight(): BacklightStatus = post("api/backlight/refresh", "")
+
+    suspend fun selectBacklight(selection: BacklightSelection): BacklightStatus =
+        send("PUT", "api/backlight/selection", json.encodeToString(selection))
+
+    suspend fun automaticBacklight(): BacklightStatus = post("api/backlight/automatic", "")
 
     suspend fun irStatus(): ApiIrStatus = get("api/ir")
 

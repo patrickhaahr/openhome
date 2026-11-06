@@ -62,7 +62,9 @@ class HomeSpeakerLightsTest {
         app.assertVisibleBelow("Optical failed. Axum API answered HTTP 503. Nothing queued; Speaker outcome may be unknown.")
         api.tvStatusCode = 503
         app.described("Speaker Volume +")
-        app.tap("Refresh Speaker controls")
+        app.tapScrolledText("Refresh Speaker controls")
+        // Refresh replaces the longer command error; locate the section again after its reflow.
+        app.described("Speaker Volume +")
         app.assertVisibleBelow("Speaker controls unavailable. Axum API answered HTTP 503. Refresh to try again.")
         app.assertButtonEnabled("Speaker Volume +", false)
         app.relaunch()

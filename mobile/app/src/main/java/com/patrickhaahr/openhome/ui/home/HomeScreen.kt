@@ -85,10 +85,7 @@ private fun TvContent(fullRemote: Boolean, onOpenProfile: (() -> Unit)? = null, 
             } else {
                 Button(onClick = onOpenRemote, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Full TV remote") }
                 SpeakerLightsSections()
-                Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SectionTitle("Backlight")
-                    Text("Controls aren't available in this version.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                BacklightSection()
             }
         }
     }
