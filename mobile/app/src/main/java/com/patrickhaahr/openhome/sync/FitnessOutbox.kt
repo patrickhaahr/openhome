@@ -118,19 +118,17 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
     /**
      * Call inside the transaction that saves a correction with [workout]'s revision. It supersedes any
      * correction still queued, even one in flight, which Axum then keeps from taking effect afterwards.
-     * A create Axum refused was never accepted, so it is corrected in place instead: a new `request_id`
-     * because the old one may hold a receipt whose Workout has since been deleted. Anything else queues
-     * behind the create, whose frozen arguments may already have committed without an answer.
+     * A create Axum refused was never accepted, so replace it at the queue's tail after any new
+     * Exercises it now uses. Its new `request_id` also leaves any old receipt behind. Anything else
+     * queues behind the create, whose frozen arguments may already have committed without an answer.
      */
     suspend fun enqueueWorkoutCorrection(workoutId: Long, workout: QueuedWorkout) {
         dao.deleteAllOf(OutboxKind.EDIT_WORKOUT, workoutId)
         val payload = Json.encodeToString(workout)
-        val replacedRefusedCreate =
-            dao.replaceRefused(OutboxKind.CREATE_WORKOUT, workoutId, UUID.randomUUID().toString(), payload) > 0
-        if (replacedRefusedCreate) return
+        val replacedRefusedCreate = dao.deleteRefused(OutboxKind.CREATE_WORKOUT, workoutId) > 0
         dao.insert(
             OutboxEntity(
-                kind = OutboxKind.EDIT_WORKOUT,
+                kind = if (replacedRefusedCreate) OutboxKind.CREATE_WORKOUT else OutboxKind.EDIT_WORKOUT,
                 recordId = workoutId,
                 requestId = UUID.randomUUID().toString(),
                 payload = payload,

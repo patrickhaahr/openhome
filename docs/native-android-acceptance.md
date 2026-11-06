@@ -49,8 +49,18 @@ exhaustive TalkBack/device/font-size coverage, upgrade from an existing native
 release database, and live household hardware remain unclaimed. Prior emulator
 cellular-default and gesture tests cover those software policies. Keeping Wi-Fi
 for wireless ADB and stopping the fixture proves outage/recovery, not cellular
-routing. No app data was cleared. The Pixel retains invented fixture data and an
-unfinished fixture Workout; its temporary API is stopped.
+routing. No app data was cleared. The Pixel retains invented fixture data;
+its temporary API is stopped.
+
+The independent PR review subsequently found a repaired refused Workout could
+precede a newly created Exercise in the outbox and stall. This was reproduced on
+the original physical release against isolated Axum. The fix appends the replacement
+create after its dependencies inside the existing save transaction. A second physical
+release journey confirmed automatic Exercise-then-Workout delivery, correct identifiers
+and sets, and exactly one created Workout without an extra Sync action or relaunch.
+The existing app-level correction regression now includes this dependency case;
+it was compiled, while runtime verification used the Pixel rather than instrumentation.
+Native lint/build and signed-release verification passed after the repair.
 
 ## Reproducing checks
 

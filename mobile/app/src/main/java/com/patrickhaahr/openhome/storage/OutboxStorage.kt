@@ -55,8 +55,8 @@ enum class SyncProblem {
  * One queued change, deleted in the transaction that records its acknowledgement. [payload] is frozen
  * when queued, so a retry repeats the same arguments under the same [requestId] whatever has happened
  * to the local record since. Later corrections are later rows, never edits to this one; the exception
- * is a refused create, which Axum never accepted: correcting it replaces both here, keeping its place
- * ahead of whatever depends on it.
+ * is a refused create, which Axum never accepted: correcting it replaces both. A repaired Workout
+ * create moves after any newly queued Exercises; repaired Exercises stay ahead of dependent Workouts.
  */
 @Entity(
     tableName = "fitness_outbox",
@@ -116,6 +116,9 @@ interface OutboxDao {
         """,
     )
     suspend fun replaceRefused(kind: OutboxKind, recordId: Long, requestId: String, payload: String): Int
+
+    @Query("DELETE FROM fitness_outbox WHERE kind = :kind AND record_id = :recordId AND state = 'REFUSED'")
+    suspend fun deleteRefused(kind: OutboxKind, recordId: Long): Int
 
     @Query("SELECT * FROM fitness_outbox WHERE kind IN (:kinds)")
     suspend fun allOfKinds(kinds: List<OutboxKind>): List<OutboxEntity>

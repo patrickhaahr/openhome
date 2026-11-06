@@ -276,19 +276,41 @@ class WorkoutCorrectionTest {
         assertEquals(2, api.storedWorkouts().size)
     }
 
-    /** Axum never accepted the create, so correcting what it refused sends the corrected Workout instead. */
+    /** A corrected refused create must follow an Exercise created later, without another sync trigger. */
     @Test
     fun correctingARefusedCreateDeliversOneCorrectedWorkout() {
         api.refuseWorkoutCreates()
         logWorkout("Refused session")
         app.assertEventuallyVisible(REFUSED)
 
-        api.healthy()
+        app.setWifi(false)
+        app.pressBackButton()
+        app.tapBelow("Library")
+        app.tap("Create Exercise")
+        app.enter("Name", "Repair Row")
+        app.tap("Calisthenics")
+        app.tap("Save Exercise")
+        app.assertVisible("Repair Row")
+        app.pressBackButton()
+        app.tapBelow("History")
         app.tap("Refused session")
-        rename("Refused session", "Accepted session")
+        app.tap("Edit Workout")
+        app.enter("Name (optional)", "Accepted session")
+        app.tapBelow("Add Exercise")
+        app.enter("Search Exercises", "Repair Row")
+        app.tap("Repair Row")
+        app.enterDescribed("Repair Row set 1 reps", "12")
+        app.tap("Save Changes")
+
+        api.healthy()
+        app.setWifi(true)
 
         app.assertEventuallyVisible(SYNCED)
-        assertEquals("Accepted session", newlyStored().single().name)
+        val workout = newlyStored().single()
+        assertEquals("Accepted session", workout.name)
+        val exercise = api.storedExercises().single { it.name == "Repair Row" }
+        assertEquals(exercise.id, workout.entries.last().exerciseId)
+        assertEquals(listOf(FixtureSet(setNumber = 1, reps = 12)), workout.entries.last().sets)
         assertEquals(emptyList<Long>(), api.editDeliveries())
     }
 

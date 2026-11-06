@@ -76,8 +76,8 @@ later. An acknowledgement does not confirm TV, Speaker or Lights state. Backligh
 shows intended, acknowledged and observed facts separately; refresh after an
 unknown outcome. Bedtime scheduling and TV Sync capture/recovery belong to Axum.
 
-The release is installed on the acceptance Pixel with invented fixture data and
-an unfinished fixture Workout retained. Its temporary fixture server is stopped;
+The release is installed on the acceptance Pixel with invented fixture data
+retained. Its temporary fixture server is stopped;
 that installation is not configured for the household API. Do not discard real
 pending work to change servers. There is no supported in-app server-switch flow.
 
