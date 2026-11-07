@@ -405,6 +405,29 @@ async fn a_retried_addition_replays_conflicts_on_changes_and_never_recreates_a_d
     assert_eq!(api.supplements().await, Vec::<Value>::new());
 }
 
+/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
+/// of replaying a fabricated one; the Supplement stays, and the client reads it first.
+#[tokio::test]
+async fn a_legacy_receipt_directs_the_client_to_read_the_supplement_first() {
+    let api = Api::start().await;
+    let oil = api.added(fish_oil("oil-1")).await;
+    sqlx::query("UPDATE supplement_receipts SET result = NULL WHERE request_id = 'oil-1'")
+        .execute(&api.state.db)
+        .await
+        .unwrap();
+
+    let (status, body) = api.add(fish_oil("oil-1")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("no original result"),
+        "{body}"
+    );
+    assert_eq!(api.supplements().await, [oil]);
+}
+
 #[tokio::test]
 async fn updating_a_supplement_renames_it_or_replaces_its_amounts_together() {
     let api = Api::start().await;

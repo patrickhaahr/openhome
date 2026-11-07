@@ -11,6 +11,57 @@ use crate::services::exercise_progress::{self, CombinedProgress, Period, Selecti
 use crate::services::nutrition::meal_logs::parse_request_id;
 use crate::services::training::calendar::CalendarDay;
 
+/// What a stored receipt allows a retry of its `request_id`; see `docs/api-receipts.md`.
+/// A retry repeating the accepted arguments is answered with the record it created (the
+/// current one, not an original snapshot). Changed arguments are a conflict. Record ids can
+/// be reused, so deleting the record clears the receipt's target id instead of removing the
+/// receipt: a cleared target is a conflict, never a recreation. Changed arguments are
+/// judged before the cleared target.
+fn accepted_target(
+    stored_request: &str,
+    stored_target: Option<i64>,
+    request: &str,
+    wording: &ReplayWording,
+) -> Result<i64> {
+    if stored_request != request {
+        return Err(AppError::Conflict(wording.changed.into()));
+    }
+    stored_target.ok_or_else(|| AppError::Conflict(wording.cleared.into()))
+}
+
+/// The conflict messages a domain gives to the two refusals in [`accepted_target`].
+struct ReplayWording {
+    changed: &'static str,
+    cleared: &'static str,
+}
+
+const EXERCISE_REPLAY: ReplayWording = ReplayWording {
+    changed: "request_id was already used for a different Exercise; use a new ID for a new Exercise",
+    cleared: "The retried Exercise was deleted; use a new request_id to create it again",
+};
+const WORKOUT_REPLAY: ReplayWording = ReplayWording {
+    changed: "request_id was already used for a different Workout; use a new ID for a new Workout",
+    cleared: "The retried Workout was deleted; use a new request_id to log it again",
+};
+const BODY_WEIGHT_REPLAY: ReplayWording = ReplayWording {
+    changed: "request_id was already used for a different Body Weight; use a new ID for a new record",
+    cleared: "The retried Body Weight was removed; use a new request_id to record it again",
+};
+
+/// A client edit revision, which orders one client's offline edits of a Workout or the Profile.
+/// An edit carrying one applies only when it is newer than the last applied (`client_revision`
+/// is null until a client sends one, so the first revision always applies); an older or
+/// repeated one changes nothing and is acknowledged with the current record. An edit without a
+/// revision always applies and leaves the stored revision alone.
+fn parse_client_revision(revision: Option<i64>) -> Result<Option<i64>> {
+    if revision.is_some_and(|revision| revision < 1) {
+        return Err(AppError::Validation(
+            "client_revision must be 1 or greater".to_string(),
+        ));
+    }
+    Ok(revision)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListExercises {
     category: Option<String>,
@@ -220,17 +271,12 @@ async fn replay_exercise(
     else {
         return Ok(None);
     };
-    if stored.request != receipt.request {
-        return Err(AppError::Conflict(
-            "request_id was already used for a different Exercise; use a new ID for a new Exercise"
-                .into(),
-        ));
-    }
-    let Some(exercise_id) = stored.exercise_id else {
-        return Err(AppError::Conflict(
-            "The retried Exercise was deleted; use a new request_id to create it again".into(),
-        ));
-    };
+    let exercise_id = accepted_target(
+        &stored.request,
+        stored.exercise_id,
+        &receipt.request,
+        &EXERCISE_REPLAY,
+    )?;
     fetch_exercise(state, exercise_id).await.map(Some)
 }
 
@@ -779,17 +825,12 @@ async fn replay_workout(
     else {
         return Ok(None);
     };
-    if stored.request != receipt.request {
-        return Err(AppError::Conflict(
-            "request_id was already used for a different Workout; use a new ID for a new Workout"
-                .into(),
-        ));
-    }
-    let Some(workout_id) = stored.workout_id else {
-        return Err(AppError::Conflict(
-            "The retried Workout was deleted; use a new request_id to log it again".into(),
-        ));
-    };
+    let workout_id = accepted_target(
+        &stored.request,
+        stored.workout_id,
+        &receipt.request,
+        &WORKOUT_REPLAY,
+    )?;
     get_workout_detail(state, workout_id).await.map(Some)
 }
 
@@ -879,12 +920,7 @@ async fn update_workout(
     if let Some(exercises) = &payload.exercises {
         validate_workout_exercises(exercises)?;
     }
-    let client_revision = payload.client_revision;
-    if client_revision.is_some_and(|revision| revision < 1) {
-        return Err(AppError::Validation(
-            "client_revision must be 1 or greater".to_string(),
-        ));
-    }
+    let client_revision = parse_client_revision(payload.client_revision)?;
 
     let mut tx = state
         .db
@@ -1163,17 +1199,12 @@ async fn replay_body_weight(
     else {
         return Ok(None);
     };
-    if stored.request != receipt.request {
-        return Err(AppError::Conflict(
-            "request_id was already used for a different Body Weight; use a new ID for a new record"
-                .into(),
-        ));
-    }
-    let Some(body_weight_id) = stored.body_weight_id else {
-        return Err(AppError::Conflict(
-            "The retried Body Weight was removed; use a new request_id to record it again".into(),
-        ));
-    };
+    let body_weight_id = accepted_target(
+        &stored.request,
+        stored.body_weight_id,
+        &receipt.request,
+        &BODY_WEIGHT_REPLAY,
+    )?;
     sqlx::query_as!(
         BodyWeightEntry,
         r#"
@@ -1367,12 +1398,7 @@ async fn update_profile(
     State(state): State<crate::AppState>,
     Json(payload): Json<UpdateProfile>,
 ) -> Result<Json<Profile>> {
-    let client_revision = payload.client_revision;
-    if client_revision.is_some_and(|revision| revision < 1) {
-        return Err(AppError::Validation(
-            "client_revision must be 1 or greater".to_string(),
-        ));
-    }
+    let client_revision = parse_client_revision(payload.client_revision)?;
 
     if let Some(Some(height)) = payload.height_cm
         && height <= 0.0

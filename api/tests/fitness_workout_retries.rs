@@ -188,6 +188,50 @@ async fn an_old_retry_cannot_recreate_a_deleted_workout_or_claim_its_reused_id()
     assert_eq!(list(&app).await.len(), 1);
 }
 
+/// Changed arguments are judged before the cleared target, so a retried Workout whose arguments
+/// no longer match reports that, not its deletion.
+#[tokio::test]
+async fn changed_arguments_are_refused_before_a_deleted_workouts_target() {
+    let app = common::test_app().await;
+    let (_, first) = post(&app, workout(KEY)).await;
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        &format!("/api/workouts/{}", first["id"]),
+        Method::DELETE,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let mut changed = workout(KEY);
+    changed["exercises"][0]["sets"][0]["reps"] = json!(9);
+    let (status, body) = post(&app, changed).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("a different Workout"),
+        "{body}"
+    );
+    assert!(
+        !body["error"].as_str().unwrap().contains("deleted"),
+        "{body}"
+    );
+
+    let (status, body) = post(&app, workout(KEY)).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("The retried Workout was deleted"),
+        "{body}"
+    );
+    assert_eq!(list(&app).await.len(), 0);
+}
+
 #[tokio::test]
 async fn request_id_is_validated_and_requires_authentication() {
     let app = common::test_app().await;

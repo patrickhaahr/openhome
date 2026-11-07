@@ -578,6 +578,68 @@ async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a
     assert_eq!(status, StatusCode::CREATED);
 }
 
+/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
+/// of replaying a fabricated one, and the refusals keep the shared order: changed arguments,
+/// then deletion, then the missing result.
+#[tokio::test]
+async fn a_legacy_receipt_directs_the_client_to_read_first_and_deletion_is_reported_before_it() {
+    let api = Nutrition::start().await;
+    let meal_log = api.logged(breakfast("breakfast-1")).await;
+    sqlx::query("UPDATE meal_log_receipts SET result = NULL WHERE request_id = 'breakfast-1'")
+        .execute(&api.state.db)
+        .await
+        .unwrap();
+
+    let (status, body) = api.log(breakfast("breakfast-1")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("no original result"),
+        "{body}"
+    );
+
+    let mut changed = breakfast("breakfast-1");
+    changed["portions"][0]["grams"] = json!(200);
+    let (status, body) = api.log(changed).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("a different Meal Log"),
+        "{body}"
+    );
+    assert_eq!(api.day("2026-10-29").await.len(), 1);
+
+    let (status, _) = api
+        .send(
+            Method::DELETE,
+            &format!(
+                "/api/nutrition/meal-logs/{}",
+                meal_log["id"].as_str().unwrap()
+            ),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, body) = api.log(breakfast("breakfast-1")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"].as_str().unwrap().contains("deleted"),
+        "{body}"
+    );
+    assert!(
+        !body["error"]
+            .as_str()
+            .unwrap()
+            .contains("no original result"),
+        "{body}"
+    );
+    assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
+}
+
 #[tokio::test]
 async fn meal_logs_belong_to_the_copenhagen_day_of_their_time_across_midnight_and_daylight_saving()
 {

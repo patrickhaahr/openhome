@@ -6,6 +6,8 @@ use axum::Router;
 use common::send_request_with_method;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
+use sqlx::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
 const DATE: &str = "2026-09-05";
 
@@ -134,6 +136,84 @@ async fn an_unusable_request_id_is_refused_without_recording() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(body["error"].as_str().unwrap().contains("request_id"));
     assert!(stored(&app).await.is_empty());
+}
+
+/// Changed arguments are judged before the cleared target, so a retry whose arguments no longer
+/// match reports that, not the missing record.
+#[tokio::test]
+async fn changed_arguments_are_refused_before_a_removed_records_target() {
+    let (app, state) = common::test_app_with_db().await;
+    let (status, _) = post(&app, record("phone-weight-1", DATE, 75.5)).await;
+    assert_eq!(status, StatusCode::CREATED);
+    sqlx::query("DELETE FROM body_weight")
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let (status, body) = post(&app, record("phone-weight-1", DATE, 74.0)).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("a different Body Weight"),
+        "{body}"
+    );
+    assert!(
+        !body["error"].as_str().unwrap().contains("removed"),
+        "{body}"
+    );
+
+    let (status, body) = post(&app, record("phone-weight-1", DATE, 75.5)).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("The retried Body Weight was removed"),
+        "{body}"
+    );
+    assert!(stored(&app).await.is_empty());
+}
+
+async fn open_file_database(path: &std::path::Path) -> SqlitePool {
+    let db = SqlitePoolOptions::new()
+        .max_connections(4)
+        .connect_with(
+            SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(true),
+        )
+        .await
+        .unwrap();
+    sqlx::migrate!("./migrations").run(&db).await.unwrap();
+    db
+}
+
+/// The claim serializes simultaneous deliveries: one record is stored and the losers replay it.
+#[tokio::test]
+async fn simultaneous_deliveries_record_one_weight() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = open_file_database(&dir.path().join("app.db")).await;
+    let (app, _) = common::test_app_with_pool(db, None);
+
+    let (one, two, three) = tokio::join!(
+        post(&app, record("phone-weight-1", DATE, 75.5)),
+        post(&app, record("phone-weight-1", DATE, 75.5)),
+        post(&app, record("phone-weight-1", DATE, 75.5)),
+    );
+
+    let mut statuses = [one.0, two.0, three.0];
+    statuses.sort();
+    assert_eq!(
+        statuses,
+        [StatusCode::OK, StatusCode::OK, StatusCode::CREATED]
+    );
+    assert_eq!(one.1["id"], two.1["id"]);
+    assert_eq!(two.1["id"], three.1["id"]);
+    let kept = stored(&app).await;
+    assert_eq!(kept.len(), 1);
+    assert_eq!(kept[0]["id"], one.1["id"]);
 }
 
 #[tokio::test]
