@@ -22,6 +22,8 @@ use openhome_api::{
 };
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
+use sqlx::Sqlite;
+use sqlx::pool::PoolConnection;
 use tempfile::TempDir;
 use tower::ServiceExt;
 use wiremock::{
@@ -47,6 +49,36 @@ impl Nutrition {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
         let (_, state) = test_app_with_db().await;
+        let first = first_dataset();
+        let app = Self::import(&server, &dir, &state, "1", first.clone()).await;
+        Self {
+            server,
+            dir,
+            state,
+            app,
+            first,
+        }
+    }
+
+    /// Imports the first synthetic dataset as version "1" against a real `app.db` file beside
+    /// `food.db`. The shared fixture keeps `app.db` in memory, which a second writer cannot lock;
+    /// a database refusal with a photo needs the file.
+    async fn start_file() -> Self {
+        let server = MockServer::start().await;
+        let dir = TempDir::new().unwrap();
+        let pool = db::connect_sqlite(&app_db_url(&dir)).await.unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        let state = AppState {
+            db: pool,
+            noop_db: sqlx::SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+            adguard_service: None,
+            docker_service: None,
+            ir_service: None,
+            switchbot_service: None,
+            docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+                openhome_api::DockerCache::default(),
+            )),
+        };
         let first = first_dataset();
         let app = Self::import(&server, &dir, &state, "1", first.clone()).await;
         Self {
@@ -312,6 +344,29 @@ fn app(foods: FoodDatabase, photos: MealPhotos, state: AppState) -> Router {
         .layer(axum::middleware::from_fn(|request, next| {
             auth_middleware(request, next, ApiKey::new(API_KEY.into()))
         }))
+}
+
+fn app_db_url(dir: &TempDir) -> String {
+    format!("sqlite:{}", dir.path().join("app.db").display())
+}
+
+/// Holds the write lock of `app.db` from a second connection until `release` frees it, so the
+/// next API statement that writes waits out its busy timeout and refuses.
+async fn lock_app_db(dir: &TempDir) -> (PoolConnection<Sqlite>, sqlx::SqlitePool) {
+    let pool = db::connect_sqlite(&app_db_url(dir)).await.unwrap();
+    let mut lock = pool.acquire().await.unwrap();
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    (lock, pool)
+}
+
+async fn release(lock: PoolConnection<Sqlite>, pool: &sqlx::SqlitePool) {
+    let mut lock = lock;
+    sqlx::raw_sql("ROLLBACK").execute(&mut *lock).await.unwrap();
+    drop(lock);
+    pool.close().await;
 }
 
 fn breakfast(request_id: &str) -> Value {
@@ -1167,6 +1222,104 @@ async fn a_retried_log_with_a_photo_replays_and_another_photo_conflicts() {
         assert_eq!(status, StatusCode::CONFLICT, "{response}");
     }
     assert_eq!(api.photo_files().len(), 2);
+}
+
+#[tokio::test]
+async fn a_database_refusal_with_a_photo_writes_nothing_and_a_retry_commits_its_files() {
+    let api = Nutrition::start_file().await;
+    let body = with_photo(
+        at("2026-10-29T12:00:00+01:00", "refused-write"),
+        &synthetic::png(600, 400),
+    );
+
+    // Storing the photo never touches the database, so the log's receipt claim inside its
+    // transaction waits out the busy timeout while the lock is held and refuses.
+    let (lock, locker) = lock_app_db(&api.dir).await;
+    let (status, response) = api.log(body.clone()).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{response}");
+    assert_eq!(response["status"], 500, "{response}");
+    release(lock, &locker).await;
+
+    // The failed write removed the new photo's files, and the receipt is unconsumed.
+    assert_eq!(api.photo_files(), Vec::<String>::new());
+    assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
+
+    // A retry then commits the Meal Log and its referenced files, which it serves.
+    let meal_log = api.logged(body).await;
+    let id = meal_log["photo"]["id"].as_str().unwrap();
+    let (status, content_type, _) = api.media(meal_log["photo"]["url"].as_str().unwrap()).await;
+    assert_eq!(
+        (status, content_type.as_deref()),
+        (StatusCode::OK, Some("image/avif"))
+    );
+    assert_eq!(
+        api.photo_files(),
+        [format!("{id}.avif"), format!("{id}.thumbnail.avif")]
+    );
+}
+
+#[tokio::test]
+async fn a_database_refusal_during_replacement_removes_its_new_photo_and_keeps_the_committed_one() {
+    let api = Nutrition::start_file().await;
+    let meal_log = api
+        .logged(with_photo(
+            at("2026-10-29T12:00:00+01:00", "replaced-write"),
+            &synthetic::png(600, 400),
+        ))
+        .await;
+    let committed = meal_log["photo"].clone();
+    let committed_id = committed["id"].as_str().unwrap();
+    let uri = format!(
+        "/api/nutrition/meal-logs/{}",
+        meal_log["id"].as_str().unwrap()
+    );
+    let replacement = json!({"photo": synthetic::base64(&synthetic::png(500, 300))});
+
+    let (lock, locker) = lock_app_db(&api.dir).await;
+    let (status, response) = api
+        .send(Method::PATCH, &uri, Some(replacement.clone()))
+        .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{response}");
+    release(lock, &locker).await;
+
+    // The refused replacement removed only its own new files; the committed photo remains
+    // referenced, readable and unchanged after the refusal.
+    assert_eq!(
+        api.photo_files(),
+        [
+            format!("{committed_id}.avif"),
+            format!("{committed_id}.thumbnail.avif")
+        ]
+    );
+    assert_eq!(api.day("2026-10-29").await, [meal_log]);
+    let (status, content_type, _) = api.media(committed["url"].as_str().unwrap()).await;
+    assert_eq!(
+        (status, content_type.as_deref()),
+        (StatusCode::OK, Some("image/avif"))
+    );
+
+    // After the lock is released the replacement commits and removes the photo it replaced.
+    let (status, replaced) = api.send(Method::PATCH, &uri, Some(replacement)).await;
+    assert_eq!(status, StatusCode::OK, "{replaced}");
+    let replaced_id = replaced["photo"]["id"].as_str().unwrap();
+    assert_ne!(replaced_id, committed_id);
+    assert_eq!(
+        api.photo_files(),
+        [
+            format!("{replaced_id}.avif"),
+            format!("{replaced_id}.thumbnail.avif")
+        ]
+    );
+    assert_eq!(
+        api.media(committed["url"].as_str().unwrap()).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        api.media(replaced["photo"]["url"].as_str().unwrap())
+            .await
+            .0,
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]

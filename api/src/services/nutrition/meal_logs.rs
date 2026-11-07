@@ -17,6 +17,8 @@
 //!
 //! An optional photo is encoded before anything is written and stored before the Meal Log row
 //! that references it, so a rejected photo writes nothing and a failed write removes its files.
+//! A replaced, removed or deleted photo's files are removed only after the row change commits.
+//! `meal_photos` describes the ownership stages and the cancellation and crash windows.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -1310,7 +1312,9 @@ impl PhotoColumns {
     }
 }
 
-/// Encodes and stores `upload`, waiting for any encode already running.
+/// Encodes and stores `upload`, waiting for any encode already running. The returned photo's
+/// files are unreferenced until a committed row names them: the caller must remove them if its
+/// write fails or loses a replay race.
 async fn store_photo(photos: &MealPhotos, upload: Upload) -> Result<StoredPhoto> {
     let encoded = photos.encode(upload).await?;
     let id = photos.store(&encoded).await?;
@@ -1393,9 +1397,10 @@ pub async fn log_meal(
         photo: PhotoColumns::of(photo.as_ref()),
     };
     let inserted = insert_log(db, &row, &prepared, &prepared_doses).await;
-    if !matches!(inserted, Ok(Some(_)))
-        && let Some(photo) = &photo
-    {
+    // Only a committed insert hands the new files to its row. A failure or a replay-losing
+    // retry (`Ok(None)`) wrote nothing that references them.
+    let referenced = matches!(inserted, Ok(Some(_)));
+    if !referenced && let Some(photo) = &photo {
         photos.remove(&photo.id).await;
     }
     let Some(meal_log) = inserted? else {
