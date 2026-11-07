@@ -9,6 +9,7 @@ import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.Exercise
 import com.patrickhaahr.openhome.fitness.FitnessRepository
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.Glyph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +49,7 @@ fun ExercisePickerRoute(onPicked: () -> Unit, onCreate: (String) -> Unit) {
     val exercises by viewModel.exercises.collectAsStateWithLifecycle()
     ExerciseBrowser(
         title = "Add Exercise",
+        glyph = Glyph.Plus,
         lookup = exercises,
         exerciseOf = { it },
         onCreate = onCreate,
@@ -64,6 +66,7 @@ fun CorrectionExercisePickerRoute(onPicked: (Long) -> Unit) {
     val exercises by viewModel.exercises.collectAsStateWithLifecycle()
     ExerciseBrowser(
         title = "Add Exercise",
+        glyph = Glyph.Plus,
         lookup = exercises,
         exerciseOf = { it },
         onCreate = null,

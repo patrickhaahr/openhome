@@ -5,15 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,7 +34,15 @@ import com.patrickhaahr.openhome.ui.EmptyState
 import com.patrickhaahr.openhome.ui.FormField
 import com.patrickhaahr.openhome.ui.ProblemText
 import com.patrickhaahr.openhome.ui.ScreenHeader
+import com.patrickhaahr.openhome.ui.ScreenMargin
+import com.patrickhaahr.openhome.ui.Spoken
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.SlabKey
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -142,7 +145,7 @@ fun FixExerciseRoute(exerciseId: Long, onSaved: () -> Unit) {
         is RefusedLookup.Loaded -> {
             val refused = current.refused
             if (refused == null) {
-                EmptyState(title = "Nothing to fix", message = "This Exercise is no longer refused.")
+                EmptyState(title = "Nothing to fix", message = "This Exercise is no longer refused.", glyph = Glyph.Check)
             } else {
                 ExerciseForm(
                     title = "Fix Exercise",
@@ -199,58 +202,54 @@ private fun ExerciseForm(
     var equipment by rememberSaveable { mutableStateOf(initial.equipment) }
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
-        ScreenHeader(title = title)
+        ScreenHeader(title = title, glyph = if (onUseExisting != null || explanation != null) Glyph.Warn else Glyph.Plus)
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenMargin),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            explanation?.let { Text(text = it, style = MaterialTheme.typography.bodyMedium) }
+            explanation?.let { Text(text = it, style = Type.Body, color = Lit.Muted, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) }
             FormField(
                 value = name,
                 onValueChange = { name = it },
                 label = "Name",
+                glyph = Glyph.Pencil,
                 problem = problems.name,
                 capitalization = KeyboardCapitalization.Words,
             )
             CategoryField(selected = category, problem = problems.category, onSelect = { category = it })
-            FormField(value = muscleGroup, onValueChange = { muscleGroup = it }, label = "Muscle group (optional)")
-            FormField(value = equipment, onValueChange = { equipment = it }, label = "Equipment (optional)")
+            FormField(value = muscleGroup, onValueChange = { muscleGroup = it }, label = "Muscle group (optional)", glyph = Glyph.Person)
+            FormField(value = equipment, onValueChange = { equipment = it }, label = "Equipment (optional)", glyph = Glyph.Kettlebell)
             problems.general?.let { ProblemText(it) }
-            Button(
-                onClick = { onSave(ExerciseDraft(name, category, muscleGroup, equipment)) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            ) {
-                Text(saveLabel)
-            }
-            onUseExisting?.let {
-                OutlinedButton(onClick = it, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                    Text("Use OpenHome's Exercise")
-                }
-            }
-            Text(
-                text = "Saved on this device first, then synced over Wi-Fi.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
+            SlabKey(
+                Glyph.Check,
+                saveLabel,
+                { onSave(ExerciseDraft(name, category, muscleGroup, equipment)) },
+                modifier = Modifier.fillMaxWidth(),
             )
+            onUseExisting?.let {
+                SlabKey(Glyph.Download, "Use OpenHome's Exercise", it, modifier = Modifier.fillMaxWidth(), tone = KeyTone.Raised)
+            }
+            Spoken("Saved on this device first, then synced over Wi-Fi.")
         }
     }
 }
 
+/** Rings or iron: the two kinds of Exercise, side by side. */
 @Composable
 private fun CategoryField(selected: String?, problem: String?, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Category",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Spoken("Category")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             EXERCISE_CATEGORIES.forEach { category ->
-                FilterChip(
-                    selected = selected == category,
-                    onClick = { onSelect(category) },
-                    label = { Text(categoryLabel(category)) },
+                GlyphKey(
+                    categoryGlyph(category),
+                    categoryLabel(category),
+                    { onSelect(category) },
+                    modifier = Modifier.weight(1f),
+                    tone = if (selected == category) KeyTone.Lamp else KeyTone.Slab,
+                    size = 88.dp,
+                    glyphSize = 40.dp,
+                    shape = com.patrickhaahr.openhome.ui.SlabShape,
                 )
             }
         }

@@ -2,33 +2,22 @@ package com.patrickhaahr.openhome.ui.workout
 
 import android.database.SQLException
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,16 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.withResumed
-import com.patrickhaahr.openhome.R
 import com.patrickhaahr.openhome.fitness.CorrectionDraft
 import com.patrickhaahr.openhome.fitness.CorrectionEntry
 import com.patrickhaahr.openhome.fitness.CorrectionSave
@@ -58,12 +43,23 @@ import com.patrickhaahr.openhome.fitness.PickedExercise
 import com.patrickhaahr.openhome.fitness.SetCheck
 import com.patrickhaahr.openhome.fitness.SetDraft
 import com.patrickhaahr.openhome.fitness.WorkoutCorrections
-import com.patrickhaahr.openhome.storage.SetMeasure
 import com.patrickhaahr.openhome.ui.DayPicker
 import com.patrickhaahr.openhome.ui.EmptyState
+import com.patrickhaahr.openhome.ui.FormField
+import com.patrickhaahr.openhome.ui.ProblemText
 import com.patrickhaahr.openhome.ui.ScreenHeader
+import com.patrickhaahr.openhome.ui.ScreenMargin
+import com.patrickhaahr.openhome.ui.Slab
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphIcon
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.SlabKey
+import com.patrickhaahr.openhome.ui.design.key as tappable
 import com.patrickhaahr.openhome.ui.formatDay
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,8 +67,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-private val SET_NUMBER_WIDTH = 28.dp
-private val REMOVE_WIDTH = 48.dp
+private val SET_NUMBER_WIDTH = 24.dp
 
 /** The form as the user left it; [showMissing] once saving has found rows still to fill in. */
 @Serializable
@@ -172,7 +167,7 @@ fun WorkoutCorrectionRoute(
     }
 
     if (workoutGone) {
-        EmptyState(title = "Workout not found", message = "This Workout isn't saved on this device.")
+        EmptyState(title = "Workout not found", message = "This Workout isn't saved on this device.", glyph = Glyph.Rewind)
     }
     form?.let { current ->
         CorrectionContent(
@@ -211,28 +206,26 @@ private fun CorrectionContent(
     Column(Modifier.fillMaxSize().imePadding()) {
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            ScreenHeader(title = "Edit Workout", subtitle = "Saves on this device first, then syncs")
+            ScreenHeader(title = "Edit Workout", glyph = Glyph.Pencil, subtitle = "Saves on this device first, then syncs")
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = ScreenMargin),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedButton(onClick = { choosingDate = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(formatDay(draft.date))
-                }
-                OutlinedTextField(
+                DateKey(draft.date) { choosingDate = true }
+                FormField(
                     value = draft.name,
                     onValueChange = { text -> onChange { it.copy(name = text) } },
-                    label = { Text("Name (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    label = "Name (optional)",
+                    glyph = Glyph.Pencil,
                 )
-                OutlinedTextField(
+                FormField(
                     value = draft.notes,
                     onValueChange = { text -> onChange { it.copy(notes = text) } },
-                    label = { Text("Notes (optional)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    label = "Notes (optional)",
+                    glyph = Glyph.Note,
+                    singleLine = false,
                 )
             }
             draft.entries.forEachIndexed { index, entry ->
@@ -246,30 +239,21 @@ private fun CorrectionContent(
                     )
                 }
             }
-            OutlinedButton(
-                onClick = onAddExercise,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp),
-            ) {
-                Text("Add Exercise")
+            Row(Modifier.fillMaxWidth().padding(horizontal = ScreenMargin), horizontalArrangement = Arrangement.End) {
+                GlyphKey(Glyph.Plus, "Add Exercise", onAddExercise, tone = KeyTone.Slab, size = 64.dp)
             }
+            Spacer(Modifier.height(4.dp))
         }
-        problem?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
-            )
-        }
-        Button(
-            onClick = {
+        problem?.let { ProblemText(it, Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)) }
+        SlabKey(
+            Glyph.Check,
+            "Save Changes",
+            {
                 focusManager.clearFocus()
                 onSave()
             },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 56.dp),
-        ) {
-            Text(text = "Save Changes", style = MaterialTheme.typography.titleMedium)
-        }
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenMargin, vertical = 8.dp),
+        )
     }
 
     if (choosingDate) {
@@ -280,22 +264,41 @@ private fun CorrectionContent(
         )
     }
     if (confirmingDiscard) {
-        AlertDialog(
-            onDismissRequest = { confirmingDiscard = false },
-            title = { Text("Discard your changes?") },
-            text = { Text("This Workout stays as it was saved.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
+        KeyDialog(
+            onDismiss = { confirmingDiscard = false },
+            title = "Discard your changes?",
+            message = "This Workout stays as it was saved.",
+            glyph = Glyph.Pencil,
+            confirm = {
+                GlyphKey(
+                    Glyph.Trash,
+                    "Discard changes",
+                    {
                         confirmingDiscard = false
                         onDiscard()
                     },
-                ) {
-                    Text("Discard changes")
-                }
+                    tone = KeyTone.Alarm,
+                )
             },
-            dismissButton = { TextButton(onClick = { confirmingDiscard = false }) { Text("Keep editing") } },
+            dismiss = { GlyphKey(Glyph.Back, "Keep editing", { confirmingDiscard = false }) },
         )
+    }
+}
+
+@Composable
+private fun DateKey(date: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .tappable(formatDay(date), onClick, shape = com.patrickhaahr.openhome.ui.FieldShape, depth = 0.98f)
+            .background(Lit.Slab, com.patrickhaahr.openhome.ui.FieldShape)
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        GlyphIcon(Glyph.Calendar, tint = Lit.Lamp, size = 26.dp)
+        Text(formatDay(date), style = Type.Name, color = Lit.Ink)
     }
 }
 
@@ -310,91 +313,37 @@ private fun EntryCard(
 ) {
     val name = entry.exerciseName
     val selectedMeasure = entry.sets.map { it.values.measure }.distinct().singleOrNull()
-    val showsReps = entry.sets.any { it.values.measure.usesReps }
-    val showsSeconds = entry.sets.any { it.values.measure.usesSeconds }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-    ) {
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
-            Text(text = name, style = MaterialTheme.typography.titleMedium)
-            entry.notes?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Slab(Modifier.fillMaxWidth().padding(horizontal = ScreenMargin), padding = 12.dp, arrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = name, style = Type.Figure, color = Lit.Ink, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+        entry.notes?.let { Text(text = it, style = Type.Body, color = Lit.Muted, modifier = Modifier.padding(start = 4.dp)) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            MeasureSwitch(selectedMeasure, name) { measure -> onChange { it.settingMeasure(entry.key, measure) } }
+            Spacer(Modifier.weight(1f))
+            if (!isFirst) GlyphKey(Glyph.ArrowUp, "Move $name up", { onChange { it.movingEntry(entry.key, -1) } }, tone = KeyTone.Quiet, size = 48.dp)
+            if (!isLast) GlyphKey(Glyph.ArrowDown, "Move $name down", { onChange { it.movingEntry(entry.key, 1) } }, tone = KeyTone.Quiet, size = 48.dp)
+            GlyphKey(Glyph.Trash, "Remove $name", { onChange { it.removingEntry(entry.key) } }, tone = KeyTone.Quiet, size = 48.dp)
+        }
+        entry.sets.forEachIndexed { index, set ->
+            key(set.key) {
+                SetRow(
+                    label = "$name set ${index + 1}",
+                    number = index + 1,
+                    set = set,
+                    showMissing = showMissing,
+                    onValues = { change -> onChange { it.updatingSet(entry.key, set.key, change) } },
+                    onRemove =
+                        if (entry.sets.size > 1) {
+                            { onChange { it.removingSet(entry.key, set.key) } }
+                        } else {
+                            null
+                        },
                 )
             }
-            FlowRow {
-                if (!isFirst) {
-                    TextAction("Move up", "Move $name up") { onChange { it.movingEntry(entry.key, -1) } }
-                }
-                if (!isLast) {
-                    TextAction("Move down", "Move $name down") { onChange { it.movingEntry(entry.key, 1) } }
-                }
-                TextAction("Remove", "Remove $name") { onChange { it.removingEntry(entry.key) } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MeasureChip(name, SetMeasure.REPS, "Reps", selectedMeasure) { measure -> onChange { it.settingMeasure(entry.key, measure) } }
-                MeasureChip(name, SetMeasure.HOLD, "Hold", selectedMeasure) { measure -> onChange { it.settingMeasure(entry.key, measure) } }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ColumnLabel("Set", Modifier.width(SET_NUMBER_WIDTH))
-                if (showsReps) ColumnLabel("Reps", Modifier.weight(1f))
-                if (showsSeconds) ColumnLabel("Seconds", Modifier.weight(1f))
-                ColumnLabel("Added kg", Modifier.weight(1f))
-                ColumnLabel("RPE", Modifier.weight(1f))
-                Box(Modifier.width(REMOVE_WIDTH))
-            }
-            entry.sets.forEachIndexed { index, set ->
-                key(set.key) {
-                    SetRow(
-                        label = "$name set ${index + 1}",
-                        number = index + 1,
-                        set = set,
-                        showsReps = showsReps,
-                        showsSeconds = showsSeconds,
-                        showMissing = showMissing,
-                        onValues = { change -> onChange { it.updatingSet(entry.key, set.key, change) } },
-                        onRemove =
-                            if (entry.sets.size > 1) {
-                                { onChange { it.removingSet(entry.key, set.key) } }
-                            } else {
-                                null
-                            },
-                    )
-                }
-            }
-            TextAction("Add set", "Add set to $name") { onChange { it.addingSet(entry.key) } }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            GlyphKey(Glyph.Plus, "Add set to $name", { onChange { it.addingSet(entry.key) } }, tone = KeyTone.Raised, size = 52.dp)
         }
     }
-}
-
-@Composable
-private fun TextAction(text: String, description: String, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = Modifier.semantics { contentDescription = description }) {
-        Text(text)
-    }
-}
-
-@Composable
-private fun MeasureChip(
-    exerciseName: String,
-    measure: SetMeasure,
-    label: String,
-    selected: SetMeasure?,
-    onSelect: (SetMeasure) -> Unit,
-) {
-    FilterChip(
-        selected = selected == measure,
-        onClick = { onSelect(measure) },
-        label = { Text(label) },
-        modifier = Modifier.semantics { contentDescription = "Log $exerciseName as $label" },
-    )
 }
 
 @Composable
@@ -402,64 +351,47 @@ private fun SetRow(
     label: String,
     number: Int,
     set: CorrectionSet,
-    showsReps: Boolean,
-    showsSeconds: Boolean,
     showMissing: Boolean,
     onValues: ((SetDraft) -> SetDraft) -> Unit,
     onRemove: (() -> Unit)?,
 ) {
     val values = set.values
     val problem = values.check() as? SetCheck.Problem
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
                 text = number.toString(),
-                style = MaterialTheme.typography.titleSmall,
+                style = Type.Name,
+                color = Lit.Muted,
                 modifier = Modifier.width(SET_NUMBER_WIDTH),
             )
             if (values.measure.usesReps) {
-                ValueField(values.reps, "$label reps", KeyboardType.Number) { text -> onValues { it.copy(reps = text) } }
-            } else if (showsReps) {
-                Spacer(Modifier.weight(1f))
+                ValueField(values.reps, "$label reps", "×", KeyboardType.Number) { text -> onValues { it.copy(reps = text) } }
             }
             if (values.measure.usesSeconds) {
-                ValueField(values.durationSeconds, "$label seconds", KeyboardType.Number) { text ->
+                ValueField(values.durationSeconds, "$label seconds", "s", KeyboardType.Number) { text ->
                     onValues { it.copy(durationSeconds = text) }
                 }
-            } else if (showsSeconds) {
-                Spacer(Modifier.weight(1f))
             }
-            ValueField(values.addedWeightKg, "$label added kg", KeyboardType.Decimal) { text ->
+            ValueField(values.addedWeightKg, "$label added kg", "kg", KeyboardType.Decimal) { text ->
                 onValues { it.copy(addedWeightKg = text) }
             }
-            ValueField(values.rpe, "$label RPE", KeyboardType.Number) { text -> onValues { it.copy(rpe = text) } }
-            Box(Modifier.width(REMOVE_WIDTH), contentAlignment = Alignment.Center) {
-                if (onRemove != null) {
-                    IconButton(onClick = onRemove) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove $label")
-                    }
-                }
+            ValueField(values.rpe, "$label RPE", "rpe", KeyboardType.Number) { text -> onValues { it.copy(rpe = text) } }
+            if (onRemove != null) {
+                GlyphKey(Glyph.Close, "Remove $label", onRemove, tone = KeyTone.Quiet, size = 44.dp)
+            } else {
+                Spacer(Modifier.width(44.dp))
             }
         }
         if (problem != null && (!problem.isMissingValue || showMissing)) {
-            Text(
-                text = problem.message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = SET_NUMBER_WIDTH + 8.dp, bottom = 4.dp),
-            )
+            ProblemText(problem.message, Modifier.padding(start = SET_NUMBER_WIDTH, bottom = 4.dp))
         }
         set.notes?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = SET_NUMBER_WIDTH + 8.dp, bottom = 4.dp),
-            )
+            Text(text = it, style = Type.Body, color = Lit.Muted, modifier = Modifier.padding(start = SET_NUMBER_WIDTH + 6.dp, bottom = 4.dp))
         }
     }
 }
@@ -468,6 +400,7 @@ private fun SetRow(
 private fun RowScope.ValueField(
     value: String,
     description: String,
+    unit: String,
     keyboard: KeyboardType,
     onValueChange: (String) -> Unit,
 ) {
@@ -475,6 +408,7 @@ private fun RowScope.ValueField(
         value = value,
         onValueChange = onValueChange,
         description = description,
+        unit = unit,
         keyboard = keyboard,
         highlighted = false,
         modifier = Modifier.weight(1f),

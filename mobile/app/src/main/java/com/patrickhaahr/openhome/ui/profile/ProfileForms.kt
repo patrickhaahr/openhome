@@ -1,21 +1,17 @@
 package com.patrickhaahr.openhome.ui.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,19 +29,30 @@ import com.patrickhaahr.openhome.fitness.BodyWeightSave
 import com.patrickhaahr.openhome.fitness.EARLIEST_BIRTH_DATE
 import com.patrickhaahr.openhome.fitness.PROFILE_SEXES
 import com.patrickhaahr.openhome.fitness.Profile
-import com.patrickhaahr.openhome.fitness.ProfileCheck
 import com.patrickhaahr.openhome.fitness.ProfileDraft
 import com.patrickhaahr.openhome.fitness.ProfileRecords
 import com.patrickhaahr.openhome.fitness.ProfileSave
 import com.patrickhaahr.openhome.fitness.latestBirthDate
 import com.patrickhaahr.openhome.ui.DayPicker
+import com.patrickhaahr.openhome.ui.FieldShape
 import com.patrickhaahr.openhome.ui.FormField
 import com.patrickhaahr.openhome.ui.ProblemText
 import com.patrickhaahr.openhome.ui.ScreenHeader
+import com.patrickhaahr.openhome.ui.ScreenMargin
+import com.patrickhaahr.openhome.ui.SlabShape
+import com.patrickhaahr.openhome.ui.Spoken
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphIcon
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.SlabKey
+import com.patrickhaahr.openhome.ui.design.key
 import com.patrickhaahr.openhome.ui.formatDay
 import com.patrickhaahr.openhome.ui.formatKilograms
 import com.patrickhaahr.openhome.ui.plainNumber
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -151,15 +158,17 @@ private fun ProfileForm(initial: Profile, problems: ProfileProblems, onSave: (Pr
     var choosingBirthDate by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
-        ScreenHeader(title = "Edit Profile")
+        ScreenHeader(title = "Edit Profile", glyph = Glyph.Pencil)
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenMargin),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             FormField(
                 value = height,
                 onValueChange = { height = it },
                 label = "Height in cm (optional)",
+                glyph = Glyph.Ruler,
+                unit = "cm",
                 problem = problems.height,
                 keyboardType = KeyboardType.Decimal,
             )
@@ -174,22 +183,19 @@ private fun ProfileForm(initial: Profile, problems: ProfileProblems, onSave: (Pr
                 value = maxHeartRate,
                 onValueChange = { maxHeartRate = it },
                 label = "Max Heart Rate in bpm (optional)",
+                glyph = Glyph.Heart,
+                unit = "bpm",
                 problem = problems.maxHeartRate,
                 keyboardType = KeyboardType.Number,
             )
             problems.general?.let { ProblemText(it) }
-            Button(
-                onClick = { onSave(ProfileDraft(height, sex, birthDate, maxHeartRate)) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            ) {
-                Text("Save Profile")
-            }
-            Text(
-                text = SAVED_FIRST,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
+            SlabKey(
+                Glyph.Check,
+                "Save Profile",
+                { onSave(ProfileDraft(height, sex, birthDate, maxHeartRate)) },
+                modifier = Modifier.fillMaxWidth(),
             )
+            Spoken(SAVED_FIRST)
         }
     }
     if (choosingBirthDate) {
@@ -207,15 +213,33 @@ private fun ProfileForm(initial: Profile, problems: ProfileProblems, onSave: (Pr
 @Composable
 private fun SexField(selected: String?, stored: String?, onSelect: (String?) -> Unit) {
     val choices = (PROFILE_SEXES + listOfNotNull(stored)).distinct()
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        FieldLabel("Sex (optional)")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            choices.forEach { sex ->
-                FilterChip(
-                    selected = selected == sex,
-                    onClick = { onSelect(sex.takeUnless { it == selected }) },
-                    label = { Text(sex.replaceFirstChar(Char::uppercase)) },
-                )
+    Spoken("Sex (optional)")
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        choices.forEach { sex ->
+            val label = sex.replaceFirstChar(Char::uppercase)
+            val tone = if (selected == sex) KeyTone.Lamp else KeyTone.Slab
+            val toggle = { onSelect(sex.takeUnless { it == selected }) }
+            when (sex) {
+                "male", "female" ->
+                    GlyphKey(
+                        if (sex == "male") Glyph.Male else Glyph.Female,
+                        label,
+                        toggle,
+                        modifier = Modifier.weight(1f),
+                        tone = tone,
+                        size = 88.dp,
+                        glyphSize = 36.dp,
+                        shape = SlabShape,
+                    )
+                else ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .height(88.dp)
+                            .key(label, toggle, shape = SlabShape)
+                            .background(tone.fill, SlabShape)
+                            .padding(16.dp),
+                    ) { Text(label, style = Type.Name, color = tone.ink) }
             }
         }
     }
@@ -223,25 +247,28 @@ private fun SexField(selected: String?, stored: String?, onSelect: (String?) -> 
 
 @Composable
 private fun BirthDateField(date: String?, problem: String?, onChoose: () -> Unit, onClear: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        FieldLabel("Birth date (optional)")
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onChoose, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(date?.let(::formatDay) ?: "Choose birth date")
-            }
-            if (date != null) TextButton(onClick = onClear) { Text("Clear birth date") }
-        }
-        problem?.let { ProblemText(it) }
+    Spoken("Birth date (optional)")
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DateKey(date, date?.let(::formatDay) ?: "Choose birth date", Glyph.Cake, onChoose, Modifier.weight(1f))
+        if (date != null) GlyphKey(Glyph.Close, "Clear birth date", onClear, tone = KeyTone.Quiet)
     }
+    problem?.let { ProblemText(it) }
 }
 
 @Composable
-private fun FieldLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun DateKey(date: String?, description: String, glyph: Glyph, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .height(72.dp)
+            .key(description, onClick, shape = FieldShape, depth = 0.98f)
+            .background(Lit.Slab, FieldShape)
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        GlyphIcon(glyph, tint = Lit.Lamp, size = 26.dp)
+        Text(date?.let(::formatDay) ?: "–", style = Type.Name, color = if (date == null) Lit.Faint else Lit.Ink)
+    }
 }
 
 /** Recording only: a date already recorded stays as it is, here and on the server. */
@@ -254,38 +281,31 @@ fun RecordBodyWeightRoute(onSaved: () -> Unit) {
     var choosingDate by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
-        ScreenHeader(title = "Record Body Weight")
+        ScreenHeader(title = "Record Body Weight", glyph = Glyph.Scale)
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenMargin),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                FieldLabel("Date")
-                OutlinedButton(onClick = { choosingDate = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(formatDay(date))
-                }
-                problems.date?.let { ProblemText(it) }
-            }
+            Spoken("Date")
+            DateKey(date, formatDay(date), Glyph.Calendar, { choosingDate = true }, Modifier.fillMaxWidth())
+            problems.date?.let { ProblemText(it) }
             FormField(
                 value = weight,
                 onValueChange = { weight = it },
                 label = "Weight in kg",
+                glyph = Glyph.Scale,
+                unit = "kg",
                 problem = problems.weight,
                 keyboardType = KeyboardType.Decimal,
             )
             problems.general?.let { ProblemText(it) }
-            Button(
-                onClick = { viewModel.recordBodyWeight(LocalDate.parse(date), weight, onSaved) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            ) {
-                Text("Save Body Weight")
-            }
-            Text(
-                text = SAVED_FIRST,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
+            SlabKey(
+                Glyph.Check,
+                "Save Body Weight",
+                { viewModel.recordBodyWeight(LocalDate.parse(date), weight, onSaved) },
+                modifier = Modifier.fillMaxWidth(),
             )
+            Spoken(SAVED_FIRST)
         }
     }
     if (choosingDate) {

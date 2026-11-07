@@ -1,14 +1,18 @@
 package com.patrickhaahr.openhome.ui
 
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SelectableDates
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.dp
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.theme.Lit
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -37,18 +41,21 @@ fun DayPicker(
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(
-                onClick = {
+            GlyphKey(
+                Glyph.Check,
+                "Set date",
+                {
                     state.selectedDateMillis?.let { onChosen(it.toUtcDay()) }
                     onDismiss()
                 },
-            ) {
-                Text("Set date")
-            }
+                tone = KeyTone.Lamp,
+                size = 52.dp,
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { GlyphKey(Glyph.Close, "Cancel", onDismiss, tone = KeyTone.Quiet, size = 52.dp) },
+        colors = DatePickerDefaults.colors(containerColor = Lit.Slab),
     ) {
-        DatePicker(state = state)
+        DatePicker(state = state, colors = DatePickerDefaults.colors(containerColor = Lit.Slab), title = null, headline = null, showModeToggle = false)
     }
 }
 

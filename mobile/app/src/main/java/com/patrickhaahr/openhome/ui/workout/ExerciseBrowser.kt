@@ -1,6 +1,6 @@
 package com.patrickhaahr.openhome.ui.workout
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,26 +9,23 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.patrickhaahr.openhome.fitness.EXERCISE_CATEGORIES
 import com.patrickhaahr.openhome.fitness.Exercise
@@ -36,7 +33,18 @@ import com.patrickhaahr.openhome.fitness.ExerciseFilter
 import com.patrickhaahr.openhome.fitness.muscleGroups
 import com.patrickhaahr.openhome.storage.SyncProblem
 import com.patrickhaahr.openhome.ui.EmptyState
+import com.patrickhaahr.openhome.ui.FormField
 import com.patrickhaahr.openhome.ui.ScreenHeader
+import com.patrickhaahr.openhome.ui.ScreenMargin
+import com.patrickhaahr.openhome.ui.SlabShape
+import com.patrickhaahr.openhome.ui.Spoken
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphIcon
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.key
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 
 /** What storage has answered so far. A failed read says so rather than looking like an empty Library. */
 sealed interface LibraryLookup<out T> {
@@ -46,6 +54,8 @@ sealed interface LibraryLookup<out T> {
 
     data object Unreadable : LibraryLookup<Nothing>
 }
+
+fun categoryGlyph(category: String): Glyph = if (category.equals("gym", ignoreCase = true)) Glyph.Barbell else Glyph.Rings
 
 fun categoryLabel(category: String): String = category.replaceFirstChar { it.uppercase() }
 
@@ -63,6 +73,7 @@ fun exerciseRefusalMessage(problem: SyncProblem): String =
 @Composable
 fun <T> ExerciseBrowser(
     title: String,
+    glyph: Glyph,
     lookup: LibraryLookup<T>,
     exerciseOf: (T) -> Exercise,
     onCreate: ((String) -> Unit)?,
@@ -72,79 +83,113 @@ fun <T> ExerciseBrowser(
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var muscleGroup by rememberSaveable { mutableStateOf<String?>(null) }
     val filter = ExerciseFilter(query, category, muscleGroup)
+    val all = (lookup as? LibraryLookup.Loaded)?.rows.orEmpty().map(exerciseOf)
 
-    Column(Modifier.fillMaxSize().imePadding()) {
-        ScreenHeader(title = title)
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("Search Exercises") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        )
-        val all = (lookup as? LibraryLookup.Loaded)?.rows.orEmpty().map(exerciseOf)
-        FilterChips(
-            options = EXERCISE_CATEGORIES,
-            selected = category,
-            label = ::categoryLabel,
-            onSelect = { category = it },
-        )
-        FilterChips(
-            options = all.muscleGroups(),
-            selected = muscleGroup,
-            label = { it },
-            onSelect = { muscleGroup = it },
-        )
-        Box(Modifier.weight(1f)) {
-            when (lookup) {
-                LibraryLookup.Loading -> Unit
-                LibraryLookup.Unreadable ->
-                    EmptyState(
-                        title = "Can't read your Library",
-                        message = "Nothing was lost. Close and reopen the app to try again.",
+    Box(Modifier.fillMaxSize().imePadding()) {
+        Column(Modifier.fillMaxSize()) {
+            ScreenHeader(title = title, glyph = glyph, figure = all.size.takeIf { it > 0 }?.toString())
+            FormField(
+                value = query,
+                onValueChange = { query = it },
+                label = "Search Exercises",
+                glyph = Glyph.Search,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenMargin),
+            )
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = ScreenMargin, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                EXERCISE_CATEGORIES.forEach { option ->
+                    val isSelected = option.equals(category, ignoreCase = true)
+                    GlyphKey(
+                        categoryGlyph(option),
+                        categoryLabel(option),
+                        { category = if (isSelected) null else option },
+                        tone = if (isSelected) KeyTone.Lamp else KeyTone.Raised,
+                        size = 48.dp,
                     )
-                is LibraryLookup.Loaded -> {
-                    val matches = lookup.rows.filter { filter.matches(exerciseOf(it)) }
-                    when {
-                        lookup.rows.isEmpty() ->
-                            EmptyState(
-                                title = "No Exercises yet",
-                                message = if (onCreate != null) "Create one below, even without a connection." else "Create one in the Library, even without a connection.",
-                            )
-                        matches.isEmpty() ->
-                            EmptyState(
-                                title = "No matching Exercises",
-                                message = if (onCreate != null) "Try a different search, or create it below." else "Try a different search, or create it in the Library.",
-                            ) {
-                                TextButton(
-                                    onClick = {
-                                        query = ""
-                                        category = null
-                                        muscleGroup = null
-                                    },
+                }
+                all.muscleGroups().forEach { option ->
+                    val isSelected = option.equals(muscleGroup, ignoreCase = true)
+                    TextChip(option, isSelected) { muscleGroup = if (isSelected) null else option }
+                }
+            }
+            Box(Modifier.weight(1f)) {
+                when (lookup) {
+                    LibraryLookup.Loading -> Unit
+                    LibraryLookup.Unreadable ->
+                        EmptyState(
+                            title = "Can't read your Library",
+                            message = "Nothing was lost. Close and reopen the app to try again.",
+                            glyph = Glyph.Warn,
+                            readable = true,
+                        )
+                    is LibraryLookup.Loaded -> {
+                        val matches = lookup.rows.filter { filter.matches(exerciseOf(it)) }
+                        when {
+                            lookup.rows.isEmpty() ->
+                                EmptyState(
+                                    title = "No Exercises yet",
+                                    message = if (onCreate != null) "Create one below, even without a connection." else "Create one in the Library, even without a connection.",
+                                    glyph = Glyph.Stack,
+                                )
+                            matches.isEmpty() ->
+                                EmptyState(
+                                    title = "No matching Exercises",
+                                    message = if (onCreate != null) "Try a different search, or create it below." else "Try a different search, or create it in the Library.",
+                                    glyph = Glyph.Search,
                                 ) {
-                                    Text("Clear search and filters")
+                                    GlyphKey(
+                                        Glyph.Close,
+                                        "Clear search and filters",
+                                        {
+                                            query = ""
+                                            category = null
+                                            muscleGroup = null
+                                        },
+                                    )
                                 }
-                            }
-                        else ->
-                            ExerciseList(
-                                matches = matches,
-                                countLabel = if (filter.isActive) "${matches.size} of ${lookup.rows.size}" else null,
-                                exerciseOf = exerciseOf,
-                                row = row,
-                            )
+                            else ->
+                                ExerciseList(
+                                    matches = matches,
+                                    countLabel = if (filter.isActive) "${matches.size} of ${lookup.rows.size}" else null,
+                                    exerciseOf = exerciseOf,
+                                    row = row,
+                                )
+                        }
                     }
                 }
             }
         }
         if (onCreate != null) {
-            OutlinedButton(
-                onClick = { onCreate(query.trim()) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 56.dp),
-            ) {
-                Text("Create Exercise")
-            }
+            GlyphKey(
+                Glyph.Plus,
+                "Create Exercise",
+                { onCreate(query.trim()) },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(ScreenMargin),
+                tone = KeyTone.Lamp,
+                size = 72.dp,
+            )
         }
+    }
+}
+
+@Composable
+private fun TextChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .height(48.dp)
+            .key(text, onClick)
+            .background(if (selected) Lit.Lamp else Lit.Raised, CircleShape)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = Type.Name, color = if (selected) Lit.OnLamp else Lit.Ink, maxLines = 1)
     }
 }
 
@@ -155,52 +200,22 @@ private fun <T> ExerciseList(
     exerciseOf: (T) -> Exercise,
     row: @Composable (T) -> Unit,
 ) {
-    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+    LazyColumn(contentPadding = PaddingValues(start = ScreenMargin, end = ScreenMargin, top = 4.dp, bottom = 112.dp)) {
         if (countLabel != null) {
             item(key = "count") {
                 Text(
                     text = countLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    style = Type.Small,
+                    color = Lit.Muted,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                 )
             }
         }
-        items(matches, key = { exerciseOf(it).id }) { match ->
-            row(match)
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
+        items(matches, key = { exerciseOf(it).id }) { match -> row(match) }
     }
 }
 
-/** Tapping the chosen one clears it. A horizontal row, so a long list never pushes the results away. */
-@Composable
-private fun FilterChips(
-    options: List<String>,
-    selected: String?,
-    label: (String) -> String,
-    onSelect: (String?) -> Unit,
-) {
-    if (options.isEmpty()) return
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { option ->
-            val isSelected = option.equals(selected, ignoreCase = true)
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelect(if (isSelected) null else option) },
-                label = { Text(label(option)) },
-            )
-        }
-    }
-}
-
-/** One Exercise with its optional metadata. Only rows with something to do are tappable. */
+/** One Exercise, marked by what kind it is. Only rows with something to do are tappable. */
 @Composable
 fun ExerciseRow(
     exercise: Exercise,
@@ -210,22 +225,26 @@ fun ExerciseRow(
     below: @Composable () -> Unit = {},
 ) {
     val tappable =
-        if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick) else Modifier
-    Column(
+        if (onClick != null) Modifier.key(onClickLabel.orEmpty(), onClick, shape = SlabShape, depth = 0.98f) else Modifier
+    Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .then(tappable)
-                .heightIn(min = 64.dp)
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .heightIn(min = 68.dp)
+                .padding(horizontal = 4.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = exercise.name, style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = exerciseDetails(exercise),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        below()
+        GlyphIcon(categoryGlyph(exercise.category), tint = Lit.Muted, size = 26.dp)
+        Column(Modifier.weight(1f)) {
+            Text(text = exercise.name, style = Type.Name, color = Lit.Ink)
+            val details = listOfNotNull(exercise.muscleGroup, exercise.equipment).joinToString(separator = " · ")
+            if (details.isNotEmpty()) {
+                Text(text = details, style = Type.Body, color = Lit.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spoken(exerciseDetails(exercise))
+            below()
+        }
     }
 }
-

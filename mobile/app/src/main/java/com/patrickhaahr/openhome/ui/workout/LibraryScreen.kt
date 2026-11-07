@@ -1,6 +1,5 @@
 package com.patrickhaahr.openhome.ui.workout
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -13,6 +12,9 @@ import com.patrickhaahr.openhome.storage.SyncProblem
 import com.patrickhaahr.openhome.sync.FitnessSyncStatus
 import com.patrickhaahr.openhome.sync.SyncStatus
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -38,6 +40,7 @@ fun LibraryRoute(onCreate: (String) -> Unit, onFix: (Long) -> Unit) {
     val rows by viewModel.rows.collectAsStateWithLifecycle()
     ExerciseBrowser(
         title = "Library",
+        glyph = Glyph.Stack,
         lookup = rows,
         exerciseOf = { it.exercise },
         onCreate = onCreate,
@@ -52,8 +55,8 @@ fun LibraryRoute(onCreate: (String) -> Unit, onFix: (Long) -> Unit) {
                     refusal != null ->
                         Text(
                             text = exerciseRefusalMessage(refusal),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
+                            style = Type.Body,
+                            color = Lit.Alarm,
                         )
                     // Quiet by default: a downloaded or synced Exercise says nothing here.
                     row.sync != SyncStatus.Synced -> SyncStatusLine(row.sync)

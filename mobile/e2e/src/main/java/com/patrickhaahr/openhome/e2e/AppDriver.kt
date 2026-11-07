@@ -197,22 +197,42 @@ class AppDriver {
         assertTrue("Back at the navigation root should leave the app", device.wait(Until.gone(By.pkg(APP_PACKAGE)), TIMEOUT_MS))
     }
 
+    /**
+     * The app says most things with symbols, keeping the words as their accessibility names, so what
+     * "reads as" something is its text or its description: the way a screen reader would find it.
+     */
+    /** A text field showing what was typed reads as the same words as the row it found, and is not what is meant. */
+    private fun findReading(text: String): UiObject2? =
+        runCatching { device.findObjects(By.text(text)).firstOrNull { it.className != "android.widget.EditText" } }.getOrNull()
+            ?: device.findObject(By.text(text))
+            ?: device.findObject(By.desc(text))
+
+    private fun findContaining(text: String): UiObject2? =
+        device.findObject(By.textContains(text)) ?: device.findObject(By.descContains(text))
+
+    private fun awaitObject(timeoutMs: Long, find: () -> UiObject2?): UiObject2? {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (true) {
+            find()?.let { return it }
+            if (SystemClock.uptimeMillis() >= deadline) return null
+            SystemClock.sleep(POLL_MS / 2)
+        }
+    }
+
     fun assertVisible(text: String): UiObject2 =
-        checkNotNull(device.wait(Until.findObject(By.text(text)), TIMEOUT_MS)) { "Expected to see \"$text\"" }
+        checkNotNull(awaitObject(TIMEOUT_MS) { findReading(text) }) { "Expected to see \"$text\"" }
 
     fun assertTextContaining(text: String): UiObject2 =
-        checkNotNull(device.wait(Until.findObject(By.textContains(text)), TIMEOUT_MS)) {
-            "Expected text containing \"$text\""
-        }
+        checkNotNull(awaitObject(TIMEOUT_MS) { findContaining(text) }) { "Expected text containing \"$text\"" }
 
     /** Synchronization runs in the background, whenever Android lets its job start. */
     fun assertEventuallyVisible(text: String) {
-        checkNotNull(device.wait(Until.findObject(By.text(text)), SYNC_TIMEOUT_MS)) { "Expected to see \"$text\" eventually" }
+        checkNotNull(awaitObject(SYNC_TIMEOUT_MS) { findReading(text) }) { "Expected to see \"$text\" eventually" }
     }
 
     /** Waits for a line that reads as this, however long the text around it. */
     fun assertEventuallyContaining(text: String) {
-        checkNotNull(device.wait(Until.findObject(By.textContains(text)), SYNC_TIMEOUT_MS)) {
+        checkNotNull(awaitObject(SYNC_TIMEOUT_MS) { findContaining(text) }) {
             "Expected text containing \"$text\" eventually"
         }
     }
@@ -222,21 +242,23 @@ class AppDriver {
 
     /** Text controls can move above the viewport when a preceding result changes height. */
     fun tapScrolledText(text: String) {
-        findInScroll(By.text(text))
+        findInScroll(text) { findReading(text) }
         tap(text)
     }
 
-    private fun findInScroll(selector: BySelector): UiObject2 {
+    private fun findInScroll(selector: BySelector): UiObject2 = findInScroll(selector.toString()) { device.findObject(selector) }
+
+    private fun findInScroll(name: String, find: () -> UiObject2?): UiObject2 {
         val x = device.displayWidth / 2
         val high = device.displayHeight * 2 / 3
         val low = device.displayHeight / 3
         repeat(SCROLL_ATTEMPTS + SCROLL_ATTEMPTS / 2) { attempt ->
             device.waitForIdle()
-            device.findObject(selector)?.let { return it }
+            find()?.let { return it }
             // Downward first, then back up past where it started.
             if (attempt < SCROLL_ATTEMPTS / 2) device.swipe(x, high, x, low, SWIPE_STEPS) else device.swipe(x, low, x, high, SWIPE_STEPS)
         }
-        error("Nothing matching $selector")
+        error("Nothing matching $name")
     }
 
     /** A text field whose description labels it, scrolled into view. */
@@ -264,11 +286,10 @@ class AppDriver {
         tapDescription(description)
     }
 
-    /** Compose exposes the label below the control's enabled/disabled accessibility node. */
+    /** Compose can expose the label below the control's enabled/disabled accessibility node, or on it. */
     fun assertButtonEnabled(description: String, expected: Boolean) {
         val label = described(description)
-        val control = checkNotNull(label.parent) { "No control for $description" }
-        assertEquals("$description enabled", expected, control.isEnabled)
+        assertEquals("$description enabled", expected, label.isEnabled && label.parent?.isEnabled != false)
     }
 
     /** The described node must itself be the toggle: any other node reads as unchecked whatever the screen shows. */
@@ -289,23 +310,15 @@ class AppDriver {
         )
     }
 
-    /** Scrolls the current list until a button or line with this text can be tapped. */
+    /** Scrolls the current list, either way, until a button or line reading this can be tapped. */
     fun tapBelow(text: String) {
-        val x = device.displayWidth / 2
-        repeat(SCROLL_ATTEMPTS) {
-            device.waitForIdle()
-            if (device.hasObject(By.text(text))) {
-                tap(text)
-                return
-            }
-            device.swipe(x, device.displayHeight * 2 / 3, x, device.displayHeight / 3, SWIPE_STEPS)
-        }
-        error("Nothing to tap reading \"$text\"")
+        findInScroll(text) { findReading(text) }
+        tap(text)
     }
 
     /** Scrolls the current list until this line is on screen. */
     fun assertVisibleBelow(text: String) {
-        findInScroll(By.text(text))
+        findInScroll(text) { findReading(text) }
     }
 
     /**
@@ -383,20 +396,20 @@ class AppDriver {
 
     fun assertTextAbsent(fragment: String) {
         device.waitForIdle()
-        assertNull("Did not expect text containing \"$fragment\"", device.wait(Until.findObject(By.textContains(fragment)), ABSENCE_WAIT_MS))
+        assertNull("Did not expect text containing \"$fragment\"", awaitObject(ABSENCE_WAIT_MS) { findContaining(fragment) })
     }
 
     fun assertAbsent(text: String) {
         device.waitForIdle()
-        assertNull("Did not expect to see \"$text\"", device.wait(Until.findObject(By.text(text)), ABSENCE_WAIT_MS))
+        assertNull("Did not expect to see \"$text\"", awaitObject(ABSENCE_WAIT_MS) { findReading(text) })
     }
 
     fun tap(text: String) {
-        tapWhenSettled(By.text(text))
+        tapWhenSettled(text) { findReading(text) }
     }
 
     fun tapTextContaining(text: String) {
-        tapWhenSettled(By.textContains(text))
+        tapWhenSettled(text) { findContaining(text) }
     }
 
     /** For asserting that something does not happen, given time it would need if it did. */
@@ -405,16 +418,15 @@ class AppDriver {
     }
 
     fun tapDescription(description: String) {
-        tapWhenSettled(By.desc(description))
+        tapWhenSettled(description) { device.findObject(By.desc(description)) }
     }
 
     /** The app ignores taps until a destination's transition ends; recomposition can replace the node. */
-    private fun tapWhenSettled(selector: BySelector) {
+    private fun tapWhenSettled(name: String, find: () -> UiObject2?) {
         repeat(TAP_ATTEMPTS) {
             device.waitForIdle()
             SystemClock.sleep(SETTLE_MS)
-            val target =
-                checkNotNull(device.wait(Until.findObject(selector), TIMEOUT_MS)) { "Expected to see $selector" }
+            val target = checkNotNull(awaitObject(TIMEOUT_MS, find)) { "Expected to see $name" }
             try {
                 target.click()
                 return
@@ -422,7 +434,7 @@ class AppDriver {
                 // Find it again.
             }
         }
-        error("$selector kept changing and could not be tapped")
+        error("$name kept changing and could not be tapped")
     }
 
     /**
@@ -433,7 +445,7 @@ class AppDriver {
         val x = device.displayWidth / 2
         var visible: List<String>? = null
         var stillPasses = 0
-        while (!device.hasObject(By.text(text))) {
+        while (findReading(text) == null) {
             val current = visibleTexts()
             stillPasses = if (current != null && current == visible) stillPasses + 1 else 0
             check(stillPasses < END_OF_LIST_PASSES) { "Reached the end of the list without finding \"$text\"" }
@@ -458,28 +470,14 @@ class AppDriver {
         }
 
     fun enter(fieldLabel: String, value: String) {
-        val field =
-            checkNotNull(
-                device.wait(
-                    Until.findObject(By.clazz("android.widget.EditText").hasDescendant(By.text(fieldLabel))),
-                    TIMEOUT_MS,
-                ),
-            ) { "No field labelled \"$fieldLabel\"" }
-        field.text = value
+        enterDescribed(fieldLabel, value)
     }
 
     fun assertField(fieldLabel: String, expected: String) {
-        val field =
-            checkNotNull(
-                device.wait(
-                    Until.findObject(By.clazz("android.widget.EditText").hasDescendant(By.text(fieldLabel))),
-                    TIMEOUT_MS,
-                ),
-            ) { "No field labelled \"$fieldLabel\"" }
-        assertEquals(fieldLabel, expected, field.text)
+        assertDescribedValue(fieldLabel, expected)
     }
 
-    fun showsTextContaining(text: String): Boolean = device.hasObject(By.pkg(APP_PACKAGE).textContains(text))
+    fun showsTextContaining(text: String): Boolean = findContaining(text) != null
 
     /** Completes the Setup Flow against [api] and waits for the app's launch destination. */
     fun completeSetup(api: FakeAxum) {
@@ -501,20 +499,19 @@ class AppDriver {
         assertVisible("Last Workout")
     }
 
-    /** The labels along the bottom of the screen, in order, and which of them is the selected tab. */
+    /** The tabs along the bottom of the screen, in order, and which of them is the selected tab. */
     fun assertBottomTabs(vararg expected: String, selected: String) {
         device.waitForIdle()
-        val labels =
-            device.findObjects(By.pkg(APP_PACKAGE).text(ANY_TEXT))
-                .filter { it.visibleBounds.top > device.displayHeight * 8 / 10 }
-                .sortedBy { it.visibleBounds.left }
-                .map { it.text }
-        assertEquals(expected.toList(), labels)
+        val tabs =
+            expected.map { name ->
+                checkNotNull(awaitObject(TIMEOUT_MS) { device.findObject(By.pkg(APP_PACKAGE).desc(name)) }) { "No tab named $name" }
+            }
+        tabs.forEach { assertTrue("Tabs belong along the bottom", it.visibleBounds.top > device.displayHeight * 8 / 10) }
+        assertEquals(expected.toList(), tabs.sortedBy { it.visibleBounds.left }.map { it.contentDescription })
         assertTrue(
             "Expected $selected to become the selected tab",
-            device.wait(Until.hasObject(By.selected(true).hasDescendant(By.text(selected))), TIMEOUT_MS),
+            device.wait(Until.hasObject(By.selected(true).desc(selected)), TIMEOUT_MS),
         )
-        assertEquals(selected, device.findObject(By.selected(true)).findObject(By.text(ANY_TEXT)).text)
     }
 
     fun assertNoBottomTabs() {
@@ -522,5 +519,5 @@ class AppDriver {
         assertFalse("A tab bar always has a selected tab", device.hasObject(By.pkg(APP_PACKAGE).selected(true)))
     }
 
-    private fun hasObject(text: String) = device.hasObject(By.text(text))
+    private fun hasObject(text: String) = findReading(text) != null
 }

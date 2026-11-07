@@ -1,5 +1,7 @@
 # Native Android
 
+See [DESIGN.md](DESIGN.md) for the visual system.
+
 Native Kotlin Android is the supported mobile client after physical Pixel acceptance
 on 6 November 2026. Expo is deprecated for new mobile development; its source and
 recipes remain available during transition. Existing API and Dashboard features

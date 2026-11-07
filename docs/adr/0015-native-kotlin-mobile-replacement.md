@@ -1,0 +1,3 @@
+# Replace the Expo mobile client with native Kotlin
+
+Build the replacement OpenHome Android client in native Kotlin, alongside the existing Expo client until it passes acceptance checks, then deprecate Expo. The user explicitly chose a fresh native implementation to prioritize Android UI and workout logging UX over retaining the existing cross-platform client; the replacement must support Android without Google Play Services and reuse the Axum API and existing fitness data. Its scope is home controls, workout logging/library/history and fitness profile; this client scope does not remove other capabilities from the API or Dashboard.

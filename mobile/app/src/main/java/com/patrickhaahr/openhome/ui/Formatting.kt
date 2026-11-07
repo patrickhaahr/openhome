@@ -7,11 +7,28 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 private val DAY_FORMAT = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
+private val SHORT_DAY_FORMAT = DateTimeFormatter.ofPattern("d MMM")
+private val MONTH_FORMAT = DateTimeFormatter.ofPattern("MMM")
+private val WEEKDAY_FORMAT = DateTimeFormatter.ofPattern("EEE")
+private const val DAY_DIGITS = 2
 
 /** Renders a calendar day as written; a day has no time zone to convert through. */
-fun formatDay(isoDay: String): String =
+fun formatDay(isoDay: String): String = formatted(isoDay, DAY_FORMAT)
+
+fun formatShortDay(isoDay: String): String = formatted(isoDay, SHORT_DAY_FORMAT)
+
+fun formatMonth(isoDay: String): String = formatted(isoDay, MONTH_FORMAT)
+
+fun formatWeekday(isoDay: String): String = formatted(isoDay, WEEKDAY_FORMAT)
+
+fun dayOfMonth(isoDay: String): String =
+    runCatching { LocalDate.parse(isoDay).dayOfMonth.toString().padStart(DAY_DIGITS, '0') }.getOrDefault(isoDay)
+
+fun yearOf(isoDay: String): Int? = runCatching { LocalDate.parse(isoDay).year }.getOrNull()
+
+private fun formatted(isoDay: String, format: DateTimeFormatter): String =
     try {
-        LocalDate.parse(isoDay).format(DAY_FORMAT)
+        LocalDate.parse(isoDay).format(format)
     } catch (_: DateTimeParseException) {
         isoDay
     }

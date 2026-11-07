@@ -1,25 +1,31 @@
 package com.patrickhaahr.openhome.ui.workout
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,8 +33,19 @@ import androidx.lifecycle.viewModelScope
 import com.patrickhaahr.openhome.fitness.REST_STEP_SECONDS
 import com.patrickhaahr.openhome.fitness.RestTimer
 import com.patrickhaahr.openhome.fitness.RestTimers
+import com.patrickhaahr.openhome.ui.ScreenMargin
+import com.patrickhaahr.openhome.ui.Spoken
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.FigureKey
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphIcon
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.Motion
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 import kotlin.math.ceil
+import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -43,6 +60,7 @@ import kotlinx.coroutines.launch
 
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
+private val KEY = 44.dp
 
 /** What the bar shows of the rest at this moment. */
 private sealed interface RestDisplay {
@@ -105,68 +123,60 @@ fun RestTimerBar(modifier: Modifier = Modifier) {
     }
 }
 
+/** A strip of lamp that burns down, over the countdown in type large enough to read from the floor. */
 @Composable
 private fun RunningBar(rest: RestDisplay.Running, viewModel: RestTimerViewModel, modifier: Modifier) {
-    BarSurface(modifier) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = formatRest(rest.remainingSeconds),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            RestOfLine(rest.exerciseName)
+    // Only the deadline is stored, so the longest reading so far stands for the whole rest.
+    var longest by remember(rest.exerciseId) { mutableLongStateOf(rest.remainingSeconds) }
+    longest = max(longest, rest.remainingSeconds)
+    val left by animateFloatAsState(
+        rest.remainingSeconds.toFloat() / max(longest, 1L),
+        tween(Motion.PANEL, easing = Motion.Ease),
+        label = "rest left",
+    )
+    Column(Modifier.fillMaxWidth().background(Lit.Slab).then(modifier)) {
+        Canvas(Modifier.fillMaxWidth().height(4.dp)) {
+            drawRect(Lit.Lamp, Offset.Zero, Size(size.width * left, size.height))
         }
-        BarAction("−15", "Less rest") { viewModel.adjust(rest.exerciseId, -REST_STEP_SECONDS) }
-        BarAction("+15", "More rest") { viewModel.adjust(rest.exerciseId, REST_STEP_SECONDS) }
-        BarAction("Skip", "Skip rest", viewModel::end)
-        BarAction("Off", "Turn off rest for ${rest.exerciseName}") { viewModel.turnOff(rest.exerciseId) }
+        Row(
+            Modifier.fillMaxWidth().padding(start = ScreenMargin + 4.dp, end = ScreenMargin, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(formatRest(rest.remainingSeconds), style = Type.Display, color = Lit.Lamp)
+            Spoken("Rest · ${rest.exerciseName}")
+            Spacer(Modifier.weight(1f))
+            FigureKey("−15", "Less rest", { viewModel.adjust(rest.exerciseId, -REST_STEP_SECONDS) }, size = KEY + 8.dp)
+            FigureKey("+15", "More rest", { viewModel.adjust(rest.exerciseId, REST_STEP_SECONDS) }, size = KEY + 8.dp)
+            GlyphKey(Glyph.Skip, "Skip rest", viewModel::end, size = KEY + 8.dp)
+            OffKey("Turn off rest for ${rest.exerciseName}") { viewModel.turnOff(rest.exerciseId) }
+        }
     }
 }
 
+@Composable
+private fun OffKey(description: String, onClick: () -> Unit) {
+    GlyphKey(Glyph.TimerOff, description, onClick, tone = KeyTone.Quiet, size = KEY)
+}
+
+/** Rest is over: the whole bar comes on. */
 @Composable
 private fun OverBar(rest: RestDisplay.Over, viewModel: RestTimerViewModel, modifier: Modifier) {
-    BarSurface(modifier) {
-        Column(Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }) {
-            Text(
-                text = "Rest over",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            RestOfLine(rest.exerciseName)
-        }
-        BarAction("Dismiss", "Dismiss rest", viewModel::end)
-    }
-}
-
-@Composable
-private fun BarSurface(modifier: Modifier, content: @Composable RowScope.() -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            content = content,
-        )
-    }
-}
-
-@Composable
-private fun RestOfLine(exerciseName: String) {
-    Text(
-        text = "Rest · $exerciseName",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-@Composable
-private fun BarAction(label: String, description: String, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).semantics { contentDescription = description },
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Lit.Lamp)
+            .then(modifier)
+            .padding(start = ScreenMargin + 4.dp, end = ScreenMargin, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(label)
+        Box(Modifier.semantics { contentDescription = "Rest over"; liveRegion = LiveRegionMode.Polite }) {
+            GlyphIcon(Glyph.Timer, tint = Lit.OnLamp, size = 36.dp)
+        }
+        Spoken("Rest · ${rest.exerciseName}")
+        Spacer(Modifier.weight(1f))
+        GlyphKey(Glyph.Check, "Dismiss rest", viewModel::end, tone = KeyTone.Slab, size = 52.dp)
     }
 }
 

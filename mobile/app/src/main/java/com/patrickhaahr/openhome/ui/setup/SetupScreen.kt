@@ -1,32 +1,29 @@
 package com.patrickhaahr.openhome.ui.setup
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -36,7 +33,17 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.patrickhaahr.openhome.setup.SetupProgress
+import com.patrickhaahr.openhome.ui.FieldShape
+import com.patrickhaahr.openhome.ui.FormField
+import com.patrickhaahr.openhome.ui.Spoken
 import com.patrickhaahr.openhome.ui.appViewModel
+import com.patrickhaahr.openhome.ui.design.Glyph
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.OpenHomeMark
+import com.patrickhaahr.openhome.ui.design.SlabKey
+import com.patrickhaahr.openhome.ui.theme.Lit
+import com.patrickhaahr.openhome.ui.theme.Type
 
 @Composable
 fun SetupRoute(interruptedBaseUrl: String?) {
@@ -44,6 +51,7 @@ fun SetupRoute(interruptedBaseUrl: String?) {
     SetupScreen(viewModel, showInterruptedNotice = interruptedBaseUrl != null)
 }
 
+/** The mark, an address, a key and an arrow. Everything said here is said because something is wrong. */
 @Composable
 private fun SetupScreen(viewModel: SetupViewModel, showInterruptedNotice: Boolean) {
     val progress = viewModel.progress
@@ -58,19 +66,14 @@ private fun SetupScreen(viewModel: SetupViewModel, showInterruptedNotice: Boolea
                 .safeDrawingPadding()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = "Connect to OpenHome",
-            style = MaterialTheme.typography.displaySmall,
-            modifier = Modifier.semantics { heading() },
-        )
-        Text(
-            text = "Your Exercises, Workouts, Profile and Body Weight download once, then stay on this device.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Spacer(Modifier.height(32.dp))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { OpenHomeMark(Modifier.size(168.dp)) }
+        Spacer(Modifier.height(48.dp))
+        Spoken("Connect to OpenHome", isHeading = true)
+        Spoken("Your Exercises, Workouts, Profile and Body Weight download once, then stay on this device.")
 
         if (showInterruptedNotice && error == null && !isWorking) {
             Notice(
@@ -79,104 +82,92 @@ private fun SetupScreen(viewModel: SetupViewModel, showInterruptedNotice: Boolea
             )
         }
 
-        OutlinedTextField(
+        FormField(
             value = viewModel.baseUrl,
             onValueChange = { viewModel.baseUrl = it },
-            label = { Text("Base URL") },
-            placeholder = { Text("http://openhome.local:8000") },
-            singleLine = true,
+            label = "Base URL",
+            glyph = Glyph.Globe,
+            hint = "http://openhome.local:8000",
             enabled = !isWorking,
-            keyboardOptions =
-                KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Next,
-                ),
-            modifier = Modifier.fillMaxWidth(),
+            capitalization = KeyboardCapitalization.None,
+            autoCorrect = false,
+            keyboardType = KeyboardType.Uri,
         )
-        OutlinedTextField(
+        FormField(
             value = viewModel.apiKey,
             onValueChange = { viewModel.apiKey = it },
-            label = { Text("API Key") },
-            singleLine = true,
+            label = "API Key",
+            glyph = Glyph.Key,
             enabled = !isWorking,
-            visualTransformation =
-                if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                TextButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                    Text(if (apiKeyVisible) "Hide" else "Show")
-                }
+            capitalization = KeyboardCapitalization.None,
+            autoCorrect = false,
+            keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
+            onDone = viewModel::submit,
+            visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailing = {
+                GlyphKey(
+                    if (apiKeyVisible) Glyph.EyeOff else Glyph.Eye,
+                    if (apiKeyVisible) "Hide" else "Show",
+                    { apiKeyVisible = !apiKeyVisible },
+                    tone = KeyTone.Quiet,
+                    size = 48.dp,
+                )
             },
-            keyboardOptions =
-                KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done,
-                ),
-            keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
-            modifier = Modifier.fillMaxWidth(),
         )
 
         if (error != null) Notice(text = error, isError = true)
         if (progress != null) ProgressLine(progress)
 
-        Button(
-            onClick = viewModel::submit,
+        SlabKey(
+            if (error == null) Glyph.Arrow else Glyph.Refresh,
+            if (error == null) "Connect and download" else "Try again",
+            viewModel::submit,
+            modifier = Modifier.fillMaxWidth(),
             enabled = !isWorking,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-        ) {
-            Text(if (error == null) "Connect and download" else "Try again")
-        }
+        )
     }
 }
 
 @Composable
 private fun Notice(text: String, isError: Boolean) {
-    Surface(
-        color =
-            if (isError) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            },
-        contentColor =
-            if (isError) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-    ) {
-        Text(text = text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
-    }
+    Text(
+        text = text,
+        style = Type.Body,
+        color = if (isError) Lit.Alarm else Lit.Ink,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(if (isError) Lit.AlarmDeep else Lit.Slab, FieldShape)
+                .padding(16.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 @Composable
 private fun ProgressLine(progress: SetupProgress) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
         val fraction =
             (progress as? SetupProgress.DownloadingWorkouts)
                 ?.takeIf { it.total > 0 }
                 ?.let { it.done.toFloat() / it.total }
         if (fraction != null) {
-            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().height(8.dp), color = Lit.Lamp, trackColor = Lit.Raised)
         } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(8.dp), color = Lit.Lamp, trackColor = Lit.Raised)
         }
-        Text(
-            text =
-                when (progress) {
-                    SetupProgress.CheckingConnection -> "Checking your Base URL and API Key"
-                    SetupProgress.ListingWorkouts -> "Finding your Workouts"
-                    is SetupProgress.DownloadingWorkouts -> "Downloading Workouts: ${progress.done} of ${progress.total}"
-                    SetupProgress.DownloadingLibraryAndProfile -> "Downloading Library, Profile and Body Weight"
-                    SetupProgress.Saving -> "Saving on this device"
-                },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Spoken(
+            when (progress) {
+                SetupProgress.CheckingConnection -> "Checking your Base URL and API Key"
+                SetupProgress.ListingWorkouts -> "Finding your Workouts"
+                is SetupProgress.DownloadingWorkouts -> "Downloading Workouts: ${progress.done} of ${progress.total}"
+                SetupProgress.DownloadingLibraryAndProfile -> "Downloading Library, Profile and Body Weight"
+                SetupProgress.Saving -> "Saving on this device"
+            },
+            live = true,
         )
+        if (progress is SetupProgress.DownloadingWorkouts) {
+            Text("${progress.done}/${progress.total}", style = Type.Figure, color = Lit.Ink)
+        }
     }
 }

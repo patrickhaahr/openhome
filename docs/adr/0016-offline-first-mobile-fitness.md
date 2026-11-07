@@ -1,0 +1,3 @@
+# Keep mobile fitness usable offline
+
+Persist workout logging, exercise creation, workout-history edits, profile changes and body-weight recording on the phone before synchronizing with the Axum API over Wi-Fi. The user needs workouts to survive app closure and unavailable connectivity, accepting the added local persistence and synchronization work rather than relying on API availability during training. Downloaded history, previous performance and the library remain available offline; the product assumes one user and one active client, so it omits multi-client conflict-resolution UI but still requires duplicate-safe synchronization retries.
