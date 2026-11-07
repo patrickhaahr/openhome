@@ -68,19 +68,19 @@ Use [`mobile/README.md`](../mobile/README.md) for signed builds and installation
 Run project recipes through devenv. Host gates can run without instrumentation:
 
 ```sh
-SQLX_OFFLINE=true devenv shell -- just check-api check-mcp check-mobile native-lint native-build check-firmware check-cli check-dashboard deployment-check
+SQLX_OFFLINE=true devenv shell -- just check-api check-mcp mobile-lint mobile-build check-firmware check-cli check-dashboard deployment-check
 ```
 
-`just native-check` also invokes instrumentation when an emulator is booted.
+`just mobile-check` also invokes instrumentation when an emulator is booted.
 For future full device runs, use memory-safe groups with fresh device-tool boots
 between them and archive results before each subsequent run overwrites the XML:
 
 ```sh
-devenv shell -- just native-test SetupFlowTest
+devenv shell -- just mobile-test SetupFlowTest
 ```
 
 Never run data-clearing instrumentation on a physical phone. Real-Axum acceptance
-uses `native-fixture-api`, `native-fixture-seed` and `native-fixture-lossy-proxy` with
+uses `mobile-fixture-api`, `mobile-fixture-seed` and `mobile-fixture-lossy-proxy` with
 throwaway databases and invented credentials. Check recipe arguments before use.
 API code/SQL changes require affected API checks and query metadata regeneration;
 offline SQLx checking does not replace maintaining that metadata.

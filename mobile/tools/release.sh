@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run through the native-release-* just recipes. Never enable shell tracing here.
+# Run through the mobile-release-* just recipes. Never enable shell tracing here.
 set -euo pipefail
 umask 077
 
@@ -27,7 +27,7 @@ case "${1:-}" in
         ;;
     sign)
         if [[ ! -f "$keystore" || ! -f "$password" ]]; then
-            echo "Release identity missing: restore its backup or run just native-release-key-init for a first release." >&2
+            echo "Release identity missing: restore its backup or run just mobile-release-key-init for a first release." >&2
             exit 1
         fi
         unsigned="mobile/app/build/outputs/apk/release/app-release-unsigned.apk"

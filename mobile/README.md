@@ -3,8 +3,7 @@
 See [DESIGN.md](DESIGN.md) for the visual system.
 
 Native Kotlin Android is the supported mobile client after physical Pixel acceptance
-on 6 November 2026. Expo is deprecated for new mobile development; its source and
-recipes remain available during transition. Existing API and Dashboard features
+on 6 November 2026. The former Expo client has been removed. Existing API and Dashboard features
 and stored fitness data are unchanged.
 The native release package is `com.patrickhaahr.openhome`; the debug package is
 `com.patrickhaahr.openhome.debug` and Expo is `com.example.openhome.expo`.
@@ -15,9 +14,9 @@ From the repository root, with the installed devenv Android SDK/JDK:
 
 ```sh
 # First release only; restore an existing identity instead when moving machines.
-devenv shell -- just native-release-key-init
-devenv shell -- just native-release
-devenv shell -- just native-release-verify
+devenv shell -- just mobile-release-key-init
+devenv shell -- just mobile-release
+devenv shell -- just mobile-release-verify
 ```
 
 The release recipe runs release lint/build, aligns the APK and signs it with
@@ -25,7 +24,7 @@ Android `apksigner`. It does not use the Android debug certificate. Output:
 `mobile/app/build/outputs/apk/release/app-release.apk`. Verification prints the
 public signing certificate fingerprint, manifest package/version/SDK information
 and SHA-256 checksum, and rejects a debuggable or wrong-package APK.
-Debug lint/build remain `just native-lint native-build`; release preparation runs
+Debug lint/build remain `just mobile-lint mobile-build`; release preparation runs
 no instrumentation and contacts no device.
 
 Resource optimization is disabled in `gradle.properties`: AGP 9.5 with devenv's
@@ -52,12 +51,12 @@ separately and compare it before installing subsequent builds. Increment
 After physical-device authorization, install with an explicit serial:
 
 ```sh
-devenv shell -- just native-release-install SERIAL
+devenv shell -- just mobile-release-install SERIAL
 ```
 
 This verifies the existing APK and uses `adb install -r`, preserving the native
 app's data. It does not build, launch, uninstall, clear data or run tests. Do not
-run `native-test` on a physical phone: instrumentation clears the debug app data.
+run `mobile-test` on a physical phone: instrumentation clears the debug app data.
 
 ## First use and support
 

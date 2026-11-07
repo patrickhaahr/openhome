@@ -8,49 +8,26 @@
   <video src="https://github.com/user-attachments/assets/b9dff174-448f-4b85-b109-6cc2e2b53ebe"></video>
 </p>
 
-OpenHome is a self-hosted home control system with a native Kotlin Android app, a household dashboard and a native LG webOS TV launcher. Mobile clients communicate exclusively with a Rust Axum API. The supported Android app lives in [`mobile/`](mobile/README.md); the Expo client is deprecated for new development but remains available during transition.
+OpenHome is a self-hosted home control system with a native Kotlin Android app, a household dashboard and a native LG webOS TV launcher. Mobile clients communicate exclusively with a Rust Axum API. The supported Android app lives in [`mobile/`](mobile/README.md).
 
 The API authenticates the client and forwards HTTP requests to two ESP32 devices:
 
 - **ESP32 IR remote:** sends infrared commands to an LG TV and an Edifier speaker.
 - **ESP32 SwitchBot controller:** drives a servo that physically turns a light switch on or off.
 
-The native app focuses on offline-first Workouts and Home controls. The legacy Expo client retains its broader features, including home geofencing; those features have not been deleted from the API or Dashboard.
+The native app focuses on offline-first Workouts and Home controls. Home geofencing is not available in the native app.
 
 ## Native Android
 
-![Native Workout home with invented acceptance data](assets/native/workout.png)
+![Native Workout home with invented acceptance data](assets/native/redesign/workout.png)
 
 Repeat and resume Workouts, confirm sets, correct History and record Profile/Body Weight offline. Fitness synchronizes on Wi-Fi; Home commands run immediately without a replay queue. See [installation and support](mobile/README.md) and [acceptance limits](docs/native-android-acceptance.md).
-
-## Legacy Expo screenshots
-
-| Home | Leave home automation |
-| :---: | :---: |
-| <img src="assets/expo/home.png" alt="OpenHome home screen" width="300"> | <img src="assets/expo/away.png" alt="OpenHome leave home automation" width="300"> |
-
-| TV remote | Speaker remote |
-| :---: | :---: |
-| <img src="assets/expo/tv.png" alt="OpenHome TV remote" width="300"> | <img src="assets/expo/speaker.png" alt="OpenHome speaker remote" width="300"> |
 
 ## Hardware Demo
 
 | ESP32 infrared controller | ESP32 SwitchBot controller |
 | :---: | :---: |
 | <img src="assets/expo/esp32-infrared.jpg" alt="ESP32 infrared controller beside an Edifier speaker" width="400"> | <img src="assets/expo/esp32-switchbot.jpg" alt="ESP32 servo controller mounted above a wall light switch" width="400"> |
-
-## Legacy Expo features
-
-- Control lights, an LG TV, and an Edifier speaker.
-- Load available infrared commands dynamically from the API.
-- Swipe between Home, TV, Speaker, and Away tabs.
-- Store the Base URL, API key, and geofence configuration in Expo SecureStore.
-- Monitor a home geofence without continuous GPS polling.
-- Retry a persisted light-off command after a temporary background failure.
-- Use either Expo Location or the Android framework location backend.
-- View and manage Docker containers on the homelab server.
-- Monitor and control AdGuard Home DNS protection.
-- Aggregate RSS and Atom feeds into a timeline with read state.
 
 ## Dashboard
 
@@ -92,18 +69,10 @@ The native client uses Compose navigation, Room for local fitness state and a
 durable Wi-Fi-only outbox. The Axum API owns device integration and retry receipts;
 Home commands bypass the fitness outbox. Its only bottom tabs are Workout and Home.
 
-The retained Expo client uses a Clean Architecture-inspired structure:
-
-- `domain` contains parsing, validation, and control definitions.
-- `application` owns state transitions and coordinates operations.
-- `infrastructure` contains the Axum API, SecureStore, GPS, and geofence adapters.
-- `ui` contains React Native screens and components.
-
 ```mermaid
 flowchart LR
-    User[User] --> Mobile[React Native + Expo]
+    User[User] --> Mobile[Kotlin Android]
     Mobile -->|Bearer-authenticated HTTP| API[Rust Axum API]
-    Mobile --> OS[GPS + SecureStore]
     API -->|HTTP| IR[ESP32 IR remote]
     API -->|HTTP| SwitchBot[ESP32 SwitchBot controller]
     IR -->|Infrared| TV[LG TV]
