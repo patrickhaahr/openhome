@@ -145,7 +145,61 @@ pub struct ForecastDay {
 #[derive(Default)]
 struct Cache {
     forecast: Option<Forecast>,
-    next_attempt: Option<DateTime<Utc>>,
+    refresh: RefreshSchedule,
+}
+
+// Admission is independent of forecast freshness; a failed refresh retains the data.
+#[derive(Default)]
+enum RefreshSchedule {
+    #[default]
+    Unattempted,
+    Scheduled {
+        at: DateTime<Utc>,
+    },
+    Backoff {
+        until: DateTime<Utc>,
+    },
+}
+
+impl RefreshSchedule {
+    fn is_due(&self, now: DateTime<Utc>) -> bool {
+        match self {
+            Self::Unattempted => true,
+            Self::Scheduled { at } => now >= *at,
+            Self::Backoff { until } => now >= *until,
+        }
+    }
+}
+
+impl Cache {
+    fn finish_refresh(&mut self, result: Result<Forecast, ()>, now: DateTime<Utc>) {
+        match result {
+            Ok(forecast) => {
+                self.refresh = RefreshSchedule::Scheduled {
+                    at: forecast.valid_until,
+                };
+                self.forecast = Some(forecast);
+            }
+            Err(()) => {
+                // Raw request errors include the coordinate-bearing URL. Do not log them.
+                self.refresh = RefreshSchedule::Backoff { until: now + RETRY };
+            }
+        }
+    }
+
+    fn read(&self, now: DateTime<Utc>) -> WeatherRead {
+        match &self.forecast {
+            Some(forecast) if now < forecast.valid_until => WeatherRead::Fresh {
+                forecast: forecast.upcoming(now),
+            },
+            Some(forecast) if now < forecast.fetched_at + MAX_STALE => WeatherRead::Stale {
+                forecast: forecast.upcoming(now),
+            },
+            _ => WeatherRead::Unavailable {
+                reason: WeatherUnavailable::ProviderUnavailable,
+            },
+        }
+    }
 }
 
 /// A clone shares one cache and serializes refreshes across all clients.
@@ -178,30 +232,14 @@ impl WeatherService {
     }
 
     async fn read_at(&self, now: DateTime<Utc>) -> WeatherRead {
+        // The guard owns the in-flight refresh: queued readers recheck admission after it
+        // completes. Cancellation drops the guard without changing the prior schedule/data.
         let mut cache = self.cache.lock().await;
-        if cache.next_attempt.is_none_or(|next| now >= next) {
-            match self.fetch(now).await {
-                Ok(forecast) => {
-                    cache.next_attempt = Some(forecast.valid_until);
-                    cache.forecast = Some(forecast);
-                }
-                Err(()) => {
-                    // Raw request errors include the coordinate-bearing URL. Do not log them.
-                    cache.next_attempt = Some(now + RETRY);
-                }
-            }
+        if cache.refresh.is_due(now) {
+            let result = self.fetch(now).await;
+            cache.finish_refresh(result, now);
         }
-        match &cache.forecast {
-            Some(forecast) if now < forecast.valid_until => WeatherRead::Fresh {
-                forecast: forecast.upcoming(now),
-            },
-            Some(forecast) if now < forecast.fetched_at + MAX_STALE => WeatherRead::Stale {
-                forecast: forecast.upcoming(now),
-            },
-            _ => WeatherRead::Unavailable {
-                reason: WeatherUnavailable::ProviderUnavailable,
-            },
-        }
+        cache.read(now)
     }
 
     async fn fetch(&self, now: DateTime<Utc>) -> Result<Forecast, ()> {
@@ -683,6 +721,7 @@ mod tests {
         server.reset().await;
         Mock::given(method("GET"))
             .respond_with(ResponseTemplate::new(503))
+            .expect(1)
             .mount(&server)
             .await;
         assert!(matches!(
@@ -691,11 +730,189 @@ mod tests {
                 .await,
             WeatherRead::Stale { .. }
         ));
+        // The stale cutoff falls inside the renewed backoff, so exactly one attempt
+        // precedes both boundary reads and the cutoff itself is projected, not fetch.
         let response = serde_json::to_value(service.read_at(now + MAX_STALE).await).unwrap();
         assert_eq!(
             response,
             json!({ "state": "unavailable", "reason": "provider-unavailable" })
         );
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn serves_unavailable_after_empty_cache_failures_and_recovers_at_the_retry_deadline() {
+        let now: DateTime<Utc> = "2026-10-11T10:00:00Z".parse().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(503))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let service = service(&server);
+        for instant in [
+            now,
+            now + chrono::Duration::seconds(30),
+            now + RETRY - chrono::Duration::seconds(1),
+        ] {
+            assert_eq!(
+                serde_json::to_value(service.read_at(instant).await).unwrap(),
+                json!({ "state": "unavailable", "reason": "provider-unavailable" })
+            );
+        }
+        // The first minute has one attempt; the next attempt happens exactly at the
+        // deadline and fails again, so the cache stays empty instead of serving data.
+        assert_eq!(
+            serde_json::to_value(service.read_at(now + RETRY).await).unwrap(),
+            json!({ "state": "unavailable", "reason": "provider-unavailable" })
+        );
+        server.verify().await;
+        server.reset().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture(now)))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let fresh = serde_json::to_value(service.read_at(now + RETRY + RETRY).await).unwrap();
+        assert_eq!(fresh["state"], "fresh");
+        assert_eq!(fresh["forecast"]["fetched_at"], "2026-10-11T10:02:00Z");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn coalesces_reads_queued_behind_a_delayed_failure_into_one_shared_backoff() {
+        let now: DateTime<Utc> = "2026-10-11T10:00:00Z".parse().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(503).set_delay(std::time::Duration::from_millis(200)),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let service = service(&server);
+        let clone = service.clone();
+        let (a, b) = tokio::join!(
+            service.read_at(now),
+            clone.read_at(now + chrono::Duration::seconds(30))
+        );
+        assert!(matches!(a, WeatherRead::Unavailable { .. }));
+        assert!(matches!(b, WeatherRead::Unavailable { .. }));
+        // The queued reader rechecks admission after the failed refresh, so reads still
+        // inside the shared backoff never re-attempt despite their later sampled time.
+        assert!(matches!(
+            service
+                .read_at(now + RETRY - chrono::Duration::seconds(1))
+                .await,
+            WeatherRead::Unavailable { .. }
+        ));
+        server.verify().await;
+        server.reset().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture(now)))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let fresh = serde_json::to_value(service.read_at(now + RETRY).await).unwrap();
+        assert_eq!(fresh["state"], "fresh");
+        assert_eq!(fresh["forecast"]["fetched_at"], "2026-10-11T10:01:00Z");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn serves_queued_reads_from_one_delayed_success_until_ttl_admits_a_refresh() {
+        let now: DateTime<Utc> = "2026-10-11T10:00:00Z".parse().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(fixture(now))
+                    .set_delay(std::time::Duration::from_millis(200)),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let service = service(&server);
+        let clone = service.clone();
+        let (a, b) = tokio::join!(
+            service.read_at(now),
+            clone.read_at(now + chrono::Duration::minutes(5))
+        );
+        assert!(matches!(a, WeatherRead::Fresh { .. }));
+        assert!(matches!(b, WeatherRead::Fresh { .. }));
+        server.verify().await;
+        server.reset().await;
+        // The queued reader rechecks admission against its own later time and reuses
+        // the completed result; the refresh is re-admitted exactly at the new TTL.
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture(now)))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let fresh = serde_json::to_value(service.read_at(now + TTL).await).unwrap();
+        assert_eq!(fresh["state"], "fresh");
+        assert_eq!(fresh["forecast"]["fetched_at"], "2026-10-11T10:15:00Z");
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn dropping_a_timed_out_read_leaves_refresh_admission_and_data_unchanged() {
+        let now: DateTime<Utc> = "2026-10-11T10:00:00Z".parse().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(fixture(now))
+                    .set_delay(std::time::Duration::from_millis(500)),
+            )
+            .mount(&server)
+            .await;
+        let service = service(&server);
+        let attempt =
+            tokio::time::timeout(std::time::Duration::from_millis(50), service.read_at(now)).await;
+        assert!(attempt.is_err(), "the read must be waiting on the provider");
+        // Cancellation drops the guard without completing a refresh, so the still
+        // unattempted cache retries immediately; a stranded refresh or a backoff
+        // invented by a cancelled attempt would leave the cache empty and skip it.
+        let fresh = serde_json::to_value(service.read_at(now).await).unwrap();
+        assert_eq!(fresh["state"], "fresh");
+        assert_eq!(fresh["forecast"]["fetched_at"], "2026-10-11T10:00:00Z");
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn abandons_a_silent_provider_after_five_seconds_into_shared_backoff() {
+        let now: DateTime<Utc> = "2026-10-11T10:00:00Z".parse().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(fixture(now))
+                    .set_delay(std::time::Duration::from_secs(6)),
+            )
+            .mount(&server)
+            .await;
+        let service = service(&server);
+        let started = std::time::Instant::now();
+        let response = serde_json::to_value(service.read_at(now).await).unwrap();
+        let elapsed = started.elapsed();
+        assert!(
+            std::time::Duration::from_millis(4800) < elapsed
+                && elapsed < std::time::Duration::from_millis(5600),
+            "{elapsed:?}"
+        );
+        assert_eq!(
+            response,
+            json!({ "state": "unavailable", "reason": "provider-unavailable" })
+        );
+        // The timed-out attempt returns to the same backoff as any other failure.
+        assert!(matches!(
+            service.read_at(now + chrono::Duration::seconds(30)).await,
+            WeatherRead::Unavailable { .. }
+        ));
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        server.verify().await;
     }
 
     #[tokio::test]
