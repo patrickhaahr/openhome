@@ -21,9 +21,17 @@ Then exactly one outcome applies, in this order:
 Receipt claim, domain write and result capture commit in one transaction. A rejected
 create rolls back with its claim, so it consumes no `request_id`. The claim
 (`ON CONFLICT DO NOTHING`) serializes simultaneous retries: the loser rolls back and
-replays the winner, or reports "Retry receipt unavailable" if the receipt cannot be read.
-Normalized arguments omit absent optional fields (and empty doses/photo), so receipts
-written before a field existed still match their retries.
+replays the winner. Only if the receipt then cannot be read does it return a domain
+conflict, and its wording differs: Exercise, Workout, Body Weight, Meal, Meal Log,
+Supplement, Product link, Watchlist Entry and Important Date say "Retry receipt
+unavailable; ...", while Wishlist says
+"The retried item was removed; use a new request_id to add it again".
+
+Accepted-argument equality is domain-specific: each domain defines it by its own
+receipt encoding or stored-column comparison, and omitted inputs can become explicit
+nulls, defaults or empty arrays. Wishlist `details` serializes every key, with nulls;
+receipts from before migration 0008 stay equivalent through that migration's backfill of
+the default details.
 
 ## Domain table
 
