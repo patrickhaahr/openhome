@@ -24,8 +24,9 @@ impl Bluetooth {
     /// adapter, discovery, connect), resolve characteristics, ordered writes, then
     /// correlated queries. The caller serializes exchanges and bounds this future, so
     /// cancellation at any `.await` is safe: owned `BlueR` handles drop with it, no write
-    /// is retried here, and only a failed link is disconnected (below) so a healthy one
-    /// persists. `current` is the only supersession check; it runs after setup and before
+    /// is retried here, and only an `Unavailable` exchange outcome (including setup or
+    /// protocol failure) is disconnected (below) so a healthy link persists. `current` is
+    /// the only supersession check; it runs after setup and before
     /// every write, so an obsolete multi-frame upload never sends later frames.
     /// Writes that completed stay accepted even if readback fails.
     async fn exchange_inner(
