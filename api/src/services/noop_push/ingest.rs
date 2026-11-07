@@ -1,4 +1,4 @@
-//! Batch ingest for NOOP push (`.noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append delivery and
+//! Batch ingest for NOOP push (`docs/noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append delivery and
 //! cursors", "Authoritative rolling-window delivery", "Acceptance, errors, and retry
 //! idempotency").
 //!

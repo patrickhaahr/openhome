@@ -1,4 +1,4 @@
-//! Receiver side of NOOP's self-hosted push protocol (`.noop/PUSH_PROTOCOL.md`).
+//! Receiver side of NOOP's self-hosted push protocol (`docs/noop/PUSH_PROTOCOL.md`).
 //!
 //! Push data lives in its own SQLite file (`noop.db`) with its own pool and migrations
 //! (`noop_migrations/`), separate from `app.db`:

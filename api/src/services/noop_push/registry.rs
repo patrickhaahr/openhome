@@ -1,4 +1,4 @@
-//! The v1 stream registry (`.noop/PUSH_PROTOCOL.md`, "Version 1 stream registry").
+//! The v1 stream registry (`docs/noop/PUSH_PROTOCOL.md`, "Version 1 stream registry").
 //!
 //! The registry is explicit and finite: every stream lists its delivery mode, its natural-key
 //! columns (excluding the batch-scoped `deviceId`), its exported `data` members with their wire
