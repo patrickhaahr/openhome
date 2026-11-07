@@ -3,8 +3,8 @@
 Disposition for [#249](https://github.com/patrickhaahr/openhome/issues/249),
 under API phase #241 and epic #240. The wire contract stays
 [`noop/PUSH_PROTOCOL.md`](noop/PUSH_PROTOCOL.md); storage meanings stay in
-[`noop/DATA_MODEL.md`](noop/DATA_MODEL.md) (the Android model, which does not
-describe the receiver). Acknowledgements, status codes, error codes, stream
+[`noop/DATA_MODEL.md`](noop/DATA_MODEL.md) (NOOP's on-device Swift/GRDB model, which does
+not describe the receiver). Acknowledgements, status codes, error codes, stream
 semantics and `noop.db` migrations are unchanged. `noop.db`, its pool and
 `NOOP_PUSH_TOKEN` stay separate from `app.db` and `API_KEY`.
 
@@ -39,8 +39,9 @@ acknowledgement commit in the same transaction, so a failure leaves neither.
 Stored acks are returned byte-identical, even across a restart.
 
 A replace-window part is classified first, then handed to `replace_window::accept`
-with the history. `accept` answers `PartOutcome::Retry` exactly when the history
-is `Identical`; `apply` treats a retry without a ledger entry as an internal
+with the history. `accept` rejects a part of a superseded replacement first, even
+when the history is `Identical`; for any non-superseded replacement it answers
+`PartOutcome::Retry` exactly when the history is `Identical`. `apply` treats a retry without a ledger entry as an internal
 error rather than guessing. `Staged` and `Applied` both continue to the ledger
 insert, so the ack for the completing part is only stored and returned after the
 atomic apply succeeded.
@@ -78,15 +79,23 @@ known applied part replays before it can alter the scope, so a late retry never
 overwrites newer data. Staged `entity` bytes are cleared on apply and on
 supersession; part rows keep their `batch_id` to detect part-number reuse.
 
-## Differences from the protocol text
+## Protocol reconciliation and receiver behavior
 
-- The protocol says a retried part is harmless. A retry of a part of an incomplete
-  replacement that was superseded is rejected with 409, as for any late part.
+PUSH_PROTOCOL.md ("Authoritative rolling-window delivery") says retrying any part
+is harmless, and also that a receiver rejects late parts of a superseded generation
+with `409`. The receiver reconciles them as follows: a retry is harmless in that
+it never changes rows, the ledger or the current generation, and an accepted part
+replays its ack while its replacement is `staging` or `applied`. Once the
+replacement is `superseded`, even a byte-identical retry of an accepted part is a
+late part of a superseded generation and gets `replacement_superseded` (409). This
+follows the superseded-generation clause; it is not a deviation.
+
+Receiver implementation behavior the protocol does not specify, not deviations:
+
 - Ledger and replacement rows are never pruned; they only disappear on rotation.
-- The transaction reads the generation itself, while `GET` reads it separately.
-  A rotation between a sender's capability read and its `POST` is handled
-  with the new generation, and the sender discovers the change on its next
-  capability read.
+- The batch transaction reads the receiver generation itself, while `GET` reads it
+  separately. A rotation between a sender's capability read and its `POST` is
+  handled with the new generation.
 
 ## Existing proof
 
