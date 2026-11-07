@@ -20,7 +20,9 @@ use std::collections::HashSet;
 
 use sqlx::{Row, SqliteConnection};
 
-use super::ingest::{Batch, DUPLICATE_KEY, IngestError, KeyValue, Window, parse_batch, upsert};
+use super::ingest::{
+    Batch, BatchHistory, DUPLICATE_KEY, IngestError, KeyValue, Window, parse_batch, upsert,
+};
 use super::registry::{ColumnType, ReplaceWindow};
 
 const REPLACEMENT_CONFLICT: IngestError = IngestError::Conflict("replacement_conflict");
@@ -50,14 +52,15 @@ struct Scope<'a> {
 }
 
 /// Accepts one validated replace-window part inside the caller's write transaction.
-/// `known_batch` is true when the ledger already holds this `batchId` with identical bytes.
+/// `history` is the ledger's verdict on this `batchId`; an identical retry replays after the
+/// replacement fences are checked.
 pub(super) async fn accept(
     conn: &mut SqliteConnection,
     receiver_state_id: &str,
     batch: &Batch,
     window: &Window,
     entity: &[u8],
-    known_batch: bool,
+    history: &BatchHistory,
 ) -> Result<PartOutcome, IngestError> {
     let scope = Scope {
         receiver_state_id,
@@ -120,7 +123,7 @@ pub(super) async fn accept(
     }
     // Superseded replacements were rejected above, even for a previously accepted part.
     // Every other known batch replays before it can change the scope's current generation.
-    if known_batch {
+    if matches!(history, BatchHistory::Identical { .. }) {
         return Ok(PartOutcome::Retry);
     }
     if state == Some(State::Applied) {

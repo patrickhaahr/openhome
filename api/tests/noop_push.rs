@@ -1423,6 +1423,71 @@ async fn concurrent_identical_posts_apply_once_and_return_the_same_ack() {
     }
 }
 
+/// Concurrent deliveries of one `batchId` with differing bytes: `BEGIN IMMEDIATE` serializes on
+/// the ledger, so exactly one applies and the other settles as a `batch_conflict`. The winning
+/// bytes and their encodings depend on scheduling, so the test asserts the state, then replays
+/// both deliveries against the settled ledger.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_differing_bytes_for_one_batch_id_apply_exactly_once() {
+    let path = std::env::temp_dir().join(format!("noop-push-conflict-{}.db", uuid::Uuid::new_v4()));
+    let db = noop_push::connect(&format!("sqlite:{}", path.display()))
+        .await
+        .unwrap();
+    let entities = [61, 99].map(|bpm| hr_batch(BATCH_1, &[hr(1, bpm)]));
+
+    let (first, second) = tokio::join!(
+        tokio::spawn({
+            let (db, entity) = (db.clone(), entities[0].clone());
+            async move { post(&db, &entity, true).await }
+        }),
+        tokio::spawn({
+            let (db, entity) = (db.clone(), entities[1].clone());
+            async move { post(&db, &entity, false).await }
+        }),
+    );
+    let replies = [first.unwrap(), second.unwrap()];
+    let statuses: Vec<StatusCode> = replies.iter().map(|reply| reply.status).collect();
+
+    let ok = replies
+        .iter()
+        .filter(|reply| reply.status == StatusCode::OK)
+        .collect::<Vec<_>>();
+    let conflict = replies
+        .iter()
+        .find(|reply| reply.status == StatusCode::CONFLICT)
+        .expect("exactly one of the two conflicting deliveries is accepted");
+    assert_eq!(ok.len(), 1, "{:?}", statuses);
+    assert_error(conflict, StatusCode::CONFLICT, "batch_conflict");
+    assert_eq!(
+        ok[0].json,
+        expected_ack("hrSample", BATCH_1, cursor(101, END_SHA), 1)
+    );
+    let accepted_ack = ok[0].raw.clone();
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM hr_sample").await, 1);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 1);
+
+    let stored_bpm = count(&db, "SELECT bpm FROM hr_sample").await;
+    assert!(
+        stored_bpm == 61 || stored_bpm == 99,
+        "the applied delivery is stored: {stored_bpm}"
+    );
+    let accepted_entity = &entities[usize::from(stored_bpm != 61)];
+    let rejected_entity = &entities[usize::from(stored_bpm == 61)];
+    let replay = post(&db, accepted_entity, false).await;
+    assert_eq!(replay.raw, accepted_ack);
+    assert_error(
+        &post(&db, rejected_entity, true).await,
+        StatusCode::CONFLICT,
+        "batch_conflict",
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 1);
+
+    db.close().await;
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // POST: replace-window delivery for the mutable streams
 // ---------------------------------------------------------------------------------------------
