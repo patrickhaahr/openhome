@@ -127,6 +127,16 @@ and dispatches it; policy never depends on a device write succeeding, and the se
 status `intended`, `control_source`, `override_expires_at` and `next_transition` are
 derived from the target, so the persisted records and Status serialization are unchanged.
 
+Delivery and recovery transitions are owned by `backlight/delivery.rs`: pure `Status`
+methods for accepted intent, recorded observation, completed or failed dispatch,
+profile-required, profile-stored and persistence failure, plus the routine's retry
+clock and the mapping from a selection to its packets. `command`, `recovery`,
+`reachability`/`observed` and `acknowledged` remain independent facts; only the
+still-current revision may change `command` and `recovery`, while accepted writes are
+acknowledged regardless. `mod.rs` sequences the effects under its locks. The Bluetooth
+exchange stays straight-line async control flow with documented cancellation ownership
+rather than stage enums.
+
 Startup validates the saved profile, retains unexpired manual selections and
 removes expired overrides against the current Copenhagen window. The background
 worker applies only the current target; missed transitions and superseded commands

@@ -1,14 +1,16 @@
 //! Local Backlight control. Private packets and identifiers never enter the HTTP contract.
 mod bluetooth;
+mod delivery;
 mod effects;
 mod protocol;
 pub mod routine;
 use crate::error::{AppError, Result};
 pub use bluetooth::Bluetooth;
 use chrono::{DateTime, Utc};
+use delivery::RetryClock;
 pub use effects::EffectId;
 pub use protocol::InactivitySettings;
-use protocol::{TvSyncProfile, frame};
+use protocol::TvSyncProfile;
 use routine::{
     BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, Policy, SystemClock,
     Target,
@@ -342,11 +344,7 @@ impl BacklightService {
         .await
         .map_err(anyhow::Error::from)?;
         *self.profile.lock().await = Some(profile);
-        let mut state = self.state.lock().await;
-        state.setup = Setup::Ready;
-        if state.recovery == Recovery::ProfileRequired {
-            state.recovery = Recovery::Pending;
-        }
+        self.state.lock().await.profile_stored();
         Ok(())
     }
     async fn capture(&self) -> Result<()> {
@@ -395,33 +393,20 @@ impl BacklightService {
     }
     async fn record_observation(&self, result: &Exchange) {
         let observed = protocol::observation(&result.replies);
-        let mut state = self.state.lock().await;
-        if observed.is_none() {
-            state.recovery = Recovery::Retrying;
-        } else if result.reconnected {
-            state.recovery = Recovery::Pending;
-        }
-        state.reachability = if observed.is_some() {
-            Reachability::Reachable
-        } else {
-            Reachability::Unreachable
-        };
-        if let Some(observed) = observed {
-            state.observed = Some(observed);
-        }
+        self.state
+            .lock()
+            .await
+            .observation_recorded(observed, result.reconnected);
     }
     pub async fn refresh(&self) -> Status {
         let _worker = self.worker.lock().await;
         if let Ok(result) = self.exchange(&[], &|| true).await {
             self.record_observation(&result).await;
         } else {
-            let mut state = self.state.lock().await;
-            state.recovery = Recovery::Retrying;
-            state.reachability = if self.transport.is_some() {
-                Reachability::Unreachable
-            } else {
-                Reachability::Unconfigured
-            };
+            self.state
+                .lock()
+                .await
+                .refresh_failed(self.transport.is_some());
         }
         self.status().await
     }
@@ -481,8 +466,7 @@ impl BacklightService {
         state.control_source = target.control_source();
         state.override_expires_at = target.override_expires_at();
         state.next_transition = target.next_transition;
-        state.command = Command::Pending;
-        state.recovery = Recovery::Pending;
+        state.target_accepted();
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
     }
     async fn finish_dispatch(&self, selection: Selection, revision: u64) -> Result<Status> {
@@ -519,16 +503,12 @@ impl BacklightService {
     pub async fn run_routine(self) {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let mut retry_at = tokio::time::Instant::now();
-        let mut backoff = Duration::from_secs(1);
+        let mut retry = RetryClock::new();
         let mut probe_at = tokio::time::Instant::now() + PROBE_INTERVAL;
         loop {
             interval.tick().await;
             if tokio::time::Instant::now() >= probe_at {
-                if !matches!(
-                    self.state.lock().await.recovery,
-                    Recovery::Pending | Recovery::Retrying
-                ) {
+                if !self.state.lock().await.recovering() {
                     self.refresh().await;
                 }
                 probe_at = tokio::time::Instant::now() + PROBE_INTERVAL;
@@ -538,11 +518,10 @@ impl BacklightService {
             let transition_due = status
                 .next_transition
                 .is_some_and(|next| self.clock.now() >= next);
-            let recovering = matches!(status.recovery, Recovery::Pending | Recovery::Retrying);
-            if !transition_due && !recovering {
+            if !transition_due && !status.recovering() {
                 continue;
             }
-            if tokio::time::Instant::now() < retry_at {
+            if !retry.ready() {
                 continue;
             }
             let target = Policy::new(
@@ -556,9 +535,7 @@ impl BacklightService {
             if let Ok(revision) = self.persist(&target).await {
                 // Policy still advances when setup prevents dispatch, including override expiry.
                 if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
-                    let mut state = self.state.lock().await;
-                    state.recovery = Recovery::ProfileRequired;
-                    state.command = Command::Failed;
+                    self.state.lock().await.profile_required();
                     continue;
                 }
                 drop(submission);
@@ -566,19 +543,11 @@ impl BacklightService {
                     tracing::warn!("Backlight recovery dispatch failed");
                 }
             } else {
-                let mut state = self.state.lock().await;
-                state.recovery = Recovery::Retrying;
-                state.command = Command::Failed;
+                self.state.lock().await.persistence_failed();
                 tracing::warn!("Backlight routine could not save its target");
             }
-            let status = self.state.lock().await.clone();
-            if matches!(status.recovery, Recovery::Retrying) {
-                retry_at = tokio::time::Instant::now() + backoff;
-                backoff = (backoff * 2).min(Duration::from_secs(30));
-            } else {
-                retry_at = tokio::time::Instant::now();
-                backoff = Duration::from_secs(1);
-            }
+            let retrying = self.state.lock().await.recovery == Recovery::Retrying;
+            retry.attempted(retrying);
         }
     }
     async fn dispatch(&self, selection: Selection, revision: u64) -> Result<()> {
@@ -597,25 +566,7 @@ impl BacklightService {
         {
             return Ok(());
         }
-        let writes = match selection {
-            Selection::Effect { effect, brightness } => effect.writes(brightness.into()),
-            Selection::Off {} => vec![frame(&[0x33, 1, 0])],
-            Selection::TvSync { brightness } => self
-                .profile
-                .lock()
-                .await
-                .as_ref()
-                .ok_or_else(|| AppError::Conflict("Save a valid TV Sync profile first".into()))?
-                .writes(brightness.map(u8::from)),
-            Selection::Color { rgb, brightness } => vec![
-                frame(&[0x33, 1, 1]),
-                // H605C requires the RGBIC whole-strip variant; generic RGB can ACK without applying.
-                frame(&[
-                    0x33, 5, 0x15, 1, rgb.red, rgb.green, rgb.blue, 0, 0, 0, 0, 0, 0xff, 0x7f,
-                ]),
-                frame(&[0x33, 4, brightness.into()]),
-            ],
-        };
+        let writes = delivery::writes(selection, self.profile.lock().await.as_ref())?;
         let deadline = self.state.lock().await.next_transition;
         let revision_counter = self.revision.clone();
         let clock = self.clock.clone();
@@ -629,35 +580,15 @@ impl BacklightService {
         }
         if let Ok(result) = result {
             self.record_observation(&result).await;
-            let mut state = self.state.lock().await;
-            if result.writes_accepted {
-                state.acknowledged = Some(selection);
-            }
-            if self.revision.load(Ordering::SeqCst) == revision {
-                state.command = if result.writes_accepted {
-                    Command::Acknowledged
-                } else {
-                    Command::Failed
-                };
-                if result.writes_accepted && state.reachability == Reachability::Reachable {
-                    if state.recovery != Recovery::Idle {
-                        state.recovery = Recovery::Recovered;
-                    }
-                } else {
-                    state.recovery = Recovery::Retrying;
-                }
-            }
+            self.state.lock().await.dispatched(
+                selection,
+                result.writes_accepted,
+                self.revision.load(Ordering::SeqCst) == revision,
+            );
         } else {
             let mut state = self.state.lock().await;
-            if self.revision.load(Ordering::SeqCst) == revision {
-                state.command = Command::Failed;
-                state.recovery = Recovery::Retrying;
-            }
-            state.reachability = if self.transport.is_some() {
-                Reachability::Unreachable
-            } else {
-                Reachability::Unconfigured
-            };
+            state.dispatch_failed(self.revision.load(Ordering::SeqCst) == revision);
+            state.exchange_failed(self.transport.is_some());
         }
         Ok(())
     }
