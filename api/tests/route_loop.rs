@@ -726,6 +726,146 @@ async fn selection_authenticates_rejects_forged_routes_and_preserves_previous_on
 }
 
 #[tokio::test]
+async fn a_request_queued_behind_the_same_target_reuses_the_first_answer() {
+    let server = MockServer::start().await;
+    answer_seed(&server, 1, ok(square(5000, NORTH_EAST)), 1).await;
+    answer_seed(&server, 2, ok(square(5200, NORTH_WEST)), 1).await;
+    answer_seed(&server, 3, ok(square(5050, SOUTH_WEST)), 1).await;
+    for seed in 4..=6 {
+        answer_seed(&server, seed, ok(square(5000, SOUTH_EAST)), 0).await;
+    }
+
+    let app = app(demo(), Some(&server)).await;
+    let ((status_a, first), (status_b, second)) =
+        tokio::join!(generate(app.clone(), walk(5000)), generate(app, walk(5000)));
+    assert_eq!(status_a, StatusCode::OK);
+    assert_eq!(status_b, StatusCode::OK);
+    assert_eq!(first, second, "both callers must receive the same plan");
+    assert_eq!(first["plan"]["search"], "complete");
+    // The identical target is searched once; the queued caller reuses its answer.
+    assert_eq!(server.received_requests().await.unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn calibrates_the_next_request_from_an_unsuitable_loop_overshoot() {
+    let server = MockServer::start().await;
+    // An unsuitable 6.25 km loop starting 780 m away still measures a 25% overshoot.
+    let far_start = [ORIGIN[0] + 0.01, ORIGIN[1]];
+    answer_seed(
+        &server,
+        1,
+        ok(trip(&rectangle(far_start, 1_562, NORTH_EAST), 6250.0)),
+        1,
+    )
+    .await;
+    // Only an attempt at the calibrated 4 km length is answered; seeds 5 and 6 are never spent.
+    for (seed, direction) in [(2, NORTH_WEST), (3, SOUTH_WEST), (4, SOUTH_EAST)] {
+        Mock::given(method("POST"))
+            .and(move |request: &Request| {
+                let body: Value = request.body_json().unwrap();
+                let round_trip = &body["options"]["round_trip"];
+                round_trip["seed"] == seed
+                    && (3995.0..=4005.0).contains(&round_trip["length"].as_f64().unwrap())
+            })
+            .respond_with(ok(square(5000, direction)))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    for seed in 5..=6 {
+        answer_seed(&server, seed, ok(square(5000, NORTH_EAST)), 0).await;
+    }
+
+    let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
+    let plan = &body["plan"];
+    assert_eq!(plan["search"], "complete");
+    assert_eq!(distances(plan).len(), 3);
+}
+
+#[tokio::test]
+async fn interrupts_with_partial_loops_when_no_attempt_may_start_after_the_time_budget() {
+    let server = MockServer::start().await;
+    // Three slow attempts spend the 20 s budget; the third retraces the first, so the search
+    // is still incomplete when the budget cuts before a fourth attempt.
+    for (seed, direction) in [(1, NORTH_EAST), (2, NORTH_WEST), (3, NORTH_EAST)] {
+        answer_seed(
+            &server,
+            seed,
+            ok(square(5000, direction)).set_delay(Duration::from_secs(8)),
+            1,
+        )
+        .await;
+    }
+    for seed in 4..=6 {
+        answer_seed(&server, seed, ok(square(5000, SOUTH_EAST)), 0).await;
+    }
+
+    let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
+    let plan = &body["plan"];
+    assert_eq!(plan["search"], "interrupted");
+    let measured = distances(plan);
+    // Both distinct loops are still shown next to the interrupted search.
+    assert_eq!(measured.len(), 2);
+    for distance in &measured {
+        assert!((distance - 5000.0).abs() < 15.0, "{distance}");
+    }
+}
+
+#[tokio::test]
+async fn partial_loops_survive_invalid_geometry_after_a_retained_loop() {
+    let server = MockServer::start().await;
+    answer_seed(&server, 1, ok(square(5000, NORTH_EAST)), 1).await;
+    let valid = square(5000, NORTH_WEST);
+    let mut two_features = valid.clone();
+    two_features["features"] = json!([valid["features"][0], valid["features"][0]]);
+    answer_seed(&server, 2, ok(two_features), 1).await;
+    for seed in 3..=6 {
+        answer_seed(&server, seed, ok(square(5000, SOUTH_WEST)), 0).await;
+    }
+
+    // The invalid second answer ends the search rather than spending more attempts, but
+    // the first retained loop remains available next to the interrupted search.
+    let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
+    let plan = &body["plan"];
+    assert_eq!(plan["search"], "interrupted");
+    let measured = distances(plan);
+    assert_eq!(measured.len(), 1);
+    assert!((measured[0] - 5000.0).abs() < 15.0, "{measured:?}");
+}
+
+#[tokio::test]
+async fn a_replaced_selection_loses_its_protection_and_may_be_pruned() {
+    let (_, state) = common::test_app_with_db().await;
+    let server = provider(ok(square(5000, NORTH_EAST)), 6).await;
+    let endpoint = ProviderEndpoint::parse(Some(&format!("{}/ors", server.uri())))
+        .unwrap()
+        .unwrap();
+    let app = app_with_state(LoopPlanner::new(demo(), Some(endpoint)).unwrap(), state);
+    let request = |stride| json!({ "activity": "walking", "target": { "kind": "distance", "meters": 5000 }, "step_length_cm": stride });
+    let (_, first) = generate(app.clone(), request(75)).await;
+    let (status, _) = select(app.clone(), &first["plan"]["loops"][0]["id"]).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, second) = generate(app.clone(), request(74)).await;
+    let (_, replacement) = select(app.clone(), &second["plan"]["loops"][0]["id"]).await;
+    assert_eq!(replacement["route"]["version"], 2);
+    // Offering 96 newer candidates prunes the replaced selection: their rows are the
+    // newest 96 and it is no longer referenced by active_route.
+    for stride in (40..=73).chain(76..=137) {
+        let (status, _) = generate(app.clone(), request(stride)).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+    let (status, _) = select(app.clone(), &first["plan"]["loops"][0]["id"]).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (_, restored) =
+        common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    // The current selection is intact and stays eligible despite the pruning.
+    assert_eq!(restored, replacement);
+    let (status, repeat) = select(app, &second["plan"]["loops"][0]["id"]).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(repeat, replacement);
+}
+
+#[tokio::test]
 async fn candidate_retention_keeps_reoffered_and_selected_routes_and_prunes_old_choices() {
     let (_, state) = common::test_app_with_db().await;
     let db = state.db.clone();
