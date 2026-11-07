@@ -40,6 +40,11 @@ pretty_assertions = "1"
 rmcp = { version = "3.4.1", features = ["client", "transport-streamable-http-client-reqwest"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
 
+# Keep dev builds lean: full DWARF for every dependency bloats target/debug
+# to tens of GB on this SSD. Line tables keep working backtraces.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 opt-level = "s"
 lto = true

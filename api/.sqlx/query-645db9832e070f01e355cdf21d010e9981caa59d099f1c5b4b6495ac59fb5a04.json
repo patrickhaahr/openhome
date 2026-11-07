@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO profile (id, height_cm, sex, hr_max_bpm, birth_date, client_revision)\n        VALUES (1, $1, $2, $5, $7, $9)\n        ON CONFLICT(id) DO UPDATE SET\n            height_cm = CASE WHEN $3 THEN $1 ELSE height_cm END,\n            sex = CASE WHEN $4 THEN $2 ELSE sex END,\n            hr_max_bpm = CASE WHEN $6 THEN $5 ELSE hr_max_bpm END,\n            birth_date = CASE WHEN $8 THEN $7 ELSE birth_date END,\n            client_revision = COALESCE($9, client_revision),\n            updated_at = CURRENT_TIMESTAMP\n        WHERE $9 IS NULL OR client_revision IS NULL OR client_revision < $9\n        RETURNING height_cm, sex, hr_max_bpm, birth_date AS \"birth_date?\",\n                  client_revision AS \"client_revision?\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "height_cm",
+        "ordinal": 0,
+        "type_info": "Float"
+      },
+      {
+        "name": "sex",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "hr_max_bpm",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "birth_date?",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "client_revision?",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "645db9832e070f01e355cdf21d010e9981caa59d099f1c5b4b6495ac59fb5a04"
+}

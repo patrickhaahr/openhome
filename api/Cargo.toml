@@ -52,6 +52,11 @@ tokio = { version = "1.49.0", features = ["full"] }
 tower = "0.5.3"
 wiremock = "0.6"
 
+# Keep dev builds lean: full DWARF for every dependency bloats target/debug
+# to tens of GB on this SSD. Line tables keep working backtraces.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 opt-level = "s"      # Optimize for size with good performance balance
 lto = true           # Link-Time Optimization for smaller binary

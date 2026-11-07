@@ -4,10 +4,11 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, Result};
 use crate::services::exercise_progress::{self, CombinedProgress, Period, Selection};
+use crate::services::nutrition::meal_logs::parse_request_id;
 use crate::services::training::calendar::CalendarDay;
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +19,8 @@ pub struct ListExercises {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateExercise {
+    /// Makes this create safe to retry: see [`replay_exercise`]. Without it, a repeat is a conflict.
+    request_id: Option<String>,
     name: String,
     category: String,
     muscle_group: Option<String>,
@@ -149,7 +152,11 @@ async fn get_exercise(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<Exercise>> {
-    let exercise = sqlx::query_as!(
+    fetch_exercise(&state, id).await.map(Json)
+}
+
+async fn fetch_exercise(state: &crate::AppState, id: i64) -> Result<Exercise> {
+    sqlx::query_as!(
         Exercise,
         r#"
         SELECT id, name, category, muscle_group, equipment
@@ -161,9 +168,70 @@ async fn get_exercise(
     .fetch_optional(&state.db)
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {e}")))?
-    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))?;
+    .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))
+}
 
-    Ok(Json(exercise))
+/// An Exercise create's retry identity: its `request_id` and the arguments a retry must repeat.
+struct ExerciseReceipt {
+    request_id: String,
+    request: String,
+}
+
+impl ExerciseReceipt {
+    fn of(request_id: &str, payload: &CreateExercise) -> Result<Self> {
+        // Absent fields stay out, so a field added later cannot mismatch an earlier receipt's retry.
+        #[derive(Serialize)]
+        struct Normalized<'a> {
+            name: &'a str,
+            category: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            muscle_group: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            equipment: Option<&'a str>,
+        }
+        let request = serde_json::to_string(&Normalized {
+            name: &payload.name,
+            category: &payload.category,
+            muscle_group: payload.muscle_group.as_deref(),
+            equipment: payload.equipment.as_deref(),
+        })
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to encode receipt: {e}")))?;
+        Ok(Self {
+            request_id: parse_request_id(request_id).map_err(AppError::Validation)?,
+            request,
+        })
+    }
+}
+
+/// Follows the `request_id` receipt pattern: a retry answers with the Exercise it already created,
+/// the same `request_id` with changed arguments is a conflict, and a deleted Exercise stays deleted.
+/// `None` means this `request_id` has not been accepted.
+async fn replay_exercise(
+    state: &crate::AppState,
+    receipt: &ExerciseReceipt,
+) -> Result<Option<Exercise>> {
+    let Some(stored) = sqlx::query!(
+        "SELECT exercise_id, request FROM exercise_receipts WHERE request_id = $1",
+        receipt.request_id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read exercise receipt: {e}")))?
+    else {
+        return Ok(None);
+    };
+    if stored.request != receipt.request {
+        return Err(AppError::Conflict(
+            "request_id was already used for a different Exercise; use a new ID for a new Exercise"
+                .into(),
+        ));
+    }
+    let Some(exercise_id) = stored.exercise_id else {
+        return Err(AppError::Conflict(
+            "The retried Exercise was deleted; use a new request_id to create it again".into(),
+        ));
+    };
+    fetch_exercise(state, exercise_id).await.map(Some)
 }
 
 async fn create_exercise(
@@ -171,8 +239,24 @@ async fn create_exercise(
     Json(payload): Json<CreateExercise>,
 ) -> Result<(StatusCode, Json<Exercise>)> {
     validate_category(&payload.category)?;
+    let receipt = payload
+        .request_id
+        .as_deref()
+        .map(|request_id| ExerciseReceipt::of(request_id, &payload))
+        .transpose()?;
+    if let Some(receipt) = &receipt
+        && let Some(exercise) = replay_exercise(&state, receipt).await?
+    {
+        return Ok((StatusCode::OK, Json(exercise)));
+    }
 
-    let exercise = sqlx::query_as!(
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
+
+    let inserted = sqlx::query_as!(
         Exercise,
         r#"
         INSERT INTO exercises (name, category, muscle_group, equipment)
@@ -184,9 +268,53 @@ async fn create_exercise(
         payload.muscle_group,
         payload.equipment
     )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| map_db_error(e, &payload.name))?;
+    .fetch_one(&mut *tx)
+    .await;
+    let exercise = match inserted {
+        Ok(exercise) => exercise,
+        Err(error) => {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            // A simultaneous retry that won the write lock holds this name under this request_id.
+            if let Some(receipt) = &receipt
+                && let Some(exercise) = replay_exercise(&state, receipt).await?
+            {
+                return Ok((StatusCode::OK, Json(exercise)));
+            }
+            return Err(map_db_error(error, &payload.name));
+        }
+    };
+
+    if let Some(receipt) = &receipt {
+        // The insert above holds the write lock, so simultaneous retries serialize here.
+        let claimed = sqlx::query_scalar!(
+            r#"
+            INSERT INTO exercise_receipts (request_id, exercise_id, request)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (request_id) DO NOTHING
+            RETURNING request_id
+            "#,
+            receipt.request_id,
+            exercise.id,
+            receipt.request
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to store receipt: {e}")))?;
+        if claimed.is_none() {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            let exercise = replay_exercise(&state, receipt).await?.ok_or_else(|| {
+                AppError::Conflict("Retry receipt unavailable; list exercises first".into())
+            })?;
+            return Ok((StatusCode::OK, Json(exercise)));
+        }
+    }
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {e}")))?;
 
     Ok((StatusCode::CREATED, Json(exercise)))
 }
@@ -270,26 +398,36 @@ pub struct ListWorkouts {
     limit: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+// Absent fields stay out of the Serialize form, which a Workout receipt compares on retry, so a
+// field added later cannot make an earlier receipt mismatch its own retry.
+#[derive(Debug, Deserialize, Serialize)]
 struct SetInput {
     set_number: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     reps: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     weight_kg: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     duration_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     rpe: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     notes: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct WorkoutExerciseInput {
     exercise_id: i64,
     order_index: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     notes: Option<String>,
     sets: Vec<SetInput>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateWorkout {
+    /// Makes this create safe to retry: see [`replay_workout`]. Without it every call creates.
+    request_id: Option<String>,
     date: String,
     name: Option<String>,
     notes: Option<String>,
@@ -298,6 +436,8 @@ pub struct CreateWorkout {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateWorkout {
+    /// Makes this edit safe to replay: see [`update_workout`]. Without it every call applies.
+    client_revision: Option<i64>,
     date: Option<String>,
     #[serde(default, with = "double_option")]
     name: Option<Option<String>>,
@@ -346,6 +486,9 @@ pub struct WorkoutDetail {
     date: String,
     name: Option<String>,
     notes: Option<String>,
+    /// Where a client that downloads this Workout continues its edit revisions from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_revision: Option<i64>,
     exercises: Vec<WorkoutExercise>,
 }
 
@@ -514,7 +657,8 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
         SELECT CAST(id AS INTEGER)  AS id,
                CAST(date AS TEXT)   AS date,
                name,
-               notes
+               notes,
+               client_revision
         FROM workouts
         WHERE id = $1
         "#,
@@ -535,6 +679,7 @@ async fn get_workout_detail(state: &crate::AppState, id: i64) -> Result<WorkoutD
         date: workout.date,
         name: workout.name,
         notes: workout.notes,
+        client_revision: workout.client_revision,
         exercises,
     })
 }
@@ -586,12 +731,84 @@ async fn get_workout(
     Ok(Json(workout))
 }
 
+/// A Workout create's retry identity: its `request_id` and the arguments a retry must repeat.
+struct WorkoutReceipt {
+    request_id: String,
+    request: String,
+}
+
+impl WorkoutReceipt {
+    fn of(request_id: &str, date: &str, payload: &CreateWorkout) -> Result<Self> {
+        #[derive(Serialize)]
+        struct Normalized<'a> {
+            date: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            name: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            notes: Option<&'a str>,
+            exercises: &'a [WorkoutExerciseInput],
+        }
+        let request = serde_json::to_string(&Normalized {
+            date,
+            name: payload.name.as_deref(),
+            notes: payload.notes.as_deref(),
+            exercises: &payload.exercises,
+        })
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to encode receipt: {e}")))?;
+        Ok(Self {
+            request_id: parse_request_id(request_id).map_err(AppError::Validation)?,
+            request,
+        })
+    }
+}
+
+/// Follows the `request_id` receipt pattern: a retry answers with the Workout it already created,
+/// the same `request_id` with changed arguments is a conflict, and a deleted Workout stays deleted.
+/// `None` means this `request_id` has not been accepted.
+async fn replay_workout(
+    state: &crate::AppState,
+    receipt: &WorkoutReceipt,
+) -> Result<Option<WorkoutDetail>> {
+    let Some(stored) = sqlx::query!(
+        "SELECT workout_id, request FROM workout_receipts WHERE request_id = $1",
+        receipt.request_id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read workout receipt: {e}")))?
+    else {
+        return Ok(None);
+    };
+    if stored.request != receipt.request {
+        return Err(AppError::Conflict(
+            "request_id was already used for a different Workout; use a new ID for a new Workout"
+                .into(),
+        ));
+    }
+    let Some(workout_id) = stored.workout_id else {
+        return Err(AppError::Conflict(
+            "The retried Workout was deleted; use a new request_id to log it again".into(),
+        ));
+    };
+    get_workout_detail(state, workout_id).await.map(Some)
+}
+
 async fn create_workout(
     State(state): State<crate::AppState>,
     Json(payload): Json<CreateWorkout>,
 ) -> Result<(StatusCode, Json<WorkoutDetail>)> {
     let date = validate_date(&payload.date)?;
     validate_workout_exercises(&payload.exercises)?;
+    let receipt = payload
+        .request_id
+        .as_deref()
+        .map(|request_id| WorkoutReceipt::of(request_id, &date, &payload))
+        .transpose()?;
+    if let Some(receipt) = &receipt
+        && let Some(workout) = replay_workout(&state, receipt).await?
+    {
+        return Ok((StatusCode::OK, Json(workout)));
+    }
 
     let mut tx = state
         .db
@@ -613,6 +830,33 @@ async fn create_workout(
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to create workout: {e}")))?
     .last_insert_rowid();
 
+    if let Some(receipt) = &receipt {
+        // The insert above holds the write lock, so simultaneous retries serialize here.
+        let claimed = sqlx::query_scalar!(
+            r#"
+            INSERT INTO workout_receipts (request_id, workout_id, request)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (request_id) DO NOTHING
+            RETURNING request_id
+            "#,
+            receipt.request_id,
+            workout_id,
+            receipt.request
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to store receipt: {e}")))?;
+        if claimed.is_none() {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            let workout = replay_workout(&state, receipt).await?.ok_or_else(|| {
+                AppError::Conflict("Retry receipt unavailable; list workouts first".into())
+            })?;
+            return Ok((StatusCode::OK, Json(workout)));
+        }
+    }
+
     insert_exercises(&mut tx, workout_id, payload.exercises).await?;
     tx.commit()
         .await
@@ -622,6 +866,10 @@ async fn create_workout(
     Ok((StatusCode::CREATED, Json(workout)))
 }
 
+/// With a `client_revision`, an edit applies only if it is newer than the last one applied. An older
+/// or repeated revision is an edit this client has already superseded or delivered, so it changes
+/// nothing and answers with the current Workout: a retry after a lost response and a late delivery
+/// both end as acknowledged, without restoring an older revision.
 async fn update_workout(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
@@ -630,6 +878,12 @@ async fn update_workout(
     let date = payload.date.as_deref().map(validate_date).transpose()?;
     if let Some(exercises) = &payload.exercises {
         validate_workout_exercises(exercises)?;
+    }
+    let client_revision = payload.client_revision;
+    if client_revision.is_some_and(|revision| revision < 1) {
+        return Err(AppError::Validation(
+            "client_revision must be 1 or greater".to_string(),
+        ));
     }
 
     let mut tx = state
@@ -652,24 +906,29 @@ async fn update_workout(
         SET date = COALESCE($1, date),
             name = CASE WHEN $2 THEN $3 ELSE name END,
             notes = CASE WHEN $4 THEN $5 ELSE notes END,
+            client_revision = COALESCE($7, client_revision),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $6
+          AND ($7 IS NULL OR client_revision IS NULL OR client_revision < $7)
         "#,
         date,
         name_set,
         name,
         notes_set,
         notes,
-        id
+        id,
+        client_revision
     )
     .execute(&mut *tx)
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update workout: {e}")))?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound(format!(
-            "Workout with id {id} not found"
-        )));
+        tx.rollback().await.map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+        })?;
+        // No such Workout, which this read reports, or a revision it has already moved past.
+        return get_workout_detail(&state, id).await.map(Json);
     }
 
     if let Some(exercises) = payload.exercises {
@@ -823,6 +1082,8 @@ pub struct ListBodyWeight {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateBodyWeight {
+    /// Makes this record safe to retry: see [`replay_body_weight`]. Without it, a repeat is a conflict.
+    request_id: Option<String>,
     date: String,
     weight_kg: f64,
 }
@@ -862,6 +1123,74 @@ async fn list_body_weight(
     Ok(Json(entries))
 }
 
+/// A Body Weight record's retry identity: its `request_id` and the arguments a retry must repeat.
+struct BodyWeightReceipt {
+    request_id: String,
+    request: String,
+}
+
+impl BodyWeightReceipt {
+    fn of(request_id: &str, date: &str, weight_kg: f64) -> Result<Self> {
+        #[derive(Serialize)]
+        struct Normalized<'a> {
+            date: &'a str,
+            weight_kg: f64,
+        }
+        let request = serde_json::to_string(&Normalized { date, weight_kg })
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to encode receipt: {e}")))?;
+        Ok(Self {
+            request_id: parse_request_id(request_id).map_err(AppError::Validation)?,
+            request,
+        })
+    }
+}
+
+/// Follows the `request_id` receipt pattern: a retry answers with the record it already created, the
+/// same `request_id` with changed arguments is a conflict, and a removed record stays removed. A new
+/// `request_id` for a recorded date is not a retry, so it stays the duplicate-date conflict.
+/// `None` means this `request_id` has not been accepted.
+async fn replay_body_weight(
+    state: &crate::AppState,
+    receipt: &BodyWeightReceipt,
+) -> Result<Option<BodyWeightEntry>> {
+    let Some(stored) = sqlx::query!(
+        "SELECT body_weight_id, request FROM body_weight_receipts WHERE request_id = $1",
+        receipt.request_id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read body weight receipt: {e}")))?
+    else {
+        return Ok(None);
+    };
+    if stored.request != receipt.request {
+        return Err(AppError::Conflict(
+            "request_id was already used for a different Body Weight; use a new ID for a new record"
+                .into(),
+        ));
+    }
+    let Some(body_weight_id) = stored.body_weight_id else {
+        return Err(AppError::Conflict(
+            "The retried Body Weight was removed; use a new request_id to record it again".into(),
+        ));
+    };
+    sqlx::query_as!(
+        BodyWeightEntry,
+        r#"
+        SELECT CAST(id AS INTEGER) AS "id!: i64",
+               CAST(date AS TEXT)  AS "date!: String",
+               weight_kg
+        FROM body_weight
+        WHERE id = $1
+        "#,
+        body_weight_id
+    )
+    .fetch_one(&state.db)
+    .await
+    .map(Some)
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read body weight: {e}")))
+}
+
 async fn create_body_weight(
     State(state): State<crate::AppState>,
     Json(payload): Json<CreateBodyWeight>,
@@ -872,8 +1201,24 @@ async fn create_body_weight(
             "weight_kg must be greater than zero".to_string(),
         ));
     }
+    let receipt = payload
+        .request_id
+        .as_deref()
+        .map(|request_id| BodyWeightReceipt::of(request_id, &date, payload.weight_kg))
+        .transpose()?;
+    if let Some(receipt) = &receipt
+        && let Some(entry) = replay_body_weight(&state, receipt).await?
+    {
+        return Ok((StatusCode::OK, Json(entry)));
+    }
 
-    let entry = sqlx::query_as!(
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
+
+    let inserted = sqlx::query_as!(
         BodyWeightEntry,
         r#"
         INSERT INTO body_weight (date, weight_kg)
@@ -885,14 +1230,60 @@ async fn create_body_weight(
         date,
         payload.weight_kg
     )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
-            AppError::Conflict(format!("Body weight for date '{date}' already recorded"))
+    .fetch_one(&mut *tx)
+    .await;
+    let entry = match inserted {
+        Ok(entry) => entry,
+        Err(error) => {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            // A simultaneous retry that won the write lock holds this date under this request_id.
+            if let Some(receipt) = &receipt
+                && let Some(entry) = replay_body_weight(&state, receipt).await?
+            {
+                return Ok((StatusCode::OK, Json(entry)));
+            }
+            return Err(match error {
+                sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
+                    AppError::Conflict(format!("Body weight for date '{date}' already recorded"))
+                }
+                other => {
+                    AppError::Internal(anyhow::anyhow!("Failed to record body weight: {other}"))
+                }
+            });
         }
-        other => AppError::Internal(anyhow::anyhow!("Failed to record body weight: {other}")),
-    })?;
+    };
+
+    if let Some(receipt) = &receipt {
+        // The insert above holds the write lock, so simultaneous retries serialize here.
+        let claimed = sqlx::query_scalar!(
+            r#"
+            INSERT INTO body_weight_receipts (request_id, body_weight_id, request)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (request_id) DO NOTHING
+            RETURNING request_id
+            "#,
+            receipt.request_id,
+            entry.id,
+            receipt.request
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to store receipt: {e}")))?;
+        if claimed.is_none() {
+            tx.rollback().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
+            })?;
+            let entry = replay_body_weight(&state, receipt).await?.ok_or_else(|| {
+                AppError::Conflict("Retry receipt unavailable; list body weight first".into())
+            })?;
+            return Ok((StatusCode::OK, Json(entry)));
+        }
+    }
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to commit transaction: {e}")))?;
 
     Ok((StatusCode::CREATED, Json(entry)))
 }
@@ -908,12 +1299,17 @@ pub struct Profile {
     hr_max_bpm: Option<i64>,
     /// `YYYY-MM-DD`; the BMR formula and the NNR age bands need it.
     birth_date: Option<String>,
+    /// Where a client that downloads this Profile continues its edit revisions from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_revision: Option<i64>,
 }
 
 const HR_MAX_BPM_RANGE: std::ops::RangeInclusive<i64> = 100..=240;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfile {
+    /// Makes this edit safe to replay: see [`update_profile`]. Without it every call applies.
+    client_revision: Option<i64>,
     #[serde(default, with = "double_option")]
     height_cm: Option<Option<f64>>,
     #[serde(default, with = "double_option")]
@@ -943,7 +1339,8 @@ async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profil
     let row = sqlx::query_as!(
         Profile,
         r#"
-        SELECT height_cm, sex, hr_max_bpm, birth_date AS "birth_date?"
+        SELECT height_cm, sex, hr_max_bpm, birth_date AS "birth_date?",
+               client_revision AS "client_revision?"
         FROM profile
         WHERE id = 1
         "#
@@ -958,13 +1355,25 @@ async fn get_profile(State(state): State<crate::AppState>) -> Result<Json<Profil
         sex: None,
         hr_max_bpm: None,
         birth_date: None,
+        client_revision: None,
     })))
 }
 
+/// With a `client_revision`, an edit applies only if it is newer than the last one applied. An older
+/// or repeated revision is an edit this client has already superseded or delivered, so it changes
+/// nothing and answers with the current Profile: a retry after a lost response and a late delivery
+/// both end as acknowledged, without restoring an older revision.
 async fn update_profile(
     State(state): State<crate::AppState>,
     Json(payload): Json<UpdateProfile>,
 ) -> Result<Json<Profile>> {
+    let client_revision = payload.client_revision;
+    if client_revision.is_some_and(|revision| revision < 1) {
+        return Err(AppError::Validation(
+            "client_revision must be 1 or greater".to_string(),
+        ));
+    }
+
     if let Some(Some(height)) = payload.height_cm
         && height <= 0.0
     {
@@ -1000,15 +1409,18 @@ async fn update_profile(
     let profile = sqlx::query_as!(
         Profile,
         r#"
-        INSERT INTO profile (id, height_cm, sex, hr_max_bpm, birth_date)
-        VALUES (1, $1, $2, $5, $7)
+        INSERT INTO profile (id, height_cm, sex, hr_max_bpm, birth_date, client_revision)
+        VALUES (1, $1, $2, $5, $7, $9)
         ON CONFLICT(id) DO UPDATE SET
             height_cm = CASE WHEN $3 THEN $1 ELSE height_cm END,
             sex = CASE WHEN $4 THEN $2 ELSE sex END,
             hr_max_bpm = CASE WHEN $6 THEN $5 ELSE hr_max_bpm END,
             birth_date = CASE WHEN $8 THEN $7 ELSE birth_date END,
+            client_revision = COALESCE($9, client_revision),
             updated_at = CURRENT_TIMESTAMP
-        RETURNING height_cm, sex, hr_max_bpm, birth_date AS "birth_date?"
+        WHERE $9 IS NULL OR client_revision IS NULL OR client_revision < $9
+        RETURNING height_cm, sex, hr_max_bpm, birth_date AS "birth_date?",
+                  client_revision AS "client_revision?"
         "#,
         height_cm,
         sex,
@@ -1017,13 +1429,18 @@ async fn update_profile(
         hr_max_bpm,
         hr_max_set,
         birth_date,
-        birth_date_set
+        birth_date_set,
+        client_revision
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update profile: {e}")))?;
 
-    Ok(Json(profile))
+    // No row: a revision this Profile has already moved past.
+    match profile {
+        Some(profile) => Ok(Json(profile)),
+        None => get_profile(State(state)).await,
+    }
 }
 
 pub fn metrics_router() -> Router<crate::AppState> {

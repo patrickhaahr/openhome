@@ -45,6 +45,14 @@ async fn test_workout_weight_migration_preserves_logged_workouts() {
             .unwrap();
     assert!(!columns.iter().any(|column| column.1 == "body_weight_kg"));
 
+    // The Workout read below is today's, which also needs this later column.
+    sqlx::raw_sql(include_str!(
+        "../migrations/0028_workout_client_revision.up.sql"
+    ))
+    .execute(&db)
+    .await
+    .unwrap();
+
     let (app, _) = common::test_app_with_pool(db, None);
     let (status, body) = send_request_with_method(
         app,

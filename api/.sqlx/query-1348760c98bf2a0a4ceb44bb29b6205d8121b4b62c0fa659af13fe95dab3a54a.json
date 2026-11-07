@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT CAST(id AS INTEGER)  AS id,\n               CAST(date AS TEXT)   AS date,\n               name,\n               notes,\n               client_revision\n        FROM workouts\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "date",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "client_revision",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1348760c98bf2a0a4ceb44bb29b6205d8121b4b62c0fa659af13fe95dab3a54a"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT workout_id, request FROM workout_receipts WHERE request_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "workout_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "request",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "4862ff09e1ee02d79157cb61274bd5bf43e7a06f63b174010d6fdcd77dbeaabd"
+}

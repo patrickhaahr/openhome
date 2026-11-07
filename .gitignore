@@ -10,7 +10,6 @@ data
 !mobile-native/app/src/test/java/com/example/openhome/data/
 !mobile-native/app/src/test/java/com/example/openhome/data/**
 package-lock.json
-!mobile-expo/package-lock.json
 .env
 .pio
 .platformio/
