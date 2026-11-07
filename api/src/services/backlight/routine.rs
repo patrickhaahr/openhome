@@ -80,6 +80,158 @@ pub enum ControlSource {
     Automatic,
     Manual,
 }
+/// Who currently decides the intended selection. A manual selection always carries
+/// its own data; Automatic carries none, so the two cannot disagree.
+#[derive(Clone, Copy)]
+enum Control {
+    Automatic,
+    Manual(BacklightOverride),
+}
+/// The complete policy decision: intended selection, its source and the next due
+/// transition. Independent of device delivery; a failed write never changes it.
+pub struct Target {
+    pub bedtime: BedtimeSettings,
+    pub selection: Selection,
+    pub manual_override: Option<BacklightOverride>,
+    pub next_transition: Option<DateTime<Utc>>,
+}
+impl Target {
+    #[must_use]
+    pub fn control_source(&self) -> ControlSource {
+        if self.manual_override.is_some() {
+            ControlSource::Manual
+        } else {
+            ControlSource::Automatic
+        }
+    }
+    #[must_use]
+    pub fn override_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.manual_override.and_then(|value| value.expires_at)
+    }
+}
+/// Owns every guarded policy transition: select, Automatic, Bedtime edit and
+/// time-driven resolution (also used at startup). Each consumes the current policy
+/// and yields the next `Target`; the clock is always the current wall time, so
+/// missed transitions are never replayed.
+pub struct Policy {
+    bedtime: BedtimeSettings,
+    control: Control,
+}
+impl Policy {
+    /// Rebuild from persisted or live state. `override_selection` and expiry apply only
+    /// when the source is Manual.
+    #[must_use]
+    pub fn new(
+        bedtime: BedtimeSettings,
+        source: ControlSource,
+        override_selection: Selection,
+        override_expires_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        let control = match source {
+            ControlSource::Automatic => Control::Automatic,
+            ControlSource::Manual => Control::Manual(BacklightOverride {
+                selection: override_selection,
+                expires_at: override_expires_at,
+            }),
+        };
+        Self { bedtime, control }
+    }
+    /// Restore from a stored override record (startup).
+    pub fn restored(bedtime: BedtimeSettings, stored: Option<BacklightOverride>) -> Self {
+        let control = stored.map_or(Control::Automatic, Control::Manual);
+        Self { bedtime, control }
+    }
+    fn live_override(&self, now: DateTime<Utc>) -> Option<BacklightOverride> {
+        match self.control {
+            Control::Manual(value) if value.expires_at.is_none_or(|expiry| now < expiry) => {
+                Some(value)
+            }
+            _ => None,
+        }
+    }
+    fn target(
+        bedtime: BedtimeSettings,
+        selection: Selection,
+        manual_override: Option<BacklightOverride>,
+        next_transition: Option<DateTime<Utc>>,
+    ) -> Target {
+        Target {
+            bedtime,
+            selection,
+            manual_override,
+            next_transition,
+        }
+    }
+    /// Current target: an unexpired override keeps its selection and expiry; an
+    /// expired or absent one yields the routine's selection. Used by startup and
+    /// the background routine.
+    #[must_use]
+    pub fn resolve(self, now: DateTime<Utc>) -> Target {
+        let evaluation = evaluate(&self.bedtime, now);
+        let manual_override = self.live_override(now);
+        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
+        Self::target(
+            self.bedtime,
+            selection,
+            manual_override,
+            evaluation.next_transition,
+        )
+    }
+    /// Manual selection that lasts until the routine's next actual transition
+    /// (indefinitely while the routine is disabled).
+    #[must_use]
+    pub fn select(self, selection: Selection, now: DateTime<Utc>) -> Target {
+        let evaluation = evaluate(&self.bedtime, now);
+        let manual_override = Some(BacklightOverride {
+            selection,
+            expires_at: evaluation.next_transition,
+        });
+        Self::target(
+            self.bedtime,
+            selection,
+            manual_override,
+            evaluation.next_transition,
+        )
+    }
+    /// Clear any override and adopt the routine's current selection.
+    #[must_use]
+    pub fn automatic(self, now: DateTime<Utc>) -> Target {
+        let evaluation = evaluate(&self.bedtime, now);
+        Self::target(
+            self.bedtime,
+            evaluation.selection,
+            None,
+            evaluation.next_transition,
+        )
+    }
+    /// Apply a validated Bedtime edit. Supplying `enabled` clears the override; otherwise an
+    /// unexpired override stays selected and takes the edited window's next transition
+    /// as its expiry.
+    pub fn edit(
+        mut self,
+        update: BedtimeUpdate,
+        now: DateTime<Utc>,
+    ) -> crate::error::Result<Target> {
+        let reset_override = update.enabled.supplied();
+        update.apply(&mut self.bedtime)?;
+        let evaluation = evaluate(&self.bedtime, now);
+        let manual_override = if reset_override {
+            None
+        } else {
+            self.live_override(now).map(|value| BacklightOverride {
+                selection: value.selection,
+                expires_at: evaluation.next_transition,
+            })
+        };
+        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
+        Ok(Self::target(
+            self.bedtime,
+            selection,
+            manual_override,
+            evaluation.next_transition,
+        ))
+    }
+}
 /// A narrow wall-clock input shared by API commands and the background routine.
 pub trait Clock: Send + Sync {
     fn now(&self) -> DateTime<Utc>;
@@ -134,6 +286,98 @@ pub fn evaluate(settings: &BedtimeSettings, now: DateTime<Utc>) -> Evaluation {
         next_transition,
     }
 }
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn source(target: &Target) -> String {
+        serde_json::to_value(target.control_source())
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .into()
+    }
+
+    fn bedtime(enabled: bool, start: &str, end: &str) -> BedtimeSettings {
+        serde_json::from_value(
+            json!({"enabled": enabled, "start": start, "end": end, "brightness": 20}),
+        )
+        .unwrap()
+    }
+    fn selection(value: serde_json::Value) -> Selection {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn automatic_source_discards_supplied_override_data() {
+        let policy = Policy::new(
+            bedtime(true, "23:00", "00:00"),
+            ControlSource::Automatic,
+            selection(json!({"mode":"off"})),
+            None,
+        );
+        let target = policy.resolve("2026-10-23T21:30:00Z".parse().unwrap());
+        // Outside the window's start, an unexpired manual Off would have leaked; instead
+        // 23:30 Copenhagen sits inside the window, so Automatic resolves the routine red.
+        assert!(matches!(target.selection, Selection::Color { .. }));
+        assert!(target.manual_override.is_none());
+        assert_eq!(source(&target), "automatic");
+        assert_eq!(target.override_expires_at(), None);
+    }
+
+    #[test]
+    fn resolve_keeps_unexpired_override_and_drops_it_exactly_at_expiry() {
+        let expiry: DateTime<Utc> = "2026-10-23T21:00:00Z".parse().unwrap();
+        let override_at = |expires_at| {
+            Policy::restored(
+                bedtime(true, "23:00", "00:00"),
+                Some(BacklightOverride {
+                    selection: selection(json!({"mode":"off"})),
+                    expires_at,
+                }),
+            )
+        };
+        let before = override_at(Some(expiry)).resolve("2026-10-23T20:59:59Z".parse().unwrap());
+        assert!(matches!(before.selection, Selection::Off { .. }));
+        assert_eq!(before.override_expires_at(), Some(expiry));
+        assert_eq!(source(&before), "manual");
+        let at_expiry = override_at(Some(expiry)).resolve(expiry);
+        assert!(matches!(at_expiry.selection, Selection::Color { .. }));
+        assert!(at_expiry.manual_override.is_none());
+        assert_eq!(source(&at_expiry), "automatic");
+    }
+
+    #[test]
+    fn edit_on_an_already_expired_override_resolves_automatically() {
+        let expired = Policy::restored(
+            bedtime(true, "23:00", "00:00"),
+            Some(BacklightOverride {
+                selection: selection(json!({"mode":"off"})),
+                expires_at: Some("2026-10-23T21:00:00Z".parse().unwrap()),
+            }),
+        );
+        let update: BedtimeUpdate = serde_json::from_value(json!({"start":"01:00"})).unwrap();
+        let target = expired
+            .edit(update, "2026-10-23T22:30:00Z".parse().unwrap())
+            .unwrap();
+        assert!(matches!(target.selection, Selection::TvSync { .. }));
+        assert!(target.manual_override.is_none());
+        assert_eq!(target.bedtime.start, "01:00".parse().unwrap());
+    }
+
+    #[test]
+    fn select_while_routine_is_disabled_has_no_expiry() {
+        let target = Policy::restored(bedtime(false, "23:00", "00:00"), None).select(
+            selection(json!({"mode":"off"})),
+            "2026-10-23T21:30:00Z".parse().unwrap(),
+        );
+        assert!(matches!(target.selection, Selection::Off { .. }));
+        assert_eq!(target.manual_override.unwrap().expires_at, None);
+        assert_eq!(target.next_transition, None);
+    }
+}
+
 mod clock_time {
     use chrono::NaiveTime;
     use serde::Deserialize;

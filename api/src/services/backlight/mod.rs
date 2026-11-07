@@ -10,7 +10,8 @@ pub use effects::EffectId;
 pub use protocol::InactivitySettings;
 use protocol::{TvSyncProfile, frame};
 use routine::{
-    BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, SystemClock, evaluate,
+    BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, Policy, SystemClock,
+    Target,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -219,11 +220,8 @@ impl BacklightService {
             .map(serde_json::from_str)
             .transpose()
             .map_err(anyhow::Error::from)?;
-        let evaluation = evaluate(&bedtime, clock.now());
-        let manual_override = manual_override
-            .filter(|value| value.expires_at.is_none_or(|expiry| clock.now() < expiry));
-        let intended = manual_override.map_or(evaluation.selection, |value| value.selection);
-        let next_transition = evaluation.next_transition;
+        // Startup applies current wall time; expired overrides are dropped, not replayed.
+        let target = Policy::restored(bedtime, manual_override).resolve(clock.now());
         let service = Self {
             db,
             state: Arc::new(Mutex::new(Status {
@@ -238,20 +236,16 @@ impl BacklightService {
                 } else {
                     Reachability::Unconfigured
                 },
-                intended,
+                intended: target.selection,
                 acknowledged: None,
                 observed: None,
                 stale: true,
                 command: Command::Idle,
                 recovery: Recovery::Pending,
-                bedtime,
-                control_source: if manual_override.is_some() {
-                    ControlSource::Manual
-                } else {
-                    ControlSource::Automatic
-                },
-                override_expires_at: manual_override.and_then(|o| o.expires_at),
-                next_transition,
+                bedtime: target.bedtime.clone(),
+                control_source: target.control_source(),
+                override_expires_at: target.override_expires_at(),
+                next_transition: target.next_transition,
             })),
             worker: Arc::new(Mutex::new(())),
             submission: Arc::new(Mutex::new(())),
@@ -261,10 +255,7 @@ impl BacklightService {
             profile: Arc::new(Mutex::new(profile)),
             clock,
         };
-        let bedtime = service.state.lock().await.bedtime.clone();
-        service
-            .persist(intended, bedtime, manual_override, next_transition)
-            .await?;
+        service.persist(&target).await?;
         Ok(service)
     }
     pub async fn status(&self) -> Status {
@@ -436,23 +427,21 @@ impl BacklightService {
     }
     pub async fn select(&self, selection: Selection) -> Result<Status> {
         let submission = self.submission.lock().await;
-        let bedtime = self.state.lock().await.bedtime.clone();
-        let evaluation = evaluate(&bedtime, self.clock.now());
-        let manual_override = Some(BacklightOverride {
-            selection,
-            expires_at: evaluation.next_transition,
-        });
+        let target = self.policy().await.select(selection, self.clock.now());
         self.prepare_profile(selection).await?;
-        let revision = self
-            .persist(
-                selection,
-                bedtime,
-                manual_override,
-                evaluation.next_transition,
-            )
-            .await?;
+        let revision = self.persist(&target).await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await
+    }
+    /// Current policy, rebuilt from the live status.
+    async fn policy(&self) -> Policy {
+        let state = self.state.lock().await;
+        Policy::new(
+            state.bedtime.clone(),
+            state.control_source,
+            state.intended,
+            state.override_expires_at,
+        )
     }
     async fn prepare_profile(&self, selection: Selection) -> Result<()> {
         // Capture before leaving TV Sync. Off still works if setup cannot be completed.
@@ -468,15 +457,11 @@ impl BacklightService {
         Ok(())
     }
     // Called with the submission lock: target, settings and override commit together.
-    async fn persist(
-        &self,
-        selection: Selection,
-        bedtime: BedtimeSettings,
-        manual_override: Option<BacklightOverride>,
-        next_transition: Option<DateTime<Utc>>,
-    ) -> Result<u64> {
+    async fn persist(&self, target: &Target) -> Result<u64> {
+        let selection = target.selection;
+        let manual_override = target.manual_override;
         let intended = serde_json::to_string(&selection).map_err(anyhow::Error::from)?;
-        let settings = serde_json::to_string(&bedtime).map_err(anyhow::Error::from)?;
+        let settings = serde_json::to_string(&target.bedtime).map_err(anyhow::Error::from)?;
         let override_json = manual_override
             .map(|value| serde_json::to_string(&value))
             .transpose()
@@ -492,14 +477,10 @@ impl BacklightService {
         .map_err(anyhow::Error::from)?;
         let mut state = self.state.lock().await;
         state.intended = selection;
-        state.bedtime = bedtime;
-        state.control_source = if manual_override.is_some() {
-            ControlSource::Manual
-        } else {
-            ControlSource::Automatic
-        };
-        state.override_expires_at = manual_override.and_then(|o| o.expires_at);
-        state.next_transition = next_transition;
+        state.bedtime = target.bedtime.clone();
+        state.control_source = target.control_source();
+        state.override_expires_at = target.override_expires_at();
+        state.next_transition = target.next_transition;
         state.command = Command::Pending;
         state.recovery = Recovery::Pending;
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
@@ -514,13 +495,10 @@ impl BacklightService {
     }
     pub async fn automatic(&self) -> Result<Status> {
         let submission = self.submission.lock().await;
-        let bedtime = self.state.lock().await.bedtime.clone();
-        let evaluation = evaluate(&bedtime, self.clock.now());
-        let selection = evaluation.selection;
+        let target = self.policy().await.automatic(self.clock.now());
+        let selection = target.selection;
         self.prepare_profile(selection).await?;
-        let revision = self
-            .persist(selection, bedtime, None, evaluation.next_transition)
-            .await?;
+        let revision = self.persist(&target).await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await
     }
@@ -529,33 +507,10 @@ impl BacklightService {
             return Ok(self.status().await);
         }
         let submission = self.submission.lock().await;
-        let status = self.state.lock().await.clone();
-        let mut bedtime = status.bedtime;
-        let reset_override = update.enabled.supplied();
-        update.apply(&mut bedtime)?;
-        let now = self.clock.now();
-        let evaluation = evaluate(&bedtime, now);
-        let manual_override = if !reset_override
-            && matches!(status.control_source, ControlSource::Manual)
-            && status.override_expires_at.is_none_or(|expiry| now < expiry)
-        {
-            Some(BacklightOverride {
-                selection: status.intended,
-                expires_at: evaluation.next_transition,
-            })
-        } else {
-            None
-        };
-        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
+        let target = self.policy().await.edit(update, self.clock.now())?;
+        let selection = target.selection;
         self.prepare_profile(selection).await?;
-        let revision = self
-            .persist(
-                selection,
-                bedtime,
-                manual_override,
-                evaluation.next_transition,
-            )
-            .await?;
+        let revision = self.persist(&target).await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await
     }
@@ -590,29 +545,15 @@ impl BacklightService {
             if tokio::time::Instant::now() < retry_at {
                 continue;
             }
-            let evaluation = evaluate(&status.bedtime, self.clock.now());
-            let manual_override = if matches!(status.control_source, ControlSource::Manual)
-                && status
-                    .override_expires_at
-                    .is_none_or(|expiry| self.clock.now() < expiry)
-            {
-                Some(BacklightOverride {
-                    selection: status.intended,
-                    expires_at: status.override_expires_at,
-                })
-            } else {
-                None
-            };
-            let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
-            if let Ok(revision) = self
-                .persist(
-                    selection,
-                    status.bedtime,
-                    manual_override,
-                    evaluation.next_transition,
-                )
-                .await
-            {
+            let target = Policy::new(
+                status.bedtime,
+                status.control_source,
+                status.intended,
+                status.override_expires_at,
+            )
+            .resolve(self.clock.now());
+            let selection = target.selection;
+            if let Ok(revision) = self.persist(&target).await {
                 // Policy still advances when setup prevents dispatch, including override expiry.
                 if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
                     let mut state = self.state.lock().await;
