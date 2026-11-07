@@ -484,6 +484,49 @@ enum Attempt {
     NoRoute,
 }
 
+/// Accumulation survives individual refusals; termination is decided by the search loop.
+struct SearchProgress {
+    kept: Vec<MeasuredLoop>,
+    overshoot: Vec<f64>,
+    empty_reason: LoopUnavailable,
+}
+
+impl SearchProgress {
+    fn new() -> Self {
+        Self {
+            kept: Vec::new(),
+            overshoot: Vec::new(),
+            empty_reason: LoopUnavailable::NoRoute,
+        }
+    }
+
+    fn has_enough_matches(&self) -> bool {
+        self.kept.iter().filter(|loop_| loop_.matches()).count() >= SOUGHT_LOOPS
+    }
+
+    fn finish(mut self, end: SearchEnd) -> Result<Found, LoopUnavailable> {
+        if self.kept.is_empty() {
+            return Err(if end == SearchEnd::Interrupted {
+                LoopUnavailable::ProviderUnavailable
+            } else {
+                self.empty_reason
+            });
+        }
+        self.kept.sort_by(|a, b| {
+            b.matches().cmp(&a.matches()).then(
+                a.deviation_percent
+                    .abs()
+                    .total_cmp(&b.deviation_percent.abs()),
+            )
+        });
+        self.kept.truncate(SOUGHT_LOOPS);
+        Ok(Found {
+            loops: self.kept,
+            end,
+        })
+    }
+}
+
 impl Provider {
     fn cached(&self, key: CacheKey) -> Option<Found> {
         self.cache.lock().ok()?.get(key)
@@ -511,77 +554,56 @@ impl Provider {
         }
 
         let target = f64::from(request.target.meters());
-        let mut kept: Vec<MeasuredLoop> = Vec::new();
-        let mut overshoot: Vec<f64> = Vec::new();
-        // The outcome reported if nothing is kept.
-        let mut nothing_kept = LoopUnavailable::NoRoute;
-        let mut end = SearchEnd::Exhausted;
-        for seed in 1..=MAX_ATTEMPTS {
-            if started.elapsed() >= SEARCH_BUDGET {
-                tracing::warn!(seed, "Route search ran out of time");
-                nothing_kept = LoopUnavailable::ProviderUnavailable;
-                end = SearchEnd::Interrupted;
-                break;
-            }
-            let length = calibrated_length(target, &overshoot);
-            let attempt = match self
-                .round_trip(origin, request.activity, length, seed)
-                .await
-            {
-                Ok(trip) => {
-                    let Some((coordinates, distance)) = trip.geometry() else {
-                        tracing::warn!("Route provider sent an invalid loop");
-                        nothing_kept = LoopUnavailable::ProviderUnavailable;
-                        end = SearchEnd::Interrupted;
-                        break;
-                    };
-                    overshoot.push(distance / f64::from(length));
-                    match suitable(origin, target, coordinates, distance) {
-                        Some(candidate) => keep(&mut kept, candidate),
-                        None => Attempt::Unsuitable,
+        let mut progress = SearchProgress::new();
+        let end = 'search: {
+            for seed in 1..=MAX_ATTEMPTS {
+                if started.elapsed() >= SEARCH_BUDGET {
+                    tracing::warn!(seed, "Route search ran out of time");
+                    break 'search SearchEnd::Interrupted;
+                }
+                let length = calibrated_length(target, &progress.overshoot);
+                let attempt = match self
+                    .round_trip(origin, request.activity, length, seed)
+                    .await
+                {
+                    Ok(trip) => {
+                        let Some((coordinates, distance)) = trip.geometry() else {
+                            tracing::warn!("Route provider sent an invalid loop");
+                            break 'search SearchEnd::Interrupted;
+                        };
+                        progress.overshoot.push(distance / f64::from(length));
+                        match suitable(origin, target, coordinates, distance) {
+                            Some(candidate) => keep(&mut progress.kept, candidate),
+                            None => Attempt::Unsuitable,
+                        }
                     }
+                    // Before any loop, no walkable way near the origin means no seed can start
+                    // one; afterwards it only concerns this seed's generated waypoints.
+                    Err(Refusal::NoRoute { origin_unroutable })
+                        if origin_unroutable && progress.kept.is_empty() =>
+                    {
+                        // Preserve a preceding unsuitable verdict, if any.
+                        return Err(progress.empty_reason);
+                    }
+                    Err(Refusal::NoRoute { .. }) => Attempt::NoRoute,
+                    Err(Refusal::Unavailable) => {
+                        break 'search SearchEnd::Interrupted;
+                    }
+                };
+                match attempt {
+                    Attempt::Unsuitable => {
+                        tracing::warn!(seed, "Rejected a loop from the route provider");
+                        progress.empty_reason = LoopUnavailable::UnsuitableRoute;
+                    }
+                    Attempt::Kept if progress.has_enough_matches() => {
+                        break 'search SearchEnd::Complete;
+                    }
+                    Attempt::Kept | Attempt::Duplicate | Attempt::NoRoute => {}
                 }
-                // Before any loop, no walkable way near the origin means no seed can start one;
-                // afterwards it only concerns this seed's generated waypoints.
-                Err(Refusal::NoRoute { origin_unroutable })
-                    if origin_unroutable && kept.is_empty() =>
-                {
-                    break;
-                }
-                Err(Refusal::NoRoute { .. }) => Attempt::NoRoute,
-                Err(Refusal::Unavailable) => {
-                    nothing_kept = LoopUnavailable::ProviderUnavailable;
-                    end = SearchEnd::Interrupted;
-                    break;
-                }
-            };
-            match attempt {
-                Attempt::Unsuitable => {
-                    tracing::warn!(seed, "Rejected a loop from the route provider");
-                    nothing_kept = LoopUnavailable::UnsuitableRoute;
-                }
-                Attempt::Kept
-                    if kept.iter().filter(|loop_| loop_.matches()).count() >= SOUGHT_LOOPS =>
-                {
-                    end = SearchEnd::Complete;
-                    break;
-                }
-                Attempt::Kept | Attempt::Duplicate | Attempt::NoRoute => {}
             }
-        }
-
-        if kept.is_empty() {
-            return Err(nothing_kept);
-        }
-        kept.sort_by(|a, b| {
-            b.matches().cmp(&a.matches()).then(
-                a.deviation_percent
-                    .abs()
-                    .total_cmp(&b.deviation_percent.abs()),
-            )
-        });
-        kept.truncate(SOUGHT_LOOPS);
-        let found = Found { loops: kept, end };
+            SearchEnd::Exhausted
+        };
+        let found = progress.finish(end)?;
         // An interrupted search is retried next time rather than remembered.
         if end != SearchEnd::Interrupted
             && let Ok(mut cache) = self.cache.lock()
