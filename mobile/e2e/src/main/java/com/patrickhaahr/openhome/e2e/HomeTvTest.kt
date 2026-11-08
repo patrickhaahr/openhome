@@ -60,6 +60,8 @@ class HomeTvTest {
         app.tap("Edit Profile")
         app.enter("Height in cm (optional)", "182")
         app.tapBelow("Save Profile")
+        // The save finishes, then closes the form itself; a Back before that leaves the form and the save never closes Profile.
+        app.assertVisible("Edit Profile")
         app.pressBackButton()
         app.tap("Start Empty")
         app.tapBelow("Add Exercise")

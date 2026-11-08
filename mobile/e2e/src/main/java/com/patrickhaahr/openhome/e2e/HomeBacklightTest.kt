@@ -128,6 +128,8 @@ class HomeBacklightTest {
         app.enter("Backlight brightness (0–100)", "42")
         app.tapBelow("Apply RGB")
         app.tapBelow("Apply brightness to intended mode")
+        // The brightness field keeps focus, and a swipe that starts on its keyboard never scrolls the list.
+        app.dismissKeyboardIfShown()
         app.tapScrolledTo("Backlight Aurora")
         app.assertNotDescribed("Backlight Forest")
         app.tapScrolledTo("Backlight Automatic")

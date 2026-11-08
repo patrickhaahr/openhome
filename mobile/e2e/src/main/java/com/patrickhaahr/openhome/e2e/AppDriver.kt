@@ -27,6 +27,7 @@ private const val SCROLL_ATTEMPTS = 8
 private const val NETWORK_TIMEOUT_MS = 45_000L
 private const val POLL_MS = 500L
 private const val SWIPE_STEPS = 20
+private const val SWIPE_MARGIN_DP = 8
 private const val DOUBLE_TAP_GAP_MS = 200L
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
@@ -250,7 +251,8 @@ class AppDriver {
     private fun findInScroll(selector: BySelector): UiObject2 = findInScroll(selector.toString()) { device.findObject(selector) }
 
     private fun findInScroll(name: String, find: () -> UiObject2?): UiObject2 {
-        val x = device.displayWidth / 2
+        // In the screen margin: nothing draggable (a hue wheel, a dimmer) lives there to swallow the swipe.
+        val x = (SWIPE_MARGIN_DP * instrumentation.targetContext.resources.displayMetrics.density).toInt()
         val high = device.displayHeight * 2 / 3
         val low = device.displayHeight / 3
         repeat(SCROLL_ATTEMPTS + SCROLL_ATTEMPTS / 2) { attempt ->
@@ -259,7 +261,7 @@ class AppDriver {
             // Downward first, then back up past where it started.
             if (attempt < SCROLL_ATTEMPTS / 2) device.swipe(x, high, x, low, SWIPE_STEPS) else device.swipe(x, low, x, high, SWIPE_STEPS)
         }
-        error("Nothing matching $name")
+        error("Nothing matching $name; IME shown: ${keyboardShown()}; on screen: ${onScreenNow()}")
     }
 
     /** A text field whose description labels it, scrolled into view. */
@@ -419,6 +421,20 @@ class AppDriver {
         assertNull("Did not expect text containing \"$fragment\"", awaitObject(ABSENCE_WAIT_MS) { findContaining(fragment) })
     }
 
+    /** Waits for a screen element to leave, so what is asserted next is the screen that replaced it. */
+    fun awaitGone(text: String) {
+        check(awaitUntil(TIMEOUT_MS) { findReading(text) == null }) { "Still showing \"$text\"" }
+    }
+
+    private fun awaitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (!condition()) {
+            if (SystemClock.uptimeMillis() >= deadline) return false
+            SystemClock.sleep(POLL_MS / 2)
+        }
+        return true
+    }
+
     fun assertAbsent(text: String) {
         device.waitForIdle()
         assertNull("Did not expect to see \"$text\"", awaitObject(ABSENCE_WAIT_MS) { findReading(text) })
@@ -480,6 +496,12 @@ class AppDriver {
             if (before != null && before == visibleTexts()) return
         }
     }
+
+    /** Every description and text the app shows right now, for a failure to explain itself. */
+    private fun onScreenNow(): String =
+        runCatching {
+            device.findObjects(By.pkg(APP_PACKAGE)).mapNotNull { it.contentDescription?.takeIf(String::isNotEmpty) ?: it.text?.takeIf(String::isNotEmpty) }
+        }.getOrElse { listOf("unreadable: $it") }.toString()
 
     /** Null while the list is still moving and its nodes are being replaced. */
     private fun visibleTexts(): List<String>? =

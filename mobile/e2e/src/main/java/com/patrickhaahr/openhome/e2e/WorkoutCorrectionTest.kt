@@ -83,6 +83,8 @@ class WorkoutCorrectionTest {
         app.tap("Edit Workout")
         app.enter("Name (optional)", to)
         app.tap("Save Changes")
+        // Until the editor is gone, its own field reads as `to`, and the Workout under it is not yet what is shown.
+        app.awaitGone("Save Changes")
         app.assertVisible(to)
         app.assertTextAbsent(from)
     }
