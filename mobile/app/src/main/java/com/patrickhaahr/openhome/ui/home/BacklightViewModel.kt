@@ -47,6 +47,7 @@ data class BacklightState(
  * Exits: a response replaces the status; an [ApiFailure] keeps the old status, marks it outdated and asks for an
  * explicit refresh; ViewModel cancellation cancels the call; the Home client's 5 s call timeout
  * (AppContainer.homeHttpClient, no connection retry) surfaces as [ApiFailure.Unreachable].
+ * Only [ApiFailure] is handled: any other exception escapes uncaught (no handler is installed), ends the process, and the relaunch starts Home idle, since nothing here is persisted.
  */
 class BacklightViewModel(private val setup: SetupService, private val client: OkHttpClient) : ViewModel() {
     private val mutableState = MutableStateFlow(BacklightState())

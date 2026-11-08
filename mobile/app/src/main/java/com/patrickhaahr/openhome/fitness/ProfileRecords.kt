@@ -83,8 +83,10 @@ sealed interface BodyWeightSave {
 /**
  * The fitness Profile and Body Weight records changed on this device. Each change commits together
  * with its queued sync, so it is what the app shows from that moment, whatever the network does. Each
- * save returns one sealed outcome after a single transaction, so a refusal or a rolled-back failure
- * changes nothing, and scheduling follows the commit and is repeated at app start if skipped.
+ * change is a single transaction, so a refusal or a rolled-back failure changes nothing. [saveProfile] and
+ * [recordBodyWeight] return a sealed outcome ([saveProfile] reports Saved even when nothing differed and
+ * nothing was queued); [useBodyWeightOnServer] returns nothing. Scheduling follows the commit and is repeated at
+ * app start if skipped.
  */
 class ProfileRecords(
     private val database: OpenHomeDatabase,

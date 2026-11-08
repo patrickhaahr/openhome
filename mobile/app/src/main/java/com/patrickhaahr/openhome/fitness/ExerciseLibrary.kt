@@ -87,7 +87,9 @@ fun List<Exercise>.muscleGroups(): List<String> =
 
 /**
  * Exercises created on this device. Each commits together with its queued sync, and is in the Library
- * and the workout picker from that moment, whatever the network does.
+ * and the workout picker from that moment, whatever the network does. Each save is one transaction that
+ * returns a sealed [ExerciseSave], so a refusal or a rolled-back failure changes nothing; scheduling follows
+ * the commit and is repeated at app start if skipped.
  */
 class ExerciseLibrary(
     private val database: OpenHomeDatabase,

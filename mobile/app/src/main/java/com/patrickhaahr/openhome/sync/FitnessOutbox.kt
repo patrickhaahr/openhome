@@ -216,8 +216,9 @@ class FitnessOutbox(private val database: OpenHomeDatabase) {
      * change can never overtake what it depends on. A refused change is set aside for the user, and
      * only what depends on it waits with it; everything else carries on.
      *
-     * Each row ends in exactly one [Delivery], and this is the only place that applies it. A row's
-     * acknowledgement and its deletion commit together (or, for the idempotent kinds, the repeat under
+     * Each row ends in exactly one [Delivery]. The per-kind deliverers apply [Delivery.Acknowledged] themselves, in
+     * the transaction that deletes the row; this loop applies the other variants (refuse, record a problem, stop the
+     * pass). A row's acknowledgement and its deletion commit together (or, for the idempotent kinds, the repeat under
      * the same `request_id` is itself acknowledged), so a crash or a replaced pass either leaves the row
      * to be sent again unchanged or leaves it gone. A row superseded while in flight makes the updates
      * here no-ops. Cancellation propagates out of the in-flight call rather than being recorded as a

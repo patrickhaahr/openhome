@@ -60,7 +60,8 @@ data class SavedConnection(val baseUrl: String, val apiKeyAvailable: Boolean)
  * [run] is one linear sequence (check, mark DOWNLOADING, download, seal the key, commit), already clear as
  * straight-line code, so it has no state machine of its own. Progress is reported to the caller, which owns
  * the on-screen outcome. The persisted [SetupStatus] is a separate fact that survives the process: a
- * cancelled or failed run leaves DOWNLOADING (no key, no data) and a retry simply starts the sequence again.
+ * run that fails the connection check leaves the status as it was; one cancelled or failed after DOWNLOADING is written
+ * leaves DOWNLOADING (no key, no data). Either way a retry simply starts the sequence again.
  */
 class SetupService(
     private val database: OpenHomeDatabase,
