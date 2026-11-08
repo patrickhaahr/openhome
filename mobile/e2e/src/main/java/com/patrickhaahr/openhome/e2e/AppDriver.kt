@@ -1,6 +1,7 @@
 package com.patrickhaahr.openhome.e2e
 
 import android.os.SystemClock
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
@@ -388,6 +389,25 @@ class AppDriver {
         SystemClock.sleep(DOUBLE_TAP_GAP_MS)
         device.click(center.x, center.y)
     }
+
+    /**
+     * Closes the soft keyboard if one is up, and does nothing else: Back with no keyboard would leave the
+     * screen. A tap that focuses a field raises it a moment later, so it is given the absence wait to appear.
+     * While it is up, a list's fixed swipes can start on the keyboard and never scroll.
+     */
+    fun dismissKeyboardIfShown() {
+        device.waitForIdle()
+        val deadline = SystemClock.uptimeMillis() + ABSENCE_WAIT_MS
+        while (!keyboardShown()) {
+            if (SystemClock.uptimeMillis() >= deadline) return
+            SystemClock.sleep(POLL_MS)
+        }
+        device.pressBack()
+        device.waitForIdle()
+    }
+
+    private fun keyboardShown(): Boolean =
+        instrumentation.uiAutomation.windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
 
     fun assertNotDescribed(description: String) {
         device.waitForIdle()
