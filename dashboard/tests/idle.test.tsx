@@ -633,3 +633,114 @@ test("Copenhagen midnight replaces yesterday's photo queue and clears its captio
   expect(document.querySelector(".idle-photo-memory")).toBeNull()
   expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
 })
+
+test("a cancelled run's late page failure cannot blank the photo its replacement is loading", async () => {
+  let failOldRead: (read: WallRead) => void = () => undefined
+
+  const stale = fakeSources(
+    undefined,
+    () =>
+      new Promise<WallRead>((resolve) => {
+        failOldRead = resolve
+      })
+  )
+
+  await render(
+    <IdleProvider settings={settings} sources={stale}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(TIMEOUT)
+  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
+
+  // New sources cancel the first run while its page read is still pending.
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(1)
+  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+
+  // The cancelled read now fails; only the replacement run may touch the screen.
+  await act(async () => failOldRead(unavailablePhotos))
+  await advance(1)
+  expect(
+    document.querySelector(".idle-stage")?.getAttribute("data-resting")
+  ).toBe("false")
+  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+
+  await act(async () =>
+    fire(document.querySelector(".idle-slide img") ?? window, "load")
+  )
+  expect(document.querySelector('[data-front="true"]')).not.toBeNull()
+})
+
+async function wake(): Promise<void> {
+  const idle = screen()
+
+  if (idle === null) throw new Error("Expected the slideshow")
+
+  await act(async () => {
+    fire(idle, "pointerdown")
+    fire(idle, "pointerup")
+    fire(idle, "click")
+  })
+  await advance(WAKE_GRACE_MS)
+  expect(screen()).toBeNull()
+}
+
+function slides(): HTMLImageElement[] {
+  return Array.from(document.querySelectorAll(".idle-slide img"))
+}
+
+test("waking while the first photo is still loading leaves nothing behind for the next spell", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
+
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(TIMEOUT)
+  const abandoned = slides()[0]
+  expect(slides()).toHaveLength(1)
+
+  await wake()
+  await act(async () => fire(abandoned ?? window, "load"))
+  await advance(1000)
+
+  // The unseen photo was never kept, so the next spell starts with it again and loads normally.
+  await advance(TIMEOUT)
+  expect(slides()).toHaveLength(1)
+  expect(slides()[0]?.src).toBe(abandoned?.src)
+  await act(async () => fire(slides()[0] ?? window, "load"))
+  expect(document.querySelector('[data-front="true"]')).not.toBeNull()
+})
+
+test("waking during the dwell stops the rotation and the next spell carries on with the unseen photo", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
+
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(TIMEOUT)
+  const shown = slides()[0]?.src
+  await act(async () => fire(slides()[0] ?? window, "load"))
+  await advance(FADE_MS)
+  const preloaded = slides()[1]
+  await act(async () => fire(preloaded ?? window, "load"))
+  await advance(DWELL_MS - FADE_MS - 1000)
+
+  await wake()
+  // The cancelled dwell never brings the preloaded photo forward or moves the remembered place.
+  await advance(2000)
+  expect(screen()).toBeNull()
+
+  await advance(TIMEOUT)
+  expect(slides()).toHaveLength(1)
+  expect(slides()[0]?.src).toBe(preloaded?.src)
+  expect(slides()[0]?.src).not.toBe(shown)
+})
