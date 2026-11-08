@@ -11,7 +11,6 @@ import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import java.util.regex.Pattern
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
@@ -556,9 +555,17 @@ class AppDriver {
         )
     }
 
+    /**
+     * The tab bar is removed as soon as navigation settles on the destination, but the screen being left stays
+     * on the accessibility tree through its exit transition. Waits until nothing selected remains, so a bar
+     * that is still being removed is not mistaken for one that stayed; a bar that stays fails after the timeout.
+     */
     fun assertNoBottomTabs() {
         device.waitForIdle()
-        assertFalse("A tab bar always has a selected tab", device.hasObject(By.pkg(APP_PACKAGE).selected(true)))
+        assertTrue(
+            "A tab bar always has a selected tab",
+            awaitUntil(TIMEOUT_MS) { !device.hasObject(By.pkg(APP_PACKAGE).selected(true)) },
+        )
     }
 
     private fun hasObject(text: String) = findReading(text) != null
