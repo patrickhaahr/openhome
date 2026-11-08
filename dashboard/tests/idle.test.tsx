@@ -8,7 +8,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
-import { IdleProvider, WAKE_GRACE_MS } from "@/components/idle"
+import { IdleProvider, WAKE_GRACE_MS, WAKE_LIMIT_MS } from "@/components/idle"
 import { useIdleBlock } from "@/components/idle-block"
 import {
   DWELL_MS,
@@ -334,6 +334,111 @@ test("the first touch only wakes, and returns to the page exactly as it was", as
 
   await act(async () => countKey().click())
   expect(countKey().textContent).toBe("Count 2")
+})
+
+test("a held touch keeps swallowing until its release, and a lost release still wakes at the limit", async () => {
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+
+  await advance(TIMEOUT)
+  const idle = screen()
+
+  if (idle === null) throw new Error("Expected the slideshow")
+
+  await act(async () => fire(idle, "pointerdown"))
+
+  // Held past the grace: still waking, so the release has somewhere to land.
+  await advance(WAKE_GRACE_MS * 2)
+  expect(screen()?.dataset.waking).toBe("true")
+
+  // The release settles after the grace, and its stray click is eaten on the way.
+  await act(async () => {
+    fire(idle, "pointerup")
+    fire(countKey(), "click")
+  })
+  expect(countKey().textContent).toBe("Count 0")
+  await advance(WAKE_GRACE_MS)
+  expect(screen()).toBeNull()
+
+  // A release that never arrives wakes at the limit instead.
+  await advance(TIMEOUT)
+  await act(async () => fire(screen() ?? window, "pointerdown"))
+  await advance(WAKE_LIMIT_MS - 1)
+  expect(screen()).not.toBeNull()
+  await advance(1)
+  expect(screen()).toBeNull()
+})
+
+test("blocks are independent reasons: the countdown restarts only when the last is released", async () => {
+  function Holder({ held }: { held: boolean }): null {
+    useIdleBlock(held)
+
+    return null
+  }
+
+  const tree = (first: boolean, second: boolean): React.ReactNode => (
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+      <Holder held={first} />
+      <Holder held={second} />
+    </IdleProvider>
+  )
+
+  await render(tree(true, true))
+  await advance(TIMEOUT * 3)
+  expect(screen()).toBeNull()
+
+  await render(tree(false, true))
+  await advance(TIMEOUT * 3)
+  expect(screen()).toBeNull()
+
+  await render(tree(false, false))
+  await advance(TIMEOUT - 1)
+  expect(screen()).toBeNull()
+  await advance(1)
+  expect(screen()).not.toBeNull()
+})
+
+test("a block that appears while waking takes the room back and returns focus", async () => {
+  const tree = (blocked: boolean): React.ReactNode => (
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page blocked={blocked} />
+    </IdleProvider>
+  )
+
+  await render(tree(false))
+  const draft = container.querySelector("input")
+  draft?.focus()
+  await advance(TIMEOUT)
+  await act(async () => fire(screen() ?? window, "pointerdown"))
+  expect(screen()?.dataset.waking).toBe("true")
+
+  await render(tree(true))
+  expect(screen()).toBeNull()
+  expect(document.activeElement).toBe(draft)
+
+  // The cancelled wake settle must not linger and the block still holds idle off.
+  await advance(TIMEOUT * 3)
+  expect(screen()).toBeNull()
+})
+
+test("unmounting while the slideshow shows stops swallowing input", async () => {
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+
+  await advance(TIMEOUT)
+  await act(async () => fire(screen() ?? window, "pointerdown"))
+  await act(async () => root.render(null))
+
+  // A leaked capture listener would cancel every tap in the app from here on.
+  expect(fire(window, "pointerdown")).toBe(true)
+  expect(fire(window, "keydown")).toBe(true)
 })
 
 test("a key wakes without reaching the page", async () => {
