@@ -8,7 +8,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
-import { IdleProvider, WAKE_GRACE_MS, WAKE_LIMIT_MS } from "@/components/idle"
+import { IdleProvider, WAKE_GRACE_MS } from "@/components/idle"
 import { useIdleBlock } from "@/components/idle-block"
 import {
   DWELL_MS,
@@ -35,6 +35,9 @@ import {
 import { unavailableWeather } from "@/lib/weather"
 
 const TIMEOUT = 10_000
+
+/** The documented contract: a held touch that never reports its release wakes after 3 seconds. */
+const LOST_RELEASE_WAKE_MS = 3000
 
 const settings: IdleSettings = { timeoutMs: TIMEOUT, preview: false }
 
@@ -366,7 +369,7 @@ test("a held touch keeps swallowing until its release, and a lost release still 
   // A release that never arrives wakes at the limit instead.
   await advance(TIMEOUT)
   await act(async () => fire(screen() ?? window, "pointerdown"))
-  await advance(WAKE_LIMIT_MS - 1)
+  await advance(LOST_RELEASE_WAKE_MS - 1)
   expect(screen()).not.toBeNull()
   await advance(1)
   expect(screen()).toBeNull()

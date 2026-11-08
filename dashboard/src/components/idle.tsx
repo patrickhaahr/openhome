@@ -18,7 +18,7 @@ import { slideMemory, wantsIdleNow, type IdleSettings } from "@/lib/idle"
 export const WAKE_GRACE_MS = 450
 
 /** A held finger that never reports its release still wakes after this long. */
-export const WAKE_LIMIT_MS = 3000
+const WAKE_LIMIT_MS = 3000
 
 /** Events from the waking gesture that must never reach a control under the slideshow. */
 const swallowed = [

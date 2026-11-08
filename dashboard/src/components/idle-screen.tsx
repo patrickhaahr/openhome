@@ -282,15 +282,25 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
  * again later.
  *
  * Each effect run is the one owner of its own playback, and its `AbortSignal` is its
- * generation: once aborted, the run neither writes the screen nor the remembered position, and
- * every await below returns. That matters because an old run's page read, image event or timer
- * can still complete after a newer run has taken the slots. (In production `memory` and
- * `sources` are stable and `day` remounts the slideshow, so a replacement run only follows
- * waking; the dependency list still allows one.) The sequential protocol stays one loop:
- * - dealing: `prepare` never rejects; it ends with the albums, or with null for the ground;
- * - page read (`source.next`): resolves, or rejects when the library is unreachable — Axum
- *   requests carry 7s/45s timeouts, so a read ends — and the loop rests; an abort during the
- *   read is noticed when it returns;
+ * generation: once aborted, the run neither writes the screen nor the remembered position. The
+ * local waits (an image load, the dwell, fade and rest timers) settle on the abort. A page read
+ * does not: the browser's server-function call is neither cancelled nor bounded here, so an
+ * old run can stay pending until that call settles, and its late result or failure is then
+ * ignored. That matters because an old run's page read, image event or timer can still
+ * complete after a newer run has taken the slots. (In production `memory` and `sources` are
+ * stable and `day` remounts the slideshow, so a replacement run only follows waking; the
+ * dependency list still allows one.) The sequential protocol stays one loop:
+ * - dealing: `prepare` never rejects; it resolves with the albums, or with null for the ground,
+ *   once its browser server-function calls settle. Those calls take no signal and are not
+ *   bounded here, and an abort does not settle them. After `prepare()` settles, the run may
+ *   await `source.next()` and may issue a page request (not when `prepare` gave null, nor
+ *   when the next photo is an on-this-day one); it returns without drawing once it reaches
+ *   the abort check or the cancellation-aware catch. Cancellation neither prevents that
+ *   request nor settles the old run;
+ * - page read (`source.next`): resolves, or rejects when the library is unreachable, and the
+ *   loop rests. Upstream, Axum requests carry 7s/45s timeouts (source-supported, not an
+ *   end-to-end guarantee: the browser's call to the dashboard server has no timeout or abort
+ *   here). A cancelled run notices the abort only when the read settles;
  * - preload (`load`): ends on the image's load or error, or the abort. The 12s media timeout
  *   makes the server answer a 503 and so an error event, but the browser's own hop to the
  *   dashboard has no timeout here: a connection that never answers waits for the abort;

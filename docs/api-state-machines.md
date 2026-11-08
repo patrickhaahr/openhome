@@ -127,7 +127,8 @@ future bounded acceptance criteria and no work started here:
 
 - **Dashboard**: Backlight queue/debounce, save-and-refresh outcomes, browser-held
   retries, slideshow/deck playback, idle/wake, pagination, weather polling, map
-  resources and gestures.
+  resources and gestures. Dispositions are in
+  [dashboard-lifecycles.md](dashboard-lifecycles.md).
 - **Native Android (`mobile/`)**: setup, immediate Home commands, Active Workout,
   local saves and correction, outbox/WorkManager delivery, rest alarms.
 - **TV and firmware**: launcher navigation and key holds, command feedback, polling,
