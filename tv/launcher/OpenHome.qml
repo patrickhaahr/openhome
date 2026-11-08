@@ -46,7 +46,6 @@ FocusScope {
     readonly property string pending: commandFlight ? commandFlight.command : ""
     readonly property string acknowledged: commandOutcome && commandOutcome.accepted ? commandOutcome.command : ""
     readonly property string failed: commandOutcome && !commandOutcome.accepted ? commandOutcome.command : ""
-    readonly property string feedback: commandFlight ? "Sending…" : commandOutcome ? (commandOutcome.accepted ? "Command accepted" : "No answer · command may have been sent") : ""
     readonly property var commands: ["lights-on", "lights-off", "speaker-bluetooth", "speaker-optical"]
     readonly property var labels: ["Tænd lys", "Sluk lys", "Bluetooth", "Optisk indgang"]
     readonly property var glyphs: ["bulb", "bulb-off", "bluetooth", "optical"]
