@@ -178,6 +178,13 @@ intention. If browser storage is unavailable, retries in the mounted form still
 reuse the in-memory ID. After uncertain member/list creation, refresh discovery
 before retrying; their names are unique within their defined scopes.
 
+`intendAddition` (in `wishlist-addition.ts`) is the one place that decides a submit's
+retry intention: the pending addition for the same list is reused when its details match,
+and anything else gets a new request ID. Storage availability is independent: the pending
+record lives in `sessionStorage` under `openhome.pending-wish.<list id>` when it can, and
+in the mounted form's memory regardless. A rejected or lost addition keeps it; only a saved
+one clears it, even when the re-read afterwards fails.
+
 MCP marks reads read-only, creation non-destructive but non-idempotent, and
 deduplicated additions non-destructive and idempotent. Item edits and deletes are
 destructive and idempotent (reapplying the same values/removal cannot duplicate an
@@ -187,6 +194,33 @@ before retrying, so another household edit is not blindly overwritten. After unc
 creation, discover lists before retrying. API and transport failures are tool
 errors (`isError:true`), never successful writes. All existing training tools
 retain their read-only GET contracts.
+
+### Dashboard save outcomes
+
+Every Lists write (wishes, watchlist, dates) goes through `useListSave`, which owns one
+`Operation` and the only function that constructs it: `idle`; `sending` and `refreshing`,
+which hold the acknowledgement text; and `settled`, which holds an outcome of `rejected`
+(with its reason), `saved` or `saved-unread`. A step that does not follow the current phase
+is ignored, so a repeated or late step cannot revive or overwrite a settled save. One save
+runs at a time. An acknowledged write is `saved` for good: when the re-read then fails the
+outcome is `saved-unread` ("Saved to OpenHome, but the view could not update"), the save
+still resolves `true`, and callers close their sheet and spend their retry intention. A
+rejected receipt, or a thrown call (reported as `unreachable`), resolves `false` and keeps
+the form and any retry intention.
+
+Demonstrated: the server side of a Wishlist or Important Date write always settles.
+`requestOpenHome` sends with `AbortSignal.timeout`, which stays attached while the body is
+parsed (5 s for these writes), and every transport failure becomes a failed receipt. Not
+demonstrated: the browser's call to the server function and the re-read the board awaits afterwards, which
+have no Dashboard timeout. If either never settles, the board stays busy until the page is
+reloaded. No timeout or retry is added without a source-backed requirement. Closing a sheet
+does not cancel a write in flight, and the board's `done` closes whichever sheet is open. The
+sheet content therefore owns the lifetime of its completion: `useSheetLifetime` reports
+whether the calling `WishAdd`, `WishDetail`, `DateAdd`, `DateDetail`, `WatchAdd` or
+`WatchDetail` is still mounted, and only a completion that finds it mounted calls `done`.
+The save itself and its durable effects still happen: a late saved addition clears its
+retry record, and the board's re-read and feedback proceed. An unmounted sheet's own
+state updates are no-ops, so nothing else is guarded. Behavior on a physical iPad is untested.
 
 ## Acceptance evidence
 

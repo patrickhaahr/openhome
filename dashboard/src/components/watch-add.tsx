@@ -4,7 +4,7 @@ import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch"
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PersonDisc } from "@/components/list-parts"
+import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
 import { KindGlyph, WatchlistPoster } from "@/components/watchlist-poster"
 import { trimText } from "@/lib/lists"
 import { createRequestId } from "@/lib/request-id"
@@ -211,6 +211,7 @@ export function WatchAdd({
   const [choice, setChoice] = useState<Choice>()
   const { found, type } = useMediaSearch(search)
   const pending = useRef<Plan | undefined>(undefined)
+  const alive = useSheetLifetime()
 
   async function add(owner: HouseholdUser, chosen: Choice): Promise<void> {
     const title = trimText(chosen.title)
@@ -241,7 +242,8 @@ export function WatchAdd({
     ) {
       pending.current = undefined
       storePending(owner.id, undefined)
-      done()
+
+      if (alive()) done()
     }
   }
 

@@ -2,13 +2,6 @@
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
 // This harness also executes the private server transport; CORS applies to browser RPCs, not Axum calls.
 
-import { once } from "node:events"
-import {
-  createServer,
-  type Server,
-  type IncomingMessage,
-  type ServerResponse,
-} from "node:http"
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -35,12 +28,14 @@ import {
   previewWishlistUrl,
 } from "@/lib/wishlist.server"
 import type {
+  WishlistCommand,
   WishlistState,
   WishlistMutation,
   WishlistMetadataLoader,
 } from "@/lib/wishlist"
 import { readWatchlists, writeWatchlist } from "@/lib/watchlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
+import { startLossyAxum } from "./support/lost-response"
 import { button, field, settle, sheet, type } from "./support/lists-dom"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
@@ -51,7 +46,7 @@ let root: Root
 
 let container: HTMLDivElement
 
-const servers: Server[] = []
+const proxies: Array<() => Promise<void>> = []
 
 let mutationWork: Promise<WishlistMutation> = Promise.resolve({
   state: "saved",
@@ -64,6 +59,13 @@ let metadataWork: Promise<unknown> = Promise.resolve()
 let search: WishSearch = {}
 
 let metadata: WishlistMetadataLoader = previewWishlistUrl
+
+let refreshFails = false
+
+let sent: WishlistCommand[] = []
+
+/** While set, a write waits for it before reaching Axum. */
+let held: Promise<void> | undefined
 
 beforeAll(async () => {
   fixture = await startAxumFixture()
@@ -81,6 +83,9 @@ beforeEach(() => {
   sessionStorage.clear()
   search = {}
   metadata = previewWishlistUrl
+  refreshFails = false
+  sent = []
+  held = undefined
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -95,12 +100,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
 
-  for (const server of servers.splice(0)) {
-    server.closeAllConnections()
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve()))
-    )
-  }
+  for (const stop of proxies.splice(0)) await stop()
 
   // Clean through the public API; receipts intentionally remain retired.
   const response = await fetch(`${apiUrl}/api/household-users`, {
@@ -138,11 +138,18 @@ async function render(): Promise<void> {
             refreshWork = render()
           }}
           change={(command) => {
-            mutationWork = writeWishlist(command)
+            sent.push(command)
+            mutationWork =
+              held === undefined
+                ? writeWishlist(command)
+                : held.then(() => writeWishlist(command))
 
             return mutationWork
           }}
           refresh={() => {
+            if (refreshFails)
+              return Promise.reject(new Error("Synthetic outage"))
+
             refreshWork = render()
 
             return refreshWork
@@ -271,6 +278,31 @@ async function household(people: Record<string, string[]>) {
       return list
     },
   }
+}
+
+/** Axum commits the next wish addition, but its response never reaches the Dashboard. */
+async function loseNextAddition(): Promise<void> {
+  const proxy = await startLossyAxum(
+    apiUrl,
+    (request) => request.url === "/api/wishlist/items"
+  )
+
+  proxies.push(proxy.stop)
+  vi.stubEnv("OPENHOME_API_URL", proxy.url)
+}
+
+/** Browser storage that refuses every call, as in private browsing. */
+function withoutSessionStorage(): void {
+  const refuse = () => {
+    throw new DOMException("Storage is disabled", "SecurityError")
+  }
+
+  vi.stubGlobal("sessionStorage", {
+    getItem: refuse,
+    setItem: refuse,
+    removeItem: refuse,
+    clear: refuse,
+  })
 }
 
 async function wish(
@@ -656,53 +688,7 @@ test.each([
   async ({ title, retry, expected, legacy, rich }) => {
     const home = await household({ "Member A": ["Ideas"] })
     const list = home.list("Member A", "Ideas")
-    let loseAddition = true
-
-    async function forward(
-      request: IncomingMessage,
-      response: ServerResponse
-    ): Promise<void> {
-      const body = await new Promise<string>((resolveBody) => {
-        let text = ""
-        request.on("data", (chunk: Buffer) => {
-          text += chunk.toString()
-        })
-        request.on("end", () => resolveBody(text))
-      })
-
-      const upstream = await fetch(`${apiUrl}${request.url ?? ""}`, {
-        method: request.method ?? "GET",
-        headers: {
-          Authorization: request.headers.authorization ?? "",
-          "Content-Type": "application/json",
-        },
-        body: body === "" ? null : body,
-      })
-
-      if (request.url === "/api/wishlist/items" && loseAddition) {
-        loseAddition = false
-        await upstream.text()
-        request.socket.destroy()
-
-        return
-      }
-
-      response.writeHead(upstream.status, {
-        "Content-Type": "application/json",
-      })
-      response.end(await upstream.text())
-    }
-
-    const proxy = createServer((request, response) => {
-      void forward(request, response).catch(() => response.destroy())
-    })
-
-    servers.push(proxy)
-    proxy.listen(0, "127.0.0.1")
-    await once(proxy, "listening")
-    const address = z.object({ port: z.number() }).parse(proxy.address())
-
-    vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${address.port}`)
+    await loseNextAddition()
     search = { person: list.owner_id, list: list.id }
     await render()
     await click("Add a wish", container)
@@ -757,3 +743,144 @@ test.each([
     )
   }
 )
+
+/** The wish additions the board has sent so far, in order. */
+function additions() {
+  return sent.flatMap((command) =>
+    command.kind === "add-item" ? [command] : []
+  )
+}
+
+test("a saved wish stays acknowledged when the view cannot be re-read, and its retry intention is spent", async () => {
+  const home = await household({ "Member A": ["Ideas"] })
+  const list = home.list("Member A", "Ideas")
+
+  search = { person: list.owner_id, list: list.id }
+  await render()
+  await click("Add a wish", container)
+  await type(field("Title", sheet()), "A book")
+  refreshFails = true
+  await click("Add wish", sheet())
+
+  expect((await available()).items.map((item) => item.title)).toEqual([
+    "A book",
+  ])
+  // The add is done: the sheet closed, and the failure names the view, not the save.
+  expect(document.querySelector(".sheet")).toBeNull()
+  expect(container.querySelector(".list-failure")?.textContent).toContain(
+    "Saved to OpenHome, but the view could not update"
+  )
+  expect(titles()).toEqual([])
+  expect(sessionStorage.getItem(`openhome.pending-wish.${list.id}`)).toBeNull()
+
+  refreshFails = false
+  await render()
+  expect(titles()).toEqual(["A book"])
+  expect(additions()).toHaveLength(1)
+})
+
+test("a rejected addition keeps its request ID and arguments for a retry after remount, and changed input gets a new one", async () => {
+  const home = await household({ "Member A": ["Ideas"] })
+  const list = home.list("Member A", "Ideas")
+
+  search = { person: list.owner_id, list: list.id }
+  await render()
+  await click("Add a wish", container)
+  await type(field("Price", sheet()), "DKK 99")
+  await type(field("Title", sheet()), "A book")
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await click("Add wish", sheet())
+  expect(sheet().textContent).toContain("OpenHome rejected the API key")
+
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  await render()
+  await click("Add a wish", container)
+  // The remounted form resumes the rejected wish rather than starting empty.
+  expect(field("Title", sheet()).value).toBe("A book")
+  expect(field("Price", sheet()).value).toBe("DKK 99")
+  await click("Add wish", sheet())
+
+  const [first, retry] = additions()
+
+  expect(retry).toEqual(first)
+  expect((await available()).items.map((item) => item.title)).toEqual([
+    "A book",
+  ])
+
+  await click("Add a wish", container)
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await type(field("Title", sheet()), "A hat")
+  await click("Add wish", sheet())
+  await type(field("Title", sheet()), "A scarf")
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  await click("Add wish", sheet())
+
+  const [, , hat, scarf] = additions()
+
+  expect(hat?.title).toBe("A hat")
+  expect(scarf?.title).toBe("A scarf")
+  expect(scarf?.request_id).not.toBe(hat?.request_id)
+})
+
+test("without session storage a lost addition retried in the same form repeats its request ID", async () => {
+  const home = await household({ "Member A": ["Ideas"] })
+  const list = home.list("Member A", "Ideas")
+
+  await loseNextAddition()
+  withoutSessionStorage()
+  search = { person: list.owner_id, list: list.id }
+  await render()
+  await click("Add a wish", container)
+  await type(field("Title", sheet()), "A book")
+  await click("Add wish", sheet())
+  expect(sheet().textContent).toContain("The response was lost")
+  expect(field("Title", sheet()).value).toBe("A book")
+  await click("Add wish", sheet())
+
+  const [first, retry] = additions()
+
+  expect(retry).toEqual(first)
+  // Axum committed the lost request, so one wish proves the retry was recognised as the same.
+  expect((await available()).items.map((item) => item.title)).toEqual([
+    "A book",
+  ])
+  expect(document.querySelector(".sheet")).toBeNull()
+})
+
+test("a closed sheet's late save does not close the sheet opened after it", async () => {
+  const home = await household({ "Member A": ["Ideas"] })
+  const list = home.list("Member A", "Ideas")
+  let release: () => void = () => undefined
+
+  search = { person: list.owner_id, list: list.id }
+  await render()
+  await click("Add a wish", container)
+  await type(field("Title", sheet()), "A book")
+  held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  // Neither click waits for the held write; the sheet may be closed while it is in flight.
+  await act(async () => button("Add wish", sheet()).click())
+  await act(async () => button("Close", sheet()).click())
+  await settle()
+  await act(async () => button("Household and lists", container).click())
+  expect(sheet().textContent).toContain("Household and lists")
+
+  await act(async () => {
+    release()
+    await mutationWork
+    await refreshWork
+  })
+  await settle()
+
+  expect((await available()).items.map((item) => item.title)).toEqual([
+    "A book",
+  ])
+  // The write was for the first sheet; the household sheet is still the one the user opened.
+  expect(sheet().textContent).toContain("Household and lists")
+  // The late write was still saved, so its spent retry intention is gone.
+  expect(sessionStorage.getItem(`openhome.pending-wish.${list.id}`)).toBeNull()
+})

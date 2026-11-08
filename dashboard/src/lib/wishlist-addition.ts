@@ -1,5 +1,7 @@
 import { z } from "zod"
-import { wishlistDetails } from "./wishlist"
+import { trimText } from "./lists"
+import { createRequestId } from "./request-id"
+import { wishlistDetails, type WishlistDetails } from "./wishlist"
 
 const pendingAddition = z.object({
   ownerId: z.uuid(),
@@ -44,4 +46,43 @@ export function storePendingAddition(
   } catch {
     /* In-memory retries still work when private browsing disables storage. */
   }
+}
+
+/** Field by field, since stored details may come back in another key order. */
+function sameDetails(a: WishlistDetails, b: WishlistDetails): boolean {
+  return (
+    a.title === b.title &&
+    (a.url ?? null) === (b.url ?? null) &&
+    (a.image_url ?? null) === (b.image_url ?? null) &&
+    (a.notes ?? null) === (b.notes ?? null) &&
+    (a.price ?? null) === (b.price ?? null) &&
+    (a.quantity ?? 1) === (b.quantity ?? 1) &&
+    (a.priority ?? "normal") === (b.priority ?? "normal")
+  )
+}
+
+/**
+ * The retry intention for one submit: the known pending addition when it is the same wish for
+ * the same list (an older record without details matches on its trimmed title), otherwise a new
+ * intention with a new request ID. The ID is never reused for changed input.
+ */
+export function intendAddition(
+  known: PendingAddition | undefined,
+  ownerId: string,
+  listId: string,
+  details: WishlistDetails
+): PendingAddition {
+  return known !== undefined &&
+    known.listId === listId &&
+    (known.details === undefined
+      ? trimText(known.title) === details.title
+      : sameDetails(known.details, details))
+    ? { ...known, title: details.title, details }
+    : {
+        ownerId,
+        listId,
+        title: details.title,
+        details,
+        requestId: createRequestId(),
+      }
 }

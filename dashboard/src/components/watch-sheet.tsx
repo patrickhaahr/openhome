@@ -7,7 +7,7 @@ import { PlayIcon } from "@phosphor-icons/react/dist/csr/Play"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PersonDisc, Segments } from "@/components/list-parts"
+import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import {
   MediaResults,
   useMediaSearch,
@@ -65,6 +65,7 @@ export function WatchDetail({
 }): React.JSX.Element {
   const id = useId()
   const [mode, setMode] = useState<"view" | "dates" | "find" | "delete">("view")
+  const alive = useSheetLifetime()
 
   const [added, setAdded] = useState(entry.date_added)
   const [completed, setCompleted] = useState(entry.completion_date ?? "")
@@ -258,7 +259,7 @@ export function WatchDetail({
                   { action: "remove", ...target },
                   `${entry.title} deleted.`
                 ).then((saved) => {
-                  if (saved) done()
+                  if (saved && alive()) done()
                 })
               }}
             >

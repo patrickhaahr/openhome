@@ -4,7 +4,7 @@ import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PersonDisc } from "@/components/list-parts"
+import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
 import { WishArt } from "@/components/wish-sheet"
 import {
   WishFields,
@@ -13,8 +13,8 @@ import {
   type WishDraft,
 } from "@/components/wish-fields"
 import { trimText } from "@/lib/lists"
-import { createRequestId } from "@/lib/request-id"
 import {
+  intendAddition,
   readPendingAddition,
   storePendingAddition,
   type PendingAddition,
@@ -61,19 +61,6 @@ function draftFromDetails(details: WishlistDetails): WishDraft {
   }
 }
 
-/** Field by field, since stored details may come back in another key order. */
-function sameDetails(a: WishlistDetails, b: WishlistDetails): boolean {
-  return (
-    a.title === b.title &&
-    (a.url ?? null) === (b.url ?? null) &&
-    (a.image_url ?? null) === (b.image_url ?? null) &&
-    (a.notes ?? null) === (b.notes ?? null) &&
-    (a.price ?? null) === (b.price ?? null) &&
-    (a.quantity ?? 1) === (b.quantity ?? 1) &&
-    (a.priority ?? "normal") === (b.priority ?? "normal")
-  )
-}
-
 /**
  * Paste a link and the product is read into editable fields; anything missing is typed. Who it
  * is for and which list come last, but the link is only read once a list is chosen, because
@@ -99,6 +86,7 @@ export function WishAdd({
   done: () => void
 }): React.JSX.Element {
   const id = useId()
+  const alive = useSheetLifetime()
 
   const [initial] = useState(() => {
     const target =
@@ -229,22 +217,12 @@ export function WishAdd({
     const details = detailsOf({ ...draft, url })
 
     // The same wish to the same list keeps its request ID, even after a reload.
-    const stored = pending.current ?? readPendingAddition(target)
-
-    pending.current =
-      stored !== undefined &&
-      stored.listId === target &&
-      (stored.details === undefined
-        ? trimText(stored.title) === details.title
-        : sameDetails(stored.details, details))
-        ? { ...stored, title: details.title, details }
-        : {
-            ownerId: owner,
-            listId: target,
-            title: details.title,
-            details,
-            requestId: createRequestId(),
-          }
+    pending.current = intendAddition(
+      pending.current ?? readPendingAddition(target),
+      owner,
+      target,
+      details
+    )
 
     storePendingAddition(target, pending.current)
 
@@ -262,7 +240,8 @@ export function WishAdd({
     if (saved) {
       pending.current = undefined
       storePendingAddition(target, undefined)
-      done()
+
+      if (alive()) done()
     }
   }
 
