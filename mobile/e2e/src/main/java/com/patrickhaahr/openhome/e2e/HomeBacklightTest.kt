@@ -27,6 +27,22 @@ class HomeBacklightTest {
         api.close()
     }
 
+    @Test fun aBacklightRequestInFlightBlocksItsControlsSoAPressCannotBeDuplicated() {
+        app.tap("Home")
+        app.assertVisibleBelow("Intended: RGB 20, 40, 60 at 35%")
+        val release = api.holdCommands()
+        app.tapScrolledTo("Backlight Off")
+        app.assertVisibleBelow("Sending Backlight selection…")
+        app.assertButtonEnabled("Backlight TV Sync", false)
+        app.assertButtonEnabled("Refresh Backlight status", false)
+        // A second press of the same control while it is held must not reach Axum.
+        app.tapDescription("Backlight Off")
+        release.countDown()
+        app.awaitGone("Sending Backlight selection…")
+        app.assertButtonEnabled("Backlight Off", true)
+        assertEquals(1, api.backlightRequests().size)
+    }
+
     @Test fun advancedSettingsUseServerResponsesAndSystemBackWithoutWifi() {
         app.tap("Home")
         app.tapScrolledText("Advanced Backlight")

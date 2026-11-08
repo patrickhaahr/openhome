@@ -100,7 +100,10 @@ class FakeAxum(
 
     @Volatile private var commandGate: CountDownLatch? = null
 
-    /** Hangs TV, speaker and light command responses until the returned latch opens, so a test can observe the sending state. */
+    /**
+     * Hangs TV, speaker, light and Backlight change (non-GET) responses until the returned latch opens, so a
+     * test can observe the sending state. Backlight reads are never held.
+     */
     fun holdCommands(): CountDownLatch = CountDownLatch(1).also { commandGate = it }
 
     private fun awaitCommandGate() {
@@ -348,6 +351,7 @@ class FakeAxum(
                 if (request.method != "GET") {
                     backlightRequests += path to (request.body?.utf8() ?: "")
                     backlightMethods += request.method.orEmpty()
+                    awaitCommandGate()
                 }
                 if (path == "/api/backlight/automatic") automaticRequest.countDown()
                 if (backlightDelayMillis > 0) Thread.sleep(backlightDelayMillis)

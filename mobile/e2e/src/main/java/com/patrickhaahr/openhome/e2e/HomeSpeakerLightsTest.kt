@@ -51,6 +51,8 @@ class HomeSpeakerLightsTest {
         app.tapDescription("Lights On")
         app.assertVisible("Sending On…")
         app.assertButtonEnabled("Lights Off", false)
+        // A second press of the same control while it is held must not reach Axum.
+        app.tapDescription("Lights On")
         releaseLight.countDown()
         app.assertVisible("On acknowledged by Axum. Lights state is unobserved.")
         val releaseSpeaker = api.holdCommands()
@@ -58,6 +60,7 @@ class HomeSpeakerLightsTest {
         app.assertVisible("Sending Optical…")
         app.assertButtonEnabled("Speaker Bluetooth", false)
         app.assertButtonEnabled("Refresh Speaker controls", false)
+        app.tapDescription("Speaker Optical")
         releaseSpeaker.countDown()
         app.assertVisible("Optical acknowledged by Axum. Speaker state is unobserved.")
         assertEquals(1, api.speakerRequests().size)

@@ -64,6 +64,8 @@ class HomeTvTest {
         app.assertButtonEnabled("TV Power", false)
         app.assertButtonEnabled("TV Mute", false)
         app.assertButtonEnabled("Refresh TV controls", false)
+        // A second press of the same control while it is held must not reach Axum.
+        app.tapDescription("TV Power")
         release.countDown()
         app.assertVisible("Power acknowledged by Axum. TV state is unobserved.")
         app.assertButtonEnabled("TV Power", true)
