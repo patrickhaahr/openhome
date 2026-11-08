@@ -54,9 +54,10 @@ fun SetupRoute(interruptedBaseUrl: String?) {
 /** The mark, an address, a key and an arrow. Everything said here is said because something is wrong. */
 @Composable
 private fun SetupScreen(viewModel: SetupViewModel, showInterruptedNotice: Boolean) {
-    val progress = viewModel.progress
-    val error = viewModel.error
-    val isWorking = progress != null
+    val submission = viewModel.submission
+    val progress = (submission as? SetupSubmission.Working)?.progress
+    val error = (submission as? SetupSubmission.Failed)?.message
+    val isWorking = submission is SetupSubmission.Working
     var apiKeyVisible by remember { mutableStateOf(false) }
 
     Column(
