@@ -1,5 +1,4 @@
 use axum::Router;
-use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::signal;
 use tower_http::trace::TraceLayer;
@@ -224,21 +223,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::noop_push::router(push_state))
         .layer(TraceLayer::new_for_http());
 
-    let scheduler_state = state.clone();
-    tokio::spawn(async move {
-        tracing::info!("Starting RSS feed scheduler (initial fetch + 24h interval)");
-        if let Err(e) = feed::refresh_all_feeds(&scheduler_state.db).await {
-            tracing::warn!(error = %e, "Initial RSS feed refresh failed");
-        }
-        loop {
-            tokio::time::sleep(Duration::from_hours(24)).await;
-            tracing::info!("Running scheduled RSS feed refresh");
-            if let Err(e) = feed::refresh_all_feeds(&scheduler_state.db).await {
-                tracing::warn!(error = %e, "Scheduled RSS feed refresh failed");
-                tokio::time::sleep(Duration::from_secs(60)).await;
-            }
-        }
-    });
+    tokio::spawn(feed::run_scheduler(state.db.clone()));
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
     tracing::info!("Listening on {}", listener.local_addr()?);

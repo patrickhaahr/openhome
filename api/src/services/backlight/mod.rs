@@ -1,16 +1,19 @@
 //! Local Backlight control. Private packets and identifiers never enter the HTTP contract.
 mod bluetooth;
+mod delivery;
 mod effects;
 mod protocol;
 pub mod routine;
 use crate::error::{AppError, Result};
 pub use bluetooth::Bluetooth;
 use chrono::{DateTime, Utc};
+use delivery::RetryClock;
 pub use effects::EffectId;
 pub use protocol::InactivitySettings;
-use protocol::{TvSyncProfile, frame};
+use protocol::TvSyncProfile;
 use routine::{
-    BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, SystemClock, evaluate,
+    BacklightOverride, BedtimeSettings, BedtimeUpdate, Clock, ControlSource, Policy, SystemClock,
+    Target,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -219,11 +222,8 @@ impl BacklightService {
             .map(serde_json::from_str)
             .transpose()
             .map_err(anyhow::Error::from)?;
-        let evaluation = evaluate(&bedtime, clock.now());
-        let manual_override = manual_override
-            .filter(|value| value.expires_at.is_none_or(|expiry| clock.now() < expiry));
-        let intended = manual_override.map_or(evaluation.selection, |value| value.selection);
-        let next_transition = evaluation.next_transition;
+        // Startup applies current wall time; expired overrides are dropped, not replayed.
+        let target = Policy::restored(bedtime, manual_override).resolve(clock.now());
         let service = Self {
             db,
             state: Arc::new(Mutex::new(Status {
@@ -238,20 +238,16 @@ impl BacklightService {
                 } else {
                     Reachability::Unconfigured
                 },
-                intended,
+                intended: target.selection(),
                 acknowledged: None,
                 observed: None,
                 stale: true,
                 command: Command::Idle,
                 recovery: Recovery::Pending,
-                bedtime,
-                control_source: if manual_override.is_some() {
-                    ControlSource::Manual
-                } else {
-                    ControlSource::Automatic
-                },
-                override_expires_at: manual_override.and_then(|o| o.expires_at),
-                next_transition,
+                bedtime: target.bedtime().clone(),
+                control_source: target.control_source(),
+                override_expires_at: target.override_expires_at(),
+                next_transition: target.next_transition(),
             })),
             worker: Arc::new(Mutex::new(())),
             submission: Arc::new(Mutex::new(())),
@@ -261,10 +257,7 @@ impl BacklightService {
             profile: Arc::new(Mutex::new(profile)),
             clock,
         };
-        let bedtime = service.state.lock().await.bedtime.clone();
-        service
-            .persist(intended, bedtime, manual_override, next_transition)
-            .await?;
+        service.persist(&target).await?;
         Ok(service)
     }
     pub async fn status(&self) -> Status {
@@ -351,11 +344,7 @@ impl BacklightService {
         .await
         .map_err(anyhow::Error::from)?;
         *self.profile.lock().await = Some(profile);
-        let mut state = self.state.lock().await;
-        state.setup = Setup::Ready;
-        if state.recovery == Recovery::ProfileRequired {
-            state.recovery = Recovery::Pending;
-        }
+        self.state.lock().await.profile_stored();
         Ok(())
     }
     async fn capture(&self) -> Result<()> {
@@ -404,55 +393,40 @@ impl BacklightService {
     }
     async fn record_observation(&self, result: &Exchange) {
         let observed = protocol::observation(&result.replies);
-        let mut state = self.state.lock().await;
-        if observed.is_none() {
-            state.recovery = Recovery::Retrying;
-        } else if result.reconnected {
-            state.recovery = Recovery::Pending;
-        }
-        state.reachability = if observed.is_some() {
-            Reachability::Reachable
-        } else {
-            Reachability::Unreachable
-        };
-        if let Some(observed) = observed {
-            state.observed = Some(observed);
-        }
+        self.state
+            .lock()
+            .await
+            .observation_recorded(observed, result.reconnected);
     }
     pub async fn refresh(&self) -> Status {
         let _worker = self.worker.lock().await;
         if let Ok(result) = self.exchange(&[], &|| true).await {
             self.record_observation(&result).await;
         } else {
-            let mut state = self.state.lock().await;
-            state.recovery = Recovery::Retrying;
-            state.reachability = if self.transport.is_some() {
-                Reachability::Unreachable
-            } else {
-                Reachability::Unconfigured
-            };
+            self.state
+                .lock()
+                .await
+                .refresh_failed(self.transport.is_some());
         }
         self.status().await
     }
     pub async fn select(&self, selection: Selection) -> Result<Status> {
         let submission = self.submission.lock().await;
-        let bedtime = self.state.lock().await.bedtime.clone();
-        let evaluation = evaluate(&bedtime, self.clock.now());
-        let manual_override = Some(BacklightOverride {
-            selection,
-            expires_at: evaluation.next_transition,
-        });
+        let target = self.policy().await.select(selection, self.clock.now());
         self.prepare_profile(selection).await?;
-        let revision = self
-            .persist(
-                selection,
-                bedtime,
-                manual_override,
-                evaluation.next_transition,
-            )
-            .await?;
+        let revision = self.persist(&target).await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await
+    }
+    /// Current policy, rebuilt from the live status.
+    async fn policy(&self) -> Policy {
+        let state = self.state.lock().await;
+        Policy::new(
+            state.bedtime.clone(),
+            state.control_source,
+            state.intended,
+            state.override_expires_at,
+        )
     }
     async fn prepare_profile(&self, selection: Selection) -> Result<()> {
         // Capture before leaving TV Sync. Off still works if setup cannot be completed.
@@ -468,15 +442,11 @@ impl BacklightService {
         Ok(())
     }
     // Called with the submission lock: target, settings and override commit together.
-    async fn persist(
-        &self,
-        selection: Selection,
-        bedtime: BedtimeSettings,
-        manual_override: Option<BacklightOverride>,
-        next_transition: Option<DateTime<Utc>>,
-    ) -> Result<u64> {
+    async fn persist(&self, target: &Target) -> Result<u64> {
+        let selection = target.selection();
+        let manual_override = target.manual_override();
         let intended = serde_json::to_string(&selection).map_err(anyhow::Error::from)?;
-        let settings = serde_json::to_string(&bedtime).map_err(anyhow::Error::from)?;
+        let settings = serde_json::to_string(target.bedtime()).map_err(anyhow::Error::from)?;
         let override_json = manual_override
             .map(|value| serde_json::to_string(&value))
             .transpose()
@@ -492,16 +462,11 @@ impl BacklightService {
         .map_err(anyhow::Error::from)?;
         let mut state = self.state.lock().await;
         state.intended = selection;
-        state.bedtime = bedtime;
-        state.control_source = if manual_override.is_some() {
-            ControlSource::Manual
-        } else {
-            ControlSource::Automatic
-        };
-        state.override_expires_at = manual_override.and_then(|o| o.expires_at);
-        state.next_transition = next_transition;
-        state.command = Command::Pending;
-        state.recovery = Recovery::Pending;
+        state.bedtime = target.bedtime().clone();
+        state.control_source = target.control_source();
+        state.override_expires_at = target.override_expires_at();
+        state.next_transition = target.next_transition();
+        state.target_accepted();
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
     }
     async fn finish_dispatch(&self, selection: Selection, revision: u64) -> Result<Status> {
@@ -514,13 +479,10 @@ impl BacklightService {
     }
     pub async fn automatic(&self) -> Result<Status> {
         let submission = self.submission.lock().await;
-        let bedtime = self.state.lock().await.bedtime.clone();
-        let evaluation = evaluate(&bedtime, self.clock.now());
-        let selection = evaluation.selection;
+        let target = self.policy().await.automatic(self.clock.now());
+        let selection = target.selection();
         self.prepare_profile(selection).await?;
-        let revision = self
-            .persist(selection, bedtime, None, evaluation.next_transition)
-            .await?;
+        let revision = self.persist(&target).await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await
     }
@@ -529,33 +491,10 @@ impl BacklightService {
             return Ok(self.status().await);
         }
         let submission = self.submission.lock().await;
-        let status = self.state.lock().await.clone();
-        let mut bedtime = status.bedtime;
-        let reset_override = update.enabled.supplied();
-        update.apply(&mut bedtime)?;
-        let now = self.clock.now();
-        let evaluation = evaluate(&bedtime, now);
-        let manual_override = if !reset_override
-            && matches!(status.control_source, ControlSource::Manual)
-            && status.override_expires_at.is_none_or(|expiry| now < expiry)
-        {
-            Some(BacklightOverride {
-                selection: status.intended,
-                expires_at: evaluation.next_transition,
-            })
-        } else {
-            None
-        };
-        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
+        let target = self.policy().await.edit(update, self.clock.now())?;
+        let selection = target.selection();
         self.prepare_profile(selection).await?;
-        let revision = self
-            .persist(
-                selection,
-                bedtime,
-                manual_override,
-                evaluation.next_transition,
-            )
-            .await?;
+        let revision = self.persist(&target).await?;
         drop(submission);
         self.finish_dispatch(selection, revision).await
     }
@@ -564,16 +503,12 @@ impl BacklightService {
     pub async fn run_routine(self) {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let mut retry_at = tokio::time::Instant::now();
-        let mut backoff = Duration::from_secs(1);
+        let mut retry = RetryClock::new();
         let mut probe_at = tokio::time::Instant::now() + PROBE_INTERVAL;
         loop {
             interval.tick().await;
             if tokio::time::Instant::now() >= probe_at {
-                if !matches!(
-                    self.state.lock().await.recovery,
-                    Recovery::Pending | Recovery::Retrying
-                ) {
+                if !self.state.lock().await.recovering() {
                     self.refresh().await;
                 }
                 probe_at = tokio::time::Instant::now() + PROBE_INTERVAL;
@@ -583,41 +518,24 @@ impl BacklightService {
             let transition_due = status
                 .next_transition
                 .is_some_and(|next| self.clock.now() >= next);
-            let recovering = matches!(status.recovery, Recovery::Pending | Recovery::Retrying);
-            if !transition_due && !recovering {
+            if !transition_due && !status.recovering() {
                 continue;
             }
-            if tokio::time::Instant::now() < retry_at {
+            if !retry.ready() {
                 continue;
             }
-            let evaluation = evaluate(&status.bedtime, self.clock.now());
-            let manual_override = if matches!(status.control_source, ControlSource::Manual)
-                && status
-                    .override_expires_at
-                    .is_none_or(|expiry| self.clock.now() < expiry)
-            {
-                Some(BacklightOverride {
-                    selection: status.intended,
-                    expires_at: status.override_expires_at,
-                })
-            } else {
-                None
-            };
-            let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
-            if let Ok(revision) = self
-                .persist(
-                    selection,
-                    status.bedtime,
-                    manual_override,
-                    evaluation.next_transition,
-                )
-                .await
-            {
+            let target = Policy::new(
+                status.bedtime,
+                status.control_source,
+                status.intended,
+                status.override_expires_at,
+            )
+            .resolve(self.clock.now());
+            let selection = target.selection();
+            if let Ok(revision) = self.persist(&target).await {
                 // Policy still advances when setup prevents dispatch, including override expiry.
                 if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
-                    let mut state = self.state.lock().await;
-                    state.recovery = Recovery::ProfileRequired;
-                    state.command = Command::Failed;
+                    self.state.lock().await.profile_required();
                     continue;
                 }
                 drop(submission);
@@ -625,19 +543,11 @@ impl BacklightService {
                     tracing::warn!("Backlight recovery dispatch failed");
                 }
             } else {
-                let mut state = self.state.lock().await;
-                state.recovery = Recovery::Retrying;
-                state.command = Command::Failed;
+                self.state.lock().await.persistence_failed();
                 tracing::warn!("Backlight routine could not save its target");
             }
-            let status = self.state.lock().await.clone();
-            if matches!(status.recovery, Recovery::Retrying) {
-                retry_at = tokio::time::Instant::now() + backoff;
-                backoff = (backoff * 2).min(Duration::from_secs(30));
-            } else {
-                retry_at = tokio::time::Instant::now();
-                backoff = Duration::from_secs(1);
-            }
+            let retrying = self.state.lock().await.recovery == Recovery::Retrying;
+            retry.attempted(retrying);
         }
     }
     async fn dispatch(&self, selection: Selection, revision: u64) -> Result<()> {
@@ -656,25 +566,7 @@ impl BacklightService {
         {
             return Ok(());
         }
-        let writes = match selection {
-            Selection::Effect { effect, brightness } => effect.writes(brightness.into()),
-            Selection::Off {} => vec![frame(&[0x33, 1, 0])],
-            Selection::TvSync { brightness } => self
-                .profile
-                .lock()
-                .await
-                .as_ref()
-                .ok_or_else(|| AppError::Conflict("Save a valid TV Sync profile first".into()))?
-                .writes(brightness.map(u8::from)),
-            Selection::Color { rgb, brightness } => vec![
-                frame(&[0x33, 1, 1]),
-                // H605C requires the RGBIC whole-strip variant; generic RGB can ACK without applying.
-                frame(&[
-                    0x33, 5, 0x15, 1, rgb.red, rgb.green, rgb.blue, 0, 0, 0, 0, 0, 0xff, 0x7f,
-                ]),
-                frame(&[0x33, 4, brightness.into()]),
-            ],
-        };
+        let writes = delivery::writes(selection, self.profile.lock().await.as_ref())?;
         let deadline = self.state.lock().await.next_transition;
         let revision_counter = self.revision.clone();
         let clock = self.clock.clone();
@@ -688,35 +580,15 @@ impl BacklightService {
         }
         if let Ok(result) = result {
             self.record_observation(&result).await;
-            let mut state = self.state.lock().await;
-            if result.writes_accepted {
-                state.acknowledged = Some(selection);
-            }
-            if self.revision.load(Ordering::SeqCst) == revision {
-                state.command = if result.writes_accepted {
-                    Command::Acknowledged
-                } else {
-                    Command::Failed
-                };
-                if result.writes_accepted && state.reachability == Reachability::Reachable {
-                    if state.recovery != Recovery::Idle {
-                        state.recovery = Recovery::Recovered;
-                    }
-                } else {
-                    state.recovery = Recovery::Retrying;
-                }
-            }
+            self.state.lock().await.dispatched(
+                selection,
+                result.writes_accepted,
+                self.revision.load(Ordering::SeqCst) == revision,
+            );
         } else {
             let mut state = self.state.lock().await;
-            if self.revision.load(Ordering::SeqCst) == revision {
-                state.command = Command::Failed;
-                state.recovery = Recovery::Retrying;
-            }
-            state.reachability = if self.transport.is_some() {
-                Reachability::Unreachable
-            } else {
-                Reachability::Unconfigured
-            };
+            state.dispatch_failed(self.revision.load(Ordering::SeqCst) == revision);
+            state.exchange_failed(self.transport.is_some());
         }
         Ok(())
     }

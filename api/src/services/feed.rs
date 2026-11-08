@@ -45,6 +45,20 @@ pub struct FeedResult {
     pub error: Option<String>,
 }
 
+/// Refreshes one Feed with a conditional GET and returns what happened; nothing here retries.
+///
+/// The stored `etag`/`last_modified` are sent as `If-None-Match`/`If-Modified-Since`. By outcome:
+///
+/// | Outcome | `feeds` row | Items |
+/// | --- | --- | --- |
+/// | 304 Not Modified | `last_fetched_at` set, `last_error` cleared; validators kept | none |
+/// | Other non-2xx | `last_fetched_at` set, `last_error` = `HTTP error: <status>` | none |
+/// | 2xx, unparseable | `last_fetched_at` set, `last_error` = `Failed to parse RSS: ...` | none |
+/// | 2xx, parsed | title, response `etag`/`last_modified` (null if absent), `last_fetched_at` set, `last_error` cleared | inserted; a unique violation counts as a duplicate |
+/// | Rejected URL, DNS, request, body-read or size failure | untouched; the error is returned only | none |
+///
+/// Metadata write failures are logged and do not change the returned result. An item whose insert
+/// fails for another reason is logged and skipped; entries without a link are skipped.
 pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedResult {
     let mut result = FeedResult {
         feed_id,
@@ -300,6 +314,8 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     result
 }
 
+/// Refreshes every stored Feed one after another. Per-Feed failures are reported in each
+/// [`FeedResult`] and never stop the pass; only failing to load the Feed list is an `Err`.
 pub async fn refresh_all_feeds(pool: &SqlitePool) -> anyhow::Result<Vec<FeedResult>> {
     #[derive(Debug)]
     struct FeedRow {
@@ -320,4 +336,33 @@ pub async fn refresh_all_feeds(pool: &SqlitePool) -> anyhow::Result<Vec<FeedResu
     }
 
     Ok(results)
+}
+
+/// How long the scheduler waits after a refresh pass before the next one.
+const REFRESH_INTERVAL: Duration = Duration::from_hours(24);
+/// Extra wait after a scheduled pass returns `Err`, before the interval wait begins again.
+const ERROR_PAUSE: Duration = Duration::from_secs(60);
+
+/// The background refresh schedule, run for the life of the process on a detached task.
+///
+/// Sequential on purpose: one pass at startup, then forever sleep `REFRESH_INTERVAL` and run
+/// a pass. Each wait starts when the previous pass ends, so the period is the interval plus the
+/// pass's duration. A failed pass (only the Feed list failing to load) is logged; a failed
+/// scheduled pass additionally sleeps `ERROR_PAUSE` and is then followed by the normal
+/// interval wait, not an immediate retry. A failed initial pass has no extra pause. Manual
+/// refreshes through the API run independently and do not move this schedule. There is no
+/// shutdown signal: the task ends only with the runtime or if it panics.
+pub async fn run_scheduler(pool: SqlitePool) {
+    tracing::info!("Starting RSS feed scheduler (initial fetch + 24h interval)");
+    if let Err(e) = refresh_all_feeds(&pool).await {
+        tracing::warn!(error = %e, "Initial RSS feed refresh failed");
+    }
+    loop {
+        tokio::time::sleep(REFRESH_INTERVAL).await;
+        tracing::info!("Running scheduled RSS feed refresh");
+        if let Err(e) = refresh_all_feeds(&pool).await {
+            tracing::warn!(error = %e, "Scheduled RSS feed refresh failed");
+            tokio::time::sleep(ERROR_PAUSE).await;
+        }
+    }
 }

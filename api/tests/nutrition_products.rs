@@ -7,6 +7,7 @@ use axum::{Router, http::Method, http::StatusCode};
 use common::food_workbook::{first_dataset, sha256};
 use common::{send_request_with_method, test_app_with_db};
 use openhome_api::{
+    AppState,
     auth::{ApiKey, auth_middleware},
     db, routes,
     services::nutrition::{
@@ -34,6 +35,7 @@ const UNKNOWN: &str = "2005550001116";
 struct Api {
     server: MockServer,
     _dir: TempDir,
+    state: AppState,
     app: Router,
 }
 
@@ -65,13 +67,14 @@ impl Api {
             MealPhotos::new(dir.path().join("meal-photos")),
             labels,
         )
-        .with_state(state)
+        .with_state(state.clone())
         .layer(axum::middleware::from_fn(|request, next| {
             auth_middleware(request, next, ApiKey::new(API_KEY.into()))
         }));
         Self {
             server,
             _dir: dir,
+            state,
             app,
         }
     }
@@ -281,6 +284,32 @@ async fn linking_stores_the_product_once_and_a_linked_barcode_skips_open_food_fa
     assert_eq!(replayed["product"], product);
     assert_eq!(api.lookup(SKYR).await.1["product"], relinked["product"]);
     assert_eq!(api.provider_reads().await, 2);
+}
+
+/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
+/// of replaying a fabricated one; the Product stays stored, and the client looks it up first.
+#[tokio::test]
+async fn a_legacy_receipt_directs_the_client_to_look_the_product_up_first() {
+    let api = Api::start().await;
+    api.provider(SKYR, found(&skyr_label()), 1).await;
+    let (status, linked) = api.link(SKYR, 1693, "link-skyr").await;
+    assert_eq!(status, StatusCode::CREATED, "{linked}");
+    sqlx::query("UPDATE product_link_receipts SET result = NULL WHERE request_id = 'link-skyr'")
+        .execute(&api.state.db)
+        .await
+        .unwrap();
+
+    let (status, body) = api.link(SKYR, 1693, "link-skyr").await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("no original result"),
+        "{body}"
+    );
+    let (status, lookup) = api.lookup(SKYR).await;
+    assert_eq!((status, &lookup["linked"]), (StatusCode::OK, &json!(true)));
 }
 
 #[tokio::test]

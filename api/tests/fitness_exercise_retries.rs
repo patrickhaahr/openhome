@@ -185,6 +185,51 @@ async fn an_old_retry_cannot_recreate_a_deleted_exercise_or_claim_its_reused_id(
     assert_eq!(named(&app, NAME).await, 0);
 }
 
+/// Changed arguments are judged before the cleared target, so a retried Exercise whose arguments
+/// no longer match reports that, not its deletion.
+#[tokio::test]
+async fn changed_arguments_are_refused_before_a_deleted_exercises_target() {
+    let app = common::test_app().await;
+    let (_, first) = post(&app, exercise(KEY)).await;
+    let (status, _) = send_request_with_method(
+        app.clone(),
+        &format!("/api/exercises/{}", first["id"]),
+        Method::DELETE,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let mut changed = exercise(KEY);
+    changed["name"] = json!("Another Name");
+    let (status, body) = post(&app, changed).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("a different Exercise"),
+        "{body}"
+    );
+    assert!(
+        !body["error"].as_str().unwrap().contains("deleted"),
+        "{body}"
+    );
+
+    let (status, body) = post(&app, exercise(KEY)).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("The retried Exercise was deleted"),
+        "{body}"
+    );
+    assert_eq!(named(&app, NAME).await, 0);
+    assert_eq!(named(&app, "Another Name").await, 0);
+}
+
 #[tokio::test]
 async fn request_id_is_validated_and_requires_authentication() {
     let app = common::test_app().await;

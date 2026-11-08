@@ -1,5 +1,10 @@
 //! Persisted, household-wide route selection. A Route Session belongs to the phone and
 //! keeps its own snapshot; selecting here never starts or changes a session.
+//!
+//! Candidate row presence is selection eligibility, with no wall-clock expiry. `remember`
+//! prunes by offer order and protects the row referenced by `active_route`. A replaced
+//! selection becomes an ordinary candidate until a later `remember` prunes it. These SQL
+//! transitions are authoritative; no separate retained/selected/expired state is stored.
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -113,6 +118,9 @@ pub async fn select(
 ) -> Result<ActiveRouteRead, ActiveRouteError> {
     let id = selection.route_id.to_string();
     let mut transaction = db.begin().await?;
+    // This first statement is a write: eligibility, identity comparison and revision update
+    // serialize together, before reading the snapshot in the same transaction. Missing rows
+    // produce no selection write; repeated identities preserve the current version.
     let row = sqlx::query!(
         "INSERT INTO active_route (slot, route_id, version)
          SELECT 1, id, 1 FROM route_candidates WHERE id = ?

@@ -21,6 +21,11 @@
 //!
 //! [`plan`] evaluates any range of days with one read of each input, so a summary over a year
 //! costs the same handful of queries as one day.
+//!
+//! Weekly lifecycle ownership stays here: row presence in `nutrition_weeks` is the frozen
+//! boundary. `Week::compute` makes a provisional value; `plan` admits only computable,
+//! unstored weeks that have started to `freeze_weeks`, which returns the database winner.
+//! `Week::fixed` reports that provenance; it is not a separately persisted lifecycle state.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -184,7 +189,7 @@ pub struct Week {
     pub blend_weight: f64,
     pub trend_weight_kg: f64,
     pub trend_weight_day: CalendarDay,
-    /// Stored, so it no longer changes; false for a week starting after today.
+    /// True only for a value read from `nutrition_weeks`; computed values start provisional.
     pub fixed: bool,
 }
 
@@ -194,8 +199,9 @@ impl Week {
         Some((monday.checked_sub_days(WINDOW_DAYS)?, monday.previous()))
     }
 
-    /// The week of `monday` from the data before it, or `None` while no weigh-in gives it a
-    /// Trend Weight up to `last_read`, the latest day of the week being read.
+    /// A provisional week, without storing it. Uses data before `monday`, with the first
+    /// in-week weigh-in as fallback up to `last_read`, the latest day of this week being read.
+    /// Returns `None` when the inputs cannot produce positive BMR and expenditure.
     fn compute(
         monday: CalendarDay,
         last_read: CalendarDay,
@@ -311,8 +317,9 @@ pub enum Plan {
     },
 }
 
-/// Each day's targets from `from` through `to`, in order. Writes the weekly target record of each
-/// week that has none yet and starts on or before `today`.
+/// Each day's targets from `from` through `to`, in order. Freezes each computable, unstored
+/// week starting on or before `today`; future weeks remain provisional. Existing rows bypass
+/// computation even if today's Profile no longer supplies the inputs a new week would need.
 pub async fn plan(
     db: &SqlitePool,
     from: CalendarDay,
@@ -321,7 +328,8 @@ pub async fn plan(
 ) -> Result<Vec<(CalendarDay, Plan)>, MealLogError> {
     let monday_of = |day: CalendarDay| day.iso_week_bounds().map_or(day, |(monday, _)| monday);
     let days: Vec<CalendarDay> = crate::services::training::calendar::days(from, to).collect();
-    // The latest day read in each week.
+    // The latest requested day in each week, not today or the week's Sunday. This bounds
+    // the first-weigh-in fallback even when a Summary reads several days at once.
     let mut last_read: BTreeMap<CalendarDay, CalendarDay> = BTreeMap::new();
     for day in &days {
         last_read.insert(monday_of(*day), *day);
@@ -353,17 +361,13 @@ pub async fn plan(
         )
         .await?;
         let today_monday = monday_of(today);
-        let (started, future): (Vec<Week>, Vec<Week>) = unstored
+        // Eligibility belongs to the ISO week, not the requested day: even a future day
+        // in the current week freezes its computable record. Missing inputs freeze nothing.
+        let (eligible, future): (Vec<Week>, Vec<Week>) = unstored
             .into_iter()
             .filter_map(|monday| Week::compute(monday, last_read[&monday], *body, &trend, &energy))
             .partition(|week| week.monday <= today_monday);
-        let mut stored = store_weeks(db, &started).await?;
-        for week in started {
-            let stored = stored
-                .remove(&week.monday)
-                .ok_or(sqlx::Error::RowNotFound)?;
-            weeks.insert(stored.monday, stored);
-        }
+        weeks.extend(freeze_weeks(db, &eligible).await?);
         for week in future {
             weeks.insert(week.monday, week);
         }
@@ -505,10 +509,10 @@ async fn stored_weeks(
         .collect()
 }
 
-/// Stores each of `weeks`, in Monday order, unless a concurrent read stored it first, in one
-/// transaction so a long first read writes once; returns the stored records from their first to
-/// their last Monday.
-async fn store_weeks(
+/// Freeze computable, eligible weeks supplied by `plan` in Monday order, in one transaction.
+/// A conflicting first read wins unchanged. After commit, reread the database and return only
+/// the requested weeks, never the caller's provisional values or unrelated rows in the range.
+async fn freeze_weeks(
     db: &SqlitePool,
     weeks: &[Week],
 ) -> Result<BTreeMap<CalendarDay, Week>, sqlx::Error> {
@@ -520,7 +524,16 @@ async fn store_weeks(
         insert_week(&mut transaction, week).await?;
     }
     transaction.commit().await?;
-    stored_weeks(db, first.monday, last.monday).await
+    let mut stored = stored_weeks(db, first.monday, last.monday).await?;
+    weeks
+        .iter()
+        .map(|week| {
+            let frozen = stored
+                .remove(&week.monday)
+                .ok_or(sqlx::Error::RowNotFound)?;
+            Ok((frozen.monday, frozen))
+        })
+        .collect()
 }
 
 async fn insert_week(

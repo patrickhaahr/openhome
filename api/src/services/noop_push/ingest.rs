@@ -1,4 +1,4 @@
-//! Batch ingest for NOOP push (`.noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append delivery and
+//! Batch ingest for NOOP push (`docs/noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append delivery and
 //! cursors", "Authoritative rolling-window delivery", "Acceptance, errors, and retry
 //! idempotency").
 //!
@@ -151,9 +151,52 @@ pub fn prepare(coding: ContentCoding, wire: Vec<u8>) -> Result<PreparedBatch, In
     })
 }
 
-/// Applies a prepared batch idempotently. A `batchId` already in the ledger with different bytes
-/// is a conflict. An append batch replays the ledger ack for a byte-identical retry or upserts
-/// its records; a replace-window part is staged and the replacement applied once complete.
+/// What the batch ledger says about a batch's `(receiver_state_id, source_id, device_id,
+/// batch_id)` identity, read inside the write transaction that may accept it. The ledger is
+/// scoped to the receiver generation, so after a rotation every batch is `Unseen` again.
+///
+/// A third outcome, a stored `batchId` whose decoded bytes differ, is a conflict and never
+/// becomes a value: [`BatchHistory::read`] rejects it with `batch_conflict` (HTTP 409) before any
+/// row changes.
+#[derive(Debug)]
+pub(super) enum BatchHistory {
+    /// No acknowledgement stored: apply the batch (a replace-window part is staged).
+    Unseen,
+    /// Byte-identical retry of an acknowledged batch: replay `ack` unchanged.
+    Identical { ack: String },
+}
+
+impl BatchHistory {
+    async fn read(
+        conn: &mut SqliteConnection,
+        receiver_state_id: &str,
+        batch: &Batch,
+        body_sha256: &[u8],
+    ) -> Result<Self, IngestError> {
+        let prior: Option<(Vec<u8>, String)> = sqlx::query_as(
+            "SELECT body_sha256, ack FROM batch_ledger \
+             WHERE receiver_state_id = ? AND source_id = ? AND device_id = ? AND batch_id = ?",
+        )
+        .bind(receiver_state_id)
+        .bind(&batch.source_id)
+        .bind(&batch.device_id)
+        .bind(&batch.batch_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        match prior {
+            None => Ok(Self::Unseen),
+            Some((stored_sha256, ack)) if stored_sha256 == body_sha256 => {
+                Ok(Self::Identical { ack })
+            }
+            Some(_) => Err(IngestError::Conflict("batch_conflict")),
+        }
+    }
+}
+
+/// Applies a prepared batch idempotently. The ledger decides first ([`BatchHistory`]): a `batchId`
+/// with different bytes is a conflict; an append batch replays the ledger ack for a byte-identical
+/// retry or upserts its records; a replace-window part is staged and the replacement applied once
+/// complete. Rows and the ledger acknowledgement commit together.
 pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepted, IngestError> {
     let PreparedBatch {
         batch,
@@ -171,24 +214,9 @@ pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepte
             .fetch_one(&mut *tx)
             .await?;
 
-    let prior: Option<(Vec<u8>, String)> = sqlx::query_as(
-        "SELECT body_sha256, ack FROM batch_ledger \
-         WHERE receiver_state_id = ? AND source_id = ? AND device_id = ? AND batch_id = ?",
-    )
-    .bind(&receiver_state_id)
-    .bind(&batch.source_id)
-    .bind(&batch.device_id)
-    .bind(&batch.batch_id)
-    .fetch_optional(&mut *tx)
-    .await?;
-    // Dropping the transaction on an early return rolls it back; nothing was written.
-    let stored_ack = match prior {
-        Some((stored_sha256, _)) if stored_sha256 != body_sha256.as_slice() => {
-            return Err(IngestError::Conflict("batch_conflict"));
-        }
-        Some((_, ack)) => Some(ack),
-        None => None,
-    };
+    // A conflicting `batchId` is rejected here; dropping the transaction rolls it back and
+    // nothing was written.
+    let history = BatchHistory::read(&mut tx, &receiver_state_id, &batch, &body_sha256).await?;
     let replay = |ack: String| Accepted {
         ack,
         stream: batch.stream.name,
@@ -197,19 +225,19 @@ pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepte
     };
 
     match &batch.delivery {
-        BatchDelivery::Append { .. } => {
-            if let Some(ack) = stored_ack {
-                return Ok(replay(ack));
+        BatchDelivery::Append { .. } => match &history {
+            BatchHistory::Identical { ack } => return Ok(replay(ack.clone())),
+            BatchHistory::Unseen => {
+                upsert(
+                    &mut tx,
+                    batch.stream,
+                    &batch.source_id,
+                    &batch.device_id,
+                    &batch.records,
+                )
+                .await?;
             }
-            upsert(
-                &mut tx,
-                batch.stream,
-                &batch.source_id,
-                &batch.device_id,
-                &batch.records,
-            )
-            .await?;
-        }
+        },
         BatchDelivery::ReplaceWindow(window) => {
             let outcome = replace_window::accept(
                 &mut tx,
@@ -217,11 +245,18 @@ pub async fn apply(pool: &SqlitePool, prepared: PreparedBatch) -> Result<Accepte
                 &batch,
                 window,
                 &entity,
-                stored_ack.is_some(),
+                &history,
             )
             .await?;
-            if let (PartOutcome::Retry, Some(ack)) = (outcome, &stored_ack) {
-                return Ok(replay(ack.clone()));
+            match (outcome, &history) {
+                (PartOutcome::Retry, BatchHistory::Identical { ack }) => {
+                    return Ok(replay(ack.clone()));
+                }
+                // `accept` only reports a retry for a batch the ledger already holds.
+                (PartOutcome::Retry, BatchHistory::Unseen) => {
+                    return Err(IngestError::Internal("retry_without_ledger_entry"));
+                }
+                (PartOutcome::Staged | PartOutcome::Applied, _) => {}
             }
         }
     }

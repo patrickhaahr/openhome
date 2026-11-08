@@ -308,6 +308,29 @@ async fn a_retried_save_replays_conflicts_on_changes_and_never_recreates_a_delet
     api.saved(protein_bowl("rejected-first")).await;
 }
 
+/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
+/// of replaying a fabricated one; the Meal stays, and the client reads it first.
+#[tokio::test]
+async fn a_legacy_receipt_directs_the_client_to_read_the_meal_first() {
+    let api = Api::start().await;
+    let meal = api.saved(protein_bowl("bowl-1")).await;
+    sqlx::query("UPDATE meal_receipts SET result = NULL WHERE request_id = 'bowl-1'")
+        .execute(&api.state.db)
+        .await
+        .unwrap();
+
+    let (status, body) = api.save(protein_bowl("bowl-1")).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("no original result"),
+        "{body}"
+    );
+    assert_eq!(api.meals().await, [meal]);
+}
+
 #[tokio::test]
 async fn renaming_a_meal_to_another_meals_name_conflicts_and_a_change_of_case_is_allowed() {
     let api = Api::start().await;
