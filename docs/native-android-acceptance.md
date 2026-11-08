@@ -62,6 +62,63 @@ The existing app-level correction regression now includes this dependency case;
 it was compiled, while runtime verification used the Pixel rather than instrumentation.
 Native lint/build and signed-release verification passed after the repair.
 
+## Lifecycle disposition (#266, integration #281)
+
+Branch `lifecycle/android-266` reviewed six lifecycle candidates for one owner,
+mutually exclusive variants carrying their data, and a recorded exit for each
+non-terminal state. Independent policy, transport and observation facts stay
+separate rather than becoming exclusive states. No state-machine framework was added.
+
+| Candidate | Disposition | Owner | Valid states / types | Rationale |
+| --- | --- | --- | --- | --- |
+| Setup (#275) | Refactored | `SetupViewModel` (`submit`, `advance`, `fail`) | `SetupSubmission`: `Idle`, `Working(progress)`, `Failed(message)` | Separate `progress` and `error` fields could show both. A submit while `Working` is ignored. `SetupService.run` stays a linear sequence; persisted `SetupStatus` is a separate fact: a failed connection check leaves it unchanged, while a run cancelled or failed after `DOWNLOADING` is written leaves `DOWNLOADING` (no key, no data), shown as an interrupted setup, and a retry restarts the sequence. |
+| Home commands (#276) | Refactored | Each Home ViewModel for its own control group | `CommandFeedback`: `Idle`, `Loading`, `Sending`, `Acknowledged`, `Failed`; Backlight uses `BacklightOperation` with `status` and `outdated` kept apart | Pending/message/problem fields could disagree. `Acknowledged` means Axum accepted the request, never a device state. |
+| Active Workout (#277) | Already explicit | `ActiveWorkoutRepository` | Row unconfirmed or confirmed; `FinishOutcome` | Every change is one serialized transaction; the Workout exists until the finishing transaction deletes it. KDoc only. |
+| Local saves and correction (#278) | Already explicit | `WorkoutCorrections.save`, `ProfileRecords`, `ExerciseLibrary` | Sealed `CorrectionSave`, `ExerciseSave`, `BodyWeightSave` and Profile outcomes | Each save is one transaction; only `Saved` changes anything (`saveProfile` reports `Saved` even when nothing differed and nothing was queued, and `useBodyWeightOnServer` returns nothing). `WorkoutCorrectionScreen` keeps `saved`, `problem` and `saving` as separate fields, retained: `saved` is only set once a save commits and never cleared, `problem` is cleared at the start of every attempt, `saving` is reset in `finally`, and `saved` leaves the screen when resumed, so no state is stuck. The only overlap is a second Save in the instant before it leaves, which re-saves the same draft. KDoc only. |
+| Outbox and WorkManager (#279) | Already explicit | `FitnessOutbox.deliverPending` | One `Delivery` per row; `DeliveryRun` | Acknowledgement and deletion commit together; the repeat under the same `request_id` is idempotent. KDoc only. |
+| Rest timers and alarms (#280) | Already explicit | `RestTimers` | Stored timer running or over (`alerted`); `RestPreference` and the Android alarm are separate facts | The row owns the rest; the alarm only mirrors it through `syncAlarm`. KDoc only. |
+
+Nothing is deferred. The Wi-Fi-only policy (`WifiNetworks`) and the Home 5 s call
+timeout remain independent policy facts, not lifecycle states.
+
+### Exits per changed lifecycle
+
+"Demonstrated" names a passing emulator test. "Assumed" is source-backed
+reasoning with no test that exercises it.
+
+| Lifecycle / non-terminal state | Success | Failure | Cancellation | Timeout | Restart |
+| --- | --- | --- | --- | --- | --- |
+| Setup `Working` | Demonstrated: `SetupFlowTest` (history and weights offline after relaunch) | Demonstrated: `failedDownloadSavesNothingAndRetrySucceeds` (nothing saved, retry works) | Assumed: clearing the ViewModel cancels the run; the single commit leaves no partial data, and the status stays unchanged (before `DOWNLOADING` is written) or `DOWNLOADING` (after) | None added; the shared HTTP client is unchanged and no test covers it | Demonstrated: `processKilledDuringDownloadDoesNotCompleteSetup` |
+| Home `Sending` / `Loading` | Demonstrated: `HomeTvTest`, `HomeSpeakerLightsTest`, `HomeBacklightTest` (acknowledged text, controls re-enabled; while held, controls are disabled and a second press of the same control sends nothing) | Demonstrated: Backlight lost-response and refresh-error test; no replay after restart. Any exception that is not an `ApiFailure` is not handled: it escapes uncaught, ends the process, and the relaunch starts Home idle (unchanged behavior, not tested) | Assumed: ViewModel scope cancels the call | Demonstrated for Lights only: `aCommandThatNeverAnswersFailsAtTheHomeCallTimeoutAndFreesTheControls` (5 s call timeout in `AppContainer.homeHttpClient`, no connection retry); TV, Speaker and Backlight share that client and its timeout but no test holds them to it | Not applicable: Home state is not persisted |
+| Active Workout row / finish | Demonstrated: `ActiveWorkoutTest` finish and queued-sync test | Demonstrated: invalid sets cannot be confirmed | Assumed: Room rolls back an interrupted transaction | None | Demonstrated: relaunch then `Resume Workout` in `RepeatWorkoutTest.repeatingTheLastWorkoutAndCompletingEachExerciseRecordsTheSamePerformanceToday` (rows, focus and confirmations survive) and in `ActiveWorkoutTest.workoutLoggedAndFinishedOnMobileDataStaysQueuedThenSyncsOnceOnWifi`; process death inside a transaction is assumed |
+| Local save (correction, Profile, Body Weight) | Demonstrated: `WorkoutCorrectionTest`, `ProfileAndBodyWeightTest` | Demonstrated: invalid or duplicate input refused with nothing changed | Assumed: Room rollback on cancellation | None | Demonstrated: edits survive a restart then reach Axum once |
+| Outbox row in flight | Demonstrated: delivery on Wi-Fi, one record in Axum | Demonstrated: lost response retried as one record; refused row set aside without blocking others; unreachable Axum keeps the row queued | Assumed: coroutine cancellation of a replaced pass leaves the row for the next pass | None added | Demonstrated: retry across a client restart |
+| Rest timer running | Demonstrated: one vibration at the deadline | Not applicable | Demonstrated: ending the Workout ends the rest; turning rest off | None | Demonstrated: restart continues the deadline; process gone still vibrates once; force-stopped rest shown over silently. Early alarm (`NOT_YET`, clock moved back) is assumed: the emulator clock seam only moves time and Android's alarm fires at the wall-clock deadline, so reaching it would need a test-only production hook, accepted as unproved |
+
+Unresolved liveness gaps: none found. Each non-terminal state ends by response,
+failure, user action or the persisted state read on the next start. The assumed
+cells above are unproved, not proven guarantees.
+
+### Evidence, reported separately
+
+- **Room/outbox compatibility.** `git diff origin/master...HEAD` for `mobile/` changes no
+  Room entity, DAO, schema or migration, no outbox row kind, no `request_id`, revision or
+  retry rule. `FitnessOutbox`, `ActiveWorkoutRepository`, `ProfileRecords`,
+  `WorkoutCorrection`, `RestTimers` and `SetupService` changed by KDoc only. Source
+  changes are `ui/home` and `ui/setup` state holders and their screens. Upgrade from an
+  existing native release database was not exercised.
+- **Focused tests.** Added or changed e2e proof: Home in-flight blocking (with a second press attempted) for Lights,
+  Speaker, TV and Backlight; the Lights-only Home call timeout; Setup retry while the API still fails; and
+  driver steps for keyboard dismissal, editor exit and scroll margin. There is no
+  JVM unit-test layer for these ViewModels.
+- **Area gate.** `just mobile-check` ran its instrumentation: 67/67 emulator tests passed
+  on emulator-5554 at the tree before this doc commit. This supersedes the earlier
+  64-test inventory with its partial run.
+- **Not covered:** a physical device for this branch; real Wi-Fi-only or cellular
+  behavior on hardware (emulator `setWifi` only); live API or household data; background
+  vibration; force-stop and reboot on hardware. The physical acceptance above applies
+  to its recorded source, not to these later changes.
+
 ## Reproducing checks
 
 Use [`mobile/README.md`](../mobile/README.md) for signed builds and installation.

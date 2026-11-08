@@ -145,6 +145,8 @@ class RepeatWorkoutTest {
         // A hurried double tap still starts exactly one copy.
         app.doubleTap("Repeat Last Workout")
         app.assertVisible("Active Workout")
+        // The second tap lands on the new screen, in a field there, and raises the keyboard over the rows.
+        app.dismissKeyboardIfShown()
         app.assertVisible(LocalDate.now().format(SHOWN_DAY))
         app.assertVisible("Pull day")
         assertLastWorkoutCopiedUnconfirmed()

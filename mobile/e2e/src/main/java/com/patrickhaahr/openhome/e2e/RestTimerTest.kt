@@ -248,6 +248,8 @@ class RestTimerTest {
         app.tapBelow("History")
         app.tap("Usual session")
         app.tap("Edit Workout")
+        // The rest bar is on every destination, so only the form's own field says the form has replaced the detail.
+        app.described("Squat set 1 reps")
         app.assertVisible("Rest · Squat")
         app.assertNoBottomTabs()
 

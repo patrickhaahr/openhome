@@ -28,6 +28,14 @@ import kotlinx.coroutines.sync.withLock
  * The one Active Workout, stored on every change. Each function returns after its change committed.
  * Writes run strictly in call order, so fast typing cannot be saved out of order and finishing always
  * sees every edit made before it.
+ *
+ * This is the one owner of a row's confirmation: a row is unconfirmed or confirmed, and it can only be
+ * confirmed while its values parse ([setCompleted], [completeExercise]); any edit that stops it parsing
+ * unconfirms it in the same transaction. Because every change is one serialized transaction on the
+ * stored row, an interrupted call (cancellation or process death) leaves the state from before it, never
+ * half of [finish]; a restart resumes whatever was committed. Finishing needs no state of its own beyond
+ * [FinishOutcome]: the Active Workout exists until the one transaction that records it deletes it. What
+ * follows a commit (the sync schedule, the alarm) is derived from storage and redone on the next app start.
  */
 class ActiveWorkoutRepository(
     private val database: OpenHomeDatabase,

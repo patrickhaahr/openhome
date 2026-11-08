@@ -106,7 +106,7 @@ fun HomeScreen(onOpenProfile: () -> Unit, onOpenRemote: () -> Unit, onOpenBackli
                     TvDeck(tvState, tv, onOpenRemote, Modifier.weight(1f).fillMaxHeight())
                 }
             }
-            tvState.problem?.let { ProblemTag(it) }
+            tvState.feedback.problem?.let { ProblemTag(it) }
             lights.problem?.let { ProblemTag(it) }
             SpeakerDeck(speaker, household)
             BacklightSection(onOpenAdvanced = onOpenBacklight)
@@ -116,7 +116,7 @@ fun HomeScreen(onOpenProfile: () -> Unit, onOpenRemote: () -> Unit, onOpenBackli
 
 /** A wall switch, because that is what it is. Both halves always look the same: a command is not a state. */
 @Composable
-private fun WallSwitch(state: HomeCommandState, send: (LightCommand) -> Unit, modifier: Modifier) {
+private fun WallSwitch(state: CommandFeedback, send: (LightCommand) -> Unit, modifier: Modifier) {
     val tracker = remember { CommandTracker() }
     Column(modifier.background(Lit.Raised, SWITCH_SHAPE)) {
         for (command in LightCommand.entries) {
@@ -157,11 +157,8 @@ private fun WallSwitch(state: HomeCommandState, send: (LightCommand) -> Unit, mo
     }
 }
 
-private fun phaseOf(tracker: CommandTracker, id: String, state: HomeCommandState): CommandPhase =
-    tracker.phase(id, state.busy, state.message?.contains("acknowledged") == true, state.problem != null)
-
-private fun phaseOf(tracker: CommandTracker, id: String, state: TvState): CommandPhase =
-    tracker.phase(id, state.busy, state.message?.contains("acknowledged") == true, state.problem != null)
+private fun phaseOf(tracker: CommandTracker, id: String, state: CommandFeedback): CommandPhase =
+    tracker.phase(id, state.busy, state is CommandFeedback.Acknowledged, state is CommandFeedback.Failed)
 
 @Composable
 private fun TvKey(
@@ -179,16 +176,16 @@ private fun TvKey(
         send(button.command, button.label)
     }
     val description = "TV ${button.label}"
-    val phase = phaseOf(tracker, button.command, state)
+    val phase = phaseOf(tracker, button.command, state.feedback)
     if (button.glyph != null) {
         GlyphKey(
             button.glyph, description, press, modifier, tone, size,
-            enabled = !state.busy && available, dimmed = !available && !state.busy, phase = phase, pulse = tracker.pulse,
+            enabled = !state.feedback.busy && available, dimmed = !available && !state.feedback.busy, phase = phase, pulse = tracker.pulse,
         )
     } else {
         FigureKey(
             button.figure.orEmpty(), description, press, modifier, tone, size,
-            enabled = !state.busy && available, dimmed = !available && !state.busy, phase = phase, pulse = tracker.pulse,
+            enabled = !state.feedback.busy && available, dimmed = !available && !state.feedback.busy, phase = phase, pulse = tracker.pulse,
         )
     }
 }
@@ -210,7 +207,7 @@ private fun TvDeck(state: TvState, model: TvViewModel, onOpenRemote: () -> Unit,
                     },
             ) { GlyphIcon(Glyph.Tv, tint = Lit.Lamp, size = 26.dp) }
             Spacer(Modifier.weight(1f))
-            GlyphKey(Glyph.Refresh, "Refresh TV controls", model::refresh, tone = KeyTone.Quiet, size = 44.dp, enabled = !state.busy, dimmed = false)
+            GlyphKey(Glyph.Refresh, "Refresh TV controls", model::refresh, tone = KeyTone.Quiet, size = 44.dp, enabled = !state.feedback.busy, dimmed = false)
             GlyphKey(Glyph.Remote, "Full TV remote", onOpenRemote, tone = KeyTone.Raised, size = 44.dp)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -233,12 +230,12 @@ private fun TvDeck(state: TvState, model: TvViewModel, onOpenRemote: () -> Unit,
 private fun TvNotes(state: TvState) {
     Spoken("TV power: unobserved")
     Spoken("Unavailable commands stay disabled.")
-    state.message?.let { Spoken(it, live = true) }
-    if (state.busy && state.message == null) Spoken("Loading TV controls…", live = true)
+    state.feedback.message?.let { Spoken(it, live = true) }
+    if (state.feedback == CommandFeedback.Loading) Spoken("Loading TV controls…", live = true)
 }
 
 @Composable
-private fun SectionNotes(state: HomeCommandState, unobserved: String, note: String) {
+private fun SectionNotes(state: CommandFeedback, unobserved: String, note: String) {
     Spoken(unobserved)
     Spoken(note)
     state.message?.let { Spoken(it, live = true) }
@@ -270,7 +267,7 @@ private fun SpeakerDeck(state: SpeakerState, model: SpeakerLightsViewModel) {
     WithSpoken(
         spoken = {
             SectionNotes(feedback, "Speaker input and volume: unobserved", "Unavailable commands stay disabled.")
-            if (feedback.busy && feedback.message == null) Spoken("Loading Speaker controls…", live = true)
+            if (feedback == CommandFeedback.Loading) Spoken("Loading Speaker controls…", live = true)
         },
     ) {
     Slab(Modifier.fillMaxWidth(), padding = 14.dp, arrangement = Arrangement.spacedBy(10.dp)) {
@@ -315,7 +312,7 @@ fun TvRemoteScreen() {
     }
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("TV remote", glyph = Glyph.Remote) {
-            GlyphKey(Glyph.Refresh, "Refresh TV controls", model::refresh, tone = KeyTone.Quiet, size = 48.dp, enabled = !state.busy, dimmed = false)
+            GlyphKey(Glyph.Refresh, "Refresh TV controls", model::refresh, tone = KeyTone.Quiet, size = 48.dp, enabled = !state.feedback.busy, dimmed = false)
         }
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = ScreenMargin).padding(bottom = 24.dp),
@@ -323,7 +320,7 @@ fun TvRemoteScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column { TvNotes(state) }
-            state.problem?.let { ProblemTag(it) }
+            state.feedback.problem?.let { ProblemTag(it) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 tvKey(POWER, tone = KeyTone.Lamp)
                 tvKey(INPUT)

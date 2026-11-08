@@ -54,12 +54,32 @@ class HomeTvTest {
         app.assertOnWorkoutTab()
     }
 
+    @Test fun aCommandInFlightBlocksEveryTvControlSoAPressCannotBeDuplicated() {
+        app.setWifi(false)
+        app.tap("Home")
+        app.assertVisible("TV power: unobserved")
+        val release = api.holdCommands()
+        app.tapDescription("TV Power")
+        app.assertVisible("Sending Power…")
+        app.assertButtonEnabled("TV Power", false)
+        app.assertButtonEnabled("TV Mute", false)
+        app.assertButtonEnabled("Refresh TV controls", false)
+        // A second press of the same control while it is held must not reach Axum.
+        app.tapDescription("TV Power")
+        release.countDown()
+        app.assertVisible("Power acknowledged by Axum. TV state is unobserved.")
+        app.assertButtonEnabled("TV Power", true)
+        assertEquals(1, api.tvRequests().size)
+    }
+
     @Test fun failuresArePromptAndNeverReplayWhileFitnessAndActiveWorkoutSurvive() {
         app.setWifi(false)
         app.tapDescription("Open Profile")
         app.tap("Edit Profile")
         app.enter("Height in cm (optional)", "182")
         app.tapBelow("Save Profile")
+        // The save finishes, then closes the form itself; a Back before that leaves the form and the save never closes Profile.
+        app.assertVisible("Edit Profile")
         app.pressBackButton()
         app.tap("Start Empty")
         app.tapBelow("Add Exercise")

@@ -1,6 +1,7 @@
 package com.patrickhaahr.openhome.e2e
 
 import android.os.SystemClock
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
@@ -10,7 +11,6 @@ import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import java.util.regex.Pattern
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
@@ -26,6 +26,7 @@ private const val SCROLL_ATTEMPTS = 8
 private const val NETWORK_TIMEOUT_MS = 45_000L
 private const val POLL_MS = 500L
 private const val SWIPE_STEPS = 20
+private const val SWIPE_MARGIN_DP = 8
 private const val DOUBLE_TAP_GAP_MS = 200L
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
@@ -249,7 +250,8 @@ class AppDriver {
     private fun findInScroll(selector: BySelector): UiObject2 = findInScroll(selector.toString()) { device.findObject(selector) }
 
     private fun findInScroll(name: String, find: () -> UiObject2?): UiObject2 {
-        val x = device.displayWidth / 2
+        // In the screen margin: nothing draggable (a hue wheel, a dimmer) lives there to swallow the swipe.
+        val x = (SWIPE_MARGIN_DP * instrumentation.targetContext.resources.displayMetrics.density).toInt()
         val high = device.displayHeight * 2 / 3
         val low = device.displayHeight / 3
         repeat(SCROLL_ATTEMPTS + SCROLL_ATTEMPTS / 2) { attempt ->
@@ -258,7 +260,7 @@ class AppDriver {
             // Downward first, then back up past where it started.
             if (attempt < SCROLL_ATTEMPTS / 2) device.swipe(x, high, x, low, SWIPE_STEPS) else device.swipe(x, low, x, high, SWIPE_STEPS)
         }
-        error("Nothing matching $name")
+        error("Nothing matching $name; IME shown: ${keyboardShown()}; on screen: ${onScreenNow()}")
     }
 
     /** A text field whose description labels it, scrolled into view. */
@@ -349,26 +351,35 @@ class AppDriver {
         assertVisible("$name $progress")
     }
 
-    /** Exactly the Exercises the Active Workout holds, in the order the screen offers them. */
+    /**
+     * Exactly the Exercises the Active Workout holds, in the order the screen offers them. Adding or removing
+     * an Exercise animates the chip row, so the old chips can still be there, or nodes replaced under a read,
+     * for a while. It waits until two reads in a row show the expected order, which is the settled screen, and
+     * otherwise fails with the last order read.
+     */
     fun assertExerciseOrder(vararg expected: String) {
         described("Go to ${expected.first()}")
-        assertEquals(expected.toList(), exerciseOrderOnScreen())
+        val wanted = expected.toList()
+        var shown: List<String>? = null
+        awaitUntil(TIMEOUT_MS) {
+            val previous = shown
+            shown = exerciseOrderOnScreen() ?: previous
+            shown == wanted && previous == wanted
+        }
+        assertEquals(wanted, shown)
     }
 
-    /** The screen can re-lay out under a read, so a read interrupted by that starts over from a fresh find. */
-    private fun exerciseOrderOnScreen(): List<String> {
-        repeat(TAP_ATTEMPTS) {
-            device.waitForIdle()
-            try {
-                return device.findObjects(By.descStartsWith("Go to "))
-                    .map { Triple(it.visibleBounds.top, it.visibleBounds.left, it.contentDescription) }
-                    .sortedWith(compareBy({ it.first }, { it.second }))
-                    .map { it.third.removePrefix("Go to ") }
-            } catch (_: StaleObjectException) {
-                // Find them all again.
-            }
+    /** One read of the chips; null when the screen re-laid out under it, which a later read replaces. */
+    private fun exerciseOrderOnScreen(): List<String>? {
+        device.waitForIdle()
+        return try {
+            device.findObjects(By.descStartsWith("Go to "))
+                .map { Triple(it.visibleBounds.top, it.visibleBounds.left, it.contentDescription) }
+                .sortedWith(compareBy({ it.first }, { it.second }))
+                .map { it.third.removePrefix("Go to ") }
+        } catch (_: StaleObjectException) {
+            null
         }
-        error("The Exercises kept changing and could not be read")
     }
 
     /** Two taps as a hurried thumb gives them: long enough apart for the screen to have changed under it. */
@@ -389,6 +400,25 @@ class AppDriver {
         device.click(center.x, center.y)
     }
 
+    /**
+     * Closes the soft keyboard if one is up, and does nothing else: Back with no keyboard would leave the
+     * screen. A tap that focuses a field raises it a moment later, so it is given the absence wait to appear.
+     * While it is up, a list's fixed swipes can start on the keyboard and never scroll.
+     */
+    fun dismissKeyboardIfShown() {
+        device.waitForIdle()
+        val deadline = SystemClock.uptimeMillis() + ABSENCE_WAIT_MS
+        while (!keyboardShown()) {
+            if (SystemClock.uptimeMillis() >= deadline) return
+            SystemClock.sleep(POLL_MS)
+        }
+        device.pressBack()
+        device.waitForIdle()
+    }
+
+    private fun keyboardShown(): Boolean =
+        instrumentation.uiAutomation.windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+
     fun assertNotDescribed(description: String) {
         device.waitForIdle()
         assertNull("Did not expect \"$description\"", device.wait(Until.findObject(By.desc(description)), ABSENCE_WAIT_MS))
@@ -397,6 +427,20 @@ class AppDriver {
     fun assertTextAbsent(fragment: String) {
         device.waitForIdle()
         assertNull("Did not expect text containing \"$fragment\"", awaitObject(ABSENCE_WAIT_MS) { findContaining(fragment) })
+    }
+
+    /** Waits for a screen element to leave, so what is asserted next is the screen that replaced it. */
+    fun awaitGone(text: String) {
+        check(awaitUntil(TIMEOUT_MS) { findReading(text) == null }) { "Still showing \"$text\"" }
+    }
+
+    private fun awaitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (!condition()) {
+            if (SystemClock.uptimeMillis() >= deadline) return false
+            SystemClock.sleep(POLL_MS / 2)
+        }
+        return true
     }
 
     fun assertAbsent(text: String) {
@@ -461,6 +505,12 @@ class AppDriver {
         }
     }
 
+    /** Every description and text the app shows right now, for a failure to explain itself. */
+    private fun onScreenNow(): String =
+        runCatching {
+            device.findObjects(By.pkg(APP_PACKAGE)).mapNotNull { it.contentDescription?.takeIf(String::isNotEmpty) ?: it.text?.takeIf(String::isNotEmpty) }
+        }.getOrElse { listOf("unreadable: $it") }.toString()
+
     /** Null while the list is still moving and its nodes are being replaced. */
     private fun visibleTexts(): List<String>? =
         try {
@@ -514,9 +564,17 @@ class AppDriver {
         )
     }
 
+    /**
+     * The tab bar is removed as soon as navigation settles on the destination, but the screen being left stays
+     * on the accessibility tree through its exit transition. Waits until nothing selected remains, so a bar
+     * that is still being removed is not mistaken for one that stayed; a bar that stays fails after the timeout.
+     */
     fun assertNoBottomTabs() {
         device.waitForIdle()
-        assertFalse("A tab bar always has a selected tab", device.hasObject(By.pkg(APP_PACKAGE).selected(true)))
+        assertTrue(
+            "A tab bar always has a selected tab",
+            awaitUntil(TIMEOUT_MS) { !device.hasObject(By.pkg(APP_PACKAGE).selected(true)) },
+        )
     }
 
     private fun hasObject(text: String) = findReading(text) != null

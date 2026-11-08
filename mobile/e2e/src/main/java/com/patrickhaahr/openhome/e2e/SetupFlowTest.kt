@@ -98,6 +98,11 @@ class SetupFlowTest {
         app.assertTextContaining("Download stopped, so nothing was saved.")
         app.assertAbsent("Last Workout")
 
+        // Trying again while the API still fails ends in the same failure, not in a stuck download.
+        app.submitSetup(api.baseUrl, API_KEY)
+        app.assertTextContaining("Download stopped, so nothing was saved.")
+        app.assertAbsent("Last Workout")
+
         // The failure survives a restart as an unfinished Setup Flow, not as a finished one.
         app.relaunch()
         app.assertOnSetup()
