@@ -1,5 +1,7 @@
 package com.patrickhaahr.openhome.ui.home
 
+import com.patrickhaahr.openhome.api.ApiFailure
+
 /**
  * What one Home control group is doing and what it last learned, as exactly one fact.
  *
@@ -34,3 +36,16 @@ sealed interface CommandFeedback {
 
     val problem: String? get() = (this as? Failed)?.reason
 }
+
+/**
+ * Runs one immediate command and settles it as [CommandFeedback.Acknowledged] or, on an [ApiFailure],
+ * [CommandFeedback.Failed]. [section] names the device group in the honest "unobserved" and "unknown" wording.
+ * Anything that is not an [ApiFailure] is deliberately not handled here and escapes to the caller.
+ */
+internal suspend fun settleCommand(section: String, label: String, send: suspend () -> Unit): CommandFeedback =
+    try {
+        send()
+        CommandFeedback.Acknowledged("$label acknowledged by Axum. $section state is unobserved.")
+    } catch (failure: ApiFailure) {
+        CommandFeedback.Failed("$label failed. ${failure.message}. Nothing queued; $section outcome may be unknown.")
+    }

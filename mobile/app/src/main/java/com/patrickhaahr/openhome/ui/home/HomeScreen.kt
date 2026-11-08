@@ -160,8 +160,6 @@ private fun WallSwitch(state: CommandFeedback, send: (LightCommand) -> Unit, mod
 private fun phaseOf(tracker: CommandTracker, id: String, state: CommandFeedback): CommandPhase =
     tracker.phase(id, state.busy, state is CommandFeedback.Acknowledged, state is CommandFeedback.Failed)
 
-private fun phaseOf(tracker: CommandTracker, id: String, state: TvState): CommandPhase = phaseOf(tracker, id, state.feedback)
-
 @Composable
 private fun TvKey(
     button: TvButton,
@@ -178,7 +176,7 @@ private fun TvKey(
         send(button.command, button.label)
     }
     val description = "TV ${button.label}"
-    val phase = phaseOf(tracker, button.command, state)
+    val phase = phaseOf(tracker, button.command, state.feedback)
     if (button.glyph != null) {
         GlyphKey(
             button.glyph, description, press, modifier, tone, size,

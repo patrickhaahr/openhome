@@ -18,6 +18,7 @@ data class TvState(val commands: Set<String> = emptySet(), val feedback: Command
  * busy guard, so each transition starts only from a settled state and its response cannot be overtaken by another.
  * Exits: response or [ApiFailure] settles it; ViewModel cancellation cancels the call; the Home client's 5 s call
  * timeout (AppContainer.homeHttpClient, no connection retry) surfaces as [ApiFailure.Unreachable].
+ * Only [ApiFailure] is handled: any other exception escapes uncaught (no handler is installed), ends the process, and the relaunch starts Home idle, since nothing here is persisted.
  */
 class TvViewModel(private val setup: SetupService, private val client: OkHttpClient) : ViewModel() {
     private val mutableState = MutableStateFlow(TvState())
@@ -40,14 +41,7 @@ class TvViewModel(private val setup: SetupService, private val client: OkHttpCli
         if (before.feedback.busy || command !in before.commands) return
         mutableState.value = before.copy(feedback = CommandFeedback.Sending(label))
         viewModelScope.launch {
-            try {
-                api().sendTvCommand(command)
-                mutableState.value = before.copy(feedback = CommandFeedback.Acknowledged("$label acknowledged by Axum. TV state is unobserved."))
-            } catch (failure: ApiFailure) {
-                mutableState.value = before.copy(
-                    feedback = CommandFeedback.Failed("$label failed. ${failure.message}. Nothing queued; TV outcome may be unknown."),
-                )
-            }
+            mutableState.value = before.copy(feedback = settleCommand("TV", label) { api().sendTvCommand(command) })
         }
     }
 

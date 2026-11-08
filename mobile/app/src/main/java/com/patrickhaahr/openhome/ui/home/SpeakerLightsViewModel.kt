@@ -19,6 +19,7 @@ data class SpeakerState(val commands: Set<String> = emptySet(), val feedback: Co
  * and Lights are two independent groups, each with one busy guard and one transition owner here. Exits: response
  * or [ApiFailure] settles; ViewModel cancellation cancels the call; the Home client's 5 s call timeout
  * (AppContainer.homeHttpClient, no connection retry) surfaces as [ApiFailure.Unreachable]. Nothing is queued or retried.
+ * Only [ApiFailure] is handled: any other exception escapes uncaught (no handler is installed), ends the process, and the relaunch starts Home idle, since nothing here is persisted.
  */
 class SpeakerLightsViewModel(private val setup: SetupService, private val client: OkHttpClient) : ViewModel() {
     private val mutableSpeaker = MutableStateFlow(SpeakerState())
@@ -43,7 +44,7 @@ class SpeakerLightsViewModel(private val setup: SetupService, private val client
         if (before.feedback.busy || command !in before.commands) return
         mutableSpeaker.value = before.copy(feedback = CommandFeedback.Sending(label))
         viewModelScope.launch {
-            mutableSpeaker.value = before.copy(feedback = commandFeedback("Speaker", label) { api().sendSpeakerCommand(command) })
+            mutableSpeaker.value = before.copy(feedback = settleCommand("Speaker", label) { api().sendSpeakerCommand(command) })
         }
     }
 
@@ -51,17 +52,9 @@ class SpeakerLightsViewModel(private val setup: SetupService, private val client
         if (lights.value.busy) return
         mutableLights.value = CommandFeedback.Sending(command.label)
         viewModelScope.launch {
-            mutableLights.value = commandFeedback("Lights", command.label) { api().sendLightCommand(command) }
+            mutableLights.value = settleCommand("Lights", command.label) { api().sendLightCommand(command) }
         }
     }
-
-    private suspend fun commandFeedback(section: String, label: String, send: suspend () -> Unit): CommandFeedback =
-        try {
-            send()
-            CommandFeedback.Acknowledged("$label acknowledged by Axum. $section state is unobserved.")
-        } catch (failure: ApiFailure) {
-            CommandFeedback.Failed("$label failed. ${failure.message}. Nothing queued; $section outcome may be unknown.")
-        }
 
     private suspend fun api(): OpenHomeApi {
         val connection = setup.connection() ?: throw ApiFailure.Unauthorized()
