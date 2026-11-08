@@ -125,6 +125,78 @@ test("defers a hidden map, reports a MapLibre graphics failure and retries on re
   }
 })
 
+test("a stalled image-tile map times out, releases its map and retries as a new attempt", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  vi.useFakeTimers()
+  const container = document.createElement("div")
+  document.body.append(container)
+  const root = createRoot(container)
+
+  function tile(): HTMLImageElement | null {
+    return container.querySelector<HTMLImageElement>("img.leaflet-tile")
+  }
+
+  try {
+    await act(async () => {
+      root.render(
+        <SharedMap
+          origin={{ latitude: 55.6869, longitude: 12.5692, source: "demo" }}
+        />
+      )
+    })
+    await act(async () => {
+      await import("leaflet")
+    })
+    await vi.waitFor(() => expect(tile()).not.toBeNull())
+    expect(container.textContent).toContain("Loading map…")
+
+    // No tile ever loads: the provider is declared unreachable and the map goes.
+    act(() => {
+      vi.advanceTimersByTime(20_000)
+    })
+    expect(container.textContent).toContain("Map tiles unavailable")
+    expect(container.textContent).toContain(
+      "OpenStreetMap could not be reached"
+    )
+    expect(tile()).toBeNull()
+    expect(container.querySelector('[aria-label="Zoom in"]')).toBeNull()
+
+    vi.useRealTimers()
+
+    const retry = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Try again"
+    )
+
+    if (retry === undefined) throw new Error("Expected a retry button")
+
+    await act(async () => {
+      retry.click()
+    })
+
+    const fresh = await vi.waitFor(() => {
+      const image = tile()
+
+      if (image === null) throw new Error("Expected a new map tile")
+
+      return image
+    })
+
+    await act(async () => {
+      fresh.dispatchEvent(new Event("load"))
+    })
+    expect(container.textContent).not.toContain("Map tiles unavailable")
+    expect(container.textContent).not.toContain("Loading map…")
+    expect(container.querySelector('[aria-label="Zoom in"]')).not.toBeNull()
+  } finally {
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  }
+})
+
 test("without WebGL2 draws OpenStreetMap image tiles instead of loading MapLibre", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   const container = document.createElement("div")

@@ -28,8 +28,78 @@ const ATTRIBUTION =
 
 const LOCAL_ZOOM = 14
 
-/** A stalled tile server must not leave the view loading forever. */
+/** A stalled style, tile server or import must not leave either map loading forever. */
 const LOAD_TIMEOUT_MS = 20_000
+
+type AttemptResource<Resource extends { remove(): void }> =
+  | { phase: "importing" }
+  | { phase: "starting"; map: Resource }
+  | { phase: "running"; map: Resource }
+  | { phase: "released" }
+
+/** One map attempt's resource, as seen by the library callbacks that outlive it. */
+export type MapAttempt<Resource extends { remove(): void }> = {
+  phase(): AttemptResource<Resource>["phase"]
+  /** Takes a created map; one made after release is removed at once. */
+  adopt(map: Resource): void
+  /** First proof of life: stops the timeout. False for a released or repeated call. */
+  settle(): boolean
+  /** Stops the timeout and removes the map. Safe to repeat. */
+  release(): void
+}
+
+/**
+ * The owner of one attempt to bring up a map: the pending import, its load
+ * timeout and the map it yields. It advances importing, starting, running and
+ * released only forwards, so a late import, tile, style or graphics event that
+ * finds the attempt released does nothing. Both maps share it.
+ */
+export function startMapAttempt<Resource extends { remove(): void }>({
+  onTimeout,
+  onMap,
+}: {
+  onTimeout: () => void
+  /** Publishes the adopted map, then `undefined` when it is released. */
+  onMap: (map: Resource | undefined) => void
+}): MapAttempt<Resource> {
+  let resource: AttemptResource<Resource> = { phase: "importing" }
+  const timer = setTimeout(onTimeout, LOAD_TIMEOUT_MS)
+
+  return {
+    phase: () => resource.phase,
+    adopt(map) {
+      if (resource.phase !== "importing") {
+        map.remove()
+
+        return
+      }
+
+      resource = { phase: "starting", map }
+      onMap(map)
+    },
+    settle() {
+      if (resource.phase !== "starting") return false
+
+      clearTimeout(timer)
+      resource = { phase: "running", map: resource.map }
+
+      return true
+    },
+    release() {
+      const released = resource
+
+      if (released.phase === "released") return
+
+      resource = { phase: "released" }
+      clearTimeout(timer)
+
+      if (released.phase === "importing") return
+
+      onMap(undefined)
+      released.map.remove()
+    },
+  }
+}
 
 /** Overlay colors from the dashboard theme the map is drawn under. */
 export type RasterPalette = {
@@ -97,32 +167,29 @@ export function RasterMap({
 
     setView({ state: "loading" })
 
-    let instance: LeafletMap | undefined
-    let disposed = false
+    const owner = startMapAttempt<LeafletMap>({
+      onTimeout: () => fail("provider-unavailable"),
+      onMap: (next) => {
+        map.current = next
+
+        if (next === undefined) overlays.current = undefined
+      },
+    })
 
     function fail(state: "provider-unavailable" | "failed"): void {
-      if (disposed) return
+      if (owner.phase() === "released") return
 
-      disposed = true
-      clearTimeout(timeout)
-      instance?.remove()
-      instance = undefined
-      map.current = undefined
-      overlays.current = undefined
+      owner.release()
       setView({ state })
     }
 
-    const timeout = setTimeout(() => {
-      fail("provider-unavailable")
-    }, LOAD_TIMEOUT_MS)
-
     import("leaflet").then(
       ({ default: L }) => {
-        if (disposed) return
+        if (owner.phase() === "released") return
 
         const reduced = prefersReducedMotion()
 
-        instance = L.map(element, {
+        const instance = L.map(element, {
           center: [origin.latitude, origin.longitude],
           zoom: LOCAL_ZOOM,
           minZoom: 10,
@@ -132,6 +199,9 @@ export function RasterMap({
           fadeAnimation: !reduced,
           markerZoomAnimation: !reduced,
         })
+
+        owner.adopt(instance)
+
         instance.attributionControl.setPrefix(false)
 
         if (credit !== undefined)
@@ -147,17 +217,10 @@ export function RasterMap({
 
         // Any tile proves the provider answers; later failures only thin the map.
         tiles.on("tileload", () => {
-          clearTimeout(timeout)
-
-          if (!disposed)
-            setView((current) =>
-              current.state === "loading"
-                ? { state: "ready", tiles: "complete" }
-                : current
-            )
+          if (owner.settle()) setView({ state: "ready", tiles: "complete" })
         })
         tiles.on("tileerror", () => {
-          if (!disposed)
+          if (owner.phase() === "running")
             setView((current) =>
               current.state === "ready"
                 ? { ...current, tiles: "incomplete" }
@@ -167,7 +230,6 @@ export function RasterMap({
         tiles.addTo(instance)
 
         leaflet.current = L
-        map.current = instance
         overlays.current = L.layerGroup().addTo(instance)
         fittedLines.current = undefined
         setCreated((count) => count + 1)
@@ -178,11 +240,7 @@ export function RasterMap({
     )
 
     return () => {
-      disposed = true
-      clearTimeout(timeout)
-      instance?.remove()
-      map.current = undefined
-      overlays.current = undefined
+      owner.release()
     }
   }, [origin.latitude, origin.longitude, attempt, credit])
 
