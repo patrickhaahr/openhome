@@ -351,26 +351,35 @@ class AppDriver {
         assertVisible("$name $progress")
     }
 
-    /** Exactly the Exercises the Active Workout holds, in the order the screen offers them. */
+    /**
+     * Exactly the Exercises the Active Workout holds, in the order the screen offers them. Adding or removing
+     * an Exercise animates the chip row, so the old chips can still be there, or nodes replaced under a read,
+     * for a while. It waits until two reads in a row show the expected order, which is the settled screen, and
+     * otherwise fails with the last order read.
+     */
     fun assertExerciseOrder(vararg expected: String) {
         described("Go to ${expected.first()}")
-        assertEquals(expected.toList(), exerciseOrderOnScreen())
+        val wanted = expected.toList()
+        var shown: List<String>? = null
+        awaitUntil(TIMEOUT_MS) {
+            val previous = shown
+            shown = exerciseOrderOnScreen() ?: previous
+            shown == wanted && previous == wanted
+        }
+        assertEquals(wanted, shown)
     }
 
-    /** The screen can re-lay out under a read, so a read interrupted by that starts over from a fresh find. */
-    private fun exerciseOrderOnScreen(): List<String> {
-        repeat(TAP_ATTEMPTS) {
-            device.waitForIdle()
-            try {
-                return device.findObjects(By.descStartsWith("Go to "))
-                    .map { Triple(it.visibleBounds.top, it.visibleBounds.left, it.contentDescription) }
-                    .sortedWith(compareBy({ it.first }, { it.second }))
-                    .map { it.third.removePrefix("Go to ") }
-            } catch (_: StaleObjectException) {
-                // Find them all again.
-            }
+    /** One read of the chips; null when the screen re-laid out under it, which a later read replaces. */
+    private fun exerciseOrderOnScreen(): List<String>? {
+        device.waitForIdle()
+        return try {
+            device.findObjects(By.descStartsWith("Go to "))
+                .map { Triple(it.visibleBounds.top, it.visibleBounds.left, it.contentDescription) }
+                .sortedWith(compareBy({ it.first }, { it.second }))
+                .map { it.third.removePrefix("Go to ") }
+        } catch (_: StaleObjectException) {
+            null
         }
-        error("The Exercises kept changing and could not be read")
     }
 
     /** Two taps as a hurried thumb gives them: long enough apart for the screen to have changed under it. */
