@@ -87,26 +87,74 @@ enum Control {
     Automatic,
     Manual(BacklightOverride),
 }
+/// The intended selection and where it comes from. A manual decision's selection lives only
+/// in its override and an automatic one's only in the routine, so the two cannot disagree.
+#[derive(Clone, Copy)]
+enum Decision {
+    Automatic { selection: Selection },
+    Manual(BacklightOverride),
+}
 /// The complete policy decision: intended selection, its source and the next due
-/// transition. Independent of device delivery; a failed write never changes it.
+/// transition. Independent of device delivery; a failed write never changes it. Only
+/// `Policy` transitions construct one, and its fields are read through accessors, so a
+/// selection and override that disagree cannot be persisted.
 pub struct Target {
-    pub bedtime: BedtimeSettings,
-    pub selection: Selection,
-    pub manual_override: Option<BacklightOverride>,
-    pub next_transition: Option<DateTime<Utc>>,
+    bedtime: BedtimeSettings,
+    decision: Decision,
+    next_transition: Option<DateTime<Utc>>,
 }
 impl Target {
+    fn new(
+        bedtime: BedtimeSettings,
+        manual_override: Option<BacklightOverride>,
+        routine_selection: Selection,
+        next_transition: Option<DateTime<Utc>>,
+    ) -> Self {
+        let decision = match manual_override {
+            Some(value) => Decision::Manual(value),
+            None => Decision::Automatic {
+                selection: routine_selection,
+            },
+        };
+        Self {
+            bedtime,
+            decision,
+            next_transition,
+        }
+    }
+    #[must_use]
+    pub fn bedtime(&self) -> &BedtimeSettings {
+        &self.bedtime
+    }
+    #[must_use]
+    pub fn selection(&self) -> Selection {
+        match self.decision {
+            Decision::Automatic { selection } => selection,
+            Decision::Manual(value) => value.selection,
+        }
+    }
+    /// The manual override to persist; `None` while Automatic.
+    #[must_use]
+    pub fn manual_override(&self) -> Option<BacklightOverride> {
+        match self.decision {
+            Decision::Automatic { .. } => None,
+            Decision::Manual(value) => Some(value),
+        }
+    }
+    #[must_use]
+    pub fn next_transition(&self) -> Option<DateTime<Utc>> {
+        self.next_transition
+    }
     #[must_use]
     pub fn control_source(&self) -> ControlSource {
-        if self.manual_override.is_some() {
-            ControlSource::Manual
-        } else {
-            ControlSource::Automatic
+        match self.decision {
+            Decision::Automatic { .. } => ControlSource::Automatic,
+            Decision::Manual(_) => ControlSource::Manual,
         }
     }
     #[must_use]
     pub fn override_expires_at(&self) -> Option<DateTime<Utc>> {
-        self.manual_override.and_then(|value| value.expires_at)
+        self.manual_override().and_then(|value| value.expires_at)
     }
 }
 /// Owns every guarded policy transition: select, Automatic, Bedtime edit and
@@ -149,19 +197,6 @@ impl Policy {
             _ => None,
         }
     }
-    fn target(
-        bedtime: BedtimeSettings,
-        selection: Selection,
-        manual_override: Option<BacklightOverride>,
-        next_transition: Option<DateTime<Utc>>,
-    ) -> Target {
-        Target {
-            bedtime,
-            selection,
-            manual_override,
-            next_transition,
-        }
-    }
     /// Current target: an unexpired override keeps its selection and expiry; an
     /// expired or absent one yields the routine's selection. Used by startup and
     /// the background routine.
@@ -169,11 +204,10 @@ impl Policy {
     pub fn resolve(self, now: DateTime<Utc>) -> Target {
         let evaluation = evaluate(&self.bedtime, now);
         let manual_override = self.live_override(now);
-        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
-        Self::target(
+        Target::new(
             self.bedtime,
-            selection,
             manual_override,
+            evaluation.selection,
             evaluation.next_transition,
         )
     }
@@ -182,14 +216,14 @@ impl Policy {
     #[must_use]
     pub fn select(self, selection: Selection, now: DateTime<Utc>) -> Target {
         let evaluation = evaluate(&self.bedtime, now);
-        let manual_override = Some(BacklightOverride {
+        let manual_override = BacklightOverride {
             selection,
             expires_at: evaluation.next_transition,
-        });
-        Self::target(
+        };
+        Target::new(
             self.bedtime,
-            selection,
-            manual_override,
+            Some(manual_override),
+            evaluation.selection,
             evaluation.next_transition,
         )
     }
@@ -197,10 +231,10 @@ impl Policy {
     #[must_use]
     pub fn automatic(self, now: DateTime<Utc>) -> Target {
         let evaluation = evaluate(&self.bedtime, now);
-        Self::target(
+        Target::new(
             self.bedtime,
-            evaluation.selection,
             None,
+            evaluation.selection,
             evaluation.next_transition,
         )
     }
@@ -223,11 +257,10 @@ impl Policy {
                 expires_at: evaluation.next_transition,
             })
         };
-        let selection = manual_override.map_or(evaluation.selection, |value| value.selection);
-        Ok(Self::target(
+        Ok(Target::new(
             self.bedtime,
-            selection,
             manual_override,
+            evaluation.selection,
             evaluation.next_transition,
         ))
     }
@@ -320,8 +353,8 @@ mod policy_tests {
         let target = policy.resolve("2026-10-23T21:30:00Z".parse().unwrap());
         // Outside the window's start, an unexpired manual Off would have leaked; instead
         // 23:30 Copenhagen sits inside the window, so Automatic resolves the routine red.
-        assert!(matches!(target.selection, Selection::Color { .. }));
-        assert!(target.manual_override.is_none());
+        assert!(matches!(target.selection(), Selection::Color { .. }));
+        assert!(target.manual_override().is_none());
         assert_eq!(source(&target), "automatic");
         assert_eq!(target.override_expires_at(), None);
     }
@@ -339,12 +372,12 @@ mod policy_tests {
             )
         };
         let before = override_at(Some(expiry)).resolve("2026-10-23T20:59:59Z".parse().unwrap());
-        assert!(matches!(before.selection, Selection::Off { .. }));
+        assert!(matches!(before.selection(), Selection::Off { .. }));
         assert_eq!(before.override_expires_at(), Some(expiry));
         assert_eq!(source(&before), "manual");
         let at_expiry = override_at(Some(expiry)).resolve(expiry);
-        assert!(matches!(at_expiry.selection, Selection::Color { .. }));
-        assert!(at_expiry.manual_override.is_none());
+        assert!(matches!(at_expiry.selection(), Selection::Color { .. }));
+        assert!(at_expiry.manual_override().is_none());
         assert_eq!(source(&at_expiry), "automatic");
     }
 
@@ -361,9 +394,9 @@ mod policy_tests {
         let target = expired
             .edit(update, "2026-10-23T22:30:00Z".parse().unwrap())
             .unwrap();
-        assert!(matches!(target.selection, Selection::TvSync { .. }));
-        assert!(target.manual_override.is_none());
-        assert_eq!(target.bedtime.start, "01:00".parse().unwrap());
+        assert!(matches!(target.selection(), Selection::TvSync { .. }));
+        assert!(target.manual_override().is_none());
+        assert_eq!(target.bedtime().start, "01:00".parse().unwrap());
     }
 
     #[test]
@@ -372,9 +405,9 @@ mod policy_tests {
             selection(json!({"mode":"off"})),
             "2026-10-23T21:30:00Z".parse().unwrap(),
         );
-        assert!(matches!(target.selection, Selection::Off { .. }));
-        assert_eq!(target.manual_override.unwrap().expires_at, None);
-        assert_eq!(target.next_transition, None);
+        assert!(matches!(target.selection(), Selection::Off { .. }));
+        assert_eq!(target.manual_override().unwrap().expires_at, None);
+        assert_eq!(target.next_transition(), None);
     }
 }
 

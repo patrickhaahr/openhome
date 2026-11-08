@@ -122,7 +122,10 @@ arbitrarily chosen occurrence of an ambiguous local boundary.
 Policy ownership lives in `routine::Policy`: Automatic or a manual override (selection
 plus optional expiry) is one `Control` value, and select, Automatic, Bedtime edit and
 time-driven resolution (also used at startup) each yield a `Target` (selection, source,
-next transition) from current wall time. `BacklightService` only persists a `Target`
+next transition) from current wall time. A `Target` has private fields read through
+accessors, and its selection comes from its single automatic-or-manual decision, so only
+a `Policy` transition can produce one and a selection that disagrees with its override
+cannot be persisted. `BacklightService` only persists a `Target`
 and dispatches it; policy never depends on a device write succeeding, and the service's
 status `intended`, `control_source`, `override_expires_at` and `next_transition` are
 derived from the target, so the persisted records and Status serialization are unchanged.

@@ -238,16 +238,16 @@ impl BacklightService {
                 } else {
                     Reachability::Unconfigured
                 },
-                intended: target.selection,
+                intended: target.selection(),
                 acknowledged: None,
                 observed: None,
                 stale: true,
                 command: Command::Idle,
                 recovery: Recovery::Pending,
-                bedtime: target.bedtime.clone(),
+                bedtime: target.bedtime().clone(),
                 control_source: target.control_source(),
                 override_expires_at: target.override_expires_at(),
-                next_transition: target.next_transition,
+                next_transition: target.next_transition(),
             })),
             worker: Arc::new(Mutex::new(())),
             submission: Arc::new(Mutex::new(())),
@@ -443,10 +443,10 @@ impl BacklightService {
     }
     // Called with the submission lock: target, settings and override commit together.
     async fn persist(&self, target: &Target) -> Result<u64> {
-        let selection = target.selection;
-        let manual_override = target.manual_override;
+        let selection = target.selection();
+        let manual_override = target.manual_override();
         let intended = serde_json::to_string(&selection).map_err(anyhow::Error::from)?;
-        let settings = serde_json::to_string(&target.bedtime).map_err(anyhow::Error::from)?;
+        let settings = serde_json::to_string(target.bedtime()).map_err(anyhow::Error::from)?;
         let override_json = manual_override
             .map(|value| serde_json::to_string(&value))
             .transpose()
@@ -462,10 +462,10 @@ impl BacklightService {
         .map_err(anyhow::Error::from)?;
         let mut state = self.state.lock().await;
         state.intended = selection;
-        state.bedtime = target.bedtime.clone();
+        state.bedtime = target.bedtime().clone();
         state.control_source = target.control_source();
         state.override_expires_at = target.override_expires_at();
-        state.next_transition = target.next_transition;
+        state.next_transition = target.next_transition();
         state.target_accepted();
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
     }
@@ -480,7 +480,7 @@ impl BacklightService {
     pub async fn automatic(&self) -> Result<Status> {
         let submission = self.submission.lock().await;
         let target = self.policy().await.automatic(self.clock.now());
-        let selection = target.selection;
+        let selection = target.selection();
         self.prepare_profile(selection).await?;
         let revision = self.persist(&target).await?;
         drop(submission);
@@ -492,7 +492,7 @@ impl BacklightService {
         }
         let submission = self.submission.lock().await;
         let target = self.policy().await.edit(update, self.clock.now())?;
-        let selection = target.selection;
+        let selection = target.selection();
         self.prepare_profile(selection).await?;
         let revision = self.persist(&target).await?;
         drop(submission);
@@ -531,7 +531,7 @@ impl BacklightService {
                 status.override_expires_at,
             )
             .resolve(self.clock.now());
-            let selection = target.selection;
+            let selection = target.selection();
             if let Ok(revision) = self.persist(&target).await {
                 // Policy still advances when setup prevents dispatch, including override expiry.
                 if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
