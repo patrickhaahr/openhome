@@ -88,6 +88,30 @@ external changes remain untouched during a healthy connection until another expl
 command or scheduled transition. Startup and reconnect deliberately restore the
 current OpenHome target.
 
+### Dashboard delivery
+
+`BacklightControls` keeps one record of delivery, a `Delivery` variant that only its
+own transition functions construct: `idle`; `debouncing` (a trailing 200 ms edit with
+its timer); `sending` (the action in flight, a run number and at most one thing
+waiting behind it, either a debounced edit or a queued action); and `closed` after
+unmount. A newer edit or action replaces whatever is waiting, so the latest selection
+wins, and an immediate action cancels a pending edit. The response, or the rejection,
+of the request in flight delivers what is waiting; a response that finds the delivery
+closed or replaced is dropped. An older response never replaces the feedback of newer
+waiting work, and a failure releases the interaction. This is only what the Dashboard
+has asked for: the API's `command`, `recovery`, saved intention and device observation
+arrive as status and stay independent.
+
+Demonstrated: the server side of a change always settles. `changeBacklight` sends its
+request with `AbortSignal.timeout(65000)`, which stays attached while the body is
+parsed, and every transport or parsing failure becomes an `unavailable` value. Not
+demonstrated: the browser's call to the `updateBacklight` server function (the page
+passes it no abort signal) and the `router.invalidate` the page awaits afterwards. If
+either never settles, `sending` keeps the page busy and later selections queue behind
+it until the page is reloaded. No Dashboard timeout or retry is added without a
+source-backed requirement. Behavior against a real Backlight and a physical iPad is
+untested.
+
 Bedtime Mode starts disabled, retaining 23:00–00:00 Europe/Copenhagen and its own
 20% red brightness. `PATCH /api/backlight/bedtime {"enabled":true}` clears manual
 overrides and applies Automatic immediately. Start is inclusive; End is exclusive.

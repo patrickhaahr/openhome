@@ -57,6 +57,109 @@ const connectionLabel = {
 const unconfirmed =
   "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
 
+/** A trailing 200 ms edit that has not been sent; `timer` is its pending timeout. */
+type Debounce = {
+  readonly kind: "debounce"
+  readonly selection: BacklightSelection
+  readonly timer: ReturnType<typeof setTimeout>
+}
+
+/** The one action waiting behind the request in flight; a newer one replaces it. */
+type Waiting =
+  | Debounce
+  | { readonly kind: "queued"; readonly action: BacklightAction }
+
+/**
+ * Where delivery of Backlight actions stands. Each variant carries exactly the data its phase
+ * needs: the debounce timer, or the action in flight (identified by `run`) and the one thing
+ * waiting behind it. This is only what the dashboard has asked for; the API's command,
+ * recovery and observation facts arrive in `data` and stay separate.
+ *
+ * The exits of every non-terminal phase:
+ * - debouncing: the timer sends it, an immediate action replaces it, or unmount clears it.
+ * - sending: the response or the rejection of `change` ends it, then whatever is waiting is
+ *   delivered; unmount drops the response. A request that never settles holds `sending`, see
+ *   `deliver`.
+ */
+type Delivery =
+  | { readonly phase: "idle" }
+  | { readonly phase: "debouncing"; readonly debounce: Debounce }
+  | {
+      readonly phase: "sending"
+      readonly run: number
+      readonly action: BacklightAction
+      readonly next: Waiting | null
+    }
+  | { readonly phase: "closed" }
+
+/** Cancel obsolete waiting work; a queued action holds nothing to release. */
+function discard(waiting: Waiting | null): void {
+  if (waiting?.kind === "debounce") clearTimeout(waiting.timer)
+}
+
+/** What the live region says about an outcome, and the tag shown beside the controls. */
+type Announcement = {
+  readonly text: string
+  readonly tag: string | null
+}
+
+/** The announcement for an action's outcome; independent of how it is delivered. */
+function describe(
+  action: BacklightAction,
+  result: BacklightResult
+): Announcement {
+  switch (result.state) {
+    case "available":
+      if (result.status.command === "failed")
+        return {
+          text: "OpenHome couldn’t confirm the command. Your selection is saved; OpenHome retries the latest selection automatically.",
+          tag: "Retrying",
+        }
+
+      if (action.action === "profile")
+        return { text: "TV Sync settings saved safely.", tag: null }
+
+      if (action.action === "bedtime")
+        return {
+          text: "Bedtime settings saved. Readable device state is listed with the Backlight state.",
+          tag: null,
+        }
+
+      if (action.action === "refresh")
+        return result.status.reachability === "reachable"
+          ? { text: "Backlight state refreshed.", tag: null }
+          : { text: "The Backlight couldn’t be reached.", tag: "No answer" }
+
+      if (result.status.command === "pending")
+        return {
+          text: "Your selection is saved and waiting for the Backlight.",
+          tag: null,
+        }
+
+      return {
+        text: "Command acknowledged. Readable device state is listed with the Backlight state.",
+        tag: null,
+      }
+    case "profile-required":
+      return {
+        text: "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup.",
+        tag: "Setup needed",
+      }
+    case "invalid-profile":
+      return {
+        text: "The saved profile is invalid. Your previous TV Sync settings were kept.",
+        tag: "Not saved",
+      }
+    case "invalid-settings":
+      return {
+        text: "Bedtime settings weren’t saved. Check the times and red brightness, then try again.",
+        tag: "Not saved",
+      }
+    case "unavailable":
+      return { text: unconfirmed, tag: "No answer" }
+  }
+}
+
 /**
  * The LED drawn as itself: a TV on a night wall, and behind it the light it is asked to make.
  * The halo is the selection; the dock below picks one, the fader sets how far it reaches, the
@@ -79,10 +182,12 @@ export function BacklightControls({
   const [sent, setSent] = useState<BacklightAction["action"] | null>(null)
   const [bedtimeRound, setBedtimeRound] = useState(0)
 
-  const inFlight = useRef(false)
-  const queued = useRef<BacklightAction | null>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const mounted = useRef(true)
+  // The delivery owner: `delivery` is the only record of what is waiting or in flight. Every
+  // change to it goes through `commit`, and only `edit`, `perform`, `fire`, `deliver` and the
+  // unmount cleanup below construct a variant, so a timer or response from replaced work can
+  // be recognised by identity and ignored.
+  const delivery = useRef<Delivery>({ phase: "idle" })
+  const runs = useRef(0)
   const latestData = useRef(data)
   useEffect(() => {
     latestData.current = data
@@ -90,122 +195,144 @@ export function BacklightControls({
   const [draft, setDraft] = useState<BacklightSelection | null>(null)
   useIdleBlock(pending)
 
-  useEffect(() => {
-    mounted.current = true
+  // `pending` and `draft` follow the delivery phase: busy while debouncing or sending, released
+  // when nothing is waiting. A closed delivery belongs to an unmounted component; nothing renders.
+  function commit(next: Delivery): void {
+    delivery.current = next
 
-    return () => {
-      mounted.current = false
-
-      if (timer.current !== null) clearTimeout(timer.current)
-      queued.current = null
-    }
-  }, [])
-
-  async function drain(): Promise<void> {
-    if (inFlight.current) return
-    inFlight.current = true
-    setPending(true)
-
-    while (queued.current !== null && mounted.current) {
-      const action = queued.current
-      queued.current = null
-      setSent(action.action)
-      setAlert(null)
-      setMessage("Sending your latest selection…")
-
-      // An older response must not replace feedback for a newer queued edit.
-      const announce = (text: string, tag: string | null = null): void => {
-        if (queued.current === null && timer.current === null) {
-          setMessage(text)
-          setAlert(tag)
-        }
-      }
-
-      try {
-        const result = await change(action)
-
-        if (!mounted.current) return
-
-        if (action.action === "bedtime") setBedtimeRound((round) => round + 1)
-
-        if (result.state === "available") {
-          setLocal({ base: latestData.current, value: result })
-
-          if (result.status.command === "failed")
-            announce(
-              "OpenHome couldn’t confirm the command. Your selection is saved; OpenHome retries the latest selection automatically.",
-              "Retrying"
-            )
-          else if (action.action === "profile")
-            announce("TV Sync settings saved safely.")
-          else if (action.action === "bedtime")
-            announce(
-              "Bedtime settings saved. Readable device state is listed with the Backlight state."
-            )
-          else if (action.action === "refresh")
-            announce(
-              result.status.reachability === "reachable"
-                ? "Backlight state refreshed."
-                : "The Backlight couldn’t be reached.",
-              result.status.reachability === "reachable" ? null : "No answer"
-            )
-          else if (result.status.command === "pending")
-            announce("Your selection is saved and waiting for the Backlight.")
-          else
-            announce(
-              "Command acknowledged. Readable device state is listed with the Backlight state."
-            )
-        } else if (result.state === "profile-required")
-          announce(
-            "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup.",
-            "Setup needed"
-          )
-        else if (result.state === "invalid-profile")
-          announce(
-            "The saved profile is invalid. Your previous TV Sync settings were kept.",
-            "Not saved"
-          )
-        else if (result.state === "invalid-settings")
-          announce(
-            "Bedtime settings weren’t saved. Check the times and red brightness, then try again.",
-            "Not saved"
-          )
-        else announce(unconfirmed, "No answer")
-      } catch {
-        if (mounted.current) announce(unconfirmed, "No answer")
-      }
-    }
-
-    inFlight.current = false
-
-    if (mounted.current && timer.current === null) {
+    if (next.phase === "idle") {
       setPending(false)
       setDraft(null)
+    } else if (next.phase !== "closed") setPending(true)
+  }
+
+  useEffect(
+    () => () => {
+      const closing = delivery.current
+
+      if (closing.phase === "debouncing") clearTimeout(closing.debounce.timer)
+      else if (closing.phase === "sending") discard(closing.next)
+      // The request in flight cannot be recalled; its response finds a closed delivery and is dropped.
+      delivery.current = { phase: "closed" }
+    },
+    []
+  )
+
+  function startDebounce(selection: BacklightSelection): Debounce {
+    const debounce: Debounce = {
+      kind: "debounce",
+      selection,
+      timer: setTimeout(() => fire(debounce), 200),
     }
+
+    return debounce
+  }
+
+  /** The trailing 200 ms edit settled: send it now, or queue it behind the request in flight. */
+  function fire(debounce: Debounce): void {
+    const state = delivery.current
+
+    const action: BacklightAction = {
+      action: "select",
+      selection: debounce.selection,
+    }
+
+    if (state.phase === "debouncing" && state.debounce === debounce)
+      void deliver(action)
+    else if (state.phase === "sending" && state.next === debounce)
+      commit({ ...state, next: { kind: "queued", action } })
+  }
+
+  async function deliver(action: BacklightAction): Promise<void> {
+    const run = ++runs.current
+    commit({ phase: "sending", run, action, next: null })
+    setSent(action.action)
+    setAlert(null)
+    setMessage("Sending your latest selection…")
+
+    // Demonstrated bound: on the server, `changeBacklight` always settles. Its request carries
+    // `AbortSignal.timeout(65_000)`, still attached while the body is parsed, and every failure
+    // becomes an `unavailable` value. Not demonstrated: the browser's call to `updateBacklight`
+    // (no abort signal is passed to the server function) and the `router.invalidate` the page
+    // awaits afterwards. If either never settles, `sending` holds the interaction busy and
+    // later actions queue behind it. No timeout or retry is added without a source-backed
+    // requirement; see "Dashboard delivery" in docs/backlight.md.
+    let result: BacklightResult | null = null
+
+    try {
+      result = await change(action)
+    } catch {
+      /* A rejection is reported as an unconfirmed command below. */
+    }
+
+    // Replaced or unmounted work: drop the response without touching state.
+    const sending = delivery.current
+
+    if (sending.phase !== "sending" || sending.run !== run) return
+
+    // An older response must not replace feedback for a newer waiting edit.
+    const announce = (text: string, tag: string | null = null): void => {
+      if (sending.next === null) {
+        setMessage(text)
+        setAlert(tag)
+      }
+    }
+
+    if (result === null) announce(unconfirmed, "No answer")
+    else {
+      if (action.action === "bedtime") setBedtimeRound((round) => round + 1)
+
+      if (result.state === "available")
+        setLocal({ base: latestData.current, value: result })
+
+      const outcome = describe(action, result)
+      announce(outcome.text, outcome.tag)
+    }
+
+    // A later selection must still drain; a settled edit keeps the interaction busy until sent.
+    const next = sending.next
+
+    if (next === null) commit({ phase: "idle" })
+    else if (next.kind === "queued") void deliver(next.action)
+    else commit({ phase: "debouncing", debounce: next })
   }
 
   function perform(action: BacklightAction): void {
-    if (timer.current !== null) clearTimeout(timer.current)
-    timer.current = null
-    queued.current = action
+    const state = delivery.current
+
+    if (state.phase === "closed") return
 
     if (action.action === "select") setDraft(action.selection)
-    void drain()
+
+    if (state.phase === "sending") {
+      discard(state.next)
+      commit({ ...state, next: { kind: "queued", action } })
+
+      return
+    }
+
+    if (state.phase === "debouncing") clearTimeout(state.debounce.timer)
+    void deliver(action)
   }
 
   function edit(selection: BacklightSelection): void {
+    const state = delivery.current
+
+    if (state.phase === "closed") return
     setDraft(selection)
-    setPending(true)
     setMessage("Waiting for your latest adjustment…")
 
-    if (timer.current !== null) clearTimeout(timer.current)
-    // A single trailing target, even while another request is in flight.
-    queued.current = null
-    timer.current = setTimeout(() => {
-      timer.current = null
-      queued.current = { action: "select", selection }
-      void drain()
-    }, 200)
+    // A single trailing target, even while another request is in flight: it replaces any
+    // queued action as well as an earlier edit.
+    if (state.phase === "sending") {
+      discard(state.next)
+      commit({ ...state, next: startDebounce(selection) })
+
+      return
+    }
+
+    if (state.phase === "debouncing") clearTimeout(state.debounce.timer)
+    commit({ phase: "debouncing", debounce: startDebounce(selection) })
   }
 
   const status = current.state === "available" ? current.status : undefined
