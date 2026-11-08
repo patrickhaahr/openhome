@@ -25,6 +25,14 @@ data class RestTimer(val exerciseId: Long, val exerciseName: String, val deadlin
 /**
  * The rest between Sets. Storage holds a deadline, so nothing here depends on a screen or a process
  * being alive: the remaining time is read from the clock and Android's alarm ends the rest.
+ *
+ * Three facts stay separate: the stored timer (a deadline and whether it was alerted), the Exercise's
+ * [RestPreference], and Android's one alarm, which only mirrors the timer through [syncAlarm]. The timer
+ * row is the owner: a rest is running (not alerted), over (alerted, or its row gone) and is never
+ * revived, and every change to it runs in one transaction. Replacing, adjusting, disabling, ending or
+ * finishing the Workout each end in [syncAlarm], so a stale alarm is at worst a no-op in [onAlarm]. A
+ * process that dies before [syncAlarm] is repaired by the sync at app start. Nothing promises a vibration
+ * once Android has dropped the alarm: the rest is then shown over, silently.
  */
 class RestTimers(private val database: OpenHomeDatabase, private val alarm: RestAlarm) {
     private val dao = database.restDao()
