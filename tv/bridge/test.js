@@ -128,6 +128,30 @@ async function cache() {
   assert.strictEqual(next.recovery.state, 'unavailable');
   assert.strictEqual(next.recovery.rest, null, 'previous-day health must never leak into today');
 
+  // A resolved but invalid upstream body is a failed observation, not a rejection: same-day values go stale
+  // and a never-observed value stays unavailable; neither is ever invented or kept fresh.
+  clock = now;
+  var invalid = false;
+  var judged = client.createBridge({now: function () { return clock; }, request: function (path) {
+    if (invalid) return Promise.resolve({unexpected: 'shape'});
+    return Promise.resolve(path === '/api/weather' ? weather() : recovery());
+  }});
+  assert.strictEqual((await judged.getState()).weather.state, 'fresh');
+  invalid = true;
+  clock = now + 15 * MINUTE;
+  var rejected = await judged.getState();
+  assert.strictEqual(rejected.weather.state, 'stale');
+  assert.strictEqual(rejected.recovery.state, 'stale');
+  assert.strictEqual(rejected.recovery.rest, 82.5, 'invalid body retains same-day measurements');
+  var neverSeen = client.createBridge({now: function () { return clock; }, request: function () {
+    return Promise.resolve({unexpected: 'shape'});
+  }});
+  var empty = await neverSeen.getState();
+  assert.strictEqual(empty.weather.state, 'unavailable');
+  assert.strictEqual(empty.recovery.state, 'unavailable');
+  var again = await neverSeen.getState();
+  assert.strictEqual(again.weather.state, 'unavailable', 'the refresh slot is released after an invalid body');
+
   // Separate instance: move midnight during requests and resolve both stale-day responses.
   clock = Date.parse('2026-10-21T21:59:59Z');
   var resolvers = [];
@@ -175,6 +199,18 @@ async function commands() {
   var failed = client.createBridge({request: function () { failures++; return Promise.reject(new Error('secret URL')); }});
   assert.deepStrictEqual(await failed.command('lights-off'), {status: 502, body: {state: 'failed', reason: 'unavailable'}});
   assert.strictEqual(failures, 1, 'failed commands must never retry automatically');
+  // Rejection releases the in-flight slot; only the independent one-second deadline then gates admission.
+  var rejectClock = now;
+  var attempts = 0;
+  var recovering = client.createBridge({now: function () { return rejectClock; }, request: function () {
+    attempts++;
+    return attempts === 1 ? Promise.reject(new Error('secret URL')) : Promise.resolve({message: 'ok'});
+  }});
+  assert.strictEqual((await recovering.command('lights-on')).status, 502);
+  assert.strictEqual((await recovering.command('lights-on')).status, 429, 'rate deadline survives a failed command');
+  rejectClock += 1000;
+  assert.strictEqual((await recovering.command('lights-on')).status, 200, 'slot was released by the failure');
+  assert.strictEqual(attempts, 2);
 }
 
 function localRequest(port, path, method, overrides, body) {
