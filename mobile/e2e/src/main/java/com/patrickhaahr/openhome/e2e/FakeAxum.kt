@@ -97,6 +97,15 @@ class FakeAxum(
     @Volatile var lightCommandCode = 200
     @Volatile var loseSpeakerResponse = false
     @Volatile var loseLightResponse = false
+
+    @Volatile private var commandGate: CountDownLatch? = null
+
+    /** Hangs TV, speaker and light command responses until the returned latch opens, so a test can observe the sending state. */
+    fun holdCommands(): CountDownLatch = CountDownLatch(1).also { commandGate = it }
+
+    private fun awaitCommandGate() {
+        commandGate?.await(60, TimeUnit.SECONDS)
+    }
     private val speakerRequests = CopyOnWriteArrayList<JsonObject>()
     private val lightRequests = CopyOnWriteArrayList<Pair<String, String>>()
     fun speakerRequests(): List<JsonObject> = speakerRequests.toList()
@@ -291,6 +300,7 @@ class FakeAxum(
 
     override fun close() {
         releaseBlockedDetails?.countDown()
+        commandGate?.countDown()
         server.close()
     }
 
@@ -309,6 +319,7 @@ class FakeAxum(
             )
             path == "/api/ir/lgtv" && request.method == "POST" -> {
                 tvRequests += Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+                awaitCommandGate()
                 when {
                     loseTvResponse -> disconnected()
                     tvCommandCode != 200 -> error(tvCommandCode, "IR unavailable")
@@ -317,6 +328,7 @@ class FakeAxum(
             }
             path == "/api/ir/edifier" && request.method == "POST" -> {
                 speakerRequests += Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
+                awaitCommandGate()
                 when {
                     loseSpeakerResponse -> disconnected()
                     speakerCommandCode != 200 -> error(speakerCommandCode, "Speaker unavailable")
@@ -325,6 +337,7 @@ class FakeAxum(
             }
             path in listOf("/api/lights/on", "/api/lights/off") && request.method == "POST" -> {
                 lightRequests += path to (request.body?.utf8() ?: "")
+                awaitCommandGate()
                 when {
                     loseLightResponse -> disconnected()
                     lightCommandCode != 200 -> error(lightCommandCode, "SwitchBot service is not configured")

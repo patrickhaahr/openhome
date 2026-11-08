@@ -14,15 +14,40 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
+/** The one request Android has made, or what it last settled as; never a pending request with an old result. */
+sealed interface BacklightOperation {
+    /** No request in flight and nothing to report. */
+    data object Idle : BacklightOperation
+
+    data class Pending(val label: String) : BacklightOperation
+
+    /** OpenHome answered a save; says nothing about what the TV or controller then did. */
+    data class Saved(val message: String) : BacklightOperation
+
+    data class Failed(val problem: String) : BacklightOperation
+}
+
+/**
+ * [status] is the last server observation and [outdated] says a later request left its outcome unknown; both
+ * stay independent of the [operation] that is in flight or last settled.
+ */
 data class BacklightState(
     val status: BacklightStatus? = null,
-    val pending: String? = null,
-    val problem: String? = null,
     val outdated: Boolean = false,
-    val message: String? = null,
-)
+    val operation: BacklightOperation = BacklightOperation.Idle,
+) {
+    val pending: String? get() = (operation as? BacklightOperation.Pending)?.label
+    val message: String? get() = (operation as? BacklightOperation.Saved)?.message
+    val problem: String? get() = (operation as? BacklightOperation.Failed)?.problem
+}
 
-/** Ephemeral, explicit requests only: no scheduler, Room writes or retry path. */
+/**
+ * Ephemeral, explicit requests only: no scheduler, Room writes or retry path. [request] is the sole transition
+ * owner and the pending guard admits one request at a time, so a response can never be overtaken by another.
+ * Exits: a response replaces the status; an [ApiFailure] keeps the old status, marks it outdated and asks for an
+ * explicit refresh; ViewModel cancellation cancels the call; the Home client's 5 s call timeout
+ * (AppContainer.homeHttpClient, no connection retry) surfaces as [ApiFailure.Unreachable].
+ */
 class BacklightViewModel(private val setup: SetupService, private val client: OkHttpClient) : ViewModel() {
     private val mutableState = MutableStateFlow(BacklightState())
     val state = mutableState.asStateFlow()
@@ -48,12 +73,15 @@ class BacklightViewModel(private val setup: SetupService, private val client: Ok
 
     private fun request(label: String, success: String? = null, hint: String? = null, call: suspend OpenHomeApi.() -> BacklightStatus) {
         val before = state.value
-        if (before.pending != null) return
-        mutableState.value = before.copy(pending = label, problem = null, message = null)
+        if (before.operation is BacklightOperation.Pending) return
+        mutableState.value = before.copy(operation = BacklightOperation.Pending(label))
         viewModelScope.launch {
             mutableState.value = try {
                 val connection = setup.connection() ?: throw ApiFailure.Unauthorized()
-                BacklightState(status = OpenHomeApi(connection.baseUrl, connection.apiKey, client).call(), message = success)
+                BacklightState(
+                    status = OpenHomeApi(connection.baseUrl, connection.apiKey, client).call(),
+                    operation = success?.let(BacklightOperation::Saved) ?: BacklightOperation.Idle,
+                )
             } catch (failure: ApiFailure) {
                 val detail = if (hint != null) {
                     "${failure.message}. $hint"
@@ -61,10 +89,10 @@ class BacklightViewModel(private val setup: SetupService, private val client: Ok
                     "TV Sync profile required; open Advanced Backlight for capture/recovery."
                 } else "${failure.message}."
                 before.copy(
-                    pending = null,
-                    message = null,
                     outdated = true,
-                    problem = "$detail Outcome may be unknown. Nothing queued or retried by Android. Refresh Backlight status before choosing again.",
+                    operation = BacklightOperation.Failed(
+                        "$detail Outcome may be unknown. Nothing queued or retried by Android. Refresh Backlight status before choosing again.",
+                    ),
                 )
             }
         }

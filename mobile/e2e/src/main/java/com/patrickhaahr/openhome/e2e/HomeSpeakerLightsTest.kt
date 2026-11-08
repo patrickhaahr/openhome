@@ -44,6 +44,35 @@ class HomeSpeakerLightsTest {
         assertEquals(listOf("/api/lights/on" to "", "/api/lights/off" to ""), api.lightRequests())
     }
 
+    // Home calls end at a 5 s call timeout, so each hold is observed without scrolling and released at once.
+    @Test fun aCommandInFlightBlocksItsGroupSoAPressCannotBeDuplicated() {
+        app.tap("Home")
+        val releaseLight = api.holdCommands()
+        app.tapDescription("Lights On")
+        app.assertVisible("Sending On…")
+        app.assertButtonEnabled("Lights Off", false)
+        releaseLight.countDown()
+        app.assertVisible("On acknowledged by Axum. Lights state is unobserved.")
+        val releaseSpeaker = api.holdCommands()
+        app.tapScrolledTo("Speaker Optical")
+        app.assertVisible("Sending Optical…")
+        app.assertButtonEnabled("Speaker Bluetooth", false)
+        app.assertButtonEnabled("Refresh Speaker controls", false)
+        releaseSpeaker.countDown()
+        app.assertVisible("Optical acknowledged by Axum. Speaker state is unobserved.")
+        assertEquals(1, api.speakerRequests().size)
+        assertEquals(listOf("/api/lights/on" to ""), api.lightRequests())
+    }
+
+    @Test fun aCommandThatNeverAnswersFailsAtTheHomeCallTimeoutAndFreesTheControls() {
+        app.tap("Home")
+        api.holdCommands()
+        app.tapDescription("Lights On")
+        app.assertVisible("On failed. Axum API unreachable. Nothing queued; Lights outcome may be unknown.")
+        app.assertButtonEnabled("Lights Off", true)
+        assertEquals(listOf("/api/lights/on" to ""), api.lightRequests())
+    }
+
     @Test fun lostResponsesAndUnavailableCapabilitiesNeverQueueOrReplay() {
         app.tap("Home")
         api.loseSpeakerResponse = true

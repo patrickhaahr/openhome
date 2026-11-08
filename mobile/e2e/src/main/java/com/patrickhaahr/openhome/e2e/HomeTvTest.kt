@@ -54,6 +54,22 @@ class HomeTvTest {
         app.assertOnWorkoutTab()
     }
 
+    @Test fun aCommandInFlightBlocksEveryTvControlSoAPressCannotBeDuplicated() {
+        app.setWifi(false)
+        app.tap("Home")
+        app.assertVisible("TV power: unobserved")
+        val release = api.holdCommands()
+        app.tapDescription("TV Power")
+        app.assertVisible("Sending Power…")
+        app.assertButtonEnabled("TV Power", false)
+        app.assertButtonEnabled("TV Mute", false)
+        app.assertButtonEnabled("Refresh TV controls", false)
+        release.countDown()
+        app.assertVisible("Power acknowledged by Axum. TV state is unobserved.")
+        app.assertButtonEnabled("TV Power", true)
+        assertEquals(1, api.tvRequests().size)
+    }
+
     @Test fun failuresArePromptAndNeverReplayWhileFitnessAndActiveWorkoutSurvive() {
         app.setWifi(false)
         app.tapDescription("Open Profile")
