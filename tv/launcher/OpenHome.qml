@@ -35,13 +35,18 @@ FocusScope {
     property int controlIndex: 0
     property var now: new Date()
     property var live: ({day: "", weather: {state: "unavailable", temperature: null, code: null, high: null, low: null, rain: null, wind: null}, recovery: {state: "unavailable", charge: null, rest: null, effort: null, freshness: "unknown"}})
-    property bool reading: false
-    property var readRequest: null
-    property var commandRequest: null
-    property string pending: ""
-    property string acknowledged: ""
-    property string failed: ""
-    property string feedback: ""
+    // Read lifecycle: null when idle, else {request}. The one in-flight read; settleRead is its only exit.
+    property var readFlight: null
+    readonly property bool reading: readFlight !== null
+    // Command lifecycle, independent of the displayed observations above. commandFlight is null or
+    // {request, command}; commandOutcome is null or {command, accepted} and is acknowledgement only,
+    // never device state. "Uncertain" (accepted === false) means the command may have been sent.
+    property var commandFlight: null
+    property var commandOutcome: null
+    readonly property string pending: commandFlight ? commandFlight.command : ""
+    readonly property string acknowledged: commandOutcome && commandOutcome.accepted ? commandOutcome.command : ""
+    readonly property string failed: commandOutcome && !commandOutcome.accepted ? commandOutcome.command : ""
+    readonly property string feedback: commandFlight ? "Sending…" : commandOutcome ? (commandOutcome.accepted ? "Command accepted" : "No answer · command may have been sent") : ""
     readonly property var commands: ["lights-on", "lights-off", "speaker-bluetooth", "speaker-optical"]
     readonly property var labels: ["Tænd lys", "Sluk lys", "Bluetooth", "Optisk indgang"]
     readonly property var glyphs: ["bulb", "bulb-off", "bluetooth", "optical"]
@@ -112,38 +117,50 @@ FocusScope {
         if (copy.recovery.state !== "unavailable") copy.recovery.state = "stale";
         live = copy;
     }
+    function settleRead(flight, data) {
+        // Only the current flight may settle; completion, timeout and late callbacks all pass through here.
+        if (readFlight !== flight) return;
+        readTimeout.stop(); readFlight = null;
+        if (data) live = data; else markOffline();
+    }
+    function parseState(req) {
+        try {
+            if (req.status !== 200) return null;
+            var data = JSON.parse(req.responseText);
+            return data.day && data.weather && data.recovery ? data : null;
+        } catch (e) { return null; }
+    }
     function refresh() {
         if (reading) return;
-        reading = true;
-        var req = new XMLHttpRequest(); readRequest = req;
+        var req = new XMLHttpRequest();
+        var flight = {request: req};
+        readFlight = flight;
         req.open("GET", "http://127.0.0.1:39479/state");
         req.setRequestHeader("X-OpenHome-TV", "1");
         req.onreadystatechange = function() {
-            if (req.readyState !== XMLHttpRequest.DONE || readRequest !== req) return;
-            readTimeout.stop(); reading = false; readRequest = null;
-            try {
-                if (req.status !== 200) throw new Error("offline");
-                var data = JSON.parse(req.responseText);
-                if (!data.day || !data.weather || !data.recovery) throw new Error("invalid");
-                live = data;
-            } catch (e) { markOffline(); }
+            if (req.readyState === XMLHttpRequest.DONE) settleRead(flight, parseState(req));
         };
         readTimeout.restart(); req.send();
     }
+    function settleCommand(flight, accepted) {
+        if (commandFlight !== flight) return;
+        commandTimeout.stop(); commandFlight = null;
+        commandOutcome = {command: flight.command, accepted: accepted};
+        feedbackTimer.restart();
+    }
     function send(command) {
-        if (pending) return;
-        feedbackTimer.stop(); acknowledged = ""; failed = ""; feedback = "Sending…"; pending = command;
-        var req = new XMLHttpRequest(); commandRequest = req;
+        if (commandFlight) return;
+        feedbackTimer.stop(); commandOutcome = null;
+        var req = new XMLHttpRequest();
+        var flight = {request: req, command: command};
+        commandFlight = flight;
         req.open("POST", "http://127.0.0.1:39479/command/" + command);
         req.setRequestHeader("X-OpenHome-TV", "1");
         req.onreadystatechange = function() {
-            if (req.readyState !== XMLHttpRequest.DONE || commandRequest !== req) return;
-            commandTimeout.stop(); commandRequest = null; pending = "";
+            if (req.readyState !== XMLHttpRequest.DONE) return;
             var ok = false;
             try { ok = req.status === 200 && JSON.parse(req.responseText).state === "accepted"; } catch (e) {}
-            if (ok) { acknowledged = command; feedback = "Command accepted"; }
-            else { failed = command; feedback = "No answer · command may have been sent"; }
-            feedbackTimer.restart();
+            settleCommand(flight, ok);
         };
         commandTimeout.restart(); req.send();
     }
@@ -170,7 +187,7 @@ FocusScope {
         onHomeShownChanged: {
             home.now = new Date();
             if (uiController.homeShown) home.refresh();
-            else { home.agentOpen = false; holdTimer.stop(); releaseTimer.stop(); home.holding = false; }
+            else { home.agentOpen = false; home.holdEvent("cancel"); }
         }
     }
     Timer { id: rebuildTimer; interval: 150; onTriggered: home.rebuild() }
@@ -178,34 +195,57 @@ FocusScope {
     Timer { interval: 60000; running: home.visible && uiController.homeShown; repeat: true; onTriggered: home.refresh() }
     Timer {
         id: readTimeout; interval: 10000
-        onTriggered: { var req = home.readRequest; home.readRequest = null; home.reading = false; if (req) req.abort(); home.markOffline(); }
+        onTriggered: {
+            var flight = home.readFlight;
+            if (!flight) return;
+            home.settleRead(flight, null);
+            flight.request.abort();
+        }
     }
     Timer {
         id: commandTimeout; interval: 14000
         onTriggered: {
-            var req = home.commandRequest; home.commandRequest = null;
-            if (req) req.abort(); home.failed = home.pending; home.pending = "";
-            home.feedback = "No answer · command may have been sent"; feedbackTimer.restart();
+            var flight = home.commandFlight;
+            if (!flight) return;
+            home.settleCommand(flight, false);
+            flight.request.abort();
         }
     }
-    Timer { id: feedbackTimer; interval: 4500; onTriggered: { home.acknowledged = ""; home.feedback = home.failed ? home.feedback : ""; } }
-    property bool holding: false
-    Timer {
-        id: holdTimer; interval: 700
-        onTriggered: {
-            if (!home.agentOpen && home.region === "apps") {
-                home.holding = false; releaseTimer.stop(); uiController.startEdit("app");
+    // Only an accepted acknowledgement expires; an uncertain outcome stays marked until the next send.
+    Timer { id: feedbackTimer; interval: 4500; onTriggered: { if (home.commandOutcome && home.commandOutcome.accepted) home.commandOutcome = null; } }
+    // Remote OK key hold lifecycle. Exactly one phase at a time, changed only by holdEvent:
+    //   idle      no key down.
+    //   pressed   OK down, holdTimer (700 ms) pending.
+    //   held      holdTimer elapsed while editing was not eligible; waits for release.
+    //   releasing OK released, releaseTimer (150 ms) pending; key repeat returns to releasingFrom.
+    // Drawer, region and agent state are independent policy read only when the hold elapses.
+    property string holdPhase: "idle"
+    property string releasingFrom: ""
+    function holdReset() { holdTimer.stop(); releaseTimer.stop(); holdPhase = "idle"; releasingFrom = ""; }
+    function holdEvent(name) {
+        var phase = holdPhase;
+        if (name === "press") {
+            if (phase === "idle") { holdPhase = "pressed"; holdTimer.restart(); }
+            else if (phase === "releasing") { releaseTimer.stop(); holdPhase = releasingFrom; releasingFrom = ""; }
+        } else if (name === "release") {
+            if (phase === "pressed" || phase === "held") { releasingFrom = phase; holdPhase = "releasing"; releaseTimer.restart(); }
+            else if (phase === "releasing") releaseTimer.restart();
+        } else if (name === "holdElapsed") {
+            // Late events are ignored unless holdTimer was genuinely pending for this phase.
+            if (phase === "pressed" || (phase === "releasing" && releasingFrom === "pressed")) {
+                if (!agentOpen && region === "apps") { holdReset(); uiController.startEdit("app"); }
+                else if (phase === "pressed") holdPhase = "held";
+                else releasingFrom = "held";
             }
-        }
+        } else if (name === "releaseElapsed") {
+            if (phase === "releasing") { holdReset(); activate(); }
+        } else if (name === "cancel") holdReset();
     }
-    Timer {
-        id: releaseTimer; interval: 150
-        onTriggered: { home.holding = false; holdTimer.stop(); home.activate(); }
-    }
+    Timer { id: holdTimer; interval: 700; onTriggered: home.holdEvent("holdElapsed") }
+    Timer { id: releaseTimer; interval: 150; onTriggered: home.holdEvent("releaseElapsed") }
     Keys.onPressed: {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            releaseTimer.stop();
-            if (!holding) { holding = true; holdTimer.restart(); }
+            holdEvent("press");
             event.accepted = true;
         } else if ([Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down].indexOf(event.key) !== -1) {
             navigate(event.key); event.accepted = true;
@@ -213,7 +253,7 @@ FocusScope {
     }
     Keys.onReleased: {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (holding) releaseTimer.restart(); event.accepted = true;
+            holdEvent("release"); event.accepted = true;
         } else if (event.key === webOS.Key_webOS_Back || event.key === Qt.Key_Escape) {
             if (agentOpen) agentOpen = false; else if (drawer) closeDrawer();
             event.accepted = true;
