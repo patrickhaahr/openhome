@@ -55,3 +55,26 @@ CARTO's matching Positron raster now requires an API key. OpenStreetMap's
 2026-10-16, permits keyless light use with visible attribution and the browser's
 Referer intact; the dashboard sets no restrictive Referrer-Policy. Night mode
 darkens the light tiles with one CSS filter on the tile pane.
+
+Each attempt to bring up either map has one owner for its pending import, load
+timeout and map, advancing importing, starting, running and released only
+forwards. Timeout, provider failure, graphics failure, a hidden tab, retry,
+unmount and the 3D-to-2D restart all release through it, which stops the timer
+and removes the MapLibre or Leaflet map with its own listeners and overlays.
+An import, style, tile or graphics event arriving after release does nothing,
+so a late callback cannot revive a view that already failed or was replaced.
+The 2D restart now removes the lost map immediately rather than on the next
+render. The view's status, the 2D/3D perspective and the building coverage stay
+separate facts: each is already a small explicit union written by one path, and
+merging them with the resource would couple independent policy. Rotation and
+pitch gestures stay disabled through the libraries' own options and handlers
+rather than being reimplemented. The vector map stops its timeout when the style
+loads, before the overlay layers are added. MapLibre 6 calls `load` listeners
+without catching, so an exception there would leave the view loading with no
+timer; it is unproved rather than guaranteed away. Invalid layers are reported
+as `error` events, and the only throwing call, a duplicate source id, cannot
+occur on a fresh style. No test can reach `load` without WebGL, and moving the
+timeout stop to the end would turn an overlay `error` event during setup into a
+provider failure, so the order is kept. Real WebGL, tile provider and touch
+behavior cannot be exercised in the test environment and need browser or device
+acceptance.

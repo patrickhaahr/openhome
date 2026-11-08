@@ -36,6 +36,9 @@ import { unavailableWeather } from "@/lib/weather"
 
 const TIMEOUT = 10_000
 
+/** The documented contract: a held touch that never reports its release wakes after 3 seconds. */
+const LOST_RELEASE_WAKE_MS = 3000
+
 const settings: IdleSettings = { timeoutMs: TIMEOUT, preview: false }
 
 const albumId = "5eed0000-0000-4000-8001-000000000000"
@@ -336,6 +339,111 @@ test("the first touch only wakes, and returns to the page exactly as it was", as
   expect(countKey().textContent).toBe("Count 2")
 })
 
+test("a held touch keeps swallowing until its release, and a lost release still wakes at the limit", async () => {
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+
+  await advance(TIMEOUT)
+  const idle = screen()
+
+  if (idle === null) throw new Error("Expected the slideshow")
+
+  await act(async () => fire(idle, "pointerdown"))
+
+  // Held past the grace: still waking, so the release has somewhere to land.
+  await advance(WAKE_GRACE_MS * 2)
+  expect(screen()?.dataset.waking).toBe("true")
+
+  // The release settles after the grace, and its stray click is eaten on the way.
+  await act(async () => {
+    fire(idle, "pointerup")
+    fire(countKey(), "click")
+  })
+  expect(countKey().textContent).toBe("Count 0")
+  await advance(WAKE_GRACE_MS)
+  expect(screen()).toBeNull()
+
+  // A release that never arrives wakes at the limit instead.
+  await advance(TIMEOUT)
+  await act(async () => fire(screen() ?? window, "pointerdown"))
+  await advance(LOST_RELEASE_WAKE_MS - 1)
+  expect(screen()).not.toBeNull()
+  await advance(1)
+  expect(screen()).toBeNull()
+})
+
+test("blocks are independent reasons: the countdown restarts only when the last is released", async () => {
+  function Holder({ held }: { held: boolean }): null {
+    useIdleBlock(held)
+
+    return null
+  }
+
+  const tree = (first: boolean, second: boolean): React.ReactNode => (
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+      <Holder held={first} />
+      <Holder held={second} />
+    </IdleProvider>
+  )
+
+  await render(tree(true, true))
+  await advance(TIMEOUT * 3)
+  expect(screen()).toBeNull()
+
+  await render(tree(false, true))
+  await advance(TIMEOUT * 3)
+  expect(screen()).toBeNull()
+
+  await render(tree(false, false))
+  await advance(TIMEOUT - 1)
+  expect(screen()).toBeNull()
+  await advance(1)
+  expect(screen()).not.toBeNull()
+})
+
+test("a block that appears while waking takes the room back and returns focus", async () => {
+  const tree = (blocked: boolean): React.ReactNode => (
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page blocked={blocked} />
+    </IdleProvider>
+  )
+
+  await render(tree(false))
+  const draft = container.querySelector("input")
+  draft?.focus()
+  await advance(TIMEOUT)
+  await act(async () => fire(screen() ?? window, "pointerdown"))
+  expect(screen()?.dataset.waking).toBe("true")
+
+  await render(tree(true))
+  expect(screen()).toBeNull()
+  expect(document.activeElement).toBe(draft)
+
+  // The cancelled wake settle must not linger and the block still holds idle off.
+  await advance(TIMEOUT * 3)
+  expect(screen()).toBeNull()
+})
+
+test("unmounting while the slideshow shows stops swallowing input", async () => {
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+
+  await advance(TIMEOUT)
+  await act(async () => fire(screen() ?? window, "pointerdown"))
+  await act(async () => root.render(null))
+
+  // A leaked capture listener would cancel every tap in the app from here on.
+  expect(fire(window, "pointerdown")).toBe(true)
+  expect(fire(window, "keydown")).toBe(true)
+})
+
 test("a key wakes without reaching the page", async () => {
   const keys: string[] = []
 
@@ -632,4 +740,115 @@ test("Copenhagen midnight replaces yesterday's photo queue and clears its captio
   ).toContain(asset(998))
   expect(document.querySelector(".idle-photo-memory")).toBeNull()
   expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+})
+
+test("a cancelled run's late page failure cannot blank the photo its replacement is loading", async () => {
+  let failOldRead: (read: WallRead) => void = () => undefined
+
+  const stale = fakeSources(
+    undefined,
+    () =>
+      new Promise<WallRead>((resolve) => {
+        failOldRead = resolve
+      })
+  )
+
+  await render(
+    <IdleProvider settings={settings} sources={stale}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(TIMEOUT)
+  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
+
+  // New sources cancel the first run while its page read is still pending.
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(1)
+  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+
+  // The cancelled read now fails; only the replacement run may touch the screen.
+  await act(async () => failOldRead(unavailablePhotos))
+  await advance(1)
+  expect(
+    document.querySelector(".idle-stage")?.getAttribute("data-resting")
+  ).toBe("false")
+  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+
+  await act(async () =>
+    fire(document.querySelector(".idle-slide img") ?? window, "load")
+  )
+  expect(document.querySelector('[data-front="true"]')).not.toBeNull()
+})
+
+async function wake(): Promise<void> {
+  const idle = screen()
+
+  if (idle === null) throw new Error("Expected the slideshow")
+
+  await act(async () => {
+    fire(idle, "pointerdown")
+    fire(idle, "pointerup")
+    fire(idle, "click")
+  })
+  await advance(WAKE_GRACE_MS)
+  expect(screen()).toBeNull()
+}
+
+function slides(): HTMLImageElement[] {
+  return Array.from(document.querySelectorAll(".idle-slide img"))
+}
+
+test("waking while the first photo is still loading leaves nothing behind for the next spell", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
+
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(TIMEOUT)
+  const abandoned = slides()[0]
+  expect(slides()).toHaveLength(1)
+
+  await wake()
+  await act(async () => fire(abandoned ?? window, "load"))
+  await advance(1000)
+
+  // The unseen photo was never kept, so the next spell starts with it again and loads normally.
+  await advance(TIMEOUT)
+  expect(slides()).toHaveLength(1)
+  expect(slides()[0]?.src).toBe(abandoned?.src)
+  await act(async () => fire(slides()[0] ?? window, "load"))
+  expect(document.querySelector('[data-front="true"]')).not.toBeNull()
+})
+
+test("waking during the dwell stops the rotation and the next spell carries on with the unseen photo", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
+
+  await render(
+    <IdleProvider settings={settings} sources={fakeSources()}>
+      <Page />
+    </IdleProvider>
+  )
+  await advance(TIMEOUT)
+  const shown = slides()[0]?.src
+  await act(async () => fire(slides()[0] ?? window, "load"))
+  await advance(FADE_MS)
+  const preloaded = slides()[1]
+  await act(async () => fire(preloaded ?? window, "load"))
+  await advance(DWELL_MS - FADE_MS - 1000)
+
+  await wake()
+  // The cancelled dwell never brings the preloaded photo forward or moves the remembered place.
+  await advance(2000)
+  expect(screen()).toBeNull()
+
+  await advance(TIMEOUT)
+  expect(slides()).toHaveLength(1)
+  expect(slides()[0]?.src).toBe(preloaded?.src)
+  expect(slides()[0]?.src).not.toBe(shown)
 })

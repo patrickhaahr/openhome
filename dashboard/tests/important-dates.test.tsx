@@ -24,6 +24,7 @@ import {
   datesFor,
   leadFigure,
   type ImportantDate,
+  type ImportantDateCommand,
   type ImportantDateMutation,
 } from "@/lib/important-dates"
 import {
@@ -34,6 +35,7 @@ import {
 import type { PersonSearch } from "@/lib/lists"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
+import { startLossyAxum } from "./support/lost-response"
 import { button, field, settle, sheet, type } from "./support/lists-dom"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
@@ -47,6 +49,12 @@ let work: Promise<ImportantDateMutation> = Promise.resolve({ state: "saved" })
 let refreshWork: Promise<void> = Promise.resolve()
 
 let search: PersonSearch = {}
+
+let refreshFails = false
+
+let sent: ImportantDateCommand[] = []
+
+const proxies: Array<() => Promise<void>> = []
 
 beforeAll(async () => {
   fixture = await startAxumFixture()
@@ -62,6 +70,8 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   sessionStorage.clear()
   search = {}
+  refreshFails = false
+  sent = []
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -70,6 +80,10 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   container.remove()
+
+  // Cleanup reads Axum directly, not through a proxy a test left behind.
+  for (const stop of proxies.splice(0)) await stop()
+  vi.stubEnv("OPENHOME_API_URL", fixture.url)
 
   const data = await available()
 
@@ -110,11 +124,15 @@ async function render(): Promise<void> {
             refreshWork = render()
           }}
           change={(command) => {
+            sent.push(command)
             work = writeImportantDate(command)
 
             return work
           }}
           refresh={() => {
+            if (refreshFails)
+              return Promise.reject(new Error("Synthetic outage"))
+
             refreshWork = render()
 
             return refreshWork
@@ -396,4 +414,123 @@ test("the shared idle read returns only dates opted into room visibility", async
 
   if (read.state !== "available") throw new Error("Expected the filtered read")
   expect(read.dates.map((date) => date.title)).toEqual(["Together"])
+})
+
+/** Axum commits the next date addition, but its response never reaches the Dashboard. */
+async function loseNextAddition(): Promise<void> {
+  const proxy = await startLossyAxum(
+    fixture.url,
+    (request) =>
+      request.method === "POST" && request.url === "/api/important-dates"
+  )
+
+  proxies.push(proxy.stop)
+  vi.stubEnv("OPENHOME_API_URL", proxy.url)
+}
+
+function additions() {
+  return sent.flatMap((command) => (command.action === "add" ? [command] : []))
+}
+
+async function addDate(title: string): Promise<void> {
+  await click("Add a date", container)
+  await type(field("Title", sheet()), title)
+  await type(field("Date", sheet()), "2019-02-14")
+  await click("Add date", sheet())
+}
+
+test.each([
+  { retry: "Together", dates: ["Together"], same: true },
+  {
+    retry: "Together again",
+    dates: ["Together", "Together again"],
+    same: false,
+  },
+])(
+  "a lost date addition retried after remount ($retry) follows its request identity",
+  async ({ retry, dates, same }) => {
+    await loseNextAddition()
+    await render()
+    await addDate("Together")
+    expect(sheet().textContent).toContain("The response was lost")
+
+    await act(async () => root.unmount())
+    root = createRoot(container)
+    await render()
+    await addDate(retry)
+
+    const [first, again] = additions()
+
+    if (same) expect(again).toEqual(first)
+    else expect(again?.request_id).not.toBe(first?.request_id)
+
+    // Axum committed the lost request, so a recognised retry adds nothing.
+    expect((await available()).dates.map((date) => date.title).sort()).toEqual(
+      dates
+    )
+    expect(document.querySelector(".sheet")).toBeNull()
+  }
+)
+
+test("without session storage a lost date addition retried in the same form repeats its request ID", async () => {
+  const refuse = () => {
+    throw new DOMException("Storage is disabled", "SecurityError")
+  }
+
+  vi.stubGlobal("sessionStorage", {
+    getItem: refuse,
+    setItem: refuse,
+    removeItem: refuse,
+    clear: refuse,
+  })
+  await loseNextAddition()
+  await render()
+  await addDate("Together")
+  expect(sheet().textContent).toContain("The response was lost")
+  expect(field("Title", sheet()).value).toBe("Together")
+  await click("Add date", sheet())
+
+  const [first, again] = additions()
+
+  expect(again).toEqual(first)
+  expect((await available()).dates.map((date) => date.title)).toEqual([
+    "Together",
+  ])
+  expect(document.querySelector(".sheet")).toBeNull()
+})
+
+test("a saved date stays acknowledged when the view cannot be re-read, and its retry intention is spent", async () => {
+  await render()
+  refreshFails = true
+  await addDate("Together")
+
+  expect((await available()).dates.map((date) => date.title)).toEqual([
+    "Together",
+  ])
+  expect(document.querySelector(".sheet")).toBeNull()
+  expect(container.querySelector(".list-failure")?.textContent).toContain(
+    "Saved to OpenHome, but the view could not update"
+  )
+  expect(titles()).toEqual([])
+  expect(sessionStorage.getItem("openhome.pending-date")).toBeNull()
+})
+
+test("a rejected date addition reports the failure and keeps the form for another try", async () => {
+  await render()
+  await click("Add a date", container)
+  await type(field("Title", sheet()), "Together")
+  await type(field("Date", sheet()), "2019-02-14")
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await click("Add date", sheet())
+  expect(sheet().textContent).toContain("OpenHome rejected the API key")
+  expect(field("Title", sheet()).value).toBe("Together")
+  vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
+  await click("Add date", sheet())
+
+  const [first, again] = additions()
+
+  expect(again).toEqual(first)
+  expect((await available()).dates.map((date) => date.title)).toEqual([
+    "Together",
+  ])
 })

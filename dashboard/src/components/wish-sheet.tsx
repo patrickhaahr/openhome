@@ -3,7 +3,7 @@ import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { Button } from "@/components/ui/button"
-import { PersonDisc } from "@/components/list-parts"
+import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
 import {
   WishFields,
   detailsOf,
@@ -76,6 +76,7 @@ export function WishDetail({
   done: () => void
 }): React.JSX.Element {
   const [mode, setMode] = useState<"view" | "edit" | "delete">("view")
+  const alive = useSheetLifetime()
   const [draft, setDraft] = useState<WishDraft>(() => draftOf(item))
   const target = { owner_id: owner.id, list_id: list.id, item_id: item.id }
 
@@ -214,7 +215,7 @@ export function WishDetail({
                   { kind: "remove-item", ...target },
                   "Wish deleted."
                 ).then((saved) => {
-                  if (saved) done()
+                  if (saved && alive()) done()
                 })
               }}
             >

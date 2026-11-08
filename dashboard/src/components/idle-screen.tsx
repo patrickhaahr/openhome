@@ -221,26 +221,57 @@ function IdleWeather({
   )
 }
 
-/** One of the two image slots: the photo showing, or the next one loading beneath it. */
+/**
+ * One of the two image slots. A layer is loading beneath, fully in front, or behind the front
+ * photo while it fades out (it has been on screen, so it keeps drifting).
+ */
 type Layer = {
   readonly item: WallItem
   readonly key: number
-  /** Fully faded in; the other slot is free to load. */
-  readonly front: boolean
-  /** Has been on screen, so it keeps drifting while it fades out. */
-  readonly shown: boolean
+  readonly phase: "loading" | "front" | "behind"
 }
 
 type Layers = readonly [Layer | null, Layer | null]
 
+/** What the screen shows: the two slots, and whether the plain ground is resting. */
+type Stage = { readonly layers: Layers; readonly resting: boolean }
+
+const blankStage: Stage = { layers: [null, null], resting: false }
+
+/** How a photo load ended; a cancelled load is neither a hit nor a miss. */
+type Loaded = "loaded" | "failed" | "cancelled"
+
+/** `slot` comes to the front; a photo that was in front fades out behind it. */
+function raise(layers: Layers, slot: 0 | 1): Layers {
+  const lift = (layer: Layer | null, own: boolean): Layer | null =>
+    layer === null
+      ? null
+      : own
+        ? { ...layer, phase: "front" }
+        : layer.phase === "front"
+          ? { ...layer, phase: "behind" }
+          : layer
+
+  return [lift(layers[0], slot === 0), lift(layers[1], slot === 1)]
+}
+
+/** Resolves when the time is up or the signal aborts, at once if it already has. */
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms)
-
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer)
+    if (signal.aborted) {
       resolve()
-    })
+
+      return
+    }
+
+    function finish(): void {
+      clearTimeout(timer)
+      signal.removeEventListener("abort", finish)
+      resolve()
+    }
+
+    const timer = setTimeout(finish, ms)
+    signal.addEventListener("abort", finish)
   })
 }
 
@@ -249,6 +280,31 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
  * When the next has loaded and the dwell is over, it crossfades in and the old slot reloads.
  * An unavailable library or a run of broken photos rests on the plain ground and quietly tries
  * again later.
+ *
+ * Each effect run is the one owner of its own playback, and its `AbortSignal` is its
+ * generation: once aborted, the run neither writes the screen nor the remembered position. The
+ * local waits (an image load, the dwell, fade and rest timers) settle on the abort. A page read
+ * does not: the browser's server-function call is neither cancelled nor bounded here, so an
+ * old run can stay pending until that call settles, and its late result or failure is then
+ * ignored. That matters because an old run's page read, image event or timer can still
+ * complete after a newer run has taken the slots. (In production `memory` and `sources` are
+ * stable and `day` remounts the slideshow, so a replacement run only follows waking; the
+ * dependency list still allows one.) The sequential protocol stays one loop:
+ * - dealing: `prepare` never rejects; it resolves with the albums, or with null for the ground,
+ *   once its browser server-function calls settle. Those calls take no signal and are not
+ *   bounded here, and an abort does not settle them. After `prepare()` settles, the run may
+ *   await `source.next()` and may issue a page request (not when `prepare` gave null, nor
+ *   when the next photo is an on-this-day one); it returns without drawing once it reaches
+ *   the abort check or the cancellation-aware catch. Cancellation neither prevents that
+ *   request nor settles the old run;
+ * - page read (`source.next`): resolves, or rejects when the library is unreachable, and the
+ *   loop rests. Upstream, Axum requests carry 7s/45s timeouts (source-supported, not an
+ *   end-to-end guarantee: the browser's call to the dashboard server has no timeout or abort
+ *   here). A cancelled run notices the abort only when the read settles;
+ * - preload (`load`): ends on the image's load or error, or the abort. The 12s media timeout
+ *   makes the server answer a 503 and so an error event, but the browser's own hop to the
+ *   dashboard has no timeout here: a connection that never answers waits for the abort;
+ * - dwell and fade (`wait`) end on the timer or the abort; rest likewise.
  */
 function Slideshow({
   day,
@@ -262,44 +318,56 @@ function Slideshow({
   sources: IdleSources
 }): React.JSX.Element {
   const still = useReducedMotion()
-  const [layers, setLayers] = useState<Layers>([null, null])
-  const [resting, setResting] = useState(false)
+  const [stage, setStage] = useState<Stage>(blankStage)
+  const { layers, resting } = stage
+  // Loads waiting on an image event; keys never repeat, so an old image cannot settle a new load.
   const settlers = useRef(new Map<number, (loaded: boolean) => void>())
+  const keys = useRef(0)
 
   useEffect(() => {
     const stop = new AbortController()
     const { signal } = stop
-    let counter = 0
 
-    function place(slot: 0 | 1, layer: Layer | null): void {
-      setLayers((previous) =>
-        slot === 0 ? [layer, previous[1]] : [previous[0], layer]
-      )
+    /** The only way a run changes the screen; a cancelled run changes nothing. */
+    function show(change: (previous: Stage) => Stage): void {
+      if (!signal.aborted) setStage(change)
     }
 
-    /** Puts a photo in a slot, unseen, and settles when it has loaded or failed. */
-    function load(slot: 0 | 1, item: WallItem): Promise<boolean> {
-      counter += 1
-      const key = counter
+    function place(slot: 0 | 1, layer: Layer): void {
+      show(({ layers: previous, resting: ground }) => ({
+        layers: slot === 0 ? [layer, previous[1]] : [previous[0], layer],
+        resting: ground,
+      }))
+    }
+
+    /** Puts a photo in a slot, unseen, and ends when it has loaded, failed or the run is cancelled. */
+    function load(slot: 0 | 1, item: WallItem): Promise<Loaded> {
+      if (signal.aborted) return Promise.resolve("cancelled")
+      keys.current += 1
+      const key = keys.current
 
       return new Promise((resolve) => {
-        settlers.current.set(key, resolve)
-        signal.addEventListener("abort", () => resolve(false))
-        place(slot, { item, key, front: false, shown: false })
+        function end(outcome: Loaded): void {
+          settlers.current.delete(key)
+          signal.removeEventListener("abort", cancel)
+          resolve(outcome)
+        }
+
+        function cancel(): void {
+          end("cancelled")
+        }
+
+        settlers.current.set(key, (loaded) => end(loaded ? "loaded" : "failed"))
+        signal.addEventListener("abort", cancel)
+        place(slot, { item, key, phase: "loading" })
       })
     }
 
     function bringForward(slot: 0 | 1): void {
-      setLayers((previous) => {
-        const [first, second] = previous
-
-        const raise = (layer: Layer | null, own: boolean): Layer | null =>
-          layer === null
-            ? null
-            : { ...layer, front: own, shown: layer.shown || own }
-
-        return [raise(first, slot === 0), raise(second, slot === 1)]
-      })
+      show((previous) => ({
+        layers: raise(previous.layers, slot),
+        resting: false,
+      }))
     }
 
     async function prepare(): Promise<SlideSource | null> {
@@ -336,8 +404,7 @@ function Slideshow({
     }
 
     async function rest(): Promise<void> {
-      setLayers([null, null])
-      setResting(true)
+      show(() => ({ layers: [null, null], resting: true }))
       await wait(REST_MS, signal)
     }
 
@@ -361,8 +428,11 @@ function Slideshow({
             continue
           }
 
-          if (!(await load(slot, item))) {
-            if (signal.aborted) return
+          const outcome = await load(slot, item)
+
+          if (outcome === "cancelled") return
+
+          if (outcome === "failed") {
             misses += 1
 
             if (misses < MISSES) continue
@@ -380,7 +450,6 @@ function Slideshow({
 
           if (signal.aborted) return
           bringForward(slot)
-          setResting(false)
           shownAt = Date.now()
           memory.keep({
             day: copenhagenDay(new Date()),
@@ -390,6 +459,8 @@ function Slideshow({
           await wait(FADE_MS, signal)
           slot = slot === 0 ? 1 : 0
         } catch {
+          // A page read that fails after cancellation belongs to no one.
+          if (signal.aborted) return
           source = null
           shownAt = null
           await rest()
@@ -399,15 +470,18 @@ function Slideshow({
 
     void run()
 
-    return () => stop.abort()
+    return () => {
+      stop.abort()
+      // A replacement run does not inherit this run's photos: its slots start empty.
+      setStage(blankStage)
+    }
   }, [memory, sources, day])
 
   function settle(key: number, loaded: boolean): void {
     settlers.current.get(key)?.(loaded)
-    settlers.current.delete(key)
   }
 
-  const front = layers.find((layer) => layer?.front === true)
+  const front = layers.find((layer) => layer?.phase === "front")
   const year = front?.item.year
 
   return (
@@ -446,8 +520,8 @@ function Slide({
   return (
     <div
       className="idle-slide"
-      data-front={layer.front}
-      data-shown={layer.shown}
+      data-front={layer.phase === "front"}
+      data-shown={layer.phase !== "loading"}
       data-drift={layer.key % 4}
     >
       <SlideImage

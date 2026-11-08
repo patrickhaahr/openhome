@@ -38,3 +38,13 @@ response. Validate that offset as Copenhagen standard/summer time and apply it
 to recover calendar dates. Converting those timestamps with changing DST rules
 would misdate autumn days and reject an otherwise valid forecast. The controlled
 provider fixture keeps daily timestamps 86,400 seconds apart as documented.
+
+The dashboard follows this cache without duplicating its policy. One polling owner
+per mounted forecast schedules a refresh at the forecast's `valid_until`, or
+every 60 seconds after a stale or unavailable result, and marks a fresh forecast
+stale at expiry. Hiding the page cancels the timer and showing it refreshes; a
+read already in flight is never overlapped, and a read finishing after disposal
+or a replaced forecast is discarded. The Axum request is bounded by the
+dashboard server's seven-second timeout, but the browser's call to that server
+function has no timeout and no abort. A call that never settles keeps polling in
+flight until the page leaves; no browser timeout or retry was added.

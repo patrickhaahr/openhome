@@ -9,7 +9,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"
 import { CrosshairSimpleIcon } from "@phosphor-icons/react/dist/csr/CrosshairSimple"
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
-import { RasterMap } from "@/components/raster-map"
+import { RasterMap, startMapAttempt } from "@/components/raster-map"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
@@ -46,9 +46,6 @@ const mapThemes = {
 export type MapTheme = keyof typeof mapThemes
 
 const LOCAL_ZOOM = 14
-
-/** A stalled style or tile request must not leave the view loading forever. */
-const LOAD_TIMEOUT_MS = 20_000
 
 /** OpenMapTiles carries building heights from this zoom; lower zooms stay flat. */
 const BUILDINGS_MIN_ZOOM = 14
@@ -244,37 +241,34 @@ export function SharedMap({
     // A recreated map measures its own buildings; never show the last map's notice.
     setCoverage("shown")
 
-    let instance: MapLibreMap | undefined
-    let disposed = false
+    // The one owner of this attempt's import, timeout and map. Releasing it also
+    // cancels the pending import: a late import, style or graphics event must not
+    // resurrect a view that already timed out, failed or was replaced.
+    const owner = startMapAttempt<MapLibreMap>({
+      onTimeout: () => fail("provider-unavailable"),
+      onMap: (next) => {
+        map.current = next
+      },
+    })
 
     function fail(state: Exclude<MapView["state"], "loading" | "ready">): void {
-      if (disposed) return
+      if (owner.phase() === "released") return
 
-      // Cancel the pending import as well as the map: a late import must not
-      // resurrect a view that already timed out or lost its graphics context.
-      disposed = true
-      clearTimeout(timeout)
-      const failed = instance
-
-      instance = undefined
-      map.current = undefined
-      failed?.remove()
+      owner.release()
       setView({ state })
     }
 
-    const timeout = setTimeout(() => {
-      fail("provider-unavailable")
-    }, LOAD_TIMEOUT_MS)
-
     import("maplibre-gl").then(
       ({ Map, setWorkerUrl }) => {
-        if (disposed) return
+        if (owner.phase() === "released") return
+
+        let created: MapLibreMap
 
         try {
           // Vite moves the library into a chunk; its relative worker URL then
           // points at a missing file. Bundle the worker explicitly for both builds.
           setWorkerUrl(workerUrl)
-          instance = new Map({
+          created = new Map({
             container: element,
             style: mapThemes[theme].style,
             center: resume.current?.center ?? [
@@ -303,22 +297,18 @@ export function SharedMap({
           return
         }
 
-        const created = instance
-
         resume.current = undefined
-        let loaded = false
 
         // A route framed on its own is fitted again on a map made for the other palette.
         if (shownRoutes.current?.framing === "even")
           fittedLines.current = undefined
 
-        map.current = created
+        owner.adopt(created)
         created.touchZoomRotate.disableRotation()
         created.keyboard.disableRotation()
 
         created.on("load", () => {
-          loaded = true
-          clearTimeout(timeout)
+          if (!owner.settle()) return
 
           // A style without the building source still serves a usable 2D map.
           const buildings =
@@ -441,31 +431,35 @@ export function SharedMap({
             },
           })
 
-          if (!disposed)
-            setView({ state: "ready", tiles: "complete", buildings })
+          setView({ state: "ready", tiles: "complete", buildings })
         })
         created.on("idle", () => {
-          if (disposed || mode.current !== "3d") return
+          if (owner.phase() !== "running" || mode.current !== "3d") return
 
           setCoverage(buildingCoverage(created))
         })
         created.on("error", () => {
           // Before load the style or source failed; afterwards only some tiles did.
-          if (!loaded) {
-            fail("provider-unavailable")
+          switch (owner.phase()) {
+            case "starting":
+              fail("provider-unavailable")
 
-            return
+              return
+            case "running":
+              setView((current) =>
+                current.state === "ready"
+                  ? { ...current, tiles: "incomplete" }
+                  : current
+              )
+
+              return
+            case "importing":
+            case "released":
+              return
           }
-
-          if (!disposed)
-            setView((current) =>
-              current.state === "ready"
-                ? { ...current, tiles: "incomplete" }
-                : current
-            )
         })
         created.on("webglcontextlost", () => {
-          if (disposed) return
+          if (owner.phase() === "released") return
 
           if (mode.current !== "3d") {
             fail("graphics-unavailable")
@@ -474,12 +468,11 @@ export function SharedMap({
           }
 
           // Extrusions can exhaust older GPUs; restart flat rather than blank.
-          disposed = true
-          clearTimeout(timeout)
           resume.current = {
             center: created.getCenter().toArray(),
             zoom: created.getZoom(),
           }
+          owner.release()
           choose({ mode: "2d", reason: "graphics-failure" })
           setAttempt((count) => count + 1)
         })
@@ -490,10 +483,7 @@ export function SharedMap({
     )
 
     return () => {
-      disposed = true
-      clearTimeout(timeout)
-      instance?.remove()
-      map.current = undefined
+      owner.release()
     }
   }, [origin.latitude, origin.longitude, attempt, visible, theme, credit])
 

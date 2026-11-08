@@ -131,6 +131,13 @@ people. Tapping a plate opens a detail sheet with Edit, the Show When Idle switc
 and Delete. "Add a date" opens the same fields. The view re-reads when the
 Copenhagen day turns.
 
+Adding a date keeps its retry intention in `sessionStorage` under `openhome.pending-date`
+(the same request ID and arguments, validated as an addition on read) and in the mounted
+form's memory when storage is unavailable. Unlike a wish, a remounted form does not refill
+its fields; retyping the same fields reuses the ID, and changed fields get a new one. Only
+a saved addition clears the record, including when the re-read afterwards fails. Dates share
+the Lists save outcomes described in [wishlists.md](wishlists.md#dashboard-save-outcomes).
+
 ## Synthetic preview
 
 `api/examples/dashboard_preview/seed/dates.json` seeds invented dates for the

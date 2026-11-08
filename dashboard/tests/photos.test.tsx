@@ -150,6 +150,8 @@ async function setup(
   const preview = (): string | null | undefined =>
     document.querySelector('[role="dialog"] img')?.getAttribute("src")
 
+  let cleaned = false
+
   return {
     container,
     open,
@@ -158,6 +160,8 @@ async function setup(
     button,
     preview,
     async cleanup() {
+      if (cleaned) return
+      cleaned = true
       await act(async () => root.unmount())
       container.remove()
       completion.mockRestore()
@@ -263,6 +267,101 @@ test("a failed page keeps what loaded and offers to try again", async () => {
     expect(view.load).toHaveBeenCalledWith("all", 1)
     expect(view.button("Try again").disabled).toBe(false)
     expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+  } finally {
+    await view.cleanup()
+  }
+})
+
+const unavailable: WallRead = {
+  state: "unavailable",
+  reason: "provider-unavailable",
+}
+
+test("retrying a failed page asks for the same cursor and ends the list when it is the last", async () => {
+  const reads = [unavailable, nextPage]
+
+  const view = await setup({ albums, view: "all", wall }, async () => {
+    const read = reads.shift()
+
+    if (read === undefined) throw new Error("Unexpected page read")
+
+    return read
+  })
+
+  try {
+    await act(async () => view.button("Load more").click())
+    expect(view.container.textContent).toContain("Could not load more photos.")
+    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+    await act(async () => view.button("Try again").click())
+    expect(view.load.mock.calls).toEqual([
+      ["all", 1],
+      ["all", 1],
+    ])
+    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(3)
+    expect(view.container.textContent).toContain("1 more photos loaded.")
+    expect(view.container.querySelector(".photo-more button")).toBeNull()
+  } finally {
+    await view.cleanup()
+  }
+})
+
+test("stepping past a failed page end keeps the open photo until a retry shows the next one", async () => {
+  const reads = [unavailable, nextPage]
+
+  const view = await setup(
+    { albums, view: albumId, wall, photo: second },
+    async () => reads.shift() ?? unavailable
+  )
+
+  try {
+    await act(async () => view.button("Next →").click())
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${second}/preview`)
+    expect(view.container.textContent).toContain("Could not load more photos.")
+    await act(async () => view.button("Next →").click())
+    expect(view.load.mock.calls).toEqual([
+      [albumId, 1],
+      [albumId, 1],
+    ])
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${third}/preview`)
+  } finally {
+    await view.cleanup()
+  }
+})
+
+test("one page read is in flight at a time, however often the viewer steps forward", async () => {
+  let settle: (read: WallRead) => void = () => {}
+
+  const view = await setup(
+    { albums, view: albumId, wall, photo: second },
+    () => new Promise<WallRead>((resolve) => (settle = resolve))
+  )
+
+  try {
+    await act(async () => view.button("Next →").click())
+    await act(async () => view.button("Next →").click())
+    expect(view.load).toHaveBeenCalledTimes(1)
+    await act(async () => settle(nextPage))
+    expect(view.preview()).toBe(`/photo-media/${albumId}/${third}/preview`)
+    expect(view.load).toHaveBeenCalledTimes(1)
+  } finally {
+    await view.cleanup()
+  }
+})
+
+test("a page that arrives after the wall is gone neither shows a photo nor changes anything", async () => {
+  let settle: (read: WallRead) => void = () => {}
+
+  const view = await setup(
+    { albums, view: albumId, wall, photo: second },
+    () => new Promise<WallRead>((resolve) => (settle = resolve))
+  )
+
+  try {
+    await act(async () => view.button("Next →").click())
+    await view.cleanup()
+    view.shown.mockClear()
+    await act(async () => settle(nextPage))
+    expect(view.shown).not.toHaveBeenCalled()
   } finally {
     await view.cleanup()
   }

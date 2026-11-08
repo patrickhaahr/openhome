@@ -3,7 +3,7 @@ import { HourglassSimpleIcon } from "@phosphor-icons/react/dist/csr/HourglassSim
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { RepeatIcon } from "@phosphor-icons/react/dist/csr/Repeat"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
-import { PersonDisc, Segments } from "@/components/list-parts"
+import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -314,6 +314,7 @@ export function DateAdd({
   done: () => void
 }): React.JSX.Element {
   const pending = useRef<Addition | undefined>(undefined)
+  const alive = useSheetLifetime()
 
   async function add(fields: DateFields): Promise<void> {
     const previous = pending.current ?? readPending()
@@ -328,7 +329,8 @@ export function DateAdd({
     if (await save(pending.current, `${fields.title} added.`)) {
       pending.current = undefined
       storePending(undefined)
-      done()
+
+      if (alive()) done()
     }
   }
 
@@ -367,6 +369,7 @@ export function DateDetail({
   done: () => void
 }): React.JSX.Element {
   const [mode, setMode] = useState<"view" | "edit" | "delete">("view")
+  const alive = useSheetLifetime()
   const target = { action: "edit" as const, date_id: date.id }
 
   const tagged = date.person_ids
@@ -489,7 +492,7 @@ export function DateDetail({
                   { action: "remove", date_id: date.id },
                   `${date.title} deleted.`
                 ).then((saved) => {
-                  if (saved) done()
+                  if (saved && alive()) done()
                 })
               }}
             >
