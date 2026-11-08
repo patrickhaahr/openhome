@@ -33,6 +33,16 @@ photos, and the owner's chosen cover when it is a served still. The gallery load
 pages as it scrolls; the full-screen dialog renders one preview at a time, steps across
 loaded photos and reads the next page when stepping past the last.
 
+The open wall owns one page request at a time (idle, loading a cursor, or failed at that
+cursor); loaded photos and the next cursor are separate and a failure never alters them.
+Scrolling, "Load more", the retry button and stepping past the last photo all go through it:
+a retry asks for the same cursor, a null cursor ends pagination, and a page that settles after
+the wall unmounted (or was replaced by another view, which remounts it) is ignored. The server
+reads time out (7 s per album, 45 s for all photos) and settle as unavailable; the browser's
+call to that server function has no timeout of its own, so a request that never settles keeps
+"Loading photos…" until the page is left. That exit is assumed, not demonstrated, and no new
+timeout was added.
+
 Capture dates are the one exception, and only as a year and a month-day. "On this day"
 (#197) needs to say which year a photo was taken in, and the idle slideshow favours
 photos from the same month-day in earlier years, so `GET /api/photos/on-this-day?date=MM-DD`

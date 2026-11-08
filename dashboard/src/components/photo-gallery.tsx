@@ -389,6 +389,16 @@ function ratioOf(width: number, height: number): number {
   return Math.min(2.4, Math.max(0.5, width / height))
 }
 
+/**
+ * The wall's single page request, owned by `load` in `PhotoWall`: idle, reading the page at a
+ * cursor, or that read failed and the same cursor is offered again. Loaded items and the next
+ * cursor are separate view data that a failure never touches.
+ */
+type PageRequest =
+  | { state: "idle" }
+  | { state: "loading"; cursor: number }
+  | { state: "failed"; cursor: number }
+
 function PhotoWall({
   view,
   first,
@@ -408,10 +418,10 @@ function PhotoWall({
 }): React.JSX.Element {
   const [items, setItems] = useState(first.items)
   const [next, setNext] = useState(first.next)
-  const [loading, setLoading] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [request, setRequest] = useState<PageRequest>({ state: "idle" })
   const [announcement, setAnnouncement] = useState("")
-  const busy = useRef(false)
+  // Identifies the one request allowed to settle; cleared on unmount so a late page is ignored.
+  const flight = useRef<symbol | null>(null)
   const end = useRef<HTMLDivElement>(null)
   const tiles = useRef(new Map<string, HTMLButtonElement>())
   const shown = useRef<string | undefined>(undefined)
@@ -430,21 +440,36 @@ function PhotoWall({
     if (current !== undefined) shown.current = current.asset
   }, [current])
 
+  const loading = request.state === "loading"
+  const failed = request.state === "failed"
+
+  useEffect(
+    () => () => {
+      flight.current = null
+    },
+    []
+  )
+
+  // The only transition owner: one read at a time, a retry asks for the failed cursor again.
   async function load(advance: boolean): Promise<void> {
-    if (busy.current || next === null) return
-    busy.current = true
-    setLoading(true)
-    setFailed(false)
-    const read = await more(view, next).catch(() => unavailablePhotos)
-    busy.current = false
-    setLoading(false)
+    if (flight.current !== null || next === null) return
+    const cursor = request.state === "failed" ? request.cursor : next
+    const token = Symbol("page")
+    flight.current = token
+    setRequest({ state: "loading", cursor })
+    const read = await more(view, cursor).catch(() => unavailablePhotos)
+
+    if (flight.current !== token) return
+    flight.current = null
 
     if (read.state !== "ready") {
-      setFailed(true)
+      setRequest({ state: "failed", cursor })
       setAnnouncement("Could not load more photos.")
 
       return
     }
+
+    setRequest({ state: "idle" })
 
     const known = new Set(items.map((item) => item.asset))
     const fresh = read.wall.items.filter((item) => !known.has(item.asset))
