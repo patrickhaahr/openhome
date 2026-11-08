@@ -145,6 +145,11 @@ class WorkoutCorrections(
     private suspend fun measureLastLogged(exerciseId: Long): SetMeasure =
         dao.latestSetOfExercise(exerciseId)?.measure() ?: SetMeasure.REPS
 
+    /**
+     * Every outcome but [CorrectionSave.Saved] changed nothing. A cancelled or failed save rolls back whole,
+     * so the draft stays the caller's to retry or discard; a committed one is local history whatever
+     * delivery later does, and its sync is scheduled below or, failing that, on the next app start.
+     */
     suspend fun save(workoutId: Long, draft: CorrectionDraft): CorrectionSave {
         val saved =
             database.withTransaction {
