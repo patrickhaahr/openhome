@@ -150,7 +150,7 @@ function createBridge(options) {
   var weatherAt = 0;
   var recoveryAt = 0;
   // Refresh in flight: null, or the one promise every concurrent reader shares. It is cleared only by
-  // finishRefresh, after all bounded upstream tasks have settled (each task absorbs its own failure).
+  // finishRefresh, after all bounded upstream tasks have settled (each task absorbs a rejected request; the success handlers are total over parsed JSON).
   var refreshing = null;
   // Command admission: three independent facts. Existence is checked against COMMANDS; the single
   // in-flight slot (commandPending) is held from admission until the upstream request settles; the
