@@ -195,6 +195,11 @@ async function commands() {
   await Promise.resolve();
   release({ok: true});
   assert.strictEqual((await pending).status, 502, '2xx body without message is not an acknowledgement');
+  clock += 1000;
+  pending = bridge.command('lights-off');
+  await Promise.resolve();
+  release({message: 'ok'});
+  assert.strictEqual((await pending).status, 200, 'an invalid body releases the in-flight slot');
   var failures = 0;
   var failed = client.createBridge({request: function () { failures++; return Promise.reject(new Error('secret URL')); }});
   assert.deepStrictEqual(await failed.command('lights-off'), {status: 502, body: {state: 'failed', reason: 'unavailable'}});
