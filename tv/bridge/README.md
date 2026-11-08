@@ -42,3 +42,14 @@ are rejected. TLS verification stays enabled.
 Tests: `node tv/bridge/test.js` from the repository root, through the repository's development
 shell/TV check recipe. All test data is synthetic. Tests use an ephemeral loopback server and
 a fake HTTPS transport; they never call the real API or control devices.
+
+## Lifecycles
+
+The bridge keeps independent facts separate. Weather and recovery each have their own freshness
+deadline; neither implies the other. `/state` has one shared in-flight refresh, cleared once its
+bounded upstream requests settle; results that arrive after a Copenhagen day change are dropped.
+Command admission is three separate checks: a known command, one in-flight slot (released on success,
+rejection or an invalid body) and the one-second start deadline (never released early). Restart clears
+all in-memory state. The launcher mirrors this: a state read is stale-marked on a non-200, invalid body
+or 10-second abort; a command is accepted or uncertain (14-second abort), never retried, and an
+accepted command is acknowledgement only.

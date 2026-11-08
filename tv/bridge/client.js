@@ -142,12 +142,19 @@ function requestApi(config, path, method, body, timeoutMs) {
 function createBridge(options) {
   var now = options.now || Date.now;
   var request = options.request;
+  // Cache: the Copenhagen day owns both observations; each has its own freshness deadline
+  // (weatherAt/recoveryAt) and neither deadline implies the other.
   var cachedDay = dayOn(now());
   var weather = unavailableWeather();
   var recovery = unavailableRecovery();
   var weatherAt = 0;
   var recoveryAt = 0;
+  // Refresh in flight: null, or the one promise every concurrent reader shares. It is cleared only by
+  // finishRefresh, after all bounded upstream tasks have settled (each task absorbs a rejected request; the success handlers are total over parsed JSON).
   var refreshing = null;
+  // Command admission: three independent facts. Existence is checked against COMMANDS; the single
+  // in-flight slot (commandPending) is held from admission until the upstream request settles; the
+  // rate deadline (nextCommand) is set at admission and is never released early.
   var commandPending = false;
   var nextCommand = 0;
 
@@ -167,45 +174,59 @@ function createBridge(options) {
     return day;
   }
 
+  // Each refresh task is bound to the day it started in; a result that lands after midnight is dropped.
+  function refreshWeather(day) {
+    weatherAt = now() + MINUTE;
+    return Promise.resolve().then(function () { return request('/api/weather', 'GET', undefined, 7000); }).then(function (body) {
+      if (rollDay() !== day) return;
+      var next = weatherFrom(body, day, now());
+      if (next) {
+        weather = next;
+        weatherAt = next.state === 'fresh' ? Date.parse(next.validUntil) : now() + MINUTE;
+      } else if (weather.state !== 'unavailable') weather.state = 'stale';
+    }, function () { if (rollDay() === day && weather.state !== 'unavailable') weather.state = 'stale'; });
+  }
+
+  function refreshRecovery(day) {
+    recoveryAt = now() + MINUTE;
+    return Promise.resolve().then(function () { return request('/api/training/days/' + day + '/recovery', 'GET', undefined, 7000); }).then(function (body) {
+      if (rollDay() !== day) return;
+      var next = recoveryFrom(body, day);
+      if (next) recovery = next;
+      else if (recovery.state !== 'unavailable') recovery.state = 'stale';
+    }, function () { if (rollDay() === day && recovery.state !== 'unavailable') recovery.state = 'stale'; });
+  }
+
+  function finishRefresh() {
+    refreshing = null;
+    rollDay();
+    // Return only the display contract, never the upstream response objects.
+    return JSON.parse(JSON.stringify({day: cachedDay, weather: weather, recovery: recovery}));
+  }
+
   function getState() {
     var day = rollDay();
     if (refreshing) return refreshing.then(getState);
     var tasks = [];
-    if (now() >= weatherAt) {
-      weatherAt = now() + MINUTE;
-      tasks.push(Promise.resolve().then(function () { return request('/api/weather', 'GET', undefined, 7000); }).then(function (body) {
-        if (rollDay() !== day) return;
-        var next = weatherFrom(body, day, now());
-        if (next) {
-          weather = next;
-          weatherAt = next.state === 'fresh' ? Date.parse(next.validUntil) : now() + MINUTE;
-        } else if (weather.state !== 'unavailable') weather.state = 'stale';
-      }, function () { if (rollDay() === day && weather.state !== 'unavailable') weather.state = 'stale'; }));
-    }
-    if (now() >= recoveryAt) {
-      recoveryAt = now() + MINUTE;
-      tasks.push(Promise.resolve().then(function () { return request('/api/training/days/' + day + '/recovery', 'GET', undefined, 7000); }).then(function (body) {
-        if (rollDay() !== day) return;
-        var next = recoveryFrom(body, day);
-        if (next) recovery = next;
-        else if (recovery.state !== 'unavailable') recovery.state = 'stale';
-      }, function () { if (rollDay() === day && recovery.state !== 'unavailable') recovery.state = 'stale'; }));
-    }
-    refreshing = Promise.all(tasks).then(function () {
-      refreshing = null;
-      rollDay();
-      // Return only the display contract, never the upstream response objects.
-      return JSON.parse(JSON.stringify({day: cachedDay, weather: weather, recovery: recovery}));
-    });
+    if (now() >= weatherAt) tasks.push(refreshWeather(day));
+    if (now() >= recoveryAt) tasks.push(refreshRecovery(day));
+    refreshing = Promise.all(tasks).then(finishRefresh);
     return refreshing;
   }
 
-  function command(name) {
-    if (!has(COMMANDS, name)) return Promise.resolve({status: 404, body: {state: 'failed', reason: 'unknown-command'}});
-    if (commandPending) return Promise.resolve({status: 409, body: {state: 'failed', reason: 'busy'}});
-    if (now() < nextCommand) return Promise.resolve({status: 429, body: {state: 'failed', reason: 'rate-limited'}});
+  // Returns the rejection for an inadmissible command, or null after taking the slot and deadline.
+  function admit(name) {
+    if (!has(COMMANDS, name)) return {status: 404, body: {state: 'failed', reason: 'unknown-command'}};
+    if (commandPending) return {status: 409, body: {state: 'failed', reason: 'busy'}};
+    if (now() < nextCommand) return {status: 429, body: {state: 'failed', reason: 'rate-limited'}};
     commandPending = true;
     nextCommand = now() + 1000;
+    return null;
+  }
+
+  function command(name) {
+    var rejection = admit(name);
+    if (rejection) return Promise.resolve(rejection);
     var action = COMMANDS[name];
     return Promise.resolve().then(function () { return request(action.path, 'POST', action.body, 12000); }).then(function (body) {
       commandPending = false;

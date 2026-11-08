@@ -25,7 +25,7 @@ mode = os.environ.get("TV_TEST_FAILURE", "")
 if name == "ls-control":
     if mode == "registry":
         sys.exit(7)
-    if sys.argv[1:] == ["scan-volatile-dirs"]:
+    if sys.argv[1:] == ["scan-volatile-dirs"] and mode != "stale-cache":
         (directory / "cached-launcher").write_text("root")
 elif name in ("luna-send", "luna-send-n"):
     if mode == "activation":
@@ -69,6 +69,14 @@ class InputHookStartupTests(unittest.TestCase):
     def test_failed_registry_refresh_does_not_activate_stale_service(self):
         result = self.run_startup("registry")
         self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.directory / "active-service").exists())
+
+    def test_unacknowledged_startup_fails_without_activating_service(self):
+        # The registry refresh succeeds but the cached sandboxed launcher stays: the service
+        # answers returnValue=false, which must fail boot rather than count as started.
+        result = self.run_startup("stale-cache")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("did not acknowledge", result.stderr)
         self.assertFalse((self.directory / "active-service").exists())
 
     def test_unresponsive_activation_does_not_block_boot(self):
