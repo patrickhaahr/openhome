@@ -17,6 +17,9 @@
           pname = "openhome";
           version = "0.1.0";
           src = ./cli;
+          # nixpkgs' cargo-setup-hook exports AWS_LC_SYS_USE_SYSTEM=1, so aws-lc-sys links nixpkgs' aws-lc instead of building it.
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = [ pkgs.aws-lc ];
           cargoHash = "sha256-K1dwtDDPgax+txLfOIl1i1wQQ6aIuw9s/Dam0NjN7kI=";
           doCheck = false; # Process tests need loopback sockets, which the Nix sandbox blocks.
         };

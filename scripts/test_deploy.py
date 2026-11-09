@@ -71,7 +71,11 @@ class ReleaseVersions(unittest.TestCase):
         outer = tempfile.TemporaryDirectory()
         self.addCleanup(outer.cleanup)
         outer = Path(outer.name)
-        git_in = lambda repository, *args: subprocess.run(["git", *args], cwd=repository, check=True, capture_output=True)
+        git_in = lambda repository, *args: subprocess.run(
+            ["git", *args], cwd=repository, check=True, capture_output=True,
+            # The developer's global git hooks must not judge these fixture commits.
+            env=os.environ | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
+        )
         with metadata_inside_the_fixture_repository():
             git_in(outer, "init", "-q")
             (outer / "dashboard").mkdir()
