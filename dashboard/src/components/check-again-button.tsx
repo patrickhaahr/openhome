@@ -4,20 +4,23 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwis
 import { Button } from "@/components/ui/button"
 
 /**
- * Re-run the current page's OpenHome checks without reloading the page. `compact` draws a
- * round arrow key; its name stays the button's text for assistive technology.
+ * Re-run the current page's OpenHome checks without reloading the page, or `check` when the
+ * page reads again some other way. `compact` draws a round arrow key; its name stays the
+ * button's text for assistive technology.
  */
 export function CheckAgainButton({
   compact = false,
+  check,
 }: {
   compact?: boolean
+  check?: () => Promise<void>
 }): React.JSX.Element {
   const router = useRouter()
   const [isChecking, startTransition] = useTransition()
 
   function checkAgain(): void {
     startTransition(async () => {
-      await router.invalidate({ sync: true })
+      await (check ?? (() => router.invalidate({ sync: true })))()
     })
   }
 

@@ -1,5 +1,5 @@
 //! Seeds the main database through the production HTTP routes: profile, body weight, logged
-//! workouts, Household Users, Wishlists, the Watchlist and Important Dates. Wish images point at the preview's own
+//! workouts, Household Users, Wishlists, the Watchlist, Important Dates and Binder Entries. Wish images point at the preview's own
 //! artwork routes (`media.rs`); Watchlist posters are static TMDB paths from the catalogue.
 
 use std::collections::HashMap;
@@ -76,7 +76,8 @@ pub async fn household(base: &str, key: &str, db: &sqlx::SqlitePool) -> anyhow::
     body(&api).await?;
     workouts(&api).await?;
     household_lists(&api, db).await?;
-    important_dates(&api).await
+    important_dates(&api).await?;
+    binder(&api).await
 }
 
 #[derive(Deserialize)]
@@ -345,6 +346,45 @@ async fn important_dates(api: &Api) -> anyhow::Result<()> {
                 "person_ids": person_ids,
                 "show_when_idle": date.show_when_idle,
                 "request_id": format!("preview-date-{index}"),
+            }),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct BinderSeed {
+    entries: Vec<BinderSeedEntry>,
+}
+
+#[derive(Deserialize)]
+struct BinderSeedEntry {
+    owner: String,
+    card_id: String,
+    quantity: Option<u32>,
+    language: Option<String>,
+}
+
+async fn binder(api: &Api) -> anyhow::Result<()> {
+    let seed: BinderSeed = serde_json::from_str(include_str!("seed/binder.json"))?;
+    let users = api.get("/api/household-users").await?;
+    for (index, entry) in seed.entries.iter().enumerate() {
+        let owner_id = users
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|user| user["name"] == entry.owner)
+            .and_then(|user| user["id"].as_str())
+            .ok_or_else(|| anyhow::anyhow!("unknown Binder owner {}", entry.owner))?;
+        api.post(
+            "/api/binder/entries",
+            json!({
+                "owner_id": owner_id,
+                "card_id": entry.card_id,
+                "quantity": entry.quantity,
+                "language": entry.language,
+                "request_id": format!("preview-binder-{index}"),
             }),
         )
         .await?;

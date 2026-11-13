@@ -164,14 +164,16 @@ async fn image(Path(file): Path<String>) -> impl IntoResponse {
 /// server.
 pub async fn optcg() -> anyhow::Result<Optcg> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-    let url = format!("http://{}/", listener.local_addr()?);
+    let address = listener.local_addr()?;
+    let url = format!("http://{address}/");
     let provider = Router::new()
         .route("/api/sets/card/{code}/", get(card))
         .route("/media/static/Card_Images/{file}", get(image))
         .with_state(url.clone());
     tokio::spawn(async move { axum::serve(listener, provider).await });
+    // Without the scheme: test harnesses take the first `http://127.0.0.1:<port>` they see as Axum's URL.
     eprintln!(
-        "OPTCG: loopback catalogue at {url} (invented OP99 cards; OP99-503 simulates an outage)"
+        "OPTCG: loopback catalogue at {address} (invented OP99 cards; OP99-503 simulates an outage)"
     );
     Optcg::new(url.parse()?)
 }

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeatureRouteImport } from './routes/$feature'
 import { Route as BacklightRouteImport } from './routes/backlight'
+import { Route as BinderRouteImport } from './routes/binder'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as ControlsRouteImport } from './routes/controls'
 import { Route as FoodRouteImport } from './routes/food'
@@ -21,6 +22,7 @@ import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as TravelRouteImport } from './routes/travel'
 import { Route as WeatherRouteImport } from './routes/weather'
 import { Route as WorkoutRouteImport } from './routes/workout'
+import { Route as BinderImageCardRouteImport } from './routes/binder-image.$card'
 import { Route as MealPhotoPhotoSizeRouteImport } from './routes/meal-photo.$photo.$size'
 import { Route as PhotoMediaAlbumAssetSizeRouteImport } from './routes/photo-media.$album.$asset.$size'
 import { Route as WishImageOwnerListItemRouteImport } from './routes/wish-image.$owner.$list.$item'
@@ -38,6 +40,11 @@ const FeatureRoute = FeatureRouteImport.update({
 const BacklightRoute = BacklightRouteImport.update({
   id: '/backlight',
   path: '/backlight',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BinderRoute = BinderRouteImport.update({
+  id: '/binder',
+  path: '/binder',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectionRoute = ConnectionRouteImport.update({
@@ -85,6 +92,11 @@ const WorkoutRoute = WorkoutRouteImport.update({
   path: '/workout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BinderImageCardRoute = BinderImageCardRouteImport.update({
+  id: '/binder-image/$card',
+  path: '/binder-image/$card',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MealPhotoPhotoSizeRoute = MealPhotoPhotoSizeRouteImport.update({
   id: '/meal-photo/$photo/$size',
   path: '/meal-photo/$photo/$size',
@@ -106,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/backlight': typeof BacklightRoute
+  '/binder': typeof BinderRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/food': typeof FoodRoute
@@ -115,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/travel': typeof TravelRoute
   '/weather': typeof WeatherRoute
   '/workout': typeof WorkoutRoute
+  '/binder-image/$card': typeof BinderImageCardRoute
   '/meal-photo/$photo/$size': typeof MealPhotoPhotoSizeRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
   '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
@@ -123,6 +137,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/backlight': typeof BacklightRoute
+  '/binder': typeof BinderRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/food': typeof FoodRoute
@@ -132,6 +147,7 @@ export interface FileRoutesByTo {
   '/travel': typeof TravelRoute
   '/weather': typeof WeatherRoute
   '/workout': typeof WorkoutRoute
+  '/binder-image/$card': typeof BinderImageCardRoute
   '/meal-photo/$photo/$size': typeof MealPhotoPhotoSizeRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
   '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
@@ -141,6 +157,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$feature': typeof FeatureRoute
   '/backlight': typeof BacklightRoute
+  '/binder': typeof BinderRoute
   '/connection': typeof ConnectionRoute
   '/controls': typeof ControlsRoute
   '/food': typeof FoodRoute
@@ -150,6 +167,7 @@ export interface FileRoutesById {
   '/travel': typeof TravelRoute
   '/weather': typeof WeatherRoute
   '/workout': typeof WorkoutRoute
+  '/binder-image/$card': typeof BinderImageCardRoute
   '/meal-photo/$photo/$size': typeof MealPhotoPhotoSizeRoute
   '/photo-media/$album/$asset/$size': typeof PhotoMediaAlbumAssetSizeRoute
   '/wish-image/$owner/$list/$item': typeof WishImageOwnerListItemRoute
@@ -160,6 +178,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$feature'
     | '/backlight'
+    | '/binder'
     | '/connection'
     | '/controls'
     | '/food'
@@ -169,6 +188,7 @@ export interface FileRouteTypes {
     | '/travel'
     | '/weather'
     | '/workout'
+    | '/binder-image/$card'
     | '/meal-photo/$photo/$size'
     | '/photo-media/$album/$asset/$size'
     | '/wish-image/$owner/$list/$item'
@@ -177,6 +197,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$feature'
     | '/backlight'
+    | '/binder'
     | '/connection'
     | '/controls'
     | '/food'
@@ -186,6 +207,7 @@ export interface FileRouteTypes {
     | '/travel'
     | '/weather'
     | '/workout'
+    | '/binder-image/$card'
     | '/meal-photo/$photo/$size'
     | '/photo-media/$album/$asset/$size'
     | '/wish-image/$owner/$list/$item'
@@ -194,6 +216,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$feature'
     | '/backlight'
+    | '/binder'
     | '/connection'
     | '/controls'
     | '/food'
@@ -203,6 +226,7 @@ export interface FileRouteTypes {
     | '/travel'
     | '/weather'
     | '/workout'
+    | '/binder-image/$card'
     | '/meal-photo/$photo/$size'
     | '/photo-media/$album/$asset/$size'
     | '/wish-image/$owner/$list/$item'
@@ -212,6 +236,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FeatureRoute: typeof FeatureRoute
   BacklightRoute: typeof BacklightRoute
+  BinderRoute: typeof BinderRoute
   ConnectionRoute: typeof ConnectionRoute
   ControlsRoute: typeof ControlsRoute
   FoodRoute: typeof FoodRoute
@@ -221,6 +246,7 @@ export interface RootRouteChildren {
   TravelRoute: typeof TravelRoute
   WeatherRoute: typeof WeatherRoute
   WorkoutRoute: typeof WorkoutRoute
+  BinderImageCardRoute: typeof BinderImageCardRoute
   MealPhotoPhotoSizeRoute: typeof MealPhotoPhotoSizeRoute
   PhotoMediaAlbumAssetSizeRoute: typeof PhotoMediaAlbumAssetSizeRoute
   WishImageOwnerListItemRoute: typeof WishImageOwnerListItemRoute
@@ -247,6 +273,13 @@ declare module '@tanstack/react-router' {
       path: '/backlight'
       fullPath: '/backlight'
       preLoaderRoute: typeof BacklightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/binder': {
+      id: '/binder'
+      path: '/binder'
+      fullPath: '/binder'
+      preLoaderRoute: typeof BinderRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connection': {
@@ -312,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/binder-image/$card': {
+      id: '/binder-image/$card'
+      path: '/binder-image/$card'
+      fullPath: '/binder-image/$card'
+      preLoaderRoute: typeof BinderImageCardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/meal-photo/$photo/$size': {
       id: '/meal-photo/$photo/$size'
       path: '/meal-photo/$photo/$size'
@@ -340,6 +380,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FeatureRoute: FeatureRoute,
   BacklightRoute: BacklightRoute,
+  BinderRoute: BinderRoute,
   ConnectionRoute: ConnectionRoute,
   ControlsRoute: ControlsRoute,
   FoodRoute: FoodRoute,
@@ -349,6 +390,7 @@ const rootRouteChildren: RootRouteChildren = {
   TravelRoute: TravelRoute,
   WeatherRoute: WeatherRoute,
   WorkoutRoute: WorkoutRoute,
+  BinderImageCardRoute: BinderImageCardRoute,
   MealPhotoPhotoSizeRoute: MealPhotoPhotoSizeRoute,
   PhotoMediaAlbumAssetSizeRoute: PhotoMediaAlbumAssetSizeRoute,
   WishImageOwnerListItemRoute: WishImageOwnerListItemRoute,

@@ -1,5 +1,6 @@
 import { AtomIcon } from "@phosphor-icons/react/dist/csr/Atom"
 import { BarbellIcon } from "@phosphor-icons/react/dist/csr/Barbell"
+import { CardsIcon } from "@phosphor-icons/react/dist/csr/Cards"
 import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
 import { ListHeartIcon } from "@phosphor-icons/react/dist/csr/ListHeart"
 import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife"
@@ -74,6 +75,14 @@ export const features = [
       "Wishes, watching and important dates, for everyone in the household.",
     unavailable:
       "Lists are unavailable. Household wishlists, watchlists and dates cannot be read.",
+  },
+  {
+    id: "binder",
+    label: "Binder",
+    title: "Binder",
+    icon: CardsIcon,
+    description: "Each person's One Piece Card Game cards, page by page.",
+    unavailable: "Binder is unavailable. Household Binders cannot be read.",
   },
   {
     id: "photos",

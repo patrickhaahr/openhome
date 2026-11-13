@@ -1,4 +1,4 @@
-//! Isolated, loopback-only health, Wishlist, Watchlist, fitness, map, walking-loop and nutrition seam for
+//! Isolated, loopback-only health, Wishlist, Watchlist, Binder, fitness, map, walking-loop and nutrition seam for
 //! tests and synthetic previews. Uses production routes, migrations and authentication without
 //! household configuration; the map explicitly serves the unrelated Copenhagen demo origin.
 //!
@@ -22,6 +22,9 @@ use openhome_api::{
 use serde_json::{Value, json};
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::net::TcpListener;
+
+#[path = "dashboard_preview/binder.rs"]
+mod binder;
 
 #[path = "support/providers.rs"]
 mod providers;
@@ -63,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
         };
     let planner = LoopPlanner::new(demo_origin, Some(endpoint))?;
     let tmdb = providers::synthetic_tmdb().await?;
+    let optcg = binder::optcg().await?;
     let backlight =
         openhome_api::services::backlight::BacklightService::new(state.db.clone(), None, None)
             .await?;
@@ -70,6 +74,8 @@ async fn main() -> anyhow::Result<()> {
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(Some(tmdb)))
+        .merge(routes::cards::router(optcg.clone()))
+        .merge(routes::binder::router(optcg))
         .merge(routes::important_dates::router())
         .merge(routes::backlight::router(backlight))
         .merge(routes::map::router(demo_origin))
