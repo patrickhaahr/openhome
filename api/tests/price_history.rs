@@ -292,6 +292,7 @@ async fn history_converts_each_point_at_its_own_date_within_the_requested_range(
     let (server, days) = moving_catalogue().await;
     let (app, state) = app(&server).await;
     store_rates(&state).await;
+    store_rate_day(&state, 10, "1.1000", "7.4000").await;
     let ada = owner(&app, "Ada").await;
     own(&app, &ada, "OP01-010").await;
     days.store(10, Ordering::SeqCst);
@@ -303,7 +304,7 @@ async fn history_converts_each_point_at_its_own_date_within_the_requested_range(
         body,
         json!({"card_id": "OP01-010", "prices": [
             {"observed_on": day(20), "usd": 2.25, "eur": 1.88, "dkk": 14.06, "rate_date": day(20)},
-            {"observed_on": day(10), "usd": 2.75, "eur": 2.29, "dkk": 17.19, "rate_date": day(20)},
+            {"observed_on": day(10), "usd": 2.75, "eur": 2.5, "dkk": 18.5, "rate_date": day(10)},
         ]})
     );
     let (_, ranged) = history(
