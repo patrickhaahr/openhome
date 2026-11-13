@@ -22,7 +22,7 @@ import { BinderBook } from "@/components/binder-book"
 import { CurrencyProvider } from "@/components/currency"
 import { currencyCookieName, formatMoney } from "@/lib/currency"
 import { readCurrency } from "@/lib/currency.functions"
-import { readBinder } from "@/lib/binder.server"
+import { readBinder, readCardPrices } from "@/lib/binder.server"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
@@ -89,6 +89,7 @@ async function load(): Promise<void> {
             choose={() => undefined}
             change={() => Promise.resolve({ state: "saved" })}
             refresh={() => Promise.resolve()}
+            prices={(card) => readCardPrices({ card })}
           />
         </CurrencyProvider>
       </RouterContextProvider>

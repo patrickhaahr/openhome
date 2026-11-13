@@ -86,6 +86,7 @@ Preconditions:
 - **Dashboard remove.** Press `Remove`: a confirmation names the card, its language and the owner. `Keep it` returns to the form with the entry intact. `Remove for good` closes the sheet and the pocket disappears (the API read-back agrees); the card image stays.
 - **Household removal.** Create a throwaway user in `Household and lists` on `/lists?tab=wish`, add entries for them with `add_binder_entry`, then `Remove <name>`: the confirmation reads "with all their wishlists, wishes and watchlist entries, and their Binder". Note one of their entry ids first. After `Remove for good`, `GET $API_URL/api/household-users/<id>/binder/entries/<entry id>` is 404, `/api/binder/entries?owner_id=<id>` is `[]`, other owners are unchanged and the card images are still 200. Use a throwaway user: the seeded ones are shared by later steps. In the preview, the buttons read `Remove <name>` through their text, not an `aria-label`; click them with `preview_evaluate` since selectors with quotes are rejected.
 - **Values.** Card Value, Binder Value, the currency switch and the ECB rates have their own recipe, [binder-values.md](./binder-values.md). The Proof step below covers both.
+- **Prices.** The daily refresh, `card_prices` and the price chart have their own recipe, [binder-prices.md](./binder-prices.md).
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.
 
 ## Gotchas

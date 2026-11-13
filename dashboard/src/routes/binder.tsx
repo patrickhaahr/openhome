@@ -3,7 +3,11 @@ import { useServerFn } from "@tanstack/react-start"
 import { BinderBook } from "@/components/binder-book"
 import { PageHead } from "@/components/page-head"
 import { binderSearch } from "@/lib/binder"
-import { loadBinder, mutateBinder } from "@/lib/binder.functions"
+import {
+  loadBinder,
+  loadCardPrices,
+  mutateBinder,
+} from "@/lib/binder.functions"
 
 /** Each Household User's Binder as spreads of two facing 3×3 pocket pages of official card images, with each card's sheet for correcting or removing it. */
 export const Route = createFileRoute("/binder")({
@@ -40,6 +44,7 @@ function BinderPage(): React.JSX.Element {
         }
         change={(command) => mutate({ data: command })}
         refresh={() => router.invalidate({ sync: true })}
+        prices={loadCardPrices}
       />
     </section>
   )

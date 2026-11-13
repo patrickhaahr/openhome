@@ -24,6 +24,7 @@ import {
   type BinderState,
   type BinderView,
 } from "@/lib/binder"
+import type { PricesState } from "@/lib/card-prices"
 import {
   binderWriteMessage,
   type BinderCommand,
@@ -42,12 +43,14 @@ export function BinderBook({
   choose,
   change,
   refresh,
+  prices,
 }: {
   data: BinderState
   search: BinderSearch
   choose: (search: BinderSearch) => void
   change: (command: BinderCommand) => Promise<BinderMutation>
   refresh: () => Promise<void>
+  prices: (card: string) => Promise<PricesState>
 }): React.JSX.Element {
   const view = viewOf(data, search)
   const [open, setOpen] = useState<string>()
@@ -109,6 +112,7 @@ export function BinderBook({
               owner={owner}
               busy={busy}
               save={save}
+              prices={prices}
               done={() => setOpen(undefined)}
             />
             <FeedbackLine feedback={feedback} busy={busy} />

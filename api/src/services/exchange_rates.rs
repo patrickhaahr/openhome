@@ -77,12 +77,12 @@ pub enum Pass {
 const RECENT_REACH_DAYS: u64 = 80;
 
 /// The stored rates cannot be completed from the 90-day file: they are empty, start after the
-/// day the oldest stored Card Price was observed, or end before the file's first day.
+/// day the oldest stored Price Point was observed, or end before the file's first day.
 async fn needs_history(db: &SqlitePool) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT (SELECT MIN(rate_date) FROM exchange_rates) AS "earliest_rate?: String",
                   (SELECT MAX(rate_date) FROM exchange_rates) AS "latest_rate?: String",
-                  (SELECT MIN(price_observed_on) FROM cards) AS "oldest_price?: String""#
+                  (SELECT MIN(observed_on) FROM price_points) AS "oldest_price?: String""#
     )
     .fetch_one(db)
     .await?;

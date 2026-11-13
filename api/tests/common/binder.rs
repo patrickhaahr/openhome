@@ -90,6 +90,13 @@ pub fn png() -> Vec<u8> {
 }
 
 pub async fn catalogue() -> MockServer {
+    catalogue_priced(market_price).await
+}
+
+/// The synthetic catalogue with its prices decided per request, so a test can move them.
+pub async fn catalogue_priced(
+    price_of: impl Fn(&str) -> (Option<f64>, u64) + Send + Sync + 'static,
+) -> MockServer {
     let server = MockServer::start().await;
     let origin = server.uri();
     Mock::given(method("GET"))
@@ -103,7 +110,7 @@ pub async fn catalogue() -> MockServer {
                 return ResponseTemplate::new(404)
                     .set_body_json(json!({"error": "Card not found."}));
             };
-            let (price, age) = market_price(code);
+            let (price, age) = price_of(code);
             let observed = days_ago(age).to_string();
             ResponseTemplate::new(200).set_body_json(
                 ids.iter()

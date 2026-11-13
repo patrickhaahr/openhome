@@ -22,6 +22,18 @@ impl Cents {
         (dollars.is_finite() && dollars >= 0.0).then(|| Self((dollars * 100.0).round() as i128))
     }
 
+    /// A stored amount of whole cents.
+    #[must_use]
+    pub fn from_whole_cents(cents: i64) -> Self {
+        Self(i128::from(cents))
+    }
+
+    /// The amount as whole cents, when it fits the database's integer.
+    #[must_use]
+    pub fn whole_cents(self) -> Option<i64> {
+        i64::try_from(self.0).ok()
+    }
+
     /// `self * numerator / denominator`, rounded half away from zero.
     fn scaled(self, numerator: i128, denominator: i128) -> Self {
         let product = self.0 * numerator;

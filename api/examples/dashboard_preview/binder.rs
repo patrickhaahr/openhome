@@ -3,6 +3,14 @@
 //! file the catalogue serves, which is not always its id (`OP99-020`'s special print). Every request is logged to stderr
 //! (`OPTCG stand-in: GET <path> -> <status>`), so a verifier can count what Axum asked for in the
 //! stack log. Code `OP99-503` simulates an outage; any other unknown code answers 404.
+//! `OPENHOME_PREVIEW_PRICES=history` starts every observation [`HISTORY_DAYS`] days earlier and
+//! lets the preview move the catalogue forward one day at a time (see `prices.rs`), so the real
+//! refresh job builds a Price History with a gap.
+
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicI64, Ordering},
+};
 
 use axum::{
     Json, Router,
@@ -44,6 +52,46 @@ struct SeedCard {
     text: String,
 }
 
+/// How far back the history mode starts the catalogue's observations.
+pub const HISTORY_DAYS: i64 = 12;
+
+pub fn history_mode() -> bool {
+    std::env::var("OPENHOME_PREVIEW_PRICES").as_deref() == Ok("history")
+}
+
+/// Where the stand-in's clock stands: observations are the seeded ones moved `back` days earlier
+/// and `advance` days forward, with prices that settle on the seeded one at the end.
+pub struct Control {
+    back: i64,
+    advance: AtomicI64,
+    failing: Mutex<Option<String>>,
+}
+
+impl Control {
+    pub fn advance_to(&self, day: i64) {
+        self.advance.store(day, Ordering::SeqCst);
+    }
+
+    pub fn fail(&self, code: Option<&str>) {
+        *self.failing.lock().expect("lock") = code.map(str::to_owned);
+    }
+
+    fn days_left(&self) -> i64 {
+        self.back - self.advance.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Clone)]
+struct Provider {
+    origin: String,
+    control: Arc<Control>,
+}
+
+pub struct Catalogue {
+    pub client: Optcg,
+    pub control: Arc<Control>,
+}
+
 fn catalogue() -> Vec<SeedCard> {
     serde_json::from_str::<Seed>(include_str!("seed/cards.json"))
         .expect("seed/cards.json is valid")
@@ -56,10 +104,14 @@ impl SeedCard {
     }
 }
 
-fn wire(card: &SeedCard, origin: &str) -> Value {
+fn wire(card: &SeedCard, origin: &str, control: &Control) -> Value {
+    let left = control.days_left();
+    let price = card
+        .market_price
+        .map(|price| (price * (1.0 + 0.02 * ((left * 5) % 7) as f64) * 100.0).round() / 100.0);
     json!({
         "inventory_price": card.inventory_price,
-        "market_price": card.market_price,
+        "market_price": price,
         "card_name": card.name,
         "set_name": card.set_name,
         "card_text": card.text,
@@ -74,7 +126,7 @@ fn wire(card: &SeedCard, origin: &str) -> Value {
         "sub_types": card.sub_types,
         "counter_amount": card.counter,
         "attribute": card.attribute,
-        "date_scraped": (Utc::now() - Duration::days(card.observed_days_ago)).format("%Y-%m-%d").to_string(),
+        "date_scraped": (Utc::now() - Duration::days(card.observed_days_ago + left)).format("%Y-%m-%d").to_string(),
         "card_image_id": card.image_id,
         "card_image": format!("{origin}media/static/Card_Images/{}.jpg", card.file()),
     })
@@ -84,9 +136,11 @@ fn log(path: &str, status: StatusCode) {
     eprintln!("OPTCG stand-in: GET {path} -> {}", status.as_u16());
 }
 
-async fn card(State(origin): State<String>, Path(code_id): Path<String>) -> impl IntoResponse {
+async fn card(State(provider): State<Provider>, Path(code_id): Path<String>) -> impl IntoResponse {
+    let Provider { origin, control } = provider;
     let path = format!("/api/sets/card/{code_id}/");
-    let (status, body) = if code_id == "OP99-503" {
+    let failing = control.failing.lock().expect("lock").clone();
+    let (status, body) = if code_id == "OP99-503" || failing.as_deref() == Some(&code_id) {
         (
             StatusCode::SERVICE_UNAVAILABLE,
             json!({"error": "synthetic outage"}),
@@ -95,7 +149,7 @@ async fn card(State(origin): State<String>, Path(code_id): Path<String>) -> impl
         let variants: Vec<Value> = catalogue()
             .iter()
             .filter(|card| card.card_code == code_id)
-            .map(|card| wire(card, &origin))
+            .map(|card| wire(card, &origin, &control))
             .collect();
         if variants.is_empty() {
             (StatusCode::NOT_FOUND, json!({"error": "Card not found."}))
@@ -160,20 +214,31 @@ async fn image(Path(file): Path<String>) -> impl IntoResponse {
     }
 }
 
-/// The catalogue client for a loopback stand-in. Never the live service: it is one volunteer's
-/// server.
-pub async fn optcg() -> anyhow::Result<Optcg> {
+/// The catalogue client for a loopback stand-in, with the handle that moves its clock. Never the
+/// live service: it is one volunteer's server.
+pub async fn stand_in() -> anyhow::Result<Catalogue> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let url = format!("http://{address}/");
+    let control = Arc::new(Control {
+        back: if history_mode() { HISTORY_DAYS } else { 0 },
+        advance: AtomicI64::new(0),
+        failing: Mutex::new(None),
+    });
     let provider = Router::new()
         .route("/api/sets/card/{code}/", get(card))
         .route("/media/static/Card_Images/{file}", get(image))
-        .with_state(url.clone());
+        .with_state(Provider {
+            origin: url.clone(),
+            control: control.clone(),
+        });
     tokio::spawn(async move { axum::serve(listener, provider).await });
     // Without the scheme: test harnesses take the first `http://127.0.0.1:<port>` they see as Axum's URL.
     eprintln!(
         "OPTCG: loopback catalogue at {address} (invented OP99 cards; OP99-503 simulates an outage)"
     );
-    Optcg::new(url.parse()?)
+    Ok(Catalogue {
+        client: Optcg::new(url.parse()?)?,
+        control,
+    })
 }

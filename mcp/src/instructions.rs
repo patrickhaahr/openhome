@@ -116,6 +116,9 @@ japanese_printing (the catalogue prices English printings only), no_catalogue_pr
 each owner's Binder Value, the sum of quantity times card_value over priced entries with stale prices included, plus \
 unpriced_entries (how many entries it leaves out) and oldest_observed_on: state the total, the unpriced count and how old the \
 oldest price is. \
+For a price trend call card_prices with a Card id: its Price History holds one point per observed price, with eur and dkk \
+converted at each point's own date. Points are sparse and unchanged observations add none, so describe gaps as no new \
+observation and never interpolate or invent prices. Prices refresh daily for Cards in a Binder only. \
 Correct an entry with update_binder_entry and remove one with delete_binder_entry, both by explicit owner_id and entry_id from \
 binder_entries. An omitted field is kept, a note of null clears it, and quantity replaces the stored count rather than adding \
 to it. A language change that would duplicate the owner's entry for that Card returns a 409 and changes nothing. Removal is \
