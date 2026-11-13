@@ -8,6 +8,12 @@ use serde::{Deserialize, Serialize};
 
 use super::patch::Patch;
 
+mod foods;
+mod meal_logs;
+mod meals;
+mod summary;
+mod supplements;
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SearchFoodsRequest {
     /// Words of a Food's Danish or English name, e.g. `skyr`, `kyllingebryst` or `chicken breast`.

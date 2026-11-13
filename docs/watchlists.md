@@ -117,7 +117,7 @@ never imply a successful write.
 
 Run `devenv shell -- just api-check mcp-check dashboard-check`. The primary domain
 proof is migrated SQLite behind authenticated Axum in `api/tests/watchlist.rs`.
-The real Streamable HTTP MCP client/adapter/Axum seam is in `mcp/tests/contract.rs`.
+The real Streamable HTTP MCP client/adapter/Axum seam is in `mcp/tests/watchlist.rs`.
 Rendered Dashboard tests use the same authenticated routes with synthetic owners,
 including additions/removal, status/date edits, filters, refresh, failed credentials and a lost accepted
 response followed by remount/retry. [Public screenshots](../dashboard/docs/watchlist/README.md)

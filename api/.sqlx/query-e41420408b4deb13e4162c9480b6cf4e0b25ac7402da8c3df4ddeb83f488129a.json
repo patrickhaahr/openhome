@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT 1 AS \"found!: i64\" FROM unlisted_cards WHERE card_code = ? AND checked_on = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "found!: i64",
+        "ordinal": 0,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e41420408b4deb13e4162c9480b6cf4e0b25ac7402da8c3df4ddeb83f488129a"
+}

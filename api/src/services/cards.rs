@@ -1,0 +1,379 @@
+//! Cards (`CONTEXT.md`, Card): every printed variant of a Card Code as the OPTCG catalogue lists
+//! it, stored the first time the code is searched for. Details are a snapshot and never edited.
+//! Each variant's official image is fetched once and kept as AVIF in the same row, so reads never
+//! touch the catalogue. A catalogue failure writes nothing. A code the catalogue does not list is
+//! remembered until the next Copenhagen day, so repeating it does not hammer a volunteer's server
+//! while a card listed later can still be found.
+
+use std::sync::LazyLock;
+
+use serde::Serialize;
+use sqlx::SqlitePool;
+use tokio::sync::Mutex;
+
+use super::avif_encoder::{self, EncodeError, Settings, Source};
+use super::optcg::{CatalogueCard, Optcg, Unavailable};
+use super::training::CalendarDay;
+
+/// One lock for every first lookup: the catalogue is a volunteer's server and a code is fetched
+/// once, so a concurrent search waits here and then finds the stored cards. At household scale
+/// serialising the rare miss costs nothing, while a lock per code would need a map to clean up.
+static FIRST_LOOKUP: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+const IMAGE: Settings = Settings {
+    speed: 8,
+    quality: 70,
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum CardsError {
+    #[error("{0}")]
+    Validation(String),
+    #[error("{0}")]
+    NotFound(String),
+    #[error("The card catalogue is unavailable; try again later")]
+    DataUnavailable,
+    #[error("Card image encoding failed")]
+    Encoder,
+    #[error("Card database operation failed")]
+    Database(#[from] sqlx::Error),
+}
+
+impl From<Unavailable> for CardsError {
+    fn from(_: Unavailable) -> Self {
+        Self::DataUnavailable
+    }
+}
+
+type Result<T> = std::result::Result<T, CardsError>;
+
+/// The code printed on a card, such as `OP01-001`: a set prefix (letters, then at most two
+/// digits), a hyphen and a three-digit card number. Stored and compared in upper case.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardCode(String);
+
+impl CardCode {
+    pub fn parse(text: &str) -> Result<Self> {
+        let code = text.trim().to_ascii_uppercase();
+        let well_formed = code.split_once('-').is_some_and(|(prefix, number)| {
+            let letters = prefix.bytes().take_while(u8::is_ascii_uppercase).count();
+            let digits = &prefix[letters..];
+            (1..=4).contains(&letters)
+                && digits.len() <= 2
+                && digits.bytes().all(|byte| byte.is_ascii_digit())
+                && number.len() == 3
+                && number.bytes().all(|byte| byte.is_ascii_digit())
+        });
+        if well_formed {
+            Ok(Self(code))
+        } else {
+            Err(CardsError::Validation(
+                "card_code must look like OP01-001: a set prefix, a hyphen and three digits".into(),
+            ))
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A variant identifier: the catalogue's image identifier, kept opaque (`OP01-001_p1`,
+/// `OP09-078-r1`, `EB03_OP09-034_p1`). Only a charset and length safe for a URL path segment and
+/// a database key is checked, since the catalogue's own spellings keep varying.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardId(String);
+
+impl CardId {
+    pub fn parse(text: &str) -> Result<Self> {
+        let well_formed = text.len() <= 64
+            && text
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+            && text
+                .bytes()
+                .next()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric());
+        if well_formed {
+            Ok(Self(text.to_owned()))
+        } else {
+            Err(CardsError::Validation(
+                "card id must be 1 to 64 letters, digits, hyphens or underscores, starting with a letter or digit"
+                    .into(),
+            ))
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The catalogue's `TCGplayer` market price in USD and the day the catalogue observed it. Other
+/// currencies join this object when exchange rates exist.
+#[derive(Debug, Serialize)]
+pub struct CardValue {
+    pub usd: f64,
+    pub observed_on: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Card {
+    pub id: String,
+    pub card_code: String,
+    pub name: String,
+    pub set_id: Option<String>,
+    pub set_name: Option<String>,
+    pub rarity: Option<String>,
+    pub color: Option<String>,
+    pub card_type: Option<String>,
+    pub life: Option<String>,
+    pub cost: Option<String>,
+    pub power: Option<String>,
+    pub counter_amount: Option<String>,
+    pub attribute: Option<String>,
+    pub sub_types: Option<String>,
+    pub text: Option<String>,
+    pub inventory_price_usd: Option<f64>,
+    pub card_value: Option<CardValue>,
+    /// Authenticated read of the stored AVIF.
+    pub image_path: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Search {
+    pub card_code: String,
+    pub cards: Vec<Card>,
+}
+
+/// Every variant of `code`, in catalogue order; empty when the catalogue does not list it. Asks
+/// the catalogue only when nothing is stored for the code and it was not found unlisted today.
+pub async fn search(db: &SqlitePool, catalogue: &Optcg, code: &CardCode) -> Result<Search> {
+    let today = CalendarDay::of(chrono::Utc::now()).to_string();
+    Ok(Search {
+        card_code: code.as_str().to_owned(),
+        cards: cards_of(db, catalogue, code, &today).await?,
+    })
+}
+
+async fn cards_of(
+    db: &SqlitePool,
+    catalogue: &Optcg,
+    code: &CardCode,
+    today: &str,
+) -> Result<Vec<Card>> {
+    if let Some(cards) = known(db, code, today).await? {
+        return Ok(cards);
+    }
+    let _first_lookup = FIRST_LOOKUP.lock().await;
+    if let Some(cards) = known(db, code, today).await? {
+        return Ok(cards);
+    }
+    let listed = catalogue.card(code).await?;
+    if listed.is_empty() {
+        remember_unlisted(db, code, today).await?;
+        return Ok(Vec::new());
+    }
+    store(db, catalogue, &listed).await?;
+    stored(db, code).await
+}
+
+pub async fn image(db: &SqlitePool, id: &CardId) -> Result<Vec<u8>> {
+    let id = id.as_str();
+    sqlx::query_scalar!(
+        r#"SELECT image_avif AS "image_avif!" FROM cards WHERE id = ?"#,
+        id
+    )
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| CardsError::NotFound("Card not found".into()))
+}
+
+/// `Some` when the API already has the answer: the stored cards, or nothing for a code found
+/// unlisted today.
+async fn known(db: &SqlitePool, code: &CardCode, today: &str) -> Result<Option<Vec<Card>>> {
+    let cards = stored(db, code).await?;
+    let code = code.as_str();
+    let unlisted = sqlx::query_scalar!(
+        r#"SELECT 1 AS "found!: i64" FROM unlisted_cards WHERE card_code = ? AND checked_on = ?"#,
+        code,
+        today
+    )
+    .fetch_optional(db)
+    .await?
+    .is_some();
+    Ok((!cards.is_empty() || unlisted).then_some(cards))
+}
+
+async fn remember_unlisted(db: &SqlitePool, code: &CardCode, today: &str) -> Result<()> {
+    let code = code.as_str();
+    sqlx::query!(
+        "INSERT INTO unlisted_cards (card_code, checked_on) VALUES (?, ?)
+         ON CONFLICT(card_code) DO UPDATE SET checked_on = excluded.checked_on",
+        code,
+        today
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
+    let code = code.as_str();
+    let rows = sqlx::query!(
+        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
+                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
+                price_observed_on
+         FROM cards WHERE card_code = ? ORDER BY position",
+        code
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| Card {
+            image_path: format!("/api/binder/cards/{}/image", row.id),
+            card_value: row
+                .price_usd
+                .zip(row.price_observed_on)
+                .map(|(usd, observed_on)| CardValue { usd, observed_on }),
+            id: row.id,
+            card_code: row.card_code,
+            name: row.name,
+            set_id: row.set_id,
+            set_name: row.set_name,
+            rarity: row.rarity,
+            color: row.color,
+            card_type: row.card_type,
+            life: row.life,
+            cost: row.cost,
+            power: row.power,
+            counter_amount: row.counter_amount,
+            attribute: row.attribute,
+            sub_types: row.sub_types,
+            text: row.text,
+            inventory_price_usd: row.inventory_price_usd,
+        })
+        .collect())
+}
+
+/// Fetches and encodes every image first, then writes all variants in one transaction, so a
+/// failure leaves nothing behind. A concurrent search that stored the same variants wins.
+async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> Result<()> {
+    let mut images = Vec::with_capacity(listed.len());
+    for card in listed {
+        let source = Source::from_bytes(catalogue.image(&card.image_url).await?)
+            .map_err(|_| CardsError::DataUnavailable)?;
+        // The encoder's decode bound is the target, so the stored image keeps its source size.
+        let [avif] = avif_encoder::encode(source, IMAGE, [avif_encoder::MAX_SIDE])
+            .await
+            .map_err(|error| match error {
+                EncodeError::Encode => CardsError::Encoder,
+                EncodeError::Undecodable | EncodeError::TooLarge => CardsError::DataUnavailable,
+            })?;
+        images.push(avif.bytes);
+    }
+    let mut tx = db.begin().await?;
+    for (position, (card, image)) in (0_i64..).zip(listed.iter().zip(&images)) {
+        let id = card.id.as_str();
+        let code = card.card_code.as_str();
+        let price_usd = card.price.as_ref().map(|price| price.usd);
+        let price_observed_on = card.price.as_ref().map(|price| price.observed_on.as_str());
+        sqlx::query!(
+            "INSERT INTO cards (id, card_code, position, name, set_id, set_name, rarity, color,
+                card_type, life, cost, power, counter_amount, attribute, sub_types, text,
+                inventory_price_usd, price_usd, price_observed_on, image_avif)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO NOTHING",
+            id,
+            code,
+            position,
+            card.name,
+            card.set_id,
+            card.set_name,
+            card.rarity,
+            card.color,
+            card.card_type,
+            card.life,
+            card.cost,
+            card.power,
+            card.counter_amount,
+            card.attribute,
+            card.sub_types,
+            card.text,
+            card.inventory_price_usd,
+            price_usd,
+            price_observed_on,
+            image
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_codes_are_normalised_and_malformed_ones_rejected() {
+        for (text, code) in [
+            ("OP01-001", "OP01-001"),
+            (" op01-001 ", "OP01-001"),
+            ("ST10-012", "ST10-012"),
+            ("EB01-061", "EB01-061"),
+            ("PRB01-001", "PRB01-001"),
+            ("P-001", "P-001"),
+        ] {
+            assert_eq!(CardCode::parse(text).unwrap().as_str(), code);
+        }
+        for text in [
+            "",
+            "OP01",
+            "OP01-1",
+            "OP01-0001",
+            "OP001-001",
+            "OPTCG1-001",
+            "-001",
+            "01-001",
+            "OP01_001",
+            "OP01-001_p1",
+            "OP01-001/..",
+            "OP01-00A",
+        ] {
+            assert!(CardCode::parse(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn card_ids_are_opaque_url_safe_catalogue_identifiers() {
+        for text in [
+            "OP01-001",
+            "OP04-016_P1",
+            "OP09-078-r1",
+            "EB03_OP09-034_p1",
+            "SPECIAL_BUGGY_BALL",
+            &"a".repeat(64),
+        ] {
+            assert_eq!(CardId::parse(text).unwrap().as_str(), text);
+        }
+        for text in [
+            "",
+            "-OP01-001",
+            "_p1",
+            "OP01-001/..",
+            "OP01-001.jpg",
+            "OP01-001?x=1",
+            "OP01 001",
+            "OP01-001\n",
+            "ÖP01-001",
+            &"a".repeat(65),
+        ] {
+            assert!(CardId::parse(text).is_err(), "{text}");
+        }
+    }
+}

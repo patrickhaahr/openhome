@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO unlisted_cards (card_code, checked_on) VALUES (?, ?)\n         ON CONFLICT(card_code) DO UPDATE SET checked_on = excluded.checked_on",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "59bcfbebc7525f3994bcc63fc8617fa054631e5c6037de9d72f760473d22e8d5"
+}

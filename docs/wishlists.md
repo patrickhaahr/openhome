@@ -231,7 +231,7 @@ and [#97](https://github.com/patrickhaahr/openhome/issues/97#issuecomment-611366
 
 Automated proof runs through migrated SQLite and authenticated routes in
 `api/tests/wishlist.rs`, and through the real MCP Streamable HTTP client → adapter
-→ Axum in `mcp/tests/contract.rs`. Run `devenv shell -- just api-check mcp-check`.
+→ Axum in `mcp/tests/wishlist.rs`. Run `devenv shell -- just api-check mcp-check`.
 For the agent workflow demonstration use an isolated migrated database and
 synthetic owners: discover, create a named list, add a generic title, retry with
 the same request ID, and read it back. Also demonstrate the clarification and
