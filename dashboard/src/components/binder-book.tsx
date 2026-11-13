@@ -34,6 +34,7 @@ import {
   turnStep,
   type Sheet,
   type Turn,
+  type TurnDirection,
   type TurnEvent,
   type TurnOutcome,
 } from "@/lib/binder-turn"
@@ -45,8 +46,8 @@ import {
 
 /**
  * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
- * The person keys choose whose Binder; the arrows and the arrow keys turn the spread, and a
- * pocket opens its card sheet. A read that failed offers a way to check again and never shows
+ * The person keys choose whose Binder; dragging or tapping a page's edge, the arrows and the arrow
+ * keys turn the spread, and a pocket opens its card sheet. A read that failed offers a way to check again and never shows
  * an empty Binder.
  */
 export function BinderBook({
@@ -200,6 +201,10 @@ function isEditing(target: EventTarget | null): boolean {
   )
 }
 
+function isGesture(turn: Turn): boolean {
+  return turn.phase === "dragging" || turn.phase === "refused"
+}
+
 function Spread({
   entries,
   index,
@@ -224,51 +229,55 @@ function Spread({
   const frame = useRef(0)
   const dragged = useRef(false)
 
-  const go = (to: number): void => {
-    if (to >= 0 && to < count) choose({ person: owner, page: to + 1 })
-  }
+  const can = { back: index > 0, forward: index < count - 1 }
 
   const draw = (): void => {
     frame.current = 0
     const current = turn.current
 
-    if (
-      leaf.current === null ||
-      current.phase === "idle" ||
-      current.phase === "pressing"
-    )
-      return
+    if (leaf.current === null || !("direction" in current)) return
     leaf.current.style.transform = `perspective(250rem) rotateY(${progress.current * turnStep[current.direction] * -180}deg)`
   }
 
   const step = (event: TurnEvent): void => {
     const before = turn.current
-    const after = nextTurn(before, event)
+    const next = nextTurn(before, event)
+
+    const after =
+      reduced && next.phase === "settling"
+        ? nextTurn(next, { type: "settled" })
+        : next
 
     if (after === before) return
     turn.current = after
 
+    if (isGesture(after) && !isGesture(before)) dragged.current = true
+
+    // The click a drag's release produces arrives in the same task; one that never comes must not swallow a later one.
+    if (isGesture(before) && !isGesture(after))
+      requestAnimationFrame(() => {
+        dragged.current = false
+      })
+
     if (after.phase === "dragging") {
       if (before.phase === "pressing")
         spread.current?.setPointerCapture(after.pointer)
-      dragged.current = true
       progress.current = after.progress
 
       if (frame.current === 0) frame.current = requestAnimationFrame(draw)
     }
 
-    if (after.phase === "turned") go(index + turnStep[after.direction])
-
-    if (after.phase === "settling" && reduced) {
-      step({ type: "settled" })
-
-      return
-    }
+    if (after.phase === "turned")
+      choose({ person: owner, page: index + turnStep[after.direction] + 1 })
 
     if (after.phase === "idle" && leaf.current !== null)
       leaf.current.style.transform = ""
 
     if (after.phase !== before.phase) setShown(after)
+  }
+
+  const flip = (direction: TurnDirection): void => {
+    if (can[direction]) step({ type: "flip", direction })
   }
 
   const land = useEffectEvent((outcome: TurnOutcome): void => {
@@ -303,9 +312,9 @@ function Spread({
       )
         return
 
-      if (event.key === "ArrowLeft") go(index - 1)
+      if (event.key === "ArrowLeft") flip("back")
 
-      if (event.key === "ArrowRight") go(index + 1)
+      if (event.key === "ArrowRight") flip("forward")
     }
 
     window.addEventListener("keydown", onKey)
@@ -318,9 +327,7 @@ function Spread({
   const open = opening(
     entries,
     index,
-    reduced || shown.phase === "idle" || shown.phase === "pressing"
-      ? undefined
-      : shown.direction
+    reduced || !("direction" in shown) ? undefined : shown.direction
   )
 
   return (
@@ -330,22 +337,21 @@ function Spread({
         className="binder-spread"
         onPointerDown={(event) => {
           if (!event.isPrimary || event.button !== 0) return
-          dragged.current = false
 
-          const held = grip(
-            event.currentTarget.getBoundingClientRect(),
-            event.clientX,
-            { back: index > 0, forward: index < count - 1 }
-          )
-
-          if (held !== undefined)
-            step({
-              type: "press",
-              pointer: event.pointerId,
-              x: event.clientX,
-              y: event.clientY,
-              ...held,
-            })
+          step({
+            type: "press",
+            pointer: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            pocket:
+              event.target instanceof Element &&
+              event.target.closest(".pocket-card") !== null,
+            grip: grip(
+              event.currentTarget.getBoundingClientRect(),
+              event.clientX,
+              can
+            ),
+          })
         }}
         onPointerMove={(event) =>
           step({
@@ -368,6 +374,9 @@ function Spread({
           step({ type: "lose", pointer: event.pointerId })
         }
         onLostPointerCapture={(event) =>
+          step({ type: "lose", pointer: event.pointerId })
+        }
+        onPointerLeave={(event) =>
           step({ type: "lose", pointer: event.pointerId })
         }
         onClickCapture={(event) => {
@@ -416,8 +425,8 @@ function Spread({
         <Button
           variant="outline"
           size="key-icon"
-          disabled={index === 0}
-          onClick={() => step({ type: "flip", direction: "back" })}
+          disabled={!can.back}
+          onClick={() => flip("back")}
         >
           <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
           <span className="sr-only">Previous pages</span>
@@ -428,8 +437,8 @@ function Spread({
         <Button
           variant="outline"
           size="key-icon"
-          disabled={index === count - 1}
-          onClick={() => step({ type: "flip", direction: "forward" })}
+          disabled={!can.forward}
+          onClick={() => flip("forward")}
         >
           <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
           <span className="sr-only">Next pages</span>

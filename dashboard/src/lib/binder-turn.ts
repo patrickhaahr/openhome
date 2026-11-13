@@ -13,20 +13,25 @@ export const turnStep = { forward: 1, back: -1 } as const satisfies Record<
 
 type Sample = { readonly x: number; readonly time: number }
 
+/** Which turn a press can start, and how far the pointer travels to lay the page on the far side. */
+export type Grip = { readonly direction: TurnDirection; readonly reach: number }
+
 /**
- * One page turn. A press near an edge may still be a tap; moving past the slop makes it a drag
- * that follows the pointer; releasing settles it. A settled completion leaves the page turned until
- * the next spread replaces this one; every other phase ends back at idle.
+ * One gesture on the spread. A press may still be a tap; moving past the slop makes it a drag that
+ * follows the pointer when the press gripped a page, or a refused drag that turns nothing when it
+ * did not. Releasing settles a drag, and a tap in a grip away from a pocket turns the page. A settled
+ * completion leaves the page turned until the next spread replaces this one; every other phase ends
+ * back at idle.
  */
 export type Turn =
   | { readonly phase: "idle" }
   | {
       readonly phase: "pressing"
       readonly pointer: number
-      readonly direction: TurnDirection
       readonly x: number
       readonly y: number
-      readonly reach: number
+      readonly pocket: boolean
+      readonly grip: Grip | undefined
     }
   | {
       readonly phase: "dragging"
@@ -38,6 +43,7 @@ export type Turn =
       readonly last: Sample
       readonly velocity: number
     }
+  | { readonly phase: "refused"; readonly pointer: number }
   | {
       readonly phase: "settling"
       readonly direction: TurnDirection
@@ -49,10 +55,10 @@ export type TurnEvent =
   | {
       readonly type: "press"
       readonly pointer: number
-      readonly direction: TurnDirection
       readonly x: number
       readonly y: number
-      readonly reach: number
+      readonly pocket: boolean
+      readonly grip: Grip | undefined
     }
   | {
       readonly type: "move"
@@ -73,7 +79,7 @@ export type TurnEvent =
 
 export const idle: Turn = { phase: "idle" }
 
-/** How far a press may wander, in CSS pixels, and still be a tap on a pocket. */
+/** How far a press may wander, in CSS pixels, and still be a tap. */
 export const tapSlop = 10
 
 /** A release this fast toward completion, in CSS pixels per millisecond, finishes the turn wherever it is. */
@@ -94,15 +100,12 @@ export function outcomeOf(progress: number, velocity: number): TurnOutcome {
   return progress >= 0.5 ? "complete" : "cancel"
 }
 
-/**
- * Which turn a press at `x` can start: one pocket column from either edge of the spread, never past
- * the first or last spread. The reach is how far the pointer travels to lay the page on the far side.
- */
+/** Which turn a press at `x` can start: one pocket column from either edge of the spread, never past the first or last spread. */
 export function grip(
   box: { readonly left: number; readonly right: number },
   x: number,
   can: Readonly<Record<TurnDirection, boolean>>
-): { direction: TurnDirection; reach: number } | undefined {
+): Grip | undefined {
   const edge = (box.right - box.left) / 6
 
   if (can.forward && x >= box.right - edge)
@@ -134,10 +137,10 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
         return {
           phase: "pressing",
           pointer: event.pointer,
-          direction: event.direction,
           x: event.x,
           y: event.y,
-          reach: event.reach,
+          pocket: event.pocket,
+          grip: event.grip,
         }
 
       if (event.type === "flip")
@@ -154,17 +157,34 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
       if (event.type === "settled" || event.pointer !== turn.pointer)
         return turn
 
-      if (event.type !== "move") return idle
+      if (event.type === "lose") return idle
+
+      if (event.type === "release")
+        return turn.grip !== undefined && !turn.pocket
+          ? {
+              phase: "settling",
+              direction: turn.grip.direction,
+              outcome: "complete",
+            }
+          : idle
 
       if (Math.hypot(event.x - turn.x, event.y - turn.y) < tapSlop) return turn
+
+      if (turn.grip === undefined)
+        return { phase: "refused", pointer: turn.pointer }
 
       return {
         phase: "dragging",
         pointer: turn.pointer,
-        direction: turn.direction,
+        direction: turn.grip.direction,
         origin: turn.x,
-        reach: turn.reach,
-        progress: progressOf(turn.direction, turn.x, turn.reach, event.x),
+        reach: turn.grip.reach,
+        progress: progressOf(
+          turn.grip.direction,
+          turn.x,
+          turn.grip.reach,
+          event.x
+        ),
         last: { x: event.x, time: event.time },
         velocity: 0,
       }
@@ -209,6 +229,15 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
         velocity: travel(turn.direction, turn.last.x, event.x) / elapsed,
       }
     }
+
+    case "refused":
+      if (
+        (event.type === "release" || event.type === "lose") &&
+        event.pointer === turn.pointer
+      )
+        return idle
+
+      return turn
 
     case "settling":
       if (event.type !== "settled") return turn

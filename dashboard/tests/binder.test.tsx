@@ -259,6 +259,17 @@ test("lays out a spread of two facing nine-pocket pages in Card Code order, mark
   expect(container.textContent).toContain("OPTCG catalogue")
 })
 
+async function turnBy(key: string): Promise<void> {
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key }))
+  })
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, settleDuration + 100))
+    await refreshWork
+  })
+  await settle()
+}
+
 test("turns a whole spread by the arrows and the arrow keys, leaving unfilled pockets empty", async () => {
   await add(await owner("Alex"), ...alex)
   await render()
@@ -275,19 +286,11 @@ test("turns a whole spread by the arrows and the arrow keys, leaving unfilled po
   expect(container.textContent).toContain("Pages 3–4 of 4")
   expect(button("Next pages").disabled).toBe(true)
 
-  await act(async () => {
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }))
-    await refreshWork
-  })
-  await settle()
+  await turnBy("ArrowLeft")
   expect(container.textContent).toContain("Pages 1–2 of 4")
   expect(cards()).toEqual(firstSpread)
 
-  await act(async () => {
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
-    await refreshWork
-  })
-  await settle()
+  await turnBy("ArrowRight")
   expect(container.textContent).toContain("Pages 3–4 of 4")
 })
 

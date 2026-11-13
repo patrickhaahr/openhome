@@ -105,8 +105,6 @@ export type BinderView =
       readonly view: "spread"
       readonly owners: HouseholdUser[]
       readonly owner: HouseholdUser
-      readonly left: BinderEntry[]
-      readonly right: BinderEntry[]
       readonly index: number
       readonly count: number
       readonly entries: BinderEntry[]
@@ -127,13 +125,9 @@ export function viewOf(state: BinderState, search: BinderSearch): BinderView {
 
   if (mine.length === 0) return { view: "empty", owners, owner }
 
-  return {
-    view: "spread",
-    owners,
-    owner,
-    ...paginate(mine, (search.page ?? 1) - 1),
-    entries: mine,
-  }
+  const { index, count } = paginate(mine, (search.page ?? 1) - 1)
+
+  return { view: "spread", owners, owner, index, count, entries: mine }
 }
 
 /** The Dashboard Start route that relays Axum's stored image; the browser never sees the catalogue. */

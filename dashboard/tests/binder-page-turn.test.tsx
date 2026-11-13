@@ -142,26 +142,28 @@ const spread = (): HTMLElement => {
   return element
 }
 
-function pointer(
+function dispatchPointer(
   target: Element,
   type: string,
   x: number,
   y = 300
-): Promise<void> {
-  return act(async () => {
-    target.dispatchEvent(
-      new PointerEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        pointerId: 7,
-        pointerType: "touch",
-        isPrimary: true,
-        button: 0,
-        clientX: x,
-        clientY: y,
-      })
-    )
-  })
+): void {
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 7,
+      pointerType: "touch",
+      isPrimary: true,
+      button: 0,
+      clientX: x,
+      clientY: y,
+    })
+  )
+}
+
+function pointer(target: Element, type: string, x: number): Promise<void> {
+  return act(async () => dispatchPointer(target, type, x))
 }
 
 async function slide(target: Element, from: number, to: number): Promise<void> {
@@ -176,11 +178,24 @@ async function holdAndLift(target: Element, at: number): Promise<void> {
   await pointer(target, "pointerup", at)
 }
 
-// A browser follows pointerup on a button with click; dispatched pointer events do not, so the test clicks.
+// A browser follows pointerup on a button with click in the same task; dispatched pointer events do not, so the test clicks.
 async function lift(target: HTMLElement, at: number): Promise<void> {
-  await pointer(target, "pointerup", at)
-  await act(async () => target.click())
+  await act(async () => {
+    dispatchPointer(target, "pointerup", at)
+    target.click()
+  })
   await settle()
+}
+
+function key(name: string): Promise<void> {
+  return act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: name }))
+  })
+}
+
+async function tap(target: Element, at: number): Promise<void> {
+  await pointer(target, "pointerdown", at)
+  await pointer(target, "pointerup", at)
 }
 
 async function landed(): Promise<void> {
@@ -251,6 +266,51 @@ describe("dragging a page", () => {
   })
 })
 
+describe("tapping a page's edge", () => {
+  test("on the right turns forward and on the left turns back", async () => {
+    await render()
+
+    await tap(spread(), 980)
+    expect(shownPages()).toEqual(["Page 1", "Page 2", "Page 3", "Page 4"])
+    expect(folio()).toBe("Pages 1–2 of 4")
+    await landed()
+    expect(folio()).toBe("Pages 3–4 of 4")
+
+    await tap(spread(), 20)
+    await landed()
+    expect(folio()).toBe("Pages 1–2 of 4")
+    expect(shownPages()).toEqual(["Page 1", "Page 2"])
+  })
+
+  test("turns nothing before the first spread, after the last or away from the edges", async () => {
+    await render()
+
+    await tap(spread(), 20)
+    await tap(spread(), 500)
+    await landed()
+    expect(folio()).toBe("Pages 1–2 of 4")
+    expect(shownPages()).toEqual(["Page 1", "Page 2"])
+
+    search = { person: alex.id, page: 2 }
+    await render()
+    await tap(spread(), 980)
+    await landed()
+    expect(folio()).toBe("Pages 3–4 of 4")
+    expect(shownPages()).toEqual(["Page 3", "Page 4"])
+  })
+
+  test("a press that leaves the spread ends, and the arrows still turn", async () => {
+    await render()
+
+    await pointer(spread(), "pointerdown", 995)
+    await pointer(spread(), "pointermove", 1003)
+    await pointer(spread(), "pointerout", 1003)
+    await act(async () => button("Next pages").click())
+    await landed()
+    expect(folio()).toBe("Pages 3–4 of 4")
+  })
+})
+
 describe("taps and drags on pockets", () => {
   test("a tap on a pocket at the edge opens its sheet and turns nothing", async () => {
     await render()
@@ -259,9 +319,34 @@ describe("taps and drags on pockets", () => {
     await pointer(card, "pointerdown", 950)
     await pointer(card, "pointermove", 953)
     await lift(card, 953)
+    await landed()
 
     expect(sheet().textContent).toContain("Invented Card 12")
     expect(folio()).toBe("Pages 1–2 of 4")
+  })
+
+  test("a drag refused before the first spread opens nothing", async () => {
+    await render()
+    const card = pocket(1)
+
+    await slide(card, 20, 300)
+    await lift(card, 300)
+    await landed()
+
+    expect(document.querySelector(".sheet")).toBeNull()
+    expect(folio()).toBe("Pages 1–2 of 4")
+  })
+
+  test("a pocket opened from the keyboard after a drag springs back opens its sheet", async () => {
+    await render()
+
+    await slide(spread(), 980, 700)
+    await holdAndLift(spread(), 700)
+    await landed()
+    await act(async () => pocket(12).click())
+    await settle()
+
+    expect(sheet().textContent).toContain("Invented Card 12")
   })
 
   test("a drag that starts on a pocket turns the page and never opens the sheet", async () => {
@@ -310,7 +395,7 @@ describe("taps and drags on pockets", () => {
 })
 
 describe("controls", () => {
-  test("the arrows turn the page and the arrow keys swap at once", async () => {
+  test("the arrows and the arrow keys turn the page", async () => {
     await render()
 
     await act(async () => button("Next pages").click())
@@ -323,11 +408,19 @@ describe("controls", () => {
     await landed()
     expect(folio()).toBe("Pages 1–2 of 4")
 
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
-    })
-    await settle()
+    await key("ArrowRight")
+    expect(shownPages()).toEqual(["Page 1", "Page 2", "Page 3", "Page 4"])
+    expect(folio()).toBe("Pages 1–2 of 4")
+    await landed()
     expect(folio()).toBe("Pages 3–4 of 4")
+
+    await key("ArrowRight")
+    await landed()
+    expect(folio()).toBe("Pages 3–4 of 4")
+
+    await key("ArrowLeft")
+    await landed()
+    expect(folio()).toBe("Pages 1–2 of 4")
   })
 })
 
@@ -345,11 +438,20 @@ describe("with reduced motion", () => {
     expect(shownPages()).toEqual(["Page 3", "Page 4"])
   })
 
-  test("the arrows swap pages at once", async () => {
+  test("the arrows, the arrow keys and an edge tap swap pages at once", async () => {
     reduced = true
     await render()
 
     await act(async () => button("Next pages").click())
+    await settle()
+    expect(folio()).toBe("Pages 3–4 of 4")
+    expect(shownPages()).toEqual(["Page 3", "Page 4"])
+
+    await key("ArrowLeft")
+    await settle()
+    expect(folio()).toBe("Pages 1–2 of 4")
+
+    await tap(spread(), 980)
     await settle()
     expect(folio()).toBe("Pages 3–4 of 4")
     expect(shownPages()).toEqual(["Page 3", "Page 4"])
@@ -387,11 +489,18 @@ describe("the turn lifecycle", () => {
   const press: TurnEvent = {
     type: "press",
     pointer: 1,
-    direction: "forward",
     x: 900,
     y: 300,
-    reach: 900,
+    pocket: false,
+    grip: { direction: "forward", reach: 900 },
   }
+
+  const release = (x: number, time: number): TurnEvent => ({
+    type: "release",
+    pointer: 1,
+    x,
+    time,
+  })
 
   const move = (x: number, time: number, pointer = 1): TurnEvent => ({
     type: "move",
@@ -401,13 +510,32 @@ describe("the turn lifecycle", () => {
     time,
   })
 
-  test("a press that stays within the slop is a tap and ends idle", () => {
+  test("a tap within the slop in a grip flips, on a pocket or away from a grip it ends idle", () => {
     const pressed = run(press, move(900 - tapSlop + 1, 10))
 
     expect(pressed.phase).toBe("pressing")
-    expect(
-      nextTurn(pressed, { type: "release", pointer: 1, x: 900, time: 20 })
-    ).toBe(idle)
+    expect(nextTurn(pressed, release(900, 20))).toEqual({
+      phase: "settling",
+      direction: "forward",
+      outcome: "complete",
+    })
+    expect(run({ ...press, pocket: true }, release(900, 20))).toBe(idle)
+    expect(run({ ...press, grip: undefined }, release(900, 20))).toBe(idle)
+  })
+
+  test("moving past the slop away from a grip is refused until release", () => {
+    const refused = run({ ...press, grip: undefined }, move(900 - tapSlop, 10))
+
+    expect(refused).toEqual({ phase: "refused", pointer: 1 })
+    expect(nextTurn(refused, { type: "flip", direction: "forward" })).toBe(
+      refused
+    )
+    expect(nextTurn(refused, release(800, 20))).toBe(idle)
+    expect(nextTurn(refused, { type: "lose", pointer: 1 })).toBe(idle)
+  })
+
+  test("a press that loses its pointer ends idle", () => {
+    expect(run(press, { type: "lose", pointer: 1 })).toBe(idle)
   })
 
   test("moving past the slop drags, following the pointer", () => {
@@ -432,17 +560,14 @@ describe("the turn lifecycle", () => {
   test("a fast release completes, a rested one is decided by the midpoint", () => {
     const flicking = run(press, move(880, 10), move(800, 20))
 
-    expect(
-      nextTurn(flicking, { type: "release", pointer: 1, x: 800, time: 30 })
-    ).toMatchObject({ phase: "settling", outcome: "complete" })
-    expect(
-      nextTurn(flicking, {
-        type: "release",
-        pointer: 1,
-        x: 800,
-        time: 20 + restAfter + 1,
-      })
-    ).toMatchObject({ phase: "settling", outcome: "cancel" })
+    expect(nextTurn(flicking, release(800, 30))).toMatchObject({
+      phase: "settling",
+      outcome: "complete",
+    })
+    expect(nextTurn(flicking, release(800, 20 + restAfter + 1))).toMatchObject({
+      phase: "settling",
+      outcome: "cancel",
+    })
   })
 
   test("a lost pointer springs back, and settling ends turned or idle", () => {
