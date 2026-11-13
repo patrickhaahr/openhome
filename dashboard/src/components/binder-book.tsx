@@ -1,11 +1,17 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { CardsIcon } from "@phosphor-icons/react/dist/csr/Cards"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { OpenConnection } from "@/components/control-alert"
-import { PersonKeys } from "@/components/list-parts"
+import { BinderSheet } from "@/components/binder-sheet"
+import {
+  FeedbackLine,
+  ListSheet,
+  PersonKeys,
+  useListSave,
+} from "@/components/list-parts"
 import { Button } from "@/components/ui/button"
 import {
   binderFailureMessage,
@@ -17,27 +23,53 @@ import {
   type BinderState,
   type BinderView,
 } from "@/lib/binder"
+import {
+  binderWriteMessage,
+  type BinderCommand,
+  type BinderMutation,
+} from "@/lib/binder-edit"
 
 /**
  * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
- * The person keys choose whose Binder; the arrows and the arrow keys turn the spread. A read
- * that failed offers a way to check again and never shows an empty Binder.
+ * The person keys choose whose Binder; the arrows and the arrow keys turn the spread, and a
+ * pocket opens its card sheet. A read that failed offers a way to check again and never shows
+ * an empty Binder.
  */
 export function BinderBook({
   data,
   search,
   choose,
+  change,
   refresh,
 }: {
   data: BinderState
   search: BinderSearch
   choose: (search: BinderSearch) => void
+  change: (command: BinderCommand) => Promise<BinderMutation>
   refresh: () => Promise<void>
 }): React.JSX.Element {
   const view = viewOf(data, search)
+  const [open, setOpen] = useState<string>()
+
+  const { busy, feedback, save } = useListSave(
+    change,
+    refresh,
+    binderWriteMessage,
+    "unreachable"
+  )
+
+  const selected =
+    data.state === "available" && open !== undefined
+      ? data.entries.find((entry) => entry.id === open)
+      : undefined
+
+  const owner =
+    data.state === "available" && selected !== undefined
+      ? data.owners.find((candidate) => candidate.id === selected.owner_id)
+      : undefined
 
   return (
-    <div className="lists binder">
+    <div className="lists binder" aria-busy={busy}>
       {view.view === "empty" || view.view === "spread" ? (
         <div className="lists-bar">
           <PersonKeys
@@ -49,7 +81,10 @@ export function BinderBook({
           />
         </div>
       ) : null}
-      <Body view={view} choose={choose} refresh={refresh} />
+      {selected === undefined ? (
+        <FeedbackLine feedback={feedback} busy={busy} />
+      ) : null}
+      <Body view={view} choose={choose} refresh={refresh} openEntry={setOpen} />
       <aside className="binder-credits" aria-label="OPTCG credits">
         <p>
           Card data and images come from the{" "}
@@ -59,6 +94,25 @@ export function BinderBook({
           .
         </p>
       </aside>
+      <ListSheet
+        open={selected !== undefined}
+        close={() => setOpen(undefined)}
+        title={selected?.card.name ?? "Card"}
+      >
+        {selected !== undefined && owner !== undefined ? (
+          <>
+            <BinderSheet
+              key={selected.id}
+              entry={selected}
+              owner={owner}
+              busy={busy}
+              save={save}
+              done={() => setOpen(undefined)}
+            />
+            <FeedbackLine feedback={feedback} busy={busy} />
+          </>
+        ) : null}
+      </ListSheet>
     </div>
   )
 }
@@ -67,10 +121,12 @@ function Body({
   view,
   choose,
   refresh,
+  openEntry,
 }: {
   view: BinderView
   choose: (search: BinderSearch) => void
   refresh: () => Promise<void>
+  openEntry: (id: string) => void
 }): React.JSX.Element {
   switch (view.view) {
     case "unavailable":
@@ -116,6 +172,7 @@ function Body({
           count={view.count}
           owner={view.owner.id}
           choose={choose}
+          openEntry={openEntry}
         />
       )
   }
@@ -136,6 +193,7 @@ function Spread({
   count,
   owner,
   choose,
+  openEntry,
 }: {
   left: BinderEntry[]
   right: BinderEntry[]
@@ -143,6 +201,7 @@ function Spread({
   count: number
   owner: string
   choose: (search: BinderSearch) => void
+  openEntry: (id: string) => void
 }): React.JSX.Element {
   const turn = (to: number): void => {
     if (to >= 0 && to < count) choose({ person: owner, page: to + 1 })
@@ -174,8 +233,18 @@ function Spread({
   return (
     <section className="binder-book" aria-label="Binder spread">
       <div className="binder-spread">
-        <Page key={`${index}-left`} number={first} entries={left} />
-        <Page key={`${index}-right`} number={first + 1} entries={right} />
+        <Page
+          key={`${index}-left`}
+          number={first}
+          entries={left}
+          openEntry={openEntry}
+        />
+        <Page
+          key={`${index}-right`}
+          number={first + 1}
+          entries={right}
+          openEntry={openEntry}
+        />
       </div>
       <div className="binder-turn">
         <Button
@@ -208,9 +277,11 @@ function Spread({
 function Page({
   number,
   entries,
+  openEntry,
 }: {
   number: number
   entries: BinderEntry[]
+  openEntry: (id: string) => void
 }): React.JSX.Element {
   const empty = Array.from(
     { length: pocketsPerPage - entries.length },
@@ -220,7 +291,7 @@ function Page({
   return (
     <ol className="binder-page" aria-label={`Page ${number}`}>
       {entries.map((entry) => (
-        <Pocket key={entry.id} entry={entry} />
+        <Pocket key={entry.id} entry={entry} open={() => openEntry(entry.id)} />
       ))}
       {empty.map((slot) => (
         <li
@@ -234,13 +305,19 @@ function Page({
   )
 }
 
-/** The card's own picture over its code and name, which stay if the picture cannot load. */
-function Pocket({ entry }: { entry: BinderEntry }): React.JSX.Element {
+/** The card's own picture over its code and name, which stay if the picture cannot load. Tapping opens its sheet. */
+function Pocket({
+  entry,
+  open,
+}: {
+  entry: BinderEntry
+  open: () => void
+}): React.JSX.Element {
   const { card, quantity, language } = entry
 
   return (
     <li className="pocket" data-language={language}>
-      <span className="pocket-card">
+      <button type="button" className="pocket-card" onClick={open}>
         <span className="pocket-type" aria-hidden="true">
           <span className="num">{card.card_code}</span>
           {card.name}
@@ -259,12 +336,12 @@ function Pocket({ entry }: { entry: BinderEntry }): React.JSX.Element {
             event.currentTarget.hidden = false
           }}
         />
-      </span>
-      <span className="sr-only">
-        {card.name}, {card.card_code}
-        {language === "ja" ? ", Japanese" : ""}
-        {quantity > 1 ? `, ${quantity} copies` : ""}
-      </span>
+        <span className="sr-only">
+          {card.name}, {card.card_code}
+          {language === "ja" ? ", Japanese" : ""}
+          {quantity > 1 ? `, ${quantity} copies` : ""}
+        </span>
+      </button>
       {language === "ja" ? (
         <span className="pocket-mark" aria-hidden="true">
           JP

@@ -6,10 +6,12 @@ and storage decisions are in [ADR 0017](adr/0017-binder-card-data-from-optcg.md)
 [#287](https://github.com/patrickhaahr/openhome/issues/287) delivered the card
 catalogue: Hermes looks a card up by Card Code and Axum stores it.
 [#288](https://github.com/patrickhaahr/openhome/issues/288) adds Binder Entries:
-Hermes adds cards from a photo and lists a Binder in Card Code order. [#289](https://github.com/patrickhaahr/openhome/issues/289) adds the read-only
+Hermes adds cards from a photo and lists a Binder in Card Code order.
+[#290](https://github.com/patrickhaahr/openhome/issues/290) corrects and removes
+entries, from Hermes or from the Dashboard's card sheet. [#289](https://github.com/patrickhaahr/openhome/issues/289) adds the read-only
 Dashboard Binder page: one owner's entries as spreads of two facing 3×3 pocket pages, with card images
 relayed by the Dashboard's `/binder-image/{id}` route from the authenticated Axum
-image read. Editing and removing entries, Binder Value, values in other
+image read. Binder Value, values in other
 currencies, the daily refresh and the rest of the Dashboard follow under epic [#285](https://github.com/patrickhaahr/openhome/issues/285).
 
 ## Operations
@@ -23,6 +25,9 @@ authenticated Axum request per tool and returns its JSON unchanged.
 | none | `GET /api/binder/cards/{id}/image` | A Card `id`; returns the stored `image/avif` |
 | `add_binder_entry` | `POST /api/binder/entries` | `card_id`, `owner_id`, `quantity`, `language`, `note`, `request_id` |
 | `binder_entries` | `GET /api/binder/entries?owner_id=` | An optional owner filter |
+| none | `GET /api/household-users/{owner_id}/binder/entries/{id}` | An explicit owner and entry |
+| `update_binder_entry` | `PATCH /api/household-users/{owner_id}/binder/entries/{id}` | `owner_id`, `entry_id`, and any of `quantity`, `language`, `note` |
+| `delete_binder_entry` | `DELETE /api/household-users/{owner_id}/binder/entries/{id}` | `owner_id`, `entry_id` |
 
 ## Card Codes and variants
 
@@ -115,6 +120,31 @@ set number, then card number, all numerically. Within a Card Code the normal pri
 catalogue's order, and an English entry precedes the Japanese one for the same Card.
 Binder Value and Card Value in other currencies are not in the response yet.
 
+### Correcting and removing
+
+`PATCH` changes only the fields it names. An absent field keeps its stored value,
+`note: null` clears the note, a supplied note is 1 to 500 characters, and
+`quantity` replaces the stored count (it never adds to it) and is a whole number
+from 1 to 4294967295. `quantity: null` and `language: null` are 400, as is an
+unknown field such as `owner_id`; the update returns the stored entry, with a
+Japanese entry's Card unpriced. `date_added` and the Card are never editable.
+
+A language change to one the same owner already holds for that Card returns 409
+and writes nothing, including its other fields: Axum never merges entries
+silently, so correct the other entry's quantity and remove this one. Setting the
+language an entry already has is not a collision.
+
+The owner and the entry id are both part of the address. A wrong owner, an unknown
+entry and an entry already removed are all 404 for read, update and delete, so a
+repeated delete is not found. Deletion is final: it does not touch the Card, its
+Price History or the accepted addition receipt, which stays retired so an old
+`request_id` cannot recreate the entry.
+
+Removing a Household User (`DELETE /api/household-users/{id}`) removes their Binder
+Entries in the same statement as their Wishlists and Watchlist, through the
+entries' foreign key. The Cards and their images stay. The Dashboard's removal
+dialog says it deletes the person's wishlists, wishes, watchlist entries and Binder.
+
 Migration 0032 adds `binder_entries` and `binder_addition_receipts`. Rolling it back
 discards every entry and receipt.
 
@@ -154,8 +184,12 @@ failure kind, image serving). `api/tests/binder.rs` covers additions, owner
 clarification, merging, unlisted cards, outages and ordering,
 `api/tests/binder_retries.rs` covers receipts and simultaneous retries, and the
 Card Code ordering unit test is in `api/src/services/binder.rs`.
-`mcp/tests/binder.rs` drives `search_cards`, `add_binder_entry` and
-`binder_entries` through the real Streamable HTTP adapter. For a running stack, follow the
+`api/tests/binder_edits.rs` covers partial updates, validation, the language
+collision, wrong owners, deletion and the Household User cascade.
+`mcp/tests/binder.rs` drives `search_cards`, `add_binder_entry`, `binder_entries`,
+`update_binder_entry` and `delete_binder_entry` through the real Streamable HTTP
+adapter. `dashboard/tests/binder.test.tsx` renders the card sheet: its details,
+edits, removal with confirmation and failure recovery. For a running stack, follow the
 verify-openhome Binder recipe
 ([`features/binder.md`](../.agents/skills/verify-openhome/features/binder.md)): the
 synthetic preview serves invented `OP99` cards from a loopback catalogue and logs

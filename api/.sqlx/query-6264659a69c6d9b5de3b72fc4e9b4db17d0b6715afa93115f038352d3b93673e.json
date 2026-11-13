@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT e.id, e.owner_id, e.card_id, e.language AS \"language: Language\", e.quantity,\n                  e.note, e.date_added, u.name AS owner_name, c.card_code, c.position\n           FROM binder_entries e\n           JOIN household_users u ON u.id = e.owner_id\n           JOIN cards c ON c.id = e.card_id\n           WHERE ? IS NULL OR e.owner_id = ?",
+  "query": "SELECT e.id, e.owner_id, e.card_id, e.language AS \"language: Language\", e.quantity,\n                  e.note, e.date_added, u.name AS owner_name, c.card_code, c.position\n           FROM binder_entries e\n           JOIN household_users u ON u.id = e.owner_id\n           JOIN cards c ON c.id = e.card_id\n           WHERE (? IS NULL OR e.owner_id = ?) AND (? IS NULL OR e.id = ?)",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,7 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 4
     },
     "nullable": [
       false,
@@ -70,5 +70,5 @@
       false
     ]
   },
-  "hash": "ad404bf979779d152fa3c1b0084b4b99271a881ba5a2adf6feaac59d139acde1"
+  "hash": "6264659a69c6d9b5de3b72fc4e9b4db17d0b6715afa93115f038352d3b93673e"
 }

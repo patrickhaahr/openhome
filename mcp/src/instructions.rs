@@ -107,4 +107,8 @@ with the returned choices and retry with the answer. Call add_binder_entry once 
 the copies you can see as quantity and a unique request_id. Reuse the identical arguments and request_id on every retry, \
 including after an uncertain transport failure: an accepted retry returns replayed=true and never adds twice, and changed \
 arguments conflict. Adding a card the owner already has in that language raises its quantity. Never store the user's photo: \
-it only identifies the cards, and the Binder shows the official card image. binder_entries lists a Binder in Card Code order.";
+it only identifies the cards, and the Binder shows the official card image. binder_entries lists a Binder in Card Code order. \
+Correct an entry with update_binder_entry and remove one with delete_binder_entry, both by explicit owner_id and entry_id from \
+binder_entries. An omitted field is kept, a note of null clears it, and quantity replaces the stored count rather than adding \
+to it. A language change that would duplicate the owner's entry for that Card returns a 409 and changes nothing. Removal is \
+final and a repeated delete reports not found; after an uncertain update or removal, list binder_entries before retrying.";

@@ -7,6 +7,11 @@ import {
   type BinderFailure,
   type BinderState,
 } from "./binder"
+import {
+  type BinderCommand,
+  type BinderMutation,
+  type BinderWriteFailure,
+} from "./binder-edit"
 import { householdUser } from "./wishlist"
 
 async function read<T>(
@@ -46,6 +51,61 @@ export async function readBinder(): Promise<BinderState> {
   if (entries.state !== "read") return entries
 
   return { state: "available", owners: owners.data, entries: entries.data }
+}
+
+function writeFailure(status: number): BinderWriteFailure {
+  if (status === 400 || status === 422) return "invalid"
+
+  if (status === 404) return "not-found"
+
+  if (status === 409) return "conflict"
+
+  return "unavailable"
+}
+
+/** Forward one owner-targeted edit or removal; only Axum's stored result confirms persistence. */
+export async function writeBinder(
+  command: BinderCommand
+): Promise<BinderMutation> {
+  const path =
+    `/api/household-users/${command.owner_id}/binder/entries/${command.entry_id}` as const
+
+  const result = await requestOpenHome(
+    command.action === "edit"
+      ? {
+          path,
+          method: "PATCH",
+          json: {
+            quantity: command.quantity,
+            language: command.language,
+            note: command.note,
+          },
+          timeoutMs: 5000,
+        }
+      : { path, method: "DELETE", timeoutMs: 5000 }
+  )
+
+  if (result.state !== "received")
+    return { state: "failed", reason: result.state }
+
+  const { response } = result
+
+  if (!response.ok)
+    return { state: "failed", reason: writeFailure(response.status) }
+
+  if (command.action === "remove")
+    return response.status === 204
+      ? { state: "saved" }
+      : { state: "failed", reason: "unavailable" }
+
+  try {
+    if (binderEntry.safeParse(await response.json()).success)
+      return { state: "saved" }
+  } catch {
+    /* An invalid acknowledgement cannot confirm a saved entry. */
+  }
+
+  return { state: "failed", reason: "unavailable" }
 }
 
 const imageLimit = 2 * 1024 * 1024

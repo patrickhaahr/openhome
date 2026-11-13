@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder read-only, as spreads of two facing 3×3 pocket pages. There is no editing or removal of entries, no currency other than USD, no Binder Value and no card sheet yet.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages. Tapping a pocket opens a card sheet that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. There is no currency other than USD and no Binder Value yet.
 
 ## Sub-features
 
@@ -25,6 +25,17 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-dash-empty` opens Sam, whose Binder is empty.
 - `binder-dash-images` shows that every card image comes from the Dashboard origin.
 - `binder-dash-failed` shows the failed read with its recovery key, and recovery.
+- `binder-edit-mcp` calls `update_binder_entry` for quantity, language and note, and reads each result back.
+- `binder-edit-clear` sends `"note":null` and the note is cleared; omitted fields stay.
+- `binder-edit-invalid` sends quantity 0, a null quantity and a blank note and gets 400 each time with nothing changed.
+- `binder-edit-collision` moves an entry to a language another entry of the owner and Card holds: 409 and both entries unchanged.
+- `binder-edit-404` uses another owner's entry id, or an unknown one: 404.
+- `binder-delete-mcp` calls `delete_binder_entry`: `{"deleted":true}`, the entry is gone from the list; a repeat is 404.
+- `binder-dash-sheet` taps a pocket and sees the large image, details, quantity, language and note, in landscape and portrait.
+- `binder-dash-edit` saves a change in the sheet and sees the stored result read back.
+- `binder-dash-edit-fail` makes the save collide (409): the sheet stays open with an error and the draft.
+- `binder-dash-remove` removes an entry after confirming; `Keep it` keeps it.
+- `binder-household-remove` removes a Household User from `Household and lists`: the dialog names the Binder, their entries go and the cards stay.
 
 ## How to get to it (user POV)
 
@@ -64,6 +75,16 @@ Preconditions:
 - **Dashboard owners.** Click `Robin`: four pockets (one `JP`, one `×4`), `Pages 1–2 of 2`. Click `Sam`: "Sam’s Binder is empty" and no page controls.
 - **Dashboard images.** In the tab, `preview_evaluate` the `.pocket img` `src` values: all `/binder-image/<id>` on the Dashboard origin, and `performance.getEntriesByType('resource')` holds no entry outside it. `curl "$DASHBOARD_URL/binder-image/OP99-001"` gives `image/avif`, an unknown or malformed id 404. The stack log's catalogue lines do not grow when the Dashboard loads.
 - **Dashboard failed read.** The stack cannot lose its API without taking the Dashboard down (`dashboard-synthetic` stops both). Start a second `vite dev` on a free port with `OPENHOME_API_URL` pointing at a port nothing listens on and `API_KEY=synthetic-dashboard-api-key`, open `/binder` there: "Binder unavailable" and a `Check again` button, no empty Binder. Then start any GET forwarder on that port to `$API_URL` (with the bearer header) and press `Check again`: the pockets appear. Stop both afterwards.
+- **Edit.** Take Sam's entry ids from `binder_entries`. `mcp.sh call update_binder_entry '{"owner_id":"<Sam>","entry_id":"<id>","quantity":4}'` returns the entry with quantity 4 and the same language and note. Add `"note":"sleeve"`, then `"note":null` (cleared), then `"language":"ja"`: each result equals the `binder_entries` read-back.
+- **Edit invalid.** `"quantity":0`, `"quantity":null`, `"note":"  "` and an unknown field each exit 2 with status 400. The entry is unchanged in the list.
+- **Edit collision.** With Sam holding the same Card in `en` and `ja`, update one to the other's language: exit 2, status 409, both entries unchanged in the list.
+- **Edit 404.** Another owner's `owner_id` with Sam's `entry_id`, or a random uuid: exit 2, status 404.
+- **Delete.** `mcp.sh call delete_binder_entry '{"owner_id":"<Sam>","entry_id":"<id>"}'` gives `{"deleted":true}` and the entry leaves `binder_entries`. Repeat it: exit 2, status 404. The Card stays: `/api/binder/cards/<id>/image` is still 200.
+- **Dashboard sheet.** Open `/binder?person=<Sam id>` (or pick Sam) at the `ipad-air` preset and click a pocket. The sheet shows the large image, owner, code, `Added` date, Set, Rarity, Colour, Type, Cost, Power, Counter, Attribute, Types and card text, then Quantity, Language, Note, `Save changes` and `Remove`. Repeat in portrait: it still fits.
+- **Dashboard edit.** Change the quantity and press `Save changes`: the pocket badge shows the new quantity and `curl "$API_URL/api/binder/entries?owner_id=<id>"` agrees. The sheet shows the stored values.
+- **Dashboard edit failure.** With Sam holding the Card in `en` and `ja`, switch one to the other language and save: the sheet stays open with the conflict message and your draft, and the list is unchanged. Choose the original language and save again to recover.
+- **Dashboard remove.** Press `Remove`: a confirmation names the card, its language and the owner. `Keep it` returns to the form with the entry intact. `Remove for good` closes the sheet and the pocket disappears (the API read-back agrees); the card image stays.
+- **Household removal.** Create a throwaway user in `Household and lists` on `/lists?tab=wish`, add entries for them with `add_binder_entry`, then `Remove <name>`: the confirmation reads "with all their wishlists, wishes and watchlist entries, and their Binder". Note one of their entry ids first. After `Remove for good`, `GET $API_URL/api/household-users/<id>/binder/entries/<entry id>` is 404, `/api/binder/entries?owner_id=<id>` is `[]`, other owners are unchanged and the card images are still 200. Use a throwaway user: the seeded ones are shared by later steps. In the preview, the buttons read `Remove <name>` through their text, not an `aria-label`; click them with `preview_evaluate` since selectors with quotes are rejected.
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.
 
 ## Gotchas

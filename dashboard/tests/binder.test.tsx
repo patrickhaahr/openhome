@@ -22,11 +22,12 @@ import {
 import { z } from "zod"
 import { BinderBook } from "@/components/binder-book"
 import { paginate, type BinderSearch } from "@/lib/binder"
-import { readBinder, readCardImage } from "@/lib/binder.server"
+import type { BinderMutation } from "@/lib/binder-edit"
+import { readBinder, readCardImage, writeBinder } from "@/lib/binder.server"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
-import { button, nameOf, settle } from "./support/lists-dom"
+import { button, field, nameOf, settle, sheet, type } from "./support/lists-dom"
 
 // The fixture's OPTCG stand-in knows the invented OP99 cards only.
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
@@ -38,6 +39,8 @@ let container: HTMLDivElement
 let search: BinderSearch = {}
 
 let refreshWork: Promise<void> = Promise.resolve()
+
+let work: Promise<BinderMutation> = Promise.resolve({ state: "saved" })
 
 const key = "synthetic-dashboard-api-key"
 
@@ -55,6 +58,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   search = {}
   refreshWork = Promise.resolve()
+  work = Promise.resolve({ state: "saved" })
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -93,6 +97,11 @@ async function render(): Promise<void> {
             search = next
             refreshWork = render()
           }}
+          change={(command) => {
+            work = writeBinder(command)
+
+            return work
+          }}
           refresh={() => {
             vi.stubEnv("OPENHOME_API_URL", fixture.url)
             refreshWork = render()
@@ -108,6 +117,7 @@ async function render(): Promise<void> {
 async function press(element: HTMLButtonElement): Promise<void> {
   await act(async () => {
     element.click()
+    await work
     await refreshWork
   })
   await settle()
@@ -372,4 +382,197 @@ test("a spread is two nine-pocket pages, with the index kept in range", () => {
     count: 1,
   })
   expect(paginate([], 0)).toEqual({ left: [], right: [], index: 0, count: 1 })
+})
+
+async function stored() {
+  const data = await readBinder()
+
+  if (data.state !== "available") throw new Error("Expected a Binder read")
+
+  return data
+}
+
+/** The note field; its label cannot be matched by text once the textarea holds one. */
+function note(): HTMLTextAreaElement {
+  const found = sheet().querySelector("textarea")
+
+  if (found === null) throw new Error("Missing note field")
+
+  return found
+}
+
+async function openCard(name: RegExp): Promise<void> {
+  await press(button(name, container))
+}
+
+test("a pocket opens a sheet with the large image and the card's details", async () => {
+  const alex = await owner("Alex")
+  await add(alex, { card: "OP99-001", quantity: 2 })
+  await render()
+
+  await openCard(/^Captain Marlow \(001\), OP99-001, 2 copies/)
+
+  const open = sheet()
+
+  expect(open.querySelector("img")?.getAttribute("src")).toBe(
+    "/binder-image/OP99-001"
+  )
+  expect(open.querySelector(".sheet-title")?.textContent).toBe(
+    "Captain Marlow (001)"
+  )
+
+  const facts = Array.from(open.querySelectorAll(".binder-facts div"), (row) =>
+    nameOf(row)
+  )
+
+  expect(facts).toEqual([
+    "SetSynthetic Tides",
+    "RarityL",
+    "ColourRed",
+    "TypeLeader",
+    "Power5000",
+    "Life5",
+    "AttributeSlash",
+    "TypesLantern Crew Invented",
+  ])
+  expect(open.textContent).toContain("[DON!! x1] [Your Turn]")
+  expect(open.textContent).toContain("OP99-001")
+  expect(field("Quantity", open).value).toBe("2")
+  expect(button("EN", open).getAttribute("aria-pressed")).toBe("true")
+  expect(button("JP", open).getAttribute("aria-pressed")).toBe("false")
+  expect(button("Save changes", open).disabled).toBe(true)
+  expect(container.querySelector(".binder-page")).not.toBeNull()
+  expect(container.querySelectorAll(".binder-page")).toHaveLength(2)
+})
+
+test("edits quantity, language and note and reads the stored entry back, clearing a note with an empty one", async () => {
+  const alex = await owner("Alex")
+  await add(alex, { card: "OP99-001" })
+  await render()
+  await openCard(/^Captain Marlow/)
+
+  await type(field("Quantity", sheet()), "7")
+  await type(note(), "  sleeved, binder 2 ")
+  await press(button("Save changes", sheet()))
+
+  expect((await stored()).entries[0]).toMatchObject({
+    quantity: 7,
+    language: "en",
+    note: "sleeved, binder 2",
+  })
+  expect(field("Quantity", sheet()).value).toBe("7")
+  expect(note().value).toBe("sleeved, binder 2")
+  expect(button("Save changes", sheet()).disabled).toBe(true)
+  expect(pockets()[0]?.querySelector(".pocket-quantity")?.textContent).toBe(
+    "×7"
+  )
+
+  await press(button("JP", sheet()))
+  await press(button("Save changes", sheet()))
+  expect((await stored()).entries[0]).toMatchObject({
+    quantity: 7,
+    language: "ja",
+    note: "sleeved, binder 2",
+  })
+  expect(button("JP", sheet()).getAttribute("aria-pressed")).toBe("true")
+  expect(pockets()[0]?.querySelector(".pocket-mark")?.textContent).toBe("JP")
+
+  await type(note(), "")
+  await press(button("Save changes", sheet()))
+  expect((await stored()).entries[0]).toMatchObject({
+    quantity: 7,
+    language: "ja",
+    note: null,
+  })
+  expect(note().value).toBe("")
+
+  await type(field("Quantity", sheet()), "0")
+  expect(button("Save changes", sheet()).disabled).toBe(true)
+  await type(field("Quantity", sheet()), "1.5")
+  expect(button("Save changes", sheet()).disabled).toBe(true)
+})
+
+test("removes an entry only after confirmation, keeping the other entries and the card", async () => {
+  const alex = await owner("Alex")
+  await add(alex, { card: "OP99-001" }, { card: "OP99-002" })
+  await render()
+  await openCard(/^Captain Marlow/)
+
+  await press(button("Remove", sheet()))
+  expect(
+    sheet().querySelector('[aria-label="Remove card"]')?.textContent
+  ).toContain("Alex’s Binder")
+  await press(button("Keep it", sheet()))
+  expect((await stored()).entries).toHaveLength(2)
+  expect(sheet().querySelector('[aria-label="Remove card"]')).toBeNull()
+
+  await press(button("Remove", sheet()))
+  await press(button("Remove for good", sheet()))
+  expect((await stored()).entries.map((entry) => entry.card.id)).toEqual([
+    "OP99-002",
+  ])
+  expect(document.querySelector(".sheet")).toBeNull()
+  expect(cards()).toEqual(["OP99-002"])
+  expect((await readCardImage({ card: "OP99-001" })).status).toBe(200)
+})
+
+test("a failed edit or removal keeps the sheet open with its error and the draft, and the retry saves", async () => {
+  const alex = await owner("Alex")
+  await add(alex, { card: "OP99-001" }, { card: "OP99-001", language: "ja" })
+  await render()
+  await openCard(/^Captain Marlow \(001\), OP99-001$/)
+
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await type(field("Quantity", sheet()), "4")
+  await press(button("Save changes", sheet()))
+  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
+    "OpenHome rejected the API key"
+  )
+  expect(sheet().textContent).not.toContain("synthetic-rejected-key")
+  expect(field("Quantity", sheet()).value).toBe("4")
+  vi.stubEnv("API_KEY", key)
+  expect((await stored()).entries.map((entry) => entry.quantity)).toEqual([
+    1, 1,
+  ])
+
+  await press(button("Remove", sheet()))
+  vi.stubEnv("API_KEY", "synthetic-rejected-key")
+  await press(button("Remove for good", sheet()))
+  expect(sheet().querySelector(".list-failure")).not.toBeNull()
+  expect(sheet().querySelector('[aria-label="Remove card"]')).not.toBeNull()
+  vi.stubEnv("API_KEY", key)
+  expect(await stored().then((data) => data.entries)).toHaveLength(2)
+  await press(button("Keep it", sheet()))
+
+  await press(button("JP", sheet()))
+  await press(button("Save changes", sheet()))
+  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
+    "already holds the card in that language"
+  )
+  expect(button("JP", sheet()).getAttribute("aria-pressed")).toBe("true")
+  expect(
+    (await stored()).entries.map((entry) => [entry.language, entry.quantity])
+  ).toEqual([
+    ["en", 1],
+    ["ja", 1],
+  ])
+
+  await press(button("EN", sheet()))
+  await type(field("Quantity", sheet()), "4")
+  await press(button("Save changes", sheet()))
+  expect(sheet().querySelector(".list-failure")).toBeNull()
+  expect((await stored()).entries[0]).toMatchObject({ quantity: 4 })
+})
+
+test("a removed Household User takes their Binder with them while the cards stay", async () => {
+  const alex = await owner("Alex")
+  const robin = await owner("Robin")
+  await add(alex, { card: "OP99-001" })
+  await add(robin, { card: "OP99-001" })
+  await writeWishlist({ kind: "remove-owner", owner_id: alex })
+
+  const data = await stored()
+
+  expect(data.entries.map((entry) => entry.owner_id)).toEqual([robin])
+  expect((await readCardImage({ card: "OP99-001" })).status).toBe(200)
 })

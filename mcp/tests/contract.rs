@@ -40,6 +40,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "binder_entries",
             "classify_food",
             "create_wishlist",
+            "delete_binder_entry",
             "delete_important_date",
             "delete_meal",
             "delete_meal_log",
@@ -69,6 +70,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "sleep_recent",
             "supplements",
             "training_context",
+            "update_binder_entry",
             "update_important_date",
             "update_meal",
             "update_meal_log",
@@ -93,6 +95,8 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 tool.name.as_ref(),
                 "create_wishlist"
                     | "add_binder_entry"
+                    | "update_binder_entry"
+                    | "delete_binder_entry"
                     | "add_wishlist_item"
                     | "update_wishlist_item"
                     | "delete_wishlist_item"
@@ -143,6 +147,8 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             tool.name.as_ref(),
             "update_wishlist_item"
                 | "delete_wishlist_item"
+                | "update_binder_entry"
+                | "delete_binder_entry"
                 | "delete_watchlist_entry"
                 | "update_watchlist_entry"
                 | "update_important_date"
@@ -198,6 +204,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "search_cards" => json!(["card_code"]),
             "add_binder_entry" => json!(["card_id", "request_id"]),
+            "update_binder_entry" | "delete_binder_entry" => json!(["owner_id", "entry_id"]),
             "search_foods" => json!(["query"]),
             "food" => json!(["food_id"]),
             "log_meal" => json!(["eaten_at", "request_id"]),

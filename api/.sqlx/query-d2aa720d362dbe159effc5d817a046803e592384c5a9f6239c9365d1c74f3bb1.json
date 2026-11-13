@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM binder_entries WHERE id = ? AND owner_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "d2aa720d362dbe159effc5d817a046803e592384c5a9f6239c9365d1c74f3bb1"
+}

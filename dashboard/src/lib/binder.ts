@@ -13,13 +13,33 @@ export type BinderSearch = z.infer<typeof binderSearch>
 /** Axum's Card id is the catalogue's opaque image identifier, safe in a URL path. */
 export const cardId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)
 
-/** One Card in one language in one owner's Binder; only what a pocket draws. */
+const detail = z.string().nullable()
+
+/** One Card in one language in one owner's Binder, with the card's catalogue details. */
 export const binderEntry = z.object({
   id: z.uuid(),
   owner_id: z.uuid(),
   language: z.enum(["en", "ja"]),
   quantity: z.number().int().positive(),
-  card: z.object({ id: cardId, card_code: z.string(), name: z.string() }),
+  note: z.string().nullable(),
+  date_added: z.iso.date(),
+  card: z.object({
+    id: cardId,
+    card_code: z.string(),
+    name: z.string(),
+    set_id: detail,
+    set_name: detail,
+    rarity: detail,
+    color: detail,
+    card_type: detail,
+    life: detail,
+    cost: detail,
+    power: detail,
+    counter_amount: detail,
+    attribute: detail,
+    sub_types: detail,
+    text: detail,
+  }),
 })
 
 export type BinderEntry = z.infer<typeof binderEntry>
