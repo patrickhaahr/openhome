@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder read-only, as spreads of two facing 3×3 pocket pages. There is no editing or removal of entries, no currency other than USD, no Binder Value and no card sheet yet.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages, and an `Add card` sheet adds a card by Card Code. There is no editing or removal of entries, no currency other than USD, no Binder Value and no card sheet yet.
 
 ## Sub-features
 
@@ -25,6 +25,12 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-dash-empty` opens Sam, whose Binder is empty.
 - `binder-dash-images` shows that every card image comes from the Dashboard origin.
 - `binder-dash-failed` shows the failed read with its recovery key, and recovery.
+- `binder-dash-search` opens `Add card`, types a code and submits: each variant shows its image and name.
+- `binder-dash-add` picks a variant (EN, quantity 1, the selected owner by default), changes owner, quantity or language, and adds it.
+- `binder-dash-merge` adds the same variant and language again: the sheet says the quantity was raised and the pocket shows `×N`.
+- `binder-dash-outage` searches `OP99-503`: a catalogue message, and the sheet stays usable.
+- `binder-dash-unlisted` searches `OP99-777`: "not in the catalogue yet".
+- `binder-dash-draft` picks a variant, reloads: the sheet reopens on the same draft; `Discard draft` clears it.
 
 ## How to get to it (user POV)
 
@@ -64,6 +70,9 @@ Preconditions:
 - **Dashboard owners.** Click `Robin`: four pockets (one `JP`, one `×4`), `Pages 1–2 of 2`. Click `Sam`: "Sam’s Binder is empty" and no page controls.
 - **Dashboard images.** In the tab, `preview_evaluate` the `.pocket img` `src` values: all `/binder-image/<id>` on the Dashboard origin, and `performance.getEntriesByType('resource')` holds no entry outside it. `curl "$DASHBOARD_URL/binder-image/OP99-001"` gives `image/avif`, an unknown or malformed id 404. The stack log's catalogue lines do not grow when the Dashboard loads.
 - **Dashboard failed read.** The stack cannot lose its API without taking the Dashboard down (`dashboard-synthetic` stops both). Start a second `vite dev` on a free port with `OPENHOME_API_URL` pointing at a port nothing listens on and `API_KEY=synthetic-dashboard-api-key`, open `/binder` there: "Binder unavailable" and a `Check again` button, no empty Binder. Then start any GET forwarder on that port to `$API_URL` (with the bearer header) and press `Check again`: the pockets appear. Stop both afterwards.
+- **Dashboard add.** Click `Add card` (top right of the bar), type `OP99-001` and press Enter. The sheet lists `Captain Marlow (001)` and its `(Parallel)`, each picture from `/binder-image/<id>`. Pick the first: the draft shows `Add to` (Alex selected), `Quantity` 1, `Language` EN and `Add card` / `Discard draft`. Press `Add card`: "Added to Alex’s Binder, quantity 1." and the pocket appears on the page behind. Press `Add another card`, search and pick the same variant, press `One more` and add: "Quantity raised to 3 in Alex’s Binder." and the pocket shows `×3`. Alex owns neither `OP99-001` variant in the seed, so run this before the Hermes steps that add it.
+- **Dashboard add edge cases.** `OP99-503` shows "The card catalogue is not answering" and leaves the Card Code field usable. `OP99-777` shows "OP99-777 is not in the catalogue yet." and offers nothing to add. `hello` shows "That is not a Card Code".
+- **Dashboard draft.** Pick a variant and reload `/binder`: the sheet reopens on the draft (`sessionStorage` key `openhome.pending-binder-addition`, also holding the `request_id`). `Discard draft` empties the key and returns to the search form, and `binder_entries` shows nothing written. After `Add card` the key is gone; an add whose response is lost keeps it, locks the fields and offers `Retry add`, which replays the same `request_id`. Repeat in portrait with `preview_resize` `orientation: portrait`: the sheet stays beside the page and the pockets keep their layout.
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.
 
 ## Gotchas

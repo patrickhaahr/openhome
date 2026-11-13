@@ -22,7 +22,12 @@ import {
 import { z } from "zod"
 import { BinderBook } from "@/components/binder-book"
 import { paginate, type BinderSearch } from "@/lib/binder"
-import { readBinder, readCardImage } from "@/lib/binder.server"
+import {
+  addBinderEntry,
+  readBinder,
+  readCardImage,
+  searchBinderCards,
+} from "@/lib/binder.server"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
@@ -99,6 +104,8 @@ async function render(): Promise<void> {
 
             return refreshWork
           }}
+          find={searchBinderCards}
+          change={addBinderEntry}
         />
       </RouterContextProvider>
     )

@@ -127,6 +127,75 @@
   text-decoration: underline;
 }
 
+/* The add sheet: variants as card pictures, then the chosen one beside its quantity and language. */
+.card-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.875rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.card-result {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.card-result:active {
+  scale: 0.97;
+}
+.card-art {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 600 / 838;
+  border-radius: 0.5rem;
+  background: var(--wash-strong);
+}
+.card-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card-art img[hidden] {
+  display: none;
+}
+.card-art-code {
+  position: absolute;
+  inset: auto 0.5rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.binder-draft {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+.binder-draft > div {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+.binder-search-note,
+.binder-added {
+  margin: 0;
+  color: var(--muted-ink);
+}
+.binder-added {
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
 @media (max-width: 900px) {
   .binder {
     --pocket-gap: 0.5rem;
