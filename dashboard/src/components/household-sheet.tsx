@@ -190,7 +190,7 @@ export function HouseholdLists({
                   `Removed ${owner.name}.`
                 )
               }
-              removal={`Remove ${owner.name} with all their wishlists, wishes and watchlist entries? This cannot be undone.`}
+              removal={`Remove ${owner.name} with all their wishlists, wishes and watchlist entries, and their Binder? This cannot be undone.`}
             />
           </div>
           <div className="household-lists">

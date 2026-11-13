@@ -4,7 +4,7 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::OpenHomeTools;
+use crate::{OpenHomeTools, patch::Patch};
 
 const SEARCH_CARDS: &str = "Look up a One Piece Card Game card by its Card Code (for example OP01-001) and get every variant of it: the normal print and each parallel art. Each Card has a stable id (OP01-001, OP01-001_p1), its name, set, rarity, colour, type, life, cost, power, counter amount, attribute, types and text, a card_value with its USD market price and the date the catalogue observed it (null when unpriced), and an image_path for the stored AVIF image. The first lookup of a code asks the OPTCG catalogue and stores the Cards; later lookups come from OpenHome. A code the catalogue does not list returns cards as an empty list; a malformed code is an error, and card_data_unavailable means the catalogue could not be reached, so try again later. There is no name search.";
 
@@ -45,6 +45,39 @@ pub struct AddBinderEntryRequest {
     pub note: Option<String>,
     /// Unique intended addition ID, 1-128 characters. Reuse identical arguments and ID after an uncertain response.
     pub request_id: String,
+}
+
+const UPDATE_BINDER_ENTRY: &str = "Correct one Binder Entry's quantity, language or note by explicit owner_id and entry_id from binder_entries or add_binder_entry. Omitted fields are preserved; note null clears the note; quantity is a whole number of at least 1 and replaces the stored quantity (it does not add to it); quantity and language cannot be null. Changing language to one the owner already holds for that Card returns a 409 conflict and changes nothing: raise that entry's quantity and remove this one instead. A ja entry has no card_value. The result is the stored entry. A wrong owner or entry is a 404 tool error. After an uncertain response, read binder_entries before retrying.";
+
+const DELETE_BINDER_ENTRY: &str = "Permanently remove one Binder Entry by explicit owner_id and entry_id. The Card and its Price History stay. Returns deleted=true only after Axum confirms removal; a wrong owner or an entry already removed is a 404 tool error, so a repeated delete reports not found. Old addition retries cannot recreate the removed entry. Read binder_entries after an uncertain response.";
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BinderEntryRequest {
+    /// Explicit stable Household User ID; must own `entry_id`.
+    pub owner_id: String,
+    /// Stable Binder Entry ID from `binder_entries` or `add_binder_entry`.
+    pub entry_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateBinderEntryRequest {
+    /// Explicit Household User ID; must own `entry_id`.
+    #[serde(skip_serializing)]
+    pub owner_id: String,
+    /// Stable Binder Entry ID from `binder_entries` or `add_binder_entry`.
+    #[serde(skip_serializing)]
+    pub entry_id: String,
+    /// Omit to preserve. The new copy count, a whole number of at least 1. Cannot be null.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub quantity: Patch<i64>,
+    /// Omit to preserve. `en` or `ja`; a collision with the owner's other entry for the Card is a 409. Cannot be null.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub language: Patch<Language>,
+    /// Omit to preserve, 1-500 characters to replace, null to clear.
+    #[serde(default, skip_serializing_if = "Patch::missing")]
+    pub note: Patch<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -111,6 +144,68 @@ impl OpenHomeTools {
                 &["api", "binder", "entries"],
                 None,
                 &query,
+            )
+            .await
+    }
+
+    #[tool(
+        description = UPDATE_BINDER_ENTRY,
+        annotations(
+            title = "Update Binder Entry",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn update_binder_entry(
+        &self,
+        Parameters(request): Parameters<UpdateBinderEntryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::PATCH,
+                &[
+                    "api",
+                    "household-users",
+                    &request.owner_id,
+                    "binder",
+                    "entries",
+                    &request.entry_id,
+                ],
+                Some(json!(request)),
+                &[],
+            )
+            .await
+    }
+
+    #[tool(
+        description = DELETE_BINDER_ENTRY,
+        annotations(
+            title = "Delete Binder Entry",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_binder_entry(
+        &self,
+        Parameters(request): Parameters<BinderEntryRequest>,
+    ) -> CallToolResult {
+        self.api
+            .request(
+                reqwest::Method::DELETE,
+                &[
+                    "api",
+                    "household-users",
+                    &request.owner_id,
+                    "binder",
+                    "entries",
+                    &request.entry_id,
+                ],
+                None,
+                &[],
             )
             .await
     }

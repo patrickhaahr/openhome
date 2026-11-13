@@ -23,6 +23,8 @@
 
 - `add_binder_entry` (non-destructive, idempotent through `request_id`, open-world because a first lookup asks the catalogue) and `binder_entries` (read-only) forward `POST`/`GET /api/binder/entries` unchanged. Axum owns owner clarification (`binder_destination_required`), Card lookup and storage, `card_not_listed`, quantity merging, receipts and Card Code ordering. The global instructions carry the photo workflow (read codes, normal or parallel, `search_cards`, ask once when ambiguous, `ja` only for visibly Japanese cards, report unlisted cards, explicit owner, reuse `request_id`, never store the photo); keep them in step with the API.
 
+- `update_binder_entry` and `delete_binder_entry` (destructive, idempotent) forward `PATCH`/`DELETE /api/household-users/{owner_id}/binder/entries/{id}` unchanged. The update's `quantity`, `language` and `note` use `Patch`, so an omitted field is kept and only a null note clears. Axum owns the validation, the language-collision 409 and the 404 for a wrong owner or repeated delete.
+
 - Read `../docs/training-context.md` before changing training tools or their contracts.
 - Keep training tools read-only: each call makes one authenticated API GET and passes its JSON unchanged. Add an API endpoint before adding a tool that needs new interpretation; database access and domain rules belong in the API.
 - Percent-encode path arguments, reject literal `.` and `..` segments, and keep API redirects disabled so requests stay on the intended endpoint.

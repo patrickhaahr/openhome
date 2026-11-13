@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use super::cards::{self, Card, CardId, CardsError};
 use super::optcg::Optcg;
+use super::patch::Patch;
 use super::training::CalendarDay;
 use super::wishlist::HouseholdUser;
 
@@ -287,15 +288,37 @@ pub struct EntriesFilter {
 }
 
 pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<BinderEntry>> {
+    load(db, filter.owner_id.as_deref(), None).await
+}
+
+/// Read only the complete owner/entry destination.
+pub async fn entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<BinderEntry> {
+    load(db, Some(owner_id), Some(id))
+        .await?
+        .pop()
+        .ok_or_else(not_found)
+}
+
+fn not_found() -> BinderError {
+    BinderError::NotFound("Binder Entry not found for this Household User".into())
+}
+
+async fn load(
+    db: &SqlitePool,
+    owner_id: Option<&str>,
+    id: Option<&str>,
+) -> Result<Vec<BinderEntry>> {
     let mut rows = sqlx::query!(
         r#"SELECT e.id, e.owner_id, e.card_id, e.language AS "language: Language", e.quantity,
                   e.note, e.date_added, u.name AS owner_name, c.card_code, c.position
            FROM binder_entries e
            JOIN household_users u ON u.id = e.owner_id
            JOIN cards c ON c.id = e.card_id
-           WHERE ? IS NULL OR e.owner_id = ?"#,
-        filter.owner_id,
-        filter.owner_id
+           WHERE (? IS NULL OR e.owner_id = ?) AND (? IS NULL OR e.id = ?)"#,
+        owner_id,
+        owner_id,
+        id,
+        id
     )
     .fetch_all(db)
     .await?;
@@ -328,6 +351,85 @@ pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<Binde
             })
         })
         .collect()
+}
+
+/// Absent fields keep their stored value and a null note clears it. Quantity and language have
+/// no empty state, so null for either is rejected.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditEntry {
+    #[serde(default)]
+    pub quantity: Patch<i64>,
+    #[serde(default)]
+    pub language: Patch<Language>,
+    #[serde(default)]
+    pub note: Patch<String>,
+}
+
+fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
+    match patch {
+        Patch::Missing => Ok(None),
+        Patch::Value(Some(value)) => Ok(Some(value)),
+        Patch::Value(None) => Err(BinderError::Validation(format!("{field} cannot be null"))),
+    }
+}
+
+/// A language that another entry of the same owner and Card already holds returns 409 and the
+/// whole correction is rolled back, so entries are never merged silently.
+pub async fn edit_entry(
+    db: &SqlitePool,
+    owner_id: &str,
+    id: &str,
+    request: EditEntry,
+) -> Result<BinderEntry> {
+    let quantity = required(request.quantity, "quantity")?
+        .map(Quantity::parse)
+        .transpose()?
+        .map(Quantity::get);
+    let language = required(request.language, "language")?;
+    let (note_given, note) = match request.note {
+        Patch::Missing => (false, None),
+        Patch::Value(note) => (true, note.map(|note| text(&note, "note", 500)).transpose()?),
+    };
+    let updated = sqlx::query_scalar!(
+        r#"UPDATE binder_entries
+           SET quantity = COALESCE(?, quantity), language = COALESCE(?, language),
+               note = CASE WHEN ? THEN ? ELSE note END
+           WHERE id = ? AND owner_id = ? RETURNING id AS "id!""#,
+        quantity,
+        language,
+        note_given,
+        note,
+        id,
+        owner_id
+    )
+    .fetch_optional(db)
+    .await
+    .map_err(|error| match error {
+        sqlx::Error::Database(error) if error.is_unique_violation() => BinderError::Conflict(
+            "This owner already has the Card in that language; raise its quantity instead".into(),
+        ),
+        other => other.into(),
+    })?;
+    if updated.is_none() {
+        return Err(not_found());
+    }
+    entry(db, owner_id, id).await
+}
+
+/// Deletion is final. The accepted addition receipt stays retired.
+pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()> {
+    let removed = sqlx::query!(
+        "DELETE FROM binder_entries WHERE id = ? AND owner_id = ?",
+        id,
+        owner_id
+    )
+    .execute(db)
+    .await?;
+    if removed.rows_affected() == 0 {
+        return Err(not_found());
+    }
+    Ok(())
 }
 
 /// The catalogue's prices are for English printings, so a Japanese entry has no price at all.

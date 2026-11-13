@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json, Router,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -11,7 +11,7 @@ use crate::{
     AppState,
     error::AppError,
     services::{
-        binder::{self, AddEntry, Addition, BinderEntry, BinderError, EntriesFilter},
+        binder::{self, AddEntry, Addition, BinderEntry, BinderError, EditEntry, EntriesFilter},
         optcg::Optcg,
     },
 };
@@ -19,7 +19,36 @@ use crate::{
 pub fn router(catalogue: Optcg) -> Router<AppState> {
     Router::new()
         .route("/api/binder/entries", get(entries).post(add_entry))
+        .route(
+            "/api/household-users/{owner_id}/binder/entries/{id}",
+            get(entry).patch(edit_entry).delete(remove_entry),
+        )
         .layer(Extension(catalogue))
+}
+
+async fn entry(
+    State(state): State<AppState>,
+    Path((owner_id, id)): Path<(String, String)>,
+) -> Result<Json<BinderEntry>, BinderError> {
+    Ok(Json(binder::entry(&state.db, &owner_id, &id).await?))
+}
+
+async fn edit_entry(
+    State(state): State<AppState>,
+    Path((owner_id, id)): Path<(String, String)>,
+    Json(request): Json<EditEntry>,
+) -> Result<Json<BinderEntry>, BinderError> {
+    Ok(Json(
+        binder::edit_entry(&state.db, &owner_id, &id, request).await?,
+    ))
+}
+
+async fn remove_entry(
+    State(state): State<AppState>,
+    Path((owner_id, id)): Path<(String, String)>,
+) -> Result<StatusCode, BinderError> {
+    binder::remove_entry(&state.db, &owner_id, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn entries(
