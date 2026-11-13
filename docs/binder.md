@@ -65,6 +65,8 @@ A Binder Entry is one Card in one language in one owner's Binder: `id`, `owner_i
 first added. There is no Binder record: a Binder is its owner's entries, and
 removing the Household User removes them (the Cards stay). Each owner has at most
 one entry per Card and language, so an English and a Japanese copy are two entries.
+The catalogue's prices are for English printings, so a Japanese entry's Card has
+no `card_value`.
 
 An addition names the Card by `card_id` and never sends card details. `quantity`
 is 1 to 999 (default 1), and a merge that would take an entry past 999 copies is
@@ -141,7 +143,8 @@ Run `devenv shell -- just api-check mcp-check`. The domain proof is
 `api/tests/cards.rs`: authenticated HTTP on migrated SQLite against a loopback
 catalogue (first lookup, cached lookup, unlisted and malformed codes, each
 failure kind, image serving). `api/tests/binder.rs` covers additions, owner
-clarification, receipts, merging, unlisted cards, outages and ordering, and the
+clarification, merging, unlisted cards, outages and ordering,
+`api/tests/binder_retries.rs` covers receipts and simultaneous retries, and the
 Card Code ordering unit test is in `api/src/services/binder.rs`.
 `mcp/tests/binder.rs` drives `search_cards`, `add_binder_entry` and
 `binder_entries` through the real Streamable HTTP adapter. For a running stack, follow the

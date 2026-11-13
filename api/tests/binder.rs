@@ -1,145 +1,8 @@
 mod common;
 
-use axum::{
-    Router,
-    http::{Method, StatusCode},
-};
-use common::{send_request_with_method, test_app_with_db};
-use image::{ImageEncoder, Rgb, RgbImage, codecs::png::PngEncoder};
-use openhome_api::{
-    AppState,
-    auth::{ApiKey, auth_middleware},
-    routes,
-    services::optcg::Optcg,
-};
+use axum::http::{Method, StatusCode};
+use common::binder::*;
 use serde_json::{Value, json};
-use wiremock::{
-    Mock, MockServer, Request, ResponseTemplate,
-    matchers::{method, path_regex},
-};
-
-const LISTED: [(&str, &[&str]); 6] = [
-    ("OP01-001", &["OP01-001", "OP01-001_p1"]),
-    ("OP01-002", &["OP01-002"]),
-    ("OP01-010", &["OP01-010", "OP01-010_p1", "OP01-010_p2"]),
-    ("OP09-034", &["EB03_OP09-034_p1", "OP09-034"]),
-    ("OP10-001", &["OP10-001"]),
-    ("ST01-001", &["ST01-001"]),
-];
-const OUTAGE: &str = "OP77-503";
-
-fn png() -> Vec<u8> {
-    let pixels = RgbImage::from_pixel(60, 84, Rgb([200, 30, 30]));
-    let mut bytes = Vec::new();
-    PngEncoder::new(&mut bytes)
-        .write_image(pixels.as_raw(), 60, 84, image::ExtendedColorType::Rgb8)
-        .unwrap();
-    bytes
-}
-
-async fn catalogue() -> MockServer {
-    let server = MockServer::start().await;
-    let origin = server.uri();
-    Mock::given(method("GET"))
-        .and(path_regex(r"^/api/sets/card/[^/]+/$"))
-        .respond_with(move |request: &Request| {
-            let code = request.url.path().split('/').nth(4).unwrap();
-            if code == OUTAGE {
-                return ResponseTemplate::new(503);
-            }
-            let Some((_, ids)) = LISTED.iter().find(|(listed, _)| *listed == code) else {
-                return ResponseTemplate::new(404)
-                    .set_body_json(json!({"error": "Card not found."}));
-            };
-            ResponseTemplate::new(200).set_body_json(
-                ids.iter()
-                    .map(|id| {
-                        json!({
-                            "inventory_price": 1.95, "market_price": 2.25,
-                            "card_name": format!("Invented {id}"), "set_name": "Synthetic Set",
-                            "card_text": "[Your Turn] Gain +1000 power.", "set_id": "OP-01",
-                            "rarity": "L", "card_set_id": code, "card_color": "Red",
-                            "card_type": "Leader", "life": "5", "card_cost": null,
-                            "card_power": "5000", "sub_types": "Invented Crew",
-                            "counter_amount": null, "attribute": "Slash",
-                            "date_scraped": "2026-11-12", "card_image_id": id,
-                            "card_image": format!("{origin}/media/static/Card_Images/{id}.jpg"),
-                        })
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path_regex(r"^/media/static/Card_Images/[^/]+\.jpg$"))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(png()))
-        .mount(&server)
-        .await;
-    server
-}
-
-async fn catalogue_requests(server: &MockServer) -> usize {
-    server.received_requests().await.unwrap().len()
-}
-
-async fn app(server: &MockServer) -> (Router, AppState) {
-    let (_, state) = test_app_with_db().await;
-    let catalogue = Optcg::new(server.uri().parse().unwrap()).unwrap();
-    let app = routes::wishlist::router(None)
-        .merge(routes::cards::router(catalogue.clone()))
-        .merge(routes::binder::router(catalogue))
-        .with_state(state.clone())
-        .layer(axum::middleware::from_fn(|request, next| {
-            auth_middleware(request, next, ApiKey::new("test-api-key".into()))
-        }));
-    (app, state)
-}
-
-async fn send(app: &Router, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
-    send_request_with_method(app.clone(), uri, method, body, Some("test-api-key")).await
-}
-
-async fn owner(app: &Router, name: &str) -> String {
-    let (status, body) = send(
-        app,
-        Method::POST,
-        "/api/household-users",
-        Some(json!({"name": name})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body}");
-    body["id"].as_str().unwrap().to_owned()
-}
-
-async fn add(app: &Router, body: Value) -> (StatusCode, Value) {
-    send(app, Method::POST, "/api/binder/entries", Some(body)).await
-}
-
-async fn list(app: &Router, query: &str) -> Vec<Value> {
-    let (status, body) = send(
-        app,
-        Method::GET,
-        &format!("/api/binder/entries{query}"),
-        None,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body}");
-    body.as_array().unwrap().clone()
-}
-
-fn ids(entries: &[Value]) -> Vec<(&str, &str, i64)> {
-    entries
-        .iter()
-        .map(|entry| {
-            (
-                entry["card"]["id"].as_str().unwrap(),
-                entry["language"].as_str().unwrap(),
-                entry["quantity"].as_i64().unwrap(),
-            )
-        })
-        .collect()
-}
 
 #[tokio::test]
 async fn an_addition_stores_the_card_itself_and_returns_the_entry_with_its_card() {
@@ -228,95 +91,6 @@ async fn a_missing_owner_asks_which_household_user_and_writes_nothing() {
 }
 
 #[tokio::test]
-async fn an_identical_retry_replays_the_original_result_without_adding_again() {
-    let server = catalogue().await;
-    let (app, _) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let request =
-        json!({"owner_id": ada, "card_id": "OP01-001", "quantity": 2, "request_id": "r1"});
-
-    let (_, first) = add(&app, request.clone()).await;
-    let (status, retry) = add(&app, request.clone()).await;
-    assert_eq!(status, StatusCode::OK, "{retry}");
-    assert_eq!(retry["replayed"], true);
-    assert_eq!(retry["entry"], first["entry"]);
-    assert_eq!(ids(&list(&app, "").await), [("OP01-001", "en", 2)]);
-
-    let (_, merged) = add(
-        &app,
-        json!({"owner_id": ada, "card_id": "OP01-001", "request_id": "r2"}),
-    )
-    .await;
-    assert_eq!(merged["entry"]["quantity"], 3);
-    let (status, later) = add(&app, request).await;
-    assert_eq!(status, StatusCode::OK, "{later}");
-    assert_eq!(
-        later["entry"]["quantity"], 2,
-        "the original result, not the merged total"
-    );
-    assert_eq!(ids(&list(&app, "").await), [("OP01-001", "en", 3)]);
-}
-
-#[tokio::test]
-async fn a_used_request_id_with_changed_arguments_conflicts_and_changes_nothing() {
-    let server = catalogue().await;
-    let (app, _) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let bo = owner(&app, "Bo").await;
-    let base = json!({"owner_id": ada, "card_id": "OP01-001", "quantity": 1, "request_id": "r1"});
-    add(&app, base.clone()).await;
-
-    for changed in [
-        json!({"quantity": 2}),
-        json!({"language": "ja"}),
-        json!({"note": "new"}),
-        json!({"card_id": "OP01-002"}),
-        json!({"owner_id": bo}),
-    ] {
-        let mut request = base.clone();
-        for (key, value) in changed.as_object().unwrap() {
-            request[key] = value.clone();
-        }
-        let (status, body) = add(&app, request).await;
-        assert_eq!(status, StatusCode::CONFLICT, "{changed}: {body}");
-    }
-    assert_eq!(ids(&list(&app, "").await), [("OP01-001", "en", 1)]);
-}
-
-#[tokio::test]
-async fn receipts_outlive_the_entry_and_its_owner_so_old_retries_never_recreate_it() {
-    let server = catalogue().await;
-    let (app, state) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let bo = owner(&app, "Bo").await;
-    let for_ada = json!({"owner_id": ada, "card_id": "OP01-001", "request_id": "r1"});
-    let for_bo = json!({"owner_id": bo, "card_id": "OP01-001", "request_id": "r2"});
-    add(&app, for_ada.clone()).await;
-    add(&app, for_bo.clone()).await;
-
-    sqlx::query("DELETE FROM binder_entries WHERE owner_id = ?")
-        .bind(&ada)
-        .execute(&state.db)
-        .await
-        .unwrap();
-    let (status, body) = add(&app, for_ada).await;
-    assert_eq!(status, StatusCode::CONFLICT, "{body}");
-
-    let (status, _) = send(
-        &app,
-        Method::DELETE,
-        &format!("/api/household-users/{bo}"),
-        None,
-    )
-    .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
-    assert!(list(&app, "").await.is_empty());
-    let (status, body) = add(&app, for_bo).await;
-    assert_eq!(status, StatusCode::CONFLICT, "{body}");
-    assert!(list(&app, "").await.is_empty());
-}
-
-#[tokio::test]
 async fn the_same_card_and_language_merges_while_another_language_is_its_own_entry() {
     let server = catalogue().await;
     let (app, _) = app(&server).await;
@@ -350,6 +124,10 @@ async fn the_same_card_and_language_merges_while_another_language_is_its_own_ent
     .await;
     assert_eq!(japanese["entry"]["language"], "ja");
     assert_eq!(japanese["entry"]["quantity"], 1);
+    assert!(
+        japanese["entry"]["card"]["card_value"].is_null(),
+        "an English price is never shown for a Japanese entry: {japanese}"
+    );
     add(
         &app,
         json!({"owner_id": bo, "card_id": "OP01-001", "request_id": "r5"}),
@@ -361,6 +139,8 @@ async fn the_same_card_and_language_merges_while_another_language_is_its_own_ent
         ids(&ada_entries),
         [("OP01-001", "en", 6), ("OP01-001", "ja", 1)]
     );
+    assert!(ada_entries[0]["card"]["card_value"]["usd"].is_number());
+    assert!(ada_entries[1]["card"]["card_value"].is_null());
     assert_eq!(
         ids(&list(&app, &format!("?owner_id={bo}")).await),
         [("OP01-001", "en", 1)]
@@ -468,47 +248,6 @@ async fn invalid_additions_are_rejected_before_anything_is_written() {
     }
     assert!(list(&app, "").await.is_empty());
     assert_eq!(catalogue_requests(&server).await, 0);
-}
-
-#[tokio::test]
-async fn a_merge_past_the_quantity_limit_is_rejected_and_changes_nothing() {
-    let server = catalogue().await;
-    let (app, _) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let full =
-        json!({"owner_id": ada, "card_id": "OP01-001", "quantity": 999, "request_id": "full"});
-    let (status, body) = add(&app, full).await;
-    assert_eq!(status, StatusCode::CREATED, "{body}");
-
-    let one_more = json!({"owner_id": ada, "card_id": "OP01-001", "request_id": "one-more"});
-    let (status, body) = add(&app, one_more.clone()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-    let entries = list(&app, "").await;
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0]["quantity"], 999);
-
-    // The rejected request left no receipt, so the same id can still be used once room exists.
-    let (status, body) = add(&app, one_more).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-}
-
-#[tokio::test]
-async fn concurrent_additions_claim_one_request_id() {
-    let server = catalogue().await;
-    let (app, _) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let request =
-        json!({"owner_id": ada, "card_id": "OP01-001", "quantity": 2, "request_id": "same"});
-    let ((first, a), (second, b)) =
-        tokio::join!(add(&app, request.clone()), add(&app, request.clone()));
-    let mut statuses = [first, second];
-    statuses.sort();
-    assert_eq!(statuses, [StatusCode::OK, StatusCode::CREATED], "{a} {b}");
-    assert_ne!(a["replayed"], b["replayed"], "{a} {b}");
-    assert_eq!(a["entry"]["id"], b["entry"]["id"]);
-    let entries = list(&app, "").await;
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0]["quantity"], 2);
 }
 
 #[tokio::test]

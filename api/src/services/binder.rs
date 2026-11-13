@@ -235,16 +235,22 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
         MAX_QUANTITY
     )
     .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(|| {
-        BinderError::Validation(format!(
-            "the Binder Entry would hold more than {MAX_QUANTITY} copies"
-        ))
-    })?;
+    .await?;
+    let Some(stored) = stored else {
+        tx.rollback().await?;
+        // A simultaneous identical retry may have committed this very addition and filled the
+        // entry; it then replays instead of reporting the limit it caused.
+        return match previous(db, &request.request_id).await? {
+            Some(receipt) => receipt.replay(db, &request).await,
+            None => Err(BinderError::Validation(format!(
+                "the Binder Entry would hold more than {MAX_QUANTITY} copies"
+            ))),
+        };
+    };
     let entry = BinderEntry {
         id: stored.id,
         owner_id: owner_id.to_owned(),
-        card,
+        card: priced_for(card, request.language),
         language: request.language,
         quantity: stored.quantity,
         note: stored.note,
@@ -320,10 +326,13 @@ pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<Binde
     rows.into_iter()
         .map(|row| {
             Ok(BinderEntry {
-                card: cards
-                    .get(&row.card_id)
-                    .cloned()
-                    .ok_or(sqlx::Error::RowNotFound)?,
+                card: priced_for(
+                    cards
+                        .get(&row.card_id)
+                        .cloned()
+                        .ok_or(sqlx::Error::RowNotFound)?,
+                    row.language,
+                ),
                 id: row.id,
                 owner_id: row.owner_id,
                 language: row.language,
@@ -333,6 +342,14 @@ pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<Binde
             })
         })
         .collect()
+}
+
+/// The catalogue's prices are for English printings, so a Japanese entry has no Card Value.
+fn priced_for(mut card: Card, language: Language) -> Card {
+    if language == Language::Ja {
+        card.card_value = None;
+    }
+    card
 }
 
 /// A normal print (its id is the Card Code) precedes its parallels, which keep catalogue order.
