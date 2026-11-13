@@ -13,6 +13,7 @@ import {
   type BinderMutation,
   type BinderWriteFailure,
 } from "./binder-edit"
+import { cardPrices, type PricesState } from "./card-prices"
 import { householdUser } from "./wishlist"
 
 async function read<T>(
@@ -21,7 +22,11 @@ async function read<T>(
 ): Promise<
   { state: "read"; data: T } | { state: "unavailable"; reason: BinderFailure }
 > {
-  const result = await requestOpenHome({ path, method: "GET", timeoutMs: 5000 })
+  const result = await requestOpenHome({
+    path,
+    method: "GET",
+    timeoutMs: 5000,
+  })
 
   if (result.state !== "received")
     return { state: "unavailable", reason: result.state }
@@ -112,6 +117,24 @@ export async function writeBinder(
   }
 
   return { state: "failed", reason: "unavailable" }
+}
+
+/** One Card's whole Price History, converted by Axum at each point's own date. */
+export async function readCardPrices(input: {
+  card: string
+}): Promise<PricesState> {
+  const parsed = cardId.safeParse(input.card)
+
+  if (!parsed.success) return { state: "unavailable" }
+
+  const result = await read(
+    `/api/binder/cards/${parsed.data}/prices`,
+    cardPrices
+  )
+
+  return result.state === "read"
+    ? { state: "read", points: result.data.prices }
+    : { state: "unavailable" }
 }
 
 const imageLimit = 2 * 1024 * 1024

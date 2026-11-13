@@ -38,6 +38,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "add_watchlist_entry",
             "add_wishlist_item",
             "binder_entries",
+            "card_prices",
             "classify_food",
             "create_wishlist",
             "delete_binder_entry",
@@ -203,6 +204,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             }
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "search_cards" => json!(["card_code"]),
+            "card_prices" => json!(["card_id"]),
             "add_binder_entry" => json!(["card_id", "request_id"]),
             "update_binder_entry" | "delete_binder_entry" => json!(["owner_id", "entry_id"]),
             "search_foods" => json!(["query"]),

@@ -393,3 +393,67 @@ async fn global_instructions_describe_the_binder_photo_workflow() {
     );
     client.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn card_prices_forwards_the_price_history_unchanged() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    wishlist_call(&client, "search_cards", json!({"card_code": "OP99-001"})).await;
+    let direct = |query: &'static str| {
+        let url = format!("{api}/api/binder/cards/OP99-001_p1/prices{query}");
+        async move {
+            reqwest::Client::new()
+                .get(url)
+                .bearer_auth(API_KEY)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+
+    let history = wishlist_call(&client, "card_prices", json!({"card_id": "OP99-001_p1"})).await;
+    assert_eq!(history.is_error, Some(false), "{history:?}");
+    let history = history.structured_content.unwrap();
+    assert_eq!(
+        history,
+        json!({"card_id": "OP99-001_p1", "prices": [{
+            "observed_on": yesterday(), "usd": 2.25, "eur": 2.03, "dkk": 15.18,
+            "rate_date": yesterday()
+        }]})
+    );
+    assert_eq!(history, direct("").await);
+
+    let from = yesterday().next().to_string();
+    let empty = wishlist_call(
+        &client,
+        "card_prices",
+        json!({"card_id": "OP99-001_p1", "from": from}),
+    )
+    .await;
+    assert_eq!(empty.is_error, Some(false), "{empty:?}");
+    assert_eq!(
+        empty.structured_content.unwrap(),
+        json!({"card_id": "OP99-001_p1", "prices": []})
+    );
+
+    let malformed = wishlist_call(
+        &client,
+        "card_prices",
+        json!({"card_id": "OP99-001_p1", "to": "soon"}),
+    )
+    .await;
+    assert_eq!(malformed.is_error, Some(true));
+    let malformed = malformed.structured_content.unwrap();
+    assert_eq!(malformed["status"], 400);
+    assert_eq!(malformed, direct("?to=soon").await);
+
+    let unknown = wishlist_call(&client, "card_prices", json!({"card_id": "OP99-404"})).await;
+    assert_eq!(unknown.is_error, Some(true));
+    assert_eq!(unknown.structured_content.unwrap()["status"], 404);
+    client.cancel().await.unwrap();
+}

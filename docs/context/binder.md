@@ -31,7 +31,7 @@ Japanese Binder Entry has no Card Price.
 _Avoid_: Live price, Cardmarket price
 
 **Price History**:
-The Card Prices OpenHome has observed since the Card first entered any Binder.
+The Card Prices OpenHome has observed since the Card was first stored.
 A price whose observation date has not changed adds nothing, and nothing is
 backfilled or interpolated.
 _Avoid_: Market history, daily price series

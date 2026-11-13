@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT cards.card_code AS \"card_code!\" FROM cards\n           JOIN binder_entries ON binder_entries.card_id = cards.id ORDER BY cards.card_code",
+  "describe": {
+    "columns": [
+      {
+        "name": "card_code!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f8707a072ce43a9920ec923c111966c757b86275403f01d580e06297c48a0ac9"
+}

@@ -24,7 +24,7 @@ Anything else, and every network failure, is an `Unavailable` that only reaches 
 `services/exchange_rates` stores one row per ECB date in `exchange_rates` (migration
 0033, rates as integer micro-units). Each pass reads the history file when the stored rates
 cannot be completed from the 90-day file: there are no rates, no stored day at or before the
-oldest stored Card observation date (`MIN(cards.price_observed_on)`), or the newest stored
+oldest stored Price Point date (`MIN(price_points.observed_on)`), or the newest stored
 day is more than 80 days old (the margin keeps the 90-day file's first day at or before it).
 Otherwise it reads the 90-day file and upserts every day it holds, so a working day the
 service missed, such as an outage or a restart after one, is filled by the next pass, for

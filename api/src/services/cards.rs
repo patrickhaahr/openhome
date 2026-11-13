@@ -1,5 +1,6 @@
 //! Cards (`CONTEXT.md`, Card): every printed variant of a Card Code as the OPTCG catalogue lists
-//! it, stored the first time the code is searched for. Details are a snapshot and never edited.
+//! it, stored the first time the code is searched for. Details are a snapshot and never edited,
+//! except the latest price, which the daily refresh updates (`price_refresh`).
 //! Each variant's official image is fetched once and kept as AVIF in the same row, so reads never
 //! touch the catalogue. A catalogue failure writes nothing. A code the catalogue does not list is
 //! remembered until the next Copenhagen day, so repeating it does not hammer a volunteer's server
@@ -16,6 +17,7 @@ use super::avif_encoder::{self, EncodeError, Settings, Source};
 use super::card_value::{Valuation, Valuer};
 use super::exchange_rates;
 use super::optcg::{CatalogueCard, Optcg, Unavailable};
+use super::price_history;
 use super::training::CalendarDay;
 
 /// One lock for every first lookup: the catalogue is a volunteer's server and a code is fetched
@@ -350,7 +352,7 @@ async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> 
         let code = card.card_code.as_str();
         let price_usd = card.price.as_ref().map(|price| price.usd);
         let price_observed_on = card.price.as_ref().map(|price| price.observed_on.as_str());
-        sqlx::query!(
+        let inserted = sqlx::query!(
             "INSERT INTO cards (id, card_code, position, name, set_id, set_name, rarity, color,
                 card_type, life, cost, power, counter_amount, attribute, sub_types, text,
                 price_usd, price_observed_on, image_avif)
@@ -377,7 +379,11 @@ async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> 
             image
         )
         .execute(&mut *tx)
-        .await?;
+        .await?
+        .rows_affected();
+        if let (1, Some(price)) = (inserted, &card.price) {
+            price_history::record_first(&mut tx, id, price.usd, &price.observed_on).await?;
+        }
     }
     tx.commit().await?;
     Ok(())

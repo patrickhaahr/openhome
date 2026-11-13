@@ -15,6 +15,19 @@ pub struct SearchCardsRequest {
     pub card_code: String,
 }
 
+const CARD_PRICES: &str = "Read one Card's Price History by its Card id from search_cards or binder_entries: the TCGplayer market prices OpenHome observed since the Card was first stored (a search or a Binder add stores it), oldest first, each with observed_on, usd and its eur and dkk converted at the ECB rate of that observation date (or the latest earlier day, named in rate_date; null when no rate exists yet). Optional from and to bound observed_on as inclusive YYYY-MM-DD days; omit both for the whole history. A price whose observation date has not changed adds no point, and nothing is backfilled, so the points are sparse and gaps between them mean no new observation, not a flat price; never interpolate. An unknown id is a 404 tool error and a card with no priced observation returns an empty prices list. Answer trends in DKK unless the user asks for EUR or USD.";
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CardPricesRequest {
+    /// The Card's `id` from `search_cards`, such as OP01-001 or its parallel OP01-001_p1.
+    pub card_id: String,
+    /// Earliest observation day to include, YYYY-MM-DD. Omit for no lower bound.
+    pub from: Option<String>,
+    /// Latest observation day to include, YYYY-MM-DD. Omit for no upper bound.
+    pub to: Option<String>,
+}
+
 const ADD_BINDER_ENTRY: &str = "Add a One Piece Card Game card to a Household User's Binder, by the Card id from search_cards (OP01-001, OP01-001_p1) and an explicit owner_id discovered with household_users. Searching the Card Code first is the recommended workflow. An id nobody searched is resolved through the Card Code it contains (OP01-001_p1, EB03_OP09-034_p1) and added when that code lists it; an id containing no Card Code must come from search_cards. A rejected addition writes nothing. Axum stores the Card itself and never trusts card details from the client; a card the catalogue does not list is a 404 card_not_listed tool error and writes nothing, and card_data_unavailable (503) means the catalogue could not be reached. Quantity (a whole number of at least 1, default 1) is how many copies this addition adds: adding an owner's existing Card in the same language raises its quantity and returns the updated entry. Language is en (default) or ja, and English and Japanese copies are separate entries; a ja entry has no card_value and value_unavailable japanese_printing, because catalogue prices are for English printings. A missing owner returns binder_destination_required with one question and choices and writes nothing. Generate a unique request_id per intended addition and reuse identical arguments and ID after an uncertain response: an accepted retry returns the original result with replayed=true and never adds twice, changed arguments conflict, and a removed entry cannot be recreated by an old request_id.";
 
 const BINDER_ENTRIES: &str = "List Binder Entries, household-visible, with an optional owner_id filter (omit for every owner; use household_users to discover owners). Returns entries and binder_values. Each entry has its stable id, owner_id, language (en or ja), quantity, optional note, the Europe/Copenhagen date_added and its Card as search_cards returns it, including card_value in usd, eur and dkk, except that a ja entry has no card_value and value_unavailable japanese_printing because catalogue prices are for English printings. Entries come back grouped by owner, each Binder in Card Code order: set prefix, set number, card number, with a normal print before its parallels. binder_values has one item per Household User in scope, including an empty Binder worth zero: owner_id and that Binder Value, the sum of quantity times card_value over priced entries in usd, eur and dkk (stale prices count), unpriced_entries (entries with no card_value, left out of the sums) and oldest_observed_on (the oldest price date among the priced entries, null when none). Answer values in DKK unless the user asks for EUR or USD.";
@@ -103,6 +116,28 @@ impl OpenHomeTools {
                 &["api", "binder", "cards"],
                 None,
                 &[("card_code".into(), card_code)],
+            )
+            .await
+    }
+
+    #[tool(
+        description = CARD_PRICES,
+        annotations(title = "Card Prices", read_only_hint = true, open_world_hint = false)
+    )]
+    async fn card_prices(
+        &self,
+        Parameters(CardPricesRequest { card_id, from, to }): Parameters<CardPricesRequest>,
+    ) -> CallToolResult {
+        let query: Vec<_> = [("from", from), ("to", to)]
+            .into_iter()
+            .filter_map(|(name, day)| Some((name.into(), day?)))
+            .collect();
+        self.api
+            .request(
+                reqwest::Method::GET,
+                &["api", "binder", "cards", &card_id, "prices"],
+                None,
+                &query,
             )
             .await
     }

@@ -23,6 +23,7 @@ authenticated Axum request per tool and returns its JSON unchanged.
 | MCP tool | Authenticated Axum operation | Input |
 | --- | --- | --- |
 | `search_cards` | `GET /api/binder/cards?card_code=OP01-001` | A Card Code |
+| `card_prices` | `GET /api/binder/cards/{id}/prices?from=&to=` | A Card `id`, optional inclusive `from` and `to` days; see [`binder-prices.md`](binder-prices.md) |
 | none | `GET /api/binder/cards/{id}/image` | A Card `id`; returns the stored `image/avif` |
 | `add_binder_entry` | `POST /api/binder/entries` | `card_id`, `owner_id`, `quantity`, `language`, `note`, `request_id` |
 | `binder_entries` | `GET /api/binder/entries?owner_id=` | An optional owner filter |
@@ -192,7 +193,8 @@ collision, wrong owners, deletion and the Household User cascade.
 adapter. `dashboard/tests/binder.test.tsx` renders the card sheet: its details,
 edits, removal with confirmation and failure recovery, and
 `dashboard/tests/binder-values.test.tsx` renders values, the currency switch and the
-stale and unpriced states. For a running stack, follow the
+stale and unpriced states. [`binder-prices.md`](binder-prices.md) lists the price refresh and
+Price History proof. For a running stack, follow the
 verify-openhome Binder recipe
 ([`features/binder.md`](../.agents/skills/verify-openhome/features/binder.md)): the
 synthetic preview serves invented `OP99` cards from a loopback catalogue and logs

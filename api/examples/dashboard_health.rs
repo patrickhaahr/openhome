@@ -25,6 +25,7 @@ use sqlx::sqlite::SqlitePoolOptions;
 use tokio::net::TcpListener;
 
 #[path = "dashboard_preview/binder.rs"]
+#[allow(dead_code)]
 mod binder;
 
 // One backfill pass: the tests need prices to convert, not the daily job.
@@ -73,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         };
     let planner = LoopPlanner::new(demo_origin, Some(endpoint))?;
     let tmdb = providers::synthetic_tmdb().await?;
-    let optcg = binder::optcg().await?;
+    let optcg = binder::stand_in().await?.client;
     let backlight =
         openhome_api::services::backlight::BacklightService::new(state.db.clone(), None, None)
             .await?;

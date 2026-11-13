@@ -24,7 +24,12 @@ import { BinderBook } from "@/components/binder-book"
 import { CurrencyProvider } from "@/components/currency"
 import { paginate, type BinderSearch } from "@/lib/binder"
 import type { BinderMutation } from "@/lib/binder-edit"
-import { readBinder, readCardImage, writeBinder } from "@/lib/binder.server"
+import {
+  readBinder,
+  readCardImage,
+  readCardPrices,
+  writeBinder,
+} from "@/lib/binder.server"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
@@ -104,6 +109,7 @@ async function render(): Promise<void> {
 
               return work
             }}
+            prices={(card) => readCardPrices({ card })}
             refresh={() => {
               vi.stubEnv("OPENHOME_API_URL", fixture.url)
               refreshWork = render()

@@ -54,6 +54,7 @@ mod ecb;
 mod media;
 mod noop;
 mod photos;
+mod prices;
 mod seed;
 mod stubs;
 
@@ -90,7 +91,8 @@ async fn main() -> anyhow::Result<()> {
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
     let tmdb = media::tmdb().await?;
-    let optcg = binder::optcg().await?;
+    let catalogue = binder::stand_in().await?;
+    let optcg = catalogue.client.clone();
     // `OPENHOME_PREVIEW_ECB=outage` makes the stand-in answer 503, so no rates arrive;
     // `missed-day` leaves a day out of the history file and refills it on a second pass.
     let mode = ecb::mode();
@@ -150,6 +152,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Household records are seeded through the public routes, so they always match the contract.
     seed::household(&url, API_KEY, &seed_db).await?;
+    if binder::history_mode() {
+        prices::replay(&seed_db, &catalogue).await?;
+        tokio::spawn(prices::restarts(seed_db.clone(), catalogue.client.clone()));
+    }
     println!("{url}");
     tokio::signal::ctrl_c().await?;
     Ok(())

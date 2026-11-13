@@ -15,6 +15,8 @@ pub mod noop_push;
 pub mod nutrition;
 pub mod optcg;
 mod patch;
+pub mod price_history;
+pub mod price_refresh;
 pub mod route_loop;
 pub mod switchbot;
 pub mod tmdb;

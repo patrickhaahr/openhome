@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
-import type { BinderState } from "./binder"
+import { z } from "zod"
+import { cardId, type BinderState } from "./binder"
+import type { PricesState } from "./card-prices"
 import { binderCommand } from "./binder-edit"
 
 /** Household-visible read through authenticated Axum, with credentials held by Start. */
@@ -27,5 +29,24 @@ export async function loadBinder(): Promise<BinderState> {
     return await getBinder()
   } catch {
     return { state: "unavailable", reason: "unreachable" }
+  }
+}
+
+/** A card's Price History, read when its sheet opens. */
+export const getCardPrices = createServerFn({ method: "GET" })
+  .validator(z.object({ card: cardId }))
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { readCardPrices } = await import("./binder.server")
+
+    return readCardPrices(data)
+  })
+
+/** A dropped RPC reads as unavailable, never as an empty history. */
+export async function loadCardPrices(card: string): Promise<PricesState> {
+  try {
+    return await getCardPrices({ data: { card } })
+  } catch {
+    return { state: "unavailable" }
   }
 }
