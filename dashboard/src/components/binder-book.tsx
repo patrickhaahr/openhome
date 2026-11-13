@@ -343,6 +343,7 @@ function Spread({
             pointer: event.pointerId,
             x: event.clientX,
             y: event.clientY,
+            time: event.timeStamp,
             pocket:
               event.target instanceof Element &&
               event.target.closest(".pocket-card") !== null,

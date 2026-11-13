@@ -491,6 +491,7 @@ describe("the turn lifecycle", () => {
     pointer: 1,
     x: 900,
     y: 300,
+    time: 0,
     pocket: false,
     grip: { direction: "forward", reach: 900 },
   }
@@ -567,6 +568,13 @@ describe("the turn lifecycle", () => {
     expect(nextTurn(flicking, release(800, 20 + restAfter + 1))).toMatchObject({
       phase: "settling",
       outcome: "cancel",
+    })
+  })
+
+  test("a flick delivered as one move completes short of the midpoint", () => {
+    expect(run(press, move(800, 10), release(800, 11))).toMatchObject({
+      phase: "settling",
+      outcome: "complete",
     })
   })
 

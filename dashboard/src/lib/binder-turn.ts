@@ -30,6 +30,7 @@ export type Turn =
       readonly pointer: number
       readonly x: number
       readonly y: number
+      readonly time: number
       readonly pocket: boolean
       readonly grip: Grip | undefined
     }
@@ -57,6 +58,7 @@ export type TurnEvent =
       readonly pointer: number
       readonly x: number
       readonly y: number
+      readonly time: number
       readonly pocket: boolean
       readonly grip: Grip | undefined
     }
@@ -139,6 +141,7 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
           pointer: event.pointer,
           x: event.x,
           y: event.y,
+          time: event.time,
           pocket: event.pocket,
           grip: event.grip,
         }
@@ -186,7 +189,11 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
           event.x
         ),
         last: { x: event.x, time: event.time },
-        velocity: 0,
+        velocity:
+          event.time > turn.time
+            ? travel(turn.grip.direction, turn.x, event.x) /
+              (event.time - turn.time)
+            : 0,
       }
     case "dragging": {
       if (
