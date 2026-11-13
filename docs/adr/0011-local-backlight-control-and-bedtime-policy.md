@@ -29,4 +29,4 @@ acknowledgment-only meaning.
 
 Product behavior, confirmed interview decisions and acceptance criteria are in
 [the backlight plan](../tv-backlight-plan.md); terminology is in
-[`CONTEXT.md`](../../CONTEXT.md#backlight).
+[`docs/context/home-controls.md`](../context/home-controls.md#backlight).
