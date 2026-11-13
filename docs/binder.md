@@ -67,8 +67,9 @@ removing the Household User removes them (the Cards stay). Each owner has at mos
 one entry per Card and language, so an English and a Japanese copy are two entries.
 
 An addition names the Card by `card_id` and never sends card details. `quantity`
-is 1 to 999 (default 1), `language` defaults to `en`, and a note is 1 to 500
-characters. Axum finds the Card in this order, and never reads a code out of an
+is 1 to 999 (default 1), and a merge that would take an entry past 999 copies is
+rejected with 400 and changes nothing. `language` defaults to `en`, and a note is
+1 to 500 characters. Axum finds the Card in this order, and never reads a code out of an
 id's spelling:
 
 1. A stored Card (every variant a search returned) is used as it is.

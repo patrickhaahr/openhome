@@ -223,6 +223,7 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
            VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (owner_id, card_id, language) DO UPDATE
            SET quantity = quantity + excluded.quantity, note = COALESCE(excluded.note, note)
+           WHERE binder_entries.quantity + excluded.quantity <= ?
            RETURNING id AS "id!", quantity AS "quantity!", note AS "note?", date_added AS "date_added!""#,
         id,
         owner_id,
@@ -230,10 +231,16 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
         request.language,
         quantity,
         request.note,
-        date_added
+        date_added,
+        MAX_QUANTITY
     )
-    .fetch_one(&mut *tx)
-    .await?;
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        BinderError::Validation(format!(
+            "the Binder Entry would hold more than {MAX_QUANTITY} copies"
+        ))
+    })?;
     let entry = BinderEntry {
         id: stored.id,
         owner_id: owner_id.to_owned(),
