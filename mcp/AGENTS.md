@@ -19,6 +19,8 @@
 
 - `nutrition_summary` is a read-only forward of `/api/nutrition/summary` (`from`, `to`, `aggregation` day, week or month). Axum owns the 365-day limit, ISO weeks, partial edge periods, logged and missing days, means and weekly rates. Like `nutrition_day`, its first read of a past week stores that week's target record (ADR 0014), which is internal memoisation, so it keeps `read_only_hint`. Axum also owns the micronutrient coverage (means per logged day, Upper Limit days, cut down windows and the Lasting Shortfall rule). Keep the global instructions on missing days, the goal rate and micronutrient coverage in step with the API.
 
+- `search_cards` is a read-only, open-world forward of `GET /api/binder/cards?card_code=` returning every variant of a Card Code; Axum owns Card Code validation, the OPTCG read (origin, timeout, byte cap, no redirects), image storage and `card_data_unavailable`. Keep the global instructions on empty results and outages in step with the API. See `../docs/binder.md`.
+
 - Read `../docs/training-context.md` before changing training tools or their contracts.
 - Keep training tools read-only: each call makes one authenticated API GET and passes its JSON unchanged. Add an API endpoint before adding a tool that needs new interpretation; database access and domain rules belong in the API.
 - Percent-encode path arguments, reject literal `.` and `..` segments, and keep API redirects disabled so requests stay on the intended endpoint.

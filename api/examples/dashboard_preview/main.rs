@@ -14,8 +14,8 @@
 
 //! Serves the production routes, migrations and authentication over isolated in-memory databases,
 //! with loopback stand-ins for every upstream (openrouteservice, `Open-Meteo`, Immich, the IR
-//! bridge and the `SwitchBot` bridge). TMDB is the real service when `TMDB_READ_ACCESS_TOKEN` is
-//! set, otherwise a loopback catalogue. All data is invented and readable in `seed/*.json`; it is
+//! bridge, the `SwitchBot` bridge and the OPTCG card catalogue). TMDB is the real service when
+//! `TMDB_READ_ACCESS_TOKEN` is set, otherwise a loopback catalogue. All data is invented and readable in `seed/*.json`; it is
 //! generated relative to today so the current day is always populated. The household API,
 //! credentials and coordinates are never touched: the map and weather use the public Copenhagen
 //! demo origin.
@@ -48,6 +48,7 @@ mod providers;
 #[path = "../support/foods.rs"]
 mod foods;
 
+mod binder;
 mod media;
 mod noop;
 mod photos;
@@ -87,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
     let tmdb = media::tmdb().await?;
+    let optcg = binder::optcg().await?;
     // `--food-database=importing` previews the Food page's unavailable state.
     let food_state = foods::FoodState::from_args();
     let foods = foods::synthetic_foods(food_state).await?;
@@ -111,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
     let app = routes::health::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(Some(tmdb)))
+        .merge(routes::cards::router(optcg))
         .merge(routes::important_dates::router())
         .merge(routes::map::router(demo_origin))
         .merge(routes::route_loop::router(planner))

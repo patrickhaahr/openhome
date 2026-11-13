@@ -61,6 +61,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "nutrition_summary",
             "recovery_on_day",
             "save_meal",
+            "search_cards",
             "search_foods",
             "set_nutrition_goal",
             "sleep_recent",
@@ -153,7 +154,10 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             assert_eq!(annotations.destructive_hint, Some(true));
             assert_eq!(annotations.idempotent_hint, Some(true));
         }
-        if matches!(tool.name.as_ref(), "lookup_product" | "link_product") {
+        if matches!(
+            tool.name.as_ref(),
+            "lookup_product" | "link_product" | "search_cards"
+        ) {
             assert_eq!(
                 tool.annotations.as_ref().unwrap().open_world_hint,
                 Some(true),
@@ -188,6 +192,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 json!(["owner_id", "list_id", "item_id"])
             }
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
+            "search_cards" => json!(["card_code"]),
             "search_foods" => json!(["query"]),
             "food" => json!(["food_id"]),
             "log_meal" => json!(["eaten_at", "request_id"]),
@@ -224,6 +229,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 || tool.name.contains("watchlist")
                 || tool.name.contains("important_date")
                 || tool.name.contains("food")
+                || tool.name.contains("card")
                 || tool.name.contains("product")
                 || tool.name.contains("meal")
                 || tool.name.contains("supplement")

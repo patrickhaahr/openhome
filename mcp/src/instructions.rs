@@ -94,4 +94,7 @@ weigh-ins. nutrition_summary's micronutrients give each vitamin and mineral's me
 for the range and per period: name a lasting_shortfall (below 70 % over at least 7 logged days) as a habit worth fixing \
 with food, never a single low day; seven_day_average_above_upper_limit means a habitual excess to cut down, usually a \
 Supplement, while days_above_upper_limit alone is only a caution. For a long range prefer week or month: by day the \
-micronutrients make the result large.";
+micronutrients make the result large. \
+For One Piece Card Game cards, call search_cards with the Card Code read from the card: it returns every variant (the normal \
+print and its parallel arts) with details, the USD card_value and the date of its price. Report a code with an empty cards \
+list as not listed by the catalogue; card_data_unavailable means the catalogue is down, so tell the user to try later.";

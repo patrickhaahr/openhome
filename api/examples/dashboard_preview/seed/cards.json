@@ -1,0 +1,35 @@
+{
+  "note": "Invented cards in the OPTCG catalogue's wire shape. OP99 is not a real set. Prices are USD, observed this many days ago.",
+  "cards": [
+    {
+      "image_id": "OP99-001", "name": "Captain Marlow (001)", "set_name": "Synthetic Tides", "rarity": "L",
+      "color": "Red", "card_type": "Leader", "life": "5", "cost": null, "power": "5000", "counter": null,
+      "attribute": "Slash", "sub_types": "Lantern Crew Invented", "inventory_price": 1.95, "market_price": 2.25,
+      "observed_days_ago": 1, "text": "[DON!! x1] [Your Turn] All of your Characters gain +1000 power."
+    },
+    {
+      "image_id": "OP99-001_p1", "name": "Captain Marlow (001) (Parallel)", "set_name": "Synthetic Tides", "rarity": "L",
+      "color": "Red", "card_type": "Leader", "life": "5", "cost": null, "power": "5000", "counter": null,
+      "attribute": "Slash", "sub_types": "Lantern Crew Invented", "inventory_price": 169.0, "market_price": 568.01,
+      "observed_days_ago": 157, "text": "[DON!! x1] [Your Turn] All of your Characters gain +1000 power."
+    },
+    {
+      "image_id": "OP99-002", "name": "Wren Lanternkeeper (002)", "set_name": "Synthetic Tides", "rarity": "C",
+      "color": "Blue", "card_type": "Character", "life": null, "cost": "3", "power": "4000", "counter": "1000",
+      "attribute": "Strike", "sub_types": "Lantern Crew", "inventory_price": 0.1, "market_price": 0.35,
+      "observed_days_ago": 1, "text": "[On Play] Look at 3 cards from the top of your deck and place them at the top or bottom."
+    },
+    {
+      "image_id": "OP99-002_p1", "name": "Wren Lanternkeeper (002) (Parallel)", "set_name": "Synthetic Tides", "rarity": "C",
+      "color": "Blue", "card_type": "Character", "life": null, "cost": "3", "power": "4000", "counter": "1000",
+      "attribute": "Strike", "sub_types": "Lantern Crew", "inventory_price": 2.5, "market_price": null,
+      "observed_days_ago": 40, "text": "[On Play] Look at 3 cards from the top of your deck and place them at the top or bottom."
+    },
+    {
+      "image_id": "OP99-010", "name": "Harbour Fog (010)", "set_name": "Synthetic Tides", "rarity": "R",
+      "color": "Green", "card_type": "Event", "life": null, "cost": "1", "power": null, "counter": null,
+      "attribute": null, "sub_types": "Invented", "inventory_price": 0.4, "market_price": 0.8,
+      "observed_days_ago": 2, "text": "[Main] Rest up to 1 of your opponent's Characters with a cost of 3 or less."
+    }
+  ]
+}

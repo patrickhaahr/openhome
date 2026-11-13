@@ -1,6 +1,6 @@
 //! Hermes MCP adapter for OpenHome.
 //!
-//! A Streamable HTTP MCP server for read-only training and Food database reads, and writable
+//! A Streamable HTTP MCP server for read-only training, Food database and card catalogue reads, and writable
 //! Wishlists, Watchlists, Important Dates, Meals, Supplements and Meal Logs. Each tool
 //! makes one authenticated API request and passes its JSON unchanged. The adapter has no
 //! database access or domain rules; Axum owns training interpretation, destination resolution
@@ -30,6 +30,7 @@ use serde_json::{Value, json};
 use subtle::ConstantTimeEq;
 use url::Url;
 
+mod binder;
 mod important_dates;
 mod instructions;
 mod nutrition;
@@ -265,7 +266,8 @@ impl OpenHomeTools {
                 + Self::supplements_router()
                 + Self::meal_logs_router()
                 + Self::nutrition_summary_router()
-                + Self::training_router(),
+                + Self::training_router()
+                + Self::binder_router(),
         }
     }
 }

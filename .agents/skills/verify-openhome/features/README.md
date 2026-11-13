@@ -30,7 +30,8 @@ Each feature file has an H1, one paragraph, then exactly four H2s in order: `Sub
 - [Wishlist](./wishlist.md): wishes through Hermes and the Dashboard Wish view.
 - [Important Dates](./important-dates.md): dates through Hermes and the Dashboard Dates view.
 - [Meal logging](./meal-logging.md): Food search and meal logs through Hermes, the Dashboard Food page.
+- [Binder](./binder.md): Card Code search through Hermes against the OPTCG loopback stand-in, stored AVIF images. Only the catalogue slice is driveable so far.
 
 ## Planned: Binder (epic #285)
 
-Binder tickets must add `binder.md` here once a slice is driveable. They must also add loopback stand-ins for the OPTCG catalogue and the ECB rates file to the synthetic preview example, the same way TMDB has one, so card search, images, prices and currency values work offline with invented cards. Never point the preview at the live OPTCG service: it is one volunteer's server.
+`binder.md` covers the card catalogue slice, with the loopback OPTCG stand-in in the preview example (`api/examples/dashboard_preview/binder.rs`). Later Binder tickets extend it and must add the ECB rates stand-in the same way TMDB has one, so currency values work offline. Never point the preview at the live OPTCG service: it is one volunteer's server.

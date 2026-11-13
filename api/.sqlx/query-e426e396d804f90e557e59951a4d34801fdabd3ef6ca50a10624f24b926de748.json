@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO cards (id, card_code, position, name, set_id, set_name, rarity, color,\n                card_type, life, cost, power, counter_amount, attribute, sub_types, text,\n                inventory_price_usd, price_usd, price_observed_on, image_avif)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n             ON CONFLICT(id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 20
+    },
+    "nullable": []
+  },
+  "hash": "e426e396d804f90e557e59951a4d34801fdabd3ef6ca50a10624f24b926de748"
+}

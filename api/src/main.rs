@@ -182,6 +182,11 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::route_loop::router(loop_planner))
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
+        .merge(routes::cards::router(
+            openhome_api::services::optcg::Optcg::new(url::Url::parse(
+                openhome_api::services::optcg::PRODUCTION_URL,
+            )?)?,
+        ))
         .merge(routes::watchlist::router(
             non_empty_env("TMDB_READ_ACCESS_TOKEN").and_then(|token| {
                 let base_url = url::Url::parse("https://api.themoviedb.org/3/").ok()?;

@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+mod binder;
+
 use axum::Router;
 use openhome_api::services::noop_push;
 use openhome_api::services::nutrition::food_database::{DatasetPin, FoodDatabase};
@@ -51,6 +53,7 @@ pub async fn start_api() -> String {
 /// The API routes over `foods`, for Food database reads.
 pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let labels = open_food_facts().await;
+    let catalogue = binder::optcg().await;
     let state = AppState {
         db: training_log().await,
         noop_db: noop_mirror().await,
@@ -64,6 +67,7 @@ pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let app = routes::training::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(None))
+        .merge(routes::cards::router(catalogue))
         .merge(routes::important_dates::router())
         .merge(routes::nutrition::router(
             foods,

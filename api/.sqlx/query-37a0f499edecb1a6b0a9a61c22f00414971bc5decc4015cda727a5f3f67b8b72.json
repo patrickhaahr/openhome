@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT image_avif AS \"image_avif!\" FROM cards WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "image_avif!",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "37a0f499edecb1a6b0a9a61c22f00414971bc5decc4015cda727a5f3f67b8b72"
+}
