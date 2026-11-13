@@ -43,6 +43,7 @@ export function implementedRoute(
   | "/weather"
   | "/travel"
   | "/lists"
+  | "/binder"
   | "/photos"
   | "/workout"
   | "/recovery"
@@ -57,6 +58,8 @@ export function implementedRoute(
       return "/travel"
     case "lists":
       return "/lists"
+    case "binder":
+      return "/binder"
     case "photos":
       return "/photos"
     case "workout":

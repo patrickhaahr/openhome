@@ -30,7 +30,7 @@ Each feature file has an H1, one paragraph, then exactly four H2s in order: `Sub
 - [Wishlist](./wishlist.md): wishes through Hermes and the Dashboard Wish view.
 - [Important Dates](./important-dates.md): dates through Hermes and the Dashboard Dates view.
 - [Meal logging](./meal-logging.md): Food search and meal logs through Hermes, the Dashboard Food page.
-- [Binder](./binder.md): Card Code search and adding cards to a Household User's Binder through Hermes against the OPTCG loopback stand-in. The catalogue and Binder Entry slices are driveable so far.
+- [Binder](./binder.md): Card Code search and adding cards to a Household User's Binder through Hermes against the OPTCG loopback stand-in. The catalogue, Binder Entry and read-only Dashboard Binder page slices are driveable so far.
 
 ## Planned: Binder (epic #285)
 

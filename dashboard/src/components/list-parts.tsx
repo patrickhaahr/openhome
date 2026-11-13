@@ -18,6 +18,7 @@ export function PersonKeys({
   counts,
   noun,
   label = "Whose list",
+  everyone = true,
 }: {
   owners: readonly HouseholdUser[]
   selected: string | undefined
@@ -25,20 +26,23 @@ export function PersonKeys({
   counts?: ReadonlyMap<string, number>
   noun?: readonly [string, string]
   label?: string
+  everyone?: boolean
 }): React.JSX.Element {
   return (
     <div className="view-tabs person-keys" role="group" aria-label={label}>
-      <button
-        type="button"
-        className="view-tab person-key"
-        aria-pressed={selected === undefined}
-        onClick={() => choose(undefined)}
-      >
-        <span className="person-disc" aria-hidden="true">
-          <UsersThreeIcon size={16} weight="bold" />
-        </span>
-        Everyone
-      </button>
+      {everyone ? (
+        <button
+          type="button"
+          className="view-tab person-key"
+          aria-pressed={selected === undefined}
+          onClick={() => choose(undefined)}
+        >
+          <span className="person-disc" aria-hidden="true">
+            <UsersThreeIcon size={16} weight="bold" />
+          </span>
+          Everyone
+        </button>
+      ) : null}
       {owners.map((owner) => {
         const count = counts?.get(owner.id)
 
