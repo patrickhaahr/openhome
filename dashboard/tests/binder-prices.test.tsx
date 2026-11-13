@@ -23,7 +23,12 @@ import { CurrencyProvider, CurrencySwitch } from "@/components/currency"
 import { PriceHistory } from "@/components/price-history"
 import { currencyCookieName } from "@/lib/currency"
 import { readCurrency } from "@/lib/currency.functions"
-import { readBinder, readCardPrices } from "@/lib/binder.server"
+import {
+  addBinderEntry,
+  readBinder,
+  readCardPrices,
+  searchBinderCards,
+} from "@/lib/binder.server"
 import type { PricePoint, PricesState } from "@/lib/card-prices"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
@@ -228,6 +233,8 @@ test("an English card sheet charts the history Axum stored, and a Japanese one h
             change={() => Promise.resolve({ state: "saved" })}
             refresh={() => Promise.resolve()}
             prices={(card) => readCardPrices({ card })}
+            find={searchBinderCards}
+            add={addBinderEntry}
           />
         </CurrencyProvider>
       </RouterContextProvider>

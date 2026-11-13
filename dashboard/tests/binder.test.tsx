@@ -25,9 +25,11 @@ import { CurrencyProvider } from "@/components/currency"
 import { paginate, type BinderSearch } from "@/lib/binder"
 import type { BinderMutation } from "@/lib/binder-edit"
 import {
+  addBinderEntry,
   readBinder,
   readCardImage,
   readCardPrices,
+  searchBinderCards,
   writeBinder,
 } from "@/lib/binder.server"
 import { readWatchlists } from "@/lib/watchlist.server"
@@ -116,6 +118,8 @@ async function render(): Promise<void> {
 
               return refreshWork
             }}
+            find={searchBinderCards}
+            add={addBinderEntry}
           />
         </CurrencyProvider>
       </RouterContextProvider>

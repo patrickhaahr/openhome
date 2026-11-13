@@ -14,11 +14,13 @@ const unavailableCopy: Record<ValueUnavailable, string> = {
   no_exchange_rates: "No value yet: no exchange rates for the price’s day.",
 }
 
-/** The Binder Value in the chosen currency, what it leaves out, and the switch for every value. */
+/** The Binder Value in the chosen currency, what it leaves out, and the switch for every value, ending with the bar's actions. */
 export function BinderValueBar({
   value,
+  children,
 }: {
   value: BinderValue | undefined
+  children?: React.ReactNode
 }): React.JSX.Element {
   const { currency } = useCurrency()
 
@@ -49,6 +51,7 @@ export function BinderValueBar({
         </p>
       )}
       <CurrencySwitch />
+      {children}
     </div>
   )
 }

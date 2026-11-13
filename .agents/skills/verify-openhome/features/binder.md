@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, its Card Value in DKK, EUR and USD with the price's observation date and a stale flag, and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages. Tapping a pocket opens a card sheet that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. Binder reads carry each owner's Binder Value, and the Dashboard shows it in DKK, EUR or USD by a switch kept in a cookie.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, its Card Value in DKK, EUR and USD with the price's observation date and a stale flag, and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages, and an `Add card` sheet adds a card by Card Code. Tapping a pocket opens a card sheet that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. Binder reads carry each owner's Binder Value, and the Dashboard shows it in DKK, EUR or USD by a switch kept in a cookie.
 
 ## Sub-features
 
@@ -36,6 +36,12 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-dash-edit-fail` makes the save collide (409): the sheet stays open with an error and the draft.
 - `binder-dash-remove` removes an entry after confirming; `Keep it` keeps it.
 - `binder-household-remove` removes a Household User from `Household and lists`: the dialog names the Binder, their entries go and the cards stay.
+- `binder-dash-search` opens `Add card`, types a code and submits: each variant shows its image and name.
+- `binder-dash-add` picks a variant (EN, quantity 1, the selected owner by default), changes owner, quantity or language, and adds it.
+- `binder-dash-merge` adds the same variant and language again: the sheet says the quantity was raised and the pocket shows `×N`.
+- `binder-dash-outage` searches `OP99-503`: a catalogue message, and the sheet stays usable.
+- `binder-dash-unlisted` searches `OP99-777`: "not in the catalogue yet".
+- `binder-dash-draft` picks a variant, reloads: the sheet reopens on the same draft; `Discard draft` clears it.
 
 ## How to get to it (user POV)
 
@@ -87,6 +93,9 @@ Preconditions:
 - **Household removal.** Create a throwaway user in `Household and lists` on `/lists?tab=wish`, add entries for them with `add_binder_entry`, then `Remove <name>`: the confirmation reads "with all their wishlists, wishes and watchlist entries, and their Binder". Note one of their entry ids first. After `Remove for good`, `GET $API_URL/api/household-users/<id>/binder/entries/<entry id>` is 404, `/api/binder/entries?owner_id=<id>` is `[]`, other owners are unchanged and the card images are still 200. Use a throwaway user: the seeded ones are shared by later steps. In the preview, the buttons read `Remove <name>` through their text, not an `aria-label`; click them with `preview_evaluate` since selectors with quotes are rejected.
 - **Values.** Card Value, Binder Value, the currency switch and the ECB rates have their own recipe, [binder-values.md](./binder-values.md). The Proof step below covers both.
 - **Prices.** The daily refresh, `card_prices` and the price chart have their own recipe, [binder-prices.md](./binder-prices.md).
+- **Dashboard add.** Click `Add card` (top right of the bar), type `OP99-001` and press Enter. The sheet lists `Captain Marlow (001)` and its `(Parallel)`, each picture from `/binder-image/<id>`. Pick the first: the draft shows `Add to` (Alex selected), `Quantity` 1, `Language` EN and `Add card` / `Discard draft`. Press `Add card`: "Added to Alex’s Binder, quantity 1." and the pocket appears on the page behind. Press `Add another card`, search and pick the same variant, press `One more` and add: "Quantity raised to 3 in Alex’s Binder." and the pocket shows `×3`. Alex owns neither `OP99-001` variant in the seed, so run this before the Hermes steps that add it.
+- **Dashboard add edge cases.** `OP99-503` shows "The card catalogue is not answering" and leaves the Card Code field usable. `OP99-777` shows "OP99-777 is not in the catalogue yet." and offers nothing to add. `hello` shows "That is not a Card Code".
+- **Dashboard draft.** Pick a variant and reload `/binder`: the sheet reopens on the draft (`sessionStorage` key `openhome.pending-binder-addition`, also holding the `request_id`). `Discard draft` empties the key and returns to the search form, and `binder_entries` shows nothing written. After `Add card` the key is gone; an add whose response is lost keeps it, locks the fields and offers `Retry add`, which replays the same `request_id`. Repeat in portrait with `preview_resize` `orientation: portrait`: the sheet stays beside the page and the pockets keep their layout.
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.
 
 ## Gotchas

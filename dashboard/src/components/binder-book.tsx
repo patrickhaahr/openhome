@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { CardsIcon } from "@phosphor-icons/react/dist/csr/Cards"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
+import { AddCard, type FindCards } from "@/components/binder-add"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { OpenConnection } from "@/components/control-alert"
 import { BinderSheet } from "@/components/binder-sheet"
@@ -30,6 +31,7 @@ import {
   type BinderCommand,
   type BinderMutation,
 } from "@/lib/binder-edit"
+import type { BinderAddReceipt, BinderAddition } from "@/lib/binder-add"
 
 /**
  * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
@@ -44,6 +46,8 @@ export function BinderBook({
   change,
   refresh,
   prices,
+  find,
+  add,
 }: {
   data: BinderState
   search: BinderSearch
@@ -51,6 +55,8 @@ export function BinderBook({
   change: (command: BinderCommand) => Promise<BinderMutation>
   refresh: () => Promise<void>
   prices: (card: string) => Promise<PricesState>
+  find: FindCards
+  add: (command: BinderAddition) => Promise<BinderAddReceipt>
 }): React.JSX.Element {
   const view = viewOf(data, search)
   const [open, setOpen] = useState<string>()
@@ -83,7 +89,16 @@ export function BinderBook({
             label="Whose Binder"
             choose={(person) => choose({ person })}
           />
-          <BinderValueBar value={view.value} />
+          <BinderValueBar value={view.value}>
+            <AddCard
+              owners={view.owners}
+              person={view.owner.id}
+              entries={data.state === "available" ? data.entries : []}
+              find={find}
+              change={add}
+              refresh={refresh}
+            />
+          </BinderValueBar>
         </div>
       ) : null}
       {selected === undefined ? (
@@ -166,7 +181,9 @@ function Body({
         <div className="lists-empty">
           <CardsIcon size={48} weight="light" aria-hidden="true" />
           <h2>{view.owner.name}’s Binder is empty</h2>
-          <p>Ask Hermes to add cards from a photo.</p>
+          <p>
+            Ask Hermes to add cards from a photo, or add one by its Card Code.
+          </p>
         </div>
       )
     case "spread":
