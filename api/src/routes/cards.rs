@@ -14,6 +14,7 @@ use crate::{
     services::{
         cards::{self, CardCode, CardId, CardsError, Search},
         optcg::Optcg,
+        price_history::{self, PriceHistory},
     },
 };
 
@@ -21,6 +22,7 @@ pub fn router(catalogue: Optcg) -> Router<AppState> {
     Router::new()
         .route("/api/binder/cards", get(search))
         .route("/api/binder/cards/{id}/image", get(image))
+        .route("/api/binder/cards/{id}/prices", get(prices))
         .layer(Extension(catalogue))
 }
 
@@ -37,6 +39,29 @@ async fn search(
 ) -> Result<Json<Search>, CardsError> {
     let code = CardCode::parse(&query.card_code)?;
     Ok(Json(cards::search(&state.db, &catalogue, &code).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PricesQuery {
+    from: Option<String>,
+    to: Option<String>,
+}
+
+async fn prices(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(range): Query<PricesQuery>,
+) -> Result<Json<PriceHistory>, CardsError> {
+    Ok(Json(
+        price_history::history(
+            &state.db,
+            &CardId::parse(&id)?,
+            range.from.as_deref(),
+            range.to.as_deref(),
+        )
+        .await?,
+    ))
 }
 
 async fn image(

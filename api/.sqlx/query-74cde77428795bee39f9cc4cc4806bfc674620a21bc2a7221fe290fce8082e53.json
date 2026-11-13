@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE cards SET price_usd = ?, price_observed_on = ?\n         WHERE id = ? AND (price_observed_on IS NULL OR price_observed_on < ?)\n           AND EXISTS (SELECT 1 FROM binder_entries WHERE card_id = cards.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "74cde77428795bee39f9cc4cc4806bfc674620a21bc2a7221fe290fce8082e53"
+}

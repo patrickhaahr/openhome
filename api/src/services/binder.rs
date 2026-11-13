@@ -1,11 +1,14 @@
 use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use super::card_value::{BinderValue, Unpriced, Valuation};
 use super::cards::{self, Card, CardId, CardsError};
 use super::optcg::Optcg;
+use super::patch::Patch;
 use super::training::CalendarDay;
 use super::wishlist::HouseholdUser;
 
@@ -64,7 +67,7 @@ impl Quantity {
 }
 
 /// A Binder is only its owner's entries: there is no Binder record.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct BinderEntry {
     pub id: String,
     pub owner_id: String,
@@ -89,7 +92,9 @@ pub struct AddEntry {
 
 #[derive(Serialize)]
 pub struct Addition {
-    pub entry: BinderEntry,
+    /// A replay returns the stored response exactly as it was recorded, whatever its shape was
+    /// then, so a retry never differs from the first answer when rates or prices have moved on.
+    pub entry: Box<RawValue>,
     pub replayed: bool,
 }
 
@@ -164,10 +169,9 @@ impl Receipt {
                 "The retried entry was removed; use a new request_id to add it again".into(),
             ));
         }
-        let entry = serde_json::from_str(&self.result)
-            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
         Ok(Addition {
-            entry,
+            entry: RawValue::from_string(self.result)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
             replayed: true,
         })
     }
@@ -244,6 +248,8 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     };
     let result =
         serde_json::to_string(&entry).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    let accepted = RawValue::from_string(result.clone())
+        .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     // The receipt claim serializes simultaneous retries; the loser rolls back its merge.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO binder_addition_receipts
@@ -275,7 +281,7 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     }
     tx.commit().await?;
     Ok(Addition {
-        entry,
+        entry: accepted,
         replayed: false,
     })
 }
@@ -286,16 +292,76 @@ pub struct EntriesFilter {
     pub owner_id: Option<String>,
 }
 
-pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<BinderEntry>> {
+/// One owner's Binder Value; an empty Binder is worth zero.
+#[derive(Debug, Serialize)]
+pub struct OwnerValue {
+    pub owner_id: String,
+    #[serde(flatten)]
+    pub value: BinderValue,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Entries {
+    pub entries: Vec<BinderEntry>,
+    pub binder_values: Vec<OwnerValue>,
+}
+
+/// Every Household User in scope has a Binder, so each gets a Binder Value even with no entries.
+pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Entries> {
+    let owner_id = filter.owner_id.as_deref();
+    let entries = load(db, owner_id, None).await?;
+    let binder_values = sqlx::query_scalar!(
+        "SELECT id FROM household_users WHERE ? IS NULL OR id = ? ORDER BY name, id",
+        owner_id,
+        owner_id
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|owner_id| OwnerValue {
+        value: BinderValue::total(
+            entries
+                .iter()
+                .filter(|entry| entry.owner_id == owner_id)
+                .map(|entry| (entry.quantity, &entry.card.valuation)),
+        ),
+        owner_id,
+    })
+    .collect();
+    Ok(Entries {
+        entries,
+        binder_values,
+    })
+}
+
+/// Read only the complete owner/entry destination.
+pub async fn entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<BinderEntry> {
+    load(db, Some(owner_id), Some(id))
+        .await?
+        .pop()
+        .ok_or_else(not_found)
+}
+
+fn not_found() -> BinderError {
+    BinderError::NotFound("Binder Entry not found for this Household User".into())
+}
+
+async fn load(
+    db: &SqlitePool,
+    owner_id: Option<&str>,
+    id: Option<&str>,
+) -> Result<Vec<BinderEntry>> {
     let mut rows = sqlx::query!(
         r#"SELECT e.id, e.owner_id, e.card_id, e.language AS "language: Language", e.quantity,
                   e.note, e.date_added, u.name AS owner_name, c.card_code, c.position
            FROM binder_entries e
            JOIN household_users u ON u.id = e.owner_id
            JOIN cards c ON c.id = e.card_id
-           WHERE ? IS NULL OR e.owner_id = ?"#,
-        filter.owner_id,
-        filter.owner_id
+           WHERE (? IS NULL OR e.owner_id = ?) AND (? IS NULL OR e.id = ?)"#,
+        owner_id,
+        owner_id,
+        id,
+        id
     )
     .fetch_all(db)
     .await?;
@@ -330,11 +396,89 @@ pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<Binde
         .collect()
 }
 
+/// Absent fields keep their stored value and a null note clears it. Quantity and language have
+/// no empty state, so null for either is rejected.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditEntry {
+    #[serde(default)]
+    pub quantity: Patch<i64>,
+    #[serde(default)]
+    pub language: Patch<Language>,
+    #[serde(default)]
+    pub note: Patch<String>,
+}
+
+fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
+    match patch {
+        Patch::Missing => Ok(None),
+        Patch::Value(Some(value)) => Ok(Some(value)),
+        Patch::Value(None) => Err(BinderError::Validation(format!("{field} cannot be null"))),
+    }
+}
+
+/// A language that another entry of the same owner and Card already holds returns 409 and the
+/// whole correction is rolled back, so entries are never merged silently.
+pub async fn edit_entry(
+    db: &SqlitePool,
+    owner_id: &str,
+    id: &str,
+    request: EditEntry,
+) -> Result<BinderEntry> {
+    let quantity = required(request.quantity, "quantity")?
+        .map(Quantity::parse)
+        .transpose()?
+        .map(Quantity::get);
+    let language = required(request.language, "language")?;
+    let (note_given, note) = match request.note {
+        Patch::Missing => (false, None),
+        Patch::Value(note) => (true, note.map(|note| text(&note, "note", 500)).transpose()?),
+    };
+    let updated = sqlx::query_scalar!(
+        r#"UPDATE binder_entries
+           SET quantity = COALESCE(?, quantity), language = COALESCE(?, language),
+               note = CASE WHEN ? THEN ? ELSE note END
+           WHERE id = ? AND owner_id = ? RETURNING id AS "id!""#,
+        quantity,
+        language,
+        note_given,
+        note,
+        id,
+        owner_id
+    )
+    .fetch_optional(db)
+    .await
+    .map_err(|error| match error {
+        sqlx::Error::Database(error) if error.is_unique_violation() => BinderError::Conflict(
+            "This owner already has the Card in that language; raise its quantity instead".into(),
+        ),
+        other => other.into(),
+    })?;
+    if updated.is_none() {
+        return Err(not_found());
+    }
+    entry(db, owner_id, id).await
+}
+
+/// Deletion is final. The accepted addition receipt stays retired.
+pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()> {
+    let removed = sqlx::query!(
+        "DELETE FROM binder_entries WHERE id = ? AND owner_id = ?",
+        id,
+        owner_id
+    )
+    .execute(db)
+    .await?;
+    if removed.rows_affected() == 0 {
+        return Err(not_found());
+    }
+    Ok(())
+}
+
 /// The catalogue's prices are for English printings, so a Japanese entry has no price at all.
 fn priced_for(mut card: Card, language: Language) -> Card {
     if language == Language::Ja {
-        card.card_value = None;
-        card.inventory_price_usd = None;
+        card.valuation = Valuation::Unpriced(Unpriced::JapanesePrinting);
     }
     card
 }

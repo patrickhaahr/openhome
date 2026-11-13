@@ -7,8 +7,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use openhome_api::auth;
 use openhome_api::routes;
 use openhome_api::services::{
-    adguard, backlight, docker, feed, ir, map, noop_push, nutrition::food_database, route_loop,
-    switchbot, weather,
+    adguard, backlight, docker, ecb, exchange_rates, feed, ir, map, noop_push,
+    nutrition::food_database, price_refresh, route_loop, switchbot, weather,
 };
 
 #[tokio::main]
@@ -186,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::switchbot::router())
         .merge(routes::training::router())
         .merge(routes::cards::router(catalogue.clone()))
-        .merge(routes::binder::router(catalogue))
+        .merge(routes::binder::router(catalogue.clone()))
         .merge(routes::watchlist::router(
             non_empty_env("TMDB_READ_ACCESS_TOKEN").and_then(|token| {
                 let base_url = url::Url::parse("https://api.themoviedb.org/3/").ok()?;
@@ -229,6 +229,14 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http());
 
     tokio::spawn(feed::run_scheduler(state.db.clone()));
+    tokio::spawn(price_refresh::run_scheduler(state.db.clone(), catalogue));
+    tokio::spawn(exchange_rates::run_scheduler(
+        state.db.clone(),
+        ecb::Ecb::new(
+            url::Url::parse(ecb::RECENT_URL)?,
+            url::Url::parse(ecb::HISTORY_URL)?,
+        )?,
+    ));
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
     tracing::info!("Listening on {}", listener.local_addr()?);

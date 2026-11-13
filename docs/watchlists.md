@@ -104,7 +104,7 @@ and refreshes from Axum; a failed removal keeps the dialog open. Incomplete read
 show recovery controls instead of an empty household. After an uncertain removal,
 read its destination before retrying.
 
-Removing a Household User in Wishlist also removes all their watchlist entries.
+Removing a Household User in Wishlist also removes all their watchlist entries and Binder Entries.
 The member-removal dialog discloses both Wishlist and Watchlist deletion; accepted
 addition receipts remain retired.
 

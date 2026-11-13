@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT rate_date, usd_micros, dkk_micros FROM exchange_rates",
+  "describe": {
+    "columns": [
+      {
+        "name": "rate_date",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "usd_micros",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "dkk_micros",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "809ae9e6fe7878332a68268222ff603c903544899b093bed7b693dc94283b134"
+}

@@ -1,10 +1,17 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
 import { BinderBook } from "@/components/binder-book"
 import { PageHead } from "@/components/page-head"
 import { binderSearch } from "@/lib/binder"
-import { addCard, loadBinder, searchCards } from "@/lib/binder.functions"
+import {
+  addCard,
+  loadBinder,
+  loadCardPrices,
+  mutateBinder,
+  searchCards,
+} from "@/lib/binder.functions"
 
-/** Each Household User's Binder as spreads of two facing 3×3 pocket pages of official card images, with adding by Card Code. */
+/** Each Household User's Binder as spreads of two facing 3×3 pocket pages of official card images, with adding by Card Code and each card's sheet for correcting or removing it. */
 export const Route = createFileRoute("/binder")({
   head: () => ({ meta: [{ title: "Binder · OpenHome" }] }),
   validateSearch: binderSearch,
@@ -26,6 +33,7 @@ function BinderPage(): React.JSX.Element {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const router = useRouter()
+  const mutate = useServerFn(mutateBinder)
 
   return (
     <section>
@@ -36,9 +44,11 @@ function BinderPage(): React.JSX.Element {
         choose={(next) =>
           void navigate({ search: next, replace: true, resetScroll: false })
         }
+        change={(command) => mutate({ data: command })}
         refresh={() => router.invalidate({ sync: true })}
         find={(input) => searchCards({ data: input })}
-        change={(command) => addCard({ data: command })}
+        add={(command) => addCard({ data: command })}
+        prices={loadCardPrices}
       />
     </section>
   )

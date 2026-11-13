@@ -8,6 +8,7 @@ import { HouseIcon } from "@phosphor-icons/react/dist/csr/House"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ThemeScript } from "@/components/daylight"
 import { daylight } from "@/lib/daylight"
+import { readCurrency } from "@/lib/currency.functions"
 import { readIdleSettings } from "@/lib/idle.functions"
 import { readNavPrefs } from "@/lib/nav-layout.functions"
 
@@ -17,6 +18,7 @@ export const Route = createRootRoute({
   loader: () => ({
     openedAt: new Date().toISOString(),
     nav: readNavPrefs(),
+    currency: readCurrency(),
     idle: readIdleSettings(),
   }),
   headers: () => ({ "Cache-Control": "no-store" }),

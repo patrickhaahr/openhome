@@ -19,6 +19,7 @@ import {
   vi,
 } from "vitest"
 import { BinderBook } from "@/components/binder-book"
+import { CurrencyProvider } from "@/components/currency"
 import {
   addBinderEntry,
   readBinder,
@@ -93,26 +94,30 @@ async function render(): Promise<void> {
   await act(async () =>
     root.render(
       <RouterContextProvider router={router}>
-        <BinderBook
-          data={data}
-          search={{}}
-          choose={() => undefined}
-          refresh={() => {
-            refreshed = render()
+        <CurrencyProvider initial="DKK">
+          <BinderBook
+            data={data}
+            search={{}}
+            choose={() => undefined}
+            refresh={() => {
+              refreshed = render()
 
-            return refreshed
-          }}
-          find={(input) => {
-            found = searchBinderCards(input)
+              return refreshed
+            }}
+            find={(input) => {
+              found = searchBinderCards(input)
 
-            return found
-          }}
-          change={(command) => {
-            added = addBinderEntry(command)
+              return found
+            }}
+            add={(command) => {
+              added = addBinderEntry(command)
 
-            return added
-          }}
-        />
+              return added
+            }}
+            change={() => Promise.resolve({ state: "saved" })}
+            prices={() => Promise.resolve({ state: "unavailable" })}
+          />
+        </CurrencyProvider>
       </RouterContextProvider>
     )
   )

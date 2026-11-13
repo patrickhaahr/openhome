@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO price_points (card_id, observed_on, price_usd_cents) VALUES (?, ?, ?)\n         ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "b9f7644dd3443a5bddac374c41ae2e43f7d52e98720ca8f8169ecfa9788b500e"
+}

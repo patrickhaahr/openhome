@@ -47,3 +47,9 @@ Prices are TCGplayer's English-printing market prices, so Japanese Binder
 Entries have none. The main database grows by one image per stored Card and is
 backed up with it. Card names and images are trademarks of their owners, and
 the Dashboard credits the catalogue as the data source.
+
+Card Values in DKK and EUR come from the ECB's reference rates, read from its
+published XML files (the 90-day file, which each pass stores in full so a missed day is
+filled, and the full history file on the first pass that needs it) by an adapter with the same limits as the catalogue's, so that
+prices need no paid service. The file is parsed with `quick-xml`, a real XML parser,
+strictly, and a DTD is refused. See [`binder-values.md`](../binder-values.md).

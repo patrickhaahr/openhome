@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE binder_entries\n           SET quantity = COALESCE(?, quantity), language = COALESCE(?, language),\n               note = CASE WHEN ? THEN ? ELSE note END\n           WHERE id = ? AND owner_id = ? RETURNING id AS \"id!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3900d95d101046179f785707daa1210cdc03c6e3cb78827872782a5f55f94b07"
+}

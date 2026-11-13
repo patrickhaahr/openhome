@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT observed_on, price_usd_cents FROM price_points\n         WHERE card_id = ? AND (?2 IS NULL OR observed_on >= ?2) AND (?3 IS NULL OR observed_on <= ?3)\n         ORDER BY observed_on",
+  "describe": {
+    "columns": [
+      {
+        "name": "observed_on",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "price_usd_cents",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "5cf2f34b18d3f8f5301fc9d939db479c00c6296da3107cbc43749aadf8686e86"
+}

@@ -3,10 +3,17 @@ import { z } from "zod"
 import { requestOpenHome, readBoundedBody } from "./openhome.server"
 import {
   binderEntry,
+  binderList,
   cardId,
   type BinderFailure,
   type BinderState,
 } from "./binder"
+import {
+  type BinderCommand,
+  type BinderMutation,
+  type BinderWriteFailure,
+} from "./binder-edit"
+import { cardPrices, type PricesState } from "./card-prices"
 import {
   cardSearchResponse,
   type AddFailure,
@@ -22,7 +29,11 @@ async function read<T>(
 ): Promise<
   { state: "read"; data: T } | { state: "unavailable"; reason: BinderFailure }
 > {
-  const result = await requestOpenHome({ path, method: "GET", timeoutMs: 5000 })
+  const result = await requestOpenHome({
+    path,
+    method: "GET",
+    timeoutMs: 5000,
+  })
 
   if (result.state !== "received")
     return { state: "unavailable", reason: result.state }
@@ -45,14 +56,92 @@ async function read<T>(
 export async function readBinder(): Promise<BinderState> {
   const [owners, entries] = await Promise.all([
     read("/api/household-users", householdUser.array()),
-    read("/api/binder/entries", binderEntry.array()),
+    read("/api/binder/entries", binderList),
   ])
 
   if (owners.state !== "read") return owners
 
   if (entries.state !== "read") return entries
 
-  return { state: "available", owners: owners.data, entries: entries.data }
+  return {
+    state: "available",
+    owners: owners.data,
+    entries: entries.data.entries,
+    values: entries.data.binder_values,
+  }
+}
+
+function writeFailure(status: number): BinderWriteFailure {
+  if (status === 400 || status === 422) return "invalid"
+
+  if (status === 404) return "not-found"
+
+  if (status === 409) return "conflict"
+
+  return "unavailable"
+}
+
+/** Forward one owner-targeted edit or removal; only Axum's stored result confirms persistence. */
+export async function writeBinder(
+  command: BinderCommand
+): Promise<BinderMutation> {
+  const path =
+    `/api/household-users/${command.owner_id}/binder/entries/${command.entry_id}` as const
+
+  const result = await requestOpenHome(
+    command.action === "edit"
+      ? {
+          path,
+          method: "PATCH",
+          json: {
+            quantity: command.quantity,
+            language: command.language,
+            note: command.note,
+          },
+          timeoutMs: 5000,
+        }
+      : { path, method: "DELETE", timeoutMs: 5000 }
+  )
+
+  if (result.state !== "received")
+    return { state: "failed", reason: result.state }
+
+  const { response } = result
+
+  if (!response.ok)
+    return { state: "failed", reason: writeFailure(response.status) }
+
+  if (command.action === "remove")
+    return response.status === 204
+      ? { state: "saved" }
+      : { state: "failed", reason: "unavailable" }
+
+  try {
+    if (binderEntry.safeParse(await response.json()).success)
+      return { state: "saved" }
+  } catch {
+    /* An invalid acknowledgement cannot confirm a saved entry. */
+  }
+
+  return { state: "failed", reason: "unavailable" }
+}
+
+/** One Card's whole Price History, converted by Axum at each point's own date. */
+export async function readCardPrices(input: {
+  card: string
+}): Promise<PricesState> {
+  const parsed = cardId.safeParse(input.card)
+
+  if (!parsed.success) return { state: "unavailable" }
+
+  const result = await read(
+    `/api/binder/cards/${parsed.data}/prices`,
+    cardPrices
+  )
+
+  return result.state === "read"
+    ? { state: "read", points: result.data.prices }
+    : { state: "unavailable" }
 }
 
 /** Search by Card Code through Start's server boundary; the catalogue is never reached by the browser. */

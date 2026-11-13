@@ -1,5 +1,6 @@
 //! Cards (`CONTEXT.md`, Card): every printed variant of a Card Code as the OPTCG catalogue lists
-//! it, stored the first time the code is searched for. Details are a snapshot and never edited.
+//! it, stored the first time the code is searched for. Details are a snapshot and never edited,
+//! except the latest price, which the daily refresh updates (`price_refresh`).
 //! Each variant's official image is fetched once and kept as AVIF in the same row, so reads never
 //! touch the catalogue. A catalogue failure writes nothing. A code the catalogue does not list is
 //! remembered until the next Copenhagen day, so repeating it does not hammer a volunteer's server
@@ -8,12 +9,15 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 
 use super::avif_encoder::{self, EncodeError, Settings, Source};
+use super::card_value::{Valuation, Valuer};
+use super::exchange_rates;
 use super::optcg::{CatalogueCard, Optcg, Unavailable};
+use super::price_history;
 use super::training::CalendarDay;
 
 /// One lock for every first lookup: the catalogue is a volunteer's server and a code is fetched
@@ -112,15 +116,7 @@ impl CardId {
     }
 }
 
-/// The catalogue's `TCGplayer` market price in USD and the day the catalogue observed it. Other
-/// currencies join this object when exchange rates exist.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CardValue {
-    pub usd: f64,
-    pub observed_on: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Card {
     pub id: String,
     pub card_code: String,
@@ -137,8 +133,9 @@ pub struct Card {
     pub attribute: Option<String>,
     pub sub_types: Option<String>,
     pub text: Option<String>,
-    pub inventory_price_usd: Option<f64>,
-    pub card_value: Option<CardValue>,
+    /// The catalogue's `TCGplayer` market price in USD, EUR and DKK, or why there is none.
+    #[serde(flatten)]
+    pub valuation: Valuation,
     /// Authenticated read of the stored AVIF.
     pub image_path: String,
 }
@@ -242,35 +239,30 @@ struct CardRow {
     attribute: Option<String>,
     sub_types: Option<String>,
     text: Option<String>,
-    inventory_price_usd: Option<f64>,
     price_usd: Option<f64>,
     price_observed_on: Option<String>,
 }
 
-impl From<CardRow> for Card {
-    fn from(row: CardRow) -> Self {
-        Self {
-            image_path: format!("/api/binder/cards/{}/image", row.id),
-            card_value: row
-                .price_usd
-                .zip(row.price_observed_on)
-                .map(|(usd, observed_on)| CardValue { usd, observed_on }),
-            id: row.id,
-            card_code: row.card_code,
-            name: row.name,
-            set_id: row.set_id,
-            set_name: row.set_name,
-            rarity: row.rarity,
-            color: row.color,
-            card_type: row.card_type,
-            life: row.life,
-            cost: row.cost,
-            power: row.power,
-            counter_amount: row.counter_amount,
-            attribute: row.attribute,
-            sub_types: row.sub_types,
-            text: row.text,
-            inventory_price_usd: row.inventory_price_usd,
+impl CardRow {
+    fn into_card(self, valuer: &Valuer) -> Card {
+        Card {
+            image_path: format!("/api/binder/cards/{}/image", self.id),
+            valuation: valuer.card(self.price_usd.zip(self.price_observed_on.as_deref())),
+            id: self.id,
+            card_code: self.card_code,
+            name: self.name,
+            set_id: self.set_id,
+            set_name: self.set_name,
+            rarity: self.rarity,
+            color: self.color,
+            card_type: self.card_type,
+            life: self.life,
+            cost: self.cost,
+            power: self.power,
+            counter_amount: self.counter_amount,
+            attribute: self.attribute,
+            sub_types: self.sub_types,
+            text: self.text,
         }
     }
 }
@@ -280,14 +272,14 @@ async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
     let rows = sqlx::query_as!(
         CardRow,
         "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
-                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
-                price_observed_on
+                counter_amount, attribute, sub_types, text, price_usd, price_observed_on
          FROM cards WHERE card_code = ? ORDER BY position",
         code
     )
     .fetch_all(db)
     .await?;
-    Ok(rows.into_iter().map(Card::from).collect())
+    let valuer = exchange_rates::valuer(db).await?;
+    Ok(rows.into_iter().map(|row| row.into_card(&valuer)).collect())
 }
 
 pub async fn by_ids(db: &SqlitePool, ids: &[&str]) -> Result<HashMap<String, Card>> {
@@ -295,16 +287,16 @@ pub async fn by_ids(db: &SqlitePool, ids: &[&str]) -> Result<HashMap<String, Car
     let rows = sqlx::query_as!(
         CardRow,
         "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
-                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
-                price_observed_on
+                counter_amount, attribute, sub_types, text, price_usd, price_observed_on
          FROM cards WHERE id IN (SELECT value FROM json_each(?))",
         ids
     )
     .fetch_all(db)
     .await?;
+    let valuer = exchange_rates::valuer(db).await?;
     Ok(rows
         .into_iter()
-        .map(|row| (row.id.clone(), row.into()))
+        .map(|row| (row.id.clone(), row.into_card(&valuer)))
         .collect())
 }
 
@@ -360,11 +352,11 @@ async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> 
         let code = card.card_code.as_str();
         let price_usd = card.price.as_ref().map(|price| price.usd);
         let price_observed_on = card.price.as_ref().map(|price| price.observed_on.as_str());
-        sqlx::query!(
+        let inserted = sqlx::query!(
             "INSERT INTO cards (id, card_code, position, name, set_id, set_name, rarity, color,
                 card_type, life, cost, power, counter_amount, attribute, sub_types, text,
-                inventory_price_usd, price_usd, price_observed_on, image_avif)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                price_usd, price_observed_on, image_avif)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO NOTHING",
             id,
             code,
@@ -382,13 +374,16 @@ async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> 
             card.attribute,
             card.sub_types,
             card.text,
-            card.inventory_price_usd,
             price_usd,
             price_observed_on,
             image
         )
         .execute(&mut *tx)
-        .await?;
+        .await?
+        .rows_affected();
+        if let (1, Some(price)) = (inserted, &card.price) {
+            price_history::record_first(&mut tx, id, price.usd, &price.observed_on).await?;
+        }
     }
     tx.commit().await?;
     Ok(())
