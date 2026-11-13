@@ -27,6 +27,48 @@
     )
   );
 }
+/* Horizontal drags turn pages, so the browser keeps only vertical scrolling here. */
+.binder-spread {
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.binder-side {
+  position: relative;
+  min-width: 0;
+}
+.binder-side[data-lifted] {
+  z-index: 1;
+}
+.binder-side[data-lifted] > .binder-page {
+  position: absolute;
+  inset: 0;
+}
+.binder-side[data-lifted] > .binder-leaf {
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.binder-side[data-side="right"] > .binder-leaf {
+  transform-origin: calc(var(--spine-gap) / -2) 50%;
+}
+.binder-side[data-side="left"] > .binder-leaf {
+  transform-origin: calc(100% + var(--spine-gap) / 2) 50%;
+}
+.binder-leaf[data-settling] {
+  transition: transform var(--settle) var(--ease);
+}
+.binder-side[data-lifted] .binder-leaf > .binder-page {
+  background: var(--ground);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.binder-leaf > .binder-page + .binder-page {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
 .binder-page {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
