@@ -1,5 +1,7 @@
 # MCP guidance
 
+- Each tool group lives in its feature module (`src/watchlist.rs`, `src/nutrition/foods.rs`, ...) as a `#[tool_router(router = ..., vis = "pub(crate)")]` impl beside its request types and descriptions; register the router in `OpenHomeTools::new`. Contract tests mirror that: one integration-test file per feature in `tests/`, sharing `tests/common/mod.rs`. Keep every file under the 20,000-byte commit guard.
+
 - Watchlist tools add, list, read, correct status/dates and remove movie/whole-series plans through authenticated Axum. Require explicit owner targeting; missing owners return API clarification, never a guessed destination. Reuse request IDs/arguments after uncertain additions. Reads are read-only, deduplicated additions non-destructive/idempotent, corrections/removals destructive/idempotent. After an uncertain correction, read the explicit owner/entry destination before retrying. Axum owns completion defaults, date consistency and filters. See `../docs/watchlists.md`.
 
 - Wishlist tools may create named lists and add, read, edit or delete items; forward typed authenticated API operations unchanged. Destination resolution, validation and deduplication belong in Axum. Reads stay read-only; annotate additive writes as non-destructive. Deduplicated additions and item edits/deletes are idempotent; edits/deletes are destructive. See `../docs/wishlists.md`.
