@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT (SELECT MIN(rate_date) FROM exchange_rates) AS \"earliest_rate?: String\",\n                  (SELECT MAX(rate_date) FROM exchange_rates) AS \"latest_rate?: String\",\n                  (SELECT MIN(price_observed_on) FROM cards) AS \"oldest_price?: String\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "earliest_rate?: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "latest_rate?: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "oldest_price?: String",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "7dae9ef2bd9daaafec85d888e74812b942a4db8d1ac8c6124a61fd2e232d728d"
+}

@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
@@ -66,7 +67,7 @@ impl Quantity {
 }
 
 /// A Binder is only its owner's entries: there is no Binder record.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct BinderEntry {
     pub id: String,
     pub owner_id: String,
@@ -91,7 +92,9 @@ pub struct AddEntry {
 
 #[derive(Serialize)]
 pub struct Addition {
-    pub entry: BinderEntry,
+    /// A replay returns the stored response exactly as it was recorded, whatever its shape was
+    /// then, so a retry never differs from the first answer when rates or prices have moved on.
+    pub entry: Box<RawValue>,
     pub replayed: bool,
 }
 
@@ -167,37 +170,10 @@ impl Receipt {
             ));
         }
         Ok(Addition {
-            entry: self.entry(db).await?,
+            entry: RawValue::from_string(self.result)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
             replayed: true,
         })
-    }
-
-    /// The stored response, or for a receipt written before Card Value the same response with
-    /// the Card's value as of now: its `card_value` was `{usd, observed_on}` or null with no
-    /// reason, which holds no EUR or DKK and so cannot decode. The receipt row is never rewritten.
-    async fn entry(&self, db: &SqlitePool) -> Result<BinderEntry> {
-        let decode = |error| sqlx::Error::Decode(Box::new(error));
-        if let Ok(entry) = serde_json::from_str(&self.result) {
-            return Ok(entry);
-        }
-        let mut stored: serde_json::Value = serde_json::from_str(&self.result).map_err(decode)?;
-        let card = stored
-            .get_mut("card")
-            .and_then(serde_json::Value::as_object_mut)
-            .ok_or(sqlx::Error::RowNotFound)?;
-        card.remove("card_value");
-        // Only to satisfy the decoder; the valuation is replaced below.
-        card.insert(
-            "value_unavailable".into(),
-            serde_json::json!(Unpriced::NoCataloguePrice),
-        );
-        let mut entry: BinderEntry = serde_json::from_value(stored).map_err(decode)?;
-        let current = cards::by_ids(db, &[&self.card_id])
-            .await?
-            .remove(&self.card_id)
-            .ok_or(sqlx::Error::RowNotFound)?;
-        entry.card.valuation = priced_for(current, entry.language).valuation;
-        Ok(entry)
     }
 }
 
@@ -272,6 +248,8 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     };
     let result =
         serde_json::to_string(&entry).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    let accepted = RawValue::from_string(result.clone())
+        .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     // The receipt claim serializes simultaneous retries; the loser rolls back its merge.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO binder_addition_receipts
@@ -303,7 +281,7 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     }
     tx.commit().await?;
     Ok(Addition {
-        entry,
+        entry: accepted,
         replayed: false,
     })
 }

@@ -113,13 +113,28 @@ async fn concurrent_additions_claim_one_request_id() {
     assert_eq!(entries[0]["quantity"], 2);
 }
 
+async fn replayed(app: &axum::Router, request: &Value) -> Value {
+    let (status, retry) = add(app, request.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{retry}");
+    assert_eq!(retry["replayed"], true);
+    retry["entry"].clone()
+}
+
+async fn receipt_result(state: &openhome_api::AppState, request_id: &str) -> String {
+    sqlx::query_scalar("SELECT result FROM binder_addition_receipts WHERE request_id = ?")
+        .bind(request_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap()
+}
+
 #[tokio::test]
-async fn a_retry_of_an_addition_accepted_before_card_value_still_replays_it() {
+async fn a_retry_of_an_addition_accepted_before_card_value_replays_it_as_recorded() {
     let server = catalogue().await;
     let (app, state) = app(&server).await;
     store_rates(&state).await;
     let ada = owner(&app, "Ada").await;
-    let seen = json!({"usd": 2.25, "observed_on": days_ago(1).to_string()});
+    let seen = json!({"usd": 1.95, "observed_on": days_ago(3).to_string()});
     for (request_id, card, language, legacy_value) in [
         ("r1", "OP01-001", "en", seen),
         ("r2", "OP01-001", "ja", Value::Null),
@@ -136,27 +151,48 @@ async fn a_retry_of_an_addition_accepted_before_card_value_still_replays_it() {
             .as_object_mut()
             .unwrap()
             .remove("value_unavailable");
-        let legacy = legacy.to_string();
+        assert_ne!(
+            legacy, first["entry"],
+            "{request_id}: differs from today's value"
+        );
+        let stored = legacy.to_string();
         sqlx::query("UPDATE binder_addition_receipts SET result = ? WHERE request_id = ?")
-            .bind(&legacy)
+            .bind(&stored)
             .bind(request_id)
             .execute(&state.db)
             .await
             .unwrap();
 
-        let (status, retry) = add(&app, request).await;
-        assert_eq!(status, StatusCode::OK, "{request_id}: {retry}");
-        assert_eq!(retry["replayed"], true);
-        assert_eq!(retry["entry"], first["entry"], "{request_id}");
-        let stored: String =
-            sqlx::query_scalar("SELECT result FROM binder_addition_receipts WHERE request_id = ?")
-                .bind(request_id)
-                .fetch_one(&state.db)
-                .await
-                .unwrap();
+        assert_eq!(replayed(&app, &request).await, legacy, "{request_id}");
+        store_rate_day(&state, 0, "1.5000", "7.0000").await;
         assert_eq!(
-            stored, legacy,
+            replayed(&app, &request).await,
+            legacy,
+            "{request_id}: the same answer once rates have moved"
+        );
+        assert_eq!(
+            receipt_result(&state, request_id).await,
+            stored,
             "{request_id}: the receipt is never rewritten"
         );
     }
+}
+
+#[tokio::test]
+async fn a_retry_returns_the_original_unavailable_value_after_rates_arrive() {
+    let server = catalogue().await;
+    let (app, state) = app(&server).await;
+    let ada = owner(&app, "Ada").await;
+    let request = json!({"owner_id": ada, "card_id": "OP01-001", "request_id": "r1"});
+    let (_, first) = add(&app, request.clone()).await;
+    assert_eq!(
+        first["entry"]["card"]["value_unavailable"],
+        "no_exchange_rates"
+    );
+    let stored = receipt_result(&state, "r1").await;
+
+    store_rates(&state).await;
+    assert_eq!(replayed(&app, &request).await, first["entry"]);
+    assert_eq!(receipt_result(&state, "r1").await, stored);
+    assert!(list(&app, "").await[0]["card"]["card_value"].is_object());
 }

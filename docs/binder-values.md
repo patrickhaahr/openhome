@@ -8,28 +8,34 @@ asks for euros (EUR) or US dollars (USD).
 
 `services/ecb` is the only code that talks to the European Central Bank. It reads two
 files (replaceable only in code, for tests and the preview), both with no redirects and the
-app's `User-Agent`. The daily file, `eurofxref-daily.xml`, has a five second timeout and a
-64 KiB limit. The history file, `eurofxref-hist.xml`, holds every working day back to 1999
+app's `User-Agent`. The 90-day file, `eurofxref-hist-90d.xml`, holds about 64 working days
+(roughly 100 KB), so it has a five second timeout and a 1 MiB limit. The history file, `eurofxref-hist.xml`, holds every working day back to 1999
 (about 8 MB on one line), so it has a 60 second timeout and a 16 MiB limit. Both quote every
 currency per one euro. OpenHome keeps USD and DKK, so USD per EUR is the USD rate and DKK per
 EUR the DKK rate.
 
 The parser is strict: the document must be `Envelope > Cube > Cube[time] >
 Cube[currency, rate]`, with no DTD, each currency at most once per day and every kept rate a
-positive decimal of at most six decimals. The daily file must hold one date with USD and DKK.
-The history file is read as a stream of events, never a DOM, and a day that lacks USD or DKK
-is skipped (very old days lack some currencies) while a malformed file is refused whole.
+positive decimal of at most six decimals. Both files are read by one parser, as a stream of
+events, never a DOM. A day that lacks USD or DKK is skipped (very old days lack some
+currencies), a file with no complete day and a malformed file are refused whole.
 Anything else, and every network failure, is an `Unavailable` that only reaches the log.
 
 `services/exchange_rates` stores one row per ECB date in `exchange_rates` (migration
 0033, rates as integer micro-units). Each pass reads the history file when the stored rates
-do not cover the oldest stored Card observation date (`MIN(cards.price_observed_on)`): there
-are no rates, or no stored day at or before that date. Otherwise it reads the daily file. A
-pass runs at startup and every 24 hours, like the feed scheduler, and after 15 minutes when
-it failed. A pass writes all its days in one transaction, so a failed pass writes nothing and
-the previous rates stay in use. A day's row is replaced by a later read of the same date.
-After one backfill the earliest stored day is 1999-01-04, so the history file is not read
-again unless a Card was observed before that.
+cannot be completed from the 90-day file: there are no rates, no stored day at or before the
+oldest stored Card observation date (`MIN(cards.price_observed_on)`), or the newest stored
+day is more than 80 days old (the margin keeps the 90-day file's first day at or before it).
+Otherwise it reads the 90-day file and upserts every day it holds, so a working day the
+service missed, such as an outage or a restart after one, is filled by the next pass, for
+any gap under 90 days. The ticket's "fetches the ECB reference-rate file and stores that
+day's USD and DKK rates" still holds: each pass stores the current day among the days it
+reads. A pass runs at startup and every 24 hours, like the feed scheduler, and after 15
+minutes when it failed. A pass writes all its days in one transaction, so a failed pass
+writes nothing and the previous rates stay in use. A day's row is replaced by a later read of
+the same date. After one backfill the earliest stored day is 1999-01-04, so the history file
+is not read again unless a Card was observed before that or the service was down for most of
+a quarter.
 
 ## Conversion
 
@@ -62,12 +68,12 @@ Card Value over the priced entries in each currency, stale prices included. Entr
 without a value are counted in `unpriced_entries`, and the oldest observation date is
 among the priced ones (null when none is priced).
 
-A retried addition replays the stored receipt, so its `card_value` is the snapshot taken
-when it was added, including its `stale` flag. A fresh read is current. A receipt written
-before Card Value existed holds `card_value` as `{usd, observed_on}` or null and no
-`value_unavailable`, which holds no EUR or DKK. Its replay keeps every other stored field and
-takes the Card's value as of now (a Japanese entry stays `japanese_printing`); the receipt row
-is never rewritten.
+A retried addition replays the stored receipt exactly as it was recorded, plus
+`replayed: true`: the stored JSON is returned without being decoded, so its `card_value`
+(or `value_unavailable`) is the snapshot taken when it was added, including its `stale` flag,
+whatever the rates or the Card's price are by then. A fresh read is current. A receipt
+written before Card Value existed replays the same way, with `card_value` as `{usd,
+observed_on}` or null and no `value_unavailable`; the receipt row is never rewritten.
 
 ## Dashboard
 

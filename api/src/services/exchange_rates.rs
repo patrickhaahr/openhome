@@ -2,7 +2,8 @@
 //! nothing, so the previous rates stay and values keep converting at the latest earlier day.
 //! A price is converted at the latest stored day at or before its own, never a later one, so the
 //! first pass on a store that does not reach back to the oldest stored price backfills the
-//! ECB's full history instead of the current day alone.
+//! ECB's full history, and every other pass stores the 90-day file, so a day the service
+//! missed is filled by the next pass.
 
 use std::time::Duration;
 
@@ -66,38 +67,52 @@ pub async fn store(db: &SqlitePool, days: &[DailyRates]) -> Result<(), sqlx::Err
 /// What a pass stored.
 #[derive(Debug)]
 pub enum Pass {
-    Daily(DailyRates),
+    Recent { days: usize },
     History { days: usize },
 }
 
-/// The stored rates leave the oldest stored Card Price unconvertible: they are empty, or start
-/// after the day it was observed.
+/// The 90-day file holds the last ~64 working days. A stored newest day older than this leaves a
+/// gap it may not reach, so the margin keeps its first day certain to be at or before the newest
+/// stored one.
+const RECENT_REACH_DAYS: u64 = 80;
+
+/// The stored rates cannot be completed from the 90-day file: they are empty, start after the
+/// day the oldest stored Card Price was observed, or end before the file's first day.
 async fn needs_history(db: &SqlitePool) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT (SELECT MIN(rate_date) FROM exchange_rates) AS "earliest_rate?: String",
+                  (SELECT MAX(rate_date) FROM exchange_rates) AS "latest_rate?: String",
                   (SELECT MIN(price_observed_on) FROM cards) AS "oldest_price?: String""#
     )
     .fetch_one(db)
     .await?;
-    Ok(match (row.earliest_rate, row.oldest_price) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(rate), Some(price)) => rate > price,
-    })
+    let Some((earliest, latest)) = row.earliest_rate.zip(row.latest_rate) else {
+        return Ok(true);
+    };
+    let reach = CalendarDay::today()
+        .checked_sub_days(RECENT_REACH_DAYS)
+        .map_or_else(String::new, |day| day.to_string());
+    Ok(latest < reach || row.oldest_price.is_some_and(|price| earliest > price))
 }
 
-/// One pass: read the ECB's full history when the stored rates do not cover the oldest stored
-/// Card Price, else its current file, and store what it holds. Reads first and writes once, so
-/// every failure leaves the stored rates untouched.
+/// One pass: read the ECB's full history when the stored rates cannot be completed from its
+/// 90-day file, else the 90-day file, and store every day it holds. Reads first and writes once,
+/// so every failure leaves the stored rates untouched.
 pub async fn refresh(db: &SqlitePool, ecb: &Ecb) -> Result<Pass, RefreshError> {
-    if needs_history(db).await? {
-        let days = ecb.history().await.map_err(RefreshError::Unavailable)?;
-        store(db, &days).await?;
-        return Ok(Pass::History { days: days.len() });
+    let history = needs_history(db).await?;
+    let days = if history {
+        ecb.history().await
+    } else {
+        ecb.recent().await
     }
-    let rates = ecb.daily().await.map_err(RefreshError::Unavailable)?;
-    store(db, &[rates]).await?;
-    Ok(Pass::Daily(rates))
+    .map_err(RefreshError::Unavailable)?;
+    store(db, &days).await?;
+    let days = days.len();
+    Ok(if history {
+        Pass::History { days }
+    } else {
+        Pass::Recent { days }
+    })
 }
 
 const REFRESH_INTERVAL: Duration = Duration::from_hours(24);
@@ -113,8 +128,8 @@ pub async fn run_scheduler(db: SqlitePool, ecb: Ecb) {
     tracing::info!("Starting ECB rate refresh (initial fetch + 24h interval)");
     loop {
         let pause = match refresh(&db, &ecb).await {
-            Ok(Pass::Daily(rates)) => {
-                tracing::info!(date = %rates.date, "Stored ECB reference rates");
+            Ok(Pass::Recent { days }) => {
+                tracing::info!(days, "Stored ECB reference rates of the last 90 days");
                 REFRESH_INTERVAL
             }
             Ok(Pass::History { days }) => {

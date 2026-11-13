@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 
@@ -114,7 +114,7 @@ impl CardId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Card {
     pub id: String,
     pub card_code: String,

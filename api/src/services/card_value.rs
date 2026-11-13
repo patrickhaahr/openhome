@@ -4,7 +4,7 @@
 //! never meets a float: every amount is rounded to cents once, half away from zero, from the exact
 //! quotient. A Card Price with no rate at or before its day has no Card Value, and says why.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 
 use super::training::CalendarDay;
 
@@ -34,13 +34,6 @@ impl Cents {
 impl Serialize for Cents {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_f64(self.0 as f64 / 100.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for Cents {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let dollars = f64::deserialize(deserializer)?;
-        Self::from_dollars(dollars).ok_or_else(|| serde::de::Error::custom("expected an amount"))
     }
 }
 
@@ -134,7 +127,7 @@ pub fn is_stale(observed_on: CalendarDay, today: CalendarDay) -> bool {
     observed_on.days_until(today) > STALE_AFTER_DAYS
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CardValue {
     pub usd: Cents,
     pub eur: Cents,
@@ -146,7 +139,7 @@ pub struct CardValue {
     pub stale: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Unpriced {
     /// The catalogue prices English printings only.
@@ -163,7 +156,7 @@ pub enum Valuation {
     Unpriced(Unpriced),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct Wire {
     card_value: Option<CardValue>,
     value_unavailable: Option<Unpriced>,
@@ -182,24 +175,6 @@ impl Serialize for Valuation {
             },
         }
         .serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Valuation {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        match Wire::deserialize(deserializer)? {
-            Wire {
-                card_value: Some(value),
-                value_unavailable: None,
-            } => Ok(Self::Priced(value)),
-            Wire {
-                card_value: None,
-                value_unavailable: Some(reason),
-            } => Ok(Self::Unpriced(reason)),
-            _ => Err(serde::de::Error::custom(
-                "exactly one of card_value and value_unavailable",
-            )),
-        }
     }
 }
 
@@ -440,30 +415,6 @@ mod tests {
                 unpriced_entries: 1,
                 ..BinderValue::default()
             }
-        );
-    }
-
-    #[test]
-    fn a_valuation_round_trips_through_its_two_wire_fields() {
-        let valuer = Valuer::new(
-            rates(&[("2026-11-12", "1.1081", "7.4754")]),
-            day("2026-11-13"),
-        );
-        for valuation in [
-            valuer.card(Some((2.25, "2026-11-12"))),
-            Valuation::Unpriced(Unpriced::JapanesePrinting),
-        ] {
-            let json = serde_json::to_value(&valuation).unwrap();
-            assert_eq!(
-                serde_json::from_value::<Valuation>(json).unwrap(),
-                valuation
-            );
-        }
-        assert!(
-            serde_json::from_value::<Valuation>(serde_json::json!({
-                "card_value": null, "value_unavailable": null
-            }))
-            .is_err()
         );
     }
 }

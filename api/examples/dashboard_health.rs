@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
         .connect("sqlite::memory:")
         .await?;
     sqlx::migrate!("./migrations").run(&db).await?;
-    exchange_rates::refresh(&db, &ecb::ecb().await?).await?;
+    exchange_rates::refresh(&db, &ecb::ecb(ecb::Mode::Normal).await?).await?;
     let noop_db = SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")

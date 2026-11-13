@@ -232,7 +232,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(exchange_rates::run_scheduler(
         state.db.clone(),
         ecb::Ecb::new(
-            url::Url::parse(ecb::DAILY_URL)?,
+            url::Url::parse(ecb::RECENT_URL)?,
             url::Url::parse(ecb::HISTORY_URL)?,
         )?,
     ));

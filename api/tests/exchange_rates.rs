@@ -35,10 +35,11 @@ async fn a_refresh_stores_the_files_day_and_prices_convert_at_it() {
         "before the file's day, the earlier day's rates convert"
     );
 
-    let Pass::Daily(stored) = exchange_rates::refresh(&state.db, &ecb).await.unwrap() else {
-        panic!("rates reach back past every price, so the daily file is enough");
-    };
-    assert_eq!(stored.date, days_ago(1));
+    let pass = exchange_rates::refresh(&state.db, &ecb).await.unwrap();
+    assert!(
+        matches!(pass, Pass::Recent { days: 1 }),
+        "rates reach back past every price, so the 90-day file is enough: {pass:?}"
+    );
     let entries = list(&app, "").await;
     assert_eq!(
         entries[0]["card"]["card_value"],
@@ -132,7 +133,7 @@ async fn a_failed_read_keeps_the_previous_rates_and_writes_nothing() {
         (
             "oversized",
             ResponseTemplate::new(200)
-                .set_body_string(format!("{other_day}{}", " ".repeat(200_000))),
+                .set_body_string(format!("{other_day}{}", " ".repeat(1024 * 1024))),
         ),
         (
             "redirect",

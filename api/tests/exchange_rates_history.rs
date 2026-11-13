@@ -89,9 +89,9 @@ async fn a_first_deployment_backfills_history_and_old_prices_count_as_stale_valu
     assert_eq!(total["oldest_observed_on"], day(120));
 
     let pass = exchange_rates::refresh(&state.db, &ecb).await.unwrap();
-    assert!(matches!(pass, Pass::Daily(_)), "{pass:?}");
+    assert!(matches!(pass, Pass::Recent { .. }), "{pass:?}");
     assert_eq!(requests_to(&rates, ecb::HISTORY_PATH).await, 1);
-    assert_eq!(requests_to(&rates, ecb::FILE_PATH).await, 1);
+    assert_eq!(requests_to(&rates, ecb::RECENT_PATH).await, 1);
     assert_eq!(list_response(&app, "").await, after);
 }
 
@@ -114,7 +114,7 @@ async fn rates_that_start_after_the_oldest_price_are_backfilled_too() {
 }
 
 #[tokio::test]
-async fn a_failed_history_read_writes_nothing_and_does_not_fall_back_to_the_daily_file() {
+async fn a_failed_history_read_writes_nothing_and_does_not_fall_back_to_the_90_day_file() {
     let catalogue = catalogue().await;
     let (app, state) = app(&catalogue).await;
     let rates = serving_history(history()).await;
@@ -184,4 +184,61 @@ async fn a_failed_history_read_writes_nothing_and_does_not_fall_back_to_the_dail
             "{name} changed values"
         );
     }
+}
+
+#[tokio::test]
+async fn a_day_missed_during_an_outage_is_filled_by_the_next_pass() {
+    let catalogue = catalogue().await;
+    let (app, state) = app(&catalogue).await;
+    ecb::store_day(&state.db, &day(40), "1.1000", "7.4000").await;
+    ecb::store_day(&state.db, &day(1), "1.1081", "7.4754").await;
+    let rates = ecb::serving(ecb::history_file(&[
+        (&day(1), "1.1081", Some("7.4754")),
+        (&day(20), "1.2000", Some("7.5000")),
+        (&day(40), "1.1000", Some("7.4000")),
+    ]))
+    .await;
+    let ecb = ecb::client(&rates);
+
+    let ada = owner(&app, "Ada").await;
+    let (status, body) = add(
+        &app,
+        json!({"owner_id": ada, "card_id": "OP01-010", "request_id": "r1"}),
+    )
+    .await;
+    assert!(status.is_success(), "{body}");
+    let missed = &list(&app, "").await[0]["card"]["card_value"];
+    assert_eq!(
+        (&missed["rate_date"], &missed["eur"]),
+        (&json!(day(40)), &json!(2.05)),
+        "the missed day converts at the last day before it"
+    );
+
+    let pass = exchange_rates::refresh(&state.db, &ecb).await.unwrap();
+    assert!(matches!(pass, Pass::Recent { days: 3 }), "{pass:?}");
+    assert_eq!(stored_days(&state).await, [day(40), day(20), day(1)]);
+    let filled = &list(&app, "").await[0]["card"]["card_value"];
+    assert_eq!(
+        (&filled["rate_date"], &filled["eur"], &filled["dkk"]),
+        (&json!(day(20)), &json!(1.88), &json!(14.06))
+    );
+    assert_eq!(requests_to(&rates, ecb::HISTORY_PATH).await, 0);
+}
+
+#[tokio::test]
+async fn an_outage_longer_than_the_90_day_file_reaches_is_filled_from_history() {
+    let catalogue = catalogue().await;
+    let (_app, state) = app(&catalogue).await;
+    ecb::store_day(&state.db, &day(100), "1.1000", "7.4000").await;
+    let rates = serving_history(history()).await;
+
+    let pass = exchange_rates::refresh(&state.db, &ecb::client(&rates))
+        .await
+        .unwrap();
+    assert!(matches!(pass, Pass::History { .. }), "{pass:?}");
+    assert_eq!(
+        stored_days(&state).await,
+        [day(125), day(100), day(20), day(1)]
+    );
+    assert_eq!(requests_to(&rates, ecb::RECENT_PATH).await, 0);
 }

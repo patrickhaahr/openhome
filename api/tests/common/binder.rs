@@ -55,6 +55,20 @@ pub fn days_ago(days: u64) -> CalendarDay {
         .unwrap()
 }
 
+/// One stored ECB day, `days` ago.
+pub async fn store_rate_day(state: &AppState, days: u64, usd: &str, dkk: &str) {
+    exchange_rates::store(
+        &state.db,
+        &[DailyRates {
+            date: days_ago(days),
+            usd: Rate::parse(usd).unwrap(),
+            dkk: Rate::parse(dkk).unwrap(),
+        }],
+    )
+    .await
+    .unwrap();
+}
+
 /// Three ECB days: yesterday's, twenty days ago and forty-five days ago.
 pub async fn store_rates(state: &AppState) {
     for (days, usd, dkk) in [
@@ -62,16 +76,7 @@ pub async fn store_rates(state: &AppState) {
         (20, "1.2000", "7.5000"),
         (45, "1.1000", "7.4000"),
     ] {
-        exchange_rates::store(
-            &state.db,
-            &[DailyRates {
-                date: days_ago(days),
-                usd: Rate::parse(usd).unwrap(),
-                dkk: Rate::parse(dkk).unwrap(),
-            }],
-        )
-        .await
-        .unwrap();
+        store_rate_day(state, days, usd, dkk).await;
     }
 }
 
