@@ -109,6 +109,7 @@ export type BinderView =
       readonly right: BinderEntry[]
       readonly index: number
       readonly count: number
+      readonly entries: BinderEntry[]
     }
 
 export function viewOf(state: BinderState, search: BinderSearch): BinderView {
@@ -131,6 +132,7 @@ export function viewOf(state: BinderState, search: BinderSearch): BinderView {
     owners,
     owner,
     ...paginate(mine, (search.page ?? 1) - 1),
+    entries: mine,
   }
 }
 

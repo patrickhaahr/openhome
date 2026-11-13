@@ -23,6 +23,7 @@ import { z } from "zod"
 import { BinderBook } from "@/components/binder-book"
 import { paginate, type BinderSearch } from "@/lib/binder"
 import type { BinderMutation } from "@/lib/binder-edit"
+import { settleDuration } from "@/lib/binder-turn"
 import { readBinder, readCardImage, writeBinder } from "@/lib/binder.server"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
@@ -263,6 +264,10 @@ test("turns a whole spread by the arrows and the arrow keys, leaving unfilled po
   await render()
 
   await press(button("Next pages"))
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, settleDuration + 100))
+    await refreshWork
+  })
   expect(pageCards(3)).toEqual(["OP99-020", "OP99-020"])
   expect(pageCards(4)).toEqual([])
   expect(container.querySelectorAll(".pocket")).toHaveLength(18)

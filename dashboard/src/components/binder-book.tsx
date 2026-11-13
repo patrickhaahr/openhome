@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { CardsIcon } from "@phosphor-icons/react/dist/csr/Cards"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
@@ -6,6 +6,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { OpenConnection } from "@/components/control-alert"
 import { BinderSheet } from "@/components/binder-sheet"
+import { useReducedMotion } from "@/components/idle-screen"
 import {
   FeedbackLine,
   ListSheet,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import {
   binderFailureMessage,
   cardImageUrl,
+  paginate,
   pocketsPerPage,
   viewOf,
   type BinderEntry,
@@ -23,6 +25,18 @@ import {
   type BinderState,
   type BinderView,
 } from "@/lib/binder"
+import {
+  grip,
+  idle,
+  nextTurn,
+  opening,
+  settleDuration,
+  turnStep,
+  type Sheet,
+  type Turn,
+  type TurnEvent,
+  type TurnOutcome,
+} from "@/lib/binder-turn"
 import {
   binderWriteMessage,
   type BinderCommand,
@@ -166,8 +180,8 @@ function Body({
     case "spread":
       return (
         <Spread
-          left={view.left}
-          right={view.right}
+          key={`${view.owner.id}-${view.index}`}
+          entries={view.entries}
           index={view.index}
           count={view.count}
           owner={view.owner.id}
@@ -187,25 +201,96 @@ function isEditing(target: EventTarget | null): boolean {
 }
 
 function Spread({
-  left,
-  right,
+  entries,
   index,
   count,
   owner,
   choose,
   openEntry,
 }: {
-  left: BinderEntry[]
-  right: BinderEntry[]
+  entries: BinderEntry[]
   index: number
   count: number
   owner: string
   choose: (search: BinderSearch) => void
   openEntry: (id: string) => void
 }): React.JSX.Element {
-  const turn = (to: number): void => {
+  const reduced = useReducedMotion()
+  const turn = useRef<Turn>(idle)
+  const [shown, setShown] = useState<Turn>(idle)
+  const spread = useRef<HTMLDivElement>(null)
+  const leaf = useRef<HTMLDivElement>(null)
+  const progress = useRef(0)
+  const frame = useRef(0)
+  const dragged = useRef(false)
+
+  const go = (to: number): void => {
     if (to >= 0 && to < count) choose({ person: owner, page: to + 1 })
   }
+
+  const draw = (): void => {
+    frame.current = 0
+    const current = turn.current
+
+    if (
+      leaf.current === null ||
+      current.phase === "idle" ||
+      current.phase === "pressing"
+    )
+      return
+    leaf.current.style.transform = `perspective(250rem) rotateY(${progress.current * turnStep[current.direction] * -180}deg)`
+  }
+
+  const step = (event: TurnEvent): void => {
+    const before = turn.current
+    const after = nextTurn(before, event)
+
+    if (after === before) return
+    turn.current = after
+
+    if (after.phase === "dragging") {
+      if (before.phase === "pressing")
+        spread.current?.setPointerCapture(after.pointer)
+      dragged.current = true
+      progress.current = after.progress
+
+      if (frame.current === 0) frame.current = requestAnimationFrame(draw)
+    }
+
+    if (after.phase === "turned") go(index + turnStep[after.direction])
+
+    if (after.phase === "settling" && reduced) {
+      step({ type: "settled" })
+
+      return
+    }
+
+    if (after.phase === "idle" && leaf.current !== null)
+      leaf.current.style.transform = ""
+
+    if (after.phase !== before.phase) setShown(after)
+  }
+
+  const land = useEffectEvent((outcome: TurnOutcome): void => {
+    cancelAnimationFrame(frame.current)
+    progress.current = outcome === "complete" ? 1 : 0
+    draw()
+  })
+
+  const settled = useEffectEvent((): void => step({ type: "settled" }))
+
+  useEffect(() => {
+    if (shown.phase !== "settling") return
+    land(shown.outcome)
+
+    const timer = setTimeout(settled, settleDuration)
+
+    return () => clearTimeout(timer)
+  }, [shown])
+
+  usePrefetchNeighbours(entries, index, count)
+
+  useEffect(() => () => cancelAnimationFrame(frame.current), [])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -218,9 +303,9 @@ function Spread({
       )
         return
 
-      if (event.key === "ArrowLeft") turn(index - 1)
+      if (event.key === "ArrowLeft") go(index - 1)
 
-      if (event.key === "ArrowRight") turn(index + 1)
+      if (event.key === "ArrowRight") go(index + 1)
     }
 
     window.addEventListener("keydown", onKey)
@@ -230,28 +315,109 @@ function Spread({
 
   const first = index * 2 + 1
 
+  const open = opening(
+    entries,
+    index,
+    reduced || shown.phase === "idle" || shown.phase === "pressing"
+      ? undefined
+      : shown.direction
+  )
+
   return (
     <section className="binder-book" aria-label="Binder spread">
-      <div className="binder-spread">
-        <Page
-          key={`${index}-left`}
-          number={first}
-          entries={left}
-          openEntry={openEntry}
-        />
-        <Page
-          key={`${index}-right`}
-          number={first + 1}
-          entries={right}
-          openEntry={openEntry}
-        />
+      <div
+        ref={spread}
+        className="binder-spread"
+        onPointerDown={(event) => {
+          if (!event.isPrimary || event.button !== 0) return
+          dragged.current = false
+
+          const held = grip(
+            event.currentTarget.getBoundingClientRect(),
+            event.clientX,
+            { back: index > 0, forward: index < count - 1 }
+          )
+
+          if (held !== undefined)
+            step({
+              type: "press",
+              pointer: event.pointerId,
+              x: event.clientX,
+              y: event.clientY,
+              ...held,
+            })
+        }}
+        onPointerMove={(event) =>
+          step({
+            type: "move",
+            pointer: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            time: event.timeStamp,
+          })
+        }
+        onPointerUp={(event) =>
+          step({
+            type: "release",
+            pointer: event.pointerId,
+            x: event.clientX,
+            time: event.timeStamp,
+          })
+        }
+        onPointerCancel={(event) =>
+          step({ type: "lose", pointer: event.pointerId })
+        }
+        onLostPointerCapture={(event) =>
+          step({ type: "lose", pointer: event.pointerId })
+        }
+        onClickCapture={(event) => {
+          if (!dragged.current) return
+          dragged.current = false
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+      >
+        {(["left", "right"] as const).map((side) => {
+          const lifted = open.lifted?.side === side ? open.lifted : undefined
+
+          return (
+            <div
+              key={side}
+              className="binder-side"
+              data-side={side}
+              data-lifted={lifted === undefined ? undefined : ""}
+            >
+              {lifted === undefined ? null : (
+                <Page sheet={lifted.under} openEntry={openEntry} />
+              )}
+              <div
+                ref={lifted === undefined ? undefined : leaf}
+                className="binder-leaf"
+                data-settling={
+                  lifted !== undefined && shown.phase === "settling"
+                    ? ""
+                    : undefined
+                }
+                // SAFETY: CSSProperties omits custom properties; --settle is a CSS duration.
+                style={
+                  { "--settle": `${settleDuration}ms` } as React.CSSProperties
+                }
+              >
+                <Page sheet={open[side]} openEntry={openEntry} />
+                {lifted === undefined ? null : (
+                  <Page sheet={lifted.back} openEntry={openEntry} />
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
       <div className="binder-turn">
         <Button
           variant="outline"
           size="key-icon"
           disabled={index === 0}
-          onClick={() => turn(index - 1)}
+          onClick={() => step({ type: "flip", direction: "back" })}
         >
           <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
           <span className="sr-only">Previous pages</span>
@@ -263,7 +429,7 @@ function Spread({
           variant="outline"
           size="key-icon"
           disabled={index === count - 1}
-          onClick={() => turn(index + 1)}
+          onClick={() => step({ type: "flip", direction: "forward" })}
         >
           <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
           <span className="sr-only">Next pages</span>
@@ -273,16 +439,33 @@ function Spread({
   )
 }
 
+function usePrefetchNeighbours(
+  entries: BinderEntry[],
+  index: number,
+  count: number
+): void {
+  useEffect(() => {
+    for (const to of [index - 1, index + 1]) {
+      if (to < 0 || to >= count) continue
+
+      const { left, right } = paginate(entries, to)
+
+      for (const entry of [...left, ...right])
+        new Image().src = cardImageUrl(entry.card.id)
+    }
+  }, [entries, index, count])
+}
+
 /** One 3×3 page, filled to nine pockets so the rest show empty. */
 function Page({
-  number,
-  entries,
+  sheet,
   openEntry,
 }: {
-  number: number
-  entries: BinderEntry[]
+  sheet: Sheet<BinderEntry>
   openEntry: (id: string) => void
 }): React.JSX.Element {
+  const { number, entries } = sheet
+
   const empty = Array.from(
     { length: pocketsPerPage - entries.length },
     (_, slot) => slot
@@ -325,6 +508,7 @@ function Pocket({
         <img
           src={cardImageUrl(card.id)}
           alt=""
+          draggable={false}
           width={600}
           height={838}
           loading="lazy"
