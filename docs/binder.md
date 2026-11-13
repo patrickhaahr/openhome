@@ -72,7 +72,7 @@ Card and image.
 Run `devenv shell -- just api-check mcp-check`. The domain proof is
 `api/tests/cards.rs`: authenticated HTTP on migrated SQLite against a loopback
 catalogue (first lookup, cached lookup, unlisted and malformed codes, each
-failure kind, image serving). `mcp/tests/contract.rs` drives `search_cards`
+failure kind, image serving). `mcp/tests/binder.rs` drives `search_cards`
 through the real Streamable HTTP adapter. For a running stack, follow the
 verify-openhome Binder recipe
 ([`features/binder.md`](../.agents/skills/verify-openhome/features/binder.md)): the
