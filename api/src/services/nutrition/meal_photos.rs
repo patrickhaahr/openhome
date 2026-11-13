@@ -3,11 +3,9 @@
 //! A JPEG or PNG upload is decoded, turned upright from its EXIF orientation, limited to
 //! [`LONG_SIDE`] px on its long side and re-encoded as AVIF with a [`THUMBNAIL_LONG_SIDE`] px
 //! thumbnail. Re-encoding from pixels removes every piece of metadata (EXIF, GPS, XMP, ICC), and
-//! the original upload is never written. Embedded RGB/gray ICC profiles are converted to sRGB
-//! before stripping the profile; untagged uploads are treated as sRGB. Encoding uses libavif's
-//! aom encoder at speed 8 on one
-//! thread, on a blocking worker outside the async runtime and one photo at a time, so the other
-//! services on the host keep their CPU.
+//! the original upload is never written. Decoding, ICC-to-sRGB conversion and encoding belong to
+//! the shared [`avif_encoder`]; this module picks the sizes, speed 8 and quality, and owns the
+//! stored files.
 //!
 //! # Lifecycle and ownership
 //!
@@ -40,28 +38,16 @@
 //! - dropped or stopped after the commit and before `remove`: the replaced, removed or deleted
 //!   photo's files remain.
 
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 
 use base64::Engine;
-use image::{
-    DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits, RgbImage,
-    imageops::FilterType, metadata::Orientation,
-};
-use moxcms::{ColorProfile, DataColorSpace, Layout, TransformOptions};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::sqlite::SqliteConnectOptions;
-use tokio::sync::Semaphore;
 use uuid::Uuid;
 
-#[expect(
-    unsafe_code,
-    reason = "libavif's safe wrapper cannot set colour information; this module owns and checks native allocations"
-)]
-mod avif;
+pub use crate::services::avif_encoder::Size;
+use crate::services::avif_encoder::{self, EncodeError, Settings, Source};
 
 /// The largest photo accepted, before base64 encoding.
 pub const MAX_PHOTO_BYTES: usize = 10 * 1024 * 1024;
@@ -72,14 +58,12 @@ pub const PHOTO_BODY_LIMIT: usize = 15 * 1024 * 1024;
 pub const LONG_SIDE: u32 = 1_600;
 /// The thumbnail's longest side, in pixels.
 pub const THUMBNAIL_LONG_SIDE: u32 = 400;
-/// The longest side a photo may have before it is decoded, against decompression bombs.
-const MAX_SIDE: u32 = 12_000;
-/// The most memory one decode may allocate: a 48-megapixel photo as RGBA, with headroom.
-const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
-/// aom speed 8 of 0-10: about 0.6 s per 1,600 px photo on one Raspberry Pi 5 core.
-const SPEED: u8 = 8;
-/// libavif quality 0-100: about 235 KB for a 1,600 px photo.
-const QUALITY: u8 = 60;
+/// aom speed 8 of 0-10 (about 0.6 s per 1,600 px photo on one Raspberry Pi 5 core) and libavif
+/// quality 60 of 0-100 (about 235 KB for a 1,600 px photo).
+const ENCODING: Settings = Settings {
+    speed: 8,
+    quality: 60,
+};
 const DIR_NAME: &str = "meal-photos";
 
 #[derive(Debug, thiserror::Error)]
@@ -96,8 +80,7 @@ pub enum PhotoError {
 
 /// A received JPEG or PNG within [`MAX_PHOTO_BYTES`], not yet decoded.
 pub struct Upload {
-    bytes: Vec<u8>,
-    format: ImageFormat,
+    source: Source,
 }
 
 impl Upload {
@@ -106,14 +89,9 @@ impl Upload {
         if bytes.len() > MAX_PHOTO_BYTES {
             return Err(PhotoError::TooLarge);
         }
-        let format = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-            ImageFormat::Jpeg
-        } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-            ImageFormat::Png
-        } else {
-            return Err(PhotoError::Undecodable);
-        };
-        Ok(Self { bytes, format })
+        Ok(Self {
+            source: Source::from_bytes(bytes)?,
+        })
     }
 
     /// Accepts standard base64, padded or not, optionally as a `data:image/...;base64,` URL.
@@ -137,20 +115,14 @@ impl Upload {
     #[must_use]
     pub fn sha256(&self) -> String {
         use std::fmt::Write;
-        Sha256::digest(&self.bytes)
-            .iter()
-            .fold(String::with_capacity(64), |mut hex, byte| {
+        Sha256::digest(self.source.as_bytes()).iter().fold(
+            String::with_capacity(64),
+            |mut hex, byte| {
                 let _ = write!(hex, "{byte:02x}");
                 hex
-            })
+            },
+        )
     }
-}
-
-/// Pixel dimensions.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub struct Size {
-    pub width: u32,
-    pub height: u32,
 }
 
 /// A photo re-encoded as AVIF with its thumbnail; nothing is stored yet.
@@ -172,8 +144,6 @@ pub enum Variant {
 #[derive(Clone)]
 pub struct MealPhotos {
     dir: PathBuf,
-    /// One permit: encodes run one at a time.
-    encoder: Arc<Semaphore>,
 }
 
 /// Where photos are stored: a `meal-photos` directory beside `app.db`.
@@ -193,38 +163,20 @@ pub fn dir_beside(database_url: &str) -> anyhow::Result<PathBuf> {
 impl MealPhotos {
     #[must_use]
     pub fn new(dir: PathBuf) -> Self {
-        Self {
-            dir,
-            encoder: Arc::new(Semaphore::new(1)),
-        }
+        Self { dir }
     }
 
-    /// Decodes, resizes and re-encodes `upload` on a blocking worker, waiting for any encode
-    /// already running. The permit moves into the worker, so an abandoned request still holds it
-    /// until its encode ends.
+    /// Decodes, resizes and re-encodes `upload` with the shared [`avif_encoder`], waiting for any
+    /// encode already running.
     pub async fn encode(&self, upload: Upload) -> Result<Encoded, PhotoError> {
-        let permit = Arc::clone(&self.encoder)
-            .acquire_owned()
-            .await
-            .map_err(|_| PhotoError::Encode)?;
-        tokio::task::spawn_blocking(move || {
-            let started = std::time::Instant::now();
-            let encoded = encode(&upload);
-            drop(permit);
-            if let Ok(encoded) = &encoded {
-                tracing::info!(
-                    elapsed_ms = started.elapsed().as_millis(),
-                    width = encoded.size.width,
-                    height = encoded.size.height,
-                    photo_bytes = encoded.photo.len(),
-                    thumbnail_bytes = encoded.thumbnail.len(),
-                    "Encoded a meal photo"
-                );
-            }
-            encoded
+        let [photo, thumbnail] =
+            avif_encoder::encode(upload.source, ENCODING, [LONG_SIDE, THUMBNAIL_LONG_SIDE]).await?;
+        Ok(Encoded {
+            photo: photo.bytes,
+            thumbnail: thumbnail.bytes,
+            size: photo.size,
+            thumbnail_size: thumbnail.size,
         })
-        .await
-        .map_err(|_| PhotoError::Encode)?
     }
 
     /// Stores `encoded` under a new photo ID. Either both files are written or neither is, when
@@ -301,93 +253,14 @@ async fn write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     written
 }
 
-fn decode(upload: &Upload) -> Result<RgbImage, PhotoError> {
-    let classify = |error: ImageError| match error {
-        ImageError::Limits(_) => PhotoError::TooLarge,
-        _ => PhotoError::Undecodable,
-    };
-    let mut reader = ImageReader::with_format(Cursor::new(&upload.bytes), upload.format);
-    let mut limits = Limits::default();
-    limits.max_image_width = Some(MAX_SIDE);
-    limits.max_image_height = Some(MAX_SIDE);
-    limits.max_alloc = Some(MAX_DECODE_BYTES);
-    reader.limits(limits);
-    let mut decoder = reader.into_decoder().map_err(classify)?;
-    // Metadata is about to be dropped, so turn the pixels the way the camera meant them first.
-    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
-    let profile = decoder.icc_profile().map_err(classify)?;
-    let mut image = DynamicImage::from_decoder(decoder).map_err(classify)?;
-    image.apply_orientation(orientation);
-    let (width, height) = (image.width(), image.height());
-    let Some(profile) = profile else {
-        return Ok(image.into_rgb8());
-    };
-    let profile = ColorProfile::new_from_slice(&profile).map_err(|_| PhotoError::Undecodable)?;
-    let (pixels, layout) = match profile.color_space {
-        DataColorSpace::Rgb => (image.into_rgb8().into_raw(), Layout::Rgb),
-        DataColorSpace::Gray => (image.into_luma8().into_raw(), Layout::Gray),
-        // The JPEG decoder has already converted CMYK pixels to RGB; applying the original
-        // CMYK profile to them would be wrong. Refuse it rather than mislabel its colours.
-        _ => return Err(PhotoError::Undecodable),
-    };
-    let transform = profile
-        .create_transform_8bit(
-            layout,
-            &ColorProfile::new_srgb(),
-            Layout::Rgb,
-            TransformOptions::default(),
-        )
-        .map_err(|_| PhotoError::Undecodable)?;
-    let mut converted = vec![0; pixels.len() / layout.channels() * 3];
-    transform
-        .transform(&pixels, &mut converted)
-        .map_err(|_| PhotoError::Undecodable)?;
-    RgbImage::from_raw(width, height, converted).ok_or(PhotoError::Undecodable)
-}
-
-/// `size` scaled down so its long side is at most `long_side`, never up.
-fn fit(size: Size, long_side: u32) -> Size {
-    let longest = size.width.max(size.height);
-    if longest <= long_side {
-        return size;
+impl From<EncodeError> for PhotoError {
+    fn from(error: EncodeError) -> Self {
+        match error {
+            EncodeError::Undecodable => Self::Undecodable,
+            EncodeError::TooLarge => Self::TooLarge,
+            EncodeError::Encode => Self::Encode,
+        }
     }
-    // Rounded integer scaling; the result is at most `long_side`, so it fits a u32.
-    let scale = |side: u32| {
-        let scaled =
-            (u64::from(side) * u64::from(long_side) + u64::from(longest) / 2) / u64::from(longest);
-        u32::try_from(scaled).unwrap_or(long_side).max(1)
-    };
-    Size {
-        width: scale(size.width),
-        height: scale(size.height),
-    }
-}
-
-fn resized(image: &RgbImage, long_side: u32) -> (RgbImage, Size) {
-    let original = Size {
-        width: image.width(),
-        height: image.height(),
-    };
-    let size = fit(original, long_side);
-    if size == original {
-        return (image.clone(), size);
-    }
-    let resized = image::imageops::resize(image, size.width, size.height, FilterType::CatmullRom);
-    (resized, size)
-}
-
-fn encode(upload: &Upload) -> Result<Encoded, PhotoError> {
-    // Transparency has no meaning in a meal photo; RGB drops alpha along with the metadata.
-    let image = decode(upload)?;
-    let (photo, size) = resized(&image, LONG_SIDE);
-    drop(image);
-    let (thumbnail, thumbnail_size) = resized(&photo, THUMBNAIL_LONG_SIDE);
-    Ok(Encoded {
-        photo: avif::encode(&photo, SPEED, QUALITY)?,
-        thumbnail: avif::encode(&thumbnail, SPEED, QUALITY)?,
-        size,
-        thumbnail_size,
-    })
 }
 
 #[cfg(test)]

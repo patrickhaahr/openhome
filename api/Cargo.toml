@@ -33,7 +33,7 @@ scraper = "0.27.0"
 bluer = { version = "0.17.4", default-features = false, features = ["bluetoothd"] }
 dbus = { version = "0.9.12", features = ["vendored"] }
 calamine = { version = "0.37.0", default-features = false }
-# Meal photos: decode JPEG/PNG, then libavif with only the aom codec (vendored, built with CMake).
+# Shared AVIF encoder (meal photos): decode JPEG/PNG, then libavif with only the aom codec (vendored, built with CMake).
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 # Use the native API to set colour information before RGB-to-YUV conversion.
 libavif-sys = { version = "0.17", default-features = false, features = ["codec-aom"] }

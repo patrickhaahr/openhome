@@ -1,4 +1,5 @@
 pub mod adguard;
+pub mod avif_encoder;
 pub mod docker;
 pub mod exercise_progress;
 pub mod feed;
