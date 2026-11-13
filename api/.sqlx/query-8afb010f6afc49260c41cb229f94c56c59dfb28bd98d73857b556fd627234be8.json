@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO price_refresh_state (id, next_due_at) VALUES (1, ?)\n         ON CONFLICT (id) DO UPDATE SET next_due_at = excluded.next_due_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "8afb010f6afc49260c41cb229f94c56c59dfb28bd98d73857b556fd627234be8"
+}

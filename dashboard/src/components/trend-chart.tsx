@@ -13,6 +13,8 @@ export type Series = {
   readonly values: Values
   /** What the table says for a period without a value; "No value" by default. */
   readonly gap?: string
+  /** What the table says per period, where a gap differs by period; wins over `gap`. */
+  readonly gaps?: readonly string[]
 }
 
 /** How a chart draws its series. */
@@ -380,7 +382,7 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
                   return (
                     <td key={part.key}>
                       {value === null
-                        ? (part.gap ?? "No value")
+                        ? (part.gaps?.[index] ?? part.gap ?? "No value")
                         : format(value)}
                     </td>
                   )

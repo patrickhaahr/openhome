@@ -68,7 +68,7 @@ export function PriceHistory({
           name: `Price in ${currency}`,
           tone: "ink",
           values: line.values,
-          gap: "No observation",
+          gaps: line.gaps,
         },
       ]}
       format={(value) => formatMoney(value, currency)}

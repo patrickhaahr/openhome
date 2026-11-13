@@ -142,7 +142,7 @@ test("the line follows the chosen currency", async () => {
   expect(rows()[5]).toEqual(["6 Nov 2026", "US$3.50"])
 })
 
-test("a point with no rate yet is a gap in that currency", async () => {
+test("a point with no rate yet is a gap in that currency, named as a missing rate", async () => {
   await render(() =>
     Promise.resolve({
       state: "read",
@@ -154,7 +154,7 @@ test("a point with no rate yet is a gap in that currency", async () => {
   )
 
   expect(rows()).toEqual([
-    ["1 Nov 2026", "No observation"],
+    ["1 Nov 2026", "No exchange rate"],
     ["2 Nov 2026", "DKK 10.00"],
   ])
 })

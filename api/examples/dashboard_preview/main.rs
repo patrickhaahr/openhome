@@ -154,6 +154,7 @@ async fn main() -> anyhow::Result<()> {
     seed::household(&url, API_KEY, &seed_db).await?;
     if binder::history_mode() {
         prices::replay(&seed_db, &catalogue).await?;
+        tokio::spawn(prices::restarts(seed_db.clone(), catalogue.client.clone()));
     }
     println!("{url}");
     tokio::signal::ctrl_c().await?;

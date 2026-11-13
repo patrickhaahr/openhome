@@ -18,13 +18,17 @@ latest price, and `price_observed_on` always equals the newest point's date.
 
 ## Daily refresh
 
-`services/price_refresh` runs at startup and every 24 hours after a pass ends (15 minutes after
-a database failure), mirroring the ECB job. A pass asks the catalogue once per distinct Card Code
+`services/price_refresh` runs one pass a day, however often the process restarts. The next due
+time is one row in `price_refresh_state` (migration 0035). A pass moves it 24 hours ahead when it
+starts, not when it ends, so a crash loop asks the catalogue once and a restart waits for the due
+time. A pass the database failed moves it back to 15 minutes ahead. With no row the first start
+runs a pass. (The ECB job still runs at every start.) A pass asks the catalogue once per distinct Card Code
 that has a Binder Entry, two seconds apart, and for each owned variant of the answer runs one
 guarded `UPDATE ... WHERE price_observed_on < ?` plus the point insert in one transaction. An
 unchanged or older observation date writes nothing, so retries and simultaneous runs append each
 observation once; runs also take one lock, so pacing holds across them. A catalogue failure is
-logged with the Card Code only, counted, and the run goes on. Unowned Cards are never asked for or
+logged with the Card Code only, counted, and the run goes on. No log line from the adapter
+carries catalogue text: it names a reason, a Card Code or a field. Unowned Cards are never asked for or
 touched, so they keep their details, image and history. A sibling variant nobody owns is not
 updated either.
 
@@ -40,7 +44,9 @@ range 400.
 
 The card sheet of an English entry reads the history when it opens and draws it with `TrendChart`
 in the selected currency. The series has one slot per day from the first to the last point, and a
-day without a point is a null slot, so the line breaks (a lone point is a dot). A Japanese entry
+day without a point is a null slot, so the line breaks (a lone point is a dot). A point with no
+rate in the chosen currency is a null slot too, and the table says "No exchange rate" there
+instead of "No observation". A Japanese entry
 shows no chart.
 
 ## Verification

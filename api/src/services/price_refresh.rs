@@ -20,7 +20,6 @@ static RUN: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// The catalogue is one volunteer's server: a pause between codes keeps a run gentle.
 const PACE: Duration = Duration::from_secs(2);
 const REFRESH_INTERVAL: Duration = Duration::from_hours(24);
-/// A pass the database failed is retried sooner than a day.
 const RETRY_PAUSE: Duration = Duration::from_mins(15);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,25 +79,70 @@ pub async fn refresh(
     Ok(pass)
 }
 
-/// The daily schedule, run for the life of the process on a detached task: a pass at startup,
-/// then one 24 hours after each pass ends, or after [`RETRY_PAUSE`] when the database failed one.
+async fn due_in(db: &SqlitePool) -> Result<Option<Duration>, sqlx::Error> {
+    let due = sqlx::query_scalar!("SELECT next_due_at FROM price_refresh_state WHERE id = 1")
+        .fetch_optional(db)
+        .await?;
+    let wait = due.map_or(0, |due| due - chrono::Utc::now().timestamp());
+    Ok((wait > 0).then(|| Duration::from_secs(wait.unsigned_abs()).min(REFRESH_INTERVAL)))
+}
+
+async fn schedule_next(db: &SqlitePool, after: Duration) -> Result<(), sqlx::Error> {
+    let due = chrono::Utc::now().timestamp() + after.as_secs().cast_signed();
+    sqlx::query!(
+        "INSERT INTO price_refresh_state (id, next_due_at) VALUES (1, ?)
+         ON CONFLICT (id) DO UPDATE SET next_due_at = excluded.next_due_at",
+        due
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// A pass the database failed is retried after [`RETRY_PAUSE`].
+async fn run_pass(db: &SqlitePool, catalogue: &Optcg) -> Result<(), sqlx::Error> {
+    schedule_next(db, REFRESH_INTERVAL).await?;
+    match refresh(db, catalogue, PACE).await {
+        Ok(Pass {
+            codes,
+            appended,
+            failed,
+        }) => {
+            tracing::info!(codes, appended, failed, "Card Price refresh finished");
+            Ok(())
+        }
+        Err(error) => {
+            tracing::warn!(%error, "Card Price refresh failed");
+            schedule_next(db, RETRY_PAUSE).await
+        }
+    }
+}
+
+/// The daily schedule, run for the life of the process on a detached task. The due time is
+/// persisted, so a pass runs once a day however often the process restarts.
 pub async fn run_scheduler(db: SqlitePool, catalogue: Optcg) {
-    tracing::info!("Starting Card Price refresh (initial pass + 24h interval)");
+    tracing::info!("Starting Card Price refresh (daily, persisted across restarts)");
     loop {
-        let pause = match refresh(&db, &catalogue, PACE).await {
-            Ok(Pass {
-                codes,
-                appended,
-                failed,
-            }) => {
-                tracing::info!(codes, appended, failed, "Card Price refresh finished");
-                REFRESH_INTERVAL
+        let wait = match due_in(&db).await {
+            Ok(Some(wait)) => {
+                tracing::info!(
+                    wait_secs = wait.as_secs(),
+                    "Card Price refresh is not due yet"
+                );
+                wait
             }
+            Ok(None) => match run_pass(&db, &catalogue).await {
+                Ok(()) => continue,
+                Err(error) => {
+                    tracing::warn!(%error, "Card Price refresh could not schedule its next pass");
+                    RETRY_PAUSE
+                }
+            },
             Err(error) => {
-                tracing::warn!(%error, "Card Price refresh failed");
+                tracing::warn!(%error, "Card Price refresh could not read its due time");
                 RETRY_PAUSE
             }
         };
-        tokio::time::sleep(pause).await;
+        tokio::time::sleep(wait).await;
     }
 }

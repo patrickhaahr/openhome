@@ -45,6 +45,8 @@ export type PriceLine = {
   readonly labels: string[]
   readonly names: string[]
   readonly values: Array<number | null>
+  /** What a null slot means: no Price Point that day, or one with no rate in the currency. */
+  readonly gaps: string[]
   readonly observations: number
   readonly missing: number
   readonly latest: { readonly day: string; readonly value: number } | undefined
@@ -52,7 +54,7 @@ export type PriceLine = {
 
 /**
  * The points as a daily series in `currency`. A day with no observation, or with no rate yet,
- * is a null slot, so the line breaks there: nothing is interpolated.
+ * is a null slot, so the line breaks there: nothing is interpolated. `gaps` says which.
  */
 export function priceLine(
   points: readonly PricePoint[],
@@ -66,6 +68,7 @@ export function priceLine(
       labels: [],
       names: [],
       values: [],
+      gaps: [],
       observations: 0,
       missing: 0,
       latest: undefined,
@@ -75,6 +78,7 @@ export function priceLine(
   const labels: string[] = []
   const names: string[] = []
   const values: Array<number | null> = []
+  const gaps: string[] = []
 
   for (
     let ms = time(first.observed_on);
@@ -88,6 +92,7 @@ export function priceLine(
     values.push(
       point === undefined ? null : (point[amountKey[currency]] ?? null)
     )
+    gaps.push(point === undefined ? "No observation" : "No exchange rate")
   }
 
   const latest = values.reduce<number>(
@@ -99,6 +104,7 @@ export function priceLine(
     labels,
     names,
     values,
+    gaps,
     observations: points.length,
     missing: values.length - points.length,
     latest:
