@@ -159,6 +159,34 @@ async fn stored_image(app: &Router, id: &str) -> Vec<u8> {
 }
 
 #[tokio::test]
+async fn concurrent_first_lookups_of_a_code_ask_the_catalogue_once() {
+    let server = MockServer::start().await;
+    mount_card_with(&server, Duration::from_millis(300), png(60, 84)).await;
+    let app = app(&server).await;
+
+    let uri = "/api/binder/cards?card_code=OP01-001";
+    let ((first_status, first), (second_status, second)) =
+        tokio::join!(get(&app, uri), get(&app, uri));
+    assert_eq!(first_status, StatusCode::OK, "{first}");
+    assert_eq!(second_status, StatusCode::OK, "{second}");
+    assert_eq!(first["cards"].as_array().unwrap().len(), 2);
+    assert_eq!(first, second);
+
+    let received = server.received_requests().await.unwrap();
+    let asked = |wanted: &str| {
+        received
+            .iter()
+            .filter(|request| request.url.path() == wanted)
+            .count()
+    };
+    assert_eq!(asked(CARD_PATH), 1, "card requests");
+    for id in ["OP01-001", "OP01-001_p1"] {
+        let image = format!("/media/static/Card_Images/{id}.jpg");
+        assert_eq!(asked(&image), 1, "{id} image requests");
+    }
+}
+
+#[tokio::test]
 async fn an_image_larger_than_two_thousand_pixels_is_stored_at_its_source_size() {
     let server = MockServer::start().await;
     mount_card_with(&server, Duration::ZERO, png(2_400, 1_200)).await;

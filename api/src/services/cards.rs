@@ -3,11 +3,19 @@
 //! Each variant's official image is fetched once and kept as AVIF in the same row, so reads never
 //! touch the catalogue. A catalogue failure writes nothing.
 
+use std::sync::LazyLock;
+
 use serde::Serialize;
 use sqlx::SqlitePool;
+use tokio::sync::Mutex;
 
 use super::avif_encoder::{self, EncodeError, Settings, Source};
 use super::optcg::{CatalogueCard, Optcg, Unavailable};
+
+/// One lock for every first lookup: the catalogue is a volunteer's server and a code is fetched
+/// once, so a concurrent search waits here and then finds the stored cards. At household scale
+/// serialising the rare miss costs nothing, while a lock per code would need a map to clean up.
+static FIRST_LOOKUP: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 const IMAGE: Settings = Settings {
     speed: 8,
@@ -148,10 +156,14 @@ pub struct Search {
 pub async fn search(db: &SqlitePool, catalogue: &Optcg, code: &CardCode) -> Result<Search> {
     let mut cards = stored(db, code).await?;
     if cards.is_empty() {
-        let listed = catalogue.card(code).await?;
-        if !listed.is_empty() {
-            store(db, catalogue, &listed).await?;
-            cards = stored(db, code).await?;
+        let _first_lookup = FIRST_LOOKUP.lock().await;
+        cards = stored(db, code).await?;
+        if cards.is_empty() {
+            let listed = catalogue.card(code).await?;
+            if !listed.is_empty() {
+                store(db, catalogue, &listed).await?;
+                cards = stored(db, code).await?;
+            }
         }
     }
     Ok(Search {
