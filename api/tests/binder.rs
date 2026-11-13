@@ -188,6 +188,17 @@ async fn a_card_the_catalogue_does_not_list_is_rejected_and_writes_nothing() {
         .await
         .unwrap();
     assert_eq!(rows, 0, "a rejected addition consumes no request_id");
+    let images = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.url.path().contains("Card_Images"))
+        .count();
+    assert_eq!(
+        images, 0,
+        "a rejected addition stores no Card, so it fetches no image"
+    );
 
     let (status, body) = add(
         &app,

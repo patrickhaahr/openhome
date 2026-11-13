@@ -77,13 +77,16 @@ and a note is 1 to 500 characters. Axum finds the Card in this order:
 1. A stored Card (every variant a search returned) is used as it is.
 2. Otherwise every substring of `card_id` that is a Card Code is a candidate, from
    left to right (`EB03_OP09-034_p1` contains `OP09-034`, while `EB03` is no code).
-   Each candidate goes through the search path, which stores every variant of the
-   code, and the id is accepted only if it is one of that code's variants. The
+   Each candidate asks the catalogue (unless the code is already stored or known
+   unlisted today), and the code's variants are stored only when the id is one of
+   them, so a rejected addition stores no Card, image or unlisted marker. The
    spelling is only a hint that the catalogue's variant list verifies, so a wrong
    guess can only end in the next step.
 3. Anything else, including an id that holds no code, a code that does not list it
-   and a wrong-case id, is `404 card_not_listed` and writes nothing. Searching the
-   Card Code first stays the recommended workflow, but it is not required.
+   and a wrong-case id, is `404 card_not_listed` and writes nothing. The catalogue
+   is queried only by Card Code, so an id holding no code can only be added after a
+   search stored it; every variant id seen so far holds its code. Searching the
+   Card Code first stays the recommended workflow.
 
 A catalogue outage during the lookup is the existing `503 card_data_unavailable`.
 Adding an existing owner, Card and language raises its quantity by the requested

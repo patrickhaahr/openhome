@@ -155,7 +155,7 @@ pub async fn search(db: &SqlitePool, catalogue: &Optcg, code: &CardCode) -> Resu
     let today = CalendarDay::of(chrono::Utc::now()).to_string();
     Ok(Search {
         card_code: code.as_str().to_owned(),
-        cards: cards_of(db, catalogue, code, &today).await?,
+        cards: cards_of(db, catalogue, code, &today, None).await?,
     })
 }
 
@@ -164,6 +164,7 @@ async fn cards_of(
     catalogue: &Optcg,
     code: &CardCode,
     today: &str,
+    wanted: Option<&CardId>,
 ) -> Result<Vec<Card>> {
     if let Some(cards) = known(db, code, today).await? {
         return Ok(cards);
@@ -173,6 +174,10 @@ async fn cards_of(
         return Ok(cards);
     }
     let listed = catalogue.card(code).await?;
+    // An addition the catalogue does not list writes nothing: no variants, images or marker.
+    if wanted.is_some_and(|id| !listed.iter().any(|card| card.id == *id)) {
+        return Ok(Vec::new());
+    }
     if listed.is_empty() {
         remember_unlisted(db, code, today).await?;
         return Ok(Vec::new());
@@ -312,7 +317,7 @@ pub async fn listed(db: &SqlitePool, catalogue: &Optcg, id: &CardId) -> Result<O
     }
     let today = CalendarDay::of(chrono::Utc::now()).to_string();
     for code in codes_in(id) {
-        let found = cards_of(db, catalogue, &code, &today)
+        let found = cards_of(db, catalogue, &code, &today, Some(id))
             .await?
             .into_iter()
             .find(|card| card.id == id.as_str());
