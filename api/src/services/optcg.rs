@@ -1,7 +1,7 @@
 //! OPTCG catalogue reads (optcgapi.com, ADR 0017). It is one volunteer's server, so every call is
 //! a single bounded GET: a short timeout, a byte cap and no redirects or retries. Nothing the
-//! catalogue sends is trusted. Image URLs are rebuilt from the configured origin rather than
-//! followed, and every failure is [`Unavailable`], so upstream text never reaches a caller.
+//! catalogue sends is trusted. A variant's image URL is fetched only when it names the configured
+//! origin, and every failure is [`Unavailable`], so upstream text never reaches a caller.
 //!
 //! The catalogue answers `api/sets/card/{code}/` with a JSON array of variants, or 404
 //! `{"error":"Card not found."}` for a code it does not list. It serves PNGs under `.jpg` names.
@@ -46,6 +46,9 @@ pub struct Price {
 #[derive(Debug)]
 pub struct CatalogueCard {
     pub id: CardId,
+    pub card_code: CardCode,
+    /// On the adapter's configured origin, which is checked before a card is returned.
+    pub image_url: Url,
     pub name: String,
     pub set_id: Option<String>,
     pub set_name: Option<String>,
@@ -84,6 +87,7 @@ struct Raw {
     market_price: Option<Value>,
     date_scraped: Option<Value>,
     card_image_id: Option<Value>,
+    card_image: Option<Value>,
 }
 
 impl Optcg {
@@ -98,8 +102,11 @@ impl Optcg {
 
     /// Every variant of `code`; empty when the catalogue does not list it.
     pub async fn card(&self, code: &CardCode) -> Result<Vec<CatalogueCard>, Unavailable> {
-        let path = format!("api/sets/card/{}/", code.as_str());
-        let response = self.get(&path).await?;
+        let url = self
+            .base_url
+            .join(&format!("api/sets/card/{}/", code.as_str()))
+            .map_err(|error| unavailable("bad URL", &error))?;
+        let response = self.get(url).await?;
         match response.status() {
             StatusCode::NOT_FOUND => return Ok(Vec::new()),
             status if !status.is_success() => return Err(unavailable("refused", &status)),
@@ -113,7 +120,7 @@ impl Optcg {
         }
         let cards = raw
             .into_iter()
-            .map(|raw| raw.validate(code))
+            .map(|raw| raw.validate(code, &self.base_url))
             .collect::<Result<Vec<_>, _>>()?;
         let mut ids: Vec<_> = cards.iter().map(|card| card.id.as_str()).collect();
         ids.sort_unstable();
@@ -124,22 +131,16 @@ impl Optcg {
         Ok(cards)
     }
 
-    /// The variant's official image bytes (a PNG or JPEG), fetched from the configured origin.
-    pub async fn image(&self, id: &CardId) -> Result<Vec<u8>, Unavailable> {
-        let response = self
-            .get(&format!("media/static/Card_Images/{}.jpg", id.as_str()))
-            .await?;
+    /// The variant's official image bytes (a PNG or JPEG) from its catalogue URL.
+    pub async fn image(&self, url: &Url) -> Result<Vec<u8>, Unavailable> {
+        let response = self.get(url.clone()).await?;
         if !response.status().is_success() {
             return Err(unavailable("refused an image", &response.status()));
         }
         read_capped(response, MAX_IMAGE_BYTES).await
     }
 
-    async fn get(&self, path: &str) -> Result<Response, Unavailable> {
-        let url = self
-            .base_url
-            .join(path)
-            .map_err(|error| unavailable("bad URL", &error))?;
+    async fn get(&self, url: Url) -> Result<Response, Unavailable> {
         self.client
             .get(url)
             .send()
@@ -207,15 +208,19 @@ fn number(value: Option<&Value>) -> Result<Option<f64>, Unavailable> {
 }
 
 impl Raw {
-    fn validate(self, code: &CardCode) -> Result<CatalogueCard, Unavailable> {
+    fn validate(self, code: &CardCode, origin: &Url) -> Result<CatalogueCard, Unavailable> {
         let missing = |what| unavailable(what, &code.as_str());
         let listed_code = text(self.card_set_id, MAX_TEXT_CHARS)?;
         let id = text(self.card_image_id, MAX_TEXT_CHARS)?
             .and_then(|id| CardId::parse(&id).ok())
             .ok_or_else(|| missing("no usable variant id"))?;
-        if listed_code.as_deref() != Some(code.as_str()) || id.code() != *code {
+        if listed_code.as_deref() != Some(code.as_str()) {
             return Err(missing("a variant of another code"));
         }
+        let image_url = text(self.card_image, MAX_TEXT_CHARS)?
+            .and_then(|url| Url::parse(&url).ok())
+            .filter(|url| url.origin() == origin.origin())
+            .ok_or_else(|| missing("no image on the catalogue's origin"))?;
         let market_price = number(self.market_price.as_ref())?;
         let observed_on = text(self.date_scraped, MAX_TEXT_CHARS)?.filter(|date| {
             date.len() == 10 && chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok()
@@ -227,6 +232,8 @@ impl Raw {
         };
         Ok(CatalogueCard {
             id,
+            card_code: code.clone(),
+            image_url,
             name: text(self.card_name, MAX_TEXT_CHARS)?.ok_or_else(|| missing("no name"))?,
             set_id: text(self.set_id, MAX_TEXT_CHARS)?,
             set_name: text(self.set_name, MAX_TEXT_CHARS)?,

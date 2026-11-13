@@ -1,9 +1,16 @@
 //! The preview's OPTCG catalogue stand-in: invented cards in the real catalogue's wire shape, with
-//! PNG images served under `.jpg` names like the real thing. Every request is logged to stderr
+//! PNG images served under `.jpg` names like the real thing. A variant's `card_image` names the
+//! file the catalogue serves, which is not always its id (`OP99-020`'s special print). Every request is logged to stderr
 //! (`OPTCG stand-in: GET <path> -> <status>`), so a verifier can count what Axum asked for in the
 //! stack log. Code `OP99-503` simulates an outage; any other unknown code answers 404.
 
-use axum::{Json, Router, extract::Path, http::StatusCode, response::IntoResponse, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+};
 use chrono::{Duration, Utc};
 use image::{ImageEncoder, Rgb, RgbImage, codecs::png::PngEncoder};
 use openhome_api::services::optcg::Optcg;
@@ -17,7 +24,9 @@ struct Seed {
 
 #[derive(Deserialize, Clone)]
 struct SeedCard {
+    card_code: String,
     image_id: String,
+    image_file: Option<String>,
     name: String,
     set_name: String,
     rarity: String,
@@ -41,11 +50,13 @@ fn catalogue() -> Vec<SeedCard> {
         .cards
 }
 
-fn code(image_id: &str) -> &str {
-    image_id.split('_').next().unwrap_or(image_id)
+impl SeedCard {
+    fn file(&self) -> &str {
+        self.image_file.as_deref().unwrap_or(&self.image_id)
+    }
 }
 
-fn wire(card: &SeedCard) -> Value {
+fn wire(card: &SeedCard, origin: &str) -> Value {
     json!({
         "inventory_price": card.inventory_price,
         "market_price": card.market_price,
@@ -54,7 +65,7 @@ fn wire(card: &SeedCard) -> Value {
         "card_text": card.text,
         "set_id": "OP-99",
         "rarity": card.rarity,
-        "card_set_id": code(&card.image_id),
+        "card_set_id": card.card_code,
         "card_color": card.color,
         "card_type": card.card_type,
         "life": card.life,
@@ -65,7 +76,7 @@ fn wire(card: &SeedCard) -> Value {
         "attribute": card.attribute,
         "date_scraped": (Utc::now() - Duration::days(card.observed_days_ago)).format("%Y-%m-%d").to_string(),
         "card_image_id": card.image_id,
-        "card_image": format!("https://catalogue.invalid/{}.jpg", card.image_id),
+        "card_image": format!("{origin}media/static/Card_Images/{}.jpg", card.file()),
     })
 }
 
@@ -73,7 +84,7 @@ fn log(path: &str, status: StatusCode) {
     eprintln!("OPTCG stand-in: GET {path} -> {}", status.as_u16());
 }
 
-async fn card(Path(code_id): Path<String>) -> impl IntoResponse {
+async fn card(State(origin): State<String>, Path(code_id): Path<String>) -> impl IntoResponse {
     let path = format!("/api/sets/card/{code_id}/");
     let (status, body) = if code_id == "OP99-503" {
         (
@@ -83,8 +94,8 @@ async fn card(Path(code_id): Path<String>) -> impl IntoResponse {
     } else {
         let variants: Vec<Value> = catalogue()
             .iter()
-            .filter(|card| code(&card.image_id) == code_id)
-            .map(wire)
+            .filter(|card| card.card_code == code_id)
+            .map(|card| wire(card, &origin))
             .collect();
         if variants.is_empty() {
             (StatusCode::NOT_FOUND, json!({"error": "Card not found."}))
@@ -96,8 +107,8 @@ async fn card(Path(code_id): Path<String>) -> impl IntoResponse {
     (status, Json(body))
 }
 
-fn picture(image_id: &str) -> Vec<u8> {
-    let hue = image_id.bytes().fold(7_u32, |hash, byte| {
+fn picture(file: &str) -> Vec<u8> {
+    let hue = file.bytes().fold(7_u32, |hash, byte| {
         hash.wrapping_mul(31).wrapping_add(u32::from(byte))
     }) % 200;
     let tone = |base: u32| u8::try_from((base + hue).min(255)).unwrap_or(255);
@@ -132,7 +143,7 @@ fn picture(image_id: &str) -> Vec<u8> {
 async fn image(Path(file): Path<String>) -> impl IntoResponse {
     let path = format!("/media/static/Card_Images/{file}");
     let id = file.strip_suffix(".jpg").unwrap_or("");
-    let known = catalogue().iter().any(|card| card.image_id == id);
+    let known = catalogue().iter().any(|card| card.file() == id);
     let status = if known {
         StatusCode::OK
     } else {
@@ -152,11 +163,12 @@ async fn image(Path(file): Path<String>) -> impl IntoResponse {
 /// The catalogue client for a loopback stand-in. Never the live service: it is one volunteer's
 /// server.
 pub async fn optcg() -> anyhow::Result<Optcg> {
-    let provider = Router::new()
-        .route("/api/sets/card/{code}/", get(card))
-        .route("/media/static/Card_Images/{file}", get(image));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let url = format!("http://{}/", listener.local_addr()?);
+    let provider = Router::new()
+        .route("/api/sets/card/{code}/", get(card))
+        .route("/media/static/Card_Images/{file}", get(image))
+        .with_state(url.clone());
     tokio::spawn(async move { axum::serve(listener, provider).await });
     eprintln!(
         "OPTCG: loopback catalogue at {url} (invented OP99 cards; OP99-503 simulates an outage)"

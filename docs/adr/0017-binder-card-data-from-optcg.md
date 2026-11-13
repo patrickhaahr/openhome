@@ -4,7 +4,9 @@ Axum takes Card details, images and prices from one source, the OPTCG
 catalogue at optcgapi.com. It is free, needs no key and answers one Card Code
 request with every variant: the details, an image URL, the TCGplayer market
 price in USD and the date the catalogue observed it. Variant identity is the
-catalogue's image identifier (`OP01-001`, `OP01-001_p1`).
+catalogue's image identifier, treated as opaque (`OP01-001`, `OP04-016_P1`,
+`EB03_OP09-034_p1`). The Card Code comes from the variant's own field, and each
+image is fetched from the catalogue's `card_image` URL on the configured origin.
 
 OpenHome records its own Price History. The catalogue keeps no usable history
 (only a two-week window), so OpenHome stores a Price Point whenever it sees a
@@ -38,7 +40,8 @@ failed lookup writes nothing and answers `card_data_unavailable` (503) without
 upstream text. The adapter has a fixed production origin, a short timeout, a
 response size cap and no redirects, and asks for a Card Code once, then once
 per owned Card Code per day, paced, because the catalogue publishes no rate
-limit and asks callers to be modest.
+limit and asks callers to be modest. A code it does not list is asked again at
+most once per Copenhagen day.
 
 Prices are TCGplayer's English-printing market prices, so Japanese Binder
 Entries have none. The main database grows by one image per stored Card and is

@@ -50,7 +50,7 @@ fn png(width: u32, height: u32) -> Vec<u8> {
     bytes
 }
 
-fn variant(image_id: &str, name: &str, price: Option<f64>, date: &str) -> Value {
+fn variant(origin: &str, image_id: &str, name: &str, price: Option<f64>, date: &str) -> Value {
     json!({
         "inventory_price": 1.95, "market_price": price, "card_name": name,
         "set_name": "Synthetic Set", "card_text": "[Your Turn] Gain +1000 power.",
@@ -58,8 +58,25 @@ fn variant(image_id: &str, name: &str, price: Option<f64>, date: &str) -> Value 
         "card_type": "Leader", "life": "5", "card_cost": null, "card_power": "5000",
         "sub_types": "Invented Crew", "counter_amount": null, "attribute": "Slash",
         "date_scraped": date, "card_image_id": image_id,
-        "card_image": format!("https://catalogue.invalid/{image_id}.jpg"),
+        "card_image": format!("{origin}/media/static/Card_Images/{image_id}.jpg"),
     })
+}
+
+fn named(mut variant: Value, field: &str, value: &str) -> Value {
+    variant[field] = json!(value);
+    variant
+}
+
+async fn mount_image(server: &MockServer, file: &str, image: Vec<u8>) {
+    Mock::given(method("GET"))
+        .and(path(format!("/media/static/Card_Images/{file}.jpg")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "image/jpeg")
+                .set_body_bytes(image),
+        )
+        .mount(server)
+        .await;
 }
 
 async fn mount_card(server: &MockServer) {
@@ -67,6 +84,7 @@ async fn mount_card(server: &MockServer) {
 }
 
 async fn mount_card_with(server: &MockServer, delay: Duration, image: Vec<u8>) {
+    let origin = server.uri();
     Mock::given(method("GET"))
         .and(path(CARD_PATH))
         .respond_with(
@@ -74,12 +92,14 @@ async fn mount_card_with(server: &MockServer, delay: Duration, image: Vec<u8>) {
                 .set_delay(delay)
                 .set_body_json(json!([
                     variant(
+                        &origin,
                         "OP01-001",
                         "Invented Captain (001)",
                         Some(2.25),
                         "2026-11-12"
                     ),
                     variant(
+                        &origin,
                         "OP01-001_p1",
                         "Invented Captain (001) (Parallel)",
                         None,
@@ -90,15 +110,7 @@ async fn mount_card_with(server: &MockServer, delay: Duration, image: Vec<u8>) {
         .mount(server)
         .await;
     for id in ["OP01-001", "OP01-001_p1"] {
-        Mock::given(method("GET"))
-            .and(path(format!("/media/static/Card_Images/{id}.jpg")))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-type", "image/jpeg")
-                    .set_body_bytes(image.clone()),
-            )
-            .mount(server)
-            .await;
+        mount_image(server, id, image.clone()).await;
     }
 }
 
@@ -199,6 +211,111 @@ async fn an_image_larger_than_two_thousand_pixels_is_stored_at_its_source_size()
     assert_eq!((pixels.width(), pixels.height()), (2_400, 1_200));
 }
 
+async fn mount_listing(server: &MockServer, variants: Vec<Value>) {
+    Mock::given(method("GET"))
+        .and(path(CARD_PATH))
+        .respond_with(ResponseTemplate::new(200).set_body_json(variants))
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn variant_ids_of_any_safe_form_are_stored_and_served_under_the_requested_code() {
+    let server = MockServer::start().await;
+    let origin = server.uri();
+    let ids = ["OP01-001_P1", "OP01-001-r1", "EB03_OP01-001_p1"];
+    mount_listing(
+        &server,
+        ids.iter()
+            .map(|id| variant(&origin, id, "Invented Captain", None, "2026-11-12"))
+            .collect(),
+    )
+    .await;
+    for id in ids {
+        mount_image(&server, id, png(60, 84)).await;
+    }
+    let app = app(&server).await;
+
+    let (status, found) = get(&app, "/api/binder/cards?card_code=OP01-001").await;
+    assert_eq!(status, StatusCode::OK, "{found}");
+    let cards = found["cards"].as_array().unwrap();
+    assert_eq!(
+        cards.iter().map(|card| &card["id"]).collect::<Vec<_>>(),
+        ids
+    );
+    for card in cards {
+        assert_eq!(card["card_code"], "OP01-001");
+        assert!(libavif::is_avif(
+            &stored_image(&app, card["id"].as_str().unwrap()).await
+        ));
+    }
+}
+
+#[tokio::test]
+async fn an_image_whose_filename_differs_from_the_id_is_fetched_from_the_catalogue_s_url() {
+    let server = MockServer::start().await;
+    let origin = server.uri();
+    mount_listing(
+        &server,
+        vec![named(
+            variant(&origin, "OP01-001", "Invented Captain", None, "2026-11-12"),
+            "card_image",
+            &format!("{origin}/media/static/Card_Images/SPECIAL_BUGGY_BALL.jpg"),
+        )],
+    )
+    .await;
+    mount_image(&server, "SPECIAL_BUGGY_BALL", png(60, 84)).await;
+    let app = app(&server).await;
+
+    let (status, found) = get(&app, "/api/binder/cards?card_code=OP01-001").await;
+    assert_eq!(status, StatusCode::OK, "{found}");
+    assert!(libavif::is_avif(&stored_image(&app, "OP01-001").await));
+}
+
+#[tokio::test]
+async fn an_image_on_another_origin_is_unavailable_and_nothing_is_fetched_from_it() {
+    let server = MockServer::start().await;
+    let elsewhere = MockServer::start().await;
+    let origin = server.uri();
+    mount_listing(
+        &server,
+        vec![named(
+            variant(&origin, "OP01-001", "Invented Captain", None, "2026-11-12"),
+            "card_image",
+            &format!("{}/media/static/Card_Images/OP01-001.jpg", elsewhere.uri()),
+        )],
+    )
+    .await;
+    mount_image(&server, "OP01-001", png(60, 84)).await;
+    mount_image(&elsewhere, "OP01-001", png(60, 84)).await;
+    let app = app(&server).await;
+
+    let (status, body) = get(&app, "/api/binder/cards?card_code=OP01-001").await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["code"], "card_data_unavailable");
+    assert_eq!(requests(&elsewhere).await, 0);
+    let (status, _) = get(&app, "/api/binder/cards/OP01-001/image").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn an_unlisted_code_is_asked_for_once_per_day() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/sets/card/OP99-999/"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({"error": "Card not found."})))
+        .mount(&server)
+        .await;
+    let app = app(&server).await;
+
+    for _ in 0..2 {
+        let (status, found) = get(&app, "/api/binder/cards?card_code=OP99-999").await;
+        assert_eq!(status, StatusCode::OK, "{found}");
+        assert_eq!(found, json!({"card_code": "OP99-999", "cards": []}));
+    }
+    assert_eq!(requests(&server).await, 1);
+}
+
 #[tokio::test]
 async fn stored_images_are_full_size_avif_behind_authentication() {
     let server = MockServer::start().await;
@@ -234,7 +351,7 @@ async fn stored_images_are_full_size_avif_behind_authentication() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let response = fetch("/api/binder/cards/OP01-002/image", Some("test-api-key")).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    let response = fetch("/api/binder/cards/not-a-card/image", Some("test-api-key")).await;
+    let response = fetch("/api/binder/cards/bad.id/image", Some("test-api-key")).await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
@@ -271,9 +388,16 @@ async fn a_code_the_catalogue_does_not_list_is_empty_and_malformed_codes_are_rej
 async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
     let leak = "synthetic-upstream-secret-text";
     let oversized_image = vec![0x89; 3 * 1024 * 1024];
-    let wrong_code = json!([variant("OP02-002", leak, Some(1.0), "2026-11-12")]);
+    let server = MockServer::start().await;
+    let origin = server.uri();
+    let wrong_code = json!([named(
+        variant(&origin, "OP02-002", leak, Some(1.0), "2026-11-12"),
+        "card_set_id",
+        "OP02-002"
+    )]);
     let priced_without_date = json!([{
         "card_set_id": "OP01-001", "card_image_id": "OP01-001", "card_name": leak, "market_price": 1.0,
+        "card_image": format!("{origin}/media/static/Card_Images/OP01-001.jpg"),
     }]);
     let failures: Vec<(&str, ResponseTemplate, ResponseTemplate)> = vec![
         (
@@ -316,6 +440,7 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
         (
             "image refused",
             ResponseTemplate::new(200).set_body_json(json!([variant(
+                &origin,
                 "OP01-001",
                 "A",
                 Some(1.0),
@@ -326,6 +451,7 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
         (
             "image is not a picture",
             ResponseTemplate::new(200).set_body_json(json!([variant(
+                &origin,
                 "OP01-001",
                 "A",
                 Some(1.0),
@@ -336,6 +462,7 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
         (
             "image too large",
             ResponseTemplate::new(200).set_body_json(json!([variant(
+                &origin,
                 "OP01-001",
                 "A",
                 Some(1.0),
@@ -345,7 +472,7 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
         ),
     ];
     for (name, card, image) in failures {
-        let server = MockServer::start().await;
+        server.reset().await;
         Mock::given(method("GET"))
             .and(path(CARD_PATH))
             .respond_with(card)
