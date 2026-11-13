@@ -60,7 +60,9 @@ fetches every variant's image, re-encodes it with the shared AVIF encoder
 (speed 8, quality 70, never scaled up) and writes all variants and images in one
 transaction. Later searches and image reads are answered from OpenHome and make
 no catalogue request. Stored Cards are snapshots that clients never edit.
-An unlisted code is remembered in SQLite until the next Europe/Copenhagen
+A code is unlisted only when the catalogue answers 404 with its own
+`{"error":"Card not found."}` body; any other 404 is a `card_data_unavailable`
+failure. An unlisted code is remembered in SQLite until the next Europe/Copenhagen
 calendar day: a repeat that day makes no catalogue request and returns
 `cards: []`, and a later day asks again, so a card the catalogue lists later can
 still be found.

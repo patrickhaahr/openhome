@@ -107,10 +107,12 @@ impl Optcg {
             .join(&format!("api/sets/card/{}/", code.as_str()))
             .map_err(|error| unavailable("bad URL", &error))?;
         let response = self.get(url).await?;
-        match response.status() {
-            StatusCode::NOT_FOUND => return Ok(Vec::new()),
-            status if !status.is_success() => return Err(unavailable("refused", &status)),
-            _ => {}
+        let status = response.status();
+        if status == StatusCode::NOT_FOUND {
+            return not_listed(&read_capped(response, MAX_CARD_BYTES).await?);
+        }
+        if !status.is_success() {
+            return Err(unavailable("refused", &status));
         }
         let bytes = read_capped(response, MAX_CARD_BYTES).await?;
         let raw: Vec<Raw> = serde_json::from_slice(&bytes)
@@ -171,6 +173,22 @@ async fn read_capped(mut response: Response, limit: usize) -> Result<Vec<u8>, Un
         bytes.extend_from_slice(&chunk);
     }
     Ok(bytes)
+}
+
+/// Only the catalogue's own answer means "unlisted": any other 404 (a proxy, a moved endpoint)
+/// would otherwise be remembered as unlisted for the day.
+fn not_listed(body: &[u8]) -> Result<Vec<CatalogueCard>, Unavailable> {
+    #[derive(Deserialize)]
+    struct NotFound {
+        error: String,
+    }
+    match serde_json::from_slice::<NotFound>(body) {
+        Ok(NotFound { error }) if error == "Card not found." => Ok(Vec::new()),
+        _ => Err(unavailable(
+            "a 404 that is not the catalogue's not-found answer",
+            &body.len(),
+        )),
+    }
 }
 
 fn unavailable(what: &str, detail: &dyn std::fmt::Debug) -> Unavailable {

@@ -416,6 +416,11 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
             ResponseTemplate::new(200),
         ),
         (
+            "a 404 that is not the catalogue's not-found answer",
+            ResponseTemplate::new(404).set_body_string(format!("<html>{leak}</html>")),
+            ResponseTemplate::new(200),
+        ),
+        (
             "redirect",
             ResponseTemplate::new(302).insert_header("location", "/elsewhere"),
             ResponseTemplate::new(200),
