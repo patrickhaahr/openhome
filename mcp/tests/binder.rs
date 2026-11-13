@@ -70,3 +70,119 @@ async fn search_cards_forwards_the_catalogue_search_unchanged() {
     assert_eq!(malformed, direct("OP99").await);
     client.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn binder_entry_tools_forward_additions_and_lists_unchanged() {
+    let api = start_api().await;
+    let http = reqwest::Client::new();
+    let direct_get = |query: String| {
+        let http = http.clone();
+        let url = format!("{api}/api/binder/entries{query}");
+        async move {
+            http.get(url)
+                .bearer_auth(API_KEY)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+    let owner: Value = http
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name": "Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    wishlist_call(&client, "search_cards", json!({"card_code": "OP99-001"})).await;
+    let request = json!({"card_id": "OP99-001_p1", "quantity": 2, "language": "ja", "request_id": "mcp-binder-1"});
+    let clarification = wishlist_call(&client, "add_binder_entry", request.clone()).await;
+    assert_eq!(clarification.is_error, Some(true));
+    let clarification = clarification.structured_content.unwrap();
+    assert_eq!(clarification["code"], "binder_destination_required");
+    assert_eq!(clarification["choices"], json!([owner]));
+
+    let mut request = request;
+    request["owner_id"] = owner["id"].clone();
+    let added = wishlist_call(&client, "add_binder_entry", request.clone()).await;
+    assert_eq!(added.is_error, Some(false), "{added:?}");
+    let added = added.structured_content.unwrap();
+    assert_eq!(
+        (
+            &added["replayed"],
+            &added["entry"]["card"]["id"],
+            &added["entry"]["language"],
+            &added["entry"]["quantity"]
+        ),
+        (
+            &json!(false),
+            &json!("OP99-001_p1"),
+            &json!("ja"),
+            &json!(2)
+        ),
+        "{added}"
+    );
+
+    let replayed = wishlist_call(&client, "add_binder_entry", request).await;
+    assert_eq!(replayed.is_error, Some(false));
+    let replayed = replayed.structured_content.unwrap();
+    assert_eq!(replayed["replayed"], true);
+    assert_eq!(replayed["entry"], added["entry"]);
+
+    let unlisted = wishlist_call(
+        &client,
+        "add_binder_entry",
+        json!({"owner_id": owner["id"], "card_id": "OP99-002", "request_id": "mcp-binder-2"}),
+    )
+    .await;
+    assert_eq!(unlisted.is_error, Some(true));
+    let unlisted = unlisted.structured_content.unwrap();
+    assert_eq!(
+        (&unlisted["status"], &unlisted["code"]),
+        (&json!(404), &json!("card_not_listed"))
+    );
+
+    let owner_id = owner["id"].as_str().unwrap();
+    for (arguments, query) in [
+        (json!({}), String::new()),
+        (
+            json!({"owner_id": owner_id}),
+            format!("?owner_id={owner_id}"),
+        ),
+        (json!({"owner_id": "nobody"}), "?owner_id=nobody".into()),
+    ] {
+        let listed = wishlist_call(&client, "binder_entries", arguments).await;
+        assert_eq!(listed.is_error, Some(false), "{listed:?}");
+        assert_eq!(listed.structured_content.unwrap(), direct_get(query).await);
+    }
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn global_instructions_describe_the_binder_photo_workflow() {
+    let api = start_api().await;
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    let instructions = client
+        .peer_info()
+        .unwrap()
+        .instructions
+        .clone()
+        .unwrap_or_default();
+    assert!(
+        instructions.contains("add_binder_entry")
+            && instructions.contains("binder_destination_required")
+            && instructions.contains("Never store the user's photo"),
+        "{instructions}"
+    );
+    client.cancel().await.unwrap();
+}

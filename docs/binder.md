@@ -1,12 +1,14 @@
 # Binder: One Piece Card Game collections through the Dashboard and OpenHome MCP
 
-Each Household User will have one household-visible Binder of One Piece Card
-Game cards. Terms are in [`docs/context/binder.md`](context/binder.md); the
-sources and storage decisions are in [ADR 0017](adr/0017-binder-card-data-from-optcg.md).
-This slice, [#287](https://github.com/patrickhaahr/openhome/issues/287), delivers
-the card catalogue: Hermes looks a card up by Card Code and Axum stores it. Binder
-Entries, values in other currencies, the daily refresh and the Dashboard follow
-under epic [#285](https://github.com/patrickhaahr/openhome/issues/285).
+Each Household User has one household-visible Binder of One Piece Card Game
+cards. Terms are in [`docs/context/binder.md`](context/binder.md); the sources
+and storage decisions are in [ADR 0017](adr/0017-binder-card-data-from-optcg.md).
+[#287](https://github.com/patrickhaahr/openhome/issues/287) delivered the card
+catalogue: Hermes looks a card up by Card Code and Axum stores it.
+[#288](https://github.com/patrickhaahr/openhome/issues/288) adds Binder Entries:
+Hermes adds cards from a photo and lists a Binder in Card Code order. Editing and
+removing entries, Binder Value, values in other currencies, the daily refresh and
+the Dashboard follow under epic [#285](https://github.com/patrickhaahr/openhome/issues/285).
 
 ## Operations
 
@@ -17,6 +19,8 @@ authenticated Axum request per tool and returns its JSON unchanged.
 | --- | --- | --- |
 | `search_cards` | `GET /api/binder/cards?card_code=OP01-001` | A Card Code |
 | none | `GET /api/binder/cards/{id}/image` | A Card `id`; returns the stored `image/avif` |
+| `add_binder_entry` | `POST /api/binder/entries` | `card_id`, `owner_id`, `quantity`, `language`, `note`, `request_id` |
+| `binder_entries` | `GET /api/binder/entries?owner_id=` | An optional owner filter |
 
 ## Card Codes and variants
 
@@ -53,6 +57,56 @@ It accepts the URL only when its scheme, host and port equal the configured
 origin. A variant naming any other origin, or none, is an unavailable failure
 and nothing is fetched from that origin. The URL is never stored.
 
+## Binder Entries
+
+A Binder Entry is one Card in one language in one owner's Binder: `id`, `owner_id`,
+`card` (as search returns it, with its USD `card_value`), `language` (`en` or `ja`),
+`quantity`, an optional `note` and `date_added`, the Europe/Copenhagen day it was
+first added. There is no Binder record: a Binder is its owner's entries, and
+removing the Household User removes them (the Cards stay). Each owner has at most
+one entry per Card and language, so an English and a Japanese copy are two entries.
+
+An addition names the Card by `card_id` and never sends card details. `quantity`
+is 1 to 999 (default 1), `language` defaults to `en`, and a note is 1 to 500
+characters. Axum finds the Card in this order, and never reads a code out of an
+id's spelling:
+
+1. A stored Card (every variant a search returned) is used as it is.
+2. Otherwise `card_id` is tried as a Card Code, which is the id of a normal print.
+   Axum looks that code up through the search path and accepts the id only if it is
+   one of the code's variants.
+3. Anything else, including a parallel that was never searched for, an unlisted
+   code and a wrong-case id, is `404 card_not_listed` and writes nothing. Hermes
+   searches the Card Code first, so its ids are stored by the time it adds them.
+
+A catalogue outage during the lookup is the existing `503 card_data_unavailable`.
+Adding an existing owner, Card and language raises its quantity by the requested
+amount and returns the updated entry; a supplied `note` replaces the stored one and
+an omitted one keeps it. `date_added` keeps the first day.
+
+A missing `owner_id` is `409 binder_destination_required` with a `question` and
+`choices` (the Household Users), and writes nothing. An unknown owner is 404.
+
+`request_id` is required (1 to 128 characters) and follows the Watchlist rules in
+[`api-receipts.md`](api-receipts.md). The receipt is committed with the write and
+stores the original response. An identical retry returns that result with
+`replayed: true` and status 200 (a new addition is 201), so the quantity is not
+added again and later merges do not change the replay. Different arguments under a
+used id are 409. If the entry has since been removed, the retry is 409 and never
+recreates it; the receipt outlives the entry and the owner. A rejected addition
+rolls back with its claim and consumes no `request_id`.
+
+`GET /api/binder/entries` returns every owner's entries, or one owner's with
+`owner_id`, grouped by owner (name, then id). Each Binder is in Card Code order: set
+prefix (compared alphabetically, so `EB` before `OP` before `P`, `PRB`, `ST`), then
+set number, then card number, all numerically. Within a Card Code the normal print
+(the variant whose id equals the code) comes first, then its parallels in the
+catalogue's order, and an English entry precedes the Japanese one for the same Card.
+Binder Value and Card Value in other currencies are not in the response yet.
+
+Migration 0032 adds `binder_entries` and `binder_addition_receipts`. Rolling it back
+discards every entry and receipt.
+
 ## Storing and the catalogue
 
 A search asks the catalogue only when nothing is stored for the code. It then
@@ -85,8 +139,11 @@ discards every stored Card, image and unlisted-code marker.
 Run `devenv shell -- just api-check mcp-check`. The domain proof is
 `api/tests/cards.rs`: authenticated HTTP on migrated SQLite against a loopback
 catalogue (first lookup, cached lookup, unlisted and malformed codes, each
-failure kind, image serving). `mcp/tests/binder.rs` drives `search_cards`
-through the real Streamable HTTP adapter. For a running stack, follow the
+failure kind, image serving). `api/tests/binder.rs` covers additions, owner
+clarification, receipts, merging, unlisted cards, outages and ordering, and the
+Card Code ordering unit test is in `api/src/services/binder.rs`.
+`mcp/tests/binder.rs` drives `search_cards`, `add_binder_entry` and
+`binder_entries` through the real Streamable HTTP adapter. For a running stack, follow the
 verify-openhome Binder recipe
 ([`features/binder.md`](../.agents/skills/verify-openhome/features/binder.md)): the
 synthetic preview serves invented `OP99` cards from a loopback catalogue and logs

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO binder_addition_receipts\n            (request_id, entry_id, owner_id, card_id, language, quantity, note, result)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n         ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "request_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c4ab691379e4eb316a3a9358e694d52502a3c066817ee44b35ddd4648a9dc88d"
+}

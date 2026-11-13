@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT e.id, e.owner_id, e.card_id, e.language AS \"language: Language\", e.quantity,\n                  e.note, e.date_added, u.name AS owner_name, c.card_code, c.position\n           FROM binder_entries e\n           JOIN household_users u ON u.id = e.owner_id\n           JOIN cards c ON c.id = e.card_id\n           WHERE ? IS NULL OR e.owner_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "language: Language",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "quantity",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "note",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "date_added",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_code",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "position",
+        "ordinal": 9,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ad404bf979779d152fa3c1b0084b4b99271a881ba5a2adf6feaac59d139acde1"
+}

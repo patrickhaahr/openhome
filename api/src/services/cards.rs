@@ -5,9 +5,10 @@
 //! remembered until the next Copenhagen day, so repeating it does not hammer a volunteer's server
 //! while a card listed later can still be found.
 
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 
@@ -113,13 +114,13 @@ impl CardId {
 
 /// The catalogue's `TCGplayer` market price in USD and the day the catalogue observed it. Other
 /// currencies join this object when exchange rates exist.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardValue {
     pub usd: f64,
     pub observed_on: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Card {
     pub id: String,
     pub card_code: String,
@@ -220,20 +221,30 @@ async fn remember_unlisted(db: &SqlitePool, code: &CardCode, today: &str) -> Res
     Ok(())
 }
 
-async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
-    let code = code.as_str();
-    let rows = sqlx::query!(
-        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
-                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
-                price_observed_on
-         FROM cards WHERE card_code = ? ORDER BY position",
-        code
-    )
-    .fetch_all(db)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| Card {
+struct CardRow {
+    id: String,
+    card_code: String,
+    name: String,
+    set_id: Option<String>,
+    set_name: Option<String>,
+    rarity: Option<String>,
+    color: Option<String>,
+    card_type: Option<String>,
+    life: Option<String>,
+    cost: Option<String>,
+    power: Option<String>,
+    counter_amount: Option<String>,
+    attribute: Option<String>,
+    sub_types: Option<String>,
+    text: Option<String>,
+    inventory_price_usd: Option<f64>,
+    price_usd: Option<f64>,
+    price_observed_on: Option<String>,
+}
+
+impl From<CardRow> for Card {
+    fn from(row: CardRow) -> Self {
+        Self {
             image_path: format!("/api/binder/cards/{}/image", row.id),
             card_value: row
                 .price_usd
@@ -255,8 +266,57 @@ async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
             sub_types: row.sub_types,
             text: row.text,
             inventory_price_usd: row.inventory_price_usd,
-        })
+        }
+    }
+}
+
+async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
+    let code = code.as_str();
+    let rows = sqlx::query_as!(
+        CardRow,
+        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
+                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
+                price_observed_on
+         FROM cards WHERE card_code = ? ORDER BY position",
+        code
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows.into_iter().map(Card::from).collect())
+}
+
+pub async fn by_ids(db: &SqlitePool, ids: &[&str]) -> Result<HashMap<String, Card>> {
+    let ids = serde_json::to_string(ids).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    let rows = sqlx::query_as!(
+        CardRow,
+        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
+                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
+                price_observed_on
+         FROM cards WHERE id IN (SELECT value FROM json_each(?))",
+        ids
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.id.clone(), row.into()))
         .collect())
+}
+
+/// A Card not stored yet is looked up by the one code known without parsing its id: the id
+/// itself, which is the code of a normal print. `None` means the catalogue does not list it.
+pub async fn listed(db: &SqlitePool, catalogue: &Optcg, id: &CardId) -> Result<Option<Card>> {
+    if let Some(card) = by_ids(db, &[id.as_str()]).await?.remove(id.as_str()) {
+        return Ok(Some(card));
+    }
+    let Ok(code) = CardCode::parse(id.as_str()) else {
+        return Ok(None);
+    };
+    let today = CalendarDay::of(chrono::Utc::now()).to_string();
+    Ok(cards_of(db, catalogue, &code, &today)
+        .await?
+        .into_iter()
+        .find(|card| card.id == id.as_str()))
 }
 
 /// Fetches and encodes every image first, then writes all variants in one transaction, so a

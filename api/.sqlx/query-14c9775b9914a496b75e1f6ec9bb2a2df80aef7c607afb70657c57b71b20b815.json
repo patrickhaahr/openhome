@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT entry_id, owner_id, card_id, language AS \"language: Language\", quantity, note, result\n           FROM binder_addition_receipts WHERE request_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "entry_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "language: Language",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "quantity",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "note",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "result",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "14c9775b9914a496b75e1f6ec9bb2a2df80aef7c607afb70657c57b71b20b815"
+}

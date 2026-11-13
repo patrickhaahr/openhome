@@ -32,10 +32,12 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
     assert_eq!(
         names,
         [
+            "add_binder_entry",
             "add_important_date",
             "add_supplement",
             "add_watchlist_entry",
             "add_wishlist_item",
+            "binder_entries",
             "classify_food",
             "create_wishlist",
             "delete_important_date",
@@ -90,6 +92,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             Some(!matches!(
                 tool.name.as_ref(),
                 "create_wishlist"
+                    | "add_binder_entry"
                     | "add_wishlist_item"
                     | "update_wishlist_item"
                     | "delete_wishlist_item"
@@ -118,6 +121,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         if matches!(
             tool.name.as_ref(),
             "create_wishlist"
+                | "add_binder_entry"
                 | "add_wishlist_item"
                 | "add_watchlist_entry"
                 | "add_important_date"
@@ -156,7 +160,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         }
         if matches!(
             tool.name.as_ref(),
-            "lookup_product" | "link_product" | "search_cards"
+            "lookup_product" | "link_product" | "search_cards" | "add_binder_entry"
         ) {
             assert_eq!(
                 tool.annotations.as_ref().unwrap().open_world_hint,
@@ -171,8 +175,8 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             assert_eq!(annotations.destructive_hint, Some(false));
         }
         let required = match tool.name.as_ref() {
-            "household_users" | "wishlists" | "watchlist_entries" | "important_dates"
-            | "meal_logs" | "meals" | "supplements" | "nutrition_goal" => {
+            "household_users" | "wishlists" | "watchlist_entries" | "binder_entries"
+            | "important_dates" | "meal_logs" | "meals" | "supplements" | "nutrition_goal" => {
                 assert!(tool.input_schema.get("required").is_none());
                 continue;
             }
@@ -193,6 +197,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             }
             "exercise_history" => json!(["exercise_name", "from_day", "to_day"]),
             "search_cards" => json!(["card_code"]),
+            "add_binder_entry" => json!(["card_id", "request_id"]),
             "search_foods" => json!(["query"]),
             "food" => json!(["food_id"]),
             "log_meal" => json!(["eaten_at", "request_id"]),
@@ -230,6 +235,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
                 || tool.name.contains("important_date")
                 || tool.name.contains("food")
                 || tool.name.contains("card")
+                || tool.name.contains("binder")
                 || tool.name.contains("product")
                 || tool.name.contains("meal")
                 || tool.name.contains("supplement")
