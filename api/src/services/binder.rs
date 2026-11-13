@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use super::card_value::{BinderValue, Unpriced, Valuation};
 use super::cards::{self, Card, CardId, CardsError};
 use super::optcg::Optcg;
 use super::patch::Patch;
@@ -287,8 +288,38 @@ pub struct EntriesFilter {
     pub owner_id: Option<String>,
 }
 
-pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<BinderEntry>> {
-    load(db, filter.owner_id.as_deref(), None).await
+/// One owner's Binder Value, for an owner that has entries in the list.
+#[derive(Debug, Serialize)]
+pub struct OwnerValue {
+    pub owner_id: String,
+    #[serde(flatten)]
+    pub value: BinderValue,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Entries {
+    pub entries: Vec<BinderEntry>,
+    pub binder_values: Vec<OwnerValue>,
+}
+
+pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Entries> {
+    let entries = load(db, filter.owner_id.as_deref(), None).await?;
+    // Entries are grouped by owner, so each run of one owner is one Binder.
+    let binder_values = entries
+        .chunk_by(|a, b| a.owner_id == b.owner_id)
+        .map(|binder| OwnerValue {
+            owner_id: binder[0].owner_id.clone(),
+            value: BinderValue::total(
+                binder
+                    .iter()
+                    .map(|entry| (entry.quantity, &entry.card.valuation)),
+            ),
+        })
+        .collect();
+    Ok(Entries {
+        entries,
+        binder_values,
+    })
 }
 
 /// Read only the complete owner/entry destination.
@@ -435,8 +466,7 @@ pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<(
 /// The catalogue's prices are for English printings, so a Japanese entry has no price at all.
 fn priced_for(mut card: Card, language: Language) -> Card {
     if language == Language::Ja {
-        card.card_value = None;
-        card.inventory_price_usd = None;
+        card.valuation = Valuation::Unpriced(Unpriced::JapanesePrinting);
     }
     card
 }

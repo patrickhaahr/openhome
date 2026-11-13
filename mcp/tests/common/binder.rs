@@ -1,8 +1,29 @@
 use axum::Router;
-use openhome_api::services::optcg::Optcg;
+use openhome_api::services::{
+    card_value::{DailyRates, Rate},
+    exchange_rates,
+    optcg::Optcg,
+    training::CalendarDay,
+};
 use serde_json::json;
+use sqlx::SqlitePool;
 
 use super::serve;
+
+/// The day before today in Copenhagen: the catalogue observed its prices then, and the ECB
+/// published rates for it.
+pub fn yesterday() -> CalendarDay {
+    CalendarDay::today().previous()
+}
+
+pub async fn store_rates(db: &SqlitePool) {
+    let rates = DailyRates {
+        date: yesterday(),
+        usd: Rate::parse("1.1081").unwrap(),
+        dkk: Rate::parse("7.4754").unwrap(),
+    };
+    exchange_rates::store(db, &rates).await.unwrap();
+}
 
 pub async fn optcg() -> Optcg {
     let variant = |host: &str, image_id: &str, name: &str| {
@@ -11,7 +32,7 @@ pub async fn optcg() -> Optcg {
             "card_text": "[Your Turn] Gain +1000 power.", "set_id": "OP-99", "rarity": "L",
             "card_set_id": "OP99-001", "card_color": "Red", "card_type": "Leader", "life": "5",
             "card_cost": null, "card_power": "5000", "sub_types": "Invented Crew", "counter_amount": null,
-            "attribute": "Slash", "date_scraped": "2026-11-12", "card_image_id": image_id,
+            "attribute": "Slash", "date_scraped": yesterday().to_string(), "card_image_id": image_id,
             "card_image": format!("http://{host}/media/static/Card_Images/{image_id}.jpg"),
         })
     };

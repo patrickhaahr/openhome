@@ -14,7 +14,7 @@
 
 //! Serves the production routes, migrations and authentication over isolated in-memory databases,
 //! with loopback stand-ins for every upstream (openrouteservice, `Open-Meteo`, Immich, the IR
-//! bridge, the `SwitchBot` bridge and the OPTCG card catalogue). TMDB is the real service when
+//! bridge, the `SwitchBot` bridge, the OPTCG card catalogue and the ECB reference rates). TMDB is the real service when
 //! `TMDB_READ_ACCESS_TOKEN` is set, otherwise a loopback catalogue. All data is invented and readable in `seed/*.json`; it is
 //! generated relative to today so the current day is always populated. The household API,
 //! credentials and coordinates are never touched: the map and weather use the public Copenhagen
@@ -27,6 +27,7 @@ use std::sync::Arc;
 use openhome_api::{
     AppState, DockerCache, auth, routes,
     services::{
+        exchange_rates,
         ir::IrService,
         map::MapOrigin,
         noop_push,
@@ -49,6 +50,7 @@ mod providers;
 mod foods;
 
 mod binder;
+mod ecb;
 mod media;
 mod noop;
 mod photos;
@@ -89,6 +91,10 @@ async fn main() -> anyhow::Result<()> {
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
     let tmdb = media::tmdb().await?;
     let optcg = binder::optcg().await?;
+    // `OPENHOME_PREVIEW_ECB=outage` makes the stand-in answer 503, so only the seeded history converts prices.
+    let ecb = ecb::ecb().await?;
+    ecb::seed_history(&db).await?;
+    tokio::spawn(exchange_rates::run_scheduler(db.clone(), ecb));
     // `--food-database=importing` previews the Food page's unavailable state.
     let food_state = foods::FoodState::from_args();
     let foods = foods::synthetic_foods(food_state).await?;

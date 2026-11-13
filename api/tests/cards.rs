@@ -5,7 +5,7 @@ use axum::{
     body::Body,
     http::{Method, Request, StatusCode, header},
 };
-use common::{send_request_with_method, test_app_with_db};
+use common::{ecb, send_request_with_method, test_app_with_db};
 use image::{ImageEncoder, Rgb, RgbImage, codecs::png::PngEncoder};
 use openhome_api::{
     auth::{ApiKey, auth_middleware},
@@ -24,6 +24,7 @@ const CARD_PATH: &str = "/api/sets/card/OP01-001/";
 
 async fn app(server: &MockServer) -> Router {
     let (_, state) = test_app_with_db().await;
+    ecb::store_day(&state.db, "2026-11-12", "1.1081", "7.4754").await;
     routes::cards::router(Optcg::new(server.uri().parse().unwrap()).unwrap())
         .with_state(state)
         .layer(axum::middleware::from_fn(|request, next| {
@@ -140,13 +141,17 @@ async fn first_lookup_stores_every_variant_and_later_lookups_ask_nobody() {
     assert_eq!(normal["attribute"], "Slash");
     assert_eq!(normal["sub_types"], "Invented Crew");
     assert_eq!(normal["text"], "[Your Turn] Gain +1000 power.");
-    assert_eq!(
-        normal["card_value"],
-        json!({"usd": 2.25, "observed_on": "2026-11-12"})
-    );
+    assert_eq!(normal["card_value"]["usd"], 2.25);
+    assert_eq!(normal["card_value"]["eur"], 2.03);
+    assert_eq!(normal["card_value"]["dkk"], 15.18);
+    assert_eq!(normal["card_value"]["observed_on"], "2026-11-12");
+    assert_eq!(normal["card_value"]["rate_date"], "2026-11-12");
+    assert_eq!(normal["value_unavailable"], Value::Null);
+    assert!(normal.get("inventory_price_usd").is_none());
     assert_eq!(normal["image_path"], "/api/binder/cards/OP01-001/image");
     assert_eq!(cards[1]["id"], "OP01-001_p1");
     assert_eq!(cards[1]["card_value"], Value::Null);
+    assert_eq!(cards[1]["value_unavailable"], "no_catalogue_price");
     // The card and its two images.
     assert_eq!(requests(&server).await, 3);
 

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requestOpenHome, readBoundedBody } from "./openhome.server"
 import {
   binderEntry,
+  binderList,
   cardId,
   type BinderFailure,
   type BinderState,
@@ -43,14 +44,19 @@ async function read<T>(
 export async function readBinder(): Promise<BinderState> {
   const [owners, entries] = await Promise.all([
     read("/api/household-users", householdUser.array()),
-    read("/api/binder/entries", binderEntry.array()),
+    read("/api/binder/entries", binderList),
   ])
 
   if (owners.state !== "read") return owners
 
   if (entries.state !== "read") return entries
 
-  return { state: "available", owners: owners.data, entries: entries.data }
+  return {
+    state: "available",
+    owners: owners.data,
+    entries: entries.data.entries,
+    values: entries.data.binder_values,
+  }
 }
 
 function writeFailure(status: number): BinderWriteFailure {

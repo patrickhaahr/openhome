@@ -1,5 +1,6 @@
 import { useId, useState } from "react"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
+import { CardValueLine } from "@/components/binder-value"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -91,6 +92,7 @@ export function BinderSheet({
               </time>
             </span>
           </p>
+          <CardValueLine card={card} />
           <dl className="binder-facts">
             {factsOf(card).map(([label, value]) => (
               <div key={label}>

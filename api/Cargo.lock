@@ -1892,6 +1892,7 @@ dependencies = [
  "libavif-sys",
  "moxcms",
  "pretty_assertions",
+ "quick-xml",
  "reqwest",
  "rust_xlsxwriter",
  "scraper",

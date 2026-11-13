@@ -1,8 +1,11 @@
 pub mod adguard;
 pub mod avif_encoder;
 pub mod binder;
+pub mod card_value;
 pub mod cards;
 pub mod docker;
+pub mod ecb;
+pub mod exchange_rates;
 pub mod exercise_progress;
 pub mod feed;
 pub mod important_dates;

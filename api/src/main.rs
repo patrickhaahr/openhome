@@ -7,8 +7,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use openhome_api::auth;
 use openhome_api::routes;
 use openhome_api::services::{
-    adguard, backlight, docker, feed, ir, map, noop_push, nutrition::food_database, route_loop,
-    switchbot, weather,
+    adguard, backlight, docker, ecb, exchange_rates, feed, ir, map, noop_push,
+    nutrition::food_database, route_loop, switchbot, weather,
 };
 
 #[tokio::main]
@@ -229,6 +229,10 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http());
 
     tokio::spawn(feed::run_scheduler(state.db.clone()));
+    tokio::spawn(exchange_rates::run_scheduler(
+        state.db.clone(),
+        ecb::Ecb::new(url::Url::parse(ecb::PRODUCTION_URL)?)?,
+    ));
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
     tracing::info!("Listening on {}", listener.local_addr()?);

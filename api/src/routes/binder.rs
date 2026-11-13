@@ -11,7 +11,9 @@ use crate::{
     AppState,
     error::AppError,
     services::{
-        binder::{self, AddEntry, Addition, BinderEntry, BinderError, EditEntry, EntriesFilter},
+        binder::{
+            self, AddEntry, Addition, BinderEntry, BinderError, EditEntry, Entries, EntriesFilter,
+        },
         optcg::Optcg,
     },
 };
@@ -54,7 +56,7 @@ async fn remove_entry(
 async fn entries(
     State(state): State<AppState>,
     Query(filter): Query<EntriesFilter>,
-) -> Result<Json<Vec<BinderEntry>>, BinderError> {
+) -> Result<Json<Entries>, BinderError> {
     Ok(Json(binder::entries(&state.db, filter).await?))
 }
 

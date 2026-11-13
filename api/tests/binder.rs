@@ -6,7 +6,8 @@ use serde_json::{Value, json};
 
 fn assert_no_english_price(entry: &Value) {
     assert!(
-        entry["card"]["card_value"].is_null() && entry["card"]["inventory_price_usd"].is_null(),
+        entry["card"]["card_value"].is_null()
+            && entry["card"]["value_unavailable"] == "japanese_printing",
         "an English price is never shown for a Japanese entry: {entry}"
     );
 }
@@ -14,7 +15,8 @@ fn assert_no_english_price(entry: &Value) {
 #[tokio::test]
 async fn an_addition_stores_the_card_itself_and_returns_the_entry_with_its_card() {
     let server = catalogue().await;
-    let (app, _) = app(&server).await;
+    let (app, state) = app(&server).await;
+    store_rates(&state).await;
     let ada = owner(&app, "Ada").await;
 
     let (status, added) = add(
@@ -37,10 +39,14 @@ async fn an_addition_stores_the_card_itself_and_returns_the_entry_with_its_card(
     assert_eq!(entry["card"]["id"], "OP01-001");
     assert_eq!(entry["card"]["card_code"], "OP01-001");
     assert_eq!(entry["card"]["name"], "Invented OP01-001");
+    let yesterday = days_ago(1).to_string();
     assert_eq!(
         entry["card"]["card_value"],
-        json!({"usd": 2.25, "observed_on": "2026-11-12"})
+        json!({"usd": 2.25, "eur": 2.03, "dkk": 15.18, "observed_on": yesterday,
+               "rate_date": yesterday, "stale": false})
     );
+    assert_eq!(entry["card"]["value_unavailable"], Value::Null);
+    assert!(entry["card"].get("inventory_price_usd").is_none());
     assert_eq!(
         entry["card"]["image_path"],
         "/api/binder/cards/OP01-001/image"
@@ -100,7 +106,8 @@ async fn a_missing_owner_asks_which_household_user_and_writes_nothing() {
 #[tokio::test]
 async fn the_same_card_and_language_merges_while_another_language_is_its_own_entry() {
     let server = catalogue().await;
-    let (app, _) = app(&server).await;
+    let (app, state) = app(&server).await;
+    store_rates(&state).await;
     let ada = owner(&app, "Ada").await;
     let bo = owner(&app, "Bo").await;
 
@@ -151,8 +158,7 @@ async fn the_same_card_and_language_merges_while_another_language_is_its_own_ent
         ids(&ada_entries),
         [("OP01-001", "en", 6), ("OP01-001", "ja", 1)]
     );
-    assert!(ada_entries[0]["card"]["card_value"]["usd"].is_number());
-    assert_eq!(ada_entries[0]["card"]["inventory_price_usd"], 1.95);
+    assert_eq!(ada_entries[0]["card"]["card_value"]["usd"], 2.25);
     assert_no_english_price(&ada_entries[1]);
     assert_eq!(
         ids(&list(&app, &format!("?owner_id={bo}")).await),

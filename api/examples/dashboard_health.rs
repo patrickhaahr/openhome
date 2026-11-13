@@ -26,6 +26,11 @@ use tokio::net::TcpListener;
 #[path = "dashboard_preview/binder.rs"]
 mod binder;
 
+// Only the seeded rate history: the tests need prices to convert, not the daily job.
+#[path = "dashboard_preview/ecb.rs"]
+#[allow(dead_code)]
+mod ecb;
+
 #[path = "support/providers.rs"]
 mod providers;
 
@@ -41,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .connect("sqlite::memory:")
         .await?;
     sqlx::migrate!("./migrations").run(&db).await?;
+    ecb::seed_history(&db).await?;
     let noop_db = SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")

@@ -146,6 +146,43 @@
   margin: 0;
   font-weight: 500;
 }
+.binder-value {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0;
+}
+.binder-value-label {
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.binder-value-figure {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.binder-value-note {
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+}
+.binder-stale {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--ground);
+  font-weight: 700;
+  line-height: 1.25rem;
+}
+.binder-value-bar {
+  gap: 1rem;
+}
+.binder-value-bar .binder-value {
+  min-width: 15rem;
+  justify-items: end;
+  text-align: right;
+}
 .binder-fields {
   display: grid;
   gap: 1rem;

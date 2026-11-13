@@ -62,7 +62,6 @@ pub struct CatalogueCard {
     pub attribute: Option<String>,
     pub sub_types: Option<String>,
     pub text: Option<String>,
-    pub inventory_price_usd: Option<f64>,
     pub price: Option<Price>,
 }
 
@@ -83,7 +82,6 @@ struct Raw {
     attribute: Option<Value>,
     sub_types: Option<Value>,
     card_text: Option<Value>,
-    inventory_price: Option<Value>,
     market_price: Option<Value>,
     date_scraped: Option<Value>,
     card_image_id: Option<Value>,
@@ -265,7 +263,6 @@ impl Raw {
             attribute: text(self.attribute, MAX_TEXT_CHARS)?,
             sub_types: text(self.sub_types, MAX_TEXT_CHARS)?,
             text: text(self.card_text, MAX_CARD_TEXT_CHARS)?,
-            inventory_price_usd: number(self.inventory_price.as_ref())?,
             price,
         })
     }
