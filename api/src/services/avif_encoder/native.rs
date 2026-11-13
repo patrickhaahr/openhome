@@ -2,7 +2,7 @@
 //! libavif's safe wrapper does not expose these colour fields. Native resources remain local
 //! and are released on every error path; no pointers escape this module.
 
-use super::PhotoError;
+use super::EncodeError;
 use image::RgbImage;
 use libavif_sys as avif;
 use std::ptr::NonNull;
@@ -37,7 +37,7 @@ impl Drop for Data {
     }
 }
 
-pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8>, PhotoError> {
+pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8>, EncodeError> {
     // SAFETY: ImageBuffer guarantees contiguous width*height RGB bytes. Dimensions and row
     // bytes are checked, borrowed pixels outlive the synchronous conversion, and libavif only
     // reads RGB input. All native allocations are checked and wrapped before fallible calls.
@@ -49,7 +49,7 @@ pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8
                 8,
                 avif::AVIF_PIXEL_FORMAT_YUV420,
             ))
-            .ok_or(PhotoError::Encode)?,
+            .ok_or(EncodeError::Encode)?,
         );
         let raw = &mut *image.0.as_ptr();
         raw.colorPrimaries = avif::AVIF_COLOR_PRIMARIES_BT709 as u16;
@@ -59,13 +59,13 @@ pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8
         let mut rgb = avif::avifRGBImage::default();
         avif::avifRGBImageSetDefaults(&raw mut rgb, raw);
         rgb.format = avif::AVIF_RGB_FORMAT_RGB;
-        rgb.rowBytes = pixels.width().checked_mul(3).ok_or(PhotoError::Encode)?;
+        rgb.rowBytes = pixels.width().checked_mul(3).ok_or(EncodeError::Encode)?;
         // The C API takes a mutable pointer even for the read-only RGB-to-YUV input.
         rgb.pixels = pixels.as_raw().as_ptr().cast_mut();
         if avif::avifImageRGBToYUV(raw, &raw const rgb) != avif::AVIF_RESULT_OK {
-            return Err(PhotoError::Encode);
+            return Err(EncodeError::Encode);
         }
-        let encoder = Encoder(NonNull::new(avif::avifEncoderCreate()).ok_or(PhotoError::Encode)?);
+        let encoder = Encoder(NonNull::new(avif::avifEncoderCreate()).ok_or(EncodeError::Encode)?);
         let raw_encoder = &mut *encoder.0.as_ptr();
         raw_encoder.codecChoice = avif::AVIF_CODEC_CHOICE_AOM;
         raw_encoder.maxThreads = 1;
@@ -76,7 +76,7 @@ pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8
             || data.0.data.is_null()
             || data.0.size == 0
         {
-            return Err(PhotoError::Encode);
+            return Err(EncodeError::Encode);
         }
         // The encoder owns a valid allocation of size bytes until Data is dropped.
         Ok(std::slice::from_raw_parts(data.0.data, data.0.size).to_vec())
