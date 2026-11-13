@@ -3,7 +3,7 @@ mod common;
 use std::time::Duration;
 
 use common::{binder::*, ecb};
-use openhome_api::services::exchange_rates;
+use openhome_api::services::exchange_rates::{self, Pass};
 use serde_json::{Value, json};
 use wiremock::ResponseTemplate;
 
@@ -20,27 +20,24 @@ async fn ada_with(app: &axum::Router, cards: &[&str]) -> Vec<Value> {
     list(app, "").await
 }
 
-fn value(entry: &Value) -> (&Value, &Value) {
-    (
-        &entry["card"]["card_value"]["eur"],
-        &entry["card"]["value_unavailable"],
-    )
-}
-
 #[tokio::test]
 async fn a_refresh_stores_the_files_day_and_prices_convert_at_it() {
     let catalogue = catalogue().await;
     let (app, state) = app(&catalogue).await;
+    ecb::store_day(&state.db, &days_ago(3).to_string(), "1.2000", "7.5000").await;
     let rates = ecb::serving(ecb::file(&days_ago(1).to_string(), "1.1081", "7.4754")).await;
     let ecb = ecb::client(&rates);
 
     let entries = ada_with(&app, &["OP01-001"]).await;
     assert_eq!(
-        value(&entries[0]),
-        (&Value::Null, &json!("no_exchange_rates"))
+        entries[0]["card"]["card_value"]["rate_date"],
+        json!(days_ago(3).to_string()),
+        "before the file's day, the earlier day's rates convert"
     );
 
-    let stored = exchange_rates::refresh(&state.db, &ecb).await.unwrap();
+    let Pass::Daily(stored) = exchange_rates::refresh(&state.db, &ecb).await.unwrap() else {
+        panic!("rates reach back past every price, so the daily file is enough");
+    };
     assert_eq!(stored.date, days_ago(1));
     let entries = list(&app, "").await;
     assert_eq!(
@@ -61,6 +58,7 @@ async fn a_refresh_stores_the_files_day_and_prices_convert_at_it() {
 async fn each_day_the_ecb_publishes_is_kept_beside_the_earlier_ones() {
     let catalogue = catalogue().await;
     let (app, state) = app(&catalogue).await;
+    ecb::store_day(&state.db, &days_ago(40).to_string(), "1.1000", "7.4000").await;
     let rates = ecb::serving(ecb::file(&days_ago(20).to_string(), "1.2000", "7.5000")).await;
     let ecb = ecb::client(&rates);
     exchange_rates::refresh(&state.db, &ecb).await.unwrap();
@@ -98,18 +96,19 @@ async fn each_day_the_ecb_publishes_is_kept_beside_the_earlier_ones() {
 async fn a_failed_read_keeps_the_previous_rates_and_writes_nothing() {
     let catalogue = catalogue().await;
     let (app, state) = app(&catalogue).await;
+    ecb::store_day(&state.db, &days_ago(30).to_string(), "1.1000", "7.4000").await;
+    ecb::store_day(&state.db, &days_ago(1).to_string(), "1.1081", "7.4754").await;
     let rates = ecb::serving(ecb::file(&days_ago(1).to_string(), "1.1081", "7.4754")).await;
     let ecb = ecb::client(&rates);
-    exchange_rates::refresh(&state.db, &ecb).await.unwrap();
     let before = ada_with(&app, &["OP01-001", "OP01-010"]).await;
-    assert_eq!(value(&before[0]).0, &json!(2.03));
+    assert_eq!(before[0]["card"]["card_value"]["eur"], json!(2.03));
     assert_eq!(
-        value(&before[1]),
-        (&Value::Null, &json!("no_exchange_rates")),
+        before[1]["card"]["card_value"]["rate_date"],
+        json!(days_ago(30).to_string()),
         "nothing is stored for twenty days ago yet"
     );
 
-    // Each failing answer carries a file for twenty days ago: if it were stored, that card would be priced.
+    // Each failing answer carries a file for twenty days ago: if it were stored, that card would convert at it.
     let other_day = ecb::file(&days_ago(20).to_string(), "1.2000", "7.5000");
     let no_dkk = other_day.replace(r#"<Cube currency="DKK" rate="7.5000"/>"#, "");
     let failures = [

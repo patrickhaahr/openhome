@@ -1,10 +1,12 @@
-//! The ECB's daily euro reference rates (ADR 0017). One bounded GET with a short timeout, a byte
-//! cap and no redirects or retries; nothing the file says is trusted beyond the one date and the
-//! USD and DKK rates it must hold. Every failure is [`Unavailable`], so upstream text never
-//! reaches a caller.
+//! The ECB's euro reference rates (ADR 0017): the daily file and the full history file. One
+//! bounded GET each, with a timeout, a byte cap and no redirects or retries; nothing a file says
+//! is trusted beyond its dates and the USD and DKK rates they must hold. Every failure is
+//! [`Unavailable`], so upstream text never reaches a caller.
 //!
-//! The file is XML: `<Cube><Cube time="YYYY-MM-DD"><Cube currency="USD" rate="1.1081"/>…`, rates
-//! being units of the currency per euro for that working day.
+//! Both files are XML: `<Cube><Cube time="YYYY-MM-DD"><Cube currency="USD" rate="1.1081"/>…`,
+//! rates being units of the currency per euro for that working day. The daily file holds one
+//! day. The history file holds one per working day back to 1999, about 8 MB on a single line,
+//! so it is parsed as a stream of events and only the two kept rates of each day are retained.
 
 use std::time::Duration;
 
@@ -16,9 +18,22 @@ use super::card_value::{DailyRates, Rate};
 use super::nutrition::open_food_facts::USER_AGENT;
 use super::training::CalendarDay;
 
-pub const PRODUCTION_URL: &str = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
-const TIMEOUT: Duration = Duration::from_secs(5);
-const MAX_BYTES: usize = 64 * 1024;
+pub const DAILY_URL: &str = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+pub const HISTORY_URL: &str = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml";
+
+struct Limits {
+    timeout: Duration,
+    max_bytes: usize,
+}
+
+const DAILY: Limits = Limits {
+    timeout: Duration::from_secs(5),
+    max_bytes: 64 * 1024,
+};
+const HISTORY: Limits = Limits {
+    timeout: Duration::from_secs(60),
+    max_bytes: 16 * 1024 * 1024,
+};
 
 /// Unreachable, slow, refused, oversized or malformed; the cause is only logged.
 #[derive(Debug)]
@@ -27,25 +42,41 @@ pub struct Unavailable;
 #[derive(Clone)]
 pub struct Ecb {
     client: Client,
-    url: Url,
+    daily: Url,
+    history: Url,
 }
 
 impl Ecb {
-    /// Use [`PRODUCTION_URL`]; an explicit URL also supports isolated provider tests.
-    pub fn new(url: Url) -> anyhow::Result<Self> {
+    /// Use [`DAILY_URL`] and [`HISTORY_URL`]; explicit URLs also support isolated provider tests.
+    pub fn new(daily: Url, history: Url) -> anyhow::Result<Self> {
         let client = Client::builder()
             .user_agent(USER_AGENT)
-            .timeout(TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
-        Ok(Self { client, url })
+        Ok(Self {
+            client,
+            daily,
+            history,
+        })
     }
 
-    /// The reference rates of the file's working day.
+    /// The reference rates of the daily file's working day.
     pub async fn daily(&self) -> Result<DailyRates, Unavailable> {
+        let body = self.fetch(&self.daily, &DAILY).await?;
+        parse_daily(&body).map_err(|reason| unavailable(reason, &body.len()))
+    }
+
+    /// Every working day the history file holds that quotes both USD and DKK.
+    pub async fn history(&self) -> Result<Vec<DailyRates>, Unavailable> {
+        let body = self.fetch(&self.history, &HISTORY).await?;
+        parse_history(&body).map_err(|reason| unavailable(reason, &body.len()))
+    }
+
+    async fn fetch(&self, url: &Url, limits: &Limits) -> Result<Vec<u8>, Unavailable> {
         let mut response = self
             .client
-            .get(self.url.clone())
+            .get(url.clone())
+            .timeout(limits.timeout)
             .send()
             .await
             .map_err(|error| unavailable("request failed", &error))?;
@@ -56,9 +87,9 @@ impl Ecb {
             .headers()
             .get(header::CONTENT_LENGTH)
             .and_then(|length| length.to_str().ok()?.parse::<usize>().ok())
-            .is_some_and(|length| length > MAX_BYTES)
+            .is_some_and(|length| length > limits.max_bytes)
         {
-            return Err(unavailable("oversized body", &MAX_BYTES));
+            return Err(unavailable("oversized body", &limits.max_bytes));
         }
         let mut body = Vec::new();
         while let Some(chunk) = response
@@ -66,12 +97,12 @@ impl Ecb {
             .await
             .map_err(|error| unavailable("reading the body failed", &error))?
         {
-            if body.len() + chunk.len() > MAX_BYTES {
-                return Err(unavailable("oversized body", &MAX_BYTES));
+            if body.len() + chunk.len() > limits.max_bytes {
+                return Err(unavailable("oversized body", &limits.max_bytes));
             }
             body.extend_from_slice(&chunk);
         }
-        parse(&body).map_err(|reason| unavailable(reason, &body.len()))
+        Ok(body)
     }
 }
 
@@ -80,20 +111,44 @@ fn unavailable(what: &str, detail: &dyn std::fmt::Debug) -> Unavailable {
     Unavailable
 }
 
-#[derive(Default)]
-struct Found {
-    date: Option<CalendarDay>,
+/// A dated `Cube` as the file has it; very old days lack some currencies.
+struct Day {
+    date: CalendarDay,
     usd: Option<Rate>,
     dkk: Option<Rate>,
 }
 
-/// Strict on structure, silent about currencies it does not use: one dated `Cube` under the
-/// envelope's own `Cube`, holding USD and DKK once each. A DTD is refused outright.
-fn parse(body: &[u8]) -> Result<DailyRates, &'static str> {
+impl Day {
+    fn complete(self) -> Option<DailyRates> {
+        Some(DailyRates {
+            date: self.date,
+            usd: self.usd?,
+            dkk: self.dkk?,
+        })
+    }
+}
+
+fn parse_daily(body: &[u8]) -> Result<DailyRates, &'static str> {
+    let [day] = <[Day; 1]>::try_from(days(body)?).map_err(|_| "not exactly one dated Cube")?;
+    day.complete().ok_or("no complete day of USD and DKK rates")
+}
+
+/// A day without USD or DKK is skipped; a file with no complete day is refused.
+fn parse_history(body: &[u8]) -> Result<Vec<DailyRates>, &'static str> {
+    let complete: Vec<_> = days(body)?.into_iter().filter_map(Day::complete).collect();
+    if complete.is_empty() {
+        return Err("no complete day of USD and DKK rates");
+    }
+    Ok(complete)
+}
+
+/// Strict on structure, silent about currencies it does not use: dated `Cube`s under the
+/// envelope's own `Cube`, each holding USD and DKK at most once. A DTD is refused outright.
+fn days(body: &[u8]) -> Result<Vec<Day>, &'static str> {
     let text = std::str::from_utf8(body).map_err(|_| "not UTF-8")?;
     let mut reader = Reader::from_str(text);
     let mut path: Vec<String> = Vec::new();
-    let mut found = Found::default();
+    let mut days: Vec<Day> = Vec::new();
     loop {
         let (element, opened) = match reader.read_event().map_err(|_| "not well-formed XML")? {
             Event::Eof if path.is_empty() => break,
@@ -122,18 +177,19 @@ fn parse(body: &[u8]) -> Result<DailyRates, &'static str> {
                 Ok(None)
             };
             let parents: Vec<&str> = path.iter().map(String::as_str).collect();
-            match parents.as_slice() {
-                ["Envelope", "Cube"] => {
+            match (parents.as_slice(), days.last_mut()) {
+                (["Envelope", "Cube"], _) => {
                     let date = attribute("time")?.ok_or("a Cube without a time")?;
-                    let date = CalendarDay::parse(&date).ok_or("an unusable date")?;
-                    if found.date.replace(date).is_some() {
-                        return Err("more than one dated Cube");
-                    }
+                    days.push(Day {
+                        date: CalendarDay::parse(&date).ok_or("an unusable date")?,
+                        usd: None,
+                        dkk: None,
+                    });
                 }
-                ["Envelope", "Cube", "Cube"] => {
+                (["Envelope", "Cube", "Cube"], Some(day)) => {
                     let slot = match attribute("currency")?.as_deref() {
-                        Some("USD") => Some(&mut found.usd),
-                        Some("DKK") => Some(&mut found.dkk),
+                        Some("USD") => Some(&mut day.usd),
+                        Some("DKK") => Some(&mut day.dkk),
                         _ => None,
                     };
                     if let Some(slot) = slot {
@@ -151,14 +207,7 @@ fn parse(body: &[u8]) -> Result<DailyRates, &'static str> {
             path.push(name);
         }
     }
-    match found {
-        Found {
-            date: Some(date),
-            usd: Some(usd),
-            dkk: Some(dkk),
-        } => Ok(DailyRates { date, usd, dkk }),
-        _ => Err("no complete day of USD and DKK rates"),
-    }
+    Ok(days)
 }
 
 #[cfg(test)]
@@ -180,7 +229,7 @@ mod tests {
 
     #[test]
     fn the_published_file_yields_its_day_and_the_two_rates() {
-        let rates = parse(ENVELOPE.as_bytes()).unwrap();
+        let rates = parse_daily(ENVELOPE.as_bytes()).unwrap();
         assert_eq!(rates.date.to_string(), "2026-11-12");
         assert_eq!(rates.usd.micros(), 1_108_100);
         assert_eq!(rates.dkk.micros(), 7_475_400);
@@ -210,14 +259,64 @@ mod tests {
             "{\"rates\":{}}".into(),
         ];
         for body in broken {
-            assert!(parse(body.as_bytes()).is_err(), "{body}");
+            assert!(parse_daily(body.as_bytes()).is_err(), "{body}");
         }
-        assert!(parse(b"\xff\xfe").is_err());
+        assert!(parse_daily(b"\xff\xfe").is_err());
     }
 
     #[test]
     fn rates_of_currencies_it_does_not_use_may_be_odd() {
         let odd = ENVELOPE.replace("171.30", "n/a");
-        assert!(parse(odd.as_bytes()).is_ok());
+        assert!(parse_daily(odd.as_bytes()).is_ok());
+    }
+
+    const HISTORY_FILE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<gesmes:Envelope xmlns:gesmes="http://www.gesmes.org/xml/2002-08-01" xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref"><gesmes:subject>Reference rates</gesmes:subject><gesmes:Sender><gesmes:name>European Central Bank</gesmes:name></gesmes:Sender><Cube><Cube time="2026-11-12"><Cube currency="USD" rate="1.1081"/><Cube currency="DKK" rate="7.4754"/></Cube><Cube time="2026-11-11"><Cube currency="USD" rate="1.1000"/><Cube currency="DKK" rate="7.4700"/></Cube><Cube time="1999-01-04"><Cube currency="USD" rate="1.1789"/><Cube currency="DKK" rate="7.4501"/></Cube></Cube></gesmes:Envelope>"#;
+
+    #[test]
+    fn the_history_file_yields_every_day_it_holds() {
+        let days = parse_history(HISTORY_FILE.as_bytes()).unwrap();
+        let dates: Vec<_> = days.iter().map(|day| day.date.to_string()).collect();
+        assert_eq!(dates, ["2026-11-12", "2026-11-11", "1999-01-04"]);
+        assert_eq!(days[2].usd.micros(), 1_178_900);
+        assert_eq!(days[2].dkk.micros(), 7_450_100);
+    }
+
+    #[test]
+    fn a_history_day_without_usd_or_dkk_is_skipped() {
+        let sparse = HISTORY_FILE
+            .replace(r#"<Cube currency="DKK" rate="7.4700"/>"#, "")
+            .replace(r#"<Cube currency="USD" rate="1.1789"/>"#, "");
+        let days = parse_history(sparse.as_bytes()).unwrap();
+        let dates: Vec<_> = days.iter().map(|day| day.date.to_string()).collect();
+        assert_eq!(dates, ["2026-11-12"]);
+    }
+
+    #[test]
+    fn a_malformed_history_file_is_rejected_outright() {
+        let broken = [
+            HISTORY_FILE.replace("7.4700", "free"),
+            HISTORY_FILE.replace("1999-01-04", "1999-13-04"),
+            HISTORY_FILE.replace(r#" time="1999-01-04""#, ""),
+            HISTORY_FILE.replace(
+                r#"<Cube currency="USD" rate="1.1000"/>"#,
+                r#"<Cube currency="USD" rate="1.1000"/><Cube currency="USD" rate="1.1"/>"#,
+            ),
+            HISTORY_FILE.replace("</gesmes:Envelope>", ""),
+            HISTORY_FILE.replace(
+                "<gesmes:Envelope",
+                "<!DOCTYPE x [<!ENTITY a \"b\">]><gesmes:Envelope",
+            ),
+            HISTORY_FILE.replace(
+                r#"<Cube currency="USD" rate="1.1081"/>"#,
+                r#"<Cube currency="USD"/>"#,
+            ),
+            HISTORY_FILE.replace("</Cube></Cube></gesmes", "</Cube></gesmes"),
+            "<gesmes:Envelope xmlns:gesmes=\"x\"><Cube/></gesmes:Envelope>".into(),
+            String::new(),
+        ];
+        for body in broken {
+            assert!(parse_history(body.as_bytes()).is_err(), "{body}");
+        }
     }
 }

@@ -166,12 +166,38 @@ impl Receipt {
                 "The retried entry was removed; use a new request_id to add it again".into(),
             ));
         }
-        let entry = serde_json::from_str(&self.result)
-            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
         Ok(Addition {
-            entry,
+            entry: self.entry(db).await?,
             replayed: true,
         })
+    }
+
+    /// The stored response, or for a receipt written before Card Value the same response with
+    /// the Card's value as of now: its `card_value` was `{usd, observed_on}` or null with no
+    /// reason, which holds no EUR or DKK and so cannot decode. The receipt row is never rewritten.
+    async fn entry(&self, db: &SqlitePool) -> Result<BinderEntry> {
+        let decode = |error| sqlx::Error::Decode(Box::new(error));
+        if let Ok(entry) = serde_json::from_str(&self.result) {
+            return Ok(entry);
+        }
+        let mut stored: serde_json::Value = serde_json::from_str(&self.result).map_err(decode)?;
+        let card = stored
+            .get_mut("card")
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or(sqlx::Error::RowNotFound)?;
+        card.remove("card_value");
+        // Only to satisfy the decoder; the valuation is replaced below.
+        card.insert(
+            "value_unavailable".into(),
+            serde_json::json!(Unpriced::NoCataloguePrice),
+        );
+        let mut entry: BinderEntry = serde_json::from_value(stored).map_err(decode)?;
+        let current = cards::by_ids(db, &[&self.card_id])
+            .await?
+            .remove(&self.card_id)
+            .ok_or(sqlx::Error::RowNotFound)?;
+        entry.card.valuation = priced_for(current, entry.language).valuation;
+        Ok(entry)
     }
 }
 

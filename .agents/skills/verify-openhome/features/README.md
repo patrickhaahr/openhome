@@ -34,4 +34,4 @@ Each feature file has an H1, one paragraph, then exactly four H2s in order: `Sub
 
 ## Planned: Binder (epic #285)
 
-`binder.md` covers card search, Binder Entries and Card and Binder Values, with the loopback OPTCG and ECB stand-ins in the preview example (`api/examples/dashboard_preview/binder.rs`, `ecb.rs`). Later Binder tickets extend it. Never point the preview at the live OPTCG service (one volunteer's server) or the live ECB file.
+`binder.md` covers card search and Binder Entries, and `binder-values.md` Card and Binder Values, with the loopback OPTCG and ECB stand-ins in the preview example (`api/examples/dashboard_preview/binder.rs`, `ecb.rs`). Later Binder tickets extend it. Never point the preview at the live OPTCG service (one volunteer's server) or the live ECB file.

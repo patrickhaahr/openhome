@@ -6,22 +6,30 @@ asks for euros (EUR) or US dollars (USD).
 
 ## Rates
 
-`services/ecb` is the only code that talks to the European Central Bank. It reads
-`https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml` (replaceable only in
-code, for tests and the preview) with a five second timeout, a 64 KiB limit, no
-redirects and the app's `User-Agent`. The file quotes every currency per one euro.
-OpenHome keeps USD and DKK, so USD per EUR is the USD rate and DKK per EUR the DKK rate.
+`services/ecb` is the only code that talks to the European Central Bank. It reads two
+files (replaceable only in code, for tests and the preview), both with no redirects and the
+app's `User-Agent`. The daily file, `eurofxref-daily.xml`, has a five second timeout and a
+64 KiB limit. The history file, `eurofxref-hist.xml`, holds every working day back to 1999
+(about 8 MB on one line), so it has a 60 second timeout and a 16 MiB limit. Both quote every
+currency per one euro. OpenHome keeps USD and DKK, so USD per EUR is the USD rate and DKK per
+EUR the DKK rate.
 
 The parser is strict: the document must be `Envelope > Cube > Cube[time] >
-Cube[currency, rate]` with one date, no DTD, each currency at most once, USD and DKK
-present and every kept rate a positive decimal of at most six decimals. Anything else, and
-every network failure, is an `Unavailable` that only reaches the log.
+Cube[currency, rate]`, with no DTD, each currency at most once per day and every kept rate a
+positive decimal of at most six decimals. The daily file must hold one date with USD and DKK.
+The history file is read as a stream of events, never a DOM, and a day that lacks USD or DKK
+is skipped (very old days lack some currencies) while a malformed file is refused whole.
+Anything else, and every network failure, is an `Unavailable` that only reaches the log.
 
 `services/exchange_rates` stores one row per ECB date in `exchange_rates` (migration
-0033, rates as integer micro-units) and refreshes at startup and every 24 hours, like
-the feed scheduler. A failed refresh writes nothing, so the previous rates stay in use. A
-day's row is replaced by a later read of the same date. Nothing is backfilled: a price
-observed before the first stored rate day has no Card Value.
+0033, rates as integer micro-units). Each pass reads the history file when the stored rates
+do not cover the oldest stored Card observation date (`MIN(cards.price_observed_on)`): there
+are no rates, or no stored day at or before that date. Otherwise it reads the daily file. A
+pass runs at startup and every 24 hours, like the feed scheduler, and after 15 minutes when
+it failed. A pass writes all its days in one transaction, so a failed pass writes nothing and
+the previous rates stay in use. A day's row is replaced by a later read of the same date.
+After one backfill the earliest stored day is 1999-01-04, so the history file is not read
+again unless a Card was observed before that.
 
 ## Conversion
 
@@ -55,7 +63,11 @@ without a value are counted in `unpriced_entries`, and the oldest observation da
 among the priced ones (null when none is priced).
 
 A retried addition replays the stored receipt, so its `card_value` is the snapshot taken
-when it was added, including its `stale` flag. A fresh read is current.
+when it was added, including its `stale` flag. A fresh read is current. A receipt written
+before Card Value existed holds `card_value` as `{usd, observed_on}` or null and no
+`value_unavailable`, which holds no EUR or DKK. Its replay keeps every other stored field and
+takes the Card's value as of now (a Japanese entry stays `japanese_printing`); the receipt row
+is never rewritten.
 
 ## Dashboard
 

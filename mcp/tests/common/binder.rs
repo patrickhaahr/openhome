@@ -22,7 +22,7 @@ pub async fn store_rates(db: &SqlitePool) {
         usd: Rate::parse("1.1081").unwrap(),
         dkk: Rate::parse("7.4754").unwrap(),
     };
-    exchange_rates::store(db, &rates).await.unwrap();
+    exchange_rates::store(db, &[rates]).await.unwrap();
 }
 
 pub async fn optcg() -> Optcg {

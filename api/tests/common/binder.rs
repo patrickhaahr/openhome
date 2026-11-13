@@ -25,13 +25,14 @@ use wiremock::{
 
 use super::{send_request_with_method, test_app_with_db};
 
-pub const LISTED: [(&str, &[&str]); 6] = [
+pub const LISTED: [(&str, &[&str]); 7] = [
     ("OP01-001", &["OP01-001", "OP01-001_p1"]),
     ("OP01-002", &["OP01-002"]),
     ("OP01-010", &["OP01-010", "OP01-010_p1", "OP01-010_p2"]),
     ("OP09-034", &["EB03_OP09-034_p1", "OP09-034"]),
     ("OP10-001", &["OP10-001"]),
     ("ST01-001", &["ST01-001"]),
+    ("OP02-001", &["OP02-001"]),
 ];
 pub const OUTAGE: &str = "OP77-503";
 
@@ -43,6 +44,7 @@ pub fn market_price(code: &str) -> (Option<f64>, u64) {
         "OP01-010" => (Some(2.25), 20),
         "OP10-001" => (Some(7.10), 30),
         "ST01-001" => (Some(3.33), 31),
+        "OP02-001" => (Some(4.00), 120),
         _ => (Some(2.25), 1),
     }
 }
@@ -62,11 +64,11 @@ pub async fn store_rates(state: &AppState) {
     ] {
         exchange_rates::store(
             &state.db,
-            &DailyRates {
+            &[DailyRates {
                 date: days_ago(days),
                 usd: Rate::parse(usd).unwrap(),
                 dkk: Rate::parse(dkk).unwrap(),
-            },
+            }],
         )
         .await
         .unwrap();

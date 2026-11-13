@@ -91,9 +91,8 @@ async fn main() -> anyhow::Result<()> {
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
     let tmdb = media::tmdb().await?;
     let optcg = binder::optcg().await?;
-    // `OPENHOME_PREVIEW_ECB=outage` makes the stand-in answer 503, so only the seeded history converts prices.
+    // `OPENHOME_PREVIEW_ECB=outage` makes the stand-in answer 503, so no rates arrive.
     let ecb = ecb::ecb().await?;
-    ecb::seed_history(&db).await?;
     tokio::spawn(exchange_rates::run_scheduler(db.clone(), ecb));
     // `--food-database=importing` previews the Food page's unavailable state.
     let food_state = foods::FoodState::from_args();

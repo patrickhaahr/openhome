@@ -43,7 +43,7 @@ the default details.
 | Wishlist Item | Required | Current item, `replayed: true` | Item row missing (UUID id, no foreign key) | Migration 0008 backfills title-only details |
 | Watchlist Entry | Required | Current entry within its owner | Entry row missing | n/a |
 | Important Date | Required | Current date with figures | Date row missing | n/a |
-| Binder Entry | Required | Original accepted entry, `replayed: true` | Entry row missing (UUID id, no foreign key) | n/a |
+| Binder Entry | Required | Original accepted entry, `replayed: true` | Entry row missing (UUID id, no foreign key) | Receipts from before Card Value replay with the Card's value as of now; the row is not rewritten |
 | Product link | Required | Original accepted Product | Product row missing ("no longer stored") | Conflict: look the Product up first |
 | Meal Log | Required | Original accepted Meal Log | Meal Log row missing | Conflict: read the current meal log first |
 | Meal | Required | Original accepted Meal | Meal row missing | Conflict: read the current meal first |

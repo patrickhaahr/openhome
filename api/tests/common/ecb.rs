@@ -1,5 +1,7 @@
-//! A synthetic ECB reference-rate server: the daily file at its production path.
+//! A synthetic ECB reference-rate server: the daily and history files at their production paths.
 #![allow(dead_code)]
+
+use std::fmt::Write;
 
 use openhome_api::services::{
     card_value::{DailyRates, Rate},
@@ -14,6 +16,7 @@ use wiremock::{
 };
 
 pub const FILE_PATH: &str = "/stats/eurofxref/eurofxref-daily.xml";
+pub const HISTORY_PATH: &str = "/stats/eurofxref/eurofxref-hist.xml";
 
 /// One stored rate day, as the daily job would have stored it.
 pub async fn store_day(db: &SqlitePool, date: &str, usd: &str, dkk: &str) {
@@ -22,7 +25,7 @@ pub async fn store_day(db: &SqlitePool, date: &str, usd: &str, dkk: &str) {
         usd: Rate::parse(usd).unwrap(),
         dkk: Rate::parse(dkk).unwrap(),
     };
-    exchange_rates::store(db, &rates).await.unwrap();
+    exchange_rates::store(db, &[rates]).await.unwrap();
 }
 
 /// The file's real shape: one dated Cube holding each currency's rate per euro.
@@ -43,6 +46,27 @@ pub fn file(date: &str, usd: &str, dkk: &str) -> String {
     )
 }
 
+/// The history file's shape: every day under one `Cube`, newest first, on a single line. A day
+/// with no DKK rate stands for the ECB's old days that lack some currencies.
+pub fn history_file(days: &[(&str, &str, Option<&str>)]) -> String {
+    let mut cubes = String::new();
+    for (date, usd, dkk) in days {
+        let dkk = dkk.map_or_else(String::new, |rate| {
+            format!(r#"<Cube currency="DKK" rate="{rate}"/>"#)
+        });
+        write!(
+            cubes,
+            r#"<Cube time="{date}"><Cube currency="USD" rate="{usd}"/><Cube currency="JPY" rate="171.30"/>{dkk}</Cube>"#
+        )
+        .unwrap();
+    }
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<gesmes:Envelope xmlns:gesmes="http://www.gesmes.org/xml/2002-08-01" xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref"><gesmes:subject>Reference rates</gesmes:subject><gesmes:Sender><gesmes:name>European Central Bank</gesmes:name></gesmes:Sender><Cube>{cubes}</Cube></gesmes:Envelope>"#
+    )
+}
+
+/// Serve the daily file; clears whatever the server served before, the history file included.
 pub async fn serve(server: &MockServer, response: ResponseTemplate) {
     server.reset().await;
     Mock::given(method("GET"))
@@ -50,6 +74,10 @@ pub async fn serve(server: &MockServer, response: ResponseTemplate) {
         .respond_with(response)
         .mount(server)
         .await;
+}
+
+pub async fn serve_history(server: &MockServer, response: ResponseTemplate) {
+    also(server, HISTORY_PATH, response).await;
 }
 
 /// Another path on the same server, such as a redirect's target.
@@ -68,5 +96,6 @@ pub async fn serving(body: String) -> MockServer {
 }
 
 pub fn client(server: &MockServer) -> Ecb {
-    Ecb::new(format!("{}{FILE_PATH}", server.uri()).parse().unwrap()).unwrap()
+    let at = |path: &str| format!("{}{path}", server.uri()).parse().unwrap();
+    Ecb::new(at(FILE_PATH), at(HISTORY_PATH)).unwrap()
 }

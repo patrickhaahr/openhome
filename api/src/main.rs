@@ -231,7 +231,10 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(feed::run_scheduler(state.db.clone()));
     tokio::spawn(exchange_rates::run_scheduler(
         state.db.clone(),
-        ecb::Ecb::new(url::Url::parse(ecb::PRODUCTION_URL)?)?,
+        ecb::Ecb::new(
+            url::Url::parse(ecb::DAILY_URL)?,
+            url::Url::parse(ecb::HISTORY_URL)?,
+        )?,
     ));
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
