@@ -19,9 +19,9 @@ import {
 } from "@/lib/binder"
 
 /**
- * One Household User's Binder, a 3×3 page at a time in Card Code order. The person keys choose
- * whose Binder; the arrows and the arrow keys turn pages. A read that failed offers a way to
- * check again and never shows an empty Binder.
+ * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
+ * The person keys choose whose Binder; the arrows and the arrow keys turn the spread. A read
+ * that failed offers a way to check again and never shows an empty Binder.
  */
 export function BinderBook({
   data,
@@ -38,7 +38,7 @@ export function BinderBook({
 
   return (
     <div className="lists binder">
-      {view.view === "empty" || view.view === "pages" ? (
+      {view.view === "empty" || view.view === "spread" ? (
         <div className="lists-bar">
           <PersonKeys
             owners={view.owners}
@@ -107,10 +107,11 @@ function Body({
           <p>Ask Hermes to add cards from a photo.</p>
         </div>
       )
-    case "pages":
+    case "spread":
       return (
-        <Pages
-          pockets={view.pockets}
+        <Spread
+          left={view.left}
+          right={view.right}
           index={view.index}
           count={view.count}
           owner={view.owner.id}
@@ -128,14 +129,16 @@ function isEditing(target: EventTarget | null): boolean {
   )
 }
 
-function Pages({
-  pockets,
+function Spread({
+  left,
+  right,
   index,
   count,
   owner,
   choose,
 }: {
-  pockets: BinderEntry[]
+  left: BinderEntry[]
+  right: BinderEntry[]
   index: number
   count: number
   owner: string
@@ -166,27 +169,13 @@ function Pages({
     return () => window.removeEventListener("keydown", onKey)
   })
 
-  const empty = Array.from(
-    { length: pocketsPerPage - pockets.length },
-    (_, slot) => slot
-  )
+  const first = index * 2 + 1
 
   return (
-    <section className="binder-book" aria-label="Binder pages">
+    <section className="binder-book" aria-label="Binder spread">
       <div className="binder-spread">
-        <ol className="binder-page" key={index}>
-          {pockets.map((entry) => (
-            <Pocket key={entry.id} entry={entry} />
-          ))}
-          {empty.map((slot) => (
-            <li
-              key={`empty-${slot}`}
-              className="pocket"
-              data-empty=""
-              aria-hidden="true"
-            />
-          ))}
-        </ol>
+        <Page key={`${index}-left`} number={first} entries={left} />
+        <Page key={`${index}-right`} number={first + 1} entries={right} />
       </div>
       <div className="binder-turn">
         <Button
@@ -196,10 +185,10 @@ function Pages({
           onClick={() => turn(index - 1)}
         >
           <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
-          <span className="sr-only">Previous page</span>
+          <span className="sr-only">Previous pages</span>
         </Button>
         <p className="binder-folio num" aria-live="polite">
-          Page {index + 1} of {count}
+          Pages {first}–{first + 1} of {count * 2}
         </p>
         <Button
           variant="outline"
@@ -208,10 +197,40 @@ function Pages({
           onClick={() => turn(index + 1)}
         >
           <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
-          <span className="sr-only">Next page</span>
+          <span className="sr-only">Next pages</span>
         </Button>
       </div>
     </section>
+  )
+}
+
+/** One 3×3 page, filled to nine pockets so the rest show empty. */
+function Page({
+  number,
+  entries,
+}: {
+  number: number
+  entries: BinderEntry[]
+}): React.JSX.Element {
+  const empty = Array.from(
+    { length: pocketsPerPage - entries.length },
+    (_, slot) => slot
+  )
+
+  return (
+    <ol className="binder-page" aria-label={`Page ${number}`}>
+      {entries.map((entry) => (
+        <Pocket key={entry.id} entry={entry} />
+      ))}
+      {empty.map((slot) => (
+        <li
+          key={`empty-${slot}`}
+          className="pocket"
+          data-empty=""
+          aria-hidden="true"
+        />
+      ))}
+    </ol>
   )
 }
 

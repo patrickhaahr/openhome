@@ -4,12 +4,12 @@ import { PageHead } from "@/components/page-head"
 import { binderSearch } from "@/lib/binder"
 import { loadBinder } from "@/lib/binder.functions"
 
-/** Each Household User's Binder as 3×3 pocket pages of official card images, read-only. */
+/** Each Household User's Binder as spreads of two facing 3×3 pocket pages of official card images, read-only. */
 export const Route = createFileRoute("/binder")({
   head: () => ({ meta: [{ title: "Binder · OpenHome" }] }),
   validateSearch: binderSearch,
   loader: () => loadBinder(),
-  // Choosing a person or turning a page never reads again; entering the page always does.
+  // Choosing a person or turning a spread never reads again; entering the page always does.
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: 0,
   headers: () => ({ "Cache-Control": "no-store" }),

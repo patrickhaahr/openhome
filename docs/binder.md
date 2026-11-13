@@ -7,7 +7,7 @@ and storage decisions are in [ADR 0017](adr/0017-binder-card-data-from-optcg.md)
 catalogue: Hermes looks a card up by Card Code and Axum stores it.
 [#288](https://github.com/patrickhaahr/openhome/issues/288) adds Binder Entries:
 Hermes adds cards from a photo and lists a Binder in Card Code order. [#289](https://github.com/patrickhaahr/openhome/issues/289) adds the read-only
-Dashboard Binder page: one owner's entries as 3×3 pocket pages, with card images
+Dashboard Binder page: one owner's entries as spreads of two facing 3×3 pocket pages, with card images
 relayed by the Dashboard's `/binder-image/{id}` route from the authenticated Axum
 image read. Editing and removing entries, Binder Value, values in other
 currencies, the daily refresh and the rest of the Dashboard follow under epic [#285](https://github.com/patrickhaahr/openhome/issues/285).

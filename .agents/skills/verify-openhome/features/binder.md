@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder read-only, as 3×3 pocket pages. There is no editing or removal of entries, no currency other than USD, no Binder Value and no card sheet yet.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder read-only, as spreads of two facing 3×3 pocket pages. There is no editing or removal of entries, no currency other than USD, no Binder Value and no card sheet yet.
 
 ## Sub-features
 
@@ -19,8 +19,8 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-ja` adds a `ja` copy: a separate entry with no `card_value` and no `inventory_price_usd`.
 - `binder-unlisted-add` adds a card the catalogue does not list: `card_not_listed`, nothing written.
 - `binder-list` lists one owner and every owner, in Card Code order with a parallel after its normal print.
-- `binder-dash-open` opens Binder from Main navigation on the Dashboard (Home has the link, with no summary) and shows Alex's first page.
-- `binder-dash-page` pages by the arrow buttons and the ArrowLeft/ArrowRight keys, in landscape and portrait.
+- `binder-dash-open` opens Binder from Main navigation on the Dashboard (Home has the link, with no summary) and shows Alex's first spread.
+- `binder-dash-page` turns whole spreads by the arrow buttons and the ArrowLeft/ArrowRight keys, in landscape and portrait.
 - `binder-dash-owner` switches between Alex, Robin and Sam under `Whose Binder`.
 - `binder-dash-empty` opens Sam, whose Binder is empty.
 - `binder-dash-images` shows that every card image comes from the Dashboard origin.
@@ -58,10 +58,10 @@ Preconditions:
 - **Unsearched parallel.** On a fresh launch, `add_binder_entry` with `"card_id":"OP99-002_p1"` for Sam succeeds without a prior `search_cards`: the stand-in log shows the `OP99-002` lookup and its images, and `binder_entries` lists the entry. A later `search_cards` for `OP99-002` adds no log line.
 - **Unlisted.** `add_binder_entry` with `"card_id":"OP99-777"` exits 2 with `status: 404`, `code: "card_not_listed"`. The list is unchanged and the stand-in log shows one 404 for it (or none if the code was already searched unlisted today). An id that holds no listed code, such as `OP99-002_p9` (the code lists no such variant), is rejected the same way.
 - **Order.** Search `OP99-002`, then add `OP99-010`, the parallel `OP99-002_p1`, `OP99-002` and `OP99-001_p1` for Sam, and one card for Robin. `binder_entries` with Sam's `owner_id` lists the earlier entries too, in Card Code order, `OP99-001` en then ja, `OP99-001_p1`, `OP99-002`, `OP99-002_p1`, `OP99-010`.
-- **Dashboard open.** Open `$DASHBOARD_URL`'s port in a T3 preview tab at the `ipad-air` preset (landscape), then click `Binder` in `Main navigation`. Alex's first page shows nine pockets and `Page 1 of 2`; the credit line names the OPTCG catalogue. Open the tab with `open: true`: a background tab leaves the pictures undecoded, so only their code and name show.
-- **Dashboard paging.** Click `Next page`: three pockets and `Page 2 of 2`, with `Next page` disabled. Press `ArrowLeft` to return. The URL carries `person` and `page`. Repeat with `preview_resize` `orientation: portrait`: the page fills the width and still fits without scrolling.
+- **Dashboard open.** Open `$DASHBOARD_URL`'s port in a T3 preview tab, then apply the `ipad-air` preset (landscape) a second time after opening: the preview ignores the first. Click `Binder` in `Main navigation`. Alex's first spread shows two facing pages (`Page 1` with nine pockets, `Page 2` with three filled and six empty) and `Pages 1–2 of 2`; the credit line names the OPTCG catalogue. Open the tab with `open: true`: a background tab leaves the pictures undecoded, so only their code and name show.
+- **Dashboard paging.** The seed leaves Alex one spread. To see the second, add eight entries for Alex with `add_binder_entry` (`OP99-001` en and ja, `OP99-001_p1`, `OP99-002`, `OP99-002_p1`, `OP99-010`, `OP99-020`, `EB99_OP99-020_P1`), which makes 20: the first spread is full (the right page starts at the 10th entry, `OP99-005`), the second shows two entries on `Page 3`, an empty `Page 4` and `Pages 3–4 of 4`. Click `Next pages`: `Next pages` is disabled. Press `ArrowLeft` to return. The URL carries `person` and `page` (the spread number). Repeat with `preview_resize` `orientation: portrait`: both pages stay side by side with smaller pockets and the page does not scroll horizontally.
 - **Dashboard markers.** Alex's `OP99-012` pocket shows `×3`, `OP99-005` `×2` and the `OP99-004` Japanese entry `JP` . A quantity of 1 shows nothing.
-- **Dashboard owners.** Click `Robin`: four pockets (one `JP`, one `×4`), `Page 1 of 1`. Click `Sam`: "Sam’s Binder is empty" and no page controls.
+- **Dashboard owners.** Click `Robin`: four pockets (one `JP`, one `×4`), `Pages 1–2 of 2`. Click `Sam`: "Sam’s Binder is empty" and no page controls.
 - **Dashboard images.** In the tab, `preview_evaluate` the `.pocket img` `src` values: all `/binder-image/<id>` on the Dashboard origin, and `performance.getEntriesByType('resource')` holds no entry outside it. `curl "$DASHBOARD_URL/binder-image/OP99-001"` gives `image/avif`, an unknown or malformed id 404. The stack log's catalogue lines do not grow when the Dashboard loads.
 - **Dashboard failed read.** The stack cannot lose its API without taking the Dashboard down (`dashboard-synthetic` stops both). Start a second `vite dev` on a free port with `OPENHOME_API_URL` pointing at a port nothing listens on and `API_KEY=synthetic-dashboard-api-key`, open `/binder` there: "Binder unavailable" and a `Check again` button, no empty Binder. Then start any GET forwarder on that port to `$API_URL` (with the bearer header) and press `Check again`: the pockets appear. Stop both afterwards.
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.

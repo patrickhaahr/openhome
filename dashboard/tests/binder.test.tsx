@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
 // The private server transport calls Axum; browser CORS applies only to Start RPCs.
+import { createServer } from "node:http"
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -18,6 +19,7 @@ import {
   test,
   vi,
 } from "vitest"
+import { z } from "zod"
 import { BinderBook } from "@/components/binder-book"
 import { paginate, type BinderSearch } from "@/lib/binder"
 import { readBinder, readCardImage } from "@/lib/binder.server"
@@ -154,6 +156,14 @@ const pockets = (): HTMLElement[] =>
     (pocket) => !pocket.hasAttribute("data-empty")
   )
 
+const pageCards = (number: number): (string | undefined)[] =>
+  Array.from(
+    container.querySelectorAll<HTMLElement>(
+      `[aria-label="Page ${number}"] .pocket:not([data-empty]) img`
+    ),
+    (image) => image.getAttribute("src")?.replace("/binder-image/", "")
+  )
+
 const cards = (): (string | undefined)[] =>
   pockets().map((pocket) =>
     pocket
@@ -162,7 +172,7 @@ const cards = (): (string | undefined)[] =>
       ?.replace("/binder-image/", "")
   )
 
-/** Thirteen entries, added out of Card Code order. */
+/** Twenty entries, added out of Card Code order: the first spread is full and the second holds two. */
 const alex: Addition[] = [
   { card: "OP99-010" },
   { card: "OP99-004_p1" },
@@ -177,54 +187,93 @@ const alex: Addition[] = [
   { card: "OP99-003" },
   { card: "OP99-002_p1" },
   { card: "OP99-020" },
+  ...["OP99-001", "OP99-003", "OP99-005", "OP99-006", "OP99-010"].map(
+    (card): Addition => ({ card, language: "ja" })
+  ),
+  { card: "OP99-011", language: "ja" },
+  { card: "OP99-020", language: "ja" },
 ]
 
-test("lays out nine pockets a page in Card Code order, marking copies and Japanese entries, and pages by the arrows", async () => {
+const firstSpread = [
+  "OP99-001",
+  "OP99-001",
+  "OP99-001_p1",
+  "OP99-002",
+  "OP99-002_p1",
+  "OP99-003",
+  "OP99-003",
+  "OP99-004",
+  "OP99-004",
+  "OP99-004_p1",
+  "OP99-005",
+  "OP99-005",
+  "OP99-006",
+  "OP99-006",
+  "OP99-010",
+  "OP99-010",
+  "OP99-011",
+  "OP99-011",
+]
+
+test("lays out a spread of two facing nine-pocket pages in Card Code order, marking copies and Japanese entries", async () => {
   await add(await owner("Alex"), ...alex)
   await render()
 
-  expect(cards()).toEqual([
-    "OP99-001",
-    "OP99-001_p1",
-    "OP99-002",
-    "OP99-002_p1",
-    "OP99-003",
-    "OP99-004",
-    "OP99-004",
-    "OP99-004_p1",
-    "OP99-005",
-  ])
-  expect(container.querySelectorAll(".pocket")).toHaveLength(9)
-  expect(container.textContent).toContain("Page 1 of 2")
-  expect(button("Previous page").disabled).toBe(true)
+  expect(container.querySelectorAll(".binder-page")).toHaveLength(2)
+  expect(container.querySelectorAll(".pocket")).toHaveLength(18)
+  expect(pageCards(1)).toEqual(firstSpread.slice(0, 9))
+  expect(pageCards(2)).toEqual(firstSpread.slice(9))
+  expect(pageCards(2)[0]).toBe("OP99-004_p1")
+  expect(container.textContent).toContain("Pages 1–2 of 4")
+  expect(button("Previous pages").disabled).toBe(true)
 
   expect(
     pockets().map(
       (pocket) => pocket.querySelector(".pocket-quantity")?.textContent ?? null
     )
-  ).toEqual([null, null, "×3", null, null, null, null, null, null])
+  ).toEqual(firstSpread.map((_, slot) => (slot === 3 ? "×3" : null)))
   expect(
     pockets().map(
       (pocket) => pocket.querySelector(".pocket-mark")?.textContent ?? null
     )
-  ).toEqual([null, null, null, null, null, null, "JP", null, null])
+  ).toEqual(
+    firstSpread.map((_, slot) =>
+      [1, 6, 8, 11, 13, 15, 17].includes(slot) ? "JP" : null
+    )
+  )
 
   for (const image of container.querySelectorAll("img"))
     expect(image.getAttribute("src")).toMatch(/^\/binder-image\//)
 
-  await press(button("Next page"))
-  expect(cards()).toEqual(["OP99-006", "OP99-010", "OP99-011", "OP99-020"])
-  expect(container.querySelectorAll(".pocket")).toHaveLength(9)
-  expect(container.textContent).toContain("Page 2 of 2")
-  expect(button("Next page").disabled).toBe(true)
+  expect(container.textContent).toContain("OPTCG catalogue")
+})
+
+test("turns a whole spread by the arrows and the arrow keys, leaving unfilled pockets empty", async () => {
+  await add(await owner("Alex"), ...alex)
+  await render()
+
+  await press(button("Next pages"))
+  expect(pageCards(3)).toEqual(["OP99-020", "OP99-020"])
+  expect(pageCards(4)).toEqual([])
+  expect(container.querySelectorAll(".pocket")).toHaveLength(18)
+  expect(container.querySelectorAll(".pocket[data-empty]")).toHaveLength(16)
+  expect(container.textContent).toContain("Pages 3–4 of 4")
+  expect(button("Next pages").disabled).toBe(true)
 
   await act(async () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }))
     await refreshWork
   })
   await settle()
-  expect(container.textContent).toContain("Page 1 of 2")
-  expect(container.textContent).toContain("OPTCG catalogue")
+  expect(container.textContent).toContain("Pages 1–2 of 4")
+  expect(cards()).toEqual(firstSpread)
+
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
+    await refreshWork
+  })
+  await settle()
+  expect(container.textContent).toContain("Pages 3–4 of 4")
 })
 
 test("switches between Household Users' Binders", async () => {
@@ -255,7 +304,7 @@ test("says a Binder is empty rather than showing blank pages", async () => {
 
   expect(container.textContent).toContain("Sam’s Binder is empty")
   expect(container.querySelectorAll(".pocket")).toHaveLength(0)
-  expect(container.textContent).not.toContain("Page 1")
+  expect(container.textContent).not.toContain("Pages 1")
 })
 
 test("keeps recovery controls for a failed read and recovers when OpenHome answers", async () => {
@@ -284,13 +333,43 @@ test("relays a stored card image through Start and rejects anything else", async
   expect((await readCardImage({ card: "../entries" })).status).toBe(404)
 })
 
-test("pages are nine pockets, with the index kept in range", () => {
-  const entries = Array.from({ length: 20 }, (_, index) => index)
+test("relays no stored card image larger than 2 MiB", async () => {
+  const oversize = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "image/avif" })
+    response.end(Buffer.alloc(2 * 1024 * 1024 + 1))
+  })
 
-  expect(paginate(entries, 0).pockets).toHaveLength(9)
-  expect(paginate(entries, 2)).toMatchObject({ index: 2, count: 3 })
-  expect(paginate(entries, 2).pockets).toHaveLength(2)
+  await new Promise<void>((done) => oversize.listen(0, "127.0.0.1", done))
+
+  const { port } = z.object({ port: z.number() }).parse(oversize.address())
+
+  vi.stubEnv("OPENHOME_API_URL", `http://127.0.0.1:${port}`)
+
+  try {
+    expect((await readCardImage({ card: "OP99-001" })).status).toBe(503)
+  } finally {
+    await new Promise((done) => oversize.close(done))
+  }
+})
+
+test("a spread is two nine-pocket pages, with the index kept in range", () => {
+  const entries = Array.from({ length: 40 }, (_, index) => index)
+
+  const first = paginate(entries, 0)
+
+  expect(first.left).toEqual(entries.slice(0, 9))
+  expect(first.right).toEqual(entries.slice(9, 18))
+  expect(paginate(entries, 2)).toMatchObject({
+    left: [36, 37, 38, 39],
+    right: [],
+    index: 2,
+    count: 3,
+  })
   expect(paginate(entries, 7).index).toBe(2)
   expect(paginate(entries, -1).index).toBe(0)
-  expect(paginate([], 0)).toEqual({ pockets: [], index: 0, count: 1 })
+  expect(paginate(entries.slice(0, 18), 1)).toMatchObject({
+    index: 0,
+    count: 1,
+  })
+  expect(paginate([], 0)).toEqual({ left: [], right: [], index: 0, count: 1 })
 })

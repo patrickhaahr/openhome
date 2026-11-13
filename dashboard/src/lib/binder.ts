@@ -3,7 +3,7 @@ import type { ConnectionState } from "./connection"
 import { personSearch } from "./lists"
 import type { HouseholdUser } from "./wishlist"
 
-/** The Binder pages: whose Binder (the first Household User when absent) and which page, from 1. */
+/** The Binder pages: whose Binder (the first Household User when absent) and which spread, from 1. */
 export const binderSearch = personSearch.extend({
   page: z.number().int().min(1).optional().catch(undefined),
 })
@@ -47,15 +47,26 @@ export const binderFailureMessage: Record<BinderFailure, string> = {
 /** A pocket page is 3×3. */
 export const pocketsPerPage = 9
 
-/** One page of pockets, with the zero-based index clamped into range. */
-export type Page<T> = { pockets: T[]; index: number; count: number }
+/** A spread is two facing pages: the left holds the first nine pockets, the right the next nine. */
+export const pocketsPerSpread = 2 * pocketsPerPage
 
-export function paginate<T>(entries: readonly T[], index: number): Page<T> {
-  const count = Math.max(1, Math.ceil(entries.length / pocketsPerPage))
+/** One spread of pockets, with the zero-based spread index clamped into range. */
+export type Spread<T> = {
+  left: T[]
+  right: T[]
+  index: number
+  count: number
+}
+
+export function paginate<T>(entries: readonly T[], index: number): Spread<T> {
+  const count = Math.max(1, Math.ceil(entries.length / pocketsPerSpread))
   const at = Math.min(Math.max(index, 0), count - 1)
+  const start = at * pocketsPerSpread
+  const middle = start + pocketsPerPage
 
   return {
-    pockets: entries.slice(at * pocketsPerPage, (at + 1) * pocketsPerPage),
+    left: entries.slice(start, middle),
+    right: entries.slice(middle, start + pocketsPerSpread),
     index: at,
     count,
   }
@@ -71,10 +82,11 @@ export type BinderView =
       owner: HouseholdUser
     }
   | {
-      readonly view: "pages"
+      readonly view: "spread"
       readonly owners: HouseholdUser[]
       readonly owner: HouseholdUser
-      readonly pockets: BinderEntry[]
+      readonly left: BinderEntry[]
+      readonly right: BinderEntry[]
       readonly index: number
       readonly count: number
     }
@@ -95,7 +107,7 @@ export function viewOf(state: BinderState, search: BinderSearch): BinderView {
   if (mine.length === 0) return { view: "empty", owners, owner }
 
   return {
-    view: "pages",
+    view: "spread",
     owners,
     owner,
     ...paginate(mine, (search.page ?? 1) - 1),
