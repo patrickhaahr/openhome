@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Only this catalogue slice exists so far: there are no Binder Entries, currencies other than USD, or Dashboard view yet.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. Only the catalogue and Binder Entry slices exist so far: there is no editing or removal of entries, no currency other than USD, no Binder Value and no Dashboard view yet.
 
 ## Sub-features
 
@@ -11,10 +11,19 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-malformed` sends a malformed code and gets a 400 tool error.
 - `binder-outage` searches the outage code and gets `card_data_unavailable` (503) with no upstream text.
 - `binder-image` reads a stored image through authenticated Axum and gets `image/avif`.
+- `binder-add-no-owner` calls `add_binder_entry` without an owner and gets `binder_destination_required` with choices; nothing is written.
+- `binder-add` adds a card for an explicit owner and reads it back.
+- `binder-retry` repeats the identical call: `replayed: true`, quantity unchanged. Reusing the `request_id` with a changed quantity is a 409.
+- `binder-merge` adds the same card again (a new `request_id`): the quantity rises on the same entry.
+- `binder-add-unsearched` adds the parallel `OP99-002_p1` before anyone searched `OP99-002`: the Card is stored and the entry listed.
+- `binder-ja` adds a `ja` copy: a separate entry with no `card_value` and no `inventory_price_usd`.
+- `binder-unlisted-add` adds a card the catalogue does not list: `card_not_listed`, nothing written.
+- `binder-list` lists one owner and every owner, in Card Code order with a parallel after its normal print.
 
 ## How to get to it (user POV)
 
 - Ask Hermes to look up a card by the code printed on it (MCP tool `search_cards`).
+- Ask Hermes to add the cards in a photo (MCP tools `add_binder_entry`, `binder_entries`).
 - No Dashboard route yet. Images are read from `GET /api/binder/cards/{id}/image` with the bearer key.
 
 ## Driving it with verify-openhome
@@ -33,10 +42,20 @@ Preconditions:
 - **Malformed.** `mcp.sh call search_cards '{"card_code":"OP99"}'` exits 2 with `status: 400` and no log line.
 - **Outage.** `mcp.sh call search_cards '{"card_code":"OP99-503"}'` exits 2 with `code: "card_data_unavailable"`, `status: 503`. A repeat asks the stand-in again (nothing was stored).
 - **Image.** `curl -sS -D - -o /dev/null -H "Authorization: Bearer $API_KEY" "$API_URL/api/binder/cards/OP99-001_p1/image"` shows `content-type: image/avif`. Without the key it is 401, for an unknown well-formed id such as `OP99-999_p1` 404, and for a malformed id 400.
+- **Owners.** `mcp.sh call household_users '{}'` gives the seeded Household Users (Alex, Robin, Sam); IDs change per launch.
+- **No owner.** `mcp.sh call add_binder_entry '{"card_id":"OP99-001","request_id":"verify-b1"}'` exits 2 with `code: "binder_destination_required"`, a `question` and one choice per Household User. `binder_entries` with no filter is still `[]`.
+- **Add.** Repeat with `"owner_id":"<Alex id>"`. `structuredContent` has `replayed: false` and an `entry` with `quantity` 1, `language` `en`, `date_added` today in Copenhagen and the full `card`. Read it back with `binder_entries` `{"owner_id":"<Alex id>"}` and `curl` of `$API_URL/api/binder/entries?owner_id=<id>`: the same entry.
+- **Retry.** Call the identical arguments again. `replayed: true`, the same `entry`, and the list still shows quantity 1. Now reuse `verify-b1` with `"quantity":2`: exit 2, status 409, nothing changed.
+- **Merge.** A new `request_id` with `"quantity":2` for the same card: the same entry `id`, `quantity` 3. Retry the first call again: it still replays the original quantity 1, while the list shows 3.
+- **Japanese.** Add the same card with `"language":"ja"`: a second entry with its own `id`, quantity 1, and `card.card_value` and `card.inventory_price_usd` both `null` (the `en` entry keeps both), also in `binder_entries`.
+- **Unsearched parallel.** On a fresh launch, `add_binder_entry` with `"card_id":"OP99-002_p1"` for Alex succeeds without a prior `search_cards`: the stand-in log shows the `OP99-002` lookup and its images, and `binder_entries` lists the entry. A later `search_cards` for `OP99-002` adds no log line.
+- **Unlisted.** `add_binder_entry` with `"card_id":"OP99-777"` exits 2 with `status: 404`, `code: "card_not_listed"`. The list is unchanged and the stand-in log shows one 404 for it (or none if the code was already searched unlisted today). An id that holds no listed code, such as `OP99-002_p9` (the code lists no such variant), is rejected the same way.
+- **Order.** Search `OP99-002`, then add `OP99-010`, the parallel `OP99-002_p1`, `OP99-002` and `OP99-001_p1` for Alex, and one card for Robin. `binder_entries` with no filter lists Alex's Binder (the earlier entries included) in Card Code order, `OP99-001` en then ja, `OP99-001_p1`, `OP99-002`, `OP99-002_p1`, `OP99-010`, followed by Robin's.
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.
 
 ## Gotchas
 
+- Add by the Card `id` from `search_cards`. Searching first is the recommended workflow, but an unsearched id is accepted when a Card Code inside it lists it. Run the unsearched-parallel step before any search of `OP99-002`, since a search stores the Cards.
 - Card IDs are opaque catalogue image identifiers (`OP99-001_p1`, `EB99_OP99-020_P1`), stable across launches, unlike Household User IDs. A card's image file name can differ from its id.
 - The synthetic images are flat colour drawings, so their AVIF sizes say nothing about real cards.
 - The stand-in sits behind a loopback port that changes per launch; read it from the `OPTCG: loopback catalogue at …` line in the stack log if you need it.

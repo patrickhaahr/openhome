@@ -1,4 +1,5 @@
 pub mod adguard;
+pub mod binder;
 pub mod cards;
 pub mod docker;
 pub mod feeds;

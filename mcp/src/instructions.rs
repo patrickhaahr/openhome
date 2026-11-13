@@ -97,4 +97,14 @@ Supplement, while days_above_upper_limit alone is only a caution. For a long ran
 micronutrients make the result large. \
 For One Piece Card Game cards, call search_cards with the Card Code read from the card: it returns every variant (the normal \
 print and its parallel arts) with details, the USD card_value and the date of its price. Report a code with an empty cards \
-list as not listed by the catalogue; card_data_unavailable means the catalogue is down, so tell the user to try later.";
+list as not listed by the catalogue; card_data_unavailable means the catalogue is down, so tell the user to try later. \
+To add cards from a photo, read each visible Card Code and tell a normal print from a parallel art by its art and frame. \
+Call search_cards for each code and pick the variant that matches. When you cannot tell which variant it is, ask the user \
+once, naming the variants, and never record a guess. Use language ja only for a visibly Japanese card and omit it otherwise. \
+Report a code the catalogue does not list (an empty cards list, or card_not_listed from add_binder_entry) instead of adding it. \
+Discover owners with household_users and pass owner_id explicitly; on binder_destination_required ask its question once \
+with the returned choices and retry with the answer. Call add_binder_entry once per variant and language with the Card id, \
+the copies you can see as quantity and a unique request_id. Reuse the identical arguments and request_id on every retry, \
+including after an uncertain transport failure: an accepted retry returns replayed=true and never adds twice, and changed \
+arguments conflict. Adding a card the owner already has in that language raises its quantity. Never store the user's photo: \
+it only identifies the cards, and the Binder shows the official card image. binder_entries lists a Binder in Card Code order.";

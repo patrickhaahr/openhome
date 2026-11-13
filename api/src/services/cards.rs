@@ -5,9 +5,10 @@
 //! remembered until the next Copenhagen day, so repeating it does not hammer a volunteer's server
 //! while a card listed later can still be found.
 
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 
@@ -113,13 +114,13 @@ impl CardId {
 
 /// The catalogue's `TCGplayer` market price in USD and the day the catalogue observed it. Other
 /// currencies join this object when exchange rates exist.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardValue {
     pub usd: f64,
     pub observed_on: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Card {
     pub id: String,
     pub card_code: String,
@@ -154,7 +155,7 @@ pub async fn search(db: &SqlitePool, catalogue: &Optcg, code: &CardCode) -> Resu
     let today = CalendarDay::of(chrono::Utc::now()).to_string();
     Ok(Search {
         card_code: code.as_str().to_owned(),
-        cards: cards_of(db, catalogue, code, &today).await?,
+        cards: cards_of(db, catalogue, code, &today, None).await?,
     })
 }
 
@@ -163,6 +164,7 @@ async fn cards_of(
     catalogue: &Optcg,
     code: &CardCode,
     today: &str,
+    wanted: Option<&CardId>,
 ) -> Result<Vec<Card>> {
     if let Some(cards) = known(db, code, today).await? {
         return Ok(cards);
@@ -172,6 +174,10 @@ async fn cards_of(
         return Ok(cards);
     }
     let listed = catalogue.card(code).await?;
+    // An addition the catalogue does not list writes nothing: no variants, images or marker.
+    if wanted.is_some_and(|id| !listed.iter().any(|card| card.id == *id)) {
+        return Ok(Vec::new());
+    }
     if listed.is_empty() {
         remember_unlisted(db, code, today).await?;
         return Ok(Vec::new());
@@ -220,20 +226,30 @@ async fn remember_unlisted(db: &SqlitePool, code: &CardCode, today: &str) -> Res
     Ok(())
 }
 
-async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
-    let code = code.as_str();
-    let rows = sqlx::query!(
-        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
-                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
-                price_observed_on
-         FROM cards WHERE card_code = ? ORDER BY position",
-        code
-    )
-    .fetch_all(db)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| Card {
+struct CardRow {
+    id: String,
+    card_code: String,
+    name: String,
+    set_id: Option<String>,
+    set_name: Option<String>,
+    rarity: Option<String>,
+    color: Option<String>,
+    card_type: Option<String>,
+    life: Option<String>,
+    cost: Option<String>,
+    power: Option<String>,
+    counter_amount: Option<String>,
+    attribute: Option<String>,
+    sub_types: Option<String>,
+    text: Option<String>,
+    inventory_price_usd: Option<f64>,
+    price_usd: Option<f64>,
+    price_observed_on: Option<String>,
+}
+
+impl From<CardRow> for Card {
+    fn from(row: CardRow) -> Self {
+        Self {
             image_path: format!("/api/binder/cards/{}/image", row.id),
             card_value: row
                 .price_usd
@@ -255,8 +271,71 @@ async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
             sub_types: row.sub_types,
             text: row.text,
             inventory_price_usd: row.inventory_price_usd,
-        })
+        }
+    }
+}
+
+async fn stored(db: &SqlitePool, code: &CardCode) -> Result<Vec<Card>> {
+    let code = code.as_str();
+    let rows = sqlx::query_as!(
+        CardRow,
+        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
+                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
+                price_observed_on
+         FROM cards WHERE card_code = ? ORDER BY position",
+        code
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows.into_iter().map(Card::from).collect())
+}
+
+pub async fn by_ids(db: &SqlitePool, ids: &[&str]) -> Result<HashMap<String, Card>> {
+    let ids = serde_json::to_string(ids).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    let rows = sqlx::query_as!(
+        CardRow,
+        "SELECT id, card_code, name, set_id, set_name, rarity, color, card_type, life, cost, power,
+                counter_amount, attribute, sub_types, text, inventory_price_usd, price_usd,
+                price_observed_on
+         FROM cards WHERE id IN (SELECT value FROM json_each(?))",
+        ids
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.id.clone(), row.into()))
         .collect())
+}
+
+/// A Card not stored yet is looked up through each Card Code its id contains, in order, until
+/// one code's variants include it. The id's spelling is only a lookup hint that the catalogue's
+/// variant list verifies, so a wrong guess can only end in `None`: the catalogue does not list it.
+pub async fn listed(db: &SqlitePool, catalogue: &Optcg, id: &CardId) -> Result<Option<Card>> {
+    if let Some(card) = by_ids(db, &[id.as_str()]).await?.remove(id.as_str()) {
+        return Ok(Some(card));
+    }
+    let today = CalendarDay::of(chrono::Utc::now()).to_string();
+    for code in codes_in(id) {
+        let found = cards_of(db, catalogue, &code, &today, Some(id))
+            .await?
+            .into_iter()
+            .find(|card| card.id == id.as_str());
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    Ok(None)
+}
+
+/// Every substring of the id that is a Card Code, by position. An id is ASCII, and a code ends
+/// three digits after its first hyphen, so each start position yields at most one candidate.
+fn codes_in(id: &CardId) -> impl Iterator<Item = CardCode> + '_ {
+    (0..id.as_str().len()).filter_map(|start| {
+        let tail = &id.as_str()[start..];
+        let end = tail.find('-')? + "-000".len();
+        CardCode::parse(tail.get(..end)?).ok()
+    })
 }
 
 /// Fetches and encodes every image first, then writes all variants in one transaction, so a
@@ -346,6 +425,23 @@ mod tests {
             "OP01-00A",
         ] {
             assert!(CardCode::parse(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn card_codes_are_found_inside_ids_in_order() {
+        for (id, codes) in [
+            ("OP01-001", &["OP01-001", "P01-001"][..]),
+            ("OP04-016_P1", &["OP04-016", "P04-016"]),
+            ("OP09-078-r1", &["OP09-078", "P09-078"]),
+            ("EB03_OP09-034_p1", &["OP09-034", "P09-034"]),
+            ("SPECIAL_BUGGY_BALL", &[]),
+            ("OP01-01_p1", &[]),
+        ] {
+            let found: Vec<_> = codes_in(&CardId::parse(id).unwrap())
+                .map(|code| code.as_str().to_owned())
+                .collect();
+            assert_eq!(found, codes, "{id}");
         }
     }
 

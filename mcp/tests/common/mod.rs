@@ -67,7 +67,8 @@ pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let app = routes::training::router()
         .merge(routes::wishlist::router(None))
         .merge(routes::watchlist::router(None))
-        .merge(routes::cards::router(catalogue))
+        .merge(routes::cards::router(catalogue.clone()))
+        .merge(routes::binder::router(catalogue))
         .merge(routes::important_dates::router())
         .merge(routes::nutrition::router(
             foods,

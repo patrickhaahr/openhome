@@ -21,6 +21,8 @@
 
 - `search_cards` is a read-only, open-world forward of `GET /api/binder/cards?card_code=` returning every variant of a Card Code; Axum owns Card Code validation, the OPTCG read (origin, timeout, byte cap, no redirects), image storage and `card_data_unavailable`. Keep the global instructions on empty results and outages in step with the API. See `../docs/binder.md`.
 
+- `add_binder_entry` (non-destructive, idempotent through `request_id`, open-world because a first lookup asks the catalogue) and `binder_entries` (read-only) forward `POST`/`GET /api/binder/entries` unchanged. Axum owns owner clarification (`binder_destination_required`), Card lookup and storage, `card_not_listed`, quantity merging, receipts and Card Code ordering. The global instructions carry the photo workflow (read codes, normal or parallel, `search_cards`, ask once when ambiguous, `ja` only for visibly Japanese cards, report unlisted cards, explicit owner, reuse `request_id`, never store the photo); keep them in step with the API.
+
 - Read `../docs/training-context.md` before changing training tools or their contracts.
 - Keep training tools read-only: each call makes one authenticated API GET and passes its JSON unchanged. Add an API endpoint before adding a tool that needs new interpretation; database access and domain rules belong in the API.
 - Percent-encode path arguments, reject literal `.` and `..` segments, and keep API redirects disabled so requests stay on the intended endpoint.

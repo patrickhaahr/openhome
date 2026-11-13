@@ -23,7 +23,7 @@ create rolls back with its claim, so it consumes no `request_id`. The claim
 (`ON CONFLICT DO NOTHING`) serializes simultaneous retries: the loser rolls back and
 replays the winner. Only if the receipt then cannot be read does it return a domain
 conflict, and its wording differs: Exercise, Workout, Body Weight, Meal, Meal Log,
-Supplement, Product link, Watchlist Entry and Important Date say "Retry receipt
+Supplement, Product link, Watchlist Entry, Binder Entry and Important Date say "Retry receipt
 unavailable; ...", while Wishlist says
 "The retried item was removed; use a new request_id to add it again".
 
@@ -43,6 +43,7 @@ the default details.
 | Wishlist Item | Required | Current item, `replayed: true` | Item row missing (UUID id, no foreign key) | Migration 0008 backfills title-only details |
 | Watchlist Entry | Required | Current entry within its owner | Entry row missing | n/a |
 | Important Date | Required | Current date with figures | Date row missing | n/a |
+| Binder Entry | Required | Original accepted entry, `replayed: true` | Entry row missing (UUID id, no foreign key) | n/a |
 | Product link | Required | Original accepted Product | Product row missing ("no longer stored") | Conflict: look the Product up first |
 | Meal Log | Required | Original accepted Meal Log | Meal Log row missing | Conflict: read the current meal log first |
 | Meal | Required | Original accepted Meal | Meal row missing | Conflict: read the current meal first |

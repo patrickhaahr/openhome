@@ -1,5 +1,6 @@
 pub mod adguard;
 pub mod avif_encoder;
+pub mod binder;
 pub mod cards;
 pub mod docker;
 pub mod exercise_progress;
