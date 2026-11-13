@@ -66,21 +66,24 @@ first added. There is no Binder record: a Binder is its owner's entries, and
 removing the Household User removes them (the Cards stay). Each owner has at most
 one entry per Card and language, so an English and a Japanese copy are two entries.
 The catalogue's prices are for English printings, so a Japanese entry's Card has
-no `card_value`.
+neither `card_value` nor `inventory_price_usd`, in additions, lists and the stored
+receipt result.
 
 An addition names the Card by `card_id` and never sends card details. `quantity`
-is 1 to 999 (default 1), and a merge that would take an entry past 999 copies is
-rejected with 400 and changes nothing. `language` defaults to `en`, and a note is
-1 to 500 characters. Axum finds the Card in this order, and never reads a code out of an
-id's spelling:
+is a whole number of at least 1 (default 1) with no maximum, up to 4294967295 per
+addition so that a sum of additions cannot overflow. `language` defaults to `en`,
+and a note is 1 to 500 characters. Axum finds the Card in this order:
 
 1. A stored Card (every variant a search returned) is used as it is.
-2. Otherwise `card_id` is tried as a Card Code, which is the id of a normal print.
-   Axum looks that code up through the search path and accepts the id only if it is
-   one of the code's variants.
-3. Anything else, including a parallel that was never searched for, an unlisted
-   code and a wrong-case id, is `404 card_not_listed` and writes nothing. Hermes
-   searches the Card Code first, so its ids are stored by the time it adds them.
+2. Otherwise every substring of `card_id` that is a Card Code is a candidate, from
+   left to right (`EB03_OP09-034_p1` contains `OP09-034`, while `EB03` is no code).
+   Each candidate goes through the search path, which stores every variant of the
+   code, and the id is accepted only if it is one of that code's variants. The
+   spelling is only a hint that the catalogue's variant list verifies, so a wrong
+   guess can only end in the next step.
+3. Anything else, including an id that holds no code, a code that does not list it
+   and a wrong-case id, is `404 card_not_listed` and writes nothing. Searching the
+   Card Code first stays the recommended workflow, but it is not required.
 
 A catalogue outage during the lookup is the existing `503 card_data_unavailable`.
 Adding an existing owner, Card and language raises its quantity by the requested

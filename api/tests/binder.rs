@@ -4,6 +4,13 @@ use axum::http::{Method, StatusCode};
 use common::binder::*;
 use serde_json::{Value, json};
 
+fn assert_no_english_price(entry: &Value) {
+    assert!(
+        entry["card"]["card_value"].is_null() && entry["card"]["inventory_price_usd"].is_null(),
+        "an English price is never shown for a Japanese entry: {entry}"
+    );
+}
+
 #[tokio::test]
 async fn an_addition_stores_the_card_itself_and_returns_the_entry_with_its_card() {
     let server = catalogue().await;
@@ -124,10 +131,15 @@ async fn the_same_card_and_language_merges_while_another_language_is_its_own_ent
     .await;
     assert_eq!(japanese["entry"]["language"], "ja");
     assert_eq!(japanese["entry"]["quantity"], 1);
-    assert!(
-        japanese["entry"]["card"]["card_value"].is_null(),
-        "an English price is never shown for a Japanese entry: {japanese}"
-    );
+    assert_no_english_price(&japanese["entry"]);
+    let (status, replayed) = add(
+        &app,
+        json!({"owner_id": ada, "card_id": "OP01-001", "language": "ja", "request_id": "r4"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed["replayed"], true);
+    assert_no_english_price(&replayed["entry"]);
     add(
         &app,
         json!({"owner_id": bo, "card_id": "OP01-001", "request_id": "r5"}),
@@ -140,7 +152,8 @@ async fn the_same_card_and_language_merges_while_another_language_is_its_own_ent
         [("OP01-001", "en", 6), ("OP01-001", "ja", 1)]
     );
     assert!(ada_entries[0]["card"]["card_value"]["usd"].is_number());
-    assert!(ada_entries[1]["card"]["card_value"].is_null());
+    assert_eq!(ada_entries[0]["card"]["inventory_price_usd"], 1.95);
+    assert_no_english_price(&ada_entries[1]);
     assert_eq!(
         ids(&list(&app, &format!("?owner_id={bo}")).await),
         [("OP01-001", "en", 1)]
@@ -158,6 +171,8 @@ async fn a_card_the_catalogue_does_not_list_is_rejected_and_writes_nothing() {
         ("OP05-777_p1", "unlisted-parallel"),
         ("OP01-001_p9", "unknown-variant"),
         ("op01-001", "lower-case"),
+        ("SPECIAL_BUGGY_BALL", "no-code"),
+        ("EB03_OP05-777_p1", "unlisted-code-in-id"),
     ] {
         let (status, body) = add(
             &app,
@@ -188,14 +203,76 @@ async fn a_catalogue_outage_is_the_existing_503_and_writes_nothing() {
     let (app, _) = app(&server).await;
     let ada = owner(&app, "Ada").await;
 
-    let (status, body) = add(
+    for (card_id, request_id) in [
+        ("OP77-503", "r1"),
+        ("OP77-503_p1", "r2"),
+        ("EB03_OP77-503_p1", "r3"),
+    ] {
+        let (status, body) = add(
+            &app,
+            json!({"owner_id": ada, "card_id": card_id, "request_id": request_id}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{card_id}: {body}");
+        assert_eq!(body["code"], "card_data_unavailable");
+    }
+    assert!(list(&app, "").await.is_empty());
+}
+
+#[tokio::test]
+async fn a_parallel_nobody_searched_for_is_added_and_its_card_stored() {
+    let server = catalogue().await;
+    let (app, _) = app(&server).await;
+    let ada = owner(&app, "Ada").await;
+
+    for (card_id, code) in [
+        ("OP01-001_p1", "OP01-001"),
+        ("EB03_OP09-034_p1", "OP09-034"),
+    ] {
+        let (status, added) = add(
+            &app,
+            json!({"owner_id": ada, "card_id": card_id, "request_id": card_id}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{card_id}: {added}");
+        assert_eq!(added["entry"]["card"]["id"], card_id);
+        assert_eq!(added["entry"]["card"]["card_code"], code);
+    }
+    assert_eq!(
+        ids(&list(&app, "").await),
+        [("OP01-001_p1", "en", 1), ("EB03_OP09-034_p1", "en", 1)]
+    );
+    let asked = catalogue_requests(&server).await;
+    let (_, searched) = send(
         &app,
-        json!({"owner_id": ada, "card_id": "OP77-503", "request_id": "r1"}),
+        Method::GET,
+        "/api/binder/cards?card_code=OP01-001",
+        None,
     )
     .await;
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
-    assert_eq!(body["code"], "card_data_unavailable");
-    assert!(list(&app, "").await.is_empty());
+    assert_eq!(searched["cards"].as_array().unwrap().len(), 2);
+    assert_eq!(catalogue_requests(&server).await, asked);
+}
+
+#[tokio::test]
+async fn quantity_has_no_upper_bound_below_what_a_sum_of_additions_can_hold() {
+    let server = catalogue().await;
+    let (app, _) = app(&server).await;
+    let ada = owner(&app, "Ada").await;
+    let most = u64::from(u32::MAX);
+
+    for request_id in ["a", "b"] {
+        let (status, body) = add(
+            &app,
+            json!({"owner_id": ada, "card_id": "OP01-001", "quantity": most, "request_id": request_id}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+    }
+    assert_eq!(
+        ids(&list(&app, "").await),
+        [("OP01-001", "en", 2 * most as i64)]
+    );
 }
 
 #[tokio::test]
@@ -233,7 +310,7 @@ async fn invalid_additions_are_rejected_before_anything_is_written() {
     for changed in [
         json!({"quantity": 0}),
         json!({"quantity": -1}),
-        json!({"quantity": 1000}),
+        json!({"quantity": 4_294_967_296_u64}),
         json!({"note": "  "}),
         json!({"note": "a".repeat(501)}),
         json!({"card_id": "OP01-001/../x"}),

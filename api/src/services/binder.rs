@@ -1,4 +1,4 @@
-use std::num::NonZeroU16;
+use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -40,21 +40,20 @@ pub enum Language {
     Ja,
 }
 
-const MAX_QUANTITY: i64 = 999;
-
+/// A copy count of at least 1. `u32` keeps a sum of additions inside SQLite's `i64`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Quantity(NonZeroU16);
+struct Quantity(NonZeroU32);
 
 impl Quantity {
     fn parse(value: i64) -> Result<Self> {
-        u16::try_from(value)
+        u32::try_from(value)
             .ok()
-            .filter(|value| i64::from(*value) <= MAX_QUANTITY)
-            .and_then(NonZeroU16::new)
+            .and_then(NonZeroU32::new)
             .map(Self)
             .ok_or_else(|| {
                 BinderError::Validation(format!(
-                    "quantity must be an integer from 1 to {MAX_QUANTITY}"
+                    "quantity must be an integer from 1 to {}",
+                    u32::MAX
                 ))
             })
     }
@@ -223,7 +222,6 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
            VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (owner_id, card_id, language) DO UPDATE
            SET quantity = quantity + excluded.quantity, note = COALESCE(excluded.note, note)
-           WHERE binder_entries.quantity + excluded.quantity <= ?
            RETURNING id AS "id!", quantity AS "quantity!", note AS "note?", date_added AS "date_added!""#,
         id,
         owner_id,
@@ -231,22 +229,10 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
         request.language,
         quantity,
         request.note,
-        date_added,
-        MAX_QUANTITY
+        date_added
     )
-    .fetch_optional(&mut *tx)
+    .fetch_one(&mut *tx)
     .await?;
-    let Some(stored) = stored else {
-        tx.rollback().await?;
-        // A simultaneous identical retry may have committed this very addition and filled the
-        // entry; it then replays instead of reporting the limit it caused.
-        return match previous(db, &request.request_id).await? {
-            Some(receipt) => receipt.replay(db, &request).await,
-            None => Err(BinderError::Validation(format!(
-                "the Binder Entry would hold more than {MAX_QUANTITY} copies"
-            ))),
-        };
-    };
     let entry = BinderEntry {
         id: stored.id,
         owner_id: owner_id.to_owned(),
@@ -344,10 +330,11 @@ pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<Binde
         .collect()
 }
 
-/// The catalogue's prices are for English printings, so a Japanese entry has no Card Value.
+/// The catalogue's prices are for English printings, so a Japanese entry has no price at all.
 fn priced_for(mut card: Card, language: Language) -> Card {
     if language == Language::Ja {
         card.card_value = None;
+        card.inventory_price_usd = None;
     }
     card
 }

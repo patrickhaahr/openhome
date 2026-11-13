@@ -95,43 +95,6 @@ async fn receipts_outlive_the_entry_and_its_owner_so_old_retries_never_recreate_
 }
 
 #[tokio::test]
-async fn a_merge_past_the_quantity_limit_is_rejected_and_changes_nothing() {
-    let server = catalogue().await;
-    let (app, _) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let full =
-        json!({"owner_id": ada, "card_id": "OP01-001", "quantity": 999, "request_id": "full"});
-    let (status, body) = add(&app, full).await;
-    assert_eq!(status, StatusCode::CREATED, "{body}");
-
-    let one_more = json!({"owner_id": ada, "card_id": "OP01-001", "request_id": "one-more"});
-    let (status, body) = add(&app, one_more.clone()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-    let entries = list(&app, "").await;
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0]["quantity"], 999);
-
-    // A receipt would replay with 200 or 201; a second 400 shows the rejection wrote none.
-    let (status, body) = add(&app, one_more).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-}
-
-#[tokio::test]
-async fn concurrent_identical_retries_that_fill_the_entry_replay_instead_of_hitting_the_limit() {
-    let server = catalogue().await;
-    let (app, _) = app(&server).await;
-    let ada = owner(&app, "Ada").await;
-    let request =
-        json!({"owner_id": ada, "card_id": "OP01-001", "quantity": 999, "request_id": "fill"});
-    let ((first, a), (second, b)) =
-        tokio::join!(add(&app, request.clone()), add(&app, request.clone()));
-    let mut statuses = [first, second];
-    statuses.sort();
-    assert_eq!(statuses, [StatusCode::OK, StatusCode::CREATED], "{a} {b}");
-    assert_eq!(list(&app, "").await[0]["quantity"], 999);
-}
-
-#[tokio::test]
 async fn concurrent_additions_claim_one_request_id() {
     let server = catalogue().await;
     let (app, _) = app(&server).await;

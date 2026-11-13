@@ -303,20 +303,34 @@ pub async fn by_ids(db: &SqlitePool, ids: &[&str]) -> Result<HashMap<String, Car
         .collect())
 }
 
-/// A Card not stored yet is looked up by the one code known without parsing its id: the id
-/// itself, which is the code of a normal print. `None` means the catalogue does not list it.
+/// A Card not stored yet is looked up through each Card Code its id contains, in order, until
+/// one code's variants include it. The id's spelling is only a lookup hint that the catalogue's
+/// variant list verifies, so a wrong guess can only end in `None`: the catalogue does not list it.
 pub async fn listed(db: &SqlitePool, catalogue: &Optcg, id: &CardId) -> Result<Option<Card>> {
     if let Some(card) = by_ids(db, &[id.as_str()]).await?.remove(id.as_str()) {
         return Ok(Some(card));
     }
-    let Ok(code) = CardCode::parse(id.as_str()) else {
-        return Ok(None);
-    };
     let today = CalendarDay::of(chrono::Utc::now()).to_string();
-    Ok(cards_of(db, catalogue, &code, &today)
-        .await?
-        .into_iter()
-        .find(|card| card.id == id.as_str()))
+    for code in codes_in(id) {
+        let found = cards_of(db, catalogue, &code, &today)
+            .await?
+            .into_iter()
+            .find(|card| card.id == id.as_str());
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    Ok(None)
+}
+
+/// Every substring of the id that is a Card Code, by position. An id is ASCII, and a code ends
+/// three digits after its first hyphen, so each start position yields at most one candidate.
+fn codes_in(id: &CardId) -> impl Iterator<Item = CardCode> + '_ {
+    (0..id.as_str().len()).filter_map(|start| {
+        let tail = &id.as_str()[start..];
+        let end = tail.find('-')? + "-000".len();
+        CardCode::parse(tail.get(..end)?).ok()
+    })
 }
 
 /// Fetches and encodes every image first, then writes all variants in one transaction, so a
@@ -406,6 +420,23 @@ mod tests {
             "OP01-00A",
         ] {
             assert!(CardCode::parse(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn card_codes_are_found_inside_ids_in_order() {
+        for (id, codes) in [
+            ("OP01-001", &["OP01-001", "P01-001"][..]),
+            ("OP04-016_P1", &["OP04-016", "P04-016"]),
+            ("OP09-078-r1", &["OP09-078", "P09-078"]),
+            ("EB03_OP09-034_p1", &["OP09-034", "P09-034"]),
+            ("SPECIAL_BUGGY_BALL", &[]),
+            ("OP01-01_p1", &[]),
+        ] {
+            let found: Vec<_> = codes_in(&CardId::parse(id).unwrap())
+                .map(|code| code.as_str().to_owned())
+                .collect();
+            assert_eq!(found, codes, "{id}");
         }
     }
 
