@@ -1,6 +1,6 @@
 mod common;
 
-use common::{API_KEY, connect, start_api, start_mcp, wishlist_call};
+use common::{API_KEY, binder::yesterday, connect, start_api, start_mcp, wishlist_call};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
 
@@ -50,7 +50,8 @@ async fn search_cards_forwards_the_catalogue_search_unchanged() {
             &json!("OP99-001"),
             &json!("OP99-001"),
             &json!("OP99-001_p1"),
-            &json!({"usd": 2.25, "observed_on": "2026-11-12"})
+            &json!({"usd": 2.25, "eur": 2.03, "dkk": 15.18, "observed_on": yesterday(),
+                    "rate_date": yesterday(), "stale": false})
         ),
         "{found}"
     );
@@ -163,6 +164,70 @@ async fn binder_entry_tools_forward_additions_and_lists_unchanged() {
         assert_eq!(listed.is_error, Some(false), "{listed:?}");
         assert_eq!(listed.structured_content.unwrap(), direct_get(query).await);
     }
+
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn binder_entries_carry_card_values_and_the_binder_value() {
+    let api = start_api().await;
+    let http = reqwest::Client::new();
+    let owner: Value = http
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name": "Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owner_id = owner["id"].as_str().unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+    wishlist_call(&client, "search_cards", json!({"card_code": "OP99-001"})).await;
+    let japanese = wishlist_call(
+        &client,
+        "add_binder_entry",
+        json!({"owner_id": owner_id, "card_id": "OP99-001_p1", "language": "ja", "request_id": "mcp-binder-1"}),
+    )
+    .await;
+    assert_eq!(japanese.is_error, Some(false), "{japanese:?}");
+    let priced = wishlist_call(
+        &client,
+        "add_binder_entry",
+        json!({"owner_id": owner_id, "card_id": "OP99-001", "quantity": 3, "request_id": "mcp-binder-3"}),
+    )
+    .await;
+    assert_eq!(priced.is_error, Some(false), "{priced:?}");
+    let listed = wishlist_call(&client, "binder_entries", json!({"owner_id": owner_id})).await;
+    let listed = listed.structured_content.unwrap();
+    assert_eq!(
+        listed["binder_values"],
+        json!([{"owner_id": owner_id, "usd": 6.75, "eur": 6.09, "dkk": 45.54,
+                "unpriced_entries": 1, "oldest_observed_on": yesterday()}]),
+        "the Japanese entry is unpriced and the English copies are valued"
+    );
+    let japanese = &listed["entries"][1];
+    assert_eq!(
+        (
+            &japanese["language"],
+            &japanese["card"]["card_value"],
+            &japanese["card"]["value_unavailable"]
+        ),
+        (&json!("ja"), &Value::Null, &json!("japanese_printing"))
+    );
+    let direct: Value = http
+        .get(format!("{api}/api/binder/entries?owner_id={owner_id}"))
+        .bearer_auth(API_KEY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed, direct);
     client.cancel().await.unwrap();
 }
 
@@ -244,7 +309,10 @@ async fn update_binder_entry_forwards_the_request_unchanged() {
     let read_back = wishlist_call(&client, "binder_entries", json!({"owner_id": owner_a})).await;
     let read_back = read_back.structured_content.unwrap();
     assert_eq!(
-        (&read_back[0]["quantity"], &read_back[0]["note"]),
+        (
+            &read_back["entries"][0]["quantity"],
+            &read_back["entries"][0]["note"],
+        ),
         (&json!(1), &json!("binder 2"))
     );
 
@@ -299,8 +367,8 @@ async fn delete_binder_entry_forwards_the_request_unchanged() {
     assert_eq!(repeated.structured_content.unwrap()["status"], 404);
     let left = wishlist_call(&client, "binder_entries", json!({"owner_id": owner_a})).await;
     let left = left.structured_content.unwrap();
-    assert_eq!(left.as_array().unwrap().len(), 1);
-    assert_eq!(left[0]["id"], entries[1]);
+    assert_eq!(left["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(left["entries"][0]["id"], entries[1]);
     client.cancel().await.unwrap();
 }
 
@@ -319,7 +387,8 @@ async fn global_instructions_describe_the_binder_photo_workflow() {
     assert!(
         instructions.contains("add_binder_entry")
             && instructions.contains("binder_destination_required")
-            && instructions.contains("Never store the user's photo"),
+            && instructions.contains("Never store the user's photo")
+            && instructions.contains("in DKK unless the user asks for EUR or USD"),
         "{instructions}"
     );
     client.cancel().await.unwrap();

@@ -10,7 +10,12 @@ use openhome_api::{
     AppState,
     auth::{ApiKey, auth_middleware},
     routes,
-    services::optcg::Optcg,
+    services::{
+        card_value::{DailyRates, Rate},
+        exchange_rates,
+        optcg::Optcg,
+        training::CalendarDay,
+    },
 };
 use serde_json::{Value, json};
 use wiremock::{
@@ -20,15 +25,60 @@ use wiremock::{
 
 use super::{send_request_with_method, test_app_with_db};
 
-pub const LISTED: [(&str, &[&str]); 6] = [
+pub const LISTED: [(&str, &[&str]); 7] = [
     ("OP01-001", &["OP01-001", "OP01-001_p1"]),
     ("OP01-002", &["OP01-002"]),
     ("OP01-010", &["OP01-010", "OP01-010_p1", "OP01-010_p2"]),
     ("OP09-034", &["EB03_OP09-034_p1", "OP09-034"]),
     ("OP10-001", &["OP10-001"]),
     ("ST01-001", &["ST01-001"]),
+    ("OP02-001", &["OP02-001"]),
 ];
 pub const OUTAGE: &str = "OP77-503";
+
+/// The catalogue's price for a code and how many days ago it observed it. Most cards are priced
+/// at 2.25 yesterday; the rest probe rate fallback, the stale boundary and unpriced cards.
+pub fn market_price(code: &str) -> (Option<f64>, u64) {
+    match code {
+        "OP01-002" => (None, 1),
+        "OP01-010" => (Some(2.25), 20),
+        "OP10-001" => (Some(7.10), 30),
+        "ST01-001" => (Some(3.33), 31),
+        "OP02-001" => (Some(4.00), 120),
+        _ => (Some(2.25), 1),
+    }
+}
+
+pub fn days_ago(days: u64) -> CalendarDay {
+    CalendarDay::of(chrono::Utc::now())
+        .checked_sub_days(days)
+        .unwrap()
+}
+
+/// One stored ECB day, `days` ago.
+pub async fn store_rate_day(state: &AppState, days: u64, usd: &str, dkk: &str) {
+    exchange_rates::store(
+        &state.db,
+        &[DailyRates {
+            date: days_ago(days),
+            usd: Rate::parse(usd).unwrap(),
+            dkk: Rate::parse(dkk).unwrap(),
+        }],
+    )
+    .await
+    .unwrap();
+}
+
+/// Three ECB days: yesterday's, twenty days ago and forty-five days ago.
+pub async fn store_rates(state: &AppState) {
+    for (days, usd, dkk) in [
+        (1, "1.1081", "7.4754"),
+        (20, "1.2000", "7.5000"),
+        (45, "1.1000", "7.4000"),
+    ] {
+        store_rate_day(state, days, usd, dkk).await;
+    }
+}
 
 pub fn png() -> Vec<u8> {
     let pixels = RgbImage::from_pixel(60, 84, Rgb([200, 30, 30]));
@@ -53,18 +103,20 @@ pub async fn catalogue() -> MockServer {
                 return ResponseTemplate::new(404)
                     .set_body_json(json!({"error": "Card not found."}));
             };
+            let (price, age) = market_price(code);
+            let observed = days_ago(age).to_string();
             ResponseTemplate::new(200).set_body_json(
                 ids.iter()
                     .map(|id| {
                         json!({
-                            "inventory_price": 1.95, "market_price": 2.25,
+                            "inventory_price": 1.95, "market_price": price,
                             "card_name": format!("Invented {id}"), "set_name": "Synthetic Set",
                             "card_text": "[Your Turn] Gain +1000 power.", "set_id": "OP-01",
                             "rarity": "L", "card_set_id": code, "card_color": "Red",
                             "card_type": "Leader", "life": "5", "card_cost": null,
                             "card_power": "5000", "sub_types": "Invented Crew",
                             "counter_amount": null, "attribute": "Slash",
-                            "date_scraped": "2026-11-12", "card_image_id": id,
+                            "date_scraped": observed, "card_image_id": id,
                             "card_image": format!("{origin}/media/static/Card_Images/{id}.jpg"),
                         })
                     })
@@ -123,7 +175,8 @@ pub async fn add(app: &Router, body: Value) -> (StatusCode, Value) {
     send(app, Method::POST, "/api/binder/entries", Some(body)).await
 }
 
-pub async fn list(app: &Router, query: &str) -> Vec<Value> {
+/// The whole list response: `entries` and each owner's `binder_values`.
+pub async fn list_response(app: &Router, query: &str) -> Value {
     let (status, body) = send(
         app,
         Method::GET,
@@ -132,7 +185,14 @@ pub async fn list(app: &Router, query: &str) -> Vec<Value> {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    body.as_array().unwrap().clone()
+    body
+}
+
+pub async fn list(app: &Router, query: &str) -> Vec<Value> {
+    list_response(app, query).await["entries"]
+        .as_array()
+        .unwrap()
+        .clone()
 }
 
 pub fn ids(entries: &[Value]) -> Vec<(&str, &str, i64)> {

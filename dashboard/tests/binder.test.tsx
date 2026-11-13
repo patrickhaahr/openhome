@@ -21,6 +21,7 @@ import {
 } from "vitest"
 import { z } from "zod"
 import { BinderBook } from "@/components/binder-book"
+import { CurrencyProvider } from "@/components/currency"
 import { paginate, type BinderSearch } from "@/lib/binder"
 import type { BinderMutation } from "@/lib/binder-edit"
 import { readBinder, readCardImage, writeBinder } from "@/lib/binder.server"
@@ -90,25 +91,27 @@ async function render(): Promise<void> {
   await act(async () =>
     root.render(
       <RouterContextProvider router={router}>
-        <BinderBook
-          data={data}
-          search={search}
-          choose={(next) => {
-            search = next
-            refreshWork = render()
-          }}
-          change={(command) => {
-            work = writeBinder(command)
+        <CurrencyProvider initial="DKK">
+          <BinderBook
+            data={data}
+            search={search}
+            choose={(next) => {
+              search = next
+              refreshWork = render()
+            }}
+            change={(command) => {
+              work = writeBinder(command)
 
-            return work
-          }}
-          refresh={() => {
-            vi.stubEnv("OPENHOME_API_URL", fixture.url)
-            refreshWork = render()
+              return work
+            }}
+            refresh={() => {
+              vi.stubEnv("OPENHOME_API_URL", fixture.url)
+              refreshWork = render()
 
-            return refreshWork
-          }}
-        />
+              return refreshWork
+            }}
+          />
+        </CurrencyProvider>
       </RouterContextProvider>
     )
   )
@@ -315,6 +318,9 @@ test("says a Binder is empty rather than showing blank pages", async () => {
   expect(container.textContent).toContain("Sam’s Binder is empty")
   expect(container.querySelectorAll(".pocket")).toHaveLength(0)
   expect(container.textContent).not.toContain("Pages 1")
+  expect(container.textContent).toContain("Binder ValueDKK\u00a00.00")
+  expect(container.textContent).toContain("No priced cards.")
+  expect(button("EUR")).toBeDefined()
 })
 
 test("keeps recovery controls for a failed read and recovers when OpenHome answers", async () => {

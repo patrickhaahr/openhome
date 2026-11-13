@@ -47,7 +47,7 @@ export function navLabelsFromCookies(cookies: string): NavLabels {
   return parseNavLabels(cookieValue(cookies, navLabelsCookieName))
 }
 
-const rememberedCookie = (name: string, value: string): string =>
+export const rememberedCookie = (name: string, value: string): string =>
   `${name}=${value}; Path=/; Max-Age=${oneYear}; SameSite=Lax`
 
 /** The `document.cookie` assignment that remembers a layout for a year. */

@@ -6,6 +6,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { OpenConnection } from "@/components/control-alert"
 import { BinderSheet } from "@/components/binder-sheet"
+import { BinderValueBar } from "@/components/binder-value"
 import {
   FeedbackLine,
   ListSheet,
@@ -79,6 +80,7 @@ export function BinderBook({
             label="Whose Binder"
             choose={(person) => choose({ person })}
           />
+          <BinderValueBar value={view.value} />
         </div>
       ) : null}
       {selected === undefined ? (

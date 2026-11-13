@@ -15,6 +15,40 @@ export const cardId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)
 
 const detail = z.string().nullable()
 
+const amount = z.number().nonnegative()
+
+/** A catalogue price in all three currencies, with the day it was observed and the ECB rate day used. */
+export const cardValue = z.object({
+  usd: amount,
+  eur: amount,
+  dkk: amount,
+  observed_on: z.iso.date(),
+  rate_date: z.iso.date(),
+  stale: z.boolean(),
+})
+
+export type CardValue = z.infer<typeof cardValue>
+
+export const valueUnavailable = z.enum([
+  "japanese_printing",
+  "no_catalogue_price",
+  "no_exchange_rates",
+])
+
+export type ValueUnavailable = z.infer<typeof valueUnavailable>
+
+/** One owner's Binder Value: priced entries only, so the unpriced count says what is missing. */
+export const binderValue = z.object({
+  owner_id: z.uuid(),
+  usd: amount,
+  eur: amount,
+  dkk: amount,
+  unpriced_entries: z.number().int().nonnegative(),
+  oldest_observed_on: z.iso.date().nullable(),
+})
+
+export type BinderValue = z.infer<typeof binderValue>
+
 /** One Card in one language in one owner's Binder, with the card's catalogue details. */
 export const binderEntry = z.object({
   id: z.uuid(),
@@ -39,10 +73,18 @@ export const binderEntry = z.object({
     attribute: detail,
     sub_types: detail,
     text: detail,
+    card_value: cardValue.nullable(),
+    value_unavailable: valueUnavailable.nullable(),
   }),
 })
 
 export type BinderEntry = z.infer<typeof binderEntry>
+
+/** The Binder list: entries in Card Code order, and each owner's Binder Value. */
+export const binderList = z.object({
+  entries: binderEntry.array(),
+  binder_values: binderValue.array(),
+})
 
 export type BinderFailure = Exclude<ConnectionState, "connected">
 
@@ -52,6 +94,7 @@ export type BinderState =
       readonly state: "available"
       readonly owners: HouseholdUser[]
       readonly entries: BinderEntry[]
+      readonly values: BinderValue[]
     }
   | { readonly state: "unavailable"; readonly reason: BinderFailure }
 
@@ -99,12 +142,14 @@ export type BinderView =
   | {
       readonly view: "empty"
       readonly owners: HouseholdUser[]
-      owner: HouseholdUser
+      readonly owner: HouseholdUser
+      readonly value: BinderValue | undefined
     }
   | {
       readonly view: "spread"
       readonly owners: HouseholdUser[]
       readonly owner: HouseholdUser
+      readonly value: BinderValue | undefined
       readonly left: BinderEntry[]
       readonly right: BinderEntry[]
       readonly index: number
@@ -123,13 +168,15 @@ export function viewOf(state: BinderState, search: BinderSearch): BinderView {
   const owner = owners.find((user) => user.id === search.person) ?? first
 
   const mine = state.entries.filter((entry) => entry.owner_id === owner.id)
+  const value = state.values.find((value) => value.owner_id === owner.id)
 
-  if (mine.length === 0) return { view: "empty", owners, owner }
+  if (mine.length === 0) return { view: "empty", owners, owner, value }
 
   return {
     view: "spread",
     owners,
     owner,
+    value,
     ...paginate(mine, (search.page ?? 1) - 1),
   }
 }

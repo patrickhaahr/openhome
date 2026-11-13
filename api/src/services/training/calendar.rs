@@ -120,6 +120,14 @@ impl CalendarDay {
     }
 }
 
+impl CalendarDay {
+    /// The current Copenhagen calendar day.
+    #[must_use]
+    pub fn today() -> Self {
+        Self::of(Utc::now())
+    }
+}
+
 impl fmt::Display for CalendarDay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.format("%Y-%m-%d"))
@@ -130,6 +138,13 @@ impl fmt::Display for CalendarDay {
 impl serde::Serialize for CalendarDay {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_str(self)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for CalendarDay {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::parse(&text).ok_or_else(|| serde::de::Error::custom("expected a YYYY-MM-DD day"))
     }
 }
 

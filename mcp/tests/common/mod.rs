@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod binder;
+pub mod binder;
 
 use axum::Router;
 use openhome_api::services::noop_push;
@@ -54,8 +54,10 @@ pub async fn start_api() -> String {
 pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let labels = open_food_facts().await;
     let catalogue = binder::optcg().await;
+    let db = training_log().await;
+    binder::store_rates(&db).await;
     let state = AppState {
-        db: training_log().await,
+        db,
         noop_db: noop_mirror().await,
         adguard_service: None,
         docker_service: None,

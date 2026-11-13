@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, USD Card Price, the price's observation date and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages. Tapping a pocket opens a card sheet that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. There is no currency other than USD and no Binder Value yet.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, its Card Value in DKK, EUR and USD with the price's observation date and a stale flag, and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages. Tapping a pocket opens a card sheet that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. Binder reads carry each owner's Binder Value, and the Dashboard shows it in DKK, EUR or USD by a switch kept in a cookie.
 
 ## Sub-features
 
@@ -16,7 +16,7 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-retry` repeats the identical call: `replayed: true`, quantity unchanged. Reusing the `request_id` with a changed quantity is a 409.
 - `binder-merge` adds the same card again (a new `request_id`): the quantity rises on the same entry.
 - `binder-add-unsearched` adds the parallel `OP99-002_p1` before anyone searched `OP99-002`: the Card is stored and the entry listed.
-- `binder-ja` adds a `ja` copy: a separate entry with no `card_value` and no `inventory_price_usd`.
+- `binder-ja` adds a `ja` copy: a separate entry with no `card_value` and `value_unavailable: "japanese_printing"`.
 - `binder-unlisted-add` adds a card the catalogue does not list: `card_not_listed`, nothing written.
 - `binder-list` lists one owner and every owner, in Card Code order with a parallel after its normal print.
 - `binder-dash-open` opens Binder from Main navigation on the Dashboard (Home has the link, with no summary) and shows Alex's first spread.
@@ -52,7 +52,7 @@ Preconditions:
 - The loopback catalogue knows only invented `OP99` cards: `OP99-001`, `OP99-002` and `OP99-004` have a parallel, `OP99-003`, `OP99-005`, `OP99-006`, `OP99-010` and `OP99-011` have one variant, `OP99-020` has two variants with odd spellings (id `EB99_OP99-020_P1`, image file `SPECIAL_LANTERN_SPIRIT.jpg`). `OP99-503` makes the stand-in answer 503. Any other code is unlisted. Never use a real code such as `OP01-001`: the preview must not reach the live catalogue, and the stand-in would answer 404 anyway.
 - Fresh launch. The preview seeds Binder Entries through the production route at startup (`seed/binder.json`), using only `OP99-003` to `OP99-006` and `OP99-011` to `OP99-015`: Alex has 12 entries (a `ja` entry, quantities 2 and 3), Robin 4, Sam none. It leaves `OP99-001`, `OP99-002`, `OP99-010` and `OP99-020` alone, so the card steps below still start from nothing stored, but every owner step uses Sam, whose Binder is empty. Run the Dashboard steps that need Sam empty (`binder-dash-empty`) before the Hermes add steps. Data resets on relaunch.
 
-- **First lookup.** Run `mcp.sh call search_cards '{"card_code":"OP99-001"}'`. `structuredContent.cards` has ids `OP99-001` and `OP99-001_p1`, each with `card_value` (`usd`, `observed_on`) and `image_path`. The parallel's price is about five months old.
+- **First lookup.** Run `mcp.sh call search_cards '{"card_code":"OP99-001"}'`. `structuredContent.cards` has ids `OP99-001` and `OP99-001_p1`, each with `card_value` (`usd`, `eur`, `dkk`, `observed_on`, `rate_date`, `stale`) and `image_path`. The parallel's price is about five months old.
 - **Count the requests.** The stand-in logs every request to the stack log as `OPTCG stand-in: GET <path> -> <status>`. Run `grep -c "OPTCG stand-in" "$RUN_DIR/logs/stack.log"`: the first lookup adds three lines (the card and two images).
 - **Cached.** Repeat the call (lower case `op99-001` works too). The result is identical and the count is unchanged.
 - **Unlisted.** `mcp.sh call search_cards '{"card_code":"OP99-777"}'` returns `{"card_code":"OP99-777","cards":[]}`. The log shows one 404 line. Repeat it: the result is the same and the log gains no line, because Axum remembers the unlisted code until the next Copenhagen day (a later day asks again, which this recipe cannot show without changing the clock).
@@ -65,7 +65,7 @@ Preconditions:
 - **Add.** Repeat with `"owner_id":"<Sam id>"`. `structuredContent` has `replayed: false` and an `entry` with `quantity` 1, `language` `en`, `date_added` today in Copenhagen and the full `card`. Read it back with `binder_entries` `{"owner_id":"<Sam id>"}` and `curl` of `$API_URL/api/binder/entries?owner_id=<id>`: the same entry.
 - **Retry.** Call the identical arguments again. `replayed: true`, the same `entry`, and the list still shows quantity 1. Now reuse `verify-b1` with `"quantity":2`: exit 2, status 409, nothing changed.
 - **Merge.** A new `request_id` with `"quantity":2` for the same card: the same entry `id`, `quantity` 3. Retry the first call again: it still replays the original quantity 1, while the list shows 3.
-- **Japanese.** Add the same card with `"language":"ja"`: a second entry with its own `id`, quantity 1, and `card.card_value` and `card.inventory_price_usd` both `null` (the `en` entry keeps both), also in `binder_entries`.
+- **Japanese.** Add the same card with `"language":"ja"`: a second entry with its own `id`, quantity 1, and `card.card_value` `null` with `card.value_unavailable` `japanese_printing` (the `en` entry keeps its `card_value`), also in `binder_entries`.
 - **Unsearched parallel.** On a fresh launch, `add_binder_entry` with `"card_id":"OP99-002_p1"` for Sam succeeds without a prior `search_cards`: the stand-in log shows the `OP99-002` lookup and its images, and `binder_entries` lists the entry. A later `search_cards` for `OP99-002` adds no log line.
 - **Unlisted.** `add_binder_entry` with `"card_id":"OP99-777"` exits 2 with `status: 404`, `code: "card_not_listed"`. The list is unchanged and the stand-in log shows one 404 for it (or none if the code was already searched unlisted today). An id that holds no listed code, such as `OP99-002_p9` (the code lists no such variant), is rejected the same way.
 - **Order.** Search `OP99-002`, then add `OP99-010`, the parallel `OP99-002_p1`, `OP99-002` and `OP99-001_p1` for Sam, and one card for Robin. `binder_entries` with Sam's `owner_id` lists the earlier entries too, in Card Code order, `OP99-001` en then ja, `OP99-001_p1`, `OP99-002`, `OP99-002_p1`, `OP99-010`.
@@ -85,6 +85,7 @@ Preconditions:
 - **Dashboard edit failure.** With Sam holding the Card in `en` and `ja`, switch one to the other language and save: the sheet stays open with the conflict message and your draft, and the list is unchanged. Choose the original language and save again to recover.
 - **Dashboard remove.** Press `Remove`: a confirmation names the card, its language and the owner. `Keep it` returns to the form with the entry intact. `Remove for good` closes the sheet and the pocket disappears (the API read-back agrees); the card image stays.
 - **Household removal.** Create a throwaway user in `Household and lists` on `/lists?tab=wish`, add entries for them with `add_binder_entry`, then `Remove <name>`: the confirmation reads "with all their wishlists, wishes and watchlist entries, and their Binder". Note one of their entry ids first. After `Remove for good`, `GET $API_URL/api/household-users/<id>/binder/entries/<entry id>` is 404, `/api/binder/entries?owner_id=<id>` is `[]`, other owners are unchanged and the card images are still 200. Use a throwaway user: the seeded ones are shared by later steps. In the preview, the buttons read `Remove <name>` through their text, not an `aria-label`; click them with `preview_evaluate` since selectors with quotes are rejected.
+- **Values.** Card Value, Binder Value, the currency switch and the ECB rates have their own recipe, [binder-values.md](./binder-values.md). The Proof step below covers both.
 - **Proof.** Save each tool JSON as `01-…` onward, plus the stand-in log lines, under `$EVIDENCE_DIR/binder/`.
 
 ## Gotchas
