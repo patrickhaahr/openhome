@@ -62,7 +62,8 @@ English printings only), `no_catalogue_price` or `no_exchange_rates` (no stored 
 before the price's day), and `card_value` is then `null`.
 
 `GET /api/binder/entries` returns `{ "entries": [...], "binder_values": [...] }`.
-`binder_values` has one item per owner that has entries: `owner_id`, `usd`, `eur`,
+`binder_values` has one item per Household User in scope (every one, or the `owner_id`
+filter's), so an empty Binder is worth zero: `owner_id`, `usd`, `eur`,
 `dkk`, `unpriced_entries` and `oldest_observed_on`. A Binder Value is quantity times
 Card Value over the priced entries in each currency, stale prices included. Entries
 without a value are counted in `unpriced_entries`, and the oldest observation date is

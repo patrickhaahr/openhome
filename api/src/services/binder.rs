@@ -292,7 +292,7 @@ pub struct EntriesFilter {
     pub owner_id: Option<String>,
 }
 
-/// One owner's Binder Value, for an owner that has entries in the list.
+/// One owner's Binder Value; an empty Binder is worth zero.
 #[derive(Debug, Serialize)]
 pub struct OwnerValue {
     pub owner_id: String,
@@ -306,20 +306,28 @@ pub struct Entries {
     pub binder_values: Vec<OwnerValue>,
 }
 
+/// Every Household User in scope has a Binder, so each gets a Binder Value even with no entries.
 pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Entries> {
-    let entries = load(db, filter.owner_id.as_deref(), None).await?;
-    // Entries are grouped by owner, so each run of one owner is one Binder.
-    let binder_values = entries
-        .chunk_by(|a, b| a.owner_id == b.owner_id)
-        .map(|binder| OwnerValue {
-            owner_id: binder[0].owner_id.clone(),
-            value: BinderValue::total(
-                binder
-                    .iter()
-                    .map(|entry| (entry.quantity, &entry.card.valuation)),
-            ),
-        })
-        .collect();
+    let owner_id = filter.owner_id.as_deref();
+    let entries = load(db, owner_id, None).await?;
+    let binder_values = sqlx::query_scalar!(
+        "SELECT id FROM household_users WHERE ? IS NULL OR id = ? ORDER BY name, id",
+        owner_id,
+        owner_id
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|owner_id| OwnerValue {
+        value: BinderValue::total(
+            entries
+                .iter()
+                .filter(|entry| entry.owner_id == owner_id)
+                .map(|entry| (entry.quantity, &entry.card.valuation)),
+        ),
+        owner_id,
+    })
+    .collect();
     Ok(Entries {
         entries,
         binder_values,

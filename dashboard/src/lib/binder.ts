@@ -142,7 +142,8 @@ export type BinderView =
   | {
       readonly view: "empty"
       readonly owners: HouseholdUser[]
-      owner: HouseholdUser
+      readonly owner: HouseholdUser
+      readonly value: BinderValue | undefined
     }
   | {
       readonly view: "spread"
@@ -167,14 +168,15 @@ export function viewOf(state: BinderState, search: BinderSearch): BinderView {
   const owner = owners.find((user) => user.id === search.person) ?? first
 
   const mine = state.entries.filter((entry) => entry.owner_id === owner.id)
+  const value = state.values.find((value) => value.owner_id === owner.id)
 
-  if (mine.length === 0) return { view: "empty", owners, owner }
+  if (mine.length === 0) return { view: "empty", owners, owner, value }
 
   return {
     view: "spread",
     owners,
     owner,
-    value: state.values.find((value) => value.owner_id === owner.id),
+    value,
     ...paginate(mine, (search.page ?? 1) - 1),
   }
 }

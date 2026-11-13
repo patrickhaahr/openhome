@@ -80,9 +80,7 @@ export function BinderBook({
             label="Whose Binder"
             choose={(person) => choose({ person })}
           />
-          {view.view === "spread" ? (
-            <BinderValueBar value={view.value} />
-          ) : null}
+          <BinderValueBar value={view.value} />
         </div>
       ) : null}
       {selected === undefined ? (

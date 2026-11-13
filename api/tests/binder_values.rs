@@ -114,7 +114,7 @@ async fn a_binder_value_sums_quantity_times_card_value_and_counts_what_has_no_pr
     store_rates(&state).await;
     let ada = owner(&app, "Ada").await;
     let bo = owner(&app, "Bo").await;
-    let _empty = owner(&app, "Cy").await;
+    let cy = owner(&app, "Cy").await;
     add_to(&app, &ada, "OP01-001", 2, "en").await;
     add_to(&app, &ada, "ST01-001", 3, "en").await;
     add_to(&app, &ada, "OP01-002", 1, "en").await;
@@ -129,8 +129,10 @@ async fn a_binder_value_sums_quantity_times_card_value_and_counts_what_has_no_pr
              "oldest_observed_on": day(31)},
             {"owner_id": bo, "usd": 2.25, "eur": 2.03, "dkk": 15.18, "unpriced_entries": 0,
              "oldest_observed_on": day(1)},
+            {"owner_id": cy, "usd": 0.0, "eur": 0.0, "dkk": 0.0, "unpriced_entries": 0,
+             "oldest_observed_on": null},
         ]),
-        "stale prices count, Japanese and unpriced entries do not"
+        "stale prices count, Japanese and unpriced entries do not, and an empty Binder is worth zero"
     );
     let ja = by_card(read["entries"].as_array().unwrap(), "OP01-001", "ja");
     assert_eq!(ja["card"]["card_value"], Value::Null);
@@ -139,6 +141,10 @@ async fn a_binder_value_sums_quantity_times_card_value_and_counts_what_has_no_pr
     let only_bo = list_response(&app, &format!("?owner_id={bo}")).await;
     assert_eq!(only_bo["binder_values"].as_array().unwrap().len(), 1);
     assert_eq!(only_bo["binder_values"][0]["owner_id"], json!(bo));
+    let only_cy = list_response(&app, &format!("?owner_id={cy}")).await;
+    assert_eq!(only_cy["entries"], json!([]));
+    assert_eq!(only_cy["binder_values"][0]["owner_id"], json!(cy));
+    assert_eq!(only_cy["binder_values"][0]["dkk"], json!(0.0));
     let nobody = list_response(&app, "?owner_id=nobody").await;
     assert_eq!(nobody, json!({"entries": [], "binder_values": []}));
 }
