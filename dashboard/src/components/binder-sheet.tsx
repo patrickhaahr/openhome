@@ -1,10 +1,13 @@
 import { useId, useState } from "react"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
+import { CardValueLine } from "@/components/binder-value"
+import { PriceHistory } from "@/components/price-history"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
+import type { PricesState } from "@/lib/card-prices"
 import { maxQuantity, type BinderCommand } from "@/lib/binder-edit"
 import { formatDay } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
@@ -49,12 +52,14 @@ export function BinderSheet({
   owner,
   busy,
   save,
+  prices,
   done,
 }: {
   entry: BinderEntry
   owner: HouseholdUser
   busy: boolean
   save: Save
+  prices: (card: string) => Promise<PricesState>
   done: () => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
@@ -91,6 +96,7 @@ export function BinderSheet({
               </time>
             </span>
           </p>
+          <CardValueLine card={card} />
           <dl className="binder-facts">
             {factsOf(card).map(([label, value]) => (
               <div key={label}>
@@ -104,6 +110,9 @@ export function BinderSheet({
           )}
         </div>
       </div>
+      {entry.language === "en" ? (
+        <PriceHistory card={card.id} load={prices} />
+      ) : null}
       <EntryFields
         key={`${entry.quantity}-${entry.language}-${entry.note ?? ""}`}
         entry={entry}

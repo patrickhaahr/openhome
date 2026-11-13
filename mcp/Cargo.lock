@@ -1883,6 +1883,7 @@ dependencies = [
  "image",
  "libavif-sys",
  "moxcms",
+ "quick-xml",
  "reqwest",
  "scraper",
  "serde",

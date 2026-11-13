@@ -34,4 +34,4 @@ Each feature file has an H1, one paragraph, then exactly four H2s in order: `Sub
 
 ## Planned: Binder (epic #285)
 
-`binder.md` covers card search and Binder Entries, with the loopback OPTCG stand-in in the preview example (`api/examples/dashboard_preview/binder.rs`). Later Binder tickets extend it and must add the ECB rates stand-in the same way TMDB has one, so currency values work offline. Never point the preview at the live OPTCG service: it is one volunteer's server.
+`binder.md` covers card search and Binder Entries, `binder-values.md` Card and Binder Values, `binder-turn.md` dragging and tapping pages, and `binder-prices.md` the daily price refresh and Price History, with the loopback OPTCG and ECB stand-ins in the preview example (`api/examples/dashboard_preview/binder.rs`, `ecb.rs`). Later Binder tickets extend it. Never point the preview at the live OPTCG service (one volunteer's server) or the live ECB file.

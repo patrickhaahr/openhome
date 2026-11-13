@@ -9,6 +9,7 @@ import {
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { BinderBook } from "@/components/binder-book"
+import { CurrencyProvider } from "@/components/currency"
 import type { BinderEntry, BinderSearch } from "@/lib/binder"
 import {
   grip,
@@ -51,6 +52,8 @@ const entries: BinderEntry[] = Array.from({ length: 20 }, (_, slot) => {
       attribute: null,
       sub_types: null,
       text: null,
+      card_value: null,
+      value_unavailable: "no_catalogue_price",
     },
   }
 })
@@ -104,16 +107,21 @@ async function render(): Promise<void> {
   await act(async () =>
     root.render(
       <RouterContextProvider router={router}>
-        <BinderBook
-          data={{ state: "available", owners: [alex], entries }}
-          search={search}
-          choose={(next) => {
-            search = next
-            void render()
-          }}
-          change={async () => ({ state: "saved" })}
-          refresh={async () => undefined}
-        />
+        <CurrencyProvider initial="DKK">
+          <BinderBook
+            data={{ state: "available", owners: [alex], entries, values: [] }}
+            search={search}
+            choose={(next) => {
+              search = next
+              void render()
+            }}
+            change={async () => ({ state: "saved" })}
+            refresh={async () => undefined}
+            prices={async () => ({ state: "unavailable" })}
+            find={() => new Promise(() => undefined)}
+            add={() => new Promise(() => undefined)}
+          />
+        </CurrencyProvider>
       </RouterContextProvider>
     )
   )

@@ -1,9 +1,11 @@
 use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use super::card_value::{BinderValue, Unpriced, Valuation};
 use super::cards::{self, Card, CardId, CardsError};
 use super::optcg::Optcg;
 use super::patch::Patch;
@@ -65,7 +67,7 @@ impl Quantity {
 }
 
 /// A Binder is only its owner's entries: there is no Binder record.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct BinderEntry {
     pub id: String,
     pub owner_id: String,
@@ -90,7 +92,9 @@ pub struct AddEntry {
 
 #[derive(Serialize)]
 pub struct Addition {
-    pub entry: BinderEntry,
+    /// A replay returns the stored response exactly as it was recorded, whatever its shape was
+    /// then, so a retry never differs from the first answer when rates or prices have moved on.
+    pub entry: Box<RawValue>,
     pub replayed: bool,
 }
 
@@ -165,10 +169,9 @@ impl Receipt {
                 "The retried entry was removed; use a new request_id to add it again".into(),
             ));
         }
-        let entry = serde_json::from_str(&self.result)
-            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
         Ok(Addition {
-            entry,
+            entry: RawValue::from_string(self.result)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
             replayed: true,
         })
     }
@@ -245,6 +248,8 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     };
     let result =
         serde_json::to_string(&entry).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
+    let accepted = RawValue::from_string(result.clone())
+        .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     // The receipt claim serializes simultaneous retries; the loser rolls back its merge.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO binder_addition_receipts
@@ -276,7 +281,7 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     }
     tx.commit().await?;
     Ok(Addition {
-        entry,
+        entry: accepted,
         replayed: false,
     })
 }
@@ -287,8 +292,46 @@ pub struct EntriesFilter {
     pub owner_id: Option<String>,
 }
 
-pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<BinderEntry>> {
-    load(db, filter.owner_id.as_deref(), None).await
+/// One owner's Binder Value; an empty Binder is worth zero.
+#[derive(Debug, Serialize)]
+pub struct OwnerValue {
+    pub owner_id: String,
+    #[serde(flatten)]
+    pub value: BinderValue,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Entries {
+    pub entries: Vec<BinderEntry>,
+    pub binder_values: Vec<OwnerValue>,
+}
+
+/// Every Household User in scope has a Binder, so each gets a Binder Value even with no entries.
+pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Entries> {
+    let owner_id = filter.owner_id.as_deref();
+    let entries = load(db, owner_id, None).await?;
+    let binder_values = sqlx::query_scalar!(
+        "SELECT id FROM household_users WHERE ? IS NULL OR id = ? ORDER BY name, id",
+        owner_id,
+        owner_id
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|owner_id| OwnerValue {
+        value: BinderValue::total(
+            entries
+                .iter()
+                .filter(|entry| entry.owner_id == owner_id)
+                .map(|entry| (entry.quantity, &entry.card.valuation)),
+        ),
+        owner_id,
+    })
+    .collect();
+    Ok(Entries {
+        entries,
+        binder_values,
+    })
 }
 
 /// Read only the complete owner/entry destination.
@@ -435,8 +478,7 @@ pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<(
 /// The catalogue's prices are for English printings, so a Japanese entry has no price at all.
 fn priced_for(mut card: Card, language: Language) -> Card {
     if language == Language::Ja {
-        card.card_value = None;
-        card.inventory_price_usd = None;
+        card.valuation = Valuation::Unpriced(Unpriced::JapanesePrinting);
     }
     card
 }

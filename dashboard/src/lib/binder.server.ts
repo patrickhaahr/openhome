@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requestOpenHome, readBoundedBody } from "./openhome.server"
 import {
   binderEntry,
+  binderList,
   cardId,
   type BinderFailure,
   type BinderState,
@@ -12,6 +13,14 @@ import {
   type BinderMutation,
   type BinderWriteFailure,
 } from "./binder-edit"
+import { cardPrices, type PricesState } from "./card-prices"
+import {
+  cardSearchResponse,
+  type AddFailure,
+  type BinderAddReceipt,
+  type BinderAddition,
+  type CardSearchResult,
+} from "./binder-add"
 import { householdUser } from "./wishlist"
 
 async function read<T>(
@@ -20,7 +29,11 @@ async function read<T>(
 ): Promise<
   { state: "read"; data: T } | { state: "unavailable"; reason: BinderFailure }
 > {
-  const result = await requestOpenHome({ path, method: "GET", timeoutMs: 5000 })
+  const result = await requestOpenHome({
+    path,
+    method: "GET",
+    timeoutMs: 5000,
+  })
 
   if (result.state !== "received")
     return { state: "unavailable", reason: result.state }
@@ -43,14 +56,19 @@ async function read<T>(
 export async function readBinder(): Promise<BinderState> {
   const [owners, entries] = await Promise.all([
     read("/api/household-users", householdUser.array()),
-    read("/api/binder/entries", binderEntry.array()),
+    read("/api/binder/entries", binderList),
   ])
 
   if (owners.state !== "read") return owners
 
   if (entries.state !== "read") return entries
 
-  return { state: "available", owners: owners.data, entries: entries.data }
+  return {
+    state: "available",
+    owners: owners.data,
+    entries: entries.data.entries,
+    values: entries.data.binder_values,
+  }
 }
 
 function writeFailure(status: number): BinderWriteFailure {
@@ -103,6 +121,99 @@ export async function writeBinder(
       return { state: "saved" }
   } catch {
     /* An invalid acknowledgement cannot confirm a saved entry. */
+  }
+
+  return { state: "failed", reason: "unavailable" }
+}
+
+/** One Card's whole Price History, converted by Axum at each point's own date. */
+export async function readCardPrices(input: {
+  card: string
+}): Promise<PricesState> {
+  const parsed = cardId.safeParse(input.card)
+
+  if (!parsed.success) return { state: "unavailable" }
+
+  const result = await read(
+    `/api/binder/cards/${parsed.data}/prices`,
+    cardPrices
+  )
+
+  return result.state === "read"
+    ? { state: "read", points: result.data.prices }
+    : { state: "unavailable" }
+}
+
+/** Search by Card Code through Start's server boundary; the catalogue is never reached by the browser. */
+export async function searchBinderCards(input: {
+  card_code: string
+}): Promise<CardSearchResult> {
+  const result = await requestOpenHome({
+    path: "/api/binder/cards",
+    method: "GET",
+    query: input,
+    timeoutMs: 20000,
+  })
+
+  if (result.state !== "received") return { state: "failed" }
+  const { response } = result
+
+  if (response.status === 400) return { state: "invalid" }
+
+  if (response.status === 503) return { state: "outage" }
+
+  if (!response.ok) return { state: "failed" }
+
+  try {
+    const parsed = cardSearchResponse.safeParse(await response.json())
+
+    if (parsed.success)
+      return parsed.data.cards.length === 0
+        ? { state: "unlisted" }
+        : { state: "found", cards: parsed.data.cards }
+  } catch {
+    /* Never expose private catalogue diagnostics. */
+  }
+
+  return { state: "failed" }
+}
+
+function additionFailure(status: number): AddFailure {
+  if (status === 400 || status === 422) return "invalid"
+
+  if (status === 404) return "not-found"
+
+  if (status === 409) return "conflict"
+
+  if (status === 503) return "catalogue"
+
+  return "unavailable"
+}
+
+const addition = z.object({ entry: binderEntry, replayed: z.boolean() })
+
+/** Forward one explicit-owner addition; only a parsed receipt confirms that it was stored. */
+export async function addBinderEntry(
+  command: BinderAddition
+): Promise<BinderAddReceipt> {
+  const result = await requestOpenHome({
+    path: "/api/binder/entries",
+    method: "POST",
+    json: command,
+    timeoutMs: 15000,
+  })
+
+  if (result.state !== "received")
+    return { state: "failed", reason: result.state }
+
+  if (!result.response.ok)
+    return { state: "failed", reason: additionFailure(result.response.status) }
+
+  try {
+    if (addition.safeParse(await result.response.json()).success)
+      return { state: "saved" }
+  } catch {
+    /* An invalid acknowledgement cannot confirm a saved addition. */
   }
 
   return { state: "failed", reason: "unavailable" }

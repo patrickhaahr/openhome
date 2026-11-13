@@ -14,6 +14,7 @@ use std::sync::Arc;
 use openhome_api::{
     AppState, DockerCache, auth, routes,
     services::{
+        exchange_rates,
         map::MapOrigin,
         noop_push,
         route_loop::{LoopPlanner, ProviderEndpoint},
@@ -24,7 +25,13 @@ use sqlx::sqlite::SqlitePoolOptions;
 use tokio::net::TcpListener;
 
 #[path = "dashboard_preview/binder.rs"]
+#[allow(dead_code)]
 mod binder;
+
+// One backfill pass: the tests need prices to convert, not the daily job.
+#[path = "dashboard_preview/ecb.rs"]
+#[allow(dead_code)]
+mod ecb;
 
 #[path = "support/providers.rs"]
 mod providers;
@@ -41,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
         .connect("sqlite::memory:")
         .await?;
     sqlx::migrate!("./migrations").run(&db).await?;
+    exchange_rates::refresh(&db, &ecb::ecb(ecb::Mode::Normal).await?).await?;
     let noop_db = SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")
@@ -66,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         };
     let planner = LoopPlanner::new(demo_origin, Some(endpoint))?;
     let tmdb = providers::synthetic_tmdb().await?;
-    let optcg = binder::optcg().await?;
+    let optcg = binder::stand_in().await?.client;
     let backlight =
         openhome_api::services::backlight::BacklightService::new(state.db.clone(), None, None)
             .await?;

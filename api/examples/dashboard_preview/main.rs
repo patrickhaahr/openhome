@@ -14,7 +14,7 @@
 
 //! Serves the production routes, migrations and authentication over isolated in-memory databases,
 //! with loopback stand-ins for every upstream (openrouteservice, `Open-Meteo`, Immich, the IR
-//! bridge, the `SwitchBot` bridge and the OPTCG card catalogue). TMDB is the real service when
+//! bridge, the `SwitchBot` bridge, the OPTCG card catalogue and the ECB reference rates). TMDB is the real service when
 //! `TMDB_READ_ACCESS_TOKEN` is set, otherwise a loopback catalogue. All data is invented and readable in `seed/*.json`; it is
 //! generated relative to today so the current day is always populated. The household API,
 //! credentials and coordinates are never touched: the map and weather use the public Copenhagen
@@ -27,6 +27,7 @@ use std::sync::Arc;
 use openhome_api::{
     AppState, DockerCache, auth, routes,
     services::{
+        exchange_rates,
         ir::IrService,
         map::MapOrigin,
         noop_push,
@@ -49,9 +50,11 @@ mod providers;
 mod foods;
 
 mod binder;
+mod ecb;
 mod media;
 mod noop;
 mod photos;
+mod prices;
 mod seed;
 mod stubs;
 
@@ -88,7 +91,16 @@ async fn main() -> anyhow::Result<()> {
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
     let planner = LoopPlanner::new(demo_origin, Some(providers::synthetic_provider().await?))?;
     let tmdb = media::tmdb().await?;
-    let optcg = binder::optcg().await?;
+    let catalogue = binder::stand_in().await?;
+    let optcg = catalogue.client.clone();
+    // `OPENHOME_PREVIEW_ECB=outage` makes the stand-in answer 503, so no rates arrive;
+    // `missed-day` leaves a day out of the history file and refills it on a second pass.
+    let mode = ecb::mode();
+    let ecb = ecb::ecb(mode).await?;
+    if mode == ecb::Mode::MissedDay {
+        tokio::spawn(ecb::next_pass(db.clone(), ecb.clone()));
+    }
+    tokio::spawn(exchange_rates::run_scheduler(db.clone(), ecb));
     // `--food-database=importing` previews the Food page's unavailable state.
     let food_state = foods::FoodState::from_args();
     let foods = foods::synthetic_foods(food_state).await?;
@@ -140,6 +152,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Household records are seeded through the public routes, so they always match the contract.
     seed::household(&url, API_KEY, &seed_db).await?;
+    if binder::history_mode() {
+        prices::replay(&seed_db, &catalogue).await?;
+        tokio::spawn(prices::restarts(seed_db.clone(), catalogue.client.clone()));
+    }
     println!("{url}");
     tokio::signal::ctrl_c().await?;
     Ok(())

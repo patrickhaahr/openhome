@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
-import type { BinderState } from "./binder"
+import { z } from "zod"
+import { cardId, type BinderState } from "./binder"
+import type { PricesState } from "./card-prices"
 import { binderCommand } from "./binder-edit"
+import { binderAddition, cardSearchInput } from "./binder-add"
 
 /** Household-visible read through authenticated Axum, with credentials held by Start. */
 export const getBinder = createServerFn({ method: "GET" }).handler(async () => {
@@ -27,5 +30,44 @@ export async function loadBinder(): Promise<BinderState> {
     return await getBinder()
   } catch {
     return { state: "unavailable", reason: "unreachable" }
+  }
+}
+
+/** A deliberate Card Code lookup; Start holds the credential. */
+export const searchCards = createServerFn({ method: "GET" })
+  .validator(cardSearchInput)
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { searchBinderCards } = await import("./binder.server")
+
+    return searchBinderCards(data)
+  })
+
+/** An explicit-owner addition; a retry carries the same `request_id`. */
+export const addCard = createServerFn({ method: "POST" })
+  .validator(binderAddition)
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { addBinderEntry } = await import("./binder.server")
+
+    return addBinderEntry(data)
+  })
+
+/** A card's Price History, read when its sheet opens. */
+export const getCardPrices = createServerFn({ method: "GET" })
+  .validator(z.object({ card: cardId }))
+  .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "no-store")
+    const { readCardPrices } = await import("./binder.server")
+
+    return readCardPrices(data)
+  })
+
+/** A dropped RPC reads as unavailable, never as an empty history. */
+export async function loadCardPrices(card: string): Promise<PricesState> {
+  try {
+    return await getCardPrices({ data: { card } })
+  } catch {
+    return { state: "unavailable" }
   }
 }

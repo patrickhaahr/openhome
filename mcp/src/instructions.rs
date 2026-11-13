@@ -96,7 +96,7 @@ with food, never a single low day; seven_day_average_above_upper_limit means a h
 Supplement, while days_above_upper_limit alone is only a caution. For a long range prefer week or month: by day the \
 micronutrients make the result large. \
 For One Piece Card Game cards, call search_cards with the Card Code read from the card: it returns every variant (the normal \
-print and its parallel arts) with details, the USD card_value and the date of its price. Report a code with an empty cards \
+print and its parallel arts) with details and a card_value. Report a code with an empty cards \
 list as not listed by the catalogue; card_data_unavailable means the catalogue is down, so tell the user to try later. \
 To add cards from a photo, read each visible Card Code and tell a normal print from a parallel art by its art and frame. \
 Call search_cards for each code and pick the variant that matches. When you cannot tell which variant it is, ask the user \
@@ -108,6 +108,17 @@ the copies you can see as quantity and a unique request_id. Reuse the identical 
 including after an uncertain transport failure: an accepted retry returns replayed=true and never adds twice, and changed \
 arguments conflict. Adding a card the owner already has in that language raises its quantity. Never store the user's photo: \
 it only identifies the cards, and the Binder shows the official card image. binder_entries lists a Binder in Card Code order. \
+Answer what a Card or a Binder is worth in DKK unless the user asks for EUR or USD: card_value and binder_values already hold \
+all three currencies, so switching currency needs no new lookup and you never convert yourself. A card_value is the catalogue's \
+USD price converted at the ECB rate of the price's own day, with observed_on (the day of the price), rate_date (the day of the \
+rates) and stale (the price is more than 30 days old, so say so). A null card_value says why in value_unavailable: \
+japanese_printing (the catalogue prices English printings only), no_catalogue_price or no_exchange_rates. binder_values gives \
+each owner's Binder Value, the sum of quantity times card_value over priced entries with stale prices included, plus \
+unpriced_entries (how many entries it leaves out) and oldest_observed_on: state the total, the unpriced count and how old the \
+oldest price is. \
+For a price trend call card_prices with a Card id: its Price History holds one point per observed price, with eur and dkk \
+converted at each point's own date. Points are sparse and unchanged observations add none, so describe gaps as no new \
+observation and never interpolate or invent prices. Prices refresh daily for Cards in a Binder only. \
 Correct an entry with update_binder_entry and remove one with delete_binder_entry, both by explicit owner_id and entry_id from \
 binder_entries. An omitted field is kept, a note of null clears it, and quantity replaces the stored count rather than adding \
 to it. A language change that would duplicate the owner's entry for that Card returns a 409 and changes nothing. Removal is \

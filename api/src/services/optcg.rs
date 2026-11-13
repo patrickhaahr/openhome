@@ -30,6 +30,30 @@ const MAX_PRICE_USD: f64 = 1_000_000.0;
 #[derive(Debug)]
 pub struct Unavailable;
 
+/// Why a read failed. Logs carry this and our own identifiers only, never what the catalogue sent.
+#[derive(Debug, Clone, Copy)]
+enum Reason {
+    BadUrl,
+    RequestFailed,
+    BodyReadFailed,
+    OversizedBody,
+    Refused,
+    NotFoundNotFromCatalogue,
+    NotJson,
+    TooManyVariants,
+    DuplicateVariants,
+    UnexpectedFieldType,
+    UnacceptableText,
+    UnacceptablePrice,
+    NoUsableVariantId,
+    VariantOfAnotherCode,
+    NoImageOnOrigin,
+    PriceWithoutDate,
+    NoName,
+}
+
+const TRANSPORT: &str = "transport";
+
 #[derive(Clone)]
 pub struct Optcg {
     client: Client,
@@ -62,7 +86,6 @@ pub struct CatalogueCard {
     pub attribute: Option<String>,
     pub sub_types: Option<String>,
     pub text: Option<String>,
-    pub inventory_price_usd: Option<f64>,
     pub price: Option<Price>,
 }
 
@@ -83,7 +106,6 @@ struct Raw {
     attribute: Option<Value>,
     sub_types: Option<Value>,
     card_text: Option<Value>,
-    inventory_price: Option<Value>,
     market_price: Option<Value>,
     date_scraped: Option<Value>,
     card_image_id: Option<Value>,
@@ -105,20 +127,20 @@ impl Optcg {
         let url = self
             .base_url
             .join(&format!("api/sets/card/{}/", code.as_str()))
-            .map_err(|error| unavailable("bad URL", &error))?;
+            .map_err(|_| unavailable(Reason::BadUrl, code.as_str()))?;
         let response = self.get(url).await?;
         let status = response.status();
         if status == StatusCode::NOT_FOUND {
             return not_listed(&read_capped(response, MAX_CARD_BYTES).await?);
         }
         if !status.is_success() {
-            return Err(unavailable("refused", &status));
+            return Err(unavailable(Reason::Refused, code.as_str()));
         }
         let bytes = read_capped(response, MAX_CARD_BYTES).await?;
         let raw: Vec<Raw> = serde_json::from_slice(&bytes)
-            .map_err(|error| unavailable("the card was not valid JSON", &error))?;
+            .map_err(|_| unavailable(Reason::NotJson, code.as_str()))?;
         if raw.len() > MAX_VARIANTS {
-            return Err(unavailable("too many variants", &raw.len()));
+            return Err(unavailable(Reason::TooManyVariants, code.as_str()));
         }
         let cards = raw
             .into_iter()
@@ -128,7 +150,7 @@ impl Optcg {
         ids.sort_unstable();
         ids.dedup();
         if ids.len() != cards.len() {
-            return Err(unavailable("duplicate variants", &code.as_str()));
+            return Err(unavailable(Reason::DuplicateVariants, code.as_str()));
         }
         Ok(cards)
     }
@@ -137,7 +159,7 @@ impl Optcg {
     pub async fn image(&self, url: &Url) -> Result<Vec<u8>, Unavailable> {
         let response = self.get(url.clone()).await?;
         if !response.status().is_success() {
-            return Err(unavailable("refused an image", &response.status()));
+            return Err(unavailable(Reason::Refused, TRANSPORT));
         }
         read_capped(response, MAX_IMAGE_BYTES).await
     }
@@ -147,7 +169,7 @@ impl Optcg {
             .get(url)
             .send()
             .await
-            .map_err(|error| unavailable("request failed", &error))
+            .map_err(|_| unavailable(Reason::RequestFailed, TRANSPORT))
     }
 }
 
@@ -159,16 +181,16 @@ async fn read_capped(mut response: Response, limit: usize) -> Result<Vec<u8>, Un
         .and_then(|length| length.to_str().ok()?.parse::<usize>().ok())
         .is_some_and(|length| length > limit)
     {
-        return Err(unavailable("oversized body", &limit));
+        return Err(unavailable(Reason::OversizedBody, TRANSPORT));
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|error| unavailable("reading the body failed", &error))?
+        .map_err(|_| unavailable(Reason::BodyReadFailed, TRANSPORT))?
     {
         if bytes.len() + chunk.len() > limit {
-            return Err(unavailable("oversized body", &limit));
+            return Err(unavailable(Reason::OversizedBody, TRANSPORT));
         }
         bytes.extend_from_slice(&chunk);
     }
@@ -184,35 +206,36 @@ fn not_listed(body: &[u8]) -> Result<Vec<CatalogueCard>, Unavailable> {
     }
     match serde_json::from_slice::<NotFound>(body) {
         Ok(NotFound { error }) if error == "Card not found." => Ok(Vec::new()),
-        _ => Err(unavailable(
-            "a 404 that is not the catalogue's not-found answer",
-            &body.len(),
-        )),
+        _ => Err(unavailable(Reason::NotFoundNotFromCatalogue, TRANSPORT)),
     }
 }
 
-fn unavailable(what: &str, detail: &dyn std::fmt::Debug) -> Unavailable {
-    tracing::warn!(?detail, "OPTCG catalogue read: {what}");
+fn unavailable(reason: Reason, subject: &str) -> Unavailable {
+    tracing::warn!(?reason, subject, "OPTCG catalogue read failed");
     Unavailable
 }
 
-fn text(value: Option<Value>, max_chars: usize) -> Result<Option<String>, Unavailable> {
+fn text(
+    value: Option<Value>,
+    max_chars: usize,
+    field: &str,
+) -> Result<Option<String>, Unavailable> {
     let text = match value {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::String(text)) => text.trim().to_owned(),
         Some(Value::Number(number)) => number.to_string(),
-        Some(other) => return Err(unavailable("unexpected field type", &other)),
+        Some(_) => return Err(unavailable(Reason::UnexpectedFieldType, field)),
     };
     if text.is_empty() {
         return Ok(None);
     }
     if text.chars().count() > max_chars || text.chars().any(|c| c.is_control() && c != '\n') {
-        return Err(unavailable("unacceptable text", &text.len()));
+        return Err(unavailable(Reason::UnacceptableText, field));
     }
     Ok(Some(text))
 }
 
-fn number(value: Option<&Value>) -> Result<Option<f64>, Unavailable> {
+fn number(value: Option<&Value>, field: &str) -> Result<Option<f64>, Unavailable> {
     let parsed = match value {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::Number(number)) => number.as_f64(),
@@ -222,50 +245,50 @@ fn number(value: Option<&Value>) -> Result<Option<f64>, Unavailable> {
     parsed
         .filter(|price| price.is_finite() && (0.0..=MAX_PRICE_USD).contains(price))
         .map(Some)
-        .ok_or_else(|| unavailable("unacceptable price", &value))
+        .ok_or_else(|| unavailable(Reason::UnacceptablePrice, field))
 }
 
 impl Raw {
     fn validate(self, code: &CardCode, origin: &Url) -> Result<CatalogueCard, Unavailable> {
-        let missing = |what| unavailable(what, &code.as_str());
-        let listed_code = text(self.card_set_id, MAX_TEXT_CHARS)?;
-        let id = text(self.card_image_id, MAX_TEXT_CHARS)?
+        let missing = |reason| unavailable(reason, code.as_str());
+        let listed_code = text(self.card_set_id, MAX_TEXT_CHARS, "card_set_id")?;
+        let id = text(self.card_image_id, MAX_TEXT_CHARS, "card_image_id")?
             .and_then(|id| CardId::parse(&id).ok())
-            .ok_or_else(|| missing("no usable variant id"))?;
+            .ok_or_else(|| missing(Reason::NoUsableVariantId))?;
         if listed_code.as_deref() != Some(code.as_str()) {
-            return Err(missing("a variant of another code"));
+            return Err(missing(Reason::VariantOfAnotherCode));
         }
-        let image_url = text(self.card_image, MAX_TEXT_CHARS)?
+        let image_url = text(self.card_image, MAX_TEXT_CHARS, "card_image")?
             .and_then(|url| Url::parse(&url).ok())
             .filter(|url| url.origin() == origin.origin())
-            .ok_or_else(|| missing("no image on the catalogue's origin"))?;
-        let market_price = number(self.market_price.as_ref())?;
-        let observed_on = text(self.date_scraped, MAX_TEXT_CHARS)?.filter(|date| {
+            .ok_or_else(|| missing(Reason::NoImageOnOrigin))?;
+        let market_price = number(self.market_price.as_ref(), "market_price")?;
+        let observed_on = text(self.date_scraped, MAX_TEXT_CHARS, "date_scraped")?.filter(|date| {
             date.len() == 10 && chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok()
         });
         let price = match (market_price, observed_on) {
             (Some(usd), Some(observed_on)) => Some(Price { usd, observed_on }),
             (None, _) => None,
-            (Some(_), None) => return Err(missing("a price without an observation date")),
+            (Some(_), None) => return Err(missing(Reason::PriceWithoutDate)),
         };
         Ok(CatalogueCard {
             id,
             card_code: code.clone(),
             image_url,
-            name: text(self.card_name, MAX_TEXT_CHARS)?.ok_or_else(|| missing("no name"))?,
-            set_id: text(self.set_id, MAX_TEXT_CHARS)?,
-            set_name: text(self.set_name, MAX_TEXT_CHARS)?,
-            rarity: text(self.rarity, MAX_TEXT_CHARS)?,
-            color: text(self.card_color, MAX_TEXT_CHARS)?,
-            card_type: text(self.card_type, MAX_TEXT_CHARS)?,
-            life: text(self.life, MAX_TEXT_CHARS)?,
-            cost: text(self.card_cost, MAX_TEXT_CHARS)?,
-            power: text(self.card_power, MAX_TEXT_CHARS)?,
-            counter_amount: text(self.counter_amount, MAX_TEXT_CHARS)?,
-            attribute: text(self.attribute, MAX_TEXT_CHARS)?,
-            sub_types: text(self.sub_types, MAX_TEXT_CHARS)?,
-            text: text(self.card_text, MAX_CARD_TEXT_CHARS)?,
-            inventory_price_usd: number(self.inventory_price.as_ref())?,
+            name: text(self.card_name, MAX_TEXT_CHARS, "card_name")?
+                .ok_or_else(|| missing(Reason::NoName))?,
+            set_id: text(self.set_id, MAX_TEXT_CHARS, "set_id")?,
+            set_name: text(self.set_name, MAX_TEXT_CHARS, "set_name")?,
+            rarity: text(self.rarity, MAX_TEXT_CHARS, "rarity")?,
+            color: text(self.card_color, MAX_TEXT_CHARS, "card_color")?,
+            card_type: text(self.card_type, MAX_TEXT_CHARS, "card_type")?,
+            life: text(self.life, MAX_TEXT_CHARS, "life")?,
+            cost: text(self.card_cost, MAX_TEXT_CHARS, "card_cost")?,
+            power: text(self.card_power, MAX_TEXT_CHARS, "card_power")?,
+            counter_amount: text(self.counter_amount, MAX_TEXT_CHARS, "counter_amount")?,
+            attribute: text(self.attribute, MAX_TEXT_CHARS, "attribute")?,
+            sub_types: text(self.sub_types, MAX_TEXT_CHARS, "sub_types")?,
+            text: text(self.card_text, MAX_CARD_TEXT_CHARS, "card_text")?,
             price,
         })
     }

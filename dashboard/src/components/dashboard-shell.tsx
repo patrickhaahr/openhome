@@ -7,6 +7,7 @@ import {
   ThemeToggle,
   useDaylight,
 } from "@/components/daylight"
+import { CurrencyProvider } from "@/components/currency"
 import { FeatureLink } from "@/components/feature-link"
 import { IdleDates } from "@/components/idle-dates"
 import { IdleMilestone } from "@/components/idle-milestone"
@@ -28,7 +29,7 @@ const rootRoute = getRouteApi("__root__")
 /** A top bar on the horizon line, one content landmark, and focus after rendered navigation. */
 export function DashboardShell(): React.JSX.Element {
   const router = useRouter()
-  const { openedAt, nav, idle } = rootRoute.useLoaderData()
+  const { openedAt, nav, currency, idle } = rootRoute.useLoaderData()
   // The server's settings arrive with the first page; client navigations carry none.
   const [idleSettings] = useState(() => idle ?? defaultIdleSettings)
 
@@ -46,14 +47,16 @@ export function DashboardShell(): React.JSX.Element {
   return (
     <DaylightProvider initialTime={openedAt}>
       <NavLayoutProvider initial={nav}>
-        <IdleProvider
-          settings={idleSettings}
-          overlay={
-            <IdleDates lead={(dates) => <IdleMilestone dates={dates} />} />
-          }
-        >
-          <Shell />
-        </IdleProvider>
+        <CurrencyProvider initial={currency}>
+          <IdleProvider
+            settings={idleSettings}
+            overlay={
+              <IdleDates lead={(dates) => <IdleMilestone dates={dates} />} />
+            }
+          >
+            <Shell />
+          </IdleProvider>
+        </CurrencyProvider>
       </NavLayoutProvider>
     </DaylightProvider>
   )

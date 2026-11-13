@@ -59,7 +59,7 @@ async fn a_partial_update_changes_only_what_it_names_and_reads_back_the_stored_e
     assert_eq!(japanese["language"], "ja");
     assert!(
         japanese["card"]["card_value"].is_null()
-            && japanese["card"]["inventory_price_usd"].is_null(),
+            && japanese["card"]["value_unavailable"] == "japanese_printing",
         "an English price is never shown for a Japanese entry: {japanese}"
     );
 
