@@ -9,8 +9,6 @@ use sqlx::SqlitePool;
 use super::avif_encoder::{self, EncodeError, Settings, Source};
 use super::optcg::{CatalogueCard, Optcg, Unavailable};
 
-/// Catalogue images are about 600 x 838 and are never scaled up; the cap only bounds a bad source.
-const LONG_SIDE: u32 = 2_000;
 const IMAGE: Settings = Settings {
     speed: 8,
     quality: 70,
@@ -219,7 +217,8 @@ async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> 
     for card in listed {
         let source = Source::from_bytes(catalogue.image(&card.id).await?)
             .map_err(|_| CardsError::DataUnavailable)?;
-        let [avif] = avif_encoder::encode(source, IMAGE, [LONG_SIDE])
+        // The encoder's decode bound is the target, so the stored image keeps its source size.
+        let [avif] = avif_encoder::encode(source, IMAGE, [avif_encoder::MAX_SIDE])
             .await
             .map_err(|error| match error {
                 EncodeError::Encode => CardsError::Encoder,

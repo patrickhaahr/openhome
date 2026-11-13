@@ -13,6 +13,7 @@ use openhome_api::{
     services::optcg::Optcg,
 };
 use serde_json::{Value, json};
+use std::time::Duration;
 use tower::ServiceExt;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
@@ -62,22 +63,30 @@ fn variant(image_id: &str, name: &str, price: Option<f64>, date: &str) -> Value 
 }
 
 async fn mount_card(server: &MockServer) {
+    mount_card_with(server, Duration::ZERO, png(60, 84)).await;
+}
+
+async fn mount_card_with(server: &MockServer, delay: Duration, image: Vec<u8>) {
     Mock::given(method("GET"))
         .and(path(CARD_PATH))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-            variant(
-                "OP01-001",
-                "Invented Captain (001)",
-                Some(2.25),
-                "2026-11-12"
-            ),
-            variant(
-                "OP01-001_p1",
-                "Invented Captain (001) (Parallel)",
-                None,
-                "2026-06-09"
-            ),
-        ])))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(delay)
+                .set_body_json(json!([
+                    variant(
+                        "OP01-001",
+                        "Invented Captain (001)",
+                        Some(2.25),
+                        "2026-11-12"
+                    ),
+                    variant(
+                        "OP01-001_p1",
+                        "Invented Captain (001) (Parallel)",
+                        None,
+                        "2026-06-09"
+                    ),
+                ])),
+        )
         .mount(server)
         .await;
     for id in ["OP01-001", "OP01-001_p1"] {
@@ -86,7 +95,7 @@ async fn mount_card(server: &MockServer) {
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "image/jpeg")
-                    .set_body_bytes(png(60, 84)),
+                    .set_body_bytes(image.clone()),
             )
             .mount(server)
             .await;
@@ -133,6 +142,33 @@ async fn first_lookup_stores_every_variant_and_later_lookups_ask_nobody() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(again, found);
     assert_eq!(requests(&server).await, 3);
+}
+
+async fn stored_image(app: &Router, id: &str) -> Vec<u8> {
+    let request = Request::builder()
+        .uri(format!("/api/binder/cards/{id}/image"))
+        .header(header::AUTHORIZATION, "Bearer test-api-key")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    axum::body::to_bytes(response.into_body(), 16 * 1024 * 1024)
+        .await
+        .unwrap()
+        .to_vec()
+}
+
+#[tokio::test]
+async fn an_image_larger_than_two_thousand_pixels_is_stored_at_its_source_size() {
+    let server = MockServer::start().await;
+    mount_card_with(&server, Duration::ZERO, png(2_400, 1_200)).await;
+    let app = app(&server).await;
+    let (status, found) = get(&app, "/api/binder/cards?card_code=OP01-001").await;
+    assert_eq!(status, StatusCode::OK, "{found}");
+
+    let bytes = stored_image(&app, "OP01-001").await;
+    let pixels = libavif::decode_rgb(&bytes).unwrap();
+    assert_eq!((pixels.width(), pixels.height()), (2_400, 1_200));
 }
 
 #[tokio::test]
@@ -235,7 +271,7 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
         (
             "slow",
             ResponseTemplate::new(200)
-                .set_delay(std::time::Duration::from_secs(8))
+                .set_delay(Duration::from_secs(8))
                 .set_body_json(json!([])),
             ResponseTemplate::new(200),
         ),

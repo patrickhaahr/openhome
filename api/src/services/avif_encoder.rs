@@ -27,7 +27,7 @@ use tokio::sync::Semaphore;
 mod native;
 
 /// The longest side a source may have before it is decoded, against decompression bombs.
-const MAX_SIDE: u32 = 12_000;
+pub const MAX_SIDE: u32 = 12_000;
 /// The most memory one decode may allocate: a 48-megapixel image as RGBA, with headroom.
 const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
