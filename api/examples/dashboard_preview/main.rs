@@ -64,13 +64,18 @@ const DEFAULT_PORT: &str = "3101";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Each in-memory connection is its own database, so the pool must never retire its only one.
     let db = SqlitePoolOptions::new()
         .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
         .connect("sqlite::memory:")
         .await?;
     sqlx::migrate!("./migrations").run(&db).await?;
     let noop_db = SqlitePoolOptions::new()
         .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
         .connect("sqlite::memory:")
         .await?;
     noop_push::initialize(&noop_db).await?;
