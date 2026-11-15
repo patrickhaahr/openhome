@@ -67,10 +67,9 @@ export function BinderSheet({
   const { card } = entry
 
   return (
-    <div className="sheet-body">
-      <div className="binder-sheet-head">
+    <div className="binder-detail">
+      <div className="binder-detail-art">
         <img
-          className="binder-sheet-image"
           src={cardImageUrl(card.id)}
           alt={`${card.name}, ${card.card_code}`}
           width={600}
@@ -82,7 +81,9 @@ export function BinderSheet({
             event.currentTarget.hidden = false
           }}
         />
-        <div className="binder-sheet-text">
+      </div>
+      <div className="binder-detail-info">
+        <div className="binder-detail-lead">
           <p className="sheet-owner">
             <PersonDisc name={owner.name} />
             {owner.name}
@@ -96,80 +97,80 @@ export function BinderSheet({
               </time>
             </span>
           </p>
-          <CardValueLine card={card} />
-          <dl className="binder-facts">
-            {factsOf(card).map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          {card.text === null ? null : (
-            <p className="sheet-notes">{card.text}</p>
-          )}
         </div>
-      </div>
-      {entry.language === "en" ? (
-        <PriceHistory card={card.id} load={prices} />
-      ) : null}
-      <EntryFields
-        key={`${entry.quantity}-${entry.language}-${entry.note ?? ""}`}
-        entry={entry}
-        owner={owner}
-        busy={busy}
-        save={save}
-      />
-      {removing ? (
-        <div className="sheet-confirm" role="group" aria-label="Remove card">
-          <p>
-            Remove “{card.name}” ({entry.language === "ja" ? "JP" : "EN"}) from{" "}
-            {owner.name}’s Binder? This cannot be undone.
-          </p>
-          <div className="sheet-actions">
+        <CardValueLine card={card} />
+        <dl className="binder-facts">
+          {factsOf(card).map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {card.text === null ? null : (
+          <p className="binder-effect">{card.text}</p>
+        )}
+        {entry.language === "en" ? (
+          <PriceHistory card={card.id} load={prices} />
+        ) : null}
+        <EntryFields
+          key={`${entry.quantity}-${entry.language}-${entry.note ?? ""}`}
+          entry={entry}
+          owner={owner}
+          busy={busy}
+          save={save}
+        />
+        {removing ? (
+          <div className="sheet-confirm" role="group" aria-label="Remove card">
+            <p>
+              Remove “{card.name}” ({entry.language === "ja" ? "JP" : "EN"})
+              from {owner.name}’s Binder? This cannot be undone.
+            </p>
+            <div className="sheet-actions">
+              <Button
+                variant="destructive"
+                size="key"
+                disabled={busy}
+                onClick={() => {
+                  void save(
+                    {
+                      action: "remove",
+                      owner_id: owner.id,
+                      entry_id: entry.id,
+                    },
+                    `${card.name} removed.`
+                  ).then((saved) => {
+                    if (saved && alive()) done()
+                  })
+                }}
+              >
+                <TrashIcon size={18} aria-hidden="true" />
+                Remove for good
+              </Button>
+              <Button
+                variant="ghost"
+                size="key"
+                disabled={busy}
+                onClick={() => setRemoving(false)}
+              >
+                Keep it
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="sheet-actions sheet-actions-end">
             <Button
               variant="destructive"
               size="key"
               disabled={busy}
-              onClick={() => {
-                void save(
-                  {
-                    action: "remove",
-                    owner_id: owner.id,
-                    entry_id: entry.id,
-                  },
-                  `${card.name} removed.`
-                ).then((saved) => {
-                  if (saved && alive()) done()
-                })
-              }}
+              onClick={() => setRemoving(true)}
             >
               <TrashIcon size={18} aria-hidden="true" />
-              Remove for good
-            </Button>
-            <Button
-              variant="ghost"
-              size="key"
-              disabled={busy}
-              onClick={() => setRemoving(false)}
-            >
-              Keep it
+              Remove
             </Button>
           </div>
-        </div>
-      ) : (
-        <div className="sheet-actions sheet-actions-end">
-          <Button
-            variant="destructive"
-            size="key"
-            disabled={busy}
-            onClick={() => setRemoving(true)}
-          >
-            <TrashIcon size={18} aria-hidden="true" />
-            Remove
-          </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

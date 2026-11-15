@@ -90,6 +90,8 @@ export function ListSheet({
   close,
   title,
   titleHidden = false,
+  className,
+  actions,
   onKeyDown,
   children,
 }: {
@@ -97,6 +99,8 @@ export function ListSheet({
   close: () => void
   title: string
   titleHidden?: boolean
+  className?: string
+  actions?: React.ReactNode
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   children: React.ReactNode
 }): React.JSX.Element {
@@ -112,11 +116,15 @@ export function ListSheet({
     >
       <Dialog.Portal>
         <Dialog.Backdrop className="sheet-scrim" />
-        <Dialog.Popup className="sheet" onKeyDown={onKeyDown}>
+        <Dialog.Popup
+          className={className === undefined ? "sheet" : `sheet ${className}`}
+          onKeyDown={onKeyDown}
+        >
           <div className="sheet-head">
             <Dialog.Title className={titleHidden ? "sr-only" : "sheet-title"}>
               {title}
             </Dialog.Title>
+            {actions}
             <Dialog.Close render={<Button variant="outline" size="key-icon" />}>
               <XIcon size={20} aria-hidden="true" />
               <span className="sr-only">Close</span>
