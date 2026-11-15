@@ -1,6 +1,6 @@
 # Binder
 
-Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, its Card Value in DKK, EUR and USD with the price's observation date and a stale flag, and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages, turned by dragging or tapping a page's edge, the arrows or the arrow keys, and an `Add card` sheet adds a card by Card Code. Tapping a pocket opens a card sheet that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. Binder reads carry each owner's Binder Value, and the Dashboard shows it in DKK, EUR or USD by a switch kept in a cookie.
+Hermes looks up a One Piece Card Game card by its Card Code and gets every variant with its details, its Card Value in DKK, EUR and USD with the price's observation date and a stale flag, and a stored AVIF image. Hermes then adds cards to a Household User's Binder from a photo and lists the Binder in Card Code order. The Dashboard shows each Binder as spreads of two facing 3×3 pocket pages, turned by dragging or tapping a page's edge, the arrows or the arrow keys, and an `Add card` sheet adds a card by Card Code. Tapping a pocket opens a card sheet, which steps to the neighbouring cards, that edits quantity, language and note, or removes the entry after confirmation. Hermes does the same with `update_binder_entry` and `delete_binder_entry`. Binder reads carry each owner's Binder Value, and the Dashboard shows it in DKK, EUR or USD by a switch kept in a cookie.
 
 ## Sub-features
 
@@ -32,6 +32,7 @@ Hermes looks up a One Piece Card Game card by its Card Code and gets every varia
 - `binder-edit-404` uses another owner's entry id, or an unknown one: 404.
 - `binder-delete-mcp` calls `delete_binder_entry`: `{"deleted":true}`, the entry is gone from the list; a repeat is 404.
 - `binder-dash-sheet` taps a pocket and sees the large image, details, quantity, language and note, in landscape and portrait.
+- `binder-dash-step` steps through cards inside the open sheet with `Previous card` / `Next card` and ArrowLeft/ArrowRight; stepping past the spread's last pocket turns the spread behind (`page` in the URL), and arrows typed in the note do not step. Needs over 18 entries, so add some for Alex first.
 - `binder-dash-edit` saves a change in the sheet and sees the stored result read back.
 - `binder-dash-edit-fail` makes the save collide (409): the sheet stays open with an error and the draft.
 - `binder-dash-remove` removes an entry after confirming; `Keep it` keeps it.

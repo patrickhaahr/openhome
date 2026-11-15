@@ -21,6 +21,7 @@ import {
   cardImageUrl,
   paginate,
   pocketsPerPage,
+  pocketsPerSpread,
   viewOf,
   type BinderEntry,
   type BinderSearch,
@@ -51,8 +52,9 @@ import type { BinderAddReceipt, BinderAddition } from "@/lib/binder-add"
 /**
  * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
  * The person keys choose whose Binder; dragging or tapping a page's edge, the arrows and the arrow
- * keys turn the spread, and a pocket opens its card sheet. A read that failed offers a way to check again and never shows
- * an empty Binder.
+ * keys turn the spread, and a pocket opens its card sheet, whose arrows step to the neighbouring
+ * cards and turn the spread with them. A read that failed offers a way to check again and never
+ * shows an empty Binder.
  */
 export function BinderBook({
   data,
@@ -92,6 +94,23 @@ export function BinderBook({
     data.state === "available" && selected !== undefined
       ? data.owners.find((candidate) => candidate.id === selected.owner_id)
       : undefined
+
+  const order = view.view === "spread" ? view.entries : []
+  const at = selected === undefined ? -1 : order.indexOf(selected)
+
+  const stepCard = (offset: -1 | 1, within: Element): void => {
+    const to = at + offset
+    const next = order[to]
+
+    if (view.view !== "spread" || at === -1 || next === undefined) return
+    setOpen(next.id)
+    within.closest(".sheet")?.scrollTo({ top: 0 })
+
+    const spread = Math.floor(to / pocketsPerSpread)
+
+    if (spread !== view.index)
+      choose({ person: view.owner.id, page: spread + 1 })
+  }
 
   return (
     <div className="lists binder" aria-busy={busy}>
@@ -133,9 +152,51 @@ export function BinderBook({
         open={selected !== undefined}
         close={() => setOpen(undefined)}
         title={selected?.card.name ?? "Card"}
+        onKeyDown={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            isEditing(event.target)
+          )
+            return
+
+          const offset =
+            event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
+
+          if (offset === 0) return
+          event.preventDefault()
+          stepCard(offset, event.currentTarget)
+        }}
       >
         {selected !== undefined && owner !== undefined ? (
           <>
+            {at === -1 ? null : (
+              <nav className="binder-turn" aria-label="Cards">
+                <Button
+                  variant="outline"
+                  size="key-icon"
+                  disabled={at === 0}
+                  onClick={(event) => stepCard(-1, event.currentTarget)}
+                >
+                  <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
+                  <span className="sr-only">Previous card</span>
+                </Button>
+                <p className="binder-folio num" aria-live="polite">
+                  Card {at + 1} of {order.length}
+                </p>
+                <Button
+                  variant="outline"
+                  size="key-icon"
+                  disabled={at === order.length - 1}
+                  onClick={(event) => stepCard(1, event.currentTarget)}
+                >
+                  <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
+                  <span className="sr-only">Next card</span>
+                </Button>
+              </nav>
+            )}
             <BinderSheet
               key={selected.id}
               entry={selected}
