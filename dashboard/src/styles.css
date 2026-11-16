@@ -116,7 +116,6 @@
   --color-connected: #2f9e5a;
   --text-link-status: clamp(3.5rem, 1.5rem + 7vw, 8rem);
   --text-lost-code: clamp(7rem, 3rem + 16vw, 16rem);
-  --text-aside: 0.9375rem;
   --leading-status: 0.9;
   --leading-lost-code: 0.8;
   --tracking-status: -0.065em;

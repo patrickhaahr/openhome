@@ -102,7 +102,7 @@ function ConnectionPage() {
           <p className="text-link-status leading-status font-medium tracking-status">
             {isChecking ? "Checking connection…" : outcome.label}
           </p>
-          <p className="mt-3 text-aside text-muted-ink tabular-nums">
+          <p className="mt-3 text-control text-muted-ink tabular-nums">
             <span className="sr-only">Last checked </span>
             <time dateTime={health.checkedAt}>
               {checkTime.format(new Date(health.checkedAt))}
@@ -122,7 +122,7 @@ function ConnectionPage() {
           <ArrowClockwiseIcon size={36} aria-hidden="true" />
           <span className="sr-only">{label}</span>
         </Button>
-        <p className="flex items-center gap-2 text-aside text-muted-ink">
+        <p className="flex items-center gap-2 text-control text-muted-ink">
           <ShieldCheckIcon
             size={20}
             className="shrink-0 text-ink"
@@ -146,7 +146,8 @@ function ConnectionPage() {
   )
 }
 
-const setupCode = "rounded-code bg-wash-strong px-2.5 py-1 font-mono text-aside"
+const setupCode =
+  "rounded-code bg-wash-strong px-2.5 py-1 font-mono text-control"
 
 function SetupInstructions() {
   return (
@@ -163,13 +164,13 @@ function SetupInstructions() {
           <dt>
             <code className={setupCode}>OPENHOME_API_URL</code>
           </dt>
-          <dd className="text-aside text-muted-ink">Axum API base URL</dd>
+          <dd className="text-control text-muted-ink">Axum API base URL</dd>
         </div>
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <dt>
             <code className={setupCode}>API_KEY</code>
           </dt>
-          <dd className="text-aside text-muted-ink">
+          <dd className="text-control text-muted-ink">
             The key configured on Axum
           </dd>
         </div>
