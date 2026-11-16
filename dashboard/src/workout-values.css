@@ -1,0 +1,64 @@
+/* ---------- Workout: values first; labels and explanations stay for assistive technology ---------- */
+
+.training-prompt {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+  padding-block: 1rem;
+  color: var(--muted-ink);
+}
+.training-prompt h2 {
+  color: var(--ink);
+}
+.workouts dd[data-gap="true"],
+.training-summaries dd[data-gap="true"] {
+  font-size: 0;
+}
+.workouts dd[data-gap="true"]::before,
+.training-summaries dd[data-gap="true"]::before {
+  content: "–" / "";
+  color: var(--muted-ink);
+  font-size: 1.375rem;
+}
+.workouts dd[data-gap="true"] small,
+.training-summaries dd[data-gap="true"] small {
+  font-size: 0.75rem;
+}
+
+/* Backlight belongs to Controls; a focused view keeps the saved TV response in reach. */
+.controls-lights {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.controls-lights > .panel {
+  flex: 1;
+}
+/* The way to LED is a disc of its light, a round key like the rest of Controls. */
+.backlight-link {
+  align-self: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: conic-gradient(
+    #2f54ff 0deg,
+    #6c46ff 70deg,
+    #ff7a3c 140deg,
+    #ff5b1f 180deg,
+    #ff7a3c 220deg,
+    #6c46ff 290deg,
+    #2f54ff 360deg
+  );
+  transition: scale var(--t-fast) var(--ease);
+}
+.backlight-link:hover {
+  scale: 1.05;
+}
+.backlight-link:active {
+  scale: 0.97;
+}
+.backlight-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}

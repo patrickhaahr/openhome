@@ -1,0 +1,300 @@
+/* ==========================================================================================
+   Redesign: controls, weather, connection and quiet states. Later rules win on purpose.
+   ========================================================================================== */
+
+.unit {
+  font-size: 0.5em;
+  font-weight: 500;
+  letter-spacing: 0;
+  vertical-align: 0.9em;
+  margin-left: 0.04em;
+}
+
+/* ---------- Controls: three plates filling the screen, keys on paper inside them ---------- */
+
+.page:has(> .controls) {
+  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
+}
+.controls {
+  display: grid;
+  grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr) minmax(12rem, 15rem);
+  gap: clamp(1rem, 2vw, 1.5rem);
+  min-height: max(
+    calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem)),
+    32rem
+  );
+}
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border-radius: 2rem;
+  background: var(--wash);
+}
+.panel-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panel-identity {
+  color: var(--muted-ink);
+}
+.panel-keys {
+  justify-content: flex-start;
+  gap: 1rem;
+}
+.panel-recovery {
+  justify-content: center;
+}
+/* Keys sit on the paper inside the plate's tone; the hand still floods them with ink. */
+.panel
+  [data-slot="button"].bg-secondary:not(
+    :hover,
+    :disabled,
+    [data-command="ok"]
+  ) {
+  background: var(--ground);
+}
+.panel .remote-groups {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 1.25rem;
+  width: 100%;
+}
+.remote-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.panel [data-slot="button"][data-icon-only="true"] svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* Lights: a wall switch. One plate, the lit bulb on the upper half, the dark one below. */
+[data-device="lights"] {
+  padding: 0.5rem;
+  border-radius: 999px;
+}
+[data-device="lights"] .panel-head:not(:has(.control-alert)) {
+  display: contents;
+}
+[data-device="lights"] .panel-keys {
+  flex: 1;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 0.5rem;
+}
+[data-device="lights"] .panel-keys [data-slot="button"] {
+  flex: 1;
+  width: 100%;
+  height: auto;
+}
+[data-device="lights"] .panel-keys [data-command="on"] {
+  border-radius: 999px 999px 1.25rem 1.25rem;
+}
+[data-device="lights"] .panel-keys [data-command="off"] {
+  border-radius: 1.25rem 1.25rem 999px 999px;
+}
+.panel-keys [data-slot="button"] svg {
+  width: 3rem;
+  height: 3rem;
+}
+[data-device="lights"] .panel-keys [data-command="on"] svg {
+  color: var(--sun);
+}
+
+/* The speaker: power over the two inputs, then the volume rocker. */
+[data-remote="speaker"] .remote-group {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.remote-buttons[data-kind="trio"] {
+  display: flex;
+  gap: 0.625rem;
+}
+[data-remote="speaker"] .remote-buttons[data-kind="trio"] {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.75rem;
+}
+[data-remote="speaker"]
+  .remote-buttons[data-kind="trio"]
+  [data-command="power"] {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-bottom: 0.5rem;
+}
+/* Rockers: a pill-shaped track with the keys stacked inside, like a remote's volume rocker. */
+.remote-buttons[data-kind="rocker"] {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--ground);
+}
+.remote-buttons[data-kind="rocker"] [data-slot="button"] {
+  width: 3.5rem;
+  height: 3.5rem;
+  background: transparent;
+}
+.remote-buttons[data-kind="rocker"] [data-slot="button"]:hover {
+  background: var(--ink);
+}
+.remote-buttons[data-kind="keypad"] {
+  display: grid;
+  grid-template-columns: repeat(5, 3.5rem);
+  gap: 0.5rem;
+}
+.remote-buttons[data-kind="keypad"] [data-slot="button"] {
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+.remote-buttons[data-kind="row"] [data-slot="button"][data-icon-only="true"] {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+/* The d-pad: four arrows on a disc of tone around a solid OK. */
+.remote-buttons[data-kind="dpad"] {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 4rem);
+  grid-template-rows: repeat(3, 4rem);
+  place-items: center;
+  width: max-content;
+  padding: 0.5rem;
+  border-radius: 50%;
+  background: var(--ground);
+}
+.remote-buttons[data-kind="dpad"] [data-slot="button"] {
+  width: 3.75rem;
+  height: 3.75rem;
+  padding: 0;
+  background: transparent;
+}
+.remote-buttons[data-kind="dpad"] [data-slot="button"]:hover {
+  background: var(--ink);
+}
+.remote-buttons[data-kind="dpad"] [data-command="up"] {
+  grid-area: 1 / 2;
+}
+.remote-buttons[data-kind="dpad"] [data-command="left"] {
+  grid-area: 2 / 1;
+}
+.remote-buttons[data-kind="dpad"] [data-command="ok"] {
+  grid-area: 2 / 2;
+  width: 4.5rem;
+  height: 4.5rem;
+  background: var(--ink);
+  color: var(--ground);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+.remote-buttons[data-kind="dpad"] [data-command="right"] {
+  grid-area: 2 / 3;
+}
+.remote-buttons[data-kind="dpad"] [data-command="down"] {
+  grid-area: 3 / 2;
+}
+/* The TV remote: inputs across the top, the d-pad centred between volume (left) and
+   channels (right), then the menus over the numbers. Both lower rows share one width and one
+   key size, so their edges line up. */
+[data-remote="tv"] {
+  --tv-key: 3.25rem;
+  --tv-gap: 0.5rem;
+  --tv-row: calc(6 * var(--tv-key) + 5 * var(--tv-gap));
+
+  padding-block: 1rem;
+}
+/* The glyph stays level with the speaker's despite the tighter plate. */
+[data-remote="tv"] .panel-identity {
+  margin-top: 0.5rem;
+}
+[data-remote="tv"] .remote-buttons[data-kind="dpad"] {
+  grid-template-columns: repeat(3, 3.5rem);
+  grid-template-rows: repeat(3, 3.5rem);
+}
+[data-remote="tv"] .remote-buttons[data-kind="dpad"] [data-slot="button"] {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+[data-remote="tv"] .remote-buttons[data-kind="dpad"] [data-command="ok"] {
+  width: 4.25rem;
+  height: 4.25rem;
+}
+.panel[data-remote="tv"] .remote-groups {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas:
+    "power power power"
+    "vol nav ch"
+    "menus menus menus"
+    "num num num";
+  justify-content: center;
+  align-content: space-evenly;
+  column-gap: clamp(1rem, 2.5vw, 2rem);
+  row-gap: 0.75rem;
+  align-items: center;
+}
+[data-remote="tv"] .remote-group {
+  justify-self: center;
+}
+[data-remote="tv"] .remote-group[aria-label="Power and input"] {
+  grid-area: power;
+}
+[data-remote="tv"] .remote-group[aria-label="Navigation"] {
+  grid-area: nav;
+}
+[data-remote="tv"] .remote-group[aria-label="Volume"] {
+  grid-area: vol;
+}
+[data-remote="tv"] .remote-group[aria-label="Channels"] {
+  grid-area: ch;
+}
+[data-remote="tv"] .remote-group[aria-label="Menus"] {
+  grid-area: menus;
+}
+/* Both rockers run the d-pad's full height, their keys spread from end to end. */
+[data-remote="tv"]
+  .remote-group:is([aria-label="Volume"], [aria-label="Channels"]) {
+  display: flex;
+  align-self: stretch;
+}
+[data-remote="tv"] .remote-buttons[data-kind="rocker"] {
+  justify-content: space-between;
+}
+[data-remote="tv"] .remote-group[aria-label="Numbers"] {
+  grid-area: num;
+}
+[data-remote="tv"] .remote-buttons[data-kind="row"] {
+  justify-content: center;
+  gap: var(--tv-gap);
+}
+[data-remote="tv"] .remote-group[aria-label="Menus"] .remote-buttons {
+  width: var(--tv-row);
+  justify-content: space-between;
+}
+[data-remote="tv"] .remote-buttons[data-kind="row"] [data-icon-only="true"],
+[data-remote="tv"] .remote-buttons[data-kind="keypad"] [data-slot="button"] {
+  width: var(--tv-key);
+  height: var(--tv-key);
+}
+[data-remote="tv"] .remote-buttons[data-kind="keypad"] {
+  grid-template-columns: repeat(5, var(--tv-key));
+  justify-content: space-between;
+  gap: var(--tv-gap);
+  width: var(--tv-row);
+}

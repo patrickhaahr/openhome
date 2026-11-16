@@ -1,0 +1,75 @@
+/* ---------- Page tools: no repeated title; the top bar says where you are ---------- */
+
+.page-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 1rem;
+  min-height: 2.75rem;
+  margin-bottom: clamp(0.75rem, 2vw, 1.5rem);
+}
+.page-title {
+  margin-left: -0.06em;
+  font-size: var(--t-xl);
+  font-weight: 500;
+  line-height: 0.88;
+  letter-spacing: -0.058em;
+}
+.figure {
+  display: grid;
+  justify-items: end;
+  line-height: 1;
+}
+.figure strong {
+  font-size: var(--t-m);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.figure span {
+  margin-top: 0.35rem;
+  color: var(--muted-ink);
+  font-size: 0.8125rem;
+}
+.action-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.action-link svg {
+  transition: translate var(--t-mid) var(--ease);
+}
+.action-link:hover svg {
+  translate: 0.25rem -0.25rem;
+}
+.action-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  text-decoration-thickness: 1.5px;
+}
+
+/* Status, failure and empty states keep their words but lose the boxes. */
+.state-note {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  max-width: 34rem;
+  padding-block: clamp(2rem, 6vw, 4.5rem);
+}
+.state-note h2,
+.state-note h3 {
+  font-size: var(--t-l);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+.state-note p {
+  color: var(--muted-ink);
+  font-size: 1.0625rem;
+}

@@ -1,0 +1,220 @@
+/* The sun turns the room slowly; never during reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-turning,
+  html.theme-turning *,
+  html.theme-turning *::before,
+  html.theme-turning *::after {
+    transition:
+      background-color 1.2s var(--ease),
+      color 1.2s var(--ease),
+      border-color 1.2s var(--ease),
+      fill 1.2s var(--ease),
+      stroke 1.2s var(--ease) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Shell ---------- */
+
+.shell {
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+}
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: var(--margin);
+  z-index: 60;
+  padding: 0.75rem 1.25rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--ground);
+  font-weight: 600;
+  translate: 0 -200%;
+}
+.skip-link:focus {
+  translate: 0 0;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(1rem, 2.5vw, 2.5rem);
+  height: var(--bar);
+  padding-inline: var(--margin);
+  background: var(--ground);
+}
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.05em;
+  min-height: 2.75rem;
+  align-items: center;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+.wordmark i {
+  display: inline-block;
+  width: 0.36em;
+  height: 0.36em;
+  margin-left: 0.08em;
+  border-radius: 50%;
+  background: var(--sun);
+  translate: 0 0.32em;
+  transition: translate var(--t-mid) var(--ease);
+}
+.wordmark:hover i {
+  translate: 0 -0.05em;
+}
+.topnav {
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 calc(100% - 2rem),
+    transparent
+  );
+  mask-image: linear-gradient(90deg, #000 calc(100% - 2rem), transparent);
+}
+.topnav ul {
+  display: flex;
+  gap: 0;
+  width: max-content;
+  padding-right: 2rem;
+}
+.topnav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding-inline: 0.5rem;
+  color: var(--muted-ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition: color var(--t-fast) var(--ease);
+}
+.topnav a::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.45rem;
+  height: 1.5px;
+  background: currentColor;
+  scale: 0 1;
+  transform-origin: left;
+  transition: scale var(--t-mid) var(--ease);
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] {
+  color: var(--ink);
+}
+.topnav a:hover::after,
+.topnav a[aria-current="page"]::after {
+  scale: 1 1;
+}
+.topnav a[aria-current="page"] {
+  font-weight: 600;
+}
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.topbar-clock {
+  padding-inline: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.icon-link {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  color: var(--muted-ink);
+  transition:
+    color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
+}
+.icon-link:hover,
+.icon-link[aria-current="page"],
+.icon-link[aria-pressed="true"] {
+  background: var(--wash-strong);
+  color: var(--ink);
+}
+.icon-link:active {
+  scale: 0.94;
+}
+
+/* The horizon: the bar's baseline, with the sun at its real position over Copenhagen. */
+.horizon {
+  position: absolute;
+  left: var(--margin);
+  right: var(--margin);
+  bottom: 0;
+  height: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+.horizon-sun {
+  position: absolute;
+  top: 0;
+  left: calc(var(--sun-x) * 100%);
+  width: 0.625rem;
+  height: 0.625rem;
+  margin: -0.3125rem 0 0 -0.3125rem;
+  border-radius: 50%;
+  background: var(--sun);
+  transition: left 60s linear;
+}
+.horizon-sun[data-below="true"] {
+  background: var(--ground);
+  border: 1.5px solid var(--muted-ink);
+  box-shadow: none;
+  translate: 0 0.5rem;
+}
+/* The part of the day already lit: a thicker line of sun from the left edge to the sun. */
+.horizon-trail {
+  position: absolute;
+  top: -0.5px;
+  left: 0;
+  height: 2px;
+  width: calc(var(--sun-x) * 100%);
+  background: var(--sun);
+}
+
+.page {
+  width: 100%;
+  max-width: 90rem;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 3vw, 2.75rem) var(--margin) 4rem;
+}
+#page-heading:focus,
+#page-content:focus {
+  outline: none;
+}
