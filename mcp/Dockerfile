@@ -22,8 +22,8 @@ COPY mcp/src ./mcp/src
 
 WORKDIR /build/mcp
 ARG TARGETARCH
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/build/mcp/target \
+RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=locked,target=/build/mcp/target \
     case "$TARGETARCH" in \
         amd64) target=x86_64-unknown-linux-gnu ;; \
         arm64) target=aarch64-unknown-linux-gnu ;; \
