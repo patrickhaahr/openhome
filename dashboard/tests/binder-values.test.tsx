@@ -31,7 +31,14 @@ import {
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
-import { button, nameOf, settle, sheet } from "./support/lists-dom"
+import {
+  button,
+  chooseCurrency,
+  currencySelect,
+  nameOf,
+  settle,
+  sheet,
+} from "./support/lists-dom"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
@@ -179,9 +186,9 @@ test("the currency switch is remembered in a cookie and a reload renders it from
 
   if (value === undefined) throw new Error("Missing Binder Value")
 
-  expect(button("DKK", container).getAttribute("aria-pressed")).toBe("true")
+  expect(currencySelect(container).value).toBe("DKK")
 
-  await press(button("EUR", container))
+  await chooseCurrency("EUR", container)
 
   expect(headerFigure()).toBe(formatMoney(value.eur, "EUR"))
   expect(document.cookie).toContain(`${currencyCookieName}=EUR`)
@@ -190,17 +197,17 @@ test("the currency switch is remembered in a cookie and a reload renders it from
   root = createRoot(container)
   await load()
 
-  expect(button("EUR", container).getAttribute("aria-pressed")).toBe("true")
+  expect(currencySelect(container).value).toBe("EUR")
   expect(headerFigure()).toBe(formatMoney(value.eur, "EUR"))
 
-  await press(button("USD", container))
+  await chooseCurrency("USD", container)
   expect(headerFigure()).toBe(formatMoney(value.usd, "USD"))
 })
 
 test("a card sheet shows the Card Value in the chosen currency with its date, and a stale badge only when the price is old", async () => {
   await stock()
   await load()
-  await press(button("USD", container))
+  await chooseCurrency("USD", container)
 
   const fresh = await openCard(/^Captain Marlow \(001\), OP99-001, 2 copies/)
 

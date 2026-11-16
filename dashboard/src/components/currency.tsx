@@ -1,5 +1,5 @@
 import { createContext, use, useCallback, useMemo, useState } from "react"
-import { Segments } from "@/components/list-parts"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { currencies, currencyCookie, type Currency } from "@/lib/currency"
 
 type CurrencyState = {
@@ -39,17 +39,25 @@ export function useCurrency(): CurrencyState {
   return state
 }
 
-const options = currencies.map((value) => ({ value, label: value }))
-
+/** One key showing the chosen currency; the platform's own picker offers the others. */
 export function CurrencySwitch(): React.JSX.Element {
   const { currency, choose } = useCurrency()
 
   return (
-    <Segments
-      label="Currency"
+    <NativeSelect
+      aria-label="Currency"
       value={currency}
-      options={options}
-      choose={choose}
-    />
+      onChange={(event) => {
+        const next = currencies.find((value) => value === event.target.value)
+
+        if (next !== undefined) choose(next)
+      }}
+    >
+      {currencies.map((value) => (
+        <NativeSelectOption key={value} value={value}>
+          {value}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
   )
 }

@@ -32,6 +32,31 @@ export function button(
   return match
 }
 
+/** The Currency select within `scope`. */
+export function currencySelect(
+  scope: ParentNode = document
+): HTMLSelectElement {
+  const select = scope.querySelector('select[aria-label="Currency"]')
+
+  if (!(select instanceof HTMLSelectElement))
+    throw new Error("Missing Currency select")
+
+  return select
+}
+
+/** Picks a currency the way the platform picker does: a new value, then `change`. */
+export async function chooseCurrency(
+  currency: string,
+  scope: ParentNode = document
+): Promise<void> {
+  const select = currencySelect(scope)
+
+  await act(async () => {
+    select.value = currency
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+}
+
 /** The open detail plate; sheets render in a portal beside the page. */
 export function sheet(): HTMLElement {
   const element = document.querySelector<HTMLElement>(".sheet")

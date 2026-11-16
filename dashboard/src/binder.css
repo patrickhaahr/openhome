@@ -6,7 +6,7 @@
 .binder {
   --pocket-gap: 0.75rem;
   --spine-gap: 1.5rem;
-  /* A page is as tall as the screen leaves below the bar; the credits wait below the fold. */
+  /* A page is as tall as the screen leaves below the bar. */
   --page-room: calc(100dvh - 16.5rem);
 }
 
@@ -310,7 +310,27 @@
   max-width: 44rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
   padding-bottom: 1rem;
+}
+.binder-detail-info::-webkit-scrollbar,
+.binder-detail::-webkit-scrollbar {
+  display: none;
+}
+.binder-detail-about,
+.binder-detail-own {
+  display: grid;
+  align-content: start;
+  gap: 1.75rem;
+  min-width: 0;
+}
+/* Wide enough for the details to sit in two columns, so nothing waits below a scroll. */
+@media (min-width: 1500px) and (min-aspect-ratio: 3/2) {
+  .binder-detail-info {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(2rem, 3vw, 3.5rem);
+    max-width: 76rem;
+  }
 }
 .binder-detail-lead {
   display: grid;
@@ -338,6 +358,7 @@
     align-content: start;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: none;
   }
   .binder-detail-art {
     justify-self: center;
@@ -362,6 +383,91 @@
 }
 .binder-credits a {
   text-decoration: underline;
+}
+
+/* The credit shares the folio's line, in the corner the turn keys leave free, so nothing waits
+   below the fold. */
+@media (min-width: 901px) {
+  .page:has(.binder) {
+    padding-bottom: 1rem;
+  }
+  .binder {
+    position: relative;
+  }
+  .binder-credits {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+  }
+}
+
+/* Wide screens: height limits the pockets, so the bar moves into the side gutters and the spread
+   takes the full height, still centred between them. */
+@media (min-width: 1680px) and (min-aspect-ratio: 16/10) {
+  .page:has(.binder) {
+    max-width: none;
+    padding-bottom: 1.5rem;
+  }
+  .binder {
+    --page-room: calc(100dvh - 11rem);
+    grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "people book value"
+      "people book feedback"
+      "people book credits";
+    column-gap: 2rem;
+  }
+  .binder > .lists-bar {
+    display: contents;
+  }
+  .binder-book {
+    column-gap: 1rem;
+  }
+  .binder .person-keys {
+    grid-area: people;
+    flex-direction: column;
+    align-self: start;
+    justify-self: start;
+    border-radius: 1.75rem;
+  }
+  .binder-value-bar .binder-value-note {
+    text-wrap: balance;
+  }
+  .binder-value-bar {
+    grid-area: value;
+    flex-direction: column;
+    align-items: end;
+    gap: 1rem;
+    margin: 0;
+  }
+  .binder-value-bar .binder-value {
+    min-width: 0;
+  }
+  .binder > [role="status"] {
+    grid-area: feedback;
+    text-align: right;
+  }
+  .binder > .binder-book,
+  .binder > .lists-empty {
+    grid-area: book;
+  }
+  /* An auto column has no width for a percentage to resolve against, so the spread names its own. */
+  .binder-spread {
+    width: min(
+      calc(100vw - 37rem),
+      calc(
+        2 * (var(--page-room) * 0.716 + 2 * var(--pocket-gap)) +
+          var(--spine-gap)
+      )
+    );
+  }
+  .binder-credits {
+    position: static;
+    grid-area: credits;
+    justify-self: end;
+    text-align: right;
+  }
 }
 
 /* The add sheet: variants as card pictures, then the chosen one beside its quantity and language. */

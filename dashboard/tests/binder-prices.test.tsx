@@ -33,7 +33,13 @@ import type { PricePoint, PricesState } from "@/lib/card-prices"
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
-import { button, nameOf, settle, sheet } from "./support/lists-dom"
+import {
+  button,
+  chooseCurrency,
+  nameOf,
+  settle,
+  sheet,
+} from "./support/lists-dom"
 
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
@@ -138,11 +144,11 @@ test("a day without an observation is a gap in the line, never a flat stretch", 
 
 test("the line follows the chosen currency", async () => {
   await render(() => Promise.resolve(withGap))
-  await act(async () => button("EUR", container).click())
+  await chooseCurrency("EUR", container)
 
   expect(rows()[0]).toEqual(["1 Nov 2026", "€1.00"])
 
-  await act(async () => button("USD", container).click())
+  await chooseCurrency("USD", container)
 
   expect(rows()[5]).toEqual(["6 Nov 2026", "US$3.50"])
 })
