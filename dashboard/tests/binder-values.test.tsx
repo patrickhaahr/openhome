@@ -34,7 +34,7 @@ import { startAxumFixture } from "./support/axum-fixture"
 import {
   button,
   chooseCurrency,
-  currencySelect,
+  currencyShown,
   nameOf,
   settle,
   sheet,
@@ -186,7 +186,7 @@ test("the currency switch is remembered in a cookie and a reload renders it from
 
   if (value === undefined) throw new Error("Missing Binder Value")
 
-  expect(currencySelect(container).value).toBe("DKK")
+  expect(currencyShown(container)).toBe("DKK")
 
   await chooseCurrency("EUR", container)
 
@@ -197,7 +197,7 @@ test("the currency switch is remembered in a cookie and a reload renders it from
   root = createRoot(container)
   await load()
 
-  expect(currencySelect(container).value).toBe("EUR")
+  expect(currencyShown(container)).toBe("EUR")
   expect(headerFigure()).toBe(formatMoney(value.eur, "EUR"))
 
   await chooseCurrency("USD", container)

@@ -1,5 +1,11 @@
 import { createContext, use, useCallback, useMemo, useState } from "react"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { currencies, currencyCookie, type Currency } from "@/lib/currency"
 
 type CurrencyState = {
@@ -39,25 +45,29 @@ export function useCurrency(): CurrencyState {
   return state
 }
 
-/** One key showing the chosen currency; the platform's own picker offers the others. */
+/** One key showing the chosen currency; it opens a short list of the others. */
 export function CurrencySwitch(): React.JSX.Element {
   const { currency, choose } = useCurrency()
 
   return (
-    <NativeSelect
-      aria-label="Currency"
+    <Select
       value={currency}
-      onChange={(event) => {
-        const next = currencies.find((value) => value === event.target.value)
+      onValueChange={(value) => {
+        const next = currencies.find((option) => option === value)
 
         if (next !== undefined) choose(next)
       }}
     >
-      {currencies.map((value) => (
-        <NativeSelectOption key={value} value={value}>
-          {value}
-        </NativeSelectOption>
-      ))}
-    </NativeSelect>
+      <SelectTrigger aria-label="Currency">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {currencies.map((value) => (
+          <SelectItem key={value} value={value}>
+            {value}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

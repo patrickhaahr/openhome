@@ -32,28 +32,37 @@ export function button(
   return match
 }
 
-/** The Currency select within `scope`. */
-export function currencySelect(
-  scope: ParentNode = document
-): HTMLSelectElement {
-  const select = scope.querySelector('select[aria-label="Currency"]')
+/** The currency the Currency key within `scope` shows. */
+export function currencyShown(scope: ParentNode = document): string {
+  const trigger = scope.querySelector('[aria-label="Currency"]')
 
-  if (!(select instanceof HTMLSelectElement))
-    throw new Error("Missing Currency select")
+  if (trigger === null) throw new Error("Missing Currency key")
 
-  return select
+  return nameOf(trigger.querySelector('[data-slot="select-value"]') ?? trigger)
 }
 
-/** Picks a currency the way the platform picker does: a new value, then `change`. */
+/** Opens the Currency key and picks `currency` from its list, which renders in a portal. */
 export async function chooseCurrency(
   currency: string,
   scope: ParentNode = document
 ): Promise<void> {
-  const select = currencySelect(scope)
+  const trigger = scope.querySelector('[aria-label="Currency"]')
+
+  if (!(trigger instanceof HTMLElement)) throw new Error("Missing Currency key")
 
   await act(async () => {
-    select.value = currency
-    select.dispatchEvent(new Event("change", { bubbles: true }))
+    trigger.click()
+  })
+
+  const option = Array.from(document.querySelectorAll('[role="option"]')).find(
+    (element) => nameOf(element) === currency
+  )
+
+  if (!(option instanceof HTMLElement))
+    throw new Error(`Missing currency option: ${currency}`)
+
+  await act(async () => {
+    option.click()
   })
 }
 

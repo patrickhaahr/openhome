@@ -38,7 +38,7 @@ import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
 import {
   button,
-  currencySelect,
+  currencyShown,
   field,
   nameOf,
   settle,
@@ -346,7 +346,7 @@ test("says a Binder is empty rather than showing blank pages", async () => {
   expect(container.textContent).not.toContain("Pages 1")
   expect(container.textContent).toContain("Binder ValueDKK\u00a00.00")
   expect(container.textContent).toContain("No priced cards.")
-  expect(currencySelect().value).toBe("DKK")
+  expect(currencyShown()).toBe("DKK")
 })
 
 test("keeps recovery controls for a failed read and recovers when OpenHome answers", async () => {

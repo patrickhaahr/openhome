@@ -324,12 +324,36 @@
   gap: 1.75rem;
   min-width: 0;
 }
-/* Wide enough for the details to sit in two columns, so nothing waits below a scroll. */
+/* Wide enough to stand the card in the middle: what it is on the left, what this copy is worth
+   and holds on the right, so nothing waits below a scroll. */
 @media (min-width: 1500px) and (min-aspect-ratio: 3/2) {
-  .binder-detail-info {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .binder-detail {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     column-gap: clamp(2rem, 3vw, 3.5rem);
-    max-width: 76rem;
+  }
+  .binder-detail-info {
+    display: contents;
+  }
+  .binder-detail-about,
+  .binder-detail-own {
+    grid-row: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .binder-detail-about::-webkit-scrollbar,
+  .binder-detail-own::-webkit-scrollbar {
+    display: none;
+  }
+  .binder-detail-about {
+    grid-column: 1;
+  }
+  .binder-detail-art {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .binder-detail-own {
+    grid-column: 3;
   }
 }
 .binder-detail-lead {
