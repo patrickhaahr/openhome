@@ -1,6 +1,6 @@
-//! Batch ingest for NOOP push (`docs/noop/PUSH_PROTOCOL.md`, "NDJSON request", "Append delivery and
-//! cursors", "Authoritative rolling-window delivery", "Acceptance, errors, and retry
-//! idempotency").
+//! Batch ingest for NOOP push (`docs/noop/PUSH_PROTOCOL_DELIVERY.md`, "NDJSON request", "Append
+//! delivery and cursors", "Authoritative rolling-window delivery";
+//! `docs/noop/PUSH_PROTOCOL_STREAMS_AND_ERRORS.md`, "Acceptance, errors, and retry idempotency").
 //!
 //! Pipeline: decode the content coding within the 4 MiB decoded bound, frame the NDJSON (header
 //! line plus exactly `recordCount` record lines), validate the header and every record against
