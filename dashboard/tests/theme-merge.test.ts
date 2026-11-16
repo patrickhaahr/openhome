@@ -52,3 +52,15 @@ for (const [namespace, pairs] of Object.entries(cases)) {
     }
   )
 }
+
+test("@theme declares each token once", () => {
+  const names = [
+    ...styles.matchAll(
+      /^\s*(--(?:color|text|leading|tracking|spacing|radius|inset|grid-template-[a-z]+|animate|ease|shadow)-[a-z0-9-]+):/gm
+    ),
+  ].map(([, name]) => name)
+
+  expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual(
+    []
+  )
+})
