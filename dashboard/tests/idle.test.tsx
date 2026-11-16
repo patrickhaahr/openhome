@@ -37,7 +37,9 @@ import {
   screen,
   setReduced,
   settings,
+  slideOf,
   slides,
+  slot,
   TIMEOUT,
   wake,
 } from "./support/idle-dom"
@@ -398,11 +400,9 @@ test("crossfades between two image slots, preloading only the next photo", async
   )
 
   await advance(TIMEOUT)
-  const images = () => Array.from(document.querySelectorAll(".idle-slide img"))
+  const images = () => slides()
   expect(images()).toHaveLength(1)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-motion")
-  ).toBe("drift")
+  expect(slot("idle-stage")?.getAttribute("data-motion")).toBe("drift")
 
   await act(async () => fire(images()[0] ?? window, "load"))
   expect(document.querySelector('[data-front="true"]')).not.toBeNull()
@@ -410,19 +410,13 @@ test("crossfades between two image slots, preloading only the next photo", async
   await advance(FADE_MS)
   expect(images()).toHaveLength(2)
   const preloading = images()[1]
-  expect(preloading?.closest(".idle-slide")?.getAttribute("data-front")).toBe(
-    "false"
-  )
+  expect(slideOf(preloading)?.getAttribute("data-front")).toBe("false")
 
   await act(async () => fire(preloading ?? window, "load"))
   await advance(DWELL_MS - FADE_MS - 1)
-  expect(preloading?.closest(".idle-slide")?.getAttribute("data-front")).toBe(
-    "false"
-  )
+  expect(slideOf(preloading)?.getAttribute("data-front")).toBe("false")
   await advance(1)
-  expect(preloading?.closest(".idle-slide")?.getAttribute("data-front")).toBe(
-    "true"
-  )
+  expect(slideOf(preloading)?.getAttribute("data-front")).toBe("true")
 
   // After the fade the old slot takes the next photo: never more than two images.
   await advance(FADE_MS)
@@ -440,9 +434,7 @@ test("reduced motion keeps the crossfade and drops the drift", async () => {
   )
 
   await advance(TIMEOUT)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-motion")
-  ).toBe("still")
+  expect(slot("idle-stage")?.getAttribute("data-motion")).toBe("still")
 })
 
 test("an unavailable library rests on the plain ground with the clock, then quietly tries again", async () => {
@@ -455,13 +447,9 @@ test("an unavailable library rests on the plain ground with the clock, then quie
   )
 
   await advance(TIMEOUT)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-resting")
-  ).toBe("true")
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
-  expect(document.querySelector(".idle-time")?.textContent).toMatch(
-    /^\d\d:\d\d$/
-  )
+  expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("true")
+  expect(slides()).toHaveLength(0)
+  expect(slot("idle-time")?.textContent).toMatch(/^\d\d:\d\d$/)
   expect(document.querySelector('[role="alert"]')).toBeNull()
   expect(sources.albumReads()).toBe(1)
 
@@ -481,14 +469,10 @@ test("a run of broken photos rests instead of showing an error", async () => {
   await advance(TIMEOUT)
 
   for (let miss = 0; miss < 4; miss += 1)
-    await act(async () =>
-      fire(document.querySelector(".idle-slide img") ?? window, "error")
-    )
+    await act(async () => fire(slides()[0] ?? window, "error"))
 
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-resting")
-  ).toBe("true")
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
+  expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("true")
+  expect(slides()).toHaveLength(0)
 })
 
 test("favours on-this-day photos first, labels only the shown photo, then keeps the normal two-slot rotation", async () => {
@@ -513,21 +497,19 @@ test("favours on-this-day photos first, labels only the shown photo, then keeps 
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  const first = document.querySelector<HTMLImageElement>(".idle-slide img")
+  const first = slides()[0]
   expect(first?.src).toContain(asset(999))
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
+  expect(slot("idle-photo-memory")).toBeNull()
   await act(async () => fire(first ?? window, "load"))
-  expect(document.querySelector(".idle-photo-memory")?.textContent).toBe(
-    "3 years ago today"
-  )
+  expect(slot("idle-photo-memory")?.textContent).toBe("3 years ago today")
   await advance(FADE_MS)
-  const images = document.querySelectorAll<HTMLImageElement>(".idle-slide img")
+  const images = slides()
   expect(images).toHaveLength(2)
   expect(images[1]?.src).not.toContain(asset(999))
   await act(async () => fire(images[1] ?? window, "load"))
   await advance(DWELL_MS - FADE_MS)
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(2)
+  expect(slot("idle-photo-memory")).toBeNull()
+  expect(slides()).toHaveLength(2)
 })
 
 test("an unavailable on-this-day read quietly uses the normal shuffle", async () => {
@@ -542,8 +524,8 @@ test("an unavailable on-this-day read quietly uses the normal shuffle", async ()
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
+  expect(slides()).toHaveLength(1)
+  expect(slot("idle-photo-memory")).toBeNull()
 })
 
 test("Copenhagen midnight replaces yesterday's photo queue and clears its caption before loading today's memory", async () => {
@@ -581,18 +563,12 @@ test("Copenhagen midnight replaces yesterday's photo queue and clears its captio
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  await act(async () =>
-    fire(document.querySelector(".idle-slide img") ?? window, "load")
-  )
-  expect(document.querySelector(".idle-photo-memory")?.textContent).toBe(
-    "3 years ago today"
-  )
+  await act(async () => fire(slides()[0] ?? window, "load"))
+  expect(slot("idle-photo-memory")?.textContent).toBe("3 years ago today")
   await advance(2000)
-  expect(
-    document.querySelector<HTMLImageElement>(".idle-slide img")?.src
-  ).toContain(asset(998))
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+  expect(slides()[0]?.src).toContain(asset(998))
+  expect(slot("idle-photo-memory")).toBeNull()
+  expect(slides()).toHaveLength(1)
 })
 
 test("a cancelled run's late page failure cannot blank the photo its replacement is loading", async () => {
@@ -612,7 +588,7 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
+  expect(slides()).toHaveLength(0)
 
   // New sources cancel the first run while its page read is still pending.
   await render(
@@ -621,19 +597,15 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
     </IdleProvider>
   )
   await advance(1)
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+  expect(slides()).toHaveLength(1)
 
   // The cancelled read now fails; only the replacement run may touch the screen.
   await act(async () => failOldRead(unavailablePhotos))
   await advance(1)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-resting")
-  ).toBe("false")
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+  expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("false")
+  expect(slides()).toHaveLength(1)
 
-  await act(async () =>
-    fire(document.querySelector(".idle-slide img") ?? window, "load")
-  )
+  await act(async () => fire(slides()[0] ?? window, "load"))
   expect(document.querySelector('[data-front="true"]')).not.toBeNull()
 })
 

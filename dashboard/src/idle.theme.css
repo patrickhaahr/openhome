@@ -1,0 +1,60 @@
+/* The wall screen's short, wide panels (a landscape iPad) squeeze the clock plate. */
+@custom-variant idle-short {
+  @media (max-height: 750px) and (min-width: 641px) {
+    @slot;
+  }
+}
+
+@theme inline {
+  --text-idle-clock: clamp(2.75rem, 1rem + 5vw, 6rem);
+  --text-idle-clock-short: clamp(2.75rem, 5.5vw, 4.25rem);
+  --text-idle-date: clamp(1rem, 0.85rem + 0.5vw, 1.25rem);
+  --text-idle-range: 0.8em;
+  --text-idle-since-title: clamp(0.85rem, 1vw, 1rem);
+  --text-idle-since: clamp(1.15rem, 2vw, 2.1rem);
+  --text-idle-since-short: clamp(1.1rem, 1.8vw, 1.75rem);
+  --text-idle-note: clamp(0.8rem, 0.9vw, 0.95rem);
+  --text-idle-upcoming: clamp(0.95rem, 1.3vw, 1.25rem);
+  --text-idle-milestone: clamp(1.5rem, 3.2vw, 3.5rem);
+  --text-idle-milestone-short: clamp(1.5rem, 2.8vw, 2.75rem);
+  --text-idle-milestone-title: clamp(0.95rem, 1.1vw, 1.25rem);
+  --leading-idle-clock: 0.82;
+  --leading-idle-snug: 1.1;
+  --leading-idle-tight: 1.15;
+  --spacing-idle-plate-x: clamp(1rem, 1.8vw, 1.5rem);
+  --spacing-idle-plate-y: clamp(0.75rem, 1.4vw, 1.25rem);
+  --spacing-idle-dates: clamp(0.5rem, 1.2vh, 1rem);
+  --spacing-idle-separator: 0.15em;
+  --container-idle-plate: min(32rem, calc(100% - var(--margin) * 2));
+}
+
+@theme {
+  --transition-duration-idle-fade: 2400ms;
+  --animate-idle-drift: idle-drift 16.8s var(--ease) both;
+  --animate-idle-drift-back: idle-drift 16.8s var(--ease) both reverse;
+  --animate-idle-drift-across: idle-drift-across 16.8s var(--ease) both;
+  --animate-idle-drift-across-back: idle-drift-across 16.8s var(--ease) both
+    reverse;
+
+  @keyframes idle-drift {
+    from {
+      scale: 1.02;
+      translate: -1% -0.6%;
+    }
+    to {
+      scale: 1.09;
+      translate: 1% 0.6%;
+    }
+  }
+
+  @keyframes idle-drift-across {
+    from {
+      scale: 1.08;
+      translate: 1.2% -0.4%;
+    }
+    to {
+      scale: 1.02;
+      translate: -1.2% 0.5%;
+    }
+  }
+}

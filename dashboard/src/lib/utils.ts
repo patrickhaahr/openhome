@@ -95,6 +95,19 @@ export const cn = createCn({
         // Food
         "food-unit",
         "led-figure",
+        // Idle slideshow
+        "idle-clock",
+        "idle-clock-short",
+        "idle-date",
+        "idle-range",
+        "idle-since-title",
+        "idle-since",
+        "idle-since-short",
+        "idle-note",
+        "idle-upcoming",
+        "idle-milestone",
+        "idle-milestone-short",
+        "idle-milestone-title",
       ],
       leading: [
         "status",
@@ -111,6 +124,10 @@ export const cn = createCn({
         "workout-heading",
         // Food
         "food-energy",
+        // Idle slideshow
+        "idle-clock",
+        "idle-snug",
+        "idle-tight",
       ],
       tracking: [
         "score",
@@ -246,8 +263,19 @@ export const cn = createCn({
         "travel-above-dock",
         "travel-dock",
         "travel-plate",
+        // Idle slideshow
+        "idle-plate-x",
+        "idle-plate-y",
+        "idle-dates",
+        "idle-separator",
       ],
-      animate: ["stage-grow"],
+      animate: [
+        "stage-grow",
+        "idle-drift",
+        "idle-drift-back",
+        "idle-drift-across",
+        "idle-drift-across-back",
+      ],
     },
   },
 })

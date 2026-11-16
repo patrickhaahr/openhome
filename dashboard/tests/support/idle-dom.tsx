@@ -119,8 +119,12 @@ export async function advance(ms: number): Promise<void> {
   })
 }
 
+export function slot(name: string): HTMLElement | null {
+  return document.querySelector(`[data-slot="${name}"]`)
+}
+
 export function screen(): HTMLElement | null {
-  return document.querySelector(".idle")
+  return slot("idle")
 }
 
 export async function render(node: React.ReactNode): Promise<void> {
@@ -179,7 +183,15 @@ export async function wake(): Promise<void> {
 }
 
 export function slides(): HTMLImageElement[] {
-  return Array.from(document.querySelectorAll(".idle-slide img"))
+  return Array.from(
+    document.querySelectorAll<HTMLImageElement>('[data-slot="idle-slide"] img')
+  )
+}
+
+export function slideOf(
+  image: Element | undefined
+): Element | null | undefined {
+  return image?.closest('[data-slot="idle-slide"]')
 }
 
 /** Renders `node` inside a router, for components that link. */

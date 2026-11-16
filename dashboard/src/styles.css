@@ -3,8 +3,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/familjen-grotesk";
-@import "./idle.css";
-@import "./components/idle-milestone.css";
 @import "./home.css";
 @import "./photos.css";
 @import "./gap-dash.utilities.css";
@@ -22,6 +20,7 @@
 @import "./controls.theme.css";
 @import "./backlight.utilities.css";
 @import "./travel.theme.css";
+@import "./idle.theme.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {
@@ -413,8 +412,9 @@
         stroke 1.2s var(--ease) !important;
     }
   }
+  /* The idle slideshow keeps its opacity-only crossfade; a utility cannot outrank this !important. */
   @media (prefers-reduced-motion: reduce) {
-    *,
+    *:not([data-slot="idle-slide"]),
     *::before,
     *::after {
       transition-duration: 0s !important;

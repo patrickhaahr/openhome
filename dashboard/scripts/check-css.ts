@@ -6,12 +6,7 @@ import { audit } from "./css-classes.ts"
  * Page stylesheets that still define plain classes while the Tailwind migration (#305) is under way.
  * Delete an entry in the same change that deletes its file; the check fails on a stale entry.
  */
-const allowlist = [
-  "src/components/idle-milestone.css",
-  "src/home.css",
-  "src/idle.css",
-  "src/photos.css",
-]
+const allowlist = ["src/home.css", "src/photos.css"]
 
 const root = new URL("..", import.meta.url).pathname
 
