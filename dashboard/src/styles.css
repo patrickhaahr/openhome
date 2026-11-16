@@ -3,10 +3,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/familjen-grotesk";
-@import "./workout.css";
-@import "./workout-sessions.css";
-@import "./workout-body.css";
-@import "./workout-log.css";
 @import "./binder.css";
 @import "./idle.css";
 @import "./backlight.css";
@@ -17,13 +13,11 @@
 @import "./home.css";
 @import "./travel.css";
 @import "./controls.css";
-@import "./workout-views.css";
 @import "./photos.css";
-@import "./workout-values.css";
-@import "./utilities.css";
 @import "./gap-dash.utilities.css";
 @import "./shell.utilities.css";
 @import "./lists.utilities.css";
+@import "./workout.utilities.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {
@@ -234,6 +228,81 @@
     3.5rem;
   --grid-template-rows-fill-hug: minmax(0, 1fr) auto;
   --grid-template-rows-hug-fill-hug: auto minmax(0, 1fr) auto;
+
+  /* Workout and Recovery. A band, stage or zone colour resolves on the element that names it. */
+  --color-band: var(--band);
+  --color-stage: var(--stage);
+  --color-zone: var(--zone);
+  --color-good: var(--good);
+  --color-poor: var(--poor);
+  --color-effort: var(--effort);
+  --color-stage-deep: var(--stage-deep);
+  --color-stage-light: var(--stage-light);
+  /* Twelve progress hues at similar lightness so no line dominates on dark; the first is the accent. */
+  --color-progress-1: var(--sun);
+  --color-progress-2: light-dark(oklch(0.5 0.15 250), oklch(0.8 0.12 230));
+  --color-progress-3: light-dark(oklch(0.52 0.18 330), oklch(0.78 0.15 330));
+  --color-progress-4: light-dark(oklch(0.55 0.14 150), oklch(0.82 0.15 150));
+  --color-progress-5: light-dark(oklch(0.45 0.02 250), oklch(0.92 0.01 250));
+  --color-progress-6: light-dark(oklch(0.5 0.16 290), oklch(0.78 0.12 280));
+  --color-progress-7: light-dark(oklch(0.55 0.12 200), oklch(0.83 0.13 190));
+  --color-progress-8: light-dark(oklch(0.55 0.14 110), oklch(0.8 0.15 110));
+  --color-progress-9: light-dark(oklch(0.52 0.18 0), oklch(0.76 0.14 0));
+  --color-progress-10: light-dark(oklch(0.5 0.05 60), oklch(0.72 0.03 60));
+  --color-progress-11: light-dark(oklch(0.6 0.12 70), oklch(0.85 0.1 60));
+  --color-progress-12: light-dark(oklch(0.3 0.01 250), oklch(0.95 0.01 250));
+  --text-mark: 0.625rem;
+  --text-body: 1rem;
+  --text-value: 1.375rem;
+  --text-stat: 1.5rem;
+  --text-set: 1.625rem;
+  --text-clock: clamp(1.375rem, 1rem + 1.2vw, 1.875rem);
+  --text-vital: clamp(1.875rem, 1.2rem + 2vw, 2.5rem);
+  --text-weight: clamp(3.5rem, 2rem + 5vw, 6rem);
+  --tracking-workout-figure: -0.04em;
+  --leading-workout-figure: 0.9;
+  --leading-workout-heading: 1.1;
+  --spacing-detail-top: calc(var(--bar) + 1rem);
+  --spacing-workout-gutter: clamp(1.5rem, 3vw, 3rem);
+  --spacing-plate: clamp(1.25rem, 3vw, 2rem);
+  --spacing-session: clamp(1.25rem, 2.4vw, 1.75rem);
+  --spacing-view-bar: clamp(1rem, 2.4vw, 1.75rem);
+  --spacing-today: clamp(1.75rem, 3.5vw, 3rem);
+  --spacing-rings: clamp(0.75rem, 2.5vw, 2.5rem);
+  --spacing-night-head: clamp(1rem, 3vw, 2.5rem);
+  --spacing-night-stats: clamp(1rem, 2.5vw, 2rem);
+  --spacing-stage-legend: clamp(1.25rem, 4vw, 3rem);
+  --spacing-detail-stats: clamp(1.5rem, 4vw, 3rem);
+  --spacing-body-trend: clamp(0.75rem, 2vw, 1.25rem);
+  --spacing-day-rings: clamp(2.5rem, 5.5vw, 3.25rem);
+  --spacing-hr-chart: clamp(9rem, 22vw, 13rem);
+  --grid-template-columns-rings: repeat(3, minmax(0, 15rem));
+  --grid-template-columns-swatch: 1rem auto;
+  --grid-template-columns-tiles: repeat(
+    auto-fill,
+    minmax(min(100%, 19rem), 1fr)
+  );
+  --grid-template-columns-route: minmax(0, 5fr) minmax(0, 6fr);
+  --grid-template-columns-recovery: 3.5rem minmax(0, 1fr) 3rem;
+  --grid-template-columns-body: minmax(0, 1fr) 21rem;
+  --grid-template-columns-session: minmax(0, 1.2fr) minmax(0, 1fr);
+  --grid-template-columns-stats: repeat(auto-fill, minmax(6rem, 1fr));
+  --grid-template-columns-legend: repeat(
+    auto-fill,
+    minmax(min(100%, 15rem), 1fr)
+  );
+  /* Set n of every exercise shares a column; --set-columns is the session's widest row. */
+  --grid-template-columns-sets: repeat(
+    var(--set-columns),
+    minmax(5.75rem, 7.5rem)
+  );
+  --grid-template-columns-named-sets: minmax(0, 1fr)
+    repeat(var(--set-columns), minmax(5.75rem, 7.5rem));
+  --grid-template-columns-even-sets: repeat(var(--set-columns), minmax(0, 1fr));
+  --grid-template-rows-auto-fill: auto minmax(0, 1fr);
+  --grid-template-rows-lanes: repeat(4, minmax(2.25rem, 1fr));
+  --transition-property-tile: background-color, color, scale;
+  --radius-workout-plate: 1.75rem;
 }
 
 @theme {
@@ -269,10 +338,17 @@
   --animate-score-fill: score-fill 1.1s var(--ease) both;
   --animate-score-fill-2: score-fill 1.1s var(--ease) 90ms both;
   --animate-score-fill-3: score-fill 1.1s var(--ease) 180ms both;
+  --animate-stage-grow: stage-grow var(--t-slow) var(--ease) both;
 
   @keyframes score-fill {
     from {
       stroke-dashoffset: var(--ring-length);
+    }
+  }
+
+  @keyframes stage-grow {
+    from {
+      scale: 0 1;
     }
   }
 }
@@ -343,6 +419,21 @@
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--line);
   --sidebar-ring: var(--ink);
+
+  /* Workout: Charge and Rest are coloured by how good they are, Effort is always blue. */
+  --good: #1a9a52;
+  --fair: #d99a00;
+  --poor: #e0453f;
+  --effort: #2f6fed;
+  --stage-deep: #4b3fd1;
+  --stage-rem: #2aa3c7;
+  --stage-light: #a99cf7;
+  --stage-awake: #f0a050;
+  --zone-1: #9aa3ad;
+  --zone-2: #2f6fed;
+  --zone-3: #1a9a52;
+  --zone-4: #d99a00;
+  --zone-5: #e0453f;
 }
 
 .dark {
@@ -363,6 +454,19 @@
   --tile: rgb(236 236 230 / 5.5%);
   --chart-4: #7aa2ff;
   --chart-5: #6c7078;
+  --good: #3ddc84;
+  --fair: #ffcc33;
+  --poor: #ff6b5e;
+  --effort: #5b9dff;
+  --stage-deep: #7b6fff;
+  --stage-rem: #4fd1f0;
+  --stage-light: #c3b8ff;
+  --stage-awake: #ffb877;
+  --zone-1: #8a9099;
+  --zone-2: #5b9dff;
+  --zone-3: #3ddc84;
+  --zone-4: #ffcc33;
+  --zone-5: #ff6b5e;
 }
 
 @layer base {
@@ -433,5 +537,45 @@
       transition-duration: 0s !important;
       animation-duration: 0s !important;
     }
+  }
+  /* Attribute maps: a band, sleep stage or heart-rate zone names its colour once for its subtree. */
+  [data-band="good"] {
+    --band: var(--good);
+  }
+  [data-band="fair"] {
+    --band: var(--fair);
+  }
+  [data-band="poor"] {
+    --band: var(--poor);
+  }
+  [data-band="none"] {
+    --band: var(--muted-ink);
+  }
+  [data-stage="deep"] {
+    --stage: var(--stage-deep);
+  }
+  [data-stage="rem"] {
+    --stage: var(--stage-rem);
+  }
+  [data-stage="light"] {
+    --stage: var(--stage-light);
+  }
+  [data-stage="awake"] {
+    --stage: var(--stage-awake);
+  }
+  [data-zone="1"] {
+    --zone: var(--zone-1);
+  }
+  [data-zone="2"] {
+    --zone: var(--zone-2);
+  }
+  [data-zone="3"] {
+    --zone: var(--zone-3);
+  }
+  [data-zone="4"] {
+    --zone: var(--zone-4);
+  }
+  [data-zone="5"] {
+    --zone: var(--zone-5);
   }
 }

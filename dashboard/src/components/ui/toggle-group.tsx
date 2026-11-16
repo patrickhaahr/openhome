@@ -45,7 +45,7 @@ function ToggleGroup({
       // spacing multiplier read only by this component's gap utility.
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] data-[spacing=0]:data-[variant=outline]:rounded-none data-vertical:flex-col data-vertical:items-stretch",
+        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] data-[variant=capsule]:max-w-full data-[variant=capsule]:rounded-full data-[variant=capsule]:bg-wash data-[variant=capsule]:p-1 data-[spacing=0]:data-[variant=outline]:rounded-none max-[700px]:data-[variant=capsule]:w-full data-vertical:flex-col data-vertical:items-stretch",
         className
       )}
       {...props}

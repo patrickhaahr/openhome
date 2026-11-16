@@ -20,6 +20,7 @@ import { noopButtonId } from "@/components/training-shared"
 import { Night } from "@/components/training-night"
 import { Body } from "@/components/training-body"
 import { Sessions } from "@/components/training-sessions"
+import { FailurePlate, WorkoutFeedback } from "@/components/workout-parts"
 
 /** The selected day as rings over its week, beside its night; then its body and its strap sessions. Words stay for AT. */
 export function TrainingSummaries({
@@ -79,26 +80,26 @@ export function TrainingSummaries({
   const missing = covered ? "Not recorded" : "Not synced or unavailable"
 
   return (
-    <div data-slot="today" className="today" aria-busy={busy}>
+    <div data-slot="today" className="grid gap-today" aria-busy={busy}>
       <h2 className="sr-only">Recovery day · {data.day}</h2>
-      <p
-        className="workout-feedback"
-        role="status"
-        data-failed={!busy && feedback !== "" ? true : undefined}
-      >
+      <WorkoutFeedback failed={!busy && feedback !== "" ? true : undefined}>
         {busy ? "Reading training data…" : feedback}
-      </p>
-      <div className="today-hero">
-        <div className="today-glance">
+      </WorkoutFeedback>
+      <div className="grid min-h-fit-screen grid-cols-2 gap-workout-gutter *:min-w-0 max-[900px]:min-h-0 max-[900px]:grid-cols-1">
+        <div className="relative grid grid-rows-fill-hug gap-4 max-[900px]:gap-6">
           {data.recovery.state === "available" ? (
             <>
               <Sync data={data.recovery.data.noop} />
               <Rings data={data.recovery.data} missing={missing} />
             </>
           ) : (
-            <ReadFailure title="Recovery day" data={data.recovery} />
+            <ReadFailure
+              title="Recovery day"
+              data={data.recovery}
+              className="self-center"
+            />
           )}
-          <div className="today-week">
+          <div className="min-w-0">
             <DayStrip
               initial={data.week}
               selected={data.day}
@@ -128,7 +129,7 @@ export function TrainingSummaries({
           missing={missing}
         />
       )}
-      <section className="today-sessions" aria-label="Sessions">
+      <section className="grid gap-4" aria-label="Sessions">
         {data.context.state === "unavailable" ? (
           <ReadFailure title="Training context" data={data.context} />
         ) : (
@@ -154,11 +155,11 @@ export function TrainingSummaries({
           tabIndex={-1}
           role="region"
           aria-label="NOOP workout detail"
-          className="today-detail"
+          className="relative scroll-mt-detail-top focus:outline-none"
         >
           {data.detail.state === "none" ? null : (
             <>
-              <div className="today-detail-close">
+              <div className="absolute top-4 right-4 z-1">
                 <Button
                   variant="ghost"
                   size="key-icon"
@@ -209,15 +210,18 @@ export function TrainingSummaries({
 function ReadFailure({
   title,
   data,
+  className = "",
 }: {
   readonly title: string
   readonly data: Extract<TrainingRead<unknown>, { state: "unavailable" }>
+  readonly className?: string
 }): React.JSX.Element {
   return (
-    <div className="today-failure">
-      <h2>{title} unavailable</h2>
-      <p role="status">{trainingFailureMessage[data.reason]}</p>
-    </div>
+    <FailurePlate title={`${title} unavailable`} className={className}>
+      <p className="text-muted-ink" role="status">
+        {trainingFailureMessage[data.reason]}
+      </p>
+    </FailurePlate>
   )
 }
 
@@ -246,7 +250,7 @@ function Rings({
   readonly missing: string
 }): React.JSX.Element {
   return (
-    <div className="today-rings">
+    <div className="grid grid-cols-rings justify-center gap-rings self-center">
       <RecoveryRings data={data} missing={missing} size="hero" />
     </div>
   )

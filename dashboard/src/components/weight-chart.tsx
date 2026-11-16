@@ -171,8 +171,12 @@ export function WeightChart({
   const shown = focus === undefined ? undefined : points[focus]
 
   return (
-    <figure className="weight-chart" ref={figure}>
+    <figure
+      className="relative overflow-hidden rounded-workout-plate bg-tile"
+      ref={figure}
+    >
       <svg
+        className="block w-full touch-pan-y"
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
@@ -195,8 +199,7 @@ export function WeightChart({
         {bands.map((band) => (
           <rect
             key={band.kg}
-            className="weight-chart-band"
-            data-dark={band.dark}
+            className={band.dark ? "fill-wash" : "fill-transparent"}
             x="0"
             width={width}
             y={band.top}
@@ -206,7 +209,8 @@ export function WeightChart({
         {ticks.map((kg) => (
           <text
             key={kg}
-            className="weight-chart-tick"
+            className="fill-muted-ink text-small tabular-nums"
+            textAnchor="end"
             x={width - 16}
             y={y(kg) - 8}
           >
@@ -216,34 +220,55 @@ export function WeightChart({
         {months.map((month) => (
           <text
             key={month.at}
-            className="weight-chart-month"
+            className="fill-muted-ink text-small tabular-nums"
             x={x(month.at)}
             y={height - 12}
           >
             {month.label}
           </text>
         ))}
-        <path className="weight-chart-trend" d={trendLine} />
+        <path
+          className="trend-draw stroke-sun"
+          d={trendLine}
+          fill="none"
+          strokeWidth={3.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
         {points.map((point) => (
           <circle
             key={point.entry.id}
-            className="weight-chart-dot"
+            data-slot="weight-chart-dot"
+            className="fill-ink opacity-30"
             cx={point.x}
             cy={point.y}
             r="3.5"
           />
         ))}
         {points.length > 2 ? (
-          <g className="weight-chart-low">
-            <circle cx={lightest.x} cy={lightest.y} r="6" />
-            <text x={lightest.x} y={lightest.y + 24}>
+          <g>
+            <circle
+              className="stroke-ink"
+              cx={lightest.x}
+              cy={lightest.y}
+              r="6"
+              fill="none"
+              strokeWidth={2}
+            />
+            <text
+              className="fill-ink text-small font-bold"
+              x={lightest.x}
+              y={lightest.y + 24}
+              textAnchor="middle"
+            >
               {kilograms.format(lightest.entry.weight_kg)}
             </text>
           </g>
         ) : null}
         {latest === undefined ? null : (
           <circle
-            className="weight-chart-latest"
+            className="fill-sun stroke-ground"
+            strokeWidth={4}
             cx={latest.x}
             cy={latest.y}
             r="8"
@@ -251,18 +276,26 @@ export function WeightChart({
         )}
         {shown === undefined ? null : (
           <circle
-            className="weight-chart-focus"
+            className="fill-ground stroke-ink"
+            strokeWidth={3}
             cx={shown.x}
             cy={shown.y}
             r="7"
           />
         )}
       </svg>
-      <figcaption className="weight-chart-readout" aria-hidden="true">
+      <figcaption
+        className="pointer-events-none absolute top-3 left-5 flex items-baseline gap-2 tabular-nums"
+        aria-hidden="true"
+      >
         {shown === undefined ? null : (
           <>
-            <strong>{kilograms.format(shown.entry.weight_kg)}</strong>
-            <span>{shortDate.format(new Date(time(shown.entry.date)))}</span>
+            <strong className="text-figure-sm font-semibold tracking-workout-figure">
+              {kilograms.format(shown.entry.weight_kg)}
+            </strong>
+            <span className="text-muted-ink">
+              {shortDate.format(new Date(time(shown.entry.date)))}
+            </span>
           </>
         )}
       </figcaption>

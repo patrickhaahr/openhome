@@ -22,6 +22,16 @@ export const cn = createCn({
         "connected",
         "tile",
         "rain",
+        // Workout and Recovery
+        "band",
+        "stage",
+        "zone",
+        "good",
+        "poor",
+        "effort",
+        "stage-deep",
+        "stage-light",
+        ...Array.from({ length: 12 }, (_, index) => `progress-${index + 1}`),
       ],
       text: [
         "mega",
@@ -54,6 +64,15 @@ export const cn = createCn({
         "figure-xl",
         "figure-xs",
         "unit",
+        // Workout and Recovery
+        "mark",
+        "body",
+        "value",
+        "stat",
+        "set",
+        "clock",
+        "vital",
+        "weight",
       ],
       leading: [
         "status",
@@ -65,6 +84,9 @@ export const cn = createCn({
         "compact",
         "prose",
         "figure-xl",
+        // Workout and Recovery
+        "workout-figure",
+        "workout-heading",
       ],
       tracking: [
         "score",
@@ -81,8 +103,18 @@ export const cn = createCn({
         "title",
         "figure-tight",
         "figure-xl",
+        // Workout and Recovery
+        "workout-figure",
       ],
-      radius: ["poster", "art", "plate", "tile", "sheet"],
+      radius: [
+        "poster",
+        "art",
+        "plate",
+        "tile",
+        "sheet",
+        // Workout and Recovery
+        "workout-plate",
+      ],
       spacing: [
         "margin",
         "bar",
@@ -129,7 +161,23 @@ export const cn = createCn({
         "condition-glyph",
         "fit-screen",
         "rain-lane",
+        // Workout and Recovery
+        "detail-top",
+        "workout-gutter",
+        "plate",
+        "session",
+        "view-bar",
+        "today",
+        "rings",
+        "night-head",
+        "night-stats",
+        "stage-legend",
+        "detail-stats",
+        "body-trend",
+        "day-rings",
+        "hr-chart",
       ],
+      animate: ["stage-grow"],
     },
   },
 })

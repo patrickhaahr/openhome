@@ -153,7 +153,9 @@ function legendEntries(): HTMLButtonElement[] {
 }
 
 function legendName(entry: HTMLButtonElement): string {
-  return entry.querySelector(".progress-legend-name")?.textContent ?? ""
+  return (
+    entry.querySelector('[data-slot="progress-legend-name"]')?.textContent ?? ""
+  )
 }
 
 /** Each legend line's name and whether its line is shown. */
@@ -179,7 +181,7 @@ async function toggleLine(name: string): Promise<void> {
 }
 
 function drawnLines(): number {
-  return container.querySelectorAll("svg .progress-line").length
+  return container.querySelectorAll('svg [data-slot="progress-line"]').length
 }
 
 function observed(): string[][] {
@@ -190,7 +192,7 @@ function observed(): string[][] {
 
 function notCharted(): string[] {
   return Array.from(
-    container.querySelectorAll(".progress-missing li > div"),
+    container.querySelectorAll('[data-slot="progress-missing"] li > div'),
     (item) => item.textContent
   )
 }
@@ -430,9 +432,11 @@ test("large weighted changes keep plot work bounded without dropping observed va
   await render()
   expect(drawnLines()).toBe(1)
   expect(
-    container.querySelectorAll(".progress-band").length
+    container.querySelectorAll('[data-slot="progress-band"]').length
   ).toBeLessThanOrEqual(5)
-  expect(container.querySelectorAll(".progress-line circle")).toHaveLength(2)
+  expect(
+    container.querySelectorAll('[data-slot="progress-line"] circle')
+  ).toHaveLength(2)
   expect(observed().at(-1)).toEqual([
     shortDay(daysAgo(2)),
     "1,000,000 kg",

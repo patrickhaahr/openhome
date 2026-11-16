@@ -12,6 +12,11 @@ import {
   ZoneBar,
 } from "@/components/noop-detail"
 import { ScoreRing } from "@/components/score-ring"
+import {
+  ViewBar,
+  WorkoutFeedback,
+  workoutMuted,
+} from "@/components/workout-parts"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { formatWhole } from "@/lib/number-format"
@@ -72,15 +77,11 @@ export function Workouts({
   }
 
   return (
-    <div className="log workouts" aria-busy={busy}>
-      <div className="view-bar">{lead}</div>
-      <p
-        className="workout-feedback"
-        role="status"
-        data-failed={failure === undefined ? undefined : true}
-      >
+    <div className="grid" aria-busy={busy}>
+      <ViewBar lead={lead} />
+      <WorkoutFeedback failed={failure !== undefined}>
         {failure ?? (busy ? "Working…" : "")}
-      </p>
+      </WorkoutFeedback>
       {data.state === "unavailable" ? (
         <Card>
           <CardHeader>
@@ -94,18 +95,24 @@ export function Workouts({
         <>
           <h2 className="sr-only">Sessions</h2>
           {data.strap === "unavailable" ? (
-            <p className="workout-feedback" data-failed="true" role="status">
+            <WorkoutFeedback failed>
               The strap is unreachable, so only logged workouts show.
-            </p>
+            </WorkoutFeedback>
           ) : null}
           {data.sessions.length === 0 ? (
-            <div className="workout-empty">
-              <BarbellIcon size={40} aria-hidden="true" />
+            <div className="grid justify-items-start gap-3 py-10">
+              <BarbellIcon
+                className="text-muted-ink"
+                size={40}
+                aria-hidden="true"
+              />
               <h2>Ready when you are.</h2>
-              <p>Workouts you log appear here with the strap's recording.</p>
+              <p className="text-muted-ink">
+                Workouts you log appear here with the strap's recording.
+              </p>
             </div>
           ) : (
-            <ol className="log-list" aria-label="Sessions, newest first">
+            <ol className="grid gap-3" aria-label="Sessions, newest first">
               {data.sessions.map((session) => (
                 <li key={session.key}>
                   <Session session={session} />
@@ -114,8 +121,9 @@ export function Workouts({
             </ol>
           )}
           {data.hasOlder ? (
-            <div className="log-older">
+            <div className="mt-3 justify-self-center">
               <Button
+                className="touch-manipulation"
                 variant="outline"
                 size="lg"
                 disabled={busy}
@@ -190,18 +198,26 @@ function Session({
 
   return (
     <article
-      className="session"
+      data-slot="session"
+      className="grid min-w-0 gap-5 rounded-workout-plate bg-tile p-session"
       data-kind={layout}
-      data-route={route !== undefined}
       aria-labelledby={`session-${session.key}`}
     >
-      <header className="session-head">
-        <span className="session-glyph" aria-hidden="true">
+      <header className="flex items-center gap-4 max-[700px]:flex-wrap">
+        <span
+          className="grid size-12 flex-none place-items-center rounded-full bg-wash-strong"
+          aria-hidden="true"
+        >
           <SessionGlyph kind={kind} />
         </span>
-        <div className="session-title">
-          <h3 id={`session-${session.key}`}>{title}</h3>
-          <p>
+        <div data-slot="session-title" className="min-w-0 flex-1">
+          <h3
+            id={`session-${session.key}`}
+            className="truncate text-lead leading-workout-heading font-semibold tracking-title"
+          >
+            {title}
+          </h3>
+          <p className="mt-0.5 text-muted-ink tabular-nums">
             <time dateTime={session.day}>{dayLabel(session.day)}</time>
             {strap === undefined ? null : (
               <>
@@ -221,13 +237,30 @@ function Session({
         </div>
         {workout === undefined ? null : <Counts workout={workout} />}
       </header>
-      <div className="session-body">
-        {workout === undefined ? null : <Exercises workout={workout} />}
-        {strap === undefined ? null : <StrapPane strap={strap} route={route} />}
+      <div
+        className={`grid items-stretch gap-workout-gutter ${bodyColumns[layout === "strap" && route !== undefined ? "route" : layout]}`}
+      >
+        {workout === undefined ? null : (
+          <Exercises workout={workout} spread={layout === "logged"} />
+        )}
+        {strap === undefined ? null : (
+          <StrapPane
+            strap={strap}
+            route={route}
+            fit={layout === "strap" && route === undefined ? "alone" : "pane"}
+          />
+        )}
       </div>
     </article>
   )
 }
+
+const bodyColumns = {
+  paired: "grid-cols-session max-[860px]:grid-cols-1",
+  route: "grid-cols-2 max-[860px]:grid-cols-1",
+  strap: "grid-cols-1",
+  logged: "grid-cols-1",
+} as const
 
 /** How much was logged, as two figures where the header's keys once sat. */
 function Counts({
@@ -241,26 +274,35 @@ function Counts({
   )
 
   return (
-    <dl className="session-counts">
+    <dl
+      data-slot="session-counts"
+      className="flex flex-none items-baseline gap-5 max-[700px]:order-3 max-[700px]:w-full max-[700px]:pl-16"
+    >
       <div>
         <dt className="sr-only">Exercises</dt>
-        <dd>
+        <dd className={countFigure}>
           <span className="num">{workout.exercises.length}</span>
-          <small aria-hidden="true">
+          <small aria-hidden="true" className={countUnit}>
             {workout.exercises.length === 1 ? " exercise" : " exercises"}
           </small>
         </dd>
       </div>
       <div>
         <dt className="sr-only">Sets</dt>
-        <dd>
+        <dd className={countFigure}>
           <span className="num">{sets}</span>
-          <small aria-hidden="true">{sets === 1 ? " set" : " sets"}</small>
+          <small aria-hidden="true" className={countUnit}>
+            {sets === 1 ? " set" : " sets"}
+          </small>
         </dd>
       </div>
     </dl>
   )
 }
+
+const countFigure = "text-figure-sm leading-none font-bold tracking-figure"
+
+const countUnit = "text-control font-semibold tracking-normal text-muted-ink"
 
 /**
  * The logged half: one row per exercise on one shared grid, its name first and its sets in
@@ -268,8 +310,11 @@ function Counts({
  */
 function Exercises({
   workout,
+  spread,
 }: {
   readonly workout: WorkoutDetail
+  /** Alone on its plate, the rows spread over two columns that read top to bottom. */
+  readonly spread: boolean
 }): React.JSX.Element {
   const columns = Math.min(
     maxSetColumns,
@@ -277,60 +322,85 @@ function Exercises({
   )
 
   return (
-    <div className="session-logged">
+    <div
+      data-slot="session-logged"
+      className="grid min-w-0 content-start gap-4"
+    >
       {workout.notes === null ? null : (
-        <p className="workout-notes">{workout.notes}</p>
+        <p className="mt-4 whitespace-pre-wrap text-muted-ink">
+          {workout.notes}
+        </p>
       )}
       {workout.exercises.length === 0 ? (
-        <p className="workout-muted">No exercises were logged.</p>
+        <p className={workoutMuted}>No exercises were logged.</p>
       ) : (
         <ol
-          className="session-exercises"
+          data-slot="session-exercises"
+          className={
+            spread ? "exercise-columns gap-x-workout-gutter" : "grid gap-2"
+          }
           aria-label="Exercises"
           // SAFETY: CSSProperties omits custom properties; --set-columns is the grid's set column count.
           style={{ "--set-columns": columns } as React.CSSProperties}
         >
           {workout.exercises.map((entry) => (
-            <li key={entry.id}>
-              <h4>
+            <li
+              key={entry.id}
+              className={`grid grid-cols-named-sets items-baseline gap-2 max-[560px]:mb-2 max-[560px]:grid-cols-even-sets max-[560px]:gap-y-1.5 ${spread ? "mb-2 break-inside-avoid" : ""}`}
+            >
+              <h4 className="min-w-0 text-body-lg leading-tight font-semibold wrap-anywhere max-[560px]:col-span-full">
                 {entry.exercise.name}
                 <span className="sr-only"> ({entry.exercise.category})</span>
               </h4>
               {entry.sets.length === 0 ? (
-                <p className="workout-muted">No sets logged.</p>
+                <p
+                  className={`col-start-2 -col-end-1 max-[560px]:col-span-full ${workoutMuted}`}
+                >
+                  No sets logged.
+                </p>
               ) : (
-                <ol className="workout-sets">
+                <ol className="col-start-2 -col-end-1 grid grid-cols-sets gap-2 max-[560px]:col-span-full max-[560px]:grid-cols-even-sets">
                   {entry.sets.map((set, setIndex) => {
                     const figures = setFigures(set)
 
                     return (
                       <li
                         key={set.id}
-                        className="set-pill"
+                        data-slot="set-pill"
+                        className="relative flex min-w-0 flex-wrap items-baseline gap-x-1.25 overflow-hidden rounded-art bg-ground px-3 pt-2 pb-3 tabular-nums dark:bg-wash-strong"
                         data-rpe={set.rpe ?? undefined}
                         title={set.notes ?? undefined}
                       >
                         <span className="sr-only">
                           Set {setIndex + 1}: {describeSet(set)}
                         </span>
-                        <span className="set-pill-effort" aria-hidden="true">
+                        <span
+                          className="text-set leading-none font-bold tracking-title"
+                          aria-hidden="true"
+                        >
                           {figures.effort}
                         </span>
-                        <span className="set-pill-load" aria-hidden="true">
+                        <span
+                          className="text-small font-semibold text-muted-ink"
+                          aria-hidden="true"
+                        >
                           {figures.load ?? "BW"}
                         </span>
                         {set.rpe === null ? null : (
                           <span
-                            className="set-pill-rpe"
+                            data-slot="set-pill-rpe"
+                            className="absolute bottom-0 left-0 h-1 w-rpe bg-sun"
                             aria-hidden="true"
-                            // SAFETY: CSSProperties omits custom properties; --rpe is a 0..1 heat read by .set-pill-rpe.
+                            // SAFETY: CSSProperties omits custom properties; --rpe is a 0..1 heat read by w-rpe.
                             style={
                               { "--rpe": set.rpe / 10 } as React.CSSProperties
                             }
                           />
                         )}
                         {set.notes === null ? null : (
-                          <span className="set-pill-note">{set.notes}</span>
+                          <span className="basis-full text-caption text-muted-ink">
+                            {set.notes}
+                          </span>
                         )}
                       </li>
                     )
@@ -338,9 +408,7 @@ function Exercises({
                 </ol>
               )}
               {entry.notes === null ? null : (
-                <p className="session-exercise-note workout-muted">
-                  {entry.notes}
-                </p>
+                <p className={`col-span-full ${workoutMuted}`}>{entry.notes}</p>
               )}
             </li>
           ))}
@@ -356,9 +424,11 @@ type Route = NonNullable<NonNullable<Strap["detail"]>["route"]>
 function StrapPane({
   strap,
   route,
+  fit,
 }: {
   readonly strap: Strap
   readonly route: Route | undefined
+  readonly fit: "pane" | "alone"
 }): React.JSX.Element {
   const { summary, detail } = strap
   const effort = detail?.strain_score ?? summary.strain_score
@@ -389,7 +459,7 @@ function StrapPane({
       : noopStats(detail)
 
   const trace = (
-    <div className="session-trace">
+    <div className="grid min-w-0 grid-rows-fill-hug gap-4">
       {detail?.hr_series === null || detail === undefined ? null : (
         <HeartRateChart
           series={detail.hr_series}
@@ -397,18 +467,26 @@ function StrapPane({
           durationS={
             (Date.parse(summary.end) - Date.parse(summary.start)) / 1000
           }
+          fit={fit}
         />
       )}
       {detail?.hr_zones === null || detail === undefined ? null : (
-        <ZoneBar zones={detail.hr_zones} />
+        <ZoneBar zones={detail.hr_zones} fit={fit} />
       )}
     </div>
   )
 
   return (
     <>
-      <div className="session-strap">
-        <div className="session-strap-top">
+      <div
+        data-slot="session-strap"
+        className={
+          fit === "alone"
+            ? "grid min-w-0 grid-cols-2 grid-rows-none gap-workout-gutter max-[860px]:grid-cols-1 max-[860px]:gap-4"
+            : "grid min-w-0 grid-rows-auto-fill gap-5"
+        }
+      >
+        <div className="flex items-center gap-6 max-[700px]:flex-col max-[700px]:items-start max-[700px]:gap-4">
           <ScoreRing
             kind="effort"
             size="strap"
@@ -422,13 +500,13 @@ function StrapPane({
                 : `strain ${Math.round(effort)} of 100`
             }
           />
-          <StatList className="session-stats" stats={stats} />
+          <StatList look="session" stats={stats} />
         </div>
         {trace}
       </div>
       {route === undefined ? null : (
-        <div className="session-map">
-          <RouteMap route={route} />
+        <div data-slot="session-map">
+          <RouteMap route={route} fit="pane" />
         </div>
       )}
     </>

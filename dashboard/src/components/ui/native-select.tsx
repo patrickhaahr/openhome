@@ -3,7 +3,8 @@ import { cn } from "cn"
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown"
 
 type NativeSelectProps = Omit<React.ComponentProps<"select">, "size"> & {
-  size?: "sm" | "default"
+  /** `field` matches the 3rem form fields beside it. */
+  size?: "sm" | "default" | "field"
 }
 
 function NativeSelect({
@@ -23,7 +24,7 @@ function NativeSelect({
       <select
         data-slot="native-select"
         data-size={size}
-        className="h-11 w-full min-w-0 cursor-pointer appearance-none rounded-full border border-input bg-transparent py-2 pr-10 pl-4 text-[0.9375rem] font-medium transition-[color,border-color,background-color] outline-none select-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground hover:border-primary focus-visible:border-ring disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive data-[size=sm]:h-9"
+        className="h-11 w-full min-w-0 cursor-pointer appearance-none rounded-full border border-input bg-transparent py-2 pr-10 pl-4 text-[0.9375rem] font-medium transition-[color,border-color,background-color] outline-none select-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground hover:border-primary focus-visible:border-ring disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive data-[size=field]:min-h-12 data-[size=field]:text-base data-[size=sm]:h-9"
         {...props}
       />
       <CaretDownIcon

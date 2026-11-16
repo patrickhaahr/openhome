@@ -3,6 +3,7 @@ import { HourglassMediumIcon } from "@phosphor-icons/react/dist/csr/HourglassMed
 import { SunIcon } from "@phosphor-icons/react/dist/csr/Sun"
 import { clockDuration, spokenDuration } from "@/lib/recovery-score"
 import type { RecoveryDay } from "@/lib/training"
+import { clockTimes } from "@/components/training-shared"
 
 type Session = RecoveryDay["sleep"]["sessions"][number]
 
@@ -81,8 +82,15 @@ export function Hypnogram({
   const bands = ticks.filter((_, index) => index % 2 === 0)
 
   return (
-    <figure className="hypno">
-      <p className="hypno-times" aria-hidden="true">
+    <figure
+      data-slot="hypno"
+      className="grid min-h-60 flex-1 grid-cols-lead grid-rows-hug-fill-hug gap-x-4 gap-y-2"
+    >
+      <p
+        data-slot="hypno-times"
+        className={`col-span-full ${clockTimes}`}
+        aria-hidden="true"
+      >
         <span>
           <BedIcon size={18} />
           {clock.format(from)}
@@ -98,19 +106,32 @@ export function Hypnogram({
           {clock.format(to)}
         </span>
       </p>
-      <div className="hypno-labels" aria-hidden="true">
+      <div
+        data-slot="hypno-labels"
+        className="grid grid-rows-lanes"
+        aria-hidden="true"
+      >
         {lanes.map((stage) => (
-          <p key={stage} data-stage={stage}>
+          <p
+            key={stage}
+            data-stage={stage}
+            className="grid grid-cols-swatch content-center text-caption leading-tight font-semibold tracking-wider text-muted-ink uppercase before:row-span-2 before:size-2 before:self-center before:rounded-full before:bg-stage"
+          >
             {laneNames[stage]}
-            <span className="num">{clockDuration(minutes(stage))}</span>
+            <span className="col-start-2 text-body-lg tracking-figure text-ink normal-case tabular-nums">
+              {clockDuration(minutes(stage))}
+            </span>
           </p>
         ))}
       </div>
-      <div className="hypno-plot" aria-hidden="true">
+      <div
+        className="relative grid grid-rows-lanes overflow-hidden rounded-lg"
+        aria-hidden="true"
+      >
         {bands.map((time) => (
           <i
             key={time}
-            className="hypno-band"
+            className="absolute inset-y-0 lane-span bg-wash"
             // SAFETY: CSSProperties omits custom properties; both are 0..1 shares of the night.
             style={
               {
@@ -121,12 +142,18 @@ export function Hypnogram({
           />
         ))}
         {lanes.map((stage) => (
-          <div key={stage} className="hypno-lane" data-stage={stage}>
+          <div
+            key={stage}
+            data-slot="hypno-lane"
+            className="relative"
+            data-stage={stage}
+          >
             {segments
               .filter((segment) => segment.stage === stage)
               .map((segment) => (
                 <span
                   key={segment.start}
+                  className="absolute inset-y-1/6 lane-span min-w-0.75 rounded-sm bg-stage motion-safe:origin-left motion-safe:animate-stage-grow"
                   // SAFETY: CSSProperties omits custom properties; both are 0..1 shares of the night.
                   style={
                     {
@@ -139,10 +166,15 @@ export function Hypnogram({
           </div>
         ))}
       </div>
-      <p className="hypno-axis" aria-hidden="true">
+      <p
+        data-slot="hypno-axis"
+        className="relative col-start-2 h-5 text-caption text-muted-ink tabular-nums"
+        aria-hidden="true"
+      >
         {ticks.map((time) => (
           <span
             key={time}
+            className="absolute lane-at -translate-x-1/2 max-[700px]:even:hidden"
             // SAFETY: CSSProperties omits custom properties; --from is a 0..1 share of the night.
             style={{ "--from": (time - from) / span } as React.CSSProperties}
           >

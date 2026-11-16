@@ -8,6 +8,11 @@ import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import { WeightChart } from "@/components/weight-chart"
 import {
+  FailurePlate,
+  ViewBar,
+  WorkoutFeedback,
+} from "@/components/workout-parts"
+import {
   bodyFailureMessage,
   profileDraft,
   type BodyCommand,
@@ -157,61 +162,56 @@ export function BodyProfile({
     !ranges.some((option) => option.from === range.from)
 
   return (
-    <div className="body" aria-busy={busy}>
+    <div className="grid" aria-busy={busy}>
       <p className="sr-only">
         Shared fitness data · one profile, one weight record per date
       </p>
-      <div className="view-bar">
-        {lead}
-        <div className="view-bar-tools">
-          {data.state === "unavailable" ? null : (
-            <div
-              className="body-ranges"
-              role="group"
-              aria-label="Body-weight history range"
-            >
-              {ranges.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  className="body-range"
-                  aria-pressed={!custom && option.from === range.from}
-                  disabled={busy || editing !== undefined}
-                  onClick={() =>
-                    void read(() =>
-                      filter({ from: option.from, to: undefined })
-                    )
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <ViewBar lead={lead}>
+        {data.state === "unavailable" ? null : (
+          <div
+            className="flex w-max max-w-full gap-1 rounded-full bg-wash p-1 max-[700px]:w-full"
+            role="group"
+            aria-label="Body-weight history range"
+          >
+            {ranges.map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                data-slot="body-range"
+                className="min-h-11 min-w-13 touch-manipulation rounded-full px-4.5 text-control font-medium text-muted-ink transition-colors duration-fast ease-app hover:bg-wash-strong hover:text-ink disabled:opacity-50 aria-pressed:bg-ink aria-pressed:text-ground max-[700px]:flex-1 max-[700px]:px-1"
+                aria-pressed={!custom && option.from === range.from}
+                disabled={busy || editing !== undefined}
+                onClick={() =>
+                  void read(() => filter({ from: option.from, to: undefined }))
+                }
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </ViewBar>
       {data.state === "unavailable" ? (
-        <div className="today-failure">
-          <h2>Profile & weight unavailable</h2>
-          <p>
+        <FailurePlate title="Profile & weight unavailable">
+          <p className="text-muted-ink">
             {data.reason === "unreachable"
               ? "OpenHome is unreachable. Open Body again when the connection returns."
               : bodyFailureMessage[data.reason]}
           </p>
-        </div>
+        </FailurePlate>
       ) : (
-        <div className="body-layout">
-          <div className="body-trend">
+        <div className="grid grid-cols-body items-start gap-plate max-[900px]:grid-cols-1">
+          <div className="grid min-w-0 gap-body-trend">
             <h2 className="sr-only">Body-weight history</h2>
             <WeightFigure history={data.history} />
             {data.history.length === 500 ? (
-              <p className="body-history-limit" role="status">
+              <p className="mt-4 text-ink" role="status">
                 This view reached the 500-record limit. Choose a shorter range
                 to review later records.
               </p>
             ) : null}
             {data.history.length === 0 ? (
-              <p className="body-history-empty">
+              <p className="py-12 text-center text-muted-ink">
                 No body weight recorded in this date range.
               </p>
             ) : (
@@ -241,8 +241,8 @@ export function BodyProfile({
               </>
             )}
           </div>
-          <div className="body-side">
-            <section className="body-plate" aria-labelledby="body-log-title">
+          <div className="grid min-w-0 gap-3">
+            <section className={bodyPlate} aria-labelledby="body-log-title">
               <h2 id="body-log-title" className="sr-only">
                 Log body weight
               </h2>
@@ -256,14 +256,14 @@ export function BodyProfile({
               </p>
             </section>
             <section
-              className="body-profile"
+              className="relative grid gap-2"
               aria-labelledby="body-profile-title"
             >
               <h2 id="body-profile-title" className="sr-only">
                 Profile
               </h2>
               {editing !== undefined ? (
-                <div className="body-plate">
+                <div className={bodyPlate}>
                   <ProfileEditor
                     original={editing.original}
                     draft={editing.draft}
@@ -289,61 +289,61 @@ export function BodyProfile({
                 </div>
               ) : (
                 <>
-                  <dl className="body-profile-values">
-                    <div>
-                      <dt>
+                  <dl className="mb-6 grid gap-2">
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <RulerIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Height</span>
                       </dt>
                       <dd
                         data-gap={data.profile.height_cm === null}
-                        className="data-[gap=true]:gap-dash-5.5"
+                        className={profileFigure}
                       >
                         {data.profile.height_cm === null
                           ? "Not configured"
                           : numberFormat.format(data.profile.height_cm)}
                         {data.profile.height_cm === null ? null : (
-                          <small> cm</small>
+                          <small className={profileUnit}> cm</small>
                         )}
                       </dd>
                     </div>
-                    <div>
-                      <dt>
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <GenderIntersexIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Sex</span>
                       </dt>
                       <dd
                         data-gap={data.profile.sex === null}
-                        className="data-[gap=true]:gap-dash-5.5"
+                        className={profileFigure}
                       >
                         {data.profile.sex ?? "Not configured"}
                       </dd>
                     </div>
-                    <div>
-                      <dt>
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <HeartbeatIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Maximum heart rate</span>
                       </dt>
                       <dd
                         data-gap={data.profile.hr_max_bpm === null}
-                        className="data-[gap=true]:gap-dash-5.5"
+                        className={profileFigure}
                       >
                         {data.profile.hr_max_bpm === null
                           ? "Not configured"
                           : data.profile.hr_max_bpm}
                         {data.profile.hr_max_bpm === null ? null : (
-                          <small> max</small>
+                          <small className={profileUnit}> max</small>
                         )}
                       </dd>
                     </div>
-                    <div>
-                      <dt>
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <CakeIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Birth date</span>
                       </dt>
                       <dd
                         data-gap={data.profile.birth_date === null}
-                        className="data-[gap=true]:gap-dash-5.5"
+                        className={profileFigure}
                       >
                         {data.profile.birth_date === null
                           ? "Not configured"
@@ -353,7 +353,7 @@ export function BodyProfile({
                       </dd>
                     </div>
                   </dl>
-                  <div className="body-profile-edit">
+                  <div className="absolute top-2 right-2">
                     <Button
                       variant="ghost"
                       size="key-icon"
@@ -396,6 +396,19 @@ export function BodyProfile({
   )
 }
 
+const bodyPlate = "grid gap-3 rounded-workout-plate bg-tile p-5"
+
+const profileValue =
+  "flex min-h-16 flex-wrap items-center gap-3 rounded-sheet bg-tile py-2 pr-16 pl-3"
+
+const profileIcon =
+  "grid size-10 flex-none place-items-center rounded-full bg-wash-strong text-muted-ink"
+
+const profileFigure =
+  "flex-1 text-start text-value font-semibold tracking-figure-tight tabular-nums wrap-anywhere data-[gap=true]:gap-dash-5.5"
+
+const profileUnit = "text-small font-medium tracking-normal text-muted-ink"
+
 function directionMark(change: number): string {
   if (change > 0) return "▲"
 
@@ -417,16 +430,23 @@ function WeightFigure({
   const rounded = Math.round(change * 10) / 10
 
   return (
-    <p className="body-figure">
+    <p
+      data-slot="body-figure"
+      className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-workout-figure tabular-nums"
+    >
       <span className="sr-only">Latest body weight, {last.date}: </span>
-      <strong>{oneDecimal.format(last.weight_kg)}</strong>
-      <small>kg</small>
+      <strong className="text-weight font-medium tracking-score">
+        {oneDecimal.format(last.weight_kg)}
+      </strong>
+      <small className="text-lead font-medium text-muted-ink">kg</small>
       {history.length < 2 ? null : (
-        <span className="body-change" data-direction={Math.sign(rounded)}>
-          <span aria-hidden="true">{directionMark(rounded)}</span>
+        <span className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-wash-strong px-3.5 py-1.5 text-large leading-snug font-bold">
+          <span className="text-caption" aria-hidden="true">
+            {directionMark(rounded)}
+          </span>
           <span className="sr-only"> Change since {first.date}: </span>
           {oneDecimal.format(Math.abs(rounded))}
-          <small> kg</small>
+          <small className="text-small font-semibold text-muted-ink"> kg</small>
         </span>
       )}
     </p>
@@ -439,12 +459,11 @@ function FeedbackMessage({
   readonly feedback: Feedback | undefined
 }): React.JSX.Element {
   return (
-    <p
-      className="workout-feedback"
+    <WorkoutFeedback
+      failed={feedback?.failed}
       role={feedback?.failed === true ? "alert" : "status"}
-      data-failed={feedback?.failed}
     >
       {feedback?.text ?? ""}
-    </p>
+    </WorkoutFeedback>
   )
 }

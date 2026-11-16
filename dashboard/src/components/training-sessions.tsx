@@ -38,7 +38,7 @@ export function Sessions({
 
   if (day.noop_workouts.length === 0)
     return (
-      <p className="today-rest-day">
+      <p className="flex justify-center p-4 text-muted-ink">
         <BedIcon size={22} aria-hidden="true" />
         <span className="sr-only">
           {day.noop.workouts.coverage.workouts === "covered"
@@ -49,7 +49,7 @@ export function Sessions({
     )
 
   return (
-    <ul className="today-session-list">
+    <ul className="grid grid-cols-tiles gap-3">
       {day.noop_workouts.map((workout) => {
         const pressed =
           selected?.source === workout.source &&
@@ -63,7 +63,7 @@ export function Sessions({
             <button
               id={noopButtonId(workout)}
               type="button"
-              className="session-tile"
+              className="group/tile grid min-h-22 w-full touch-manipulation grid-cols-flanked items-center gap-x-4 rounded-sheet bg-tile px-4.5 py-4 text-left text-ink no-underline transition-tile duration-fast ease-app hover:bg-wash-strong active:scale-98 aria-pressed:bg-ink aria-pressed:text-ground"
               aria-pressed={pressed}
               disabled={disabled}
               onClick={() =>
@@ -75,24 +75,27 @@ export function Sessions({
               }
             >
               <span className="sr-only">Open </span>
-              <span className="session-tile-icon">
+              <span className="col-start-1 row-span-2 row-start-1 grid size-12 place-items-center rounded-full bg-wash-strong group-aria-pressed/tile:bg-ground/16">
                 {sportIcon(workout.sport)}
               </span>
-              <span className="session-tile-name">{workout.sport}</span>
+              <span className="col-start-2 row-start-1 truncate text-large font-semibold">
+                {workout.sport}
+              </span>
               <span className="sr-only"> · </span>
-              <span className="session-tile-time">
+              <span className="col-start-2 row-start-1 mr-1 justify-self-end text-small tabular-nums opacity-60">
                 {clock.format(new Date(workout.start))}
               </span>
-              <span className="session-tile-stats">
+              <span className="col-start-2 row-start-2 flex gap-4 text-control tabular-nums opacity-70">
                 {workout.duration_min === null ? null : (
-                  <span>
+                  <span className="inline-flex items-center gap-1">
                     <span className="sr-only">Duration </span>
                     {shortDuration(workout.duration_min)}
                   </span>
                 )}
                 {workout.steps === null ? null : (
-                  <span>
+                  <span className="inline-flex items-center gap-1">
                     <FootprintsIcon
+                      className="text-poor"
                       size={14}
                       weight="fill"
                       aria-hidden="true"
@@ -102,27 +105,41 @@ export function Sessions({
                   </span>
                 )}
                 {workout.avg_hr_bpm === null ? null : (
-                  <span>
-                    <HeartbeatIcon size={14} weight="fill" aria-hidden="true" />
+                  <span className="inline-flex items-center gap-1">
+                    <HeartbeatIcon
+                      className="text-poor"
+                      size={14}
+                      weight="fill"
+                      aria-hidden="true"
+                    />
                     <span className="sr-only">Average heart rate </span>
                     {Math.round(workout.avg_hr_bpm)}
                   </span>
                 )}
               </span>
-              <span className="session-tile-effort">
-                <svg viewBox="0 0 120 120" aria-hidden="true">
+              <span className="relative col-start-3 row-span-2 row-start-1 grid size-13 place-items-center text-body font-bold tabular-nums">
+                <svg
+                  className="absolute inset-0 size-full -rotate-90 overflow-visible"
+                  viewBox="0 0 120 120"
+                  aria-hidden="true"
+                >
                   <circle
-                    className="effort-ring-track"
+                    className="stroke-wash-strong"
                     cx="60"
                     cy="60"
                     r="52"
+                    fill="none"
+                    strokeWidth={9}
                   />
                   {strain === null || strain <= 0 ? null : (
                     <circle
-                      className="effort-ring-arc"
+                      className="stroke-effort"
                       cx="60"
                       cy="60"
                       r="52"
+                      fill="none"
+                      strokeWidth={9}
+                      strokeLinecap="round"
                       strokeDasharray={`${effortRing * ringShare(strain, 100)} ${effortRing}`}
                     />
                   )}

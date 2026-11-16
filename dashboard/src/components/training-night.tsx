@@ -1,4 +1,4 @@
-import { clock } from "@/components/training-shared"
+import { capsLabel, clock, clockTimes } from "@/components/training-shared"
 import { BedIcon } from "@phosphor-icons/react/dist/csr/Bed"
 import { HourglassMediumIcon } from "@phosphor-icons/react/dist/csr/HourglassMedium"
 import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
@@ -69,9 +69,17 @@ export function Night({
   const disturbances = data.sleep.disturbances.value
 
   return (
-    <section className="today-night" aria-label="Sleep">
-      <div className="today-night-head">
-        <MoonIcon size={22} weight="fill" aria-hidden="true" />
+    <section
+      className="flex flex-col gap-5 rounded-workout-plate bg-tile p-plate"
+      aria-label="Sleep"
+    >
+      <div className="grid grid-cols-flanked items-center gap-night-head max-[700px]:grid-cols-lead">
+        <MoonIcon
+          className="text-stage-deep"
+          size={22}
+          weight="fill"
+          aria-hidden="true"
+        />
         {staged !== undefined ? null : sessions.length === 0 ? (
           <p data-gap="true" className="gap-dash-5.5">
             <span className="sr-only">
@@ -83,23 +91,23 @@ export function Night({
         ) : (
           <SleepClock sessions={sessions} asleep={data.sleep.total.value} />
         )}
-        <dl className="today-night-stats">
-          <div>
-            <dt>Efficiency</dt>
+        <dl className="flex gap-night-stats max-[700px]:col-span-full">
+          <div className="grid gap-0.5">
+            <dt className={capsLabel}>Efficiency</dt>
             <dd
               data-gap={efficiency === null}
-              className="data-[gap=true]:gap-dash-5.5"
+              className="text-stat font-semibold tracking-figure-tight tabular-nums data-[gap=true]:gap-dash-5.5"
             >
               {efficiency === null
                 ? missing
                 : `${Math.round(efficiency * 100)}%`}
             </dd>
           </div>
-          <div>
-            <dt>Wake-ups</dt>
+          <div className="grid gap-0.5">
+            <dt className={capsLabel}>Wake-ups</dt>
             <dd
               data-gap={disturbances === null}
-              className="data-[gap=true]:gap-dash-5.5"
+              className="text-stat font-semibold tracking-figure-tight tabular-nums data-[gap=true]:gap-dash-5.5"
             >
               {disturbances === null ? missing : disturbances}
             </dd>
@@ -113,12 +121,17 @@ export function Night({
         </>
       ) : total === 0 ? null : (
         <>
-          <div className="today-stages" aria-hidden="true">
+          <div
+            data-slot="today-stages"
+            className="flex h-5 gap-0.75 overflow-hidden rounded-full"
+            aria-hidden="true"
+          >
             {stageOrder.map((stage) =>
               (stages[stage] ?? 0) > 0 ? (
                 <span
                   key={stage}
                   data-stage={stage}
+                  className="min-w-1 flex-(--minutes) bg-stage motion-safe:origin-left motion-safe:animate-stage-grow"
                   // SAFETY: CSSProperties omits custom properties; --minutes is the stage's share weight.
                   style={
                     { "--minutes": stages[stage] ?? 0 } as React.CSSProperties
@@ -127,16 +140,20 @@ export function Night({
               ) : null
             )}
           </div>
-          <dl className="today-stage-legend">
+          <dl className="flex flex-wrap gap-x-stage-legend gap-y-3">
             {stageOrder.map((stage) => {
               const minutes = stages[stage]
 
               return (
-                <div key={stage} data-stage={stage}>
-                  <dt>{stageNames[stage]}</dt>
+                <div key={stage} data-stage={stage} className="grid gap-0.5">
+                  <dt
+                    className={`inline-flex items-center gap-1.5 before:size-2 before:rounded-full before:bg-stage ${capsLabel}`}
+                  >
+                    {stageNames[stage]}
+                  </dt>
                   <dd
                     data-gap={minutes === null}
-                    className="data-[gap=true]:gap-dash-5.5"
+                    className="text-xlarge font-semibold tabular-nums data-[gap=true]:gap-dash-5.5"
                   >
                     {minutes === null ? missing : shortDuration(minutes)}
                   </dd>
@@ -194,8 +211,8 @@ function SleepClock({
   )
 
   return (
-    <div className="sleep-clock">
-      <p className="sleep-clock-times">
+    <div className="grid gap-2">
+      <p className={clockTimes}>
         <span>
           <BedIcon size={18} aria-hidden="true" />
           <span className="sr-only">Asleep </span>
@@ -214,7 +231,10 @@ function SleepClock({
           {clock.format(new Date(main.end))}
         </span>
       </p>
-      <div className="sleep-clock-track" aria-hidden="true">
+      <div
+        className="relative h-3.5 rounded-full bg-wash-strong"
+        aria-hidden="true"
+      >
         {sessions.map((session) => {
           const start = Date.parse(session.start)
           const end = Date.parse(session.end)
@@ -222,7 +242,7 @@ function SleepClock({
           return (
             <span
               key={`${session.source}/${session.start}`}
-              data-main={session === main}
+              className={`absolute inset-y-0 lane-span min-w-3.5 rounded-full ${session === main ? "bg-stage-deep" : "bg-stage-light"}`}
               // SAFETY: CSSProperties omits custom properties; both are 0..1 shares of the clock axis.
               style={
                 {
@@ -234,7 +254,10 @@ function SleepClock({
           )
         })}
       </div>
-      <p className="sleep-clock-axis" aria-hidden="true">
+      <p
+        className="flex justify-between text-caption text-muted-ink tabular-nums"
+        aria-hidden="true"
+      >
         <span>{clock.format(new Date(from))}</span>
         <span>{clock.format(new Date(to))}</span>
       </p>
@@ -266,13 +289,17 @@ function NightHistory({
       : recorded.reduce((sum, value) => sum + value, 0) / recorded.length
 
   return (
-    <figure className="night-history">
-      <div className="night-history-bars" aria-hidden="true">
+    <figure className="mt-2 grid grid-cols-trail items-end gap-4">
+      <div
+        data-slot="night-history-bars"
+        className="relative flex h-18 items-end gap-0.75"
+        aria-hidden="true"
+      >
         {trend.daily_points.map((point) => (
           <span
             key={point.day}
             data-band={restBand(point.value)}
-            data-selected={point.day === day}
+            className={`h-share min-h-0.5 flex-1 rounded-xs bg-band ${point.day === day ? "" : "opacity-32"}`}
             title={`${point.day} · ${point.value === null ? "–" : clockDuration(point.value)}`}
             // SAFETY: CSSProperties omits custom properties; --share is a 0..1 column height.
             style={
@@ -281,7 +308,7 @@ function NightHistory({
           />
         ))}
       </div>
-      <figcaption>
+      <figcaption className="grid justify-items-end text-label text-muted-ink tabular-nums *:last:text-large *:last:font-semibold *:last:text-ink">
         <span aria-hidden="true">{trend.daily_points.length}d</span>
         {average === null ? null : (
           <span>

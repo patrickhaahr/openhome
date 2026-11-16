@@ -39,7 +39,10 @@ export function Body({
 
   return (
     <>
-      <section className="today-vitals" aria-label="Body">
+      <section
+        className="grid grid-cols-5 gap-3 max-[1100px]:grid-cols-3 max-[700px]:grid-cols-2"
+        aria-label="Body"
+      >
         <Vital
           icon={WaveSineIcon}
           label="HRV"
@@ -89,10 +92,21 @@ export function Body({
         />
       </section>
       {data.journal.length === 0 ? null : (
-        <ul className="today-journal" aria-label={`Journal · ${data.day}`}>
+        <ul
+          className="flex flex-wrap gap-2"
+          aria-label={`Journal · ${data.day}`}
+        >
           {data.journal.map((entry) => (
-            <li key={entry.question} data-yes={entry.answered_yes}>
-              <span aria-hidden="true">{entry.answered_yes ? "✓" : "✕"}</span>
+            <li
+              key={entry.question}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-tile py-1.5 pr-4 pl-3 text-control"
+            >
+              <span
+                className={`grid size-6 shrink-0 place-items-center rounded-full text-caption font-bold ${entry.answered_yes ? "bg-ink text-ground" : "bg-wash-strong"}`}
+                aria-hidden="true"
+              >
+                {entry.answered_yes ? "✓" : "✕"}
+              </span>
               <span>
                 {entry.question}
                 <span className="sr-only">
@@ -102,7 +116,9 @@ export function Body({
               {entry.numeric_value === null ? null : (
                 <strong>{formatDecimal(entry.numeric_value)}</strong>
               )}
-              {entry.notes === null ? null : <em>{entry.notes}</em>}
+              {entry.notes === null ? null : (
+                <em className="text-muted-ink not-italic">{entry.notes}</em>
+              )}
             </li>
           ))}
         </ul>
@@ -159,21 +175,37 @@ function Vital({
     value === null ? missing : signed ? formatSigned(value) : format(value)
 
   return (
-    <div className="vital" data-tone={tone}>
-      <VitalIcon className="vital-icon" size={22} aria-hidden="true" />
+    <div
+      data-slot="vital"
+      data-band={tone}
+      className="grid min-h-30 grid-cols-trail items-center gap-y-3 rounded-sheet bg-tile px-5 py-4.5 max-[700px]:last:odd:col-span-full"
+    >
+      <VitalIcon
+        className="col-start-1 row-start-1 text-muted-ink"
+        size={22}
+        aria-hidden="true"
+      />
       <p className="sr-only">{label}</p>
-      <p className="vital-value num">
+      <p className="col-span-full row-start-2 self-end text-vital leading-none font-semibold tracking-figure tabular-nums">
         <span
           data-gap={value === null}
           className="data-[gap=true]:gap-dash-5.5"
         >
           {figure}
         </span>
-        {value === null || unit === "" ? null : <small>{unit}</small>}
+        {value === null || unit === "" ? null : (
+          <small className="ml-0.75 text-small font-medium tracking-normal text-muted-ink">
+            {unit}
+          </small>
+        )}
       </p>
       {delta === null ? null : (
-        <p className="vital-delta num">
-          <span aria-hidden="true">{delta >= 0 ? "▲" : "▼"}</span>
+        <p
+          className={`col-start-2 row-start-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-label font-bold tracking-figure tabular-nums ${tone === "good" || tone === "poor" ? "bg-band/14 text-band" : "bg-wash-strong text-muted-ink"}`}
+        >
+          <span className="text-mark" aria-hidden="true">
+            {delta >= 0 ? "▲" : "▼"}
+          </span>
           <span className="sr-only">
             {delta >= 0 ? "Above" : "Below"} its recent average by{" "}
           </span>

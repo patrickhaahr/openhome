@@ -120,7 +120,7 @@ export function ScoreRing({
         />
         {share > 0 ? (
           <circle
-            className={`${kind === "effort" ? "stroke-(--effort)" : "stroke-(--band)"} ${fills[stagger]}`}
+            className={`${kind === "effort" ? "stroke-effort" : "stroke-band"} ${fills[stagger]}`}
             cx="60"
             cy="60"
             r={radius}
@@ -140,7 +140,7 @@ export function ScoreRing({
       >
         {RingIcon === undefined ? null : (
           <RingIcon
-            className={`size-7 ${kind === "effort" ? "text-(--effort)" : "text-(--band)"}`}
+            className={`size-7 ${kind === "effort" ? "text-effort" : "text-band"}`}
             weight="fill"
           />
         )}
@@ -182,19 +182,35 @@ export function DayRings({
   ] as const
 
   return (
-    <svg className="day-rings" viewBox="0 0 50 50" aria-hidden="true">
+    <svg
+      className="w-day-rings -rotate-90"
+      viewBox="0 0 50 50"
+      aria-hidden="true"
+    >
       {rings.map((ring) => {
         const length = 2 * Math.PI * ring.r
 
         return (
           <g key={ring.kind} data-kind={ring.kind} data-band={ring.band}>
-            <circle className="day-rings-track" cx="25" cy="25" r={ring.r} />
+            <circle
+              className="stroke-wash-strong"
+              cx="25"
+              cy="25"
+              r={ring.r}
+              fill="none"
+              strokeWidth={4.5}
+            />
             {ring.share > 0 ? (
               <circle
-                className="day-rings-arc"
+                className={
+                  ring.kind === "effort" ? "stroke-effort" : "stroke-band"
+                }
                 cx="25"
                 cy="25"
                 r={ring.r}
+                fill="none"
+                strokeWidth={4.5}
+                strokeLinecap="round"
                 strokeDasharray={`${length * ring.share} ${length}`}
               />
             ) : null}

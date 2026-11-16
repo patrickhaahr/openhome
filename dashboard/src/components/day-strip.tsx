@@ -217,7 +217,8 @@ export function DayStrip({
   return (
     <ol
       ref={strip}
-      className="today-days"
+      data-slot="today-days"
+      className="flex snap-x snap-mandatory scroll-px-6 gap-1 overflow-x-auto overscroll-x-contain edge-fade-x px-6 py-1"
       aria-label="Training days"
       onKeyDown={onKeyDown}
       onScroll={(event) => {
@@ -229,18 +230,22 @@ export function DayStrip({
         const current = entry.day === selected
 
         return (
-          <li key={entry.day}>
+          <li key={entry.day} className="flex-none basis-17 snap-start">
             <button
               ref={current ? selectedRef : undefined}
               type="button"
-              className="today-day"
+              data-slot="today-day"
+              className="grid w-full touch-manipulation justify-items-center gap-1.5 rounded-tile pt-2.5 pb-3 text-muted-ink tabular-nums transition-plate duration-fast ease-app hover:bg-wash active:scale-96 disabled:cursor-default aria-pressed:bg-wash-strong aria-pressed:text-ink"
               aria-pressed={current}
               data-today={entry.day === today}
               disabled={disabled}
               aria-label={`${calendar(entry.day, dayLabel)}: ${spokenReadings(values)}`}
               onClick={() => choose(entry.day, current)}
             >
-              <span className="today-day-name" aria-hidden="true">
+              <span
+                className="text-caption font-semibold tracking-wider"
+                aria-hidden="true"
+              >
                 {calendar(entry.day, weekday)}
               </span>
               <DayRings
@@ -254,7 +259,10 @@ export function DayStrip({
                 }}
                 effort={{ share: ringShare(values.effort, 100) }}
               />
-              <span className="today-day-date" aria-hidden="true">
+              <span
+                className={`relative text-control font-semibold ${entry.day === today ? "after:absolute after:-bottom-1.5 after:left-1/2 after:size-1.25 after:-translate-x-1/2 after:rounded-full after:bg-sun" : ""}`}
+                aria-hidden="true"
+              >
                 {Number(entry.day.slice(8))}
               </span>
             </button>

@@ -9,12 +9,18 @@ const toggleVariants = cva(
       variant: {
         default: "bg-transparent",
         outline: "border border-input bg-transparent hover:border-primary",
+        /** A segment of a wash capsule; the chosen one is the ink pill. */
+        capsule:
+          "bg-transparent text-[0.9375rem] text-muted-ink hover:bg-wash-strong hover:text-ink aria-pressed:bg-ink aria-pressed:text-ground data-[pressed]:bg-ink data-[pressed]:text-ground",
       },
       size: {
         default:
           "h-11 min-w-11 px-5 has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
         sm: "h-9 min-w-9 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
         lg: "h-11 min-w-11 px-8 has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5",
+        /** Equal segments across a phone. */
+        capsule:
+          "h-11 min-w-11 px-[1.125rem] max-[700px]:flex-1 max-[700px]:px-1",
       },
     },
     defaultVariants: {

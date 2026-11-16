@@ -16,6 +16,12 @@ import {
 import { trainingDayOn } from "@/lib/workout"
 
 /** A real `YYYY-MM-DD` day no later than today in Copenhagen. */
+const field = "grid gap-1"
+
+const fieldLabel = "text-label text-muted-ink"
+
+const problemLine = "mt-1.5 text-small leading-normal text-danger"
+
 function isPastDay(value: string): boolean {
   return (
     z.iso.date().safeParse(value).success && value <= trainingDayOn(new Date())
@@ -62,7 +68,7 @@ export function ProfileEditor({
 
   return (
     <form
-      className="workout-editor"
+      className="grid gap-5"
       aria-label="Edit profile"
       noValidate
       onSubmit={(event) => {
@@ -124,9 +130,12 @@ export function ProfileEditor({
         Leave a field empty to clear it. Unchanged fields keep their stored
         values.
       </p>
-      <div className="workout-field">
-        <label htmlFor={`${id}-height`}>Height (cm)</label>
+      <div className={field}>
+        <label className={fieldLabel} htmlFor={`${id}-height`}>
+          Height (cm)
+        </label>
         <Input
+          className="min-h-12"
           id={`${id}-height`}
           aria-invalid={problem?.field === "height"}
           aria-describedby={
@@ -141,9 +150,12 @@ export function ProfileEditor({
           }}
         />
       </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-sex`}>Sex (optional)</label>
+      <div className={field}>
+        <label className={fieldLabel} htmlFor={`${id}-sex`}>
+          Sex (optional)
+        </label>
         <NativeSelect
+          size="field"
           id={`${id}-sex`}
           value={draft.sex}
           disabled={disabled}
@@ -162,9 +174,12 @@ export function ProfileEditor({
           )}
         </NativeSelect>
       </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-heart`}>Maximum heart rate (bpm)</label>
+      <div className={field}>
+        <label className={fieldLabel} htmlFor={`${id}-heart`}>
+          Maximum heart rate (bpm)
+        </label>
         <Input
+          className="min-h-12"
           id={`${id}-heart`}
           aria-invalid={problem?.field === "heart"}
           aria-describedby={
@@ -179,9 +194,12 @@ export function ProfileEditor({
           }}
         />
       </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-birth`}>Birth date</label>
+      <div className={field}>
+        <label className={fieldLabel} htmlFor={`${id}-birth`}>
+          Birth date
+        </label>
         <Input
+          className="min-h-12"
           id={`${id}-birth`}
           type="date"
           aria-invalid={problem?.field === "birth"}
@@ -197,11 +215,11 @@ export function ProfileEditor({
         />
       </div>
       {problem !== undefined || failure !== undefined ? (
-        <p id={`${id}-problem`} className="workout-problem" role="alert">
+        <p id={`${id}-problem`} className={problemLine} role="alert">
           {problem?.message ?? failure}
         </p>
       ) : null}
-      <div className="workout-editor-actions">
+      <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={disabled}>
           Save profile
         </Button>
@@ -234,7 +252,7 @@ export function WeightEditor({
 
   return (
     <form
-      className="body-weight-form"
+      className="grid gap-2"
       aria-label="Log body weight"
       noValidate
       onSubmit={(event) => {
@@ -268,13 +286,14 @@ export function WeightEditor({
         })
       }}
     >
-      <div className="body-weight-fields">
-        <div className="body-weight-amount">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="mr-auto flex items-center gap-2 text-large font-semibold text-muted-ink">
           <label htmlFor={`${id}-weight`} className="sr-only">
             Body weight (kg)
           </label>
           <ScalesIcon size={24} aria-hidden="true" />
           <Input
+            variant="figure"
             id={`${id}-weight`}
             aria-invalid={problem?.field === "weight"}
             aria-describedby={
@@ -291,11 +310,12 @@ export function WeightEditor({
           />
           <span aria-hidden="true">kg</span>
         </div>
-        <div className="body-weight-date">
+        <div className="min-w-36 flex-1">
           <label htmlFor={`${id}-date`} className="sr-only">
             Weight date
           </label>
           <Input
+            className="h-12"
             id={`${id}-date`}
             aria-invalid={problem?.field === "date"}
             aria-describedby={
@@ -316,7 +336,7 @@ export function WeightEditor({
         </Button>
       </div>
       {problem === undefined ? null : (
-        <p id={`${id}-problem`} className="workout-problem" role="alert">
+        <p id={`${id}-problem`} className={problemLine} role="alert">
           {problem.message}
         </p>
       )}

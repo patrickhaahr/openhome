@@ -94,7 +94,7 @@ async function click(text: string): Promise<void> {
 /** Re-selecting the pressed day reads it again, as the refresh key once did. */
 async function refresh(): Promise<void> {
   const current = container.querySelector<HTMLButtonElement>(
-    '.today-day[aria-pressed="true"]'
+    '[data-slot="today-day"][aria-pressed="true"]'
   )
 
   if (current === null) throw new Error("Missing selected day")
@@ -158,18 +158,18 @@ test("draws the selected day as rings, a week of days, its night and body, and i
   expect(ring("Rest")).toBe("Rest: 87 % rest")
   expect(ring("Effort")).toBe("Effort: strain 35 of 100")
   // A strip of days, not a week with arrows.
-  expect(container.querySelectorAll(".today-day")).toHaveLength(28)
+  expect(container.querySelectorAll('[data-slot="today-day"]')).toHaveLength(28)
   expect(container.textContent).not.toContain("Previous week")
   expect(container.textContent).not.toContain("Next week")
   expect(
     container
-      .querySelector('.today-day[aria-pressed="true"]')
+      .querySelector('[data-slot="today-day"][aria-pressed="true"]')
       ?.getAttribute("aria-label")
   ).toContain("Charge 78 %")
 
-  const vitals = Array.from(container.querySelectorAll(".vital")).map(
-    (element) => element.textContent
-  )
+  const vitals = Array.from(
+    container.querySelectorAll('[data-slot="vital"]')
+  ).map((element) => element.textContent)
 
   expect(vitals).toContain("Resting HR50bpm")
   expect(vitals).toContain("HRV62ms")
@@ -179,10 +179,9 @@ test("draws the selected day as rings, a week of days, its night and body, and i
   expect(vitals).toContain("StepsNot recorded")
   // The night in time order: lanes awake to deep, segments clamped to the edited 23:05 start.
   expect(
-    Array.from(container.querySelectorAll(".hypno-lane")).map((lane) => [
-      lane.getAttribute("data-stage"),
-      lane.children.length,
-    ])
+    Array.from(container.querySelectorAll('[data-slot="hypno-lane"]')).map(
+      (lane) => [lane.getAttribute("data-stage"), lane.children.length]
+    )
   ).toEqual([
     ["awake", 0],
     ["rem", 2],
@@ -190,20 +189,20 @@ test("draws the selected day as rings, a week of days, its night and body, and i
     ["deep", 2],
   ])
   expect(
-    Array.from(container.querySelectorAll(".hypno-labels p")).map(
+    Array.from(container.querySelectorAll('[data-slot="hypno-labels"] p')).map(
       (label) => label.textContent
     )
   ).toEqual(["Awake0:00", "REM1:40", "Light4:15", "Deep1:30"])
   // Bedtime, the night's sleep, then wake.
-  expect(container.querySelector(".hypno-times")?.textContent).toBe(
-    "23:057:3006:30"
-  )
-  expect(container.querySelector(".hypno-axis")?.textContent).toBe(
+  expect(
+    container.querySelector('[data-slot="hypno-times"]')?.textContent
+  ).toBe("23:057:3006:30")
+  expect(container.querySelector('[data-slot="hypno-axis"]')?.textContent).toBe(
     "00:0001:0002:0003:0004:0005:0006:00"
   )
-  expect(container.querySelector(".today-stages")).toBeNull()
+  expect(container.querySelector('[data-slot="today-stages"]')).toBeNull()
   expect(
-    Array.from(container.querySelectorAll(".hypno tbody tr")).map(
+    Array.from(container.querySelectorAll('[data-slot="hypno"] tbody tr')).map(
       (row) => row.textContent
     )
   ).toEqual([
@@ -219,9 +218,9 @@ test("draws the selected day as rings, a week of days, its night and body, and i
   expect(container.textContent).toContain("User edited")
   expect(container.textContent).toContain("Felt recovered: No")
   expect(container.textContent).toContain("Synthetic journal note")
-  expect(container.querySelectorAll(".night-history-bars span")).toHaveLength(
-    30
-  )
+  expect(
+    container.querySelectorAll('[data-slot="night-history-bars"] span')
+  ).toHaveLength(30)
   expect(buttonNamed("Open Run / walk")).toBeDefined()
   // Logged Workouts live in Workout › Log, not beside the strap's recordings.
   expect(container.textContent).not.toContain("Synthetic pull")
@@ -259,16 +258,16 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
   expect(container.querySelectorAll("meter")).toHaveLength(5)
 
   const points = Array.from(
-    container.querySelectorAll(".training-series-values p")
+    container.querySelectorAll('[data-slot="training-series-values"] p')
   ).map((point) => point.textContent)
 
   expect(points).toContain("+75 s: 150 beats/min")
   expect(points).not.toContain("+90 s: 150 beats/min")
   expect(points).toContain("+150 s: 150 beats/min")
   await click("Open Cycling")
-  expect(container.querySelector(".noop-detail h2")?.textContent).toBe(
-    "Cycling"
-  )
+  expect(
+    container.querySelector('[data-slot="noop-detail"] h2')?.textContent
+  ).toBe("Cycling")
   expect(search.noop?.sport).toBe("Cycling")
   await click("Open Mobility")
   expect(container.textContent).toContain(
@@ -279,7 +278,7 @@ test("opens the exact sport at a colliding start, shows strap detail and Profile
   )
   await closeDetail()
   expect(document.activeElement).toBe(buttonNamed("Open Mobility"))
-  expect(container.querySelector(".noop-detail")).toBeNull()
+  expect(container.querySelector('[data-slot="noop-detail"]')).toBeNull()
 })
 
 test("day selection distinguishes no sync from recorded absence and allows refresh after an authorization failure", async () => {
@@ -328,8 +327,11 @@ test("the day strip reaches into older days as it is scrolled and keeps every da
     await new Promise<void>((resolve) => setTimeout(resolve, 300))
   })
 
-  const strip = container.querySelector(".today-days")
-  const before = container.querySelectorAll("button.today-day").length
+  const strip = container.querySelector('[data-slot="today-days"]')
+
+  const before = container.querySelectorAll(
+    'button[data-slot="today-day"]'
+  ).length
 
   if (strip === null) throw new Error("Missing day strip")
   expect(strip.querySelectorAll("li > button")).toHaveLength(before)
@@ -337,12 +339,12 @@ test("the day strip reaches into older days as it is scrolled and keeps every da
     strip.dispatchEvent(new Event("scroll"))
     await new Promise<void>((resolve) => setTimeout(resolve, 300))
   })
-  expect(container.querySelectorAll("button.today-day").length).toBeGreaterThan(
-    before
-  )
+  expect(
+    container.querySelectorAll('button[data-slot="today-day"]').length
+  ).toBeGreaterThan(before)
 
   const firstDay = container
-    .querySelector("button.today-day")
+    .querySelector('button[data-slot="today-day"]')
     ?.getAttribute("aria-label")
 
   expect(firstDay).toContain("Rest")
@@ -408,7 +410,7 @@ test("closing a detail restores its session button, falling back to the selected
   // A deep link to another day's session has no button on this day.
   await closeDetail()
   expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true")
-  expect(document.activeElement?.className).toBe("today-day")
+  expect(document.activeElement?.getAttribute("data-slot")).toBe("today-day")
 
   await click("Wed 30 Sept")
   await click("Open Cycling")
@@ -435,5 +437,5 @@ test("closing a detail restores its session button, falling back to the selected
   vi.stubEnv("API_KEY", "wrong-private-credential")
   await refresh()
   await closeDetail()
-  expect(document.activeElement?.className).toBe("today-day")
+  expect(document.activeElement?.getAttribute("data-slot")).toBe("today-day")
 })

@@ -18,12 +18,6 @@ const allowlist = [
   "src/idle.css",
   "src/photos.css",
   "src/travel.css",
-  "src/workout-body.css",
-  "src/workout-log.css",
-  "src/workout-sessions.css",
-  "src/workout-values.css",
-  "src/workout-views.css",
-  "src/workout.css",
 ]
 
 const root = new URL("..", import.meta.url).pathname
