@@ -9,6 +9,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import {
+  factTerm,
+  factValue,
+  facts,
+  field,
+  linkInput,
+  mediaMeta,
+  sheetActions,
+  sheetBody,
+  sheetConfirm,
+  sheetName,
+  sheetNotes,
+  sheetOwner,
+} from "@/components/sheet-parts"
+import {
   MediaResults,
   useMediaSearch,
   type SearchMedia,
@@ -19,6 +33,7 @@ import {
   WatchlistPoster,
 } from "@/components/watchlist-poster"
 import { formatDay, trimText } from "@/lib/lists"
+import { cn } from "@/lib/utils"
 import type { WatchlistCommand, WatchlistEntry } from "@/lib/watchlist"
 import type { HouseholdUser } from "@/lib/wishlist"
 
@@ -74,26 +89,26 @@ export function WatchDetail({
   const target = { owner_id: owner.id, entry_id: entry.id }
 
   return (
-    <div className="sheet-body">
-      <div className="watch-detail-head">
+    <div className={sheetBody()}>
+      <div className="grid grid-aside-36 items-start gap-5 max-sm:grid-aside-28">
         <WatchlistPoster title={entry.title} path={entry.poster_path} />
-        <div className="watch-detail-text">
-          <p className="sheet-owner">
+        <div className="grid justify-items-start gap-2">
+          <p className={sheetOwner}>
             <PersonDisc name={owner.name} />
             {owner.name}
           </p>
           {/* The sheet's title already names the entry for assistive technology. */}
-          <p className="sheet-name" aria-hidden="true">
+          <p className={sheetName} aria-hidden="true">
             {entry.title}
           </p>
-          <p className="media-result-meta">
+          <p className={mediaMeta}>
             <KindGlyph kind={entry.kind} />
             {entry.release_date === null ? null : (
               <span className="num">{entry.release_date.slice(0, 4)}</span>
             )}
           </p>
           {entry.overview === null ? null : (
-            <p className="sheet-notes">{entry.overview}</p>
+            <p className={sheetNotes({ tone: "quiet" })}>{entry.overview}</p>
           )}
         </div>
       </div>
@@ -112,7 +127,7 @@ export function WatchDetail({
       />
       {mode === "dates" ? (
         <form
-          className="watch-dates"
+          className="grid grid-fit-40 gap-4"
           aria-label="Change dates"
           onSubmit={(event) => {
             event.preventDefault()
@@ -135,7 +150,7 @@ export function WatchDetail({
             })
           }}
         >
-          <label className="field" htmlFor={`${id}-added`}>
+          <label className={field()} htmlFor={`${id}-added`}>
             <span>Added</span>
             <Input
               id={`${id}-added`}
@@ -147,7 +162,7 @@ export function WatchDetail({
             />
           </label>
           {entry.status === "completed" ? (
-            <label className="field" htmlFor={`${id}-completed`}>
+            <label className={field()} htmlFor={`${id}-completed`}>
               <span>Completed</span>
               <Input
                 id={`${id}-completed`}
@@ -159,7 +174,7 @@ export function WatchDetail({
               />
             </label>
           ) : null}
-          <div className="sheet-actions">
+          <div className={cn(sheetActions(), "col-span-full")}>
             <Button type="submit" size="key" disabled={busy}>
               Save dates
             </Button>
@@ -175,10 +190,10 @@ export function WatchDetail({
           </div>
         </form>
       ) : (
-        <dl className="watch-days">
+        <dl className={facts()}>
           <div>
-            <dt>Added</dt>
-            <dd className="num">
+            <dt className={factTerm}>Added</dt>
+            <dd className={cn(factValue, "num")}>
               <time dateTime={entry.date_added}>
                 {formatDay(entry.date_added)}
               </time>
@@ -186,8 +201,8 @@ export function WatchDetail({
           </div>
           {entry.completion_date === null ? null : (
             <div>
-              <dt>Completed</dt>
-              <dd className="num">
+              <dt className={factTerm}>Completed</dt>
+              <dd className={cn(factValue, "num")}>
                 <time dateTime={entry.completion_date}>
                   {formatDay(entry.completion_date)}
                 </time>
@@ -195,6 +210,7 @@ export function WatchDetail({
             </div>
           )}
           <Button
+            className="ml-auto"
             variant="outline"
             size="key-icon"
             title="Change dates"
@@ -211,10 +227,10 @@ export function WatchDetail({
         </dl>
       )}
       {mode === "find" ? (
-        <div className="watch-find">
-          <label className="field" htmlFor={`${id}-find`}>
+        <div className="grid gap-4">
+          <label className={field()} htmlFor={`${id}-find`}>
             <span>Find details on TMDB</span>
-            <span className="link-input">
+            <span className={linkInput}>
               <MagnifyingGlassIcon size={22} aria-hidden="true" />
               <Input
                 id={`${id}-find`}
@@ -244,12 +260,12 @@ export function WatchDetail({
         </div>
       ) : null}
       {mode === "delete" ? (
-        <div className="sheet-confirm" role="group" aria-label="Delete entry">
+        <div className={sheetConfirm} role="group" aria-label="Delete entry">
           <p>
             Delete “{entry.title}” from {owner.name}’s watchlist? This cannot be
             undone.
           </p>
-          <div className="sheet-actions">
+          <div className={sheetActions()}>
             <Button
               variant="destructive"
               size="key"
@@ -277,7 +293,7 @@ export function WatchDetail({
           </div>
         </div>
       ) : (
-        <div className="sheet-actions sheet-actions-end">
+        <div className={sheetActions({ placement: "end" })}>
           {mode === "find" ? null : (
             <Button
               variant="outline"

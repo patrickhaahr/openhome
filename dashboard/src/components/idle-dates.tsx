@@ -82,23 +82,35 @@ function IdleDateContent({
   if (dates.length === 0) return null
 
   return (
-    <div className="idle-dates">
+    <div
+      data-slot="idle-dates"
+      className="grid max-w-120 gap-idle-dates idle-short:gap-2"
+    >
       {leading === undefined || leading === null ? null : (
-        <div className="idle-dates-lead">{leading}</div>
+        <div data-slot="idle-dates-lead" className="empty:hidden">
+          {leading}
+        </div>
       )}
       {since.map((date) => (
-        <div className="idle-since" key={date.id}>
-          <p className="idle-since-title">{date.title}</p>
-          <p className="idle-since-figure num">
+        <div className="min-w-0" key={date.id}>
+          <p className="text-idle-since-title text-muted-ink">{date.title}</p>
+          <p
+            data-slot="idle-since-figure"
+            className="text-idle-since leading-idle-snug font-medium num idle-short:text-idle-since-short"
+          >
             {figureParts(date).map((part, at) => (
-              <span key={part}>
-                {at > 0 ? <span aria-hidden="true"> · </span> : null}
+              <span className="inline-block" key={part}>
+                {at > 0 ? (
+                  <span className="mx-idle-separator" aria-hidden="true">
+                    {" · "}
+                  </span>
+                ) : null}
                 {part}
               </span>
             ))}
           </p>
           {date.elapsed === null ? null : (
-            <p className="idle-since-total num">
+            <p className="text-idle-note num text-muted-ink">
               {date.elapsed.total_days.toLocaleString("en-GB")}{" "}
               {date.elapsed.total_days === 1 ? "day" : "days"}
             </p>
@@ -106,7 +118,10 @@ function IdleDateContent({
         </div>
       ))}
       {upcoming === undefined ? null : (
-        <p className="idle-upcoming num" key={upcoming.id}>
+        <p
+          className="text-idle-upcoming leading-idle-tight num"
+          key={upcoming.id}
+        >
           {upcoming.title} {countdown(upcoming.next.days_until).toLowerCase()}
         </p>
       )}

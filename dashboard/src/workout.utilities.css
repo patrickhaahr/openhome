@@ -1,0 +1,51 @@
+/* Workout and Recovery: what utilities cannot say. Inline 0..1 fractions drive these lengths
+   (tests read them), and calc() in an arbitrary value fails the lint. */
+@utility lane-span {
+  left: calc(var(--from) * 100%);
+  width: calc(var(--length) * 100%);
+}
+@utility lane-at {
+  left: calc(var(--from) * 100%);
+}
+@utility w-share {
+  width: calc(var(--share) * 100%);
+}
+@utility h-share {
+  height: calc(var(--share) * 100%);
+}
+@utility w-rpe {
+  width: calc(var(--rpe) * 100%);
+}
+
+/* A quiet fade at both ends of the day strip, so a day is never cut hard mid-ring. */
+@utility edge-fade-x {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+}
+
+/* A logged session alone reads top to bottom over two columns; no utility sets count and width together. */
+@utility exercise-columns {
+  columns: 2 28rem;
+}
+
+/* Traces the weight trend's stroke; the dash pattern exists only while it can animate. Its own
+   name: the Home sparkline's draw reveals by clipping. */
+@utility trend-draw {
+  @media (prefers-reduced-motion: no-preference) {
+    stroke-dasharray: 4000;
+    animation: trend-draw 1.4s var(--ease) both;
+  }
+}
+@keyframes trend-draw {
+  from {
+    stroke-dashoffset: 4000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}

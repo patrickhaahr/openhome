@@ -1,0 +1,20 @@
+/* A missing value reads as a quiet dash while assistive technology keeps its words. The empty
+   alternative after the slash keeps the dash out of the accessible name. */
+@utility gap-dash {
+  &::before {
+    content: "–" / "";
+    color: var(--color-muted-ink);
+  }
+}
+
+/* For a host whose own text is the missing-value word: font-size 0 hides it and must beat the
+   host's class sizes, so it is !important. The number is the dash's size in spacing steps.
+   Repeats the dash because a utility cannot @apply another. */
+@utility gap-dash-* {
+  font-size: 0 !important;
+  &::before {
+    content: "–" / "";
+    color: var(--color-muted-ink);
+    font-size: calc(var(--spacing) * --value(number));
+  }
+}

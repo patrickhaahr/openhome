@@ -1,0 +1,57 @@
+/* The wall on top, the wheel and the dial side by side beneath it. */
+@custom-variant led-stacked {
+  @media (max-width: 1100px) and (orientation: portrait), (max-width: 860px) {
+    @slot;
+  }
+}
+@custom-variant led-phone {
+  @media (max-width: 600px) {
+    @slot;
+  }
+}
+
+/* The halo fades from solid to nothing at its rim; no utility draws a radial mask. */
+@utility halo-mask {
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    #000 52%,
+    rgb(0 0 0 / 62%) 66%,
+    rgb(0 0 0 / 20%) 84%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    closest-side,
+    #000 52%,
+    rgb(0 0 0 / 62%) 66%,
+    rgb(0 0 0 / 20%) 84%,
+    transparent 100%
+  );
+}
+
+/* How far the light reaches follows --level (0 to 1), which only calc() can combine. */
+@utility halo-glow {
+  opacity: calc(0.16 + var(--level) * 0.84);
+  scale: calc(0.78 + var(--level) * 0.3);
+}
+@utility spill-glow {
+  opacity: calc(var(--level) * 0.28);
+}
+
+/* The TV Sync picture's sun shows only above its horizon. */
+@utility half-sun {
+  clip-path: inset(0 0 50% 0);
+}
+
+/* The screen's rim takes on the colour's light in proportion to --level. */
+@utility screen-glow {
+  border-color: color-mix(
+    in srgb,
+    var(--led) calc(var(--level) * 45%),
+    rgb(236 236 230 / 9%)
+  );
+}
+
+/* An SVG circle's radius is a CSS property, but no utility sets it. */
+@utility r-held {
+  r: 19;
+}

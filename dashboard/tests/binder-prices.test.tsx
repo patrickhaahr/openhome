@@ -127,8 +127,10 @@ test("a day without an observation is a gap in the line, never a flat stretch", 
   await render(() => Promise.resolve(withGap))
 
   expect(container.querySelector("[data-chart='card-price']")).not.toBeNull()
-  expect(container.querySelectorAll("path.trend-line")).toHaveLength(2)
-  expect(container.querySelector(".trend-point")).toBeNull()
+  expect(
+    container.querySelectorAll("path[data-slot='trend-line']")
+  ).toHaveLength(2)
+  expect(container.querySelector("[data-slot='trend-point']")).toBeNull()
   expect(rows()).toEqual([
     ["1 Nov 2026", "DKK 8.00"],
     ["2 Nov 2026", "DKK 10.00"],
@@ -137,7 +139,9 @@ test("a day without an observation is a gap in the line, never a flat stretch", 
     ["5 Nov 2026", "DKK 12.00"],
     ["6 Nov 2026", "DKK 14.00"],
   ])
-  expect(plain(container.querySelector(".trend-summary")?.textContent)).toBe(
+  expect(
+    plain(container.querySelector("[data-slot='trend-summary']")?.textContent)
+  ).toBe(
     "DKK 14.00 on 6 Nov 2026; 4 observations since 1 Nov 2026, 2 days without an observation."
   )
 })
@@ -252,10 +256,10 @@ test("an English card sheet charts the history Axum stored, and a Japanese one h
 
   expect(stored.state === "read" && stored.points.length).toBe(1)
   expect(english.querySelector("[data-chart='card-price']")).not.toBeNull()
-  expect(plain(english.querySelector(".trend-summary")?.textContent)).toMatch(
-    /^DKK [\d.,]+ on \d+ \w+ \d{4}; 1 observation since /
-  )
-  expect(english.querySelector(".trend-point")).not.toBeNull()
+  expect(
+    plain(english.querySelector("[data-slot='trend-summary']")?.textContent)
+  ).toMatch(/^DKK [\d.,]+ on \d+ \w+ \d{4}; 1 observation since /)
+  expect(english.querySelector("[data-slot='trend-point']")).not.toBeNull()
   await act(async () => button("Close", document).click())
 
   const japanese = await openCard(/^Captain Marlow \(001\), OP99-001, Japanese/)

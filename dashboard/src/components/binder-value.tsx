@@ -1,7 +1,13 @@
 import { CurrencySwitch, useCurrency } from "@/components/currency"
+import { ListBarEnd } from "@/components/list-frame"
 import type { BinderEntry, BinderValue, ValueUnavailable } from "@/lib/binder"
 import { amountKey, formatMoney, type Currency } from "@/lib/currency"
 import { formatDay } from "@/lib/lists"
+import { cn } from "@/lib/utils"
+
+const valueLabel = "text-label font-semibold text-muted-ink"
+
+export const valueNote = "text-label text-muted-ink"
 
 const worth = (
   value: { usd: number; eur: number; dkk: number },
@@ -25,14 +31,26 @@ export function BinderValueBar({
   const { currency } = useCurrency()
 
   return (
-    <div className="lists-bar-end binder-value-bar">
+    <ListBarEnd
+      data-slot="binder-value-bar"
+      className="gap-4 binder-wide:col-start-3 binder-wide:row-start-1 binder-wide:m-0 binder-wide:flex-col binder-wide:items-end"
+    >
       {value === undefined ? null : (
-        <p className="binder-value">
-          <span className="binder-value-label">Binder Value</span>
-          <span className="binder-value-figure num">
+        <p
+          data-slot="binder-value"
+          className="grid min-w-60 justify-items-end gap-0.5 text-right binder-wide:min-w-0"
+        >
+          <span className={valueLabel}>Binder Value</span>
+          <span
+            data-slot="binder-value-figure"
+            className="text-2xl leading-compact font-bold num"
+          >
             {worth(value, currency)}
           </span>
-          <span className="binder-value-note">
+          <span
+            data-slot="binder-value-note"
+            className={cn(valueNote, "binder-wide:text-balance")}
+          >
             {value.unpriced_entries === 0
               ? null
               : `${value.unpriced_entries} unpriced. `}
@@ -52,7 +70,7 @@ export function BinderValueBar({
       )}
       <CurrencySwitch />
       {children}
-    </div>
+    </ListBarEnd>
   )
 }
 
@@ -66,23 +84,33 @@ export function CardValueLine({
   const { card_value: value, value_unavailable: reason } = card
 
   return (
-    <p className="binder-value">
-      <span className="binder-value-label">Card Value</span>
+    <p data-slot="binder-value" className="grid gap-0.5">
+      <span className={valueLabel}>Card Value</span>
       {value === null ? (
-        <span className="binder-value-note">
+        <span data-slot="binder-value-note" className={valueNote}>
           {unavailableCopy[reason ?? "no_catalogue_price"]}
         </span>
       ) : (
         <>
-          <span className="binder-value-figure num">
+          <span
+            data-slot="binder-value-figure"
+            className="text-binder-value leading-compact font-bold tracking-figure-tight tabular-nums"
+          >
             {worth(value, currency)}
           </span>
-          <span className="binder-value-note">
+          <span data-slot="binder-value-note" className={valueNote}>
             Observed{" "}
             <time dateTime={value.observed_on}>
               {formatDay(value.observed_on)}
             </time>
-            {value.stale ? <span className="binder-stale">Stale</span> : null}
+            {value.stale ? (
+              <span
+                data-slot="binder-stale"
+                className="ml-2 inline-block rounded-full bg-danger px-2 leading-5 font-bold text-ground"
+              >
+                Stale
+              </span>
+            ) : null}
           </span>
         </>
       )}

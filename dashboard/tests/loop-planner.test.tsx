@@ -182,7 +182,9 @@ async function type(label: string, value: string): Promise<void> {
 
 function alternatives(): HTMLButtonElement[] {
   return Array.from(
-    container.querySelectorAll<HTMLButtonElement>(".loop-alternative")
+    container.querySelectorAll<HTMLButtonElement>(
+      '[data-slot="loop-alternatives"] button'
+    )
   )
 }
 

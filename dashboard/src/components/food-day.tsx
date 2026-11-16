@@ -1,55 +1,28 @@
-import { useId, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife"
-import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { FoodViews } from "@/components/food-views"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import {
   dayName,
   doseCount,
-  goalChoice,
-  goalChoices,
-  goalName,
-  doseEnergy,
   energySplit,
   foodDatabaseCredit,
   formatAmount,
-  formatPercent,
   hasProducts,
-  intakeShare,
-  mealPhotoUrl,
-  mealTime,
-  micronutrientGroups,
-  nutrientGroups,
-  novaClassMeaning,
   novaDetail,
   nutritionFailureMessage,
-  portionName,
-  referenceGroup,
   shiftDay,
-  supplementShare,
-  upperLimitNote,
-  type DayTargets,
   type GoalMutation,
-  type MealLog,
-  type MealPhoto,
-  type Micronutrient,
-  type Micronutrients,
-  type NutrientTotal,
   type NutritionDay,
   type NutritionDayState,
-  type NutritionGoal,
-  type Portion,
   type SetGoalInput,
 } from "@/lib/nutrition"
+import { TargetStrip, GoalControl } from "@/components/food-targets"
+import { Meal } from "@/components/food-meal"
+import { MicronutrientPanel, AllNutrients } from "@/components/food-nutrients"
+import { Amount, Credit, SupplementShare } from "@/components/food-amount"
+import { StateNote, stateNoteText } from "@/components/page-tools"
 
 const macros = [
   ["protein", "Protein"],
@@ -87,7 +60,7 @@ export function FoodDay({
   reload,
 }: FoodDayProps): React.JSX.Element {
   return (
-    <div className="food">
+    <div data-slot="food" className="grid max-w-240 gap-food-flow">
       <FoodViews view="day" />
       <DayNav day={data.day} today={data.today} />
       {data.state === "available" ? (
@@ -97,16 +70,16 @@ export function FoodDay({
         </>
       ) : null}
       <DayBody data={data} />
-      <p className="food-credit">
+      <Credit>
         Nutrient values{" "}
         {data.state === "available"
           ? `${data.data.source.credit} (${data.data.source.licence})`
           : `${foodDatabaseCredit} (CC BY 4.0)`}
-      </p>
+      </Credit>
       {data.state === "available" && hasProducts(data.data) ? (
-        <p className="food-credit">
+        <Credit>
           {`${data.data.label_source.credit} (${data.data.label_source.licence})`}
-        </p>
+        </Credit>
       ) : null}
     </div>
   )
@@ -122,28 +95,42 @@ function DayBody({
       return <Day day={data.data} />
     case "food-database-unavailable":
       return (
-        <div className="state-note food-unavailable" role="status">
-          <h2>
-            {data.database === "importing"
+        <StateNote
+          data-slot="food-unavailable"
+          role="status"
+          title={
+            data.database === "importing"
               ? "Food database importing"
-              : "Food database unavailable"}
-          </h2>
-          <p>
+              : "Food database unavailable"
+          }
+        >
+          <p className={stateNoteText}>
             {data.database === "importing"
               ? "The Danish Food Composition Database is being imported. This day shows once it is ready."
               : "The food database could not be imported. OpenHome tries again when it restarts."}
           </p>
-        </div>
+        </StateNote>
       )
     case "unavailable":
       return (
-        <div className="state-note food-unavailable" role="status">
-          <h2>Food unavailable</h2>
-          <p>{nutritionFailureMessage[data.reason]}</p>
-        </div>
+        <StateNote
+          data-slot="food-unavailable"
+          role="status"
+          title="Food unavailable"
+        >
+          <p className={stateNoteText}>
+            {nutritionFailureMessage[data.reason]}
+          </p>
+        </StateNote>
       )
   }
 }
+
+const dayKey =
+  "inline-grid size-12 place-items-center rounded-full bg-wash-strong text-ink transition-food-key duration-fast ease-app"
+
+/** The reversed look of a key under the pointer, shared by the day keys and "Today". */
+const keyHover = "hover:bg-ink hover:text-ground"
 
 /** Previous and next keys around the day's name; there is no next day after today. */
 function DayNav({
@@ -161,94 +148,54 @@ function DayNav({
     target === today ? {} : { day: target }
 
   return (
-    <nav className="food-days" aria-label="Day">
+    <nav className="flex flex-wrap items-center gap-3" aria-label="Day">
       <Link
         to="/food"
         search={searchFor(previous)}
-        className="food-day-key"
+        data-slot="food-day-key"
+        className={`${dayKey} ${keyHover} active:scale-97`}
         aria-label={`Previous day, ${dayName(previous, today)}`}
       >
         <CaretLeftIcon size={22} weight="bold" aria-hidden="true" />
       </Link>
-      <h2 className="food-day-name" aria-live="polite">
+      <h2
+        data-slot="food-day-name"
+        className="min-w-food-day text-center text-lead font-medium tracking-food-heading"
+        aria-live="polite"
+      >
         {dayName(day, today)}
       </h2>
       {day < today ? (
         <Link
           to="/food"
           search={searchFor(next)}
-          className="food-day-key"
+          data-slot="food-day-key"
+          className={`${dayKey} ${keyHover} active:scale-97`}
           aria-label={`Next day, ${dayName(next, today)}`}
         >
           <CaretRightIcon size={22} weight="bold" aria-hidden="true" />
         </Link>
       ) : (
-        <span className="food-day-key" aria-hidden="true" data-disabled="">
+        <span
+          data-slot="food-day-key"
+          className={`${dayKey} data-disabled:opacity-35`}
+          aria-hidden="true"
+          data-disabled=""
+        >
           <CaretRightIcon size={22} weight="bold" />
         </span>
       )}
       {day === today ? null : (
-        <Link to="/food" search={{}} className="food-today">
+        <Link
+          to="/food"
+          search={{}}
+          data-slot="food-today"
+          className={`ml-auto inline-flex min-h-11 items-center rounded-full bg-wash px-4.5 font-semibold text-ink ${keyHover}`}
+        >
           Today
         </Link>
       )}
     </nav>
-  )
-}
-
-/** A total's figure: a dash when unknown, "≥" when some Portions have no value. */
-function Amount({
-  total,
-  unit = true,
-}: {
-  readonly total: NutrientTotal
-  readonly unit?: boolean
-}): React.JSX.Element {
-  if (total.value === null)
-    return (
-      <span className="food-amount" data-gap="true">
-        <span className="sr-only">Unknown</span>
-      </span>
-    )
-  const partial = total.unknown_portions > 0
-
-  return (
-    <span
-      className="food-amount num"
-      title={
-        partial
-          ? `${total.unknown_portions} ${total.unknown_portions === 1 ? "portion has" : "portions have"} no value`
-          : undefined
-      }
-    >
-      {partial ? (
-        <>
-          <span aria-hidden="true">≥</span>
-          <span className="sr-only">At least </span>
-        </>
-      ) : null}
-      {formatAmount(total.value)}
-      {unit && total.unit !== null ? (
-        <span className="food-unit"> {total.unit}</span>
-      ) : null}
-    </span>
-  )
-}
-
-/** The supplement share beneath a total's figure; nothing when no dose adds to it. */
-function SupplementShare({
-  total,
-  as: Element,
-  className,
-}: {
-  readonly total: NutrientTotal
-  readonly as: "p" | "dd"
-  readonly className: string
-}): React.JSX.Element | null {
-  const share = supplementShare(total)
-
-  return share === null ? null : (
-    <Element className={className}>{share}</Element>
   )
 }
 
@@ -257,19 +204,26 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
 
   return (
     <>
-      <section className="food-totals" aria-label="Day totals">
-        <p className="food-energy">
+      <section className="grid gap-4" aria-label="Day totals">
+        <p
+          data-slot="food-energy"
+          className="flex items-baseline gap-2 text-display leading-food-energy font-medium"
+        >
           <Amount total={day.totals.energy_kcal} unit={false} />
-          <span className="food-energy-unit">kcal</span>
+          <span className="text-lead tracking-figure-tight text-muted-ink">
+            kcal
+          </span>
         </p>
         <SupplementShare
           total={day.totals.energy_kcal}
           as="p"
-          className="food-energy-supplements"
+          slot="food-energy-supplements"
+          className="-mt-2 text-label text-muted-ink"
         />
         {split.length === 0 ? null : (
           <div
-            className="food-split"
+            data-slot="food-split"
+            className="flex h-2.5 gap-0.75 overflow-hidden rounded-full bg-wash"
             role="img"
             aria-label={`Energy from ${split
               .filter((part) => part.kcal > 0)
@@ -284,6 +238,7 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
                 <span
                   key={part.key}
                   data-macro={part.key}
+                  className="min-w-0.75 flex-(--share) bg-macro"
                   // SAFETY: CSSProperties omits custom properties; --share is the macro's energy share.
                   style={{ "--share": part.share } as React.CSSProperties}
                 />
@@ -291,17 +246,24 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
             )}
           </div>
         )}
-        <dl className="food-macros">
+        <dl
+          data-slot="food-macros"
+          className="grid grid-fit-30 gap-x-6 gap-y-3"
+        >
           {macros.map(([key, name]) => (
             <div key={key} data-macro={key}>
-              <dt>{name}</dt>
-              <dd>
+              <dt
+                className={`flex items-center gap-2 text-control text-muted-ink before:size-2.5 before:rounded-full before:bg-macro ${key === "dietary_fibre" ? "before:inset-ring-2 before:inset-ring-muted-ink" : ""}`}
+              >
+                {name}
+              </dt>
+              <dd className="text-lead font-medium">
                 <Amount total={day.totals[key]} />
               </dd>
               <SupplementShare
                 total={day.totals[key]}
                 as="dd"
-                className="food-macro-supplements"
+                className="text-label text-muted-ink"
               />
             </div>
           ))}
@@ -314,16 +276,29 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
           Meals
         </h2>
         {day.meal_logs.length === 0 ? (
-          <div className="food-empty">
-            <ForkKnifeIcon size={40} aria-hidden="true" />
-            <h3>Nothing logged</h3>
+          <div
+            data-slot="food-empty"
+            className="grid justify-items-start gap-3 py-10"
+          >
+            <ForkKnifeIcon
+              className="text-muted-ink"
+              size={40}
+              aria-hidden="true"
+            />
+            <h3 className="text-title leading-none font-medium tracking-headline">
+              Nothing logged
+            </h3>
             <p className="sr-only">
               Meals logged through the agent appear here at the time they were
               eaten.
             </p>
           </div>
         ) : (
-          <ol className="food-meals" aria-label="Meals in time order">
+          <ol
+            data-slot="food-meals"
+            className="grid gap-3"
+            aria-label="Meals in time order"
+          >
             {day.meal_logs.map((meal) => (
               <li key={meal.id}>
                 <Meal meal={meal} />
@@ -338,135 +313,8 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
   )
 }
 
-/**
- * The vitamins and minerals as percentages of their NNR 2023 Recommended Intakes, with adequate
- * intakes marked, the supplement share noted and EFSA Upper Limits as a caution (the day above
- * one) or a red "cut down" (the 7-day average above one); or why there is no panel.
- */
-function MicronutrientPanel({
-  panel,
-}: {
-  readonly panel: Micronutrients
-}): React.JSX.Element {
-  if (panel.state === "unavailable")
-    return (
-      <section
-        className="food-micros"
-        data-state="unavailable"
-        aria-labelledby="food-micros-heading"
-      >
-        <h2 id="food-micros-heading">No vitamin and mineral panel yet</h2>
-        <p>{panel.reason}.</p>
-        {panel.missing.length === 0 ? null : (
-          <p className="food-micros-basis">
-            Sex and birth date are set on the Workout page&apos;s Body view.
-          </p>
-        )}
-      </section>
-    )
-
-  const { logged_days: logged } = panel.trailing_window
-
-  return (
-    <section className="food-micros" aria-labelledby="food-micros-heading">
-      <h2 id="food-micros-heading">Vitamins and minerals</h2>
-      <p className="food-micros-basis">
-        Recommended Intakes for {referenceGroup(panel.sex, panel.age_band)} ·
-        Upper Limits on {logged} logged {logged === 1 ? "day" : "days"} of the
-        last 7
-      </p>
-      {micronutrientGroups(panel.nutrients).map((group) => (
-        <section key={group.name} className="food-micro-group">
-          <h3>{group.name}</h3>
-          <ul className="food-micro-list">
-            {group.nutrients.map((nutrient) => (
-              <MicronutrientRow key={nutrient.key} nutrient={nutrient} />
-            ))}
-          </ul>
-        </section>
-      ))}
-      <p className="food-micros-basis">
-        {panel.sources.map((source) => source.citation).join(" · ")}
-      </p>
-    </section>
-  )
-}
-
-/** A nutrient's percentage over a bar, its amount and reference, and any Upper Limit line. */
-function MicronutrientRow({
-  nutrient,
-}: {
-  readonly nutrient: Micronutrient
-}): React.JSX.Element {
-  const share = intakeShare(nutrient)
-  const note = upperLimitNote(nutrient)
-
-  const status =
-    nutrient.upper_limit_status === "none"
-      ? undefined
-      : (nutrient.upper_limit_status ?? undefined)
-
-  return (
-    <li
-      data-key={nutrient.key}
-      data-limit={status}
-      data-met={share === 1 ? "" : undefined}
-    >
-      <span className="food-micro-name">
-        {nutrient.name}
-        {nutrient.adequate_intake ? (
-          <span
-            className="food-micro-ai"
-            title="Adequate intake: a less certain reference than a recommended intake"
-          >
-            <span className="sr-only">, adequate intake </span>
-            <span aria-hidden="true">AI</span>
-          </span>
-        ) : null}
-      </span>
-      <span className="food-micro-percent num">
-        {nutrient.percent_of_recommended === null ? (
-          <span data-gap="true">
-            <span className="sr-only">Unknown</span>
-          </span>
-        ) : (
-          formatPercent(nutrient.percent_of_recommended)
-        )}
-      </span>
-      <span
-        className="food-micro-bar"
-        aria-hidden="true"
-        // SAFETY: CSSProperties omits custom properties; --share is the reached share of the Recommended Intake.
-        style={{ "--share": share ?? 0 } as React.CSSProperties}
-      />
-      <span className="food-micro-amount num">
-        {nutrient.amount === null ? (
-          <span data-gap="true">
-            <span className="sr-only">Unknown</span>
-          </span>
-        ) : (
-          formatAmount(nutrient.amount)
-        )}{" "}
-        / {formatAmount(nutrient.recommended_intake)}
-        <span className="food-unit"> {nutrient.unit}</span>
-      </span>
-      {nutrient.supplements === null ? null : (
-        <span className="food-micro-split">
-          Food{" "}
-          {nutrient.food === null
-            ? "unknown"
-            : `${formatAmount(nutrient.food)} ${nutrient.unit}`}{" "}
-          · supplements {formatAmount(nutrient.supplements)} {nutrient.unit}
-        </span>
-      )}
-      {note === null ? null : (
-        <span className="food-micro-limit" role="note">
-          {note}
-        </span>
-      )}
-    </li>
-  )
-}
+const supplement =
+  "inline-flex items-baseline gap-2 rounded-full bg-wash-strong px-3 py-1 text-small"
 
 /**
  * The day's Supplements: each Supplement's doses added together, then the compounds without a
@@ -482,23 +330,29 @@ function Supplements({
 
   return (
     <section
-      className="food-supplements"
+      data-slot="food-supplements"
+      className="grid gap-2"
       aria-labelledby="food-supplements-heading"
     >
-      <h3 id="food-supplements-heading">Supplements</h3>
-      <ul>
+      <h3
+        id="food-supplements-heading"
+        className="text-control font-medium text-muted-ink"
+      >
+        Supplements
+      </h3>
+      <ul className="flex flex-wrap gap-2">
         {day.supplement_doses.map((dose) => (
-          <li key={dose.supplement_id}>
-            <span className="food-supplement-name">{dose.name}</span>
-            <span className="food-supplement-amount num">
+          <li key={dose.supplement_id} className={supplement}>
+            <span className="font-semibold">{dose.name}</span>
+            <span className="num text-muted-ink">
               {doseCount(dose.doses, dose.dose_unit)}
             </span>
           </li>
         ))}
         {day.compounds.map((compound) => (
-          <li key={compound.name} data-compound="">
-            <span className="food-supplement-name">{compound.name}</span>
-            <span className="food-supplement-amount num">
+          <li key={compound.name} className={supplement}>
+            <span className="font-semibold">{compound.name}</span>
+            <span className="num text-muted-ink">
               {formatAmount(compound.value)} {compound.unit}
             </span>
           </li>
@@ -515,493 +369,24 @@ function NovaShare({
   readonly nova: NutritionDay["nova"]
 }): React.JSX.Element {
   return (
-    <div className="food-nova">
-      <p className="food-nova-share">
+    <div data-slot="food-nova" className="grid gap-1">
+      <p className="flex items-baseline gap-2 text-lead font-medium">
         {nova.nova_1_share === null ? (
-          <span className="food-amount" data-gap="true">
+          <span
+            data-slot="food-amount"
+            data-gap="true"
+            className="data-[gap=true]:gap-dash"
+          >
             <span className="sr-only">Unknown</span>
           </span>
         ) : (
-          <span className="food-amount num">
+          <span data-slot="food-amount" className="num">
             {Math.round(nova.nova_1_share * 100)} %
           </span>
         )}{" "}
-        <span className="food-nova-name">NOVA 1</span>
+        <span className="text-control text-muted-ink">NOVA 1</span>
       </p>
-      <p className="food-nova-detail">{novaDetail(nova)}</p>
+      <p className="text-small text-muted-ink">{novaDetail(nova)}</p>
     </div>
-  )
-}
-
-function Meal({ meal }: { readonly meal: MealLog }): React.JSX.Element {
-  return (
-    <article
-      className="food-meal"
-      data-photo={meal.photo === null ? undefined : ""}
-    >
-      <div className="food-meal-body">
-        <MealDetails meal={meal} />
-      </div>
-      {meal.photo === null ? null : (
-        <MealPhotoKey photo={meal.photo} time={mealTime(meal.eaten_at)} />
-      )}
-    </article>
-  )
-}
-
-/** The meal's thumbnail; selecting it shows the full photo over the page. */
-function MealPhotoKey({
-  photo,
-  time,
-}: {
-  readonly photo: MealPhoto
-  readonly time: string
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <>
-      <button
-        type="button"
-        className="food-photo"
-        aria-label={`Show the photo of the meal at ${time}`}
-        onClick={() => setOpen(true)}
-      >
-        <img
-          src={mealPhotoUrl(photo, "thumbnail")}
-          width={photo.thumbnail.width}
-          height={photo.thumbnail.height}
-          alt=""
-          loading="lazy"
-          decoding="async"
-        />
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent variant="fullscreen" showCloseButton={false}>
-          <div className="photo-viewer food-photo-viewer">
-            <DialogTitle className="sr-only">Meal at {time}</DialogTitle>
-            <div className="photo-stage">
-              <img
-                src={mealPhotoUrl(photo, "photo")}
-                width={photo.width}
-                height={photo.height}
-                alt={`The meal at ${time}`}
-                decoding="async"
-              />
-            </div>
-            <div className="photo-viewer-bar">
-              <span className="photo-viewer-where">Meal at {time}</span>
-              <DialogClose
-                render={<Button variant="outline" size="key-icon" />}
-                title="Close photo"
-              >
-                <XIcon size={22} aria-hidden="true" />
-                <span className="sr-only">Close photo</span>
-              </DialogClose>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
-function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
-  return (
-    <>
-      <header>
-        <h3>
-          <time dateTime={meal.eaten_at}>{mealTime(meal.eaten_at)}</time>
-        </h3>
-        <Amount total={meal.totals.energy_kcal} />
-      </header>
-      {meal.meal_name === null ? null : (
-        <p className="food-meal-from">
-          <span className="sr-only">Logged from the Meal </span>
-          {meal.meal_name}
-        </p>
-      )}
-      {meal.note === null ? null : <p className="food-note">{meal.note}</p>}
-      <ul className="food-portions" aria-label="Portions">
-        {meal.portions.map((portion, index) => (
-          <li key={`${portion.food_id}-${index}`}>
-            <PortionTitle portion={portion} />
-            <span className="food-portion-grams num">
-              {formatAmount(portion.grams)} g
-            </span>
-            <span className="food-portion-kcal num">
-              {portion.nutrients.energy_kcal.value === null ? (
-                <span data-gap="true">
-                  <span className="sr-only">Energy unknown</span>
-                </span>
-              ) : (
-                `${formatAmount(portion.nutrients.energy_kcal.value)} kcal`
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {meal.supplement_doses.length === 0 ? null : (
-        <ul className="food-doses" aria-label="Supplement Doses">
-          {meal.supplement_doses.map((dose) => {
-            const kcal = doseEnergy(dose)
-
-            return (
-              <li key={dose.supplement_id}>
-                <span className="food-portion-name">{dose.name}</span>
-                <span className="food-portion-grams num">
-                  {doseCount(dose.doses, dose.dose_unit)}
-                </span>
-                <span className="food-portion-kcal num">
-                  {kcal === null ? null : `${formatAmount(kcal)} kcal`}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </>
-  )
-}
-
-/**
- * A Food's name, or a Product's label name with its brand beneath it, and the NOVA Class it was
- * logged with; an unclassified Portion has no class mark.
- */
-function PortionTitle({
-  portion,
-}: {
-  readonly portion: Portion
-}): React.JSX.Element {
-  const { name, brand } = portionName(portion)
-
-  return (
-    <span className="food-portion-name">
-      {name}
-      {portion.nova_class === null ? null : (
-        <span
-          className="food-portion-nova"
-          data-nova={portion.nova_class}
-          title={`NOVA ${portion.nova_class}: ${novaClassMeaning[portion.nova_class]}`}
-        >
-          <span className="sr-only">, </span>
-          NOVA {portion.nova_class}
-        </span>
-      )}
-      {brand === null ? null : (
-        <span className="food-portion-brand">
-          <span className="sr-only">, </span>
-          {brand}
-        </span>
-      )}
-    </span>
-  )
-}
-
-/** Every parameter's total, grouped as the Food database groups them, behind one key. */
-function AllNutrients({
-  day,
-}: {
-  readonly day: NutritionDay
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <section className="food-nutrients" aria-label="All nutrients">
-      <Button
-        variant="outline"
-        aria-expanded={open}
-        aria-controls="food-nutrient-list"
-        onClick={() => setOpen(!open)}
-      >
-        All nutrients
-      </Button>
-      {open ? (
-        <div id="food-nutrient-list" className="food-nutrient-groups">
-          {nutrientGroups(day.nutrients).map((group) => (
-            <section key={group.name}>
-              <h3>{group.name}</h3>
-              <dl>
-                {group.nutrients.map((nutrient) => (
-                  <div key={nutrient.key}>
-                    <dt>{nutrient.name_en ?? nutrient.key}</dt>
-                    <dd>
-                      <Amount total={nutrient} />
-                    </dd>
-                    {nutrient.supplements === null ? null : (
-                      <dd className="food-nutrient-split">
-                        Food{" "}
-                        {nutrient.food === null
-                          ? "unknown"
-                          : `${formatAmount(nutrient.food)} ${nutrient.unit ?? ""}`.trim()}{" "}
-                        · supplements{" "}
-                        {`${formatAmount(nutrient.supplements)} ${nutrient.unit ?? ""}`.trim()}
-                      </dd>
-                    )}
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-        </div>
-      ) : null}
-    </section>
-  )
-}
-
-/** "2,120" kcal: targets are whole kcal. */
-function kcal(value: number): string {
-  return formatAmount(Math.round(value))
-}
-
-/**
- * The day's Calorie Target, eaten and remaining, with the goal and Estimated Expenditure behind
- * it, then protein, fat and carbs against their targets; or why there is no target yet.
- */
-function TargetStrip({
-  targets,
-}: {
-  readonly targets: DayTargets
-}): React.JSX.Element {
-  if (targets.state === "unavailable")
-    return (
-      <section
-        className="food-targets"
-        data-state="unavailable"
-        aria-labelledby="food-targets-heading"
-      >
-        <h2 id="food-targets-heading">No Calorie Target yet</h2>
-        <p>{targets.reason}.</p>
-        <p className="food-targets-hint">
-          Height, sex, birth date and Body Weight are set on the Workout
-          page&apos;s Body view.
-        </p>
-      </section>
-    )
-  const over = targets.remaining_kcal < 0
-
-  return (
-    <section className="food-targets" aria-labelledby="food-targets-heading">
-      <h2 id="food-targets-heading" className="sr-only">
-        Calorie Target
-      </h2>
-      <dl className="food-target-strip">
-        <div>
-          <dt>Target</dt>
-          <dd className="num">
-            {kcal(targets.calorie_target_kcal)}
-            <span className="food-unit"> kcal</span>
-          </dd>
-        </div>
-        <div>
-          <dt>Eaten</dt>
-          <dd className="num">
-            {kcal(targets.eaten_kcal)}
-            <span className="food-unit"> kcal</span>
-          </dd>
-        </div>
-        <div data-over={over ? "" : undefined}>
-          <dt>{over ? "Over" : "Remaining"}</dt>
-          <dd className="num">
-            {kcal(Math.abs(targets.remaining_kcal))}
-            <span className="food-unit"> kcal</span>
-          </dd>
-        </div>
-      </dl>
-      <p className="food-target-basis">
-        {goalName(targets.goal)} · Estimated Expenditure{" "}
-        {kcal(targets.estimated_expenditure_kcal)} kcal · Trend Weight{" "}
-        {formatAmount(targets.trend_weight_kg)} kg
-        {targets.bmr_floor_applied
-          ? ` · held at BMR ${kcal(targets.bmr_kcal)} kcal`
-          : ""}
-      </p>
-      <ul className="food-macro-targets" aria-label="Macro Targets">
-        <MacroProgress
-          macro="protein"
-          name="Protein"
-          eaten={targets.macros.protein.eaten_g}
-          target={targets.macros.protein.target_g}
-          status={targets.macros.protein.status === "met" ? "met" : "to eat"}
-        />
-        <MacroProgress
-          macro="fat"
-          name="Fat"
-          eaten={targets.macros.fat.eaten_g}
-          target={targets.macros.fat.floor_g}
-          status={
-            targets.macros.fat.status === "met" ? "floor met" : "below floor"
-          }
-        />
-        <MacroProgress
-          macro="available_carbohydrate"
-          name="Carbs"
-          eaten={targets.macros.carbs.eaten_g}
-          target={targets.macros.carbs.target_g}
-          status={null}
-        />
-      </ul>
-    </section>
-  )
-}
-
-/** One macro eaten against its target as a figure and a bar; carbs carry no status. */
-function MacroProgress({
-  macro,
-  name,
-  eaten,
-  target,
-  status,
-}: {
-  readonly macro: "protein" | "fat" | "available_carbohydrate"
-  readonly name: string
-  readonly eaten: number
-  readonly target: number
-  readonly status: "met" | "to eat" | "floor met" | "below floor" | null
-}): React.JSX.Element {
-  const share = target > 0 ? Math.min(eaten / target, 1) : 1
-
-  return (
-    <li data-macro={macro} data-status={status ?? undefined}>
-      <span className="food-macro-target-name">{name}</span>
-      <span className="food-macro-target-amount num">
-        {formatAmount(eaten)} / {formatAmount(target)}
-        <span className="food-unit"> g</span>
-      </span>
-      <span className="food-macro-target-status">{status ?? ""}</span>
-      <span
-        className="food-macro-target-bar"
-        aria-hidden="true"
-        // SAFETY: CSSProperties omits custom properties; --share is the eaten share of the target.
-        style={{ "--share": share } as React.CSSProperties}
-      />
-    </li>
-  )
-}
-
-/** Identifies the goal Axum serves; null when it could not be read. */
-function goalSignature(goal: NutritionGoal | null): string | null {
-  if (goal === null) return null
-  const { direction, rate_kg_per_week, effective_from } = goal.goal
-
-  return `${direction} ${rate_kg_per_week} ${effective_from ?? ""}`
-}
-
-/** The Nutrition Goal from today: the Day view's only write. */
-function GoalControl({
-  goal,
-  save,
-  reload,
-}: {
-  readonly goal: NutritionGoal | null
-  readonly save: FoodDayProps["saveGoal"]
-  readonly reload: FoodDayProps["reload"]
-}): React.JSX.Element {
-  const id = useId()
-  const current = goal === null ? undefined : goalChoice(goal.goal)
-  const [chosen, setChosen] = useState<string>(current?.key ?? "")
-  // The choice starts again from the goal Axum serves whenever that goal changes, such as when
-  // it could first not be read; adjusting during render keeps the save feedback.
-  const signature = goalSignature(goal)
-  const [shown, setShown] = useState(signature)
-
-  if (shown !== signature) {
-    setShown(signature)
-    setChosen(current?.key ?? "")
-  }
-
-  const [busy, setBusy] = useState(false)
-  const locked = useRef(false)
-
-  const [feedback, setFeedback] = useState<{
-    readonly failed: boolean
-    readonly text: string
-  }>()
-
-  if (goal === null)
-    return (
-      <p className="food-goal" role="status">
-        The Nutrition Goal could not be read. Reopen the page to change it.
-      </p>
-    )
-
-  async function submit(): Promise<void> {
-    const choice = goalChoices.find((option) => option.key === chosen)
-
-    if (choice === undefined || locked.current) return
-    locked.current = true
-    setBusy(true)
-    setFeedback(undefined)
-
-    try {
-      const result = await save({
-        direction: choice.direction,
-        rate_kg_per_week: choice.rate_kg_per_week,
-      })
-
-      if (result.state === "failed") {
-        setFeedback({
-          failed: true,
-          text: nutritionFailureMessage[result.reason],
-        })
-
-        return
-      }
-
-      await reload()
-      setFeedback({
-        failed: false,
-        text: `Goal saved: ${goalName(choice)} from today.`,
-      })
-    } catch {
-      setFeedback({ failed: true, text: nutritionFailureMessage.unreachable })
-    } finally {
-      locked.current = false
-      setBusy(false)
-    }
-  }
-
-  return (
-    <form
-      className="food-goal"
-      onSubmit={(event) => {
-        event.preventDefault()
-        void submit()
-      }}
-    >
-      <label htmlFor={`${id}-goal`}>Goal from today</label>
-      <select
-        id={`${id}-goal`}
-        value={chosen}
-        disabled={busy}
-        onChange={(event) => {
-          setChosen(event.target.value)
-          setFeedback(undefined)
-        }}
-      >
-        {current === undefined ? (
-          <option value="">{goalName(goal.goal)}</option>
-        ) : null}
-        {goalChoices.map((choice) => (
-          <option key={choice.key} value={choice.key}>
-            {goalName(choice)}
-          </option>
-        ))}
-      </select>
-      <Button
-        type="submit"
-        variant="outline"
-        disabled={busy || chosen === "" || chosen === current?.key}
-      >
-        Save goal
-      </Button>
-      <p
-        className="food-goal-feedback"
-        role={feedback?.failed === true ? "alert" : "status"}
-        data-failed={feedback?.failed}
-      >
-        {feedback?.text ?? ""}
-      </p>
-    </form>
   )
 }

@@ -1,0 +1,232 @@
+/* Controls and LED: the three remotes, and the Backlight drawn as light on a night wall. */
+@theme inline {
+  --color-led-wall: #07080a;
+  --color-led-ink: #ecece6;
+  --color-led-muted: #9a9ea6;
+  --color-led-wash: rgb(236 236 230 / 7%);
+  --color-led-wash-strong: rgb(236 236 230 / 13%);
+  --color-led-danger: #ff8a7a;
+  --color-led-glyph: rgb(0 0 0 / 62%);
+  --color-led-edge: rgb(236 236 230 / 9%);
+  --color-led-horizon: rgb(255 210 180 / 55%);
+  --color-bedtime-red: light-dark(#e8261c, #ff3b2f);
+  --text-led-figure: 1.375rem;
+  --radius-key-pill: 999px;
+  --shadow-led-notch: 0 0 0 1px rgb(0 0 0 / 35%);
+  --spacing-led: clamp(1rem, 2.4vw, 2rem);
+  --spacing-led-screen: max(
+    calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem)),
+    34rem
+  );
+  --spacing-led-stage: max(24rem, 54svh);
+  --spacing-led-tv: min(58cqw, 82cqh);
+  --spacing-led-tv-phone: 68cqw;
+  --spacing-led-level: min(58cqh, 22rem);
+  --spacing-led-level-phone: 42cqh;
+  --spacing-led-dock: calc(100% - 2 * clamp(1rem, 2vw, 1.5rem));
+  --spacing-led-wheel: min(100%, 36svh, 17rem);
+  --spacing-led-dial: min(100%, 40svh, 18rem);
+  --spacing-led-disc-stacked: min(100%, 15rem, 22svh);
+  --spacing-led-side: clamp(1rem, 3svh, 2rem);
+  --spacing-led-dial-gap: clamp(0.75rem, 2svh, 1.25rem);
+  --spacing-led-notch-half: 1.5px;
+  --spacing-remote-gap: clamp(1rem, 2.5vw, 2rem);
+  --grid-template-columns-led: minmax(0, 1fr) clamp(15rem, 27vw, 21rem);
+  --grid-template-columns-controls: minmax(8rem, 10rem) minmax(0, 1fr)
+    minmax(12rem, 15rem);
+  --grid-template-columns-controls-narrow: minmax(8rem, 10rem) minmax(0, 1fr);
+  --grid-template-columns-remote-triple: auto auto auto;
+  --grid-template-columns-remote-dpad: repeat(3, 3.5rem);
+  --grid-template-columns-remote-dpad-snug: repeat(3, 3.25rem);
+  --grid-template-columns-remote-keypad: repeat(5, 3.25rem);
+  --grid-template-columns-remote-keypad-snug: repeat(5, 2.75rem);
+  --grid-template-rows-pair: auto auto;
+  --grid-template-rows-led-side: minmax(0, 1fr) minmax(0, 1.25fr);
+  --grid-template-rows-remote-dpad: repeat(3, 3.5rem);
+  --grid-template-rows-remote-dpad-snug: repeat(3, 3.25rem);
+  --inset-led-horizon: 62%;
+  --transition-property-fade-scale: opacity, scale;
+  --transition-property-reveal: opacity, translate;
+  --transition-property-knob: width, height, opacity;
+  --transition-duration-knob: var(--t-fast), var(--t-fast), var(--t-mid);
+  --transition-property-dock: translate, background-color, scale;
+  --transition-duration-dock: var(--t-mid), var(--t-fast), var(--t-fast);
+  --transition-property-bottom: bottom;
+  --transition-property-r: r;
+  --background-image-led-tv-sync: conic-gradient(
+    #2f54ff 0deg,
+    #6c46ff 70deg,
+    #ff7a3c 140deg,
+    #ff5b1f 180deg,
+    #ff7a3c 220deg,
+    #6c46ff 290deg,
+    #2f54ff 360deg
+  );
+  --background-image-led-forest: conic-gradient(
+    #0f6b3a,
+    #59c14a,
+    #b6e35a,
+    #1e8a4c,
+    #2fd07d,
+    #0b4f2c,
+    #0f6b3a
+  );
+  --background-image-led-aurora: conic-gradient(
+    #00e0a8,
+    #1d6bff,
+    #8a3cff,
+    #00c8ff,
+    #1fff8e,
+    #3b5bff,
+    #00e0a8
+  );
+  --background-image-led-rainbow: conic-gradient(
+    #ff2a2a,
+    #ff8a00,
+    #ffe600,
+    #3dff4a,
+    #00e5ff,
+    #2f54ff,
+    #c43cff,
+    #ff2a2a
+  );
+  --background-image-led-fire: conic-gradient(
+    #8a1200 0deg,
+    #ff3d00 70deg,
+    #ff9a00 130deg,
+    #ffc53a 180deg,
+    #ff9a00 230deg,
+    #ff3d00 290deg,
+    #8a1200 360deg
+  );
+  --background-image-led-party: conic-gradient(
+    #ff1fa9 0deg 60deg,
+    #ffe600 60deg 120deg,
+    #00e5ff 120deg 180deg,
+    #7c3cff 180deg 240deg,
+    #ff5b1f 240deg 300deg,
+    #19ff8c 300deg 360deg
+  );
+  --background-image-led-chip-forest: conic-gradient(
+    #0f6b3a,
+    #59c14a,
+    #b6e35a,
+    #1e8a4c,
+    #0f6b3a
+  );
+  --background-image-led-chip-aurora: conic-gradient(
+    #00e0a8,
+    #1d6bff,
+    #8a3cff,
+    #00c8ff,
+    #00e0a8
+  );
+  --background-image-led-chip-fire: conic-gradient(
+    from 180deg,
+    #ffd84a,
+    #ff3d00 90deg,
+    #8a1200 180deg,
+    #ff3d00 270deg,
+    #ffd84a
+  );
+  --background-image-led-chip-tv-sync: linear-gradient(
+    #1b1f5c 0%,
+    #5a2c6e 52%,
+    #07070a 56%
+  );
+  --background-image-led-picture: linear-gradient(
+    #0b1230 0%,
+    #1b1f5c 38%,
+    #5a2c6e 56%,
+    #ff7a3c 62%,
+    #120c14 62.4%,
+    #07070a 100%
+  );
+  --background-image-led-hue-ring: conic-gradient(
+    #f00,
+    #ff0 60deg,
+    #0f0 120deg,
+    #0ff 180deg,
+    #00f 240deg,
+    #f0f 300deg,
+    #f00
+  );
+  --background-image-led-hue-wheel:
+    radial-gradient(closest-side, #fff, rgb(255 255 255 / 0%)),
+    conic-gradient(
+      #f00,
+      #ff0 60deg,
+      #0f0 120deg,
+      #0ff 180deg,
+      #00f 240deg,
+      #f0f 300deg,
+      #f00
+    );
+}
+
+@theme {
+  --animate-led-bloom: led-bloom var(--t-slow) var(--ease);
+  --animate-led-turn: led-turn 16s linear infinite;
+  --animate-led-turn-chip: led-turn 8s linear infinite;
+  --animate-led-turn-steps: led-turn 3s steps(6) infinite;
+  --animate-led-sway: led-sway 22s ease-in-out infinite alternate;
+  --animate-led-sway-fast: led-sway 9s ease-in-out infinite alternate;
+  --animate-led-flicker: led-flicker 2.2s linear infinite;
+  --animate-led-set: led-set 18s var(--ease) infinite alternate;
+  --animate-led-refuse: link-refuse 420ms var(--ease);
+
+  @keyframes led-bloom {
+    from {
+      opacity: 0;
+      scale: 0.6;
+    }
+  }
+  @keyframes led-turn {
+    to {
+      rotate: 1turn;
+    }
+  }
+  @keyframes led-sway {
+    from {
+      rotate: -50deg;
+    }
+    to {
+      rotate: 50deg;
+    }
+  }
+  @keyframes led-flicker {
+    0%,
+    100% {
+      opacity: 1;
+      scale: 1;
+    }
+    12% {
+      opacity: 0.78;
+      scale: 0.97;
+    }
+    24% {
+      opacity: 1;
+      scale: 1.03;
+    }
+    41% {
+      opacity: 0.86;
+      scale: 0.99;
+    }
+    58% {
+      opacity: 1;
+      scale: 1.02;
+    }
+    77% {
+      opacity: 0.8;
+      scale: 0.98;
+    }
+  }
+  @keyframes led-set {
+    from {
+      translate: -50% -50%;
+    }
+    to {
+      translate: -50% -38%;
+    }
+  }
+}

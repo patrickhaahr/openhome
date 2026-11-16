@@ -66,9 +66,17 @@ export async function chooseCurrency(
   })
 }
 
+/** The first element carrying `data-slot="name"` within `scope`, if any. */
+export function slot(
+  name: string,
+  scope: ParentNode = document
+): Element | null {
+  return scope.querySelector(`[data-slot="${name}"]`)
+}
+
 /** The open detail plate; sheets render in a portal beside the page. */
 export function sheet(): HTMLElement {
-  const element = document.querySelector<HTMLElement>(".sheet")
+  const element = document.querySelector<HTMLElement>('[data-slot="sheet"]')
 
   if (element === null) throw new Error("Expected an open sheet")
 

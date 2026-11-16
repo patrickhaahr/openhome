@@ -1,0 +1,7 @@
+/* A photo grows and takes its basis from its own width-to-height ratio, so a row shares one height
+   and fills the width; calc over a per-element property has no scale or token. */
+@utility photo-cell {
+  flex-grow: calc(var(--ratio) * 100);
+  flex-basis: calc(var(--ratio) * var(--spacing-photo-row));
+  aspect-ratio: var(--ratio);
+}

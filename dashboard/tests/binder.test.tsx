@@ -184,14 +184,14 @@ async function add(ownerId: string, ...additions: Addition[]): Promise<void> {
 }
 
 const pockets = (): HTMLElement[] =>
-  Array.from(container.querySelectorAll<HTMLElement>(".pocket")).filter(
-    (pocket) => !pocket.hasAttribute("data-empty")
-  )
+  Array.from(
+    container.querySelectorAll<HTMLElement>('[data-slot="pocket"]')
+  ).filter((pocket) => !pocket.hasAttribute("data-empty"))
 
 const pageCards = (number: number): (string | undefined)[] =>
   Array.from(
     container.querySelectorAll<HTMLElement>(
-      `[aria-label="Page ${number}"] .pocket:not([data-empty]) img`
+      `[aria-label="Page ${number}"] [data-slot="pocket"]:not([data-empty]) img`
     ),
     (image) => image.getAttribute("src")?.replace("/binder-image/", "")
   )
@@ -251,8 +251,10 @@ test("lays out a spread of two facing nine-pocket pages in Card Code order, mark
   await add(await owner("Alex"), ...alex)
   await render()
 
-  expect(container.querySelectorAll(".binder-page")).toHaveLength(2)
-  expect(container.querySelectorAll(".pocket")).toHaveLength(18)
+  expect(container.querySelectorAll('[data-slot="binder-page"]')).toHaveLength(
+    2
+  )
+  expect(container.querySelectorAll('[data-slot="pocket"]')).toHaveLength(18)
   expect(pageCards(1)).toEqual(firstSpread.slice(0, 9))
   expect(pageCards(2)).toEqual(firstSpread.slice(9))
   expect(pageCards(2)[0]).toBe("OP99-004_p1")
@@ -261,12 +263,15 @@ test("lays out a spread of two facing nine-pocket pages in Card Code order, mark
 
   expect(
     pockets().map(
-      (pocket) => pocket.querySelector(".pocket-quantity")?.textContent ?? null
+      (pocket) =>
+        pocket.querySelector('[data-slot="pocket-quantity"]')?.textContent ??
+        null
     )
   ).toEqual(firstSpread.map((_, slot) => (slot === 3 ? "×3" : null)))
   expect(
     pockets().map(
-      (pocket) => pocket.querySelector(".pocket-mark")?.textContent ?? null
+      (pocket) =>
+        pocket.querySelector('[data-slot="pocket-mark"]')?.textContent ?? null
     )
   ).toEqual(
     firstSpread.map((_, slot) =>
@@ -302,8 +307,10 @@ test("turns a whole spread by the arrows and the arrow keys, leaving unfilled po
   })
   expect(pageCards(3)).toEqual(["OP99-020", "OP99-020"])
   expect(pageCards(4)).toEqual([])
-  expect(container.querySelectorAll(".pocket")).toHaveLength(18)
-  expect(container.querySelectorAll(".pocket[data-empty]")).toHaveLength(16)
+  expect(container.querySelectorAll('[data-slot="pocket"]')).toHaveLength(18)
+  expect(
+    container.querySelectorAll('[data-slot="pocket"][data-empty]')
+  ).toHaveLength(16)
   expect(container.textContent).toContain("Pages 3–4 of 4")
   expect(button("Next pages").disabled).toBe(true)
 
@@ -322,16 +329,19 @@ test("switches between Household Users' Binders", async () => {
   await add(second, { card: "OP99-010", quantity: 4 })
   await render()
 
-  const names = Array.from(container.querySelectorAll(".person-key"), nameOf)
+  const names = Array.from(
+    container.querySelectorAll('[data-slot="view-tab"]'),
+    nameOf
+  )
 
   expect(names).toEqual(["Alex", "Robin"])
   expect(cards()).toEqual(["OP99-001", "OP99-002"])
 
   await press(button("Robin"))
   expect(cards()).toEqual(["OP99-010"])
-  expect(pockets()[0]?.querySelector(".pocket-quantity")?.textContent).toBe(
-    "×4"
-  )
+  expect(
+    pockets()[0]?.querySelector('[data-slot="pocket-quantity"]')?.textContent
+  ).toBe("×4")
   expect(button("Robin").getAttribute("aria-pressed")).toBe("true")
 })
 
@@ -342,7 +352,7 @@ test("says a Binder is empty rather than showing blank pages", async () => {
   await press(button("Sam"))
 
   expect(container.textContent).toContain("Sam’s Binder is empty")
-  expect(container.querySelectorAll(".pocket")).toHaveLength(0)
+  expect(container.querySelectorAll('[data-slot="pocket"]')).toHaveLength(0)
   expect(container.textContent).not.toContain("Pages 1")
   expect(container.textContent).toContain("Binder ValueDKK\u00a00.00")
   expect(container.textContent).toContain("No priced cards.")
@@ -356,7 +366,7 @@ test("keeps recovery controls for a failed read and recovers when OpenHome answe
 
   expect(container.textContent).toContain("Binder unavailable")
   expect(container.textContent).not.toContain("empty")
-  expect(container.querySelectorAll(".pocket")).toHaveLength(0)
+  expect(container.querySelectorAll('[data-slot="pocket"]')).toHaveLength(0)
 
   await press(button("Check again"))
   expect(container.textContent).not.toContain("Binder unavailable")
@@ -449,12 +459,13 @@ test("a pocket opens a sheet with the large image and the card's details", async
   expect(open.querySelector("img")?.getAttribute("src")).toBe(
     "/binder-image/OP99-001"
   )
-  expect(open.querySelector(".sheet-title")?.textContent).toBe(
+  expect(open.querySelector('[data-slot="sheet-title"]')?.textContent).toBe(
     "Captain Marlow (001)"
   )
 
-  const facts = Array.from(open.querySelectorAll(".binder-facts div"), (row) =>
-    nameOf(row)
+  const facts = Array.from(
+    open.querySelectorAll('[data-slot="binder-facts"] div'),
+    (row) => nameOf(row)
   )
 
   expect(facts).toEqual([
@@ -473,8 +484,10 @@ test("a pocket opens a sheet with the large image and the card's details", async
   expect(button("EN", open).getAttribute("aria-pressed")).toBe("true")
   expect(button("JP", open).getAttribute("aria-pressed")).toBe("false")
   expect(button("Save changes", open).disabled).toBe(true)
-  expect(container.querySelector(".binder-page")).not.toBeNull()
-  expect(container.querySelectorAll(".binder-page")).toHaveLength(2)
+  expect(container.querySelector('[data-slot="binder-page"]')).not.toBeNull()
+  expect(container.querySelectorAll('[data-slot="binder-page"]')).toHaveLength(
+    2
+  )
 })
 
 test("edits quantity, language and note and reads the stored entry back, clearing a note with an empty one", async () => {
@@ -495,9 +508,9 @@ test("edits quantity, language and note and reads the stored entry back, clearin
   expect(field("Quantity", sheet()).value).toBe("7")
   expect(note().value).toBe("sleeved, binder 2")
   expect(button("Save changes", sheet()).disabled).toBe(true)
-  expect(pockets()[0]?.querySelector(".pocket-quantity")?.textContent).toBe(
-    "×7"
-  )
+  expect(
+    pockets()[0]?.querySelector('[data-slot="pocket-quantity"]')?.textContent
+  ).toBe("×7")
 
   await press(button("JP", sheet()))
   await press(button("Save changes", sheet()))
@@ -507,7 +520,9 @@ test("edits quantity, language and note and reads the stored entry back, clearin
     note: "sleeved, binder 2",
   })
   expect(button("JP", sheet()).getAttribute("aria-pressed")).toBe("true")
-  expect(pockets()[0]?.querySelector(".pocket-mark")?.textContent).toBe("JP")
+  expect(
+    pockets()[0]?.querySelector('[data-slot="pocket-mark"]')?.textContent
+  ).toBe("JP")
 
   await type(note(), "")
   await press(button("Save changes", sheet()))
@@ -543,7 +558,7 @@ test("removes an entry only after confirmation, keeping the other entries and th
   expect((await stored()).entries.map((entry) => entry.card.id)).toEqual([
     "OP99-002",
   ])
-  expect(document.querySelector(".sheet")).toBeNull()
+  expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
   expect(cards()).toEqual(["OP99-002"])
   expect((await readCardImage({ card: "OP99-001" })).status).toBe(200)
 })
@@ -557,9 +572,9 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await type(field("Quantity", sheet()), "4")
   await press(button("Save changes", sheet()))
-  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
-    "OpenHome rejected the API key"
-  )
+  expect(
+    sheet().querySelector('[data-slot="list-failure"]')?.textContent
+  ).toContain("OpenHome rejected the API key")
   expect(sheet().textContent).not.toContain("synthetic-rejected-key")
   expect(field("Quantity", sheet()).value).toBe("4")
   vi.stubEnv("API_KEY", key)
@@ -570,7 +585,7 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
   await press(button("Remove", sheet()))
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await press(button("Remove for good", sheet()))
-  expect(sheet().querySelector(".list-failure")).not.toBeNull()
+  expect(sheet().querySelector('[data-slot="list-failure"]')).not.toBeNull()
   expect(sheet().querySelector('[aria-label="Remove card"]')).not.toBeNull()
   vi.stubEnv("API_KEY", key)
   expect(await stored().then((data) => data.entries)).toHaveLength(2)
@@ -578,9 +593,9 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
 
   await press(button("JP", sheet()))
   await press(button("Save changes", sheet()))
-  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
-    "already holds the card in that language"
-  )
+  expect(
+    sheet().querySelector('[data-slot="list-failure"]')?.textContent
+  ).toContain("already holds the card in that language")
   expect(button("JP", sheet()).getAttribute("aria-pressed")).toBe("true")
   expect(
     (await stored()).entries.map((entry) => [entry.language, entry.quantity])
@@ -592,7 +607,7 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
   await press(button("EN", sheet()))
   await type(field("Quantity", sheet()), "4")
   await press(button("Save changes", sheet()))
-  expect(sheet().querySelector(".list-failure")).toBeNull()
+  expect(sheet().querySelector('[data-slot="list-failure"]')).toBeNull()
   expect((await stored()).entries[0]).toMatchObject({ quantity: 4 })
 })
 

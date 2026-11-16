@@ -16,7 +16,9 @@ export function PageHead({
         {title}
       </h1>
       {children === undefined ? null : (
-        <div className="page-tools">{children}</div>
+        <div className="mb-tools-room flex min-h-11 flex-wrap items-center justify-end gap-x-4 gap-y-2">
+          {children}
+        </div>
       )}
     </>
   )

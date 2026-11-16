@@ -31,3 +31,6 @@ devenv.local.yaml
 
 .android
 local.properties
+
+# Visual parity harness output (just dashboard-parity)
+dashboard/.parity/

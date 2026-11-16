@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useCurrency } from "@/components/currency"
+import { valueNote } from "@/components/binder-value"
 import { TrendChart } from "@/components/trend-chart"
 import { formatMoney } from "@/lib/currency"
 import { priceLine, priceSummary, type PricesState } from "@/lib/card-prices"
@@ -32,23 +33,21 @@ export function PriceHistory({
 
   if (prices.state === "loading")
     return (
-      <p role="status" className="binder-value-note">
+      <p role="status" className={valueNote}>
         Loading price history…
       </p>
     )
 
   if (prices.state === "unavailable")
     return (
-      <p role="status" className="binder-value-note">
+      <p role="status" className={valueNote}>
         Price history is unavailable. Check again in a moment.
       </p>
     )
 
   if (prices.points.length === 0)
     return (
-      <p className="binder-value-note">
-        No price has been recorded for this card yet.
-      </p>
+      <p className={valueNote}>No price has been recorded for this card yet.</p>
     )
 
   const line = priceLine(prices.points, currency)

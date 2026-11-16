@@ -1,17 +1,12 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft"
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken"
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
-import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack"
-import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogTitle,
@@ -20,18 +15,24 @@ import { formatWhole } from "@/lib/number-format"
 import {
   ALL_PHOTOS,
   ON_THIS_DAY,
-  formatMonthDay,
   librarySpan,
   monthSpan,
   photoUrl,
   unavailablePhotos,
-  type Album,
   type AlbumRead,
   type OnThisDayResult,
   type Wall,
   type WallItem,
   type WallRead,
 } from "@/lib/photos"
+import { Tile, PhotoImage } from "@/components/photo-tile"
+import { AlbumMeta, AlbumIndex } from "@/components/photo-albums"
+import {
+  PhotoViewer,
+  ViewerBar,
+  ViewerStage,
+  ViewerStep,
+} from "@/components/photo-viewer"
 
 type GalleryProps = {
   albums: AlbumRead
@@ -136,6 +137,13 @@ export function PhotoGallery({
   )
 }
 
+const noteClass = "grid justify-items-start gap-4 py-photo-empty text-muted-ink"
+
+const noteHeading =
+  "text-title leading-none font-medium tracking-tighter text-ink"
+
+const failedDot = "block size-2.5 rounded-full bg-danger"
+
 function Unavailable({
   title,
   detail,
@@ -163,9 +171,9 @@ function Unavailable({
   }
 
   return (
-    <div className="photo-empty" role="status">
+    <div className={noteClass} role="status">
       <ImageBrokenIcon size={56} weight="light" aria-hidden="true" />
-      <h2>{title}</h2>
+      <h2 className={noteHeading}>{title}</h2>
       <p className="sr-only">{detail}</p>
       <Button
         variant="outline"
@@ -179,171 +187,12 @@ function Unavailable({
         <span className="sr-only">{label}</span>
       </Button>
       {failed ? (
-        <p className="photo-failed">
+        <p>
+          <span className={failedDot} aria-hidden="true" />
           <span className="sr-only">Still unavailable. Try again later.</span>
         </p>
       ) : null}
     </div>
-  )
-}
-
-/** The count glyph and figure, and the months, under an album's name. */
-function AlbumMeta({
-  count,
-  span,
-  unit,
-}: {
-  count: number
-  span: string | null
-  unit: "photos" | "albums"
-}): React.JSX.Element {
-  const Icon = unit === "photos" ? ImagesIcon : StackIcon
-
-  return (
-    <span className="photo-album-meta">
-      <span className="photo-album-count">
-        <Icon size={18} aria-hidden="true" />
-        <span className="num">{formatWhole(count)}</span>
-        <span className="sr-only"> {unit}</span>
-      </span>
-      {span === null ? null : <span className="num">{span}</span>}
-    </span>
-  )
-}
-
-function AlbumIndex({
-  albums,
-  onThisDay,
-  open,
-}: {
-  albums: Album[]
-  onThisDay: OnThisDayResult | null
-  open: (album: string) => void
-}): React.JSX.Element {
-  const available = albums.filter((album) => !album.missing)
-
-  const covers = available.flatMap((album) =>
-    album.cover_id === null ? [] : [{ album: album.id, asset: album.cover_id }]
-  )
-
-  const today =
-    onThisDay?.state === "ready" && onThisDay.onThisDay.total > 0
-      ? onThisDay.onThisDay
-      : null
-
-  return (
-    <>
-      <h2 className="sr-only">Albums</h2>
-      <ul className="photo-albums">
-        {available.length > 1 ? (
-          <li className="photo-album" data-kind="all">
-            <button type="button" onClick={() => open(ALL_PHOTOS)}>
-              <span
-                className="photo-album-cover"
-                data-count={Math.min(covers.length, 4)}
-              >
-                {covers.slice(0, 4).map((cover) => (
-                  <Cover key={cover.album} {...cover} />
-                ))}
-              </span>
-              <span className="photo-album-name">All photos</span>
-              <AlbumMeta
-                count={available.length}
-                span={librarySpan(available)}
-                unit="albums"
-              />
-            </button>
-          </li>
-        ) : null}
-        {today === null ? null : (
-          <li className="photo-album" data-kind="on-this-day">
-            <button type="button" onClick={() => open(ON_THIS_DAY)}>
-              <span
-                className="photo-album-cover"
-                data-count={Math.min(today.items.length, 4)}
-              >
-                {today.items.slice(0, 4).map((cover) => (
-                  <Cover
-                    key={cover.asset}
-                    album={cover.album}
-                    asset={cover.asset}
-                  />
-                ))}
-              </span>
-              <span className="photo-album-name">On this day</span>
-              <AlbumMeta
-                count={today.total}
-                span={formatMonthDay(today.date)}
-                unit="photos"
-              />
-            </button>
-          </li>
-        )}
-        {albums.map((album) => (
-          <li key={album.id} className="photo-album">
-            <button
-              type="button"
-              disabled={album.missing}
-              onClick={() => open(album.id)}
-            >
-              <span className="photo-album-cover" data-count="1">
-                {album.cover_id === null ? (
-                  <span className="photo-album-blank">
-                    {album.missing ? (
-                      <ImageBrokenIcon
-                        size={40}
-                        weight="light"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <ImagesIcon size={40} weight="light" aria-hidden="true" />
-                    )}
-                  </span>
-                ) : (
-                  <Cover album={album.id} asset={album.cover_id} />
-                )}
-              </span>
-              <span className="photo-album-name">{album.name}</span>
-              {album.missing ? (
-                <span className="sr-only">
-                  Removed from the photo library or no longer shared
-                </span>
-              ) : (
-                <AlbumMeta
-                  count={album.photo_count}
-                  span={monthSpan(album.first_month, album.last_month)}
-                  unit="photos"
-                />
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
-  )
-}
-
-/** A decorative cover: the album's name already names the plate. */
-function Cover({ album, asset }: WallItem): React.JSX.Element {
-  const [failed, setFailed] = useState(false)
-
-  const imageRef = useCallback((image: HTMLImageElement | null) => {
-    if (image?.complete === true && image.naturalWidth === 0) setFailed(true)
-  }, [])
-
-  return failed ? (
-    <span className="photo-album-blank">
-      <ImageBrokenIcon size={32} weight="light" aria-hidden="true" />
-    </span>
-  ) : (
-    <img
-      ref={imageRef}
-      src={photoUrl(album, asset, "thumbnail")}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      onError={() => setFailed(true)}
-    />
   )
 }
 
@@ -360,7 +209,7 @@ function WallHead({
   total,
 }: Head & { total: number | null }): React.JSX.Element {
   return (
-    <header className="photo-head">
+    <header className="mb-photo-head flex flex-wrap items-center gap-x-4 gap-y-2 px-margin">
       {back === undefined ? null : (
         <Button
           variant="outline"
@@ -372,28 +221,21 @@ function WallHead({
           <span className="sr-only">All albums</span>
         </Button>
       )}
-      <h2 className="photo-head-title">{title}</h2>
+      <h2 className="min-w-0 text-lead leading-none font-medium tracking-headline">
+        {title}
+      </h2>
       {total === null ? null : (
-        <AlbumMeta count={total} span={span} unit="photos" />
+        <AlbumMeta
+          className="ms-1 me-0"
+          count={total}
+          span={span}
+          unit="photos"
+        />
       )}
     </header>
   )
 }
 
-// Thumbnails tell their own frame once loaded; until then a tile is a 3:2 landscape.
-const DEFAULT_RATIO = 1.5
-
-const ratios = new Map<string, number>()
-
-function ratioOf(width: number, height: number): number {
-  return Math.min(2.4, Math.max(0.5, width / height))
-}
-
-/**
- * The wall's single page request, owned by `load` in `PhotoWall`: idle, reading the page at a
- * cursor, or that read failed and the same cursor is offered again. Loaded items and the next
- * cursor are separate view data that a failure never touches.
- */
 type PageRequest =
   | { state: "idle" }
   | { state: "loading"; cursor: number }
@@ -522,13 +364,16 @@ function PhotoWall({
     <>
       <WallHead {...head} total={first.total} />
       {items.length === 0 ? (
-        <div className="photo-empty">
+        <div className={noteClass}>
           <ImagesIcon size={56} weight="light" aria-hidden="true" />
-          <h3>No photos here yet</h3>
+          <h3 className={noteHeading}>No photos here yet</h3>
           <p className="sr-only">This album has no available still photos.</p>
         </div>
       ) : (
-        <ul className="photo-wall">
+        <ul
+          data-slot="photo-wall"
+          className="flex flex-wrap items-start gap-1 px-1 after:grow-100000 after:basis-0 max-phone:gap-0.75 max-phone:px-0.75"
+        >
           {items.map((item, at) => (
             <Tile
               key={item.asset}
@@ -544,7 +389,11 @@ function PhotoWall({
           ))}
         </ul>
       )}
-      <div ref={end} className="photo-more">
+      <div
+        ref={end}
+        data-slot="photo-more"
+        className="flex min-h-px justify-center pt-6 pb-10 empty:p-0 empty:pb-1"
+      >
         {next === null ? null : (
           <Button
             variant="outline"
@@ -553,9 +402,7 @@ function PhotoWall({
             onClick={() => void load(false)}
           >
             {loading ? "Loading photos…" : failed ? "Try again" : "Load more"}
-            {failed ? (
-              <span className="photo-failed" aria-hidden="true" />
-            ) : null}
+            {failed ? <span className={failedDot} aria-hidden="true" /> : null}
           </Button>
         )}
       </div>
@@ -583,15 +430,14 @@ function PhotoWall({
             }
           }}
         >
-          <div className="photo-viewer">
+          <PhotoViewer>
             <div className="sr-only">
               <DialogTitle>{head.title}</DialogTitle>
               <DialogDescription>
                 Photo {position} of {first.total}
               </DialogDescription>
             </div>
-            <div
-              className="photo-stage"
+            <ViewerStage
               onPointerDown={(event) => {
                 swipe.current =
                   event.pointerType === "mouse"
@@ -618,178 +464,37 @@ function PhotoWall({
                   key={current.asset}
                   src={photoUrl(current.album, current.asset, "preview")}
                   alt={`Photo ${position} from ${albumName(current)}`}
+                  variant="viewer"
                 />
               )}
-            </div>
-            <div className="photo-viewer-bar">
-              <span className="photo-viewer-where" aria-hidden="true">
-                <span className="num">
-                  {position} / {formatWhole(first.total)}
-                </span>
-                {view === ALL_PHOTOS && current !== undefined ? (
-                  <span>{albumName(current)}</span>
-                ) : null}
-                {current?.year === undefined ? null : (
-                  <span className="num">{current.year}</span>
-                )}
+            </ViewerStage>
+            <ViewerBar decorative>
+              <span className="num">
+                {position} / {formatWhole(first.total)}
               </span>
-              <DialogClose
-                render={<Button variant="outline" size="key-icon" />}
-                title="Close photo"
-              >
-                <XIcon size={22} aria-hidden="true" />
-                <span className="sr-only">Close photo</span>
-              </DialogClose>
-            </div>
-            <div className="photo-step" data-side="previous">
-              <Button
-                variant="outline"
-                size="key-icon"
-                disabled={index <= 0}
-                title="Previous photo"
-                onClick={() => go(-1)}
-              >
-                <CaretLeftIcon size={26} aria-hidden="true" />
-                <span className="sr-only">← Previous</span>
-              </Button>
-            </div>
-            <div className="photo-step" data-side="next">
-              <Button
-                variant="outline"
-                size="key-icon"
-                disabled={index === items.length - 1 && next === null}
-                title="Next photo"
-                onClick={() => go(1)}
-              >
-                <CaretRightIcon size={26} aria-hidden="true" />
-                <span className="sr-only">Next →</span>
-              </Button>
-            </div>
+              {view === ALL_PHOTOS && current !== undefined ? (
+                <span>{albumName(current)}</span>
+              ) : null}
+              {current?.year === undefined ? null : (
+                <span className="num">{current.year}</span>
+              )}
+            </ViewerBar>
+            <ViewerStep
+              side="previous"
+              disabled={index <= 0}
+              onClick={() => go(-1)}
+            />
+            <ViewerStep
+              side="next"
+              disabled={index === items.length - 1 && next === null}
+              onClick={() => go(1)}
+            />
             <span className="sr-only" aria-live="polite">
               {position} / {first.total}
             </span>
-          </div>
+          </PhotoViewer>
         </DialogContent>
       </Dialog>
     </>
-  )
-}
-
-function Tile({
-  item,
-  label,
-  alt,
-  register,
-  open,
-}: {
-  item: WallItem
-  label: string
-  alt: string
-  register: (element: HTMLButtonElement | null) => void
-  open: () => void
-}): React.JSX.Element {
-  const [ratio, setRatio] = useState(
-    () => ratios.get(item.asset) ?? DEFAULT_RATIO
-  )
-
-  return (
-    <li
-      className="photo-cell"
-      // SAFETY: CSSProperties omits custom properties; --ratio is the photo's width over height.
-      style={{ "--ratio": ratio } as React.CSSProperties}
-    >
-      <button
-        ref={register}
-        type="button"
-        className="photo-tile"
-        aria-label={label}
-        onClick={open}
-      >
-        <PhotoImage
-          src={photoUrl(item.album, item.asset, "thumbnail")}
-          alt={alt}
-          lazy
-          measure={(width, height) => {
-            const value = ratioOf(width, height)
-            ratios.set(item.asset, value)
-            setRatio(value)
-          }}
-        />
-      </button>
-    </li>
-  )
-}
-
-function PhotoImage({
-  src,
-  alt,
-  lazy = false,
-  measure,
-}: {
-  src: string
-  alt: string
-  lazy?: boolean
-  measure?: (width: number, height: number) => void
-}): React.JSX.Element {
-  const [state, setState] = useState<"loading" | "loaded" | "failed">("loading")
-  const [attempt, setAttempt] = useState(0)
-
-  const settle = useEffectEvent((image: HTMLImageElement) => {
-    if (image.naturalWidth > 0) {
-      setState("loaded")
-      measure?.(image.naturalWidth, image.naturalHeight)
-    } else setState("failed")
-  })
-
-  const imageRef = (image: HTMLImageElement | null): void => {
-    // SSR thumbnails can finish before React attaches its load/error listeners.
-    if (image !== null && image.complete) settle(image)
-  }
-
-  return (
-    <div className="photo-image" data-state={state}>
-      {state === "failed" ? (
-        <div className="photo-image-status" role="status">
-          <ImageBrokenIcon
-            size={lazy ? 28 : 48}
-            weight="light"
-            aria-hidden="true"
-          />
-          <span className="sr-only">Photo unavailable</span>
-          {lazy ? null : (
-            <Button
-              variant="outline"
-              size="key-icon"
-              title="Retry photo"
-              onClick={() => {
-                setAttempt((value) => value + 1)
-                setState("loading")
-              }}
-            >
-              <ArrowClockwiseIcon size={20} aria-hidden="true" />
-              <span className="sr-only">Retry photo</span>
-            </Button>
-          )}
-        </div>
-      ) : (
-        <>
-          <img
-            key={attempt}
-            ref={imageRef}
-            src={`${src}${attempt ? `?retry=${attempt}` : ""}`}
-            alt={alt}
-            loading={lazy ? "lazy" : "eager"}
-            decoding="async"
-            onLoad={(event) => settle(event.currentTarget)}
-            onError={() => setState("failed")}
-          />
-          {state === "loading" ? (
-            <span className="photo-image-status">
-              <span className="sr-only">Loading photo…</span>
-            </span>
-          ) : null}
-        </>
-      )}
-    </div>
   )
 }

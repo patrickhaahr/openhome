@@ -6,9 +6,16 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { AddCard, type FindCards } from "@/components/binder-add"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { OpenConnection } from "@/components/control-alert"
+import { Page } from "@/components/binder-page"
 import { BinderSheet } from "@/components/binder-sheet"
 import { BinderValueBar } from "@/components/binder-value"
 import { useReducedMotion } from "@/components/idle-screen"
+import {
+  ListBar,
+  ListEmpty,
+  ListsFrame,
+  keyLink,
+} from "@/components/list-frame"
 import {
   FeedbackLine,
   ListSheet,
@@ -20,7 +27,6 @@ import {
   binderFailureMessage,
   cardImageUrl,
   paginate,
-  pocketsPerPage,
   pocketsPerSpread,
   viewOf,
   type BinderEntry,
@@ -36,7 +42,6 @@ import {
   opening,
   settleDuration,
   turnStep,
-  type Sheet,
   type Turn,
   type TurnDirection,
   type TurnEvent,
@@ -48,6 +53,13 @@ import {
   type BinderMutation,
 } from "@/lib/binder-edit"
 import type { BinderAddReceipt, BinderAddition } from "@/lib/binder-add"
+
+/**
+ * On a wide screen the bar's keys and value stand in the gutters beside the spread, which takes
+ * the full height; elsewhere the credit shares the folio's line in the corner the turn keys leave.
+ */
+const frame =
+  "tablet:relative binder-wide:grid-cols-binder-wide binder-wide:grid-rows-hug-fill-hug binder-wide:gap-x-8 binder-wide:*:data-[slot=lists-bar]:contents binder-wide:*:data-[slot=lists-empty]:col-start-2 binder-wide:*:data-[slot=lists-empty]:row-span-full binder-wide:[&>[role=status]]:col-start-3 binder-wide:[&>[role=status]]:row-start-2 binder-wide:[&>[role=status]]:text-right"
 
 /**
  * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
@@ -112,15 +124,16 @@ export function BinderBook({
   }
 
   return (
-    <div className="lists binder" aria-busy={busy}>
+    <ListsFrame className={frame} aria-busy={busy}>
       {view.view === "empty" || view.view === "spread" ? (
-        <div className="lists-bar">
+        <ListBar>
           <PersonKeys
             owners={view.owners}
             selected={view.owner.id}
             everyone={false}
             label="Whose Binder"
             choose={(person) => choose({ person })}
+            variant="rail"
           />
           <BinderValueBar value={view.value}>
             <AddCard
@@ -132,16 +145,24 @@ export function BinderBook({
               refresh={refresh}
             />
           </BinderValueBar>
-        </div>
+        </ListBar>
       ) : null}
       {selected === undefined ? (
         <FeedbackLine feedback={feedback} busy={busy} />
       ) : null}
       <Body view={view} choose={choose} refresh={refresh} openEntry={setOpen} />
-      <aside className="binder-credits" aria-label="OPTCG credits">
+      <aside
+        className="text-label text-muted-ink tablet:absolute tablet:bottom-0 tablet:left-0 binder-wide:static binder-wide:col-start-3 binder-wide:row-start-3 binder-wide:justify-self-end binder-wide:text-right"
+        aria-label="OPTCG credits"
+      >
         <p>
           Card data and images come from the{" "}
-          <a href="https://optcgapi.com" target="_blank" rel="noreferrer">
+          <a
+            href="https://optcgapi.com"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
             OPTCG catalogue
           </a>
           .
@@ -151,10 +172,10 @@ export function BinderBook({
         open={selected !== undefined}
         close={() => setOpen(undefined)}
         title={selected?.card.name ?? "Card"}
-        className="binder-stage"
+        variant="stage"
         actions={
           at === -1 ? null : (
-            <nav className="binder-stage-turn" aria-label="Cards">
+            <nav className="flex items-center gap-3" aria-label="Cards">
               <Button
                 variant="outline"
                 size="key-icon"
@@ -164,7 +185,11 @@ export function BinderBook({
                 <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
                 <span className="sr-only">Previous card</span>
               </Button>
-              <p className="binder-folio num" aria-live="polite">
+              <p
+                data-slot="binder-folio"
+                className="min-w-18 text-center num text-muted-ink"
+                aria-live="polite"
+              >
                 {at + 1} of {order.length}
               </p>
               <Button
@@ -213,7 +238,7 @@ export function BinderBook({
           </>
         ) : null}
       </ListSheet>
-    </div>
+    </ListsFrame>
   )
 }
 
@@ -231,39 +256,36 @@ function Body({
   switch (view.view) {
     case "unavailable":
       return (
-        <div className="lists-empty">
-          <CardsIcon size={48} weight="light" aria-hidden="true" />
-          <h2>Binder unavailable</h2>
+        <ListEmpty icon={CardsIcon} title="Binder unavailable">
           <p>{binderFailureMessage[view.reason]}</p>
-          <div className="binder-recovery">
+          <div className="flex items-center gap-3">
             <CheckAgainButton check={refresh} />
             {view.reason === "unreachable" ||
             view.reason === "unavailable" ? null : (
               <OpenConnection />
             )}
           </div>
-        </div>
+        </ListEmpty>
       )
     case "no-household":
       return (
-        <div className="lists-empty">
-          <CardsIcon size={48} weight="light" aria-hidden="true" />
-          <h2>No one here yet</h2>
+        <ListEmpty icon={CardsIcon} title="No one here yet">
           <p>Household members are added under Wish.</p>
-          <Link to="/lists" search={{ tab: "wish" }} className="key-link-text">
+          <Link to="/lists" search={{ tab: "wish" }} className={keyLink}>
             Open wishes
           </Link>
-        </div>
+        </ListEmpty>
       )
     case "empty":
       return (
-        <div className="lists-empty">
-          <CardsIcon size={48} weight="light" aria-hidden="true" />
-          <h2>{view.owner.name}’s Binder is empty</h2>
+        <ListEmpty
+          icon={CardsIcon}
+          title={<>{view.owner.name}’s Binder is empty</>}
+        >
           <p>
             Ask Hermes to add cards from a photo, or add one by its Card Code.
           </p>
-        </div>
+        </ListEmpty>
       )
     case "spread":
       return (
@@ -418,10 +440,14 @@ function Spread({
   )
 
   return (
-    <section className="binder-book" aria-label="Binder spread">
+    <section
+      className="grid grid-cols-flanked items-center justify-items-center gap-x-binder-turn-gap gap-y-2 max-tablet:grid-cols-binder-turn max-tablet:gap-x-6 binder-wide:col-start-2 binder-wide:row-span-full binder-wide:gap-x-4"
+      aria-label="Binder spread"
+    >
       <Button
         variant="outline"
         size="key-icon"
+        className="col-start-1 row-start-1 max-tablet:row-start-2 max-tablet:justify-self-end"
         disabled={!can.back}
         onClick={() => flip("back")}
       >
@@ -430,7 +456,8 @@ function Spread({
       </Button>
       <div
         ref={spread}
-        className="binder-spread"
+        data-slot="binder-spread"
+        className="col-start-2 row-start-1 grid binder-spread touch-pan-y grid-cols-2 gap-(--spine-gap) select-none touch-callout-none max-tablet:col-span-full"
         onPointerDown={(event) => {
           if (!event.isPrimary || event.button !== 0) return
 
@@ -442,7 +469,7 @@ function Spread({
             time: event.timeStamp,
             pocket:
               event.target instanceof Element &&
-              event.target.closest(".pocket-card") !== null,
+              event.target.closest('[data-slot="pocket-card"]') !== null,
             grip: grip(
               event.currentTarget.getBoundingClientRect(),
               event.clientX,
@@ -489,15 +516,17 @@ function Spread({
           return (
             <div
               key={side}
-              className="binder-side"
+              data-slot="binder-side"
+              className="relative min-w-0 data-lifted:z-1"
               data-side={side}
               data-lifted={lifted === undefined ? undefined : ""}
             >
               {lifted === undefined ? null : (
-                <Page sheet={lifted.under} openEntry={openEntry} />
+                <Page sheet={lifted.under} openEntry={openEntry} under />
               )}
               <div
                 ref={lifted === undefined ? undefined : leaf}
+                data-slot="binder-leaf"
                 className="binder-leaf"
                 data-settling={
                   lifted !== undefined && shown.phase === "settling"
@@ -521,13 +550,18 @@ function Spread({
       <Button
         variant="outline"
         size="key-icon"
+        className="col-start-3 row-start-1 max-tablet:row-start-2 max-tablet:justify-self-start"
         disabled={!can.forward}
         onClick={() => flip("forward")}
       >
         <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
         <span className="sr-only">Next pages</span>
       </Button>
-      <p className="binder-folio num" aria-live="polite">
+      <p
+        data-slot="binder-folio"
+        className="col-start-2 row-start-2 min-w-28 text-center text-label num text-muted-ink"
+        aria-live="polite"
+      >
         Pages {first}–{first + 1} of {count * 2}
       </p>
     </section>
@@ -549,88 +583,4 @@ function usePrefetchNeighbours(
         new Image().src = cardImageUrl(entry.card.id)
     }
   }, [entries, index, count])
-}
-
-/** One 3×3 page, filled to nine pockets so the rest show empty. */
-function Page({
-  sheet,
-  openEntry,
-}: {
-  sheet: Sheet<BinderEntry>
-  openEntry: (id: string) => void
-}): React.JSX.Element {
-  const { number, entries } = sheet
-
-  const empty = Array.from(
-    { length: pocketsPerPage - entries.length },
-    (_, slot) => slot
-  )
-
-  return (
-    <ol className="binder-page" aria-label={`Page ${number}`}>
-      {entries.map((entry) => (
-        <Pocket key={entry.id} entry={entry} open={() => openEntry(entry.id)} />
-      ))}
-      {empty.map((slot) => (
-        <li
-          key={`empty-${slot}`}
-          className="pocket"
-          data-empty=""
-          aria-hidden="true"
-        />
-      ))}
-    </ol>
-  )
-}
-
-/** The card's own picture over its code and name, which stay if the picture cannot load. Tapping opens its sheet. */
-function Pocket({
-  entry,
-  open,
-}: {
-  entry: BinderEntry
-  open: () => void
-}): React.JSX.Element {
-  const { card, quantity, language } = entry
-
-  return (
-    <li className="pocket" data-language={language}>
-      <button type="button" className="pocket-card" onClick={open}>
-        <span className="pocket-type" aria-hidden="true">
-          <span className="num">{card.card_code}</span>
-          {card.name}
-        </span>
-        <img
-          src={cardImageUrl(card.id)}
-          alt=""
-          draggable={false}
-          width={600}
-          height={838}
-          loading="lazy"
-          decoding="async"
-          onError={(event) => {
-            event.currentTarget.hidden = true
-          }}
-          onLoad={(event) => {
-            event.currentTarget.hidden = false
-          }}
-        />
-        <span className="sr-only">
-          {card.name}, {card.card_code}
-          {language === "ja" ? ", Japanese" : ""}
-          {quantity > 1 ? `, ${quantity} copies` : ""}
-        </span>
-      </button>
-      {language === "ja" ? (
-        <span className="pocket-mark" aria-hidden="true">
-          JP
-        </span>
-      ) : null}
-      {quantity > 1 ? (
-        <span className="pocket-quantity num" aria-hidden="true">
-          ×{quantity}
-        </span>
-      ) : null}
-    </li>
-  )
 }

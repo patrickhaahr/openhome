@@ -4,7 +4,16 @@ import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { listKey, listKeys } from "@/components/list-frame"
 import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
+import {
+  field,
+  linkInput,
+  linkStatus,
+  sheetActions,
+  sheetBody,
+} from "@/components/sheet-parts"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { WishArt } from "@/components/wish-sheet"
 import {
   WishFields,
@@ -252,7 +261,7 @@ export function WishAdd({
 
   return (
     <form
-      className="sheet-body"
+      className={sheetBody()}
       aria-label="Add a wish"
       onSubmit={(event) => {
         event.preventDefault()
@@ -260,9 +269,9 @@ export function WishAdd({
         if (ready && !busy) void submit(ownerId, listId)
       }}
     >
-      <label className="field" htmlFor={`${id}-link`}>
+      <label className={field()} htmlFor={`${id}-link`}>
         <span>Paste a link</span>
-        <span className="link-input">
+        <span className={linkInput}>
           <LinkSimpleIcon size={22} aria-hidden="true" />
           <Input
             id={`${id}-link`}
@@ -294,11 +303,15 @@ export function WishAdd({
             placeholder="https://…"
           />
           {reading.state === "reading" ? (
-            <CircleNotchIcon size={22} className="spin" aria-hidden="true" />
+            <CircleNotchIcon
+              size={22}
+              className="animate-spin"
+              aria-hidden="true"
+            />
           ) : null}
         </span>
       </label>
-      <p className="link-status" role="status">
+      <p className={linkStatus} role="status">
         {reading.state === "reading"
           ? "Reading the link…"
           : reading.state === "read"
@@ -307,9 +320,13 @@ export function WishAdd({
               ? "Choose who it is for, and the link is read."
               : ""}
       </p>
-      <div className="wish-add-preview">
+      <div className="grid grid-aside-34 items-start gap-5 max-sm:grid-cols-1">
         {/* An unsaved picture is never fetched from the shop; it shows once the wish is saved. */}
-        <WishArt title={draft.title || "New wish"} image={null} />
+        <WishArt
+          title={draft.title || "New wish"}
+          image={null}
+          size="preview"
+        />
         <WishFields
           draft={draft}
           edit={(change) => {
@@ -327,14 +344,14 @@ export function WishAdd({
           withLink={false}
         />
       </div>
-      <fieldset className="field destination">
+      <fieldset className={field()}>
         <legend>For</legend>
-        <div className="view-tabs person-keys">
+        <ViewTabs variant="people">
           {owners.map((owner) => (
             <button
               key={owner.id}
               type="button"
-              className="view-tab person-key"
+              {...viewTab("person")}
               aria-pressed={ownerId === owner.id}
               disabled={busy}
               onClick={() => {
@@ -348,17 +365,17 @@ export function WishAdd({
               {owner.name}
             </button>
           ))}
-        </div>
+        </ViewTabs>
       </fieldset>
       {ownerId === undefined ? null : (
-        <fieldset className="field destination">
+        <fieldset className={field()}>
           <legend>List</legend>
-          <div className="list-keys">
+          <div className={listKeys}>
             {ownerLists.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className="list-key"
+                className={listKey()}
                 aria-pressed={listId === item.id}
                 disabled={busy}
                 onClick={() => chooseList(item.id)}
@@ -369,7 +386,7 @@ export function WishAdd({
             {newList === undefined ? (
               <button
                 type="button"
-                className="list-key list-key-new"
+                className={listKey({ kind: "new" })}
                 disabled={busy}
                 onClick={() => setNewList("")}
               >
@@ -377,7 +394,7 @@ export function WishAdd({
                 New list
               </button>
             ) : (
-              <span className="new-list">
+              <span className="flex items-center gap-2">
                 <label className="sr-only" htmlFor={`${id}-list`}>
                   New list name
                 </label>
@@ -418,7 +435,7 @@ export function WishAdd({
           </div>
         </fieldset>
       )}
-      <div className="sheet-actions sheet-submit">
+      <div className={sheetActions({ placement: "submit" })}>
         <Button type="submit" size="key-xl" disabled={!ready || busy}>
           <PlusIcon size={20} weight="bold" aria-hidden="true" />
           Add wish

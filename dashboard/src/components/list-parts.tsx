@@ -1,11 +1,77 @@
 import { useEffect, useReducer, useRef } from "react"
 import { Dialog } from "@base-ui/react/dialog"
+import { cva, type VariantProps } from "class-variance-authority"
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { useIdleBlock } from "@/components/idle-block"
+import { sheetScrim } from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { initial, type ListFeedback } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
+
+/** A person's disc; `ground` is for a disc on a tone step, and a wash disc turns ground inside a chosen key. */
+const disc = cva(
+  "inline-grid flex-none place-items-center rounded-full leading-none font-semibold text-ink",
+  {
+    variants: {
+      size: {
+        default: "size-8 text-sm",
+        heading: "size-9 text-base tracking-normal",
+        plate: "size-7 text-label",
+        household: "size-11 text-sm",
+        key: "size-14 text-2xl",
+      },
+      tone: {
+        wash: "bg-wash-strong group-aria-pressed/tab:bg-ground",
+        ground: "bg-ground",
+      },
+    },
+    defaultVariants: { size: "default", tone: "wash" },
+  }
+)
+
+const sheet = cva(
+  "fixed z-51 grid overscroll-contain text-ink duration-fast ease-app outline-none max-sm:max-h-sheet-height max-sm:rounded-t-sheet",
+  {
+    variants: {
+      variant: {
+        plate:
+          "inset-y-0 right-0 w-sheet content-start gap-5 overflow-y-auto bg-plate px-gutter pt-4 pb-8 transition-transform data-ending-style:translate-x-full data-starting-style:translate-x-full max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:data-ending-style:translate-x-0 max-sm:data-ending-style:translate-y-full max-sm:data-starting-style:translate-x-0 max-sm:data-starting-style:translate-y-full",
+        /** The Binder's card stage: the whole screen, fading in rather than rising. */
+        stage:
+          "inset-0 grid-rows-binder-stage content-stretch overflow-hidden bg-binder-stage transition-binder-stage data-ending-style:scale-98 data-ending-style:opacity-0 data-starting-style:scale-98 data-starting-style:opacity-0",
+      },
+    },
+    defaultVariants: { variant: "plate" },
+  }
+)
+
+const sheetHead = cva("flex min-h-12 items-center justify-end gap-4", {
+  variants: { variant: { plate: "", stage: "px-binder-stage-inset py-4" } },
+  defaultVariants: { variant: "plate" },
+})
+
+const sheetTitle = cva("mr-auto font-medium", {
+  variants: {
+    variant: {
+      plate: "text-lead tracking-title",
+      stage: "min-w-0 text-binder-card-title tracking-headline",
+    },
+  },
+  defaultVariants: { variant: "plate" },
+})
+
+/** `rail` stands the keys in the Binder's left gutter on a wide screen. */
+const personKeys = cva("", {
+  variants: {
+    variant: {
+      row: "",
+      rail: "binder-wide:col-start-1 binder-wide:row-span-full binder-wide:flex-col binder-wide:self-start binder-wide:justify-self-start binder-wide:rounded-panel",
+    },
+  },
+  defaultVariants: { variant: "row" },
+})
 
 /**
  * Everyone, then one key per Household User, on one wash track. The chosen key is the ink
@@ -19,6 +85,7 @@ export function PersonKeys({
   noun,
   label = "Whose list",
   everyone = true,
+  variant,
 }: {
   owners: readonly HouseholdUser[]
   selected: string | undefined
@@ -27,17 +94,24 @@ export function PersonKeys({
   noun?: readonly [string, string]
   label?: string
   everyone?: boolean
+  variant?: VariantProps<typeof personKeys>["variant"]
 }): React.JSX.Element {
   return (
-    <div className="view-tabs person-keys" role="group" aria-label={label}>
+    <ViewTabs
+      variant="people"
+      className={personKeys({ variant })}
+      data-slot="person-keys"
+      role="group"
+      aria-label={label}
+    >
       {everyone ? (
         <button
           type="button"
-          className="view-tab person-key"
+          {...viewTab("person")}
           aria-pressed={selected === undefined}
           onClick={() => choose(undefined)}
         >
-          <span className="person-disc" aria-hidden="true">
+          <span className={disc()} aria-hidden="true">
             <UsersThreeIcon size={16} weight="bold" />
           </span>
           Everyone
@@ -50,14 +124,14 @@ export function PersonKeys({
           <button
             key={owner.id}
             type="button"
-            className="view-tab person-key"
+            {...viewTab("person")}
             aria-pressed={selected === owner.id}
             onClick={() => choose(owner.id)}
           >
             <PersonDisc name={owner.name} />
             {owner.name}
             {count === undefined || noun === undefined ? null : (
-              <span className="person-count num">
+              <span className="text-label num text-muted-ink group-aria-pressed/tab:text-ground/70">
                 {count}
                 <span className="sr-only">
                   {" "}
@@ -68,14 +142,18 @@ export function PersonKeys({
           </button>
         )
       })}
-    </div>
+    </ViewTabs>
   )
 }
 
 /** A person's initial in a disc; decorative, since the name is always said beside it. */
-export function PersonDisc({ name }: { name: string }): React.JSX.Element {
+export function PersonDisc({
+  name,
+  size,
+  tone,
+}: { name: string } & VariantProps<typeof disc>): React.JSX.Element {
   return (
-    <span className="person-disc" aria-hidden="true">
+    <span className={disc({ size, tone })} aria-hidden="true">
       {initial(name)}
     </span>
   )
@@ -90,7 +168,7 @@ export function ListSheet({
   close,
   title,
   titleHidden = false,
-  className,
+  variant,
   actions,
   onKeyDown,
   children,
@@ -99,7 +177,7 @@ export function ListSheet({
   close: () => void
   title: string
   titleHidden?: boolean
-  className?: string
+  variant?: VariantProps<typeof sheet>["variant"]
   actions?: React.ReactNode
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   children: React.ReactNode
@@ -115,13 +193,17 @@ export function ListSheet({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="sheet-scrim" />
+        <Dialog.Backdrop className={sheetScrim} />
         <Dialog.Popup
-          className={className === undefined ? "sheet" : `sheet ${className}`}
+          data-slot="sheet"
+          className={sheet({ variant })}
           onKeyDown={onKeyDown}
         >
-          <div className="sheet-head">
-            <Dialog.Title className={titleHidden ? "sr-only" : "sheet-title"}>
+          <div data-slot="sheet-head" className={sheetHead({ variant })}>
+            <Dialog.Title
+              data-slot="sheet-title"
+              className={titleHidden ? "sr-only" : sheetTitle({ variant })}
+            >
               {title}
             </Dialog.Title>
             {actions}
@@ -144,6 +226,7 @@ export function Segments<T extends string>({
   options,
   choose,
   disabled = false,
+  fit = false,
 }: {
   label: string
   value: T | undefined
@@ -154,14 +237,19 @@ export function Segments<T extends string>({
   }>
   choose: (value: T) => void
   disabled?: boolean
+  fit?: boolean
 }): React.JSX.Element {
   return (
-    <div className="view-tabs segments" role="group" aria-label={label}>
+    <ViewTabs
+      variant={fit ? "fit" : "segments"}
+      role="group"
+      aria-label={label}
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
-          className="view-tab"
+          {...viewTab("segment")}
           aria-pressed={value === option.value}
           disabled={disabled}
           onClick={() => choose(option.value)}
@@ -170,7 +258,7 @@ export function Segments<T extends string>({
           {option.label}
         </button>
       ))}
-    </div>
+    </ViewTabs>
   )
 }
 
@@ -182,9 +270,16 @@ export function FeedbackLine({
   feedback: ListFeedback | undefined
   busy: boolean
 }): React.JSX.Element {
+  const failed = feedback?.failed === true
+
   return (
     <p
-      className={feedback?.failed === true ? "list-failure" : "sr-only"}
+      data-slot={failed ? "list-failure" : undefined}
+      className={
+        failed
+          ? "flex items-baseline gap-2 text-control text-danger before:size-2 before:flex-none before:-translate-y-0.5 before:rounded-full before:bg-current"
+          : "sr-only"
+      }
       role="status"
     >
       {feedback?.text ?? (busy ? "Saving…" : "")}

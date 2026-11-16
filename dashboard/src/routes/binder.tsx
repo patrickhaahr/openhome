@@ -22,7 +22,7 @@ export const Route = createFileRoute("/binder")({
   headers: () => ({ "Cache-Control": "no-store" }),
   component: BinderPage,
   pendingComponent: () => (
-    <p role="status" className="dir-pending">
+    <p role="status" className="inline-flex text-muted-ink">
       Loading Binder…
     </p>
   ),
@@ -36,7 +36,7 @@ function BinderPage(): React.JSX.Element {
   const mutate = useServerFn(mutateBinder)
 
   return (
-    <section>
+    <section data-slot="binder">
       <PageHead title="Binder" />
       <BinderBook
         data={data}

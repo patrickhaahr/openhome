@@ -1,26 +1,20 @@
-import { createElement, Suspense } from "react"
-import { Await, Link } from "@tanstack/react-router"
-import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise"
-import { CloudIcon } from "@phosphor-icons/react/dist/csr/Cloud"
 import { CloudSlashIcon } from "@phosphor-icons/react/dist/csr/CloudSlash"
-import { CloudFogIcon } from "@phosphor-icons/react/dist/csr/CloudFog"
-import { CloudLightningIcon } from "@phosphor-icons/react/dist/csr/CloudLightning"
-import { CloudRainIcon } from "@phosphor-icons/react/dist/csr/CloudRain"
-import { CloudSnowIcon } from "@phosphor-icons/react/dist/csr/CloudSnow"
-import { CloudSunIcon } from "@phosphor-icons/react/dist/csr/CloudSun"
-import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question"
-import { SunIcon } from "@phosphor-icons/react/dist/csr/Sun"
 import { ThermometerSimpleIcon } from "@phosphor-icons/react/dist/csr/ThermometerSimple"
 import { WindIcon } from "@phosphor-icons/react/dist/csr/Wind"
-import type { Icon } from "@phosphor-icons/react/dist/lib/types"
-import { CheckAgainButton } from "./check-again-button"
-import { LiveWeather } from "./live-weather"
 import { DaySky } from "./weather-sky"
+import { WeatherFailure } from "./weather-now"
+import {
+  degrees,
+  Measure,
+  percent,
+  value,
+  WeatherGlyph,
+  weekdayName,
+  type Days,
+} from "./weather-figures"
 import { weatherDescription, type WeatherRead } from "@/lib/weather"
-import { getWeather } from "@/lib/weather.functions"
-
-const number = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 })
+import { cn } from "@/lib/utils"
 
 const timestamp = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
@@ -48,69 +42,6 @@ const hourOffset = new Intl.DateTimeFormat("en-GB", {
   timeZoneName: "shortOffset",
 })
 
-const weekday = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/Copenhagen",
-  weekday: "short",
-})
-
-function value(amount: number | null | undefined, unit: string): string {
-  return amount === null || amount === undefined
-    ? "Unavailable"
-    : `${number.format(amount)} ${unit}`
-}
-
-/** A figure with its unit set smaller; the text still reads "12.4 °C". */
-function Measure({
-  amount,
-  unit,
-}: {
-  amount: number | null | undefined
-  unit: string
-}): React.JSX.Element {
-  if (amount === null || amount === undefined)
-    return <span data-gap="true">Unavailable</span>
-
-  return (
-    <>
-      {number.format(amount)} <span className="unit">{unit}</span>
-    </>
-  )
-}
-
-/** WMO code ranges and their glyphs; unknown codes never draw a clear sky. */
-const glyphs: readonly (readonly [from: number, to: number, glyph: Icon])[] = [
-  [0, 1, SunIcon],
-  [2, 2, CloudSunIcon],
-  [3, 3, CloudIcon],
-  [45, 45, CloudFogIcon],
-  [48, 48, CloudFogIcon],
-  [51, 67, CloudRainIcon],
-  [71, 77, CloudSnowIcon],
-  [80, 82, CloudRainIcon],
-  [85, 86, CloudSnowIcon],
-  [95, 99, CloudLightningIcon],
-]
-
-/** A WMO code as a glyph. */
-export function WeatherGlyph({
-  code,
-  size,
-}: {
-  code: number | null
-  size: number
-}): React.JSX.Element {
-  const match = glyphs.find(
-    ([from, to]) => code !== null && code >= from && code <= to
-  )
-
-  return createElement(match?.[2] ?? QuestionIcon, {
-    size,
-    "aria-hidden": true,
-  })
-}
-
-type Days = Extract<WeatherRead, { state: "fresh" }>["forecast"]["days"]
-
 /** Highs and lows on one shared scale, so the week reads as a shape. */
 function weekScale(days: Days): (celsius: number) => number {
   const values = days.flatMap((day) =>
@@ -123,33 +54,6 @@ function weekScale(days: Days): (celsius: number) => number {
   return (celsius) => (high === low ? 0.5 : (celsius - low) / (high - low))
 }
 
-function weekdayName(date: string): string {
-  return weekday.format(new Date(`${date}T12:00:00Z`)).replace(".", "")
-}
-
-function WeatherFailure({
-  reason,
-}: {
-  reason: "missing-configuration" | "provider-unavailable"
-}): React.JSX.Element {
-  return (
-    <div className="weather-empty" role="status">
-      <CloudSlashIcon size={44} weight="light" aria-hidden="true" />
-      <h3>
-        {reason === "missing-configuration"
-          ? "Weather setup needed"
-          : "Weather unavailable"}
-      </h3>
-      <p className="sr-only">
-        {reason === "missing-configuration"
-          ? "Set the private forecast location on OpenHome to see local conditions."
-          : "OpenHome could not provide a forecast. Check Connection or try again."}
-      </p>
-      <CheckAgainButton compact />
-    </div>
-  )
-}
-
 /** Every hour's values for assistive technology; the sky beside it draws them. */
 function HourlyForecast({
   hours,
@@ -157,13 +61,16 @@ function HourlyForecast({
   hours: Extract<WeatherRead, { state: "fresh" }>["forecast"]["hourly"]
 }): React.JSX.Element {
   return (
-    <section className="wx-sky-area" aria-labelledby="hourly-heading">
+    <section
+      className="flex min-h-72 tablet:col-start-2 tablet:row-span-3 tablet:row-start-1"
+      aria-labelledby="hourly-heading"
+    >
       <div className="sr-only">
         <h2 id="hourly-heading">Next 24 hours</h2>
         <p>Walking or running?</p>
       </div>
       {hours.length === 0 ? (
-        <p className="wx-missing" role="status">
+        <p className="flex text-danger" role="status">
           <CloudSlashIcon size={28} weight="light" aria-hidden="true" />
           <span className="sr-only">Hourly forecast unavailable</span>
         </p>
@@ -223,118 +130,6 @@ function HourlyForecast({
   )
 }
 
-/** Home weather: the temperature as a figure, then the week as a shape. */
-export function WeatherNow({
-  weather,
-}: {
-  weather: Promise<WeatherRead>
-}): React.JSX.Element {
-  return (
-    <div className="weather-now">
-      <Suspense
-        fallback={
-          <>
-            <p role="status" className="sr-only">
-              Checking weather…
-            </p>
-            <span className="weather-ghost" aria-hidden="true" />
-            <OpenWeather />
-          </>
-        }
-      >
-        <Await promise={weather}>
-          {(initial) => (
-            <LiveWeather initial={initial} readWeather={getWeather}>
-              {(read) => {
-                if (read.state === "unavailable")
-                  return (
-                    <>
-                      <WeatherFailure reason={read.reason} />
-                      <OpenWeather />
-                    </>
-                  )
-
-                const { current, days } = read.forecast
-
-                return (
-                  <Link
-                    to="/weather"
-                    aria-label="Open Weather"
-                    className="forecast"
-                    data-stale={read.state === "stale"}
-                  >
-                    <span className="forecast-now">
-                      <span className="forecast-now-glyph">
-                        <WeatherGlyph
-                          code={current?.weather_code ?? null}
-                          size={48}
-                        />
-                      </span>
-                      <span className="forecast-now-temp">
-                        {degrees(current?.temperature_c)}
-                      </span>
-                      {read.state === "stale" ? (
-                        <span className="forecast-now-stale" aria-hidden="true">
-                          <ClockCounterClockwiseIcon size={18} weight="bold" />
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="sr-only">
-                      {weatherDescription(current?.weather_code ?? null)}.{" "}
-                      {read.state === "stale" ? "Stale. " : ""}Feels{" "}
-                      {value(current?.feels_like_c, "°C")}, wind{" "}
-                      {value(current?.wind_ms, "m/s")}.
-                    </span>
-                    <ForecastDays days={days} />
-                  </Link>
-                )
-              }}
-            </LiveWeather>
-          )}
-        </Await>
-      </Suspense>
-    </div>
-  )
-}
-
-function OpenWeather(): React.JSX.Element {
-  return (
-    <Link to="/weather" aria-label="Open Weather" className="dir-go">
-      <ArrowUpRightIcon size={18} aria-hidden="true" />
-    </Link>
-  )
-}
-
-/** A whole-degree reading, or a dash when the forecast has none. */
-export function degrees(celsius: number | null | undefined): string {
-  return celsius === null || celsius === undefined
-    ? "–"
-    : `${Math.round(celsius)}°`
-}
-
-/** Today and the days ahead: name, glyph and the day's high. Lows live on Weather. */
-function ForecastDays({ days }: { days: Days }): React.JSX.Element {
-  return (
-    <ol className="forecast-days" aria-label="Seven days">
-      {days.map((day, index) => (
-        <li key={day.date}>
-          <span className="forecast-day-name">
-            {index === 0 ? "Today" : weekdayName(day.date)}
-          </span>
-          <WeatherGlyph code={day.weather_code} size={28} />
-          <span className="sr-only">
-            {weatherDescription(day.weather_code)}.
-          </span>
-          <span className="forecast-day-high">
-            <span className="sr-only">High </span>
-            {degrees(day.high_c)}
-          </span>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
 /** Whether the forecast still holds: nothing to see while fresh, a rewind mark when stale. The
  * page refreshes itself, so there is no manual check. */
 function WeatherFreshness({
@@ -346,9 +141,18 @@ function WeatherFreshness({
   const fetched = new Date(weather.forecast.fetched_at)
 
   return (
-    <div className="weather-freshness" role="status">
+    <div
+      className={cn(
+        "col-span-full flex items-center gap-3",
+        !stale && "hidden"
+      )}
+      role="status"
+    >
       {stale ? (
-        <span className="weather-stale-mark" aria-hidden="true">
+        <span
+          className="inline-flex items-center gap-1.5 text-control font-semibold text-danger tabular-nums"
+          aria-hidden="true"
+        >
           <ClockCounterClockwiseIcon size={20} weight="bold" />
           <time dateTime={weather.forecast.fetched_at}>
             {hourTime.format(fetched)}
@@ -363,6 +167,12 @@ function WeatherFreshness({
     </div>
   )
 }
+
+const attributionLink = "text-ink underline underline-offset-3"
+
+const measure = "text-lead font-medium tracking-title tabular-nums"
+
+const dayFigure = "[&>dd]:whitespace-nowrap [&>dd]:tabular-nums"
 
 /**
  * The numbers on the left (now, then the week as ranges on one scale), the next day as a
@@ -381,33 +191,44 @@ export function WeatherOverview({
   const scale = weekScale(forecast.days)
 
   return (
-    <div className="wx" data-stale={weather.state === "stale"}>
+    <div
+      data-slot="wx"
+      className="grid grid-cols-1 gap-x-pane-gap gap-y-7 *:min-w-0 tablet:min-h-fit-screen tablet:grid-cols-figures-fill tablet:grid-rows-hug-fill-hug"
+      data-stale={weather.state === "stale"}
+    >
       {weather.state === "stale" ? (
         <p className="sr-only">
           Showing the last cached forecast; conditions may have changed.
         </p>
       ) : null}
-      <section className="wx-now" aria-labelledby="current-heading">
+      <section
+        className="grid grid-cols-hug-fill items-center gap-x-6 gap-y-5 tablet:col-start-1 tablet:row-start-1"
+        aria-labelledby="current-heading"
+      >
         <h2 id="current-heading" className="sr-only">
           Current conditions
         </h2>
-        <p className="wx-temp">
+        <p className="-ml-title-hang text-figure-xl leading-figure-xl font-medium tracking-figure-xl whitespace-nowrap tabular-nums in-data-[stale=true]:opacity-45">
           <span aria-hidden="true">{degrees(current?.temperature_c)}</span>
           <span className="sr-only">{value(current?.temperature_c, "°C")}</span>
         </p>
-        <p className="wx-condition">
-          <WeatherGlyph code={current?.weather_code ?? null} size={96} />
+        <p className="flex justify-end in-data-[stale=true]:opacity-45">
+          <WeatherGlyph
+            code={current?.weather_code ?? null}
+            size={96}
+            className="h-auto w-condition-glyph"
+          />
           <span className="sr-only">
             {weatherDescription(current?.weather_code ?? null)}
           </span>
         </p>
-        <dl className="wx-measures">
+        <dl className="col-span-full flex gap-8 *:flex *:items-center *:gap-2.5">
           <div>
-            <dt>
+            <dt className="flex text-muted-ink">
               <ThermometerSimpleIcon size={22} aria-hidden="true" />
               <span className="sr-only">Feels like</span>
             </dt>
-            <dd>
+            <dd className={measure}>
               <span aria-hidden="true">{degrees(current?.feels_like_c)}</span>
               <span className="sr-only">
                 {value(current?.feels_like_c, "°C")}
@@ -415,11 +236,11 @@ export function WeatherOverview({
             </dd>
           </div>
           <div>
-            <dt>
+            <dt className="flex text-muted-ink">
               <WindIcon size={22} aria-hidden="true" />
               <span className="sr-only">Wind</span>
             </dt>
-            <dd>
+            <dd className={measure}>
               <Measure amount={current?.wind_ms} unit="m/s" />
             </dd>
           </div>
@@ -432,14 +253,21 @@ export function WeatherOverview({
         </p>
       </section>
       <HourlyForecast hours={forecast.hourly} />
-      <section className="wx-week" aria-labelledby="forecast-heading">
+      <section
+        className="flex tablet:col-start-1 tablet:row-start-2"
+        aria-labelledby="forecast-heading"
+      >
         <h2 id="forecast-heading" className="sr-only">
           Seven days
         </h2>
-        <ol>
+        <ol className="flex flex-1 flex-col">
           {forecast.days.map((day, index) => (
-            <li key={day.date} className="wx-day" data-today={index === 0}>
-              <h3>
+            <li
+              key={day.date}
+              className="grid min-h-10 flex-1 grid-cols-week-row items-center gap-3"
+              data-today={index === 0}
+            >
+              <h3 className="font-medium text-muted-ink in-data-[today=true]:text-ink">
                 <time dateTime={day.date}>
                   <span aria-hidden="true">
                     {index === 0 ? "Today" : weekdayName(day.date)}
@@ -449,34 +277,50 @@ export function WeatherOverview({
                   </span>
                 </time>
               </h3>
-              <p className="wx-day-condition">
+              <p className="flex">
                 <WeatherGlyph code={day.weather_code} size={26} />
                 <span className="sr-only">
                   {weatherDescription(day.weather_code)}
                 </span>
               </p>
-              <dl>
-                <div className="wx-day-low" data-gap={day.low_c === null}>
+              <dl className="contents">
+                <div
+                  className={cn(
+                    dayFigure,
+                    "data-[gap=true]:gap-dash-4 [&>dd]:text-right [&>dd]:text-muted-ink"
+                  )}
+                  data-gap={day.low_c === null}
+                >
                   <dt className="sr-only">Low</dt>
                   <dd>
                     <span aria-hidden="true">{degrees(day.low_c)}</span>
                     <span className="sr-only">{value(day.low_c, "°C")}</span>
                   </dd>
                 </div>
-                <div className="wx-range" aria-hidden="true">
+                <div
+                  className="relative h-1.5 rounded-full bg-wash-strong"
+                  aria-hidden="true"
+                >
                   {day.low_c === null || day.high_c === null ? null : (
                     <span
-                      // SAFETY: CSSProperties omits custom properties; --low and --high are unitless 0..1 shares of the week's temperature scale.
+                      className="absolute inset-y-0 right-(--r) left-(--x) rounded-full bg-ink in-data-[today=true]:bg-sun"
+                      // SAFETY: CSSProperties omits custom properties; --x and --r are the bar's start and remaining share of the week's temperature scale.
                       style={
                         {
-                          "--low": scale(day.low_c),
-                          "--high": scale(day.high_c),
+                          "--x": percent(scale(day.low_c)),
+                          "--r": percent(1 - scale(day.high_c)),
                         } as React.CSSProperties
                       }
                     />
                   )}
                 </div>
-                <div className="wx-day-high" data-gap={day.high_c === null}>
+                <div
+                  className={cn(
+                    dayFigure,
+                    "data-[gap=true]:gap-dash-4 [&>dd]:font-semibold"
+                  )}
+                  data-gap={day.high_c === null}
+                >
                   <dt className="sr-only">High</dt>
                   <dd>
                     <span aria-hidden="true">{degrees(day.high_c)}</span>
@@ -484,14 +328,20 @@ export function WeatherOverview({
                   </dd>
                 </div>
                 <div
-                  className="wx-day-rain"
+                  className={cn(
+                    dayFigure,
+                    "data-[dry=true]:invisible data-[gap=true]:gap-dash-4 [&>dd]:text-right [&>dd]:text-sm [&>dd]:leading-normal [&>dd]:font-medium [&>dd]:text-rain"
+                  )}
                   data-dry={day.precipitation_mm === 0}
                   data-gap={day.precipitation_mm === null}
                 >
                   <dt className="sr-only">Precipitation</dt>
                   <dd>{value(day.precipitation_mm, "mm")}</dd>
                 </div>
-                <div className="sr-only" data-gap={day.wind_ms === null}>
+                <div
+                  className="sr-only data-[gap=true]:gap-dash-4"
+                  data-gap={day.wind_ms === null}
+                >
                   <dt>Max wind</dt>
                   <dd>{value(day.wind_ms, "m/s")}</dd>
                 </div>
@@ -500,13 +350,19 @@ export function WeatherOverview({
           ))}
         </ol>
       </section>
-      <p className="weather-attribution">
+      <p className="text-label text-muted-ink tablet:col-start-1 tablet:row-start-3">
         Weather data by{" "}
-        <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+        <a
+          className={attributionLink}
+          href="https://open-meteo.com/"
+          target="_blank"
+          rel="noreferrer"
+        >
           Open-Meteo
         </a>
         , licensed under{" "}
         <a
+          className={attributionLink}
           href="https://creativecommons.org/licenses/by/4.0/"
           target="_blank"
           rel="noreferrer"

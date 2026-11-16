@@ -1,0 +1,18 @@
+@theme inline {
+  /* The viewer is always night: the photo on near-black, controls as light tone plates floating on it. */
+  --color-photo-night: #0b0c0e;
+  --color-photo-ink: #ecece6;
+  --color-photo-plate: #2c2e34;
+  --grid-template-columns-albums: repeat(
+    auto-fill,
+    minmax(min(100%, 15rem), 1fr)
+  );
+  --grid-template-columns-mosaic: 3fr 2fr;
+  --leading-photo-name: 1.08;
+  --spacing-photo-head: clamp(0.75rem, 1.6vw, 1.25rem);
+  --spacing-photo-empty: clamp(2rem, 8vh, 5rem);
+}
+
+@theme {
+  --spacing-photo-row: clamp(6.5rem, 8vw + 3.5rem, 12rem);
+}

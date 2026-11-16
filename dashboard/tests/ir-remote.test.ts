@@ -185,7 +185,7 @@ test("the full remote groups every reported command and omits unreported ones", 
   })
 
   const groups = Array.from(
-    container.querySelectorAll(".remote-group[role=group]")
+    container.querySelectorAll('[data-slot="remote-group"][role=group]')
   ).map((group) => ({
     label: group.getAttribute("aria-label"),
     buttons: Array.from(group.querySelectorAll("button")).map(
@@ -355,7 +355,7 @@ test("the speaker shows reported input and volume commands on Home and groups th
   })
 
   const groups = Array.from(
-    container.querySelectorAll(".remote-group[role=group]")
+    container.querySelectorAll('[data-slot="remote-group"][role=group]')
   ).map((group) => ({
     label: group.getAttribute("aria-label"),
     buttons: Array.from(group.querySelectorAll("button")).map(

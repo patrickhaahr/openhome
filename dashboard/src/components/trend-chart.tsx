@@ -1,7 +1,25 @@
 import { useEffect, useRef, useState } from "react"
+import { cn } from "@/lib/utils"
+import { TrendLegend, trendSummary, trendTitle } from "@/components/trend-parts"
 
-/** A series' colour, from the design tokens through CSS. */
+/** A series' colour, from the design tokens. */
 export type Tone = "ink" | "sun" | "fat" | "muted" | "faint"
+
+const fills = {
+  ink: "fill-ink",
+  sun: "fill-sun",
+  fat: "fill-chart-4",
+  muted: "fill-muted-ink",
+  faint: "fill-ink/35",
+} satisfies Record<Tone, string>
+
+const strokes = {
+  ink: "stroke-ink",
+  sun: "stroke-sun",
+  fat: "stroke-chart-4",
+  muted: "stroke-muted-ink",
+  faint: "stroke-ink/35",
+} satisfies Record<Tone, string>
 
 type Values = ReadonlyArray<number | null>
 
@@ -25,7 +43,7 @@ export type Mark =
   | ({ readonly kind: "dots" } & Series)
 
 type TrendChartProps = {
-  /** Names the chart for styling and tests. */
+  /** Names the chart for tests. */
   readonly chart: string
   readonly title: string
   /** One line over the whole range, shown and read before the chart. */
@@ -211,8 +229,7 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
     <rect
       key={`${key}-${index}`}
       data-mark={key}
-      data-tone={tone}
-      data-partial={props.partial[index] === true ? "" : undefined}
+      className={cn(fills[tone], props.partial[index] === true && "opacity-45")}
       x={x(index) - barWidth / 2}
       width={barWidth}
       y={Math.min(from, to)}
@@ -221,29 +238,33 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
   )
 
   return (
-    <figure className="trend-chart" data-chart={props.chart} ref={figure}>
-      <figcaption>
-        <h2>{props.title}</h2>
-        <p className="trend-summary">{props.summary}</p>
-        <ul className="trend-legend" aria-hidden="true">
-          {marks.flatMap((mark) =>
-            (mark.kind === "stack" ? mark.parts : [mark]).map((part) => (
-              <li
-                key={part.key}
-                data-tone={part.tone}
-                data-kind={
-                  mark.kind === "line" && mark.dashed === true
-                    ? "dashed"
-                    : mark.kind
-                }
-              >
-                {part.name}
-              </li>
-            ))
+    <figure
+      data-slot="trend-chart"
+      className="grid min-w-0 gap-3 rounded-xl bg-wash p-food-plate data-[chart=calories]:col-span-full"
+      data-chart={props.chart}
+      ref={figure}
+    >
+      <figcaption className="grid gap-1">
+        <h2 className={trendTitle}>{props.title}</h2>
+        <p data-slot="trend-summary" className={trendSummary}>
+          {props.summary}
+        </p>
+        <TrendLegend
+          items={marks.flatMap((mark) =>
+            (mark.kind === "stack" ? mark.parts : [mark]).map((part) => ({
+              key: part.key,
+              name: part.name,
+              tone: part.tone,
+              kind:
+                mark.kind === "line" && mark.dashed === true
+                  ? "dashed"
+                  : mark.kind,
+            }))
           )}
-        </ul>
+        />
       </figcaption>
       <svg
+        className="h-auto w-full"
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
@@ -252,8 +273,8 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
         {ticks.slice(0, -1).map((value, index) => (
           <rect
             key={`band-${value}`}
-            className="trend-band"
-            data-dark={index % 2 === 0}
+            className={index % 2 === 0 ? "fill-wash" : undefined}
+            fill={index % 2 === 0 ? undefined : "none"}
             x="0"
             width={width}
             y={y(ticks[index + 1] ?? scale.high)}
@@ -263,7 +284,8 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
         {ticks.map((value) => (
           <text
             key={`tick-${value}`}
-            className="trend-tick"
+            className="fill-muted-ink text-caption tabular-nums"
+            textAnchor="end"
             x={width - 10}
             y={y(value) - 5}
           >
@@ -274,7 +296,8 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
           index % labelEvery === 0 ? (
             <text
               key={`label-${index}`}
-              className="trend-label"
+              className="fill-muted-ink text-caption tabular-nums"
+              textAnchor="middle"
               x={x(index)}
               y={height - 10}
             >
@@ -314,12 +337,13 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
               )
             case "line":
               return (
-                <g key={mark.key} data-mark={mark.key} data-tone={mark.tone}>
+                <g key={mark.key} data-mark={mark.key}>
                   {runs(mark.values).map((run) =>
                     run.length === 1 ? (
                       <circle
                         key={run[0]?.index}
-                        className="trend-point"
+                        data-slot="trend-point"
+                        className={fills[mark.tone]}
                         cx={x(run[0]?.index ?? 0)}
                         cy={y(run[0]?.value ?? 0)}
                         r="3"
@@ -327,8 +351,15 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
                     ) : (
                       <path
                         key={run[0]?.index}
-                        className="trend-line"
-                        data-dashed={mark.dashed === true ? "" : undefined}
+                        data-slot="trend-line"
+                        className={strokes[mark.tone]}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={mark.dashed === true ? 2 : 2.5}
+                        strokeDasharray={
+                          mark.dashed === true ? "5 5" : undefined
+                        }
                         d={run
                           .map(
                             (point, position) =>
@@ -342,12 +373,13 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
               )
             case "dots":
               return (
-                <g key={mark.key} data-mark={mark.key} data-tone={mark.tone}>
+                <g key={mark.key} data-mark={mark.key}>
                   {mark.values.map((value, index) =>
                     value === null ? null : (
                       <circle
                         key={index}
-                        className="trend-dot"
+                        data-slot="trend-dot"
+                        className={fills[mark.tone]}
                         cx={x(index)}
                         cy={y(value)}
                         r="3"

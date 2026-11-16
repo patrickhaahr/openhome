@@ -1,11 +1,25 @@
 import { useId, useRef, useState } from "react"
+import { cva } from "class-variance-authority"
 import { HourglassSimpleIcon } from "@phosphor-icons/react/dist/csr/HourglassSimple"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { RepeatIcon } from "@phosphor-icons/react/dist/csr/Repeat"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
+import {
+  factTerm,
+  factValue,
+  facts,
+  field,
+  fieldHint,
+  sheetActions,
+  sheetBody,
+  sheetConfirm,
+  sheetName,
+  sheetOwner,
+} from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { viewTab } from "@/components/view-tabs"
 import {
   importantDateCommand,
   figureParts,
@@ -15,6 +29,7 @@ import {
 } from "@/lib/important-dates"
 import { formatDay, trimText } from "@/lib/lists"
 import { createRequestId } from "@/lib/request-id"
+import { cn } from "@/lib/utils"
 import type { HouseholdUser } from "@/lib/wishlist"
 
 type Save = (command: ImportantDateCommand, saved: string) => Promise<boolean>
@@ -28,7 +43,7 @@ export function DateKindGlyph({
   size?: number
 }): React.JSX.Element {
   return (
-    <span className="kind-glyph">
+    <span className="inline-flex">
       {kind === "since" ? (
         <HourglassSimpleIcon size={size} aria-hidden="true" />
       ) : (
@@ -38,6 +53,21 @@ export function DateKindGlyph({
     </span>
   )
 }
+
+const figure = cva(
+  "flex flex-wrap gap-x-part self-end leading-figure font-medium num text-balance",
+  {
+    variants: {
+      size: {
+        plate: "text-date",
+        since: "text-date-since",
+        large: "text-date-large",
+        milestone: "text-date-milestone",
+      },
+    },
+    defaultVariants: { size: "plate" },
+  }
+)
 
 /** Milestones lead the Dates view; ordinary figures wrap only between their elapsed parts. */
 export function DateFigure({
@@ -52,13 +82,25 @@ export function DateFigure({
 
   return (
     <span
-      className={
-        large ? "date-figure date-figure-large num" : "date-figure num"
-      }
+      data-slot="date-figure"
+      className={figure({
+        size:
+          date.milestone !== null
+            ? "milestone"
+            : large
+              ? "large"
+              : date.kind === "since"
+                ? "since"
+                : "plate",
+      })}
       data-milestone={date.milestone !== null}
     >
       {parts.map((part, index) => (
-        <span key={part} className="date-figure-part">
+        <span
+          key={part}
+          className="inline-flex gap-part whitespace-nowrap *:aria-hidden:text-muted-ink data-[milestone=true]:wrap-anywhere data-[milestone=true]:whitespace-normal"
+          data-milestone={date.milestone !== null}
+        >
           {index === 0 ? null : <span aria-hidden="true">·</span>}
           {index === 0 ? null : <span className="sr-only">, </span>}
           {part}
@@ -82,19 +124,22 @@ export function IdleSwitch({
     <button
       type="button"
       role="switch"
-      className="idle-switch"
+      className="group/switch flex min-h-14 w-full items-center justify-between gap-4 rounded-plate bg-wash-strong py-2.5 pr-3.5 pl-4.5 text-left text-ink transition-colors duration-fast ease-app disabled:opacity-50"
       aria-checked={checked}
       disabled={disabled}
       onClick={() => toggle(!checked)}
     >
-      <span className="idle-switch-text">
+      <span className="grid gap-0.5 font-medium">
         Show when idle
-        <span className="idle-switch-hint">
+        <span className="text-label font-normal text-muted-ink">
           On the photo screen, for anyone in the room
         </span>
       </span>
-      <span className="idle-switch-track" aria-hidden="true">
-        <span className="idle-switch-thumb" />
+      <span
+        className="flex h-8 w-13 flex-none items-center rounded-full bg-wash-strong p-1 transition-colors duration-fast ease-app group-aria-checked/switch:bg-ink"
+        aria-hidden="true"
+      >
+        <span className="size-6 rounded-full bg-muted-ink transition duration-fast ease-app group-aria-checked/switch:translate-x-5 group-aria-checked/switch:bg-ground" />
       </span>
     </button>
   )
@@ -151,14 +196,14 @@ function DateForm({
 
   return (
     <form
-      className="sheet-body date-form"
+      className={sheetBody({ gap: "form" })}
       onSubmit={(event) => {
         event.preventDefault()
 
         if (title !== "" && fields.date !== "") submit({ ...fields, title })
       }}
     >
-      <label className="field field-title" htmlFor={`${id}-title`}>
+      <label className={field({ emphasis: "title" })} htmlFor={`${id}-title`}>
         <span>Title</span>
         <Input
           id={`${id}-title`}
@@ -171,7 +216,7 @@ function DateForm({
           onChange={(event) => set({ title: event.target.value })}
         />
       </label>
-      <label className="field" htmlFor={`${id}-date`}>
+      <label className={field()} htmlFor={`${id}-date`}>
         <span>Date</span>
         <Input
           id={`${id}-date`}
@@ -182,7 +227,7 @@ function DateForm({
           onChange={(event) => set({ date: event.target.value })}
         />
       </label>
-      <div className="field">
+      <div className={field()}>
         <span>Counts</span>
         <Segments
           label="Counts"
@@ -191,16 +236,16 @@ function DateForm({
           disabled={busy}
           choose={(kind) => set({ kind })}
         />
-        <span className="field-hint">
+        <span className={fieldHint}>
           {fields.kind === "since"
             ? "Counts up: years, months and days since."
             : "Counts down to the next anniversary."}
         </span>
       </div>
       {owners.length === 0 ? null : (
-        <fieldset className="field">
+        <fieldset className={field()}>
           <legend>Who it is about</legend>
-          <div className="date-people">
+          <div className="flex flex-wrap gap-2">
             {owners.map((owner) => {
               const tagged = fields.person_ids.includes(owner.id)
 
@@ -208,7 +253,7 @@ function DateForm({
                 <button
                   key={owner.id}
                   type="button"
-                  className="view-tab person-key"
+                  {...viewTab("chip")}
                   aria-pressed={tagged}
                   disabled={busy}
                   onClick={() =>
@@ -225,7 +270,7 @@ function DateForm({
               )
             })}
           </div>
-          <span className="field-hint">
+          <span className={fieldHint}>
             {fields.person_ids.length === 0
               ? "No one: it shows for everyone."
               : "It shows for them, and under Everyone."}
@@ -237,7 +282,7 @@ function DateForm({
         disabled={busy}
         toggle={(show_when_idle) => set({ show_when_idle })}
       />
-      <div className="sheet-actions">
+      <div className={sheetActions()}>
         <Button
           type="submit"
           size="key"
@@ -418,14 +463,20 @@ export function DateDetail({
     )
 
   return (
-    <div className="sheet-body">
-      <p className="sheet-owner">
+    <div className={sheetBody()}>
+      <p className={sheetOwner}>
         <DateKindGlyph kind={date.kind} />
         {tagged.length === 0 ? (
           <span>Everyone</span>
         ) : (
-          tagged.map((owner) => (
-            <span key={owner.id} className="date-person">
+          tagged.map((owner, index) => (
+            <span
+              key={owner.id}
+              className={cn(
+                "inline-flex items-center gap-2",
+                index > 0 && "ml-2"
+              )}
+            >
               <PersonDisc name={owner.name} />
               {owner.name}
             </span>
@@ -433,33 +484,37 @@ export function DateDetail({
         )}
       </p>
       {/* The sheet's title already names the date for assistive technology. */}
-      <p className="sheet-name" aria-hidden="true">
+      <p className={sheetName} aria-hidden="true">
         {date.title}
       </p>
       <p>
         <DateFigure date={date} large />
       </p>
-      <dl className="watch-days date-days">
+      <dl className={facts({ flow: "wrap" })}>
         <div>
-          <dt>{date.kind === "since" ? "Since" : "Date"}</dt>
-          <dd className="num">
+          <dt className={factTerm}>
+            {date.kind === "since" ? "Since" : "Date"}
+          </dt>
+          <dd className={cn(factValue, "num")}>
             <time dateTime={date.date}>{formatDay(date.date)}</time>
           </dd>
         </div>
         {date.kind === "since" && date.elapsed !== null ? (
           <div>
-            <dt>Days</dt>
-            <dd className="num">
+            <dt className={factTerm}>Days</dt>
+            <dd className={cn(factValue, "num")}>
               {date.elapsed.total_days.toLocaleString("en-GB")}
             </dd>
           </div>
         ) : null}
         <div>
-          <dt>{date.kind === "since" ? "Next anniversary" : "Next"}</dt>
-          <dd className="num">
+          <dt className={factTerm}>
+            {date.kind === "since" ? "Next anniversary" : "Next"}
+          </dt>
+          <dd className={cn(factValue, "num")}>
             <time dateTime={date.next.date}>{formatDay(date.next.date)}</time>
             {date.next.years === 0 ? null : (
-              <span className="date-years">
+              <span className="text-muted-ink">
                 {" "}
                 · {date.next.years} {date.next.years === 1 ? "year" : "years"}
               </span>
@@ -480,9 +535,9 @@ export function DateDetail({
         }
       />
       {mode === "delete" ? (
-        <div className="sheet-confirm" role="group" aria-label="Delete date">
+        <div className={sheetConfirm} role="group" aria-label="Delete date">
           <p>Delete “{date.title}” for everyone? This cannot be undone.</p>
-          <div className="sheet-actions">
+          <div className={sheetActions()}>
             <Button
               variant="destructive"
               size="key"
@@ -510,7 +565,7 @@ export function DateDetail({
           </div>
         </div>
       ) : (
-        <div className="sheet-actions sheet-actions-end">
+        <div className={sheetActions({ placement: "end" })}>
           <Button
             variant="outline"
             size="key"

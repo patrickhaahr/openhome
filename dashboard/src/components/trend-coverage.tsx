@@ -7,6 +7,9 @@ import {
   type SummaryPeriod,
 } from "@/lib/nutrition-trends"
 import { formatPercent } from "@/lib/nutrition"
+import { adequateIntake, groupHeading } from "@/components/food-amount"
+import { TrendLegend, trendSummary, trendTitle } from "@/components/trend-parts"
+import { cn } from "@/lib/utils"
 
 const groupNames: Record<CoverageRow["group"], string> = {
   vitamins: "Vitamins",
@@ -23,6 +26,10 @@ const periodWords: Record<Aggregation, readonly [string, string]> = {
 function count(value: number, [one, many]: readonly [string, string]): string {
   return `${value} ${value === 1 ? one : many}`
 }
+
+const panel = "grid col-span-full min-w-0 gap-4 rounded-xl bg-wash p-food-plate"
+
+const basis = "text-label text-muted-ink"
 
 /** Periods wider than this get no gap between their cells, so a year of days still fits. */
 const gappedPeriods = 60
@@ -54,14 +61,17 @@ export function CoverageTrends({
   if (coverage.state === "unavailable")
     return (
       <section
-        className="trend-coverage"
+        data-slot="trend-coverage"
+        className={panel}
         data-state="unavailable"
         aria-labelledby="trend-coverage-heading"
       >
-        <h2 id="trend-coverage-heading">No vitamin and mineral coverage yet</h2>
+        <h2 id="trend-coverage-heading" className={trendTitle}>
+          No vitamin and mineral coverage yet
+        </h2>
         <p>{coverage.reason}.</p>
         {coverage.missing.length === 0 ? null : (
-          <p className="trend-summary">
+          <p data-slot="trend-summary" className={trendSummary}>
             Sex and birth date are set on the Workout page&apos;s Body view.
           </p>
         )}
@@ -90,34 +100,44 @@ export function CoverageTrends({
 
   return (
     <section
-      className="trend-coverage"
+      data-slot="trend-coverage"
+      className={panel}
       aria-labelledby="trend-coverage-heading"
     >
-      <header>
-        <h2 id="trend-coverage-heading">Vitamins and minerals</h2>
-        <p className="trend-summary">{summary}</p>
-        <p className="trend-coverage-basis">
+      <header className="grid gap-1">
+        <h2 id="trend-coverage-heading" className={trendTitle}>
+          Vitamins and minerals
+        </h2>
+        <p data-slot="trend-summary" className={trendSummary}>
+          {summary}
+        </p>
+        <p data-slot="trend-coverage-basis" className={basis}>
           Mean share of the Recommended Intake a logged day over{" "}
           {count(coverage.logged_days, ["logged day", "logged days"])} · a
           lasting shortfall is below {below} % over at least {minDays} logged
           days · cut down when a 7-day average passes an Upper Limit
         </p>
-        <ul className="trend-legend trend-coverage-legend" aria-hidden="true">
-          <li data-tone="ink">Reached</li>
-          <li data-tone="muted">Below</li>
-          <li data-tone="danger">Cut down</li>
-          <li data-tone="caution" data-kind="dots">
-            A day above an Upper Limit
-          </li>
-        </ul>
+        <TrendLegend
+          items={[
+            { key: "ink", name: "Reached", tone: "ink", kind: "bars" },
+            { key: "muted", name: "Below", tone: "muted", kind: "bars" },
+            { key: "danger", name: "Cut down", tone: "danger", kind: "bars" },
+            {
+              key: "caution",
+              name: "A day above an Upper Limit",
+              tone: "caution",
+              kind: "dots",
+            },
+          ]}
+        />
       </header>
       {(["vitamins", "minerals", "fatty_acids"] as const).map((group) => {
         const members = rows.filter((row) => row.group === group)
 
         return members.length === 0 ? null : (
-          <section key={group} className="trend-coverage-group">
-            <h3>{groupNames[group]}</h3>
-            <ul className="trend-coverage-rows">
+          <section key={group} data-slot="trend-coverage-group">
+            <h3 className={groupHeading}>{groupNames[group]}</h3>
+            <ul data-slot="trend-coverage-rows" className="grid gap-2.5">
               {members.map((row) => (
                 <CoverageRowItem
                   key={row.key}
@@ -132,7 +152,10 @@ export function CoverageTrends({
           </section>
         )
       })}
-      <p className="trend-coverage-axis" aria-hidden="true">
+      <p
+        className="-mt-1 flex justify-between pr-30 pl-food-axis text-caption text-muted-ink tabular-nums max-[40rem]:p-0"
+        aria-hidden="true"
+      >
         <span>{labels.at(0)}</span>
         <span>{labels.at(-1)}</span>
       </p>
@@ -182,7 +205,7 @@ export function CoverageTrends({
           </tbody>
         </table>
       </div>
-      <p className="trend-coverage-basis">
+      <p data-slot="trend-coverage-basis" className={basis}>
         {coverage.sources.map((source) => source.citation).join(" · ")}
       </p>
     </section>
@@ -207,6 +230,29 @@ function limitNote(row: CoverageRow, by: Aggregation): string | null {
   return days
 }
 
+/** A period's column: its share of the Recommended Intake, red when cut down, none when not logged. */
+function cellClass(
+  cell: CoverageRow["cells"][number],
+  partial: boolean
+): string {
+  const fill =
+    cell.limit === "cut_down"
+      ? "min-h-1.5 bg-danger"
+      : cell.percent === null
+        ? "min-h-0"
+        : cell.percent >= 100
+          ? "min-h-0.5 bg-ink"
+          : "min-h-0.5 bg-muted-ink"
+
+  return cn(
+    "relative h-share rounded-t-xs",
+    fill,
+    cell.limit === "above" &&
+      "after:absolute after:-bottom-2 after:left-1/2 after:size-1.25 after:-translate-x-1/2 after:rounded-full after:bg-food-caution",
+    partial && "opacity-45"
+  )
+}
+
 function CoverageRowItem({
   row,
   by,
@@ -228,12 +274,13 @@ function CoverageRowItem({
       data-key={row.key}
       data-shortfall={row.lasting_shortfall ? "" : undefined}
       data-limit={note === null ? undefined : cut ? "cut_down" : "above"}
+      className="grid grid-cols-coverage items-end gap-x-4 gap-y-0.5 max-[40rem]:grid-cols-trail"
     >
-      <span className="trend-coverage-name">
+      <span className="flex items-baseline gap-2 leading-compact font-semibold">
         {row.name}
         {row.adequate_intake ? (
           <span
-            className="food-micro-ai"
+            className={adequateIntake}
             title="Adequate intake: a less certain reference than a recommended intake"
           >
             <span aria-hidden="true">AI</span>
@@ -241,7 +288,8 @@ function CoverageRowItem({
         ) : null}
       </span>
       <span
-        className="trend-coverage-strip"
+        data-slot="trend-coverage-strip"
+        className="grid h-7 grid-cols-periods items-end gap-x-(--gap) rounded-food-swatch bg-wash-strong max-[40rem]:col-span-full max-[40rem]:row-start-2"
         aria-hidden="true"
         // SAFETY: CSSProperties omits custom properties; --periods and --gap lay out the columns.
         style={
@@ -252,35 +300,44 @@ function CoverageRowItem({
           <span
             key={names[index] ?? index}
             data-gap={cell.percent === null ? "" : undefined}
-            data-met={
-              cell.percent !== null && cell.percent >= 100 ? "" : undefined
-            }
             data-limit={cell.limit === "clear" ? undefined : cell.limit}
-            data-partial={partial[index] === true ? "" : undefined}
-            // SAFETY: CSSProperties omits custom properties; --fill is the reached share, capped at 1.
+            className={cellClass(cell, partial[index] === true)}
+            // SAFETY: CSSProperties omits custom properties; --share is the reached share, capped at 1.
             style={
               {
-                "--fill": Math.min((cell.percent ?? 0) / 100, 1),
+                "--share": Math.min((cell.percent ?? 0) / 100, 1),
               } as React.CSSProperties
             }
           />
         ))}
       </span>
-      <span className="trend-coverage-percent num">
+      <span
+        data-slot="trend-coverage-percent"
+        className="flex items-baseline justify-end gap-1.5 text-large leading-compact font-medium num"
+      >
         {row.percent_of_recommended === null ? (
-          <span data-gap="true" />
+          <span data-gap="true" className="data-[gap=true]:gap-dash" />
         ) : (
           formatPercent(row.percent_of_recommended)
         )}
         {row.lasting_shortfall ? (
           <>
             {" "}
-            <span className="trend-coverage-short">Short</span>
+            <span className="rounded-full bg-food-caution px-2 py-px text-caption font-semibold tracking-normal text-food-caution-ink">
+              Short
+            </span>
           </>
         ) : null}
       </span>
       {note === null ? null : (
-        <span className="trend-coverage-limit" aria-hidden="true">
+        <span
+          data-slot="trend-coverage-limit"
+          className={cn(
+            "col-start-2 -col-end-1 mt-2 text-label font-semibold max-[40rem]:col-span-full",
+            cut ? "text-danger" : "text-ink"
+          )}
+          aria-hidden="true"
+        >
           {note}
         </span>
       )}

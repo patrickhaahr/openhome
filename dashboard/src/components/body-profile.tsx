@@ -1,23 +1,20 @@
-import { useId, useRef, useState } from "react"
-import { z } from "zod"
+import { useRef, useState } from "react"
 import { CakeIcon } from "@phosphor-icons/react/dist/csr/Cake"
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check"
 import { GenderIntersexIcon } from "@phosphor-icons/react/dist/csr/GenderIntersex"
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { RulerIcon } from "@phosphor-icons/react/dist/csr/Ruler"
-import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales"
 import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { WeightChart } from "@/components/weight-chart"
 import {
+  FailurePlate,
+  ViewBar,
+  WorkoutFeedback,
+} from "@/components/workout-parts"
+import {
   bodyFailureMessage,
-  optionalNumber,
   profileDraft,
-  profilePatch,
-  profileSexes,
   type BodyCommand,
   type BodyMutation,
   type BodyRange,
@@ -26,6 +23,11 @@ import {
 } from "@/lib/body-profile"
 import { shiftDay } from "@/lib/training"
 import { trainingDayOn } from "@/lib/workout"
+import {
+  ProfileEditor,
+  WeightEditor,
+  type ProfileEditing,
+} from "@/components/body-profile-editor"
 
 type BodyProfileProps = {
   readonly data: BodyState
@@ -42,11 +44,6 @@ type Feedback = {
   readonly failed: boolean
   readonly text: string
   readonly area: "profile" | "weight" | "history"
-}
-
-type ProfileEditing = {
-  readonly original: ReturnType<typeof profileDraft>
-  readonly draft: ReturnType<typeof profileDraft>
 }
 
 const numberFormat = new Intl.NumberFormat("en-GB", {
@@ -165,61 +162,56 @@ export function BodyProfile({
     !ranges.some((option) => option.from === range.from)
 
   return (
-    <div className="body" aria-busy={busy}>
+    <div className="grid" aria-busy={busy}>
       <p className="sr-only">
         Shared fitness data · one profile, one weight record per date
       </p>
-      <div className="view-bar">
-        {lead}
-        <div className="view-bar-tools">
-          {data.state === "unavailable" ? null : (
-            <div
-              className="body-ranges"
-              role="group"
-              aria-label="Body-weight history range"
-            >
-              {ranges.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  className="body-range"
-                  aria-pressed={!custom && option.from === range.from}
-                  disabled={busy || editing !== undefined}
-                  onClick={() =>
-                    void read(() =>
-                      filter({ from: option.from, to: undefined })
-                    )
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <ViewBar lead={lead}>
+        {data.state === "unavailable" ? null : (
+          <div
+            className="flex w-max max-w-full gap-1 rounded-full bg-wash p-1 max-[700px]:w-full"
+            role="group"
+            aria-label="Body-weight history range"
+          >
+            {ranges.map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                data-slot="body-range"
+                className="min-h-11 min-w-13 touch-manipulation rounded-full px-4.5 text-control font-medium text-muted-ink transition-colors duration-fast ease-app hover:bg-wash-strong hover:text-ink disabled:opacity-50 aria-pressed:bg-ink aria-pressed:text-ground max-[700px]:flex-1 max-[700px]:px-1"
+                aria-pressed={!custom && option.from === range.from}
+                disabled={busy || editing !== undefined}
+                onClick={() =>
+                  void read(() => filter({ from: option.from, to: undefined }))
+                }
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </ViewBar>
       {data.state === "unavailable" ? (
-        <div className="today-failure">
-          <h2>Profile & weight unavailable</h2>
-          <p>
+        <FailurePlate title="Profile & weight unavailable">
+          <p className="text-muted-ink">
             {data.reason === "unreachable"
               ? "OpenHome is unreachable. Open Body again when the connection returns."
               : bodyFailureMessage[data.reason]}
           </p>
-        </div>
+        </FailurePlate>
       ) : (
-        <div className="body-layout">
-          <div className="body-trend">
+        <div className="grid grid-cols-body items-start gap-plate max-[900px]:grid-cols-1">
+          <div className="grid min-w-0 gap-body-trend">
             <h2 className="sr-only">Body-weight history</h2>
             <WeightFigure history={data.history} />
             {data.history.length === 500 ? (
-              <p className="body-history-limit" role="status">
+              <p className="mt-4 text-ink" role="status">
                 This view reached the 500-record limit. Choose a shorter range
                 to review later records.
               </p>
             ) : null}
             {data.history.length === 0 ? (
-              <p className="body-history-empty">
+              <p className="py-12 text-center text-muted-ink">
                 No body weight recorded in this date range.
               </p>
             ) : (
@@ -249,8 +241,8 @@ export function BodyProfile({
               </>
             )}
           </div>
-          <div className="body-side">
-            <section className="body-plate" aria-labelledby="body-log-title">
+          <div className="grid min-w-0 gap-3">
+            <section className={bodyPlate} aria-labelledby="body-log-title">
               <h2 id="body-log-title" className="sr-only">
                 Log body weight
               </h2>
@@ -264,14 +256,14 @@ export function BodyProfile({
               </p>
             </section>
             <section
-              className="body-profile"
+              className="relative grid gap-2"
               aria-labelledby="body-profile-title"
             >
               <h2 id="body-profile-title" className="sr-only">
                 Profile
               </h2>
               {editing !== undefined ? (
-                <div className="body-plate">
+                <div className={bodyPlate}>
                   <ProfileEditor
                     original={editing.original}
                     draft={editing.draft}
@@ -297,50 +289,62 @@ export function BodyProfile({
                 </div>
               ) : (
                 <>
-                  <dl className="body-profile-values">
-                    <div>
-                      <dt>
+                  <dl className="mb-6 grid gap-2">
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <RulerIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Height</span>
                       </dt>
-                      <dd data-gap={data.profile.height_cm === null}>
+                      <dd
+                        data-gap={data.profile.height_cm === null}
+                        className={profileFigure}
+                      >
                         {data.profile.height_cm === null
                           ? "Not configured"
                           : numberFormat.format(data.profile.height_cm)}
                         {data.profile.height_cm === null ? null : (
-                          <small> cm</small>
+                          <small className={profileUnit}> cm</small>
                         )}
                       </dd>
                     </div>
-                    <div>
-                      <dt>
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <GenderIntersexIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Sex</span>
                       </dt>
-                      <dd data-gap={data.profile.sex === null}>
+                      <dd
+                        data-gap={data.profile.sex === null}
+                        className={profileFigure}
+                      >
                         {data.profile.sex ?? "Not configured"}
                       </dd>
                     </div>
-                    <div>
-                      <dt>
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <HeartbeatIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Maximum heart rate</span>
                       </dt>
-                      <dd data-gap={data.profile.hr_max_bpm === null}>
+                      <dd
+                        data-gap={data.profile.hr_max_bpm === null}
+                        className={profileFigure}
+                      >
                         {data.profile.hr_max_bpm === null
                           ? "Not configured"
                           : data.profile.hr_max_bpm}
                         {data.profile.hr_max_bpm === null ? null : (
-                          <small> max</small>
+                          <small className={profileUnit}> max</small>
                         )}
                       </dd>
                     </div>
-                    <div>
-                      <dt>
+                    <div className={profileValue}>
+                      <dt className={profileIcon}>
                         <CakeIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Birth date</span>
                       </dt>
-                      <dd data-gap={data.profile.birth_date === null}>
+                      <dd
+                        data-gap={data.profile.birth_date === null}
+                        className={profileFigure}
+                      >
                         {data.profile.birth_date === null
                           ? "Not configured"
                           : birthDay.format(
@@ -349,7 +353,7 @@ export function BodyProfile({
                       </dd>
                     </div>
                   </dl>
-                  <div className="body-profile-edit">
+                  <div className="absolute top-2 right-2">
                     <Button
                       variant="ghost"
                       size="key-icon"
@@ -392,6 +396,19 @@ export function BodyProfile({
   )
 }
 
+const bodyPlate = "grid gap-3 rounded-panel bg-tile p-5"
+
+const profileValue =
+  "flex min-h-16 flex-wrap items-center gap-3 rounded-sheet bg-tile py-2 pr-16 pl-3"
+
+const profileIcon =
+  "grid size-10 flex-none place-items-center rounded-full bg-wash-strong text-muted-ink"
+
+const profileFigure =
+  "flex-1 text-start text-value font-semibold tracking-figure-tight tabular-nums wrap-anywhere data-[gap=true]:gap-dash-5.5"
+
+const profileUnit = "text-small font-medium tracking-normal text-muted-ink"
+
 function directionMark(change: number): string {
   if (change > 0) return "▲"
 
@@ -413,16 +430,23 @@ function WeightFigure({
   const rounded = Math.round(change * 10) / 10
 
   return (
-    <p className="body-figure">
+    <p
+      data-slot="body-figure"
+      className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-workout-figure tabular-nums"
+    >
       <span className="sr-only">Latest body weight, {last.date}: </span>
-      <strong>{oneDecimal.format(last.weight_kg)}</strong>
-      <small>kg</small>
+      <strong className="text-weight font-medium tracking-score">
+        {oneDecimal.format(last.weight_kg)}
+      </strong>
+      <small className="text-lead font-medium text-muted-ink">kg</small>
       {history.length < 2 ? null : (
-        <span className="body-change" data-direction={Math.sign(rounded)}>
-          <span aria-hidden="true">{directionMark(rounded)}</span>
+        <span className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-wash-strong px-3.5 py-1.5 text-large leading-snug font-bold">
+          <span className="text-caption" aria-hidden="true">
+            {directionMark(rounded)}
+          </span>
           <span className="sr-only"> Change since {first.date}: </span>
           {oneDecimal.format(Math.abs(rounded))}
-          <small> kg</small>
+          <small className="text-small font-semibold text-muted-ink"> kg</small>
         </span>
       )}
     </p>
@@ -435,316 +459,11 @@ function FeedbackMessage({
   readonly feedback: Feedback | undefined
 }): React.JSX.Element {
   return (
-    <p
-      className="workout-feedback"
+    <WorkoutFeedback
+      failed={feedback?.failed}
       role={feedback?.failed === true ? "alert" : "status"}
-      data-failed={feedback?.failed}
     >
       {feedback?.text ?? ""}
-    </p>
-  )
-}
-
-/** A real `YYYY-MM-DD` day no later than today in Copenhagen. */
-function isPastDay(value: string): boolean {
-  return (
-    z.iso.date().safeParse(value).success && value <= trainingDayOn(new Date())
-  )
-}
-
-type ProfileEditorProps = {
-  readonly original: ProfileEditing["original"]
-  readonly draft: ProfileEditing["draft"]
-  readonly update: (draft: ProfileEditing["draft"]) => void
-  readonly disabled: boolean
-  readonly save: (command: BodyCommand) => Promise<boolean>
-  readonly cancel: () => void
-  readonly failure: string | undefined
-}
-
-function ProfileEditor({
-  original,
-  draft,
-  update,
-  disabled,
-  save,
-  cancel,
-  failure,
-}: ProfileEditorProps): React.JSX.Element {
-  const [problem, setProblem] = useState<{
-    field: "height" | "heart" | "birth"
-    message: string
-  }>()
-
-  const id = useId()
-
-  // A sex stored by another client that the targets cannot use stays selectable until changed.
-  const unsupportedSex =
-    original.sex === "" ||
-    profileSexes.some((sex) => sex.value === original.sex)
-      ? undefined
-      : original.sex
-
-  return (
-    <form
-      className="workout-editor"
-      aria-label="Edit profile"
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault()
-        const patch = profilePatch(original, draft)
-
-        if (
-          patch.height_cm !== undefined &&
-          patch.height_cm !== null &&
-          (!Number.isFinite(patch.height_cm) || patch.height_cm <= 0)
-        ) {
-          setProblem({
-            field: "height",
-            message:
-              "Enter height in cm above zero, or leave it empty to clear.",
-          })
-          document.getElementById(`${id}-height`)?.focus()
-
-          return
-        }
-
-        if (
-          patch.hr_max_bpm !== undefined &&
-          patch.hr_max_bpm !== null &&
-          (!Number.isInteger(patch.hr_max_bpm) ||
-            patch.hr_max_bpm < 100 ||
-            patch.hr_max_bpm > 240)
-        ) {
-          setProblem({
-            field: "heart",
-            message:
-              "Enter a whole maximum heart rate from 100 to 240 bpm, or leave it empty to clear.",
-          })
-          document.getElementById(`${id}-heart`)?.focus()
-
-          return
-        }
-
-        if (
-          patch.birth_date !== undefined &&
-          patch.birth_date !== null &&
-          !isPastDay(patch.birth_date)
-        ) {
-          setProblem({
-            field: "birth",
-            message:
-              "Enter a birth date written YYYY-MM-DD that is not in the future, or leave it empty to clear.",
-          })
-          document.getElementById(`${id}-birth`)?.focus()
-
-          return
-        }
-
-        setProblem(undefined)
-        void save(patch)
-      }}
-    >
-      <p className="sr-only">
-        Leave a field empty to clear it. Unchanged fields keep their stored
-        values.
-      </p>
-      <div className="workout-field">
-        <label htmlFor={`${id}-height`}>Height (cm)</label>
-        <Input
-          id={`${id}-height`}
-          aria-invalid={problem?.field === "height"}
-          aria-describedby={
-            problem?.field === "height" ? `${id}-problem` : undefined
-          }
-          inputMode="decimal"
-          value={draft.height}
-          disabled={disabled}
-          onChange={(event) => {
-            update({ ...draft, height: event.target.value })
-            setProblem(undefined)
-          }}
-        />
-      </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-sex`}>Sex (optional)</label>
-        <NativeSelect
-          id={`${id}-sex`}
-          value={draft.sex}
-          disabled={disabled}
-          onChange={(event) => update({ ...draft, sex: event.target.value })}
-        >
-          <NativeSelectOption value="">Not set</NativeSelectOption>
-          {profileSexes.map((sex) => (
-            <NativeSelectOption key={sex.value} value={sex.value}>
-              {sex.label}
-            </NativeSelectOption>
-          ))}
-          {unsupportedSex === undefined ? null : (
-            <NativeSelectOption value={unsupportedSex}>
-              {`“${unsupportedSex}” (not used for targets)`}
-            </NativeSelectOption>
-          )}
-        </NativeSelect>
-      </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-heart`}>Maximum heart rate (bpm)</label>
-        <Input
-          id={`${id}-heart`}
-          aria-invalid={problem?.field === "heart"}
-          aria-describedby={
-            problem?.field === "heart" ? `${id}-problem` : undefined
-          }
-          inputMode="numeric"
-          value={draft.heartRate}
-          disabled={disabled}
-          onChange={(event) => {
-            update({ ...draft, heartRate: event.target.value })
-            setProblem(undefined)
-          }}
-        />
-      </div>
-      <div className="workout-field">
-        <label htmlFor={`${id}-birth`}>Birth date</label>
-        <Input
-          id={`${id}-birth`}
-          type="date"
-          aria-invalid={problem?.field === "birth"}
-          aria-describedby={
-            problem?.field === "birth" ? `${id}-problem` : undefined
-          }
-          value={draft.birthDate}
-          disabled={disabled}
-          onChange={(event) => {
-            update({ ...draft, birthDate: event.target.value })
-            setProblem(undefined)
-          }}
-        />
-      </div>
-      {problem !== undefined || failure !== undefined ? (
-        <p id={`${id}-problem`} className="workout-problem" role="alert">
-          {problem?.message ?? failure}
-        </p>
-      ) : null}
-      <div className="workout-editor-actions">
-        <Button type="submit" disabled={disabled}>
-          Save profile
-        </Button>
-        <Button variant="outline" disabled={disabled} onClick={cancel}>
-          Cancel profile edit
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-function WeightEditor({
-  disabled,
-  save,
-}: {
-  readonly disabled: boolean
-  readonly save: (command: BodyCommand) => Promise<boolean>
-}): React.JSX.Element {
-  const [date, setDate] = useState(() => trainingDayOn(new Date()))
-  const [weight, setWeight] = useState("")
-  // A typed weight is a draft.
-  useIdleBlock(weight !== "")
-
-  const [problem, setProblem] = useState<{
-    field: "date" | "weight"
-    message: string
-  }>()
-
-  const id = useId()
-
-  return (
-    <form
-      className="body-weight-form"
-      aria-label="Log body weight"
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault()
-
-        if (!z.iso.date().safeParse(date).success) {
-          setProblem({
-            field: "date",
-            message: "Choose a valid calendar date.",
-          })
-          document.getElementById(`${id}-date`)?.focus()
-
-          return
-        }
-
-        const value = optionalNumber(weight)
-
-        if (value === null || !Number.isFinite(value) || value <= 0) {
-          setProblem({
-            field: "weight",
-            message: "Enter body weight in kg above zero.",
-          })
-          document.getElementById(`${id}-weight`)?.focus()
-
-          return
-        }
-
-        setProblem(undefined)
-        void save({ kind: "weight", date, weight_kg: value }).then((saved) => {
-          if (saved) setWeight("")
-        })
-      }}
-    >
-      <div className="body-weight-fields">
-        <div className="body-weight-amount">
-          <label htmlFor={`${id}-weight`} className="sr-only">
-            Body weight (kg)
-          </label>
-          <ScalesIcon size={24} aria-hidden="true" />
-          <Input
-            id={`${id}-weight`}
-            aria-invalid={problem?.field === "weight"}
-            aria-describedby={
-              problem?.field === "weight" ? `${id}-problem` : undefined
-            }
-            inputMode="decimal"
-            placeholder="00.0"
-            value={weight}
-            disabled={disabled}
-            onChange={(event) => {
-              setWeight(event.target.value)
-              setProblem(undefined)
-            }}
-          />
-          <span aria-hidden="true">kg</span>
-        </div>
-        <div className="body-weight-date">
-          <label htmlFor={`${id}-date`} className="sr-only">
-            Weight date
-          </label>
-          <Input
-            id={`${id}-date`}
-            aria-invalid={problem?.field === "date"}
-            aria-describedby={
-              problem?.field === "date" ? `${id}-problem` : undefined
-            }
-            type="date"
-            value={date}
-            disabled={disabled}
-            onChange={(event) => {
-              setDate(event.target.value)
-              setProblem(undefined)
-            }}
-          />
-        </div>
-        <Button type="submit" size="key-icon" disabled={disabled}>
-          <CheckIcon size={22} weight="bold" aria-hidden="true" />
-          <span className="sr-only">Save body weight</span>
-        </Button>
-      </div>
-      {problem === undefined ? null : (
-        <p id={`${id}-problem`} className="workout-problem" role="alert">
-          {problem.message}
-        </p>
-      )}
-    </form>
+    </WorkoutFeedback>
   )
 }

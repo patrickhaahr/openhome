@@ -7,6 +7,7 @@ import { DateBoard } from "@/components/date-board"
 import { GiftBoard } from "@/components/gift-board"
 import { PageHead } from "@/components/page-head"
 import { Programme } from "@/components/programme"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import {
   loadImportantDates,
   mutateImportantDate,
@@ -60,7 +61,7 @@ function ListsPage(): React.JSX.Element {
   const refresh = () => router.invalidate({ sync: true })
 
   const switcher = (
-    <nav className="view-tabs" aria-label="Lists">
+    <ViewTabs as="nav" aria-label="Lists" className="max-sm:-order-2">
       {tabs.map((item) => (
         <Link
           key={item.label}
@@ -71,7 +72,7 @@ function ListsPage(): React.JSX.Element {
             includeSearch: true,
             explicitUndefined: true,
           }}
-          className="view-tab"
+          {...viewTab()}
           aria-current={item.tab === loaded.tab ? "page" : undefined}
           resetScroll={false}
         >
@@ -79,11 +80,11 @@ function ListsPage(): React.JSX.Element {
           {item.label}
         </Link>
       ))}
-    </nav>
+    </ViewTabs>
   )
 
   return (
-    <section>
+    <section data-slot="lists">
       <PageHead title="Lists" />
       {loaded.tab === "dates" ? (
         <DateBoard

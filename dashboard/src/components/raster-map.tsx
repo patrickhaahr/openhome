@@ -5,10 +5,14 @@ import type {
   LayerGroup,
   Map as LeafletMap,
 } from "leaflet"
-import { CrosshairSimpleIcon } from "@phosphor-icons/react/dist/csr/CrosshairSimple"
-import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
-import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
-import { Button } from "@/components/ui/button"
+import { MapControls } from "@/components/shared-map-controls"
+import { MapFrame } from "@/components/shared-map-frame"
+import {
+  MapFailure,
+  MapLoading,
+  MapNotices,
+  TilesIncomplete,
+} from "@/components/shared-map-status"
 import {
   evenPadding,
   routePadding,
@@ -355,51 +359,18 @@ export function RasterMap({
   }
 
   return (
-    <div
-      className="shared-map"
-      data-map-state={view.state}
-      data-map-renderer="raster"
-      data-map-shade={shade}
+    <MapFrame
+      state={view.state}
+      renderer="raster"
+      shade={shade}
+      canvas={container}
+      source={origin.source}
     >
-      <div
-        ref={container}
-        className="shared-map-canvas"
-        aria-label={
-          origin.source === "demo"
-            ? "Map of the Copenhagen demo area"
-            : "Map of the local area"
-        }
-      />
       {view.state === "ready" && controls ? (
-        <div className="shared-map-controls">
-          <Button
-            size="icon-lg"
-            variant="secondary"
-            aria-label="Zoom in"
-            onClick={() => zoom(1)}
-          >
-            <PlusIcon size={22} aria-hidden="true" />
-          </Button>
-          <Button
-            size="icon-lg"
-            variant="secondary"
-            aria-label="Zoom out"
-            onClick={() => zoom(-1)}
-          >
-            <MinusIcon size={22} aria-hidden="true" />
-          </Button>
-          <Button
-            size="icon-lg"
-            variant="secondary"
-            aria-label="Return to origin"
-            onClick={recenter}
-          >
-            <CrosshairSimpleIcon size={22} aria-hidden="true" />
-          </Button>
-        </div>
+        <MapControls zoom={zoom} recenter={recenter} />
       ) : null}
       <RasterStatus view={view} reload={reload} />
-    </div>
+    </MapFrame>
   )
 }
 
@@ -412,25 +383,16 @@ function RasterStatus({
 }): React.JSX.Element | null {
   switch (view.state) {
     case "loading":
-      return (
-        <p className="shared-map-message" role="status">
-          Loading map…
-        </p>
-      )
+      return <MapLoading />
     case "ready":
       return view.tiles === "complete" ? null : (
-        <div className="shared-map-notices" role="status">
-          <div className="shared-map-notice">
-            <p>Some map tiles could not load. The map may be incomplete.</p>
-            <Button variant="outline" onClick={reload}>
-              Reload map
-            </Button>
-          </div>
-        </div>
+        <MapNotices>
+          <TilesIncomplete reload={reload} />
+        </MapNotices>
       )
     case "provider-unavailable":
       return (
-        <RasterFailure
+        <MapFailure
           title="Map tiles unavailable"
           detail="OpenStreetMap could not be reached. The rest of the dashboard still works."
           reload={reload}
@@ -438,31 +400,11 @@ function RasterStatus({
       )
     case "failed":
       return (
-        <RasterFailure
+        <MapFailure
           title="Map unavailable"
           detail="The map could not start. Check the dashboard connection and try again."
           reload={reload}
         />
       )
   }
-}
-
-function RasterFailure({
-  title,
-  detail,
-  reload,
-}: {
-  title: string
-  detail: string
-  reload: () => void
-}): React.JSX.Element {
-  return (
-    <div className="shared-map-message" role="status">
-      <h3>{title}</h3>
-      <p>{detail}</p>
-      <Button size="lg" variant="outline" onClick={reload}>
-        Try again
-      </Button>
-    </div>
-  )
 }

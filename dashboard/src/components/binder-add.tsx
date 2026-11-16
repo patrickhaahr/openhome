@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch"
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass"
-import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import {
   FeedbackLine,
@@ -11,9 +10,21 @@ import {
   useListSave,
   useSheetLifetime,
 } from "@/components/list-parts"
+import {
+  Stepper,
+  field,
+  linkInput,
+  mediaMeta,
+  mediaTitle,
+  sheetActions,
+  sheetBody,
+  sheetName,
+} from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
+import { cn } from "@/lib/utils"
 import {
   additionOf,
   advance,
@@ -67,6 +78,10 @@ const languages = [
   { value: "en", label: "EN" },
   { value: "ja", label: "JP" },
 ] as const
+
+const draftRow = "grid grid-aside-36 items-start gap-5"
+
+const draftFacts = "grid justify-items-start gap-2"
 
 /** The Binder's "Add card": a button that opens the sheet, and the write behind it. */
 export function AddCard({
@@ -197,16 +212,16 @@ function AddSheet({
 
   return (
     <form
-      className="sheet-body"
+      className={sheetBody()}
       aria-label="Search by Card Code"
       onSubmit={(event) => {
         event.preventDefault()
         void search(code)
       }}
     >
-      <label className="field" htmlFor={`${id}-code`}>
+      <label className={field()} htmlFor={`${id}-code`}>
         <span>Card Code</span>
-        <span className="link-input">
+        <span className={linkInput}>
           <MagnifyingGlassIcon size={22} aria-hidden="true" />
           <Input
             id={`${id}-code`}
@@ -220,11 +235,15 @@ function AddSheet({
             onChange={(event) => setCode(event.target.value)}
           />
           {flow.state === "searching" ? (
-            <CircleNotchIcon size={22} className="spin" aria-hidden="true" />
+            <CircleNotchIcon
+              size={22}
+              className="animate-spin"
+              aria-hidden="true"
+            />
           ) : null}
         </span>
       </label>
-      <div className="sheet-actions">
+      <div className={sheetActions()}>
         <Button
           type="submit"
           disabled={flow.state === "searching" || trimText(code) === ""}
@@ -236,7 +255,7 @@ function AddSheet({
         className={
           flow.state === "idle" || flow.state === "found"
             ? "sr-only"
-            : "binder-search-note"
+            : "text-muted-ink"
         }
         role="status"
       >
@@ -247,12 +266,17 @@ function AddSheet({
             : searchMessage[flow.state](flow.code)}
       </p>
       {flow.state === "found" ? (
-        <ul className="card-results" aria-label={`Variants of ${flow.code}`}>
+        <ul
+          data-slot="card-results"
+          className="grid grid-fill-30 gap-3.5"
+          aria-label={`Variants of ${flow.code}`}
+        >
           {flow.cards.map((card) => (
             <li key={card.id}>
               <button
                 type="button"
-                className="card-result"
+                data-slot="card-result"
+                className="grid w-full content-start gap-2 text-left active:scale-97"
                 onClick={() =>
                   step({
                     type: "pick",
@@ -263,7 +287,7 @@ function AddSheet({
                 }
               >
                 <CardArt card={card} />
-                <span className="media-result-title">{card.name}</span>
+                <span className={mediaTitle}>{card.name}</span>
               </button>
             </li>
           ))}
@@ -276,11 +300,15 @@ function AddSheet({
 /** The official image over the card's code, which stays if the picture cannot load. */
 function CardArt({ card }: { card: CardVariant }): React.JSX.Element {
   return (
-    <span className="card-art">
-      <span className="card-art-code num" aria-hidden="true">
+    <span className="relative block aspect-binder-card overflow-hidden rounded-code bg-wash-strong">
+      <span
+        className="absolute inset-x-2 bottom-2 text-label font-semibold num"
+        aria-hidden="true"
+      >
         {card.card_code}
       </span>
       <img
+        className="absolute inset-0 size-full object-cover"
         src={cardImageUrl(card.id)}
         alt=""
         width={600}
@@ -320,7 +348,7 @@ function Drafting({
 
   return (
     <form
-      className="sheet-body"
+      className={sheetBody()}
       aria-label="Add this card"
       onSubmit={(event) => {
         event.preventDefault()
@@ -328,27 +356,27 @@ function Drafting({
         if (!busy) add()
       }}
     >
-      <div className="binder-draft">
+      <div className={draftRow}>
         <CardArt card={draft.card} />
-        <div>
-          <p className="sheet-name">{draft.card.name}</p>
-          <p className="media-result-meta num">{draft.card.card_code}</p>
+        <div className={draftFacts}>
+          <p className={sheetName}>{draft.card.name}</p>
+          <p className={cn(mediaMeta, "num")}>{draft.card.card_code}</p>
           {locked ? (
-            <p className="binder-search-note" role="status">
+            <p className="text-muted-ink" role="status">
               This addition is not confirmed yet. Retrying it will not add the
               card twice.
             </p>
           ) : null}
         </div>
       </div>
-      <fieldset className="field destination">
+      <fieldset className={field()}>
         <legend>Add to</legend>
-        <div className="view-tabs person-keys">
+        <ViewTabs variant="people">
           {owners.map((owner) => (
             <button
               key={owner.id}
               type="button"
-              className="view-tab person-key"
+              {...viewTab("person")}
               aria-pressed={draft.owner_id === owner.id}
               disabled={frozen}
               onClick={() => edit({ owner_id: owner.id })}
@@ -357,41 +385,18 @@ function Drafting({
               {owner.name}
             </button>
           ))}
-        </div>
+        </ViewTabs>
       </fieldset>
-      <div className="field">
+      <div className={field()}>
         <span id={`${id}-quantity`}>Quantity</span>
-        <div
-          className="stepper"
-          role="group"
-          aria-labelledby={`${id}-quantity`}
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="key-icon"
-            disabled={frozen || draft.quantity <= 1}
-            onClick={() => edit({ quantity: draft.quantity - 1 })}
-          >
-            <MinusIcon size={18} aria-hidden="true" />
-            <span className="sr-only">One fewer</span>
-          </Button>
-          <output className="num" aria-live="polite">
-            {draft.quantity}
-          </output>
-          <Button
-            type="button"
-            variant="outline"
-            size="key-icon"
-            disabled={frozen}
-            onClick={() => edit({ quantity: draft.quantity + 1 })}
-          >
-            <PlusIcon size={18} aria-hidden="true" />
-            <span className="sr-only">One more</span>
-          </Button>
-        </div>
+        <Stepper
+          labelId={`${id}-quantity`}
+          value={draft.quantity}
+          disabled={frozen}
+          set={(quantity) => edit({ quantity })}
+        />
       </div>
-      <div className="field">
+      <div className={field()}>
         <span>Language</span>
         <Segments
           label="Language"
@@ -401,7 +406,7 @@ function Drafting({
           disabled={frozen}
         />
       </div>
-      <div className="sheet-actions sheet-submit">
+      <div className={sheetActions({ placement: "submit" })}>
         <Button type="submit" size="key-xl" disabled={busy}>
           <PlusIcon size={20} weight="bold" aria-hidden="true" />
           {locked ? "Retry add" : "Add card"}
@@ -429,13 +434,13 @@ function Added({
   const whose = owner === undefined ? "the" : `${owner.name}’s`
 
   return (
-    <div className="sheet-body">
-      <div className="binder-draft">
+    <div className={sheetBody()}>
+      <div className={draftRow}>
         <CardArt card={draft.card} />
-        <div>
-          <p className="sheet-name">{draft.card.name}</p>
-          <p className="media-result-meta num">{draft.card.card_code}</p>
-          <p role="status" className="binder-added">
+        <div className={draftFacts}>
+          <p className={sheetName}>{draft.card.name}</p>
+          <p className={cn(mediaMeta, "num")}>{draft.card.card_code}</p>
+          <p role="status" className="text-large font-medium text-ink">
             {stored === undefined
               ? `Added to ${whose} Binder.`
               : stored.quantity > draft.quantity
@@ -444,7 +449,7 @@ function Added({
           </p>
         </div>
       </div>
-      <div className="sheet-actions sheet-submit">
+      <div className={sheetActions({ placement: "submit" })}>
         <Button type="button" size="key" onClick={another}>
           Add another card
         </Button>

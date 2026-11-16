@@ -76,7 +76,8 @@ test("shows allowed elapsed figures and total days with a lead slot first", asyn
   )
   await render(<p>Milestone lead</p>)
   expect(
-    container.querySelector(".idle-dates")?.firstElementChild?.textContent
+    container.querySelector('[data-slot="idle-dates"]')?.firstElementChild
+      ?.textContent
   ).toBe("Milestone lead")
   expect(container.textContent).toContain("Together")
   expect(container.textContent).toContain("7 years · 8 months · 3 days")
@@ -85,9 +86,9 @@ test("shows allowed elapsed figures and total days with a lead slot first", asyn
   await render((dates) => (
     <p>{dates.map((date) => date.title).join(", ")} lead</p>
   ))
-  expect(container.querySelector(".idle-dates-lead")?.textContent).toBe(
-    "Together lead"
-  )
+  expect(
+    container.querySelector('[data-slot="idle-dates-lead"]')?.textContent
+  ).toBe("Together lead")
 })
 
 test.each(["empty", "unavailable", "rejected"])(
@@ -102,7 +103,7 @@ test.each(["empty", "unavailable", "rejected"])(
       )
     await render()
     expect(container.textContent).toBe("")
-    expect(container.querySelector(".idle-dates")).toBeNull()
+    expect(container.querySelector('[data-slot="idle-dates"]')).toBeNull()
   }
 )
 
@@ -191,23 +192,23 @@ test("shares the milestone lead and elapsed counter until Copenhagen midnight", 
       ])
     )
   await render((dates) => <IdleMilestone dates={dates} />)
-  expect(container.querySelector(".idle-milestone")?.textContent).toContain(
-    "1,000 days today"
-  )
-  expect(container.querySelector(".idle-since-figure")?.textContent).toBe(
-    "2 years · 8 months · 26 days"
-  )
+  expect(
+    container.querySelector('[data-slot="idle-milestone"]')?.textContent
+  ).toContain("1,000 days today")
+  expect(
+    container.querySelector('[data-slot="idle-since-figure"]')?.textContent
+  ).toBe("2 years · 8 months · 26 days")
   expect(container.textContent).not.toContain("Private anniversary")
   await act(async () => vi.advanceTimersByTimeAsync(2000))
-  expect(container.querySelector(".idle-milestone")).toBeNull()
-  expect(container.querySelector(".idle-since-figure")?.textContent).toBe(
-    "2 years · 8 months · 27 days"
-  )
+  expect(container.querySelector('[data-slot="idle-milestone"]')).toBeNull()
+  expect(
+    container.querySelector('[data-slot="idle-since-figure"]')?.textContent
+  ).toBe("2 years · 8 months · 27 days")
   expect(container.textContent).toContain("1,001 days")
 })
 
 test("leaves no date overlay when the milestone lead has no opted-in dates", async () => {
   readDates.mockResolvedValue(available([]))
   await render((dates) => <IdleMilestone dates={dates} />)
-  expect(container.querySelector(".idle-dates")).toBeNull()
+  expect(container.querySelector('[data-slot="idle-dates"]')).toBeNull()
 })

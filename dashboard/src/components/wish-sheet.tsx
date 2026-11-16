@@ -2,8 +2,19 @@ import { useState } from "react"
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight"
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
+import { cva, type VariantProps } from "class-variance-authority"
 import { Button } from "@/components/ui/button"
+import { WishMark } from "@/components/list-frame"
 import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
+import {
+  sheetActions,
+  sheetBody,
+  sheetConfirm,
+  sheetLink,
+  sheetName,
+  sheetNotes,
+  sheetOwner,
+} from "@/components/sheet-parts"
 import {
   WishFields,
   detailsOf,
@@ -18,17 +29,43 @@ import {
   type WishlistItem,
 } from "@/lib/wishlist"
 
+const art = cva("relative block overflow-hidden bg-wash-strong", {
+  variants: {
+    size: {
+      plate: "aspect-square",
+      detail: "h-detail-art rounded-plate",
+      preview: "aspect-square rounded-art max-sm:w-28",
+    },
+  },
+  defaultVariants: { size: "plate" },
+})
+
+const artType = cva(
+  "absolute inset-0 flex items-end overflow-hidden leading-poster font-semibold tracking-headline text-balance text-ink",
+  {
+    variants: {
+      size: {
+        plate: "p-4 text-art max-sm:p-3 max-sm:text-xlarge",
+        detail: "p-4 text-art max-sm:p-3 max-sm:text-xlarge",
+        preview: "p-3 text-large",
+      },
+    },
+    defaultVariants: { size: "plate" },
+  }
+)
+
 /** The product image with the title as its fallback poster; a failed image reveals the title. */
 export function WishArt({
   title,
   image,
+  size,
 }: {
   title: string
   image: string | null
-}): React.JSX.Element {
+} & VariantProps<typeof art>): React.JSX.Element {
   return (
-    <span className="wish-art">
-      <span className="wish-art-type" aria-hidden="true">
+    <span className={art({ size })}>
+      <span className={artType({ size })} aria-hidden="true">
         {title}
       </span>
       {image === null ? null : (
@@ -38,6 +75,7 @@ export function WishArt({
           alt=""
           loading="lazy"
           decoding="async"
+          className="absolute inset-0 size-full object-cover transition-transform duration-mid ease-app group-hover/plate:scale-103"
           referrerPolicy="no-referrer"
           onError={(event) => {
             event.currentTarget.hidden = true
@@ -86,7 +124,7 @@ export function WishDetail({
 
     return (
       <form
-        className="sheet-body"
+        className={sheetBody()}
         aria-label={`Edit ${item.title}`}
         onSubmit={(event) => {
           event.preventDefault()
@@ -121,7 +159,7 @@ export function WishDetail({
           disabled={busy}
           withLink
         />
-        <div className="sheet-actions">
+        <div className={sheetActions()}>
           <Button type="submit" size="key" disabled={busy || next.title === ""}>
             Save
           </Button>
@@ -143,42 +181,50 @@ export function WishDetail({
   }
 
   return (
-    <div className="sheet-body">
-      <div className="wish-detail-art">
-        <WishArt title={item.title} image={wishImageUrl(owner.id, item)} />
-        {item.priority === "high" ? (
-          <i className="wish-mark" aria-hidden="true" />
-        ) : null}
+    <div className={sheetBody()}>
+      <div className="relative">
+        <WishArt
+          title={item.title}
+          image={wishImageUrl(owner.id, item)}
+          size="detail"
+        />
+        {item.priority === "high" ? <WishMark /> : null}
       </div>
-      <div className="wish-detail-head">
-        <p className="sheet-owner">
+      <div className="grid gap-2.5">
+        <p className={sheetOwner}>
           <PersonDisc name={owner.name} />
           {owner.name}
           <span aria-hidden="true">·</span>
           {list.name}
         </p>
         {/* The sheet's title already names the wish for assistive technology. */}
-        <p className="sheet-name" aria-hidden="true">
+        <p className={sheetName} aria-hidden="true">
           {item.title}
         </p>
       </div>
-      <dl className="sheet-figures">
+      <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <div>
           <dt className="sr-only">Price</dt>
-          <dd className="num" data-gap={item.price === null}>
+          <dd
+            className="text-figure-sm font-medium tracking-figure-tight tabular-nums data-[gap=true]:gap-dash-7"
+            data-gap={item.price === null}
+          >
             {item.price ?? "Unavailable"}
           </dd>
         </div>
         <div>
           <dt className="sr-only">Quantity</dt>
-          <dd className="num">
+          <dd className="text-figure-sm font-medium tracking-figure-tight tabular-nums">
             <span aria-hidden="true">×</span>
             {item.quantity}
           </dd>
         </div>
         <div>
           <dt className="sr-only">Priority</dt>
-          <dd className="sheet-priority" data-priority={item.priority}>
+          <dd
+            className="inline-flex items-center gap-2 text-muted-ink data-[priority=high]:before:size-3 data-[priority=high]:before:rounded-full data-[priority=high]:before:bg-sun"
+            data-priority={item.priority}
+          >
             {item.priority === "high"
               ? "High priority"
               : item.priority === "low"
@@ -187,10 +233,12 @@ export function WishDetail({
           </dd>
         </div>
       </dl>
-      {item.notes === null ? null : <p className="sheet-notes">{item.notes}</p>}
+      {item.notes === null ? null : (
+        <p className={sheetNotes()}>{item.notes}</p>
+      )}
       {item.url === null ? null : (
         <a
-          className="sheet-link"
+          className={sheetLink}
           href={item.url}
           target="_blank"
           rel="noreferrer"
@@ -201,11 +249,11 @@ export function WishDetail({
         </a>
       )}
       {mode === "delete" ? (
-        <div className="sheet-confirm" role="group" aria-label="Delete wish">
+        <div className={sheetConfirm} role="group" aria-label="Delete wish">
           <p>
             Delete “{item.title}” from {list.name}? This cannot be undone.
           </p>
-          <div className="sheet-actions">
+          <div className={sheetActions()}>
             <Button
               variant="destructive"
               size="key"
@@ -233,7 +281,7 @@ export function WishDetail({
           </div>
         </div>
       ) : (
-        <div className="sheet-actions sheet-actions-end">
+        <div className={sheetActions({ placement: "end" })}>
           <Button
             variant="outline"
             size="key"

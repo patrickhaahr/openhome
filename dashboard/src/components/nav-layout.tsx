@@ -115,14 +115,16 @@ export function NavLayoutSwitch(): React.JSX.Element {
   const { layout, labels, choose, chooseLabels } = useNavLayout()
 
   return (
-    <div className="nav-switches">
+    <div className="flex flex-wrap gap-x-6 gap-y-3">
       <Segments
+        fit
         label="Navigation"
         value={layout}
         options={options}
         choose={choose}
       />
       <Segments
+        fit
         label="Top bar tabs"
         value={labels}
         options={labelOptions}

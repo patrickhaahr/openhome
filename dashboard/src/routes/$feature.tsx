@@ -18,10 +18,16 @@ function FeaturePage(): React.JSX.Element {
   const feature = getFeature(Route.useLoaderData())
 
   return (
-    <section className="soon">
+    <section className="grid min-h-page-fill content-center justify-items-start gap-6">
       <PageHead title={feature.title} />
-      <feature.icon className="soon-glyph" weight="thin" aria-hidden="true" />
-      <h2 className="soon-title">Not available yet</h2>
+      <feature.icon
+        className="-ml-glyph-nudge h-auto w-glyph text-ink"
+        weight="thin"
+        aria-hidden="true"
+      />
+      <h2 className="text-title leading-none font-medium tracking-tighter">
+        Not available yet
+      </h2>
       <div className="sr-only">
         <p>{feature.unavailable}</p>
         <p>

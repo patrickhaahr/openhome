@@ -5,6 +5,15 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
+import {
+  field,
+  linkInput,
+  linkStatus,
+  mediaMeta,
+  mediaTitle,
+  sheetBody,
+  sheetName,
+} from "@/components/sheet-parts"
 import { KindGlyph, WatchlistPoster } from "@/components/watchlist-poster"
 import { trimText } from "@/lib/lists"
 import { createRequestId } from "@/lib/request-id"
@@ -111,7 +120,7 @@ export function MediaResults({
 }): React.JSX.Element {
   return (
     <>
-      <p className="link-status" role="status">
+      <p className={linkStatus} role="status">
         {found.state === "searching"
           ? "Searching TMDB…"
           : found.state === "unavailable"
@@ -123,22 +132,27 @@ export function MediaResults({
                 : ""}
       </p>
       {found.state === "found" && found.results.length > 0 ? (
-        <ul className="media-results" aria-label="TMDB titles">
+        <ul
+          data-slot="media-results"
+          className="grid grid-fill-27 gap-3.5"
+          aria-label="TMDB titles"
+        >
           {found.results.map((result) => (
             <li key={`${result.kind}:${result.tmdb_id}`}>
               <button
                 type="button"
-                className="media-result"
+                className="grid w-full content-start gap-2 text-left active:scale-97"
                 disabled={disabled}
                 onClick={() => pick(result)}
               >
                 <WatchlistPoster
                   title={result.title}
                   path={result.poster_path}
+                  size="result"
                 />
-                <span className="media-result-text">
-                  <span className="media-result-title">{result.title}</span>
-                  <span className="media-result-meta">
+                <span className="grid gap-0.5">
+                  <span className={mediaTitle}>{result.title}</span>
+                  <span className={mediaMeta}>
                     <KindGlyph kind={result.kind} size={14} />
                     {result.release_date === null ? null : (
                       <span className="num">
@@ -249,12 +263,12 @@ export function WatchAdd({
 
   if (choice !== undefined)
     return (
-      <div className="sheet-body">
-        <div className="watch-choice">
+      <div className={sheetBody()}>
+        <div className="grid grid-aside-36 items-start gap-5 max-sm:grid-aside-28">
           <WatchlistPoster title={choice.title} path={choice.poster_path} />
-          <div>
-            <p className="sheet-name">{choice.title}</p>
-            <p className="media-result-meta">
+          <div className="grid justify-items-start gap-2">
+            <p className={sheetName}>{choice.title}</p>
+            <p className={mediaMeta}>
               <KindGlyph kind={choice.kind} />
               {choice.release_date === null ? null : (
                 <span className="num">{choice.release_date.slice(0, 4)}</span>
@@ -270,19 +284,19 @@ export function WatchAdd({
             </Button>
           </div>
         </div>
-        <fieldset className="field destination">
+        <fieldset className={field()}>
           <legend>For whom?</legend>
-          <div className="whom-keys">
+          <div className="grid grid-fill-34 gap-3">
             {owners.map((owner) => (
               <button
                 key={owner.id}
                 type="button"
-                className="whom-key"
+                className="grid min-h-34 content-center justify-items-center gap-2.5 rounded-tile bg-wash-strong text-xlarge font-medium text-ink transition duration-fast ease-app hover:bg-ink hover:text-ground active:scale-97 data-[suggested=true]:bg-ink data-[suggested=true]:text-ground"
                 data-suggested={owner.id === person}
                 disabled={busy}
                 onClick={() => void add(owner, choice)}
               >
-                <PersonDisc name={owner.name} />
+                <PersonDisc name={owner.name} size="key" tone="ground" />
                 {owner.name}
               </button>
             ))}
@@ -294,10 +308,10 @@ export function WatchAdd({
   const typed = trimText(query)
 
   return (
-    <div className="sheet-body">
-      <label className="field" htmlFor={`${id}-find`}>
+    <div className={sheetBody()}>
+      <label className={field()} htmlFor={`${id}-find`}>
         <span>Find a movie or series</span>
-        <span className="link-input">
+        <span className={linkInput}>
           <MagnifyingGlassIcon size={22} aria-hidden="true" />
           <Input
             id={`${id}-find`}
@@ -313,7 +327,11 @@ export function WatchAdd({
             }}
           />
           {found.state === "searching" ? (
-            <CircleNotchIcon size={22} className="spin" aria-hidden="true" />
+            <CircleNotchIcon
+              size={22}
+              className="animate-spin"
+              aria-hidden="true"
+            />
           ) : null}
         </span>
       </label>
@@ -323,7 +341,11 @@ export function WatchAdd({
         pick={(result) => setChoice(result)}
       />
       {typed === "" ? null : (
-        <div className="manual-add" role="group" aria-label="Add by hand">
+        <div
+          className="flex flex-wrap items-center gap-2 text-muted-ink"
+          role="group"
+          aria-label="Add by hand"
+        >
           <span>Not here? Add “{typed}” as a</span>
           {(["movie", "series"] as const).map((kind) => (
             <Button

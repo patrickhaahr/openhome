@@ -24,7 +24,7 @@ import {
   type Turn,
   type TurnEvent,
 } from "@/lib/binder-turn"
-import { button, settle, sheet } from "./support/lists-dom"
+import { button, settle, sheet, slot } from "./support/lists-dom"
 
 const alex = { id: "5a02863d-0c3f-4e11-9a2e-2e99334b5a93", name: "Alex" }
 
@@ -132,12 +132,11 @@ async function render(): Promise<void> {
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
-const folio = (): string =>
-  container.querySelector(".binder-folio")?.textContent ?? ""
+const folio = (): string => slot("binder-folio", container)?.textContent ?? ""
 
 const shownPages = (): string[] =>
   Array.from(
-    container.querySelectorAll(".binder-page"),
+    container.querySelectorAll('[data-slot="binder-page"]'),
     (page) => page.getAttribute("aria-label") ?? ""
   ).sort()
 
@@ -145,7 +144,9 @@ const pocket = (number: number): HTMLButtonElement =>
   button(new RegExp(`^Invented Card ${number},`), container)
 
 const spread = (): HTMLElement => {
-  const element = container.querySelector<HTMLElement>(".binder-spread")
+  const element = container.querySelector<HTMLElement>(
+    '[data-slot="binder-spread"]'
+  )
 
   if (element === null) throw new Error("Expected a spread")
 
@@ -355,7 +356,7 @@ describe("taps and drags on pockets", () => {
     await lift(card, 300)
     await landed()
 
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(slot("sheet")).toBeNull()
     expect(folio()).toBe("Pages 1–2 of 4")
   })
 
@@ -380,7 +381,7 @@ describe("taps and drags on pockets", () => {
     await lift(card, 300)
     await landed()
 
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(slot("sheet")).toBeNull()
     expect(folio()).toBe("Pages 3–4 of 4")
   })
 
@@ -393,7 +394,7 @@ describe("taps and drags on pockets", () => {
     await lift(card, 800)
     await landed()
 
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(slot("sheet")).toBeNull()
     expect(folio()).toBe("Pages 1–2 of 4")
 
     await pointer(card, "pointerdown", 950)
@@ -422,7 +423,7 @@ describe("swiping the card stage", () => {
     await lift(pocket(18), 500)
 
     const swipe = async (from: number, to: number): Promise<void> => {
-      const detail = sheet().querySelector(".binder-detail")
+      const detail = slot("binder-detail", sheet())
 
       if (detail === null) throw new Error("Expected the card stage")
       await pointer(detail, "pointerdown", from)
@@ -430,8 +431,7 @@ describe("swiping the card stage", () => {
       await settle()
     }
 
-    const title = (): string =>
-      sheet().querySelector(".sheet-title")?.textContent ?? ""
+    const title = (): string => slot("sheet-title", sheet())?.textContent ?? ""
 
     await swipe(700, 300)
     expect(title()).toBe("Invented Card 19")

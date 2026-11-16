@@ -146,7 +146,7 @@ function text(selector: string): string[] {
 
 function row(key: string): Element {
   const element = container.querySelector(
-    `.trend-coverage-rows li[data-key="${key}"]`
+    `[data-slot="trend-coverage-rows"] li[data-key="${key}"]`
   )
 
   expect(element, key).not.toBeNull()
@@ -156,9 +156,9 @@ function row(key: string): Element {
 
 /** The coverage table's row for a nutrient, cell by cell. */
 function tableRow(name: string): string[] {
-  const rows = [...container.querySelectorAll(".trend-coverage table tr")].map(
-    (tr) => [...tr.children].map((cell) => normalize(cell.textContent))
-  )
+  const rows = [
+    ...container.querySelectorAll("[data-slot='trend-coverage'] table tr"),
+  ].map((tr) => [...tr.children].map((cell) => normalize(cell.textContent)))
 
   return rows.find((cells) => cells[0] === name) ?? []
 }
@@ -168,14 +168,16 @@ test("shows each nutrient's coverage with lasting shortfalls and cut down period
   expect(data.state).toBe("available")
   await render(data)
 
-  expect(text(".trend-coverage h2")).toEqual(["Vitamins and minerals"])
-  expect(text(".trend-coverage .trend-summary")).toEqual([
-    "Lasting shortfall: Calcium · Cut down: Vitamin D",
+  expect(text("[data-slot='trend-coverage'] h2")).toEqual([
+    "Vitamins and minerals",
   ])
-  expect(text(".trend-coverage-basis")[0]).toMatch(
+  expect(
+    text("[data-slot='trend-coverage'] [data-slot='trend-summary']")
+  ).toEqual(["Lasting shortfall: Calcium · Cut down: Vitamin D"])
+  expect(text("[data-slot='trend-coverage-basis']")[0]).toMatch(
     /over 9 logged days · a lasting shortfall is below 70 % over at least 7 logged days/
   )
-  expect(text(".trend-coverage-group h3")).toEqual([
+  expect(text("[data-slot='trend-coverage-group'] h3")).toEqual([
     "Vitamins",
     "Minerals",
     "Omega-3",
@@ -185,7 +187,9 @@ test("shows each nutrient's coverage with lasting shortfalls and cut down period
   const calcium = row("calcium")
   expect(calcium.hasAttribute("data-shortfall")).toBe(true)
   expect(
-    normalize(calcium.querySelector(".trend-coverage-percent")?.textContent)
+    normalize(
+      calcium.querySelector("[data-slot='trend-coverage-percent']")?.textContent
+    )
   ).toBe("37 % Short")
 
   // Two capsule days above 100 µg; nine days ago the 7-day average of 125 µg says cut down.
@@ -193,9 +197,15 @@ test("shows each nutrient's coverage with lasting shortfalls and cut down period
   expect(vitaminD.getAttribute("data-limit")).toBe("cut_down")
   expect(vitaminD.hasAttribute("data-shortfall")).toBe(false)
   expect(
-    normalize(vitaminD.querySelector(".trend-coverage-limit")?.textContent)
+    normalize(
+      vitaminD.querySelector("[data-slot='trend-coverage-limit']")?.textContent
+    )
   ).toBe("Cut down in 1 day · 2 days above the Upper Limit")
-  const cells = vitaminD.querySelectorAll(".trend-coverage-strip > span")
+
+  const cells = vitaminD.querySelectorAll(
+    "[data-slot='trend-coverage-strip'] > span"
+  )
+
   expect(cells).toHaveLength(30)
   expect(vitaminD.querySelectorAll('[data-limit="cut_down"]')).toHaveLength(1)
   expect(vitaminD.querySelectorAll('[data-limit="above"]')).toHaveLength(1)
@@ -203,7 +213,7 @@ test("shows each nutrient's coverage with lasting shortfalls and cut down period
   expect(vitaminD.querySelectorAll("[data-gap]")).toHaveLength(21)
   expect(
     container
-      .querySelector(".trend-coverage-strip")
+      .querySelector("[data-slot='trend-coverage-strip']")
       ?.getAttribute("aria-hidden")
   ).toBe("true")
 
@@ -241,14 +251,16 @@ test("without the Profile's sex and birth date the coverage says why and the tre
     expect(data.state).toBe("available")
     await render(data)
 
-    expect(text(".trend-coverage h2")).toEqual([
+    expect(text("[data-slot='trend-coverage'] h2")).toEqual([
       "No vitamin and mineral coverage yet",
     ])
-    expect(text('.trend-coverage[data-state="unavailable"] p')).toEqual([
+    expect(
+      text('[data-slot="trend-coverage"][data-state="unavailable"] p')
+    ).toEqual([
       "The micronutrient panel needs the Profile's sex (male or female) and birth date.",
       "Sex and birth date are set on the Workout page's Body view.",
     ])
-    expect(text(".trend-chart h2")).toContain("Calories")
+    expect(text("[data-slot='trend-chart'] h2")).toContain("Calories")
   } finally {
     await bare.stop()
   }

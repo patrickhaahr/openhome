@@ -11,6 +11,10 @@ import {
 } from "@/lib/training"
 
 import { clockTime, pace } from "@/lib/session-format"
+import { capsLabel } from "@/components/training-shared"
+
+/** Where a strap reading is drawn: the Recovery detail, or a Log session beside its exercises or alone. */
+export type StrapFit = "detail" | "pane" | "alone"
 
 function basis(data: NoopWorkoutDetail): string {
   switch (data.hr.basis) {
@@ -63,25 +67,47 @@ export function noopStats(
   ]
 }
 
+const statLooks = {
+  detail: {
+    list: "flex flex-wrap gap-x-detail-stats gap-y-4",
+    figure: "font-semibold tracking-workout-figure",
+  },
+  route: {
+    list: "grid grid-cols-2 content-center gap-x-detail-stats gap-y-4",
+    figure: "font-semibold tracking-workout-figure",
+  },
+  session: {
+    list: "grid min-w-0 flex-1 grid-cols-stats gap-x-4 gap-y-3.5 max-[700px]:w-full max-[700px]:grid-cols-2",
+    figure: "leading-workout-heading font-bold tracking-title",
+  },
+} as const
+
 /** Labelled figures in one grid; figures that were not recorded are left out. */
 export function StatList({
   stats,
-  className,
+  look,
 }: {
   readonly stats: ReadonlyArray<readonly [string, string | null, string]>
-  readonly className: string
+  readonly look: keyof typeof statLooks
 }): React.JSX.Element {
   return (
-    <dl className={className}>
+    <dl className={statLooks[look].list}>
       {stats.flatMap(([label, figure, unit]) =>
         figure === null
           ? []
           : [
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>
+              <div key={label} className="grid gap-0.5">
+                <dt className={capsLabel}>{label}</dt>
+                <dd
+                  className={`text-figure-sm tabular-nums ${statLooks[look].figure}`}
+                >
                   {figure}
-                  {unit === "" ? null : <small> {unit}</small>}
+                  {unit === "" ? null : (
+                    <small className="text-small font-medium tracking-normal text-muted-ink">
+                      {" "}
+                      {unit}
+                    </small>
+                  )}
                 </dd>
               </div>,
             ]
@@ -107,12 +133,17 @@ export function NoopDetail({
     data.route !== undefined && data.route.length > 1 ? data.route : undefined
 
   return (
-    <article className="noop-detail">
-      <header className="noop-detail-head">
-        <div>
+    <article
+      data-slot="noop-detail"
+      className="grid gap-6 rounded-panel bg-tile p-plate"
+    >
+      <header className="flex items-center gap-6 pr-14">
+        <div className="flex-1">
           <p className="sr-only">NOOP workout detail</p>
-          <h2>{data.sport}</h2>
-          <p className="noop-detail-time">
+          <h2 className="text-lead font-semibold tracking-title">
+            {data.sport}
+          </h2>
+          <p className="text-muted-ink tabular-nums">
             {clockTime(data.start)}
             <span aria-hidden="true"> – </span>
             <span className="sr-only"> to </span>
@@ -125,6 +156,7 @@ export function NoopDetail({
         </div>
         <ScoreRing
           kind="effort"
+          size="detail"
           share={ringShare(data.strain_score, 100)}
           band={data.strain_score === null ? "none" : "fair"}
           figure={
@@ -140,12 +172,17 @@ export function NoopDetail({
           }
         />
       </header>
-      <div className="noop-detail-glance" data-route={route !== undefined}>
-        <StatList className="noop-detail-stats" stats={noopStats(data)} />
-        {route === undefined ? null : <RouteMap route={route} />}
+      <div
+        className={`grid gap-5 ${route === undefined ? "" : "grid-cols-route items-stretch max-[900px]:grid-cols-1"}`}
+      >
+        <StatList
+          look={route === undefined ? "detail" : "route"}
+          stats={noopStats(data)}
+        />
+        {route === undefined ? null : <RouteMap route={route} fit="detail" />}
       </div>
       {data.hr_series === null ? (
-        <p className="noop-detail-missing">
+        <p className={missingLine}>
           <HeartbeatIcon size={18} aria-hidden="true" />
           {unavailable("hr_series")}
         </p>
@@ -154,15 +191,16 @@ export function NoopDetail({
           series={data.hr_series}
           zones={data.hr_zones}
           durationS={(Date.parse(data.end) - Date.parse(data.start)) / 1000}
+          fit="detail"
         />
       )}
       {data.hr_zones === null ? (
-        <p className="noop-detail-missing">{unavailable("hr_zones")}</p>
+        <p className={missingLine}>{unavailable("hr_zones")}</p>
       ) : (
-        <ZoneBar zones={data.hr_zones} />
+        <ZoneBar zones={data.hr_zones} fit="detail" />
       )}
       {data.hr_recovery === null ? (
-        <p className="noop-detail-missing">{unavailable("hr_recovery")}</p>
+        <p className={missingLine}>{unavailable("hr_recovery")}</p>
       ) : (
         <HeartRateRecovery recovery={data.hr_recovery} />
       )}
@@ -170,19 +208,32 @@ export function NoopDetail({
   )
 }
 
+const missingLine = "flex items-center gap-2 text-control text-muted-ink"
+
 export type Series = NonNullable<NoopWorkoutDetail["hr_series"]>
 
 export type Zones = NonNullable<NoopWorkoutDetail["hr_zones"]>
 
 /** Strap heart rate as a line over its zone bands; a missing bucket stays a gap. */
+const traceLooks: Record<StrapFit, { figure: string; plot: string }> = {
+  detail: { figure: "relative", plot: "h-hr-chart" },
+  pane: {
+    figure: "relative min-h-32",
+    plot: "h-full min-h-32 max-[860px]:h-36",
+  },
+  alone: { figure: "relative min-h-32", plot: "h-36 min-h-32" },
+}
+
 export function HeartRateChart({
   series,
   zones,
   durationS,
+  fit,
 }: {
   readonly series: Series
   readonly zones: Zones | null
   readonly durationS: number
+  readonly fit: StrapFit
 }): React.JSX.Element {
   const width = 600
   const height = 180
@@ -207,8 +258,9 @@ export function HeartRateChart({
   }
 
   return (
-    <figure className="hr-chart">
+    <figure className={traceLooks[fit].figure}>
       <svg
+        className={`block w-full overflow-hidden rounded-plate bg-wash ${traceLooks[fit].plot}`}
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
         role="img"
@@ -227,7 +279,7 @@ export function HeartRateChart({
               return top <= bottom ? null : (
                 <rect
                   key={zone.zone}
-                  className="hr-chart-zone"
+                  className="fill-zone opacity-10"
                   data-zone={zone.zone}
                   x="0"
                   width={width}
@@ -236,15 +288,26 @@ export function HeartRateChart({
                 />
               )
             })}
-        <path className="hr-chart-line" d={line} />
+        <path
+          className="stroke-poor"
+          d={line}
+          fill="none"
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
-      <figcaption>
+      <figcaption className="pointer-events-none absolute inset-y-2 left-3 flex flex-col justify-between text-caption text-muted-ink tabular-nums">
         <span>{high}</span>
         <span>{low}</span>
       </figcaption>
       <details className="sr-only">
         <summary>Inspect observed heart rate values</summary>
-        <div className="training-series-values">
+        <div
+          data-slot="training-series-values"
+          className="max-h-60 overflow-auto tabular-nums"
+        >
           {series.points.map((point) => (
             <p key={point.t_s}>
               +{point.t_s} s: {point.bpm} beats/min
@@ -259,31 +322,41 @@ export function HeartRateChart({
 /** Time in each zone as one bar, widest zone longest; minutes beneath. */
 export function ZoneBar({
   zones,
+  fit,
 }: {
   readonly zones: Zones
+  readonly fit: StrapFit
 }): React.JSX.Element {
   return (
-    <div className="zone-bar">
+    <div className="grid gap-3">
       <p className="sr-only">
         Profile maximum: {zones.hrmax_used} beats/min · Below zone 1:{" "}
         {formatDecimal(zones.below_zone_min)} min
       </p>
-      <div className="zone-bar-track" aria-hidden="true">
+      <div
+        className="flex h-4 gap-0.75 overflow-hidden rounded-full bg-wash"
+        aria-hidden="true"
+      >
         {zones.zones.map((zone) =>
           zone.percent > 0 ? (
             <span
               key={zone.zone}
               data-zone={zone.zone}
+              className="min-w-1 flex-(--minutes) bg-zone"
               // SAFETY: CSSProperties omits custom properties; --minutes is the zone's share weight.
               style={{ "--minutes": zone.percent } as React.CSSProperties}
             />
           ) : null
         )}
       </div>
-      <ol className="zone-bar-legend">
+      <ol className="grid grid-cols-5 gap-2 tabular-nums">
         {zones.zones.map((zone) => (
-          <li key={zone.zone} data-zone={zone.zone}>
-            <span className="zone-bar-name">
+          <li
+            key={zone.zone}
+            data-zone={zone.zone}
+            className={`grid gap-0.5 text-large font-semibold ${fit === "detail" ? "max-[700px]:text-control" : ""}`}
+          >
+            <span className="inline-flex items-center gap-1.5 text-caption font-bold text-muted-ink before:size-2 before:rounded-full before:bg-zone">
               <span className="sr-only">Zone </span>Z{zone.zone}
               <span className="sr-only">
                 {" "}
@@ -324,19 +397,31 @@ function HeartRateRecovery({
   )
 
   return (
-    <div className="hr-recovery">
-      <p className="hr-recovery-end">
-        <HeartbeatIcon size={18} weight="fill" aria-hidden="true" />
+    <div className="grid grid-cols-lead items-center gap-6">
+      <p className="inline-flex items-center gap-1.5 text-figure-sm font-semibold tracking-workout-figure tabular-nums">
+        <HeartbeatIcon
+          className="text-poor"
+          size={18}
+          weight="fill"
+          aria-hidden="true"
+        />
         <span className="sr-only">End heart rate: </span>
         {recovery.end_hr_bpm}
-        <small> bpm</small>
+        <small className="text-small tracking-normal text-muted-ink">
+          {" "}
+          bpm
+        </small>
       </p>
-      <ol>
+      <ol className="grid gap-1.5">
         {marks.map(([mark, reading]) => (
-          <li key={mark} data-gap={reading === null}>
-            <span className="hr-recovery-mark">{mark}</span>
+          <li
+            key={mark}
+            data-gap={reading === null}
+            className="grid grid-cols-recovery items-center gap-3 tabular-nums data-[gap=true]:gap-dash-5.5"
+          >
+            <span className="text-label text-muted-ink">{mark}</span>
             <span
-              className="hr-recovery-bar"
+              className="h-2.5 w-share min-w-0.5 rounded-full bg-good"
               aria-hidden="true"
               // SAFETY: CSSProperties omits custom properties; --share is a 0..1 bar length.
               style={
@@ -345,7 +430,7 @@ function HeartRateRecovery({
                 } as React.CSSProperties
               }
             />
-            <span className="hr-recovery-drop">
+            <span className="text-right font-bold">
               {reading === null ? (
                 <span className="sr-only">
                   Too few strap samples; not interpolated.
@@ -372,8 +457,10 @@ type Route = NonNullable<NoopWorkoutDetail["route"]>
 /** The captured route on the shared map: a sun line from its start to its end. */
 export function RouteMap({
   route,
+  fit,
 }: {
   readonly route: Route
+  readonly fit: "detail" | "pane"
 }): React.JSX.Element {
   const theme = useMapTheme()
   const first = route[0] ?? [0, 0]
@@ -401,7 +488,9 @@ export function RouteMap({
   )
 
   return (
-    <figure className="noop-detail-map">
+    <figure
+      className={`grid overflow-hidden rounded-plate bg-wash ${fit === "detail" ? "min-h-88 max-[900px]:min-h-72" : "h-full min-h-80 max-[860px]:min-h-64"}`}
+    >
       <SharedMap
         key={`${first[0]},${first[1]}`}
         origin={{ latitude: first[0], longitude: first[1], source: "private" }}

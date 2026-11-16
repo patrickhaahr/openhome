@@ -31,13 +31,13 @@ export function LiveClock({ initialTime }: LiveClockProps): React.JSX.Element {
   return (
     <div>
       <time
-        className="clock-time"
+        className="-ml-clock-hang block text-clock-time leading-figure-xl font-medium tracking-clock tabular-nums"
         dateTime={now.toISOString()}
         aria-label="Current time"
       >
         {timeFormat.format(now)}
       </time>
-      <p className="clock-date">
+      <p className="mt-5 text-clock-date leading-workout-heading font-medium tracking-figure-tight first-letter:uppercase">
         <span aria-hidden="true">{shortDate.format(now)}</span>
         <span className="sr-only">{dateFormat.format(now)}</span>
       </p>

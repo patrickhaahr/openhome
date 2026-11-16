@@ -1,15 +1,7 @@
 // @vitest-environment happy-dom
-import { act, useState } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRouter,
-  RouterProvider,
-} from "@tanstack/react-router"
-import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import { act } from "react"
+import { expect, test, vi } from "vitest"
 import { IdleProvider, WAKE_GRACE_MS } from "@/components/idle"
-import { useIdleBlock } from "@/components/idle-block"
 import {
   DWELL_MS,
   FADE_MS,
@@ -23,153 +15,34 @@ import {
   slideSource,
   wantsIdleNow,
   type DeckPage,
-  type IdleSettings,
 } from "@/lib/idle"
 import type { LightCommand, LightCommandResult } from "@/lib/lights"
+import { unavailablePhotos, type Album, type WallRead } from "@/lib/photos"
 import {
-  unavailablePhotos,
-  type Album,
-  type AlbumRead,
-  type WallRead,
-} from "@/lib/photos"
-import { unavailableWeather } from "@/lib/weather"
-
-const TIMEOUT = 10_000
-
-/** The documented contract: a held touch that never reports its release wakes after 3 seconds. */
-const LOST_RELEASE_WAKE_MS = 3000
-
-const settings: IdleSettings = { timeoutMs: TIMEOUT, preview: false }
-
-const albumId = "5eed0000-0000-4000-8001-000000000000"
-
-const asset = (n: number): string =>
-  `5eed0000-0000-4000-8000-${String(n).padStart(12, "0")}`
-
-const album: Album = {
-  id: albumId,
-  name: "Synthetic scenes",
-  photo_count: 3,
-  cover_id: null,
-  first_month: "2025-06",
-  last_month: "2025-06",
-  missing: false,
-}
-
-const readyAlbums: AlbumRead = { state: "ready", albums: [album] }
-
-function pageOf(count: number, page = 0, next: number | null = null): WallRead {
-  return {
-    state: "ready",
-    wall: {
-      items: Array.from({ length: count }, (_, at) => ({
-        album: albumId,
-        asset: asset(page * 100 + at + 1),
-      })),
-      page,
-      next,
-      total: count,
-    },
-  }
-}
-
-function fakeSources(
-  albums: () => Promise<AlbumRead> = async () => readyAlbums,
-  page: (page: DeckPage) => Promise<WallRead> = async () => pageOf(3)
-): IdleSources & { albumReads: () => number } {
-  let reads = 0
-
-  return {
-    albums: () => {
-      reads += 1
-
-      return albums()
-    },
-    page,
-    weather: async () => unavailableWeather,
-    onThisDay: async () => ({
-      state: "ready",
-      onThisDay: { date: "10-17", items: [], page: 0, next: null, total: 0 },
-    }),
-    albumReads: () => reads,
-  }
-}
-
-let container: HTMLDivElement
-
-let root: Root
-
-let reduced = false
-
-beforeEach(() => {
-  vi.useFakeTimers()
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
-  reduced = false
-
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: query.includes("reduce") && reduced,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  }))
-
-  container = document.createElement("div")
-  document.body.append(container)
-  root = createRoot(container)
-})
-
-afterEach(async () => {
-  await act(async () => root.unmount())
-  container.remove()
-  vi.useRealTimers()
-  vi.unstubAllGlobals()
-})
-
-async function advance(ms: number): Promise<void> {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms)
-  })
-}
-
-function screen(): HTMLElement | null {
-  return document.querySelector(".idle")
-}
-
-async function render(node: React.ReactNode): Promise<void> {
-  await act(async () => root.render(node))
-}
-
-function fire(target: EventTarget, type: string): boolean {
-  const event = type.startsWith("pointer")
-    ? new PointerEvent(type, { bubbles: true, cancelable: true })
-    : type.startsWith("key")
-      ? new KeyboardEvent(type, { bubbles: true, cancelable: true, key: "a" })
-      : new MouseEvent(type, { bubbles: true, cancelable: true })
-
-  return target.dispatchEvent(event)
-}
-
-/** A page with a draft, a counter and a key, to prove waking returns to exactly this. */
-function Page({ blocked = false }: { blocked?: boolean }): React.JSX.Element {
-  const [count, setCount] = useState(0)
-  useIdleBlock(blocked)
-
-  return (
-    <div className="page">
-      <input aria-label="Draft" defaultValue="" />
-      <button type="button" onClick={() => setCount(count + 1)}>
-        Count {count}
-      </button>
-    </div>
-  )
-}
-
-function countKey(): HTMLButtonElement {
-  const key = container.querySelector("button")
-
-  if (key === null) throw new Error("Expected the count key")
-
-  return key
-}
+  advance,
+  album,
+  albumId,
+  asset,
+  container,
+  countKey,
+  fakeSources,
+  fire,
+  Holder,
+  LOST_RELEASE_WAKE_MS,
+  Page,
+  pageOf,
+  render,
+  renderRouted,
+  root,
+  screen,
+  setReduced,
+  settings,
+  slideOf,
+  slides,
+  slot,
+  TIMEOUT,
+  wake,
+} from "./support/idle-dom"
 
 test("reads the timeout from the server setting, with a 5-minute default and an off switch", () => {
   expect(parseIdleSettings(undefined, undefined)).toEqual({
@@ -376,12 +249,6 @@ test("a held touch keeps swallowing until its release, and a lost release still 
 })
 
 test("blocks are independent reasons: the countdown restarts only when the last is released", async () => {
-  function Holder({ held }: { held: boolean }): null {
-    useIdleBlock(held)
-
-    return null
-  }
-
   const tree = (first: boolean, second: boolean): React.ReactNode => (
     <IdleProvider settings={settings} sources={fakeSources()}>
       <Page />
@@ -481,27 +348,15 @@ test("a tap over Home's light key wakes the screen without sending a light comma
 
   const sources = fakeSources()
 
-  const rootRoute = createRootRoute({
-    component: () => (
-      <IdleProvider settings={settings} sources={sources}>
-        <LightControls
-          layout="quick"
-          connectionState="connected"
-          sendCommand={sendCommand}
-        />
-      </IdleProvider>
-    ),
-  })
-
-  const router = createRouter({
-    routeTree: rootRoute,
-    history: createMemoryHistory(),
-  })
-
-  await act(async () => {
-    await router.load()
-    root.render(<RouterProvider router={router} />)
-  })
+  await renderRouted(
+    <IdleProvider settings={settings} sources={sources}>
+      <LightControls
+        layout="quick"
+        connectionState="connected"
+        sendCommand={sendCommand}
+      />
+    </IdleProvider>
+  )
 
   const lightKey = container.querySelector<HTMLButtonElement>(
     '[data-command="on"]'
@@ -545,11 +400,9 @@ test("crossfades between two image slots, preloading only the next photo", async
   )
 
   await advance(TIMEOUT)
-  const images = () => Array.from(document.querySelectorAll(".idle-slide img"))
+  const images = () => slides()
   expect(images()).toHaveLength(1)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-motion")
-  ).toBe("drift")
+  expect(slot("idle-stage")?.getAttribute("data-motion")).toBe("drift")
 
   await act(async () => fire(images()[0] ?? window, "load"))
   expect(document.querySelector('[data-front="true"]')).not.toBeNull()
@@ -557,19 +410,13 @@ test("crossfades between two image slots, preloading only the next photo", async
   await advance(FADE_MS)
   expect(images()).toHaveLength(2)
   const preloading = images()[1]
-  expect(preloading?.closest(".idle-slide")?.getAttribute("data-front")).toBe(
-    "false"
-  )
+  expect(slideOf(preloading)?.getAttribute("data-front")).toBe("false")
 
   await act(async () => fire(preloading ?? window, "load"))
   await advance(DWELL_MS - FADE_MS - 1)
-  expect(preloading?.closest(".idle-slide")?.getAttribute("data-front")).toBe(
-    "false"
-  )
+  expect(slideOf(preloading)?.getAttribute("data-front")).toBe("false")
   await advance(1)
-  expect(preloading?.closest(".idle-slide")?.getAttribute("data-front")).toBe(
-    "true"
-  )
+  expect(slideOf(preloading)?.getAttribute("data-front")).toBe("true")
 
   // After the fade the old slot takes the next photo: never more than two images.
   await advance(FADE_MS)
@@ -578,7 +425,7 @@ test("crossfades between two image slots, preloading only the next photo", async
 })
 
 test("reduced motion keeps the crossfade and drops the drift", async () => {
-  reduced = true
+  setReduced(true)
 
   await render(
     <IdleProvider settings={settings} sources={fakeSources()}>
@@ -587,9 +434,7 @@ test("reduced motion keeps the crossfade and drops the drift", async () => {
   )
 
   await advance(TIMEOUT)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-motion")
-  ).toBe("still")
+  expect(slot("idle-stage")?.getAttribute("data-motion")).toBe("still")
 })
 
 test("an unavailable library rests on the plain ground with the clock, then quietly tries again", async () => {
@@ -602,13 +447,9 @@ test("an unavailable library rests on the plain ground with the clock, then quie
   )
 
   await advance(TIMEOUT)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-resting")
-  ).toBe("true")
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
-  expect(document.querySelector(".idle-time")?.textContent).toMatch(
-    /^\d\d:\d\d$/
-  )
+  expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("true")
+  expect(slides()).toHaveLength(0)
+  expect(slot("idle-time")?.textContent).toMatch(/^\d\d:\d\d$/)
   expect(document.querySelector('[role="alert"]')).toBeNull()
   expect(sources.albumReads()).toBe(1)
 
@@ -628,14 +469,10 @@ test("a run of broken photos rests instead of showing an error", async () => {
   await advance(TIMEOUT)
 
   for (let miss = 0; miss < 4; miss += 1)
-    await act(async () =>
-      fire(document.querySelector(".idle-slide img") ?? window, "error")
-    )
+    await act(async () => fire(slides()[0] ?? window, "error"))
 
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-resting")
-  ).toBe("true")
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
+  expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("true")
+  expect(slides()).toHaveLength(0)
 })
 
 test("favours on-this-day photos first, labels only the shown photo, then keeps the normal two-slot rotation", async () => {
@@ -660,21 +497,19 @@ test("favours on-this-day photos first, labels only the shown photo, then keeps 
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  const first = document.querySelector<HTMLImageElement>(".idle-slide img")
+  const first = slides()[0]
   expect(first?.src).toContain(asset(999))
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
+  expect(slot("idle-photo-memory")).toBeNull()
   await act(async () => fire(first ?? window, "load"))
-  expect(document.querySelector(".idle-photo-memory")?.textContent).toBe(
-    "3 years ago today"
-  )
+  expect(slot("idle-photo-memory")?.textContent).toBe("3 years ago today")
   await advance(FADE_MS)
-  const images = document.querySelectorAll<HTMLImageElement>(".idle-slide img")
+  const images = slides()
   expect(images).toHaveLength(2)
   expect(images[1]?.src).not.toContain(asset(999))
   await act(async () => fire(images[1] ?? window, "load"))
   await advance(DWELL_MS - FADE_MS)
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(2)
+  expect(slot("idle-photo-memory")).toBeNull()
+  expect(slides()).toHaveLength(2)
 })
 
 test("an unavailable on-this-day read quietly uses the normal shuffle", async () => {
@@ -689,8 +524,8 @@ test("an unavailable on-this-day read quietly uses the normal shuffle", async ()
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
+  expect(slides()).toHaveLength(1)
+  expect(slot("idle-photo-memory")).toBeNull()
 })
 
 test("Copenhagen midnight replaces yesterday's photo queue and clears its caption before loading today's memory", async () => {
@@ -728,18 +563,12 @@ test("Copenhagen midnight replaces yesterday's photo queue and clears its captio
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  await act(async () =>
-    fire(document.querySelector(".idle-slide img") ?? window, "load")
-  )
-  expect(document.querySelector(".idle-photo-memory")?.textContent).toBe(
-    "3 years ago today"
-  )
+  await act(async () => fire(slides()[0] ?? window, "load"))
+  expect(slot("idle-photo-memory")?.textContent).toBe("3 years ago today")
   await advance(2000)
-  expect(
-    document.querySelector<HTMLImageElement>(".idle-slide img")?.src
-  ).toContain(asset(998))
-  expect(document.querySelector(".idle-photo-memory")).toBeNull()
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+  expect(slides()[0]?.src).toContain(asset(998))
+  expect(slot("idle-photo-memory")).toBeNull()
+  expect(slides()).toHaveLength(1)
 })
 
 test("a cancelled run's late page failure cannot blank the photo its replacement is loading", async () => {
@@ -759,7 +588,7 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
     </IdleProvider>
   )
   await advance(TIMEOUT)
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(0)
+  expect(slides()).toHaveLength(0)
 
   // New sources cancel the first run while its page read is still pending.
   await render(
@@ -768,39 +597,17 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
     </IdleProvider>
   )
   await advance(1)
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+  expect(slides()).toHaveLength(1)
 
   // The cancelled read now fails; only the replacement run may touch the screen.
   await act(async () => failOldRead(unavailablePhotos))
   await advance(1)
-  expect(
-    document.querySelector(".idle-stage")?.getAttribute("data-resting")
-  ).toBe("false")
-  expect(document.querySelectorAll(".idle-slide img")).toHaveLength(1)
+  expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("false")
+  expect(slides()).toHaveLength(1)
 
-  await act(async () =>
-    fire(document.querySelector(".idle-slide img") ?? window, "load")
-  )
+  await act(async () => fire(slides()[0] ?? window, "load"))
   expect(document.querySelector('[data-front="true"]')).not.toBeNull()
 })
-
-async function wake(): Promise<void> {
-  const idle = screen()
-
-  if (idle === null) throw new Error("Expected the slideshow")
-
-  await act(async () => {
-    fire(idle, "pointerdown")
-    fire(idle, "pointerup")
-    fire(idle, "click")
-  })
-  await advance(WAKE_GRACE_MS)
-  expect(screen()).toBeNull()
-}
-
-function slides(): HTMLImageElement[] {
-  return Array.from(document.querySelectorAll(".idle-slide img"))
-}
 
 test("waking while the first photo is still loading leaves nothing behind for the next spell", async () => {
   vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))

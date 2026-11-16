@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { LiveWeather } from "@/components/live-weather"
-import { timeFormat } from "@/components/live-clock"
-import { degrees, WeatherGlyph } from "@/components/weather-overview"
+import { IdleOverlay } from "@/components/idle-overlay"
 import {
   copenhagenDay,
   dealPages,
@@ -25,12 +23,8 @@ import {
   getWallPage,
 } from "@/lib/photos.functions"
 import { useCopenhagenDay } from "@/lib/use-copenhagen-day"
-import { useMinute } from "@/lib/use-minute"
-import {
-  unavailableWeather,
-  weatherDescription,
-  type WeatherRead,
-} from "@/lib/weather"
+import { cn } from "@/lib/utils"
+import type { WeatherRead } from "@/lib/weather"
 import { getWeather } from "@/lib/weather.functions"
 
 /** How long each photo stays before the next fades in. */
@@ -59,13 +53,6 @@ export const serverSources: IdleSources = {
   weather: () => getWeather(),
   onThisDay: () => getOnThisDay({ data: {} }),
 }
-
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  timeZone: "Europe/Copenhagen",
-})
 
 const reducedMotion = "(prefers-reduced-motion: reduce)"
 
@@ -107,7 +94,8 @@ export function IdleScreen({
   return (
     <div
       ref={ref}
-      className="idle dark"
+      data-slot="idle"
+      className="dark fixed inset-0 z-100 cursor-none touch-none overflow-hidden bg-ground text-ink outline-none select-none touch-callout-none data-[waking=true]:opacity-0 data-[waking=true]:transition-opacity data-[waking=true]:duration-mid data-[waking=true]:ease-app"
       data-waking={waking}
       role="dialog"
       aria-modal="true"
@@ -123,101 +111,6 @@ export function IdleScreen({
       />
       <p className="sr-only">Touch the screen or press any key to return.</p>
     </div>
-  )
-}
-
-/**
- * The tone plate in the corner: a large clock, the date and today's weather. `children` is the
- * slot for later idle content (the important-dates counter), set beneath them on the same plate.
- */
-export function IdleOverlay({
-  weather,
-  children,
-  yearsAgo,
-}: {
-  weather: IdleSources["weather"]
-  children?: React.ReactNode
-  yearsAgo?: number | undefined
-}): React.JSX.Element {
-  const [openedAt] = useState(() => new Date().toISOString())
-  const now = useMinute(openedAt)
-
-  return (
-    <section className="idle-plate" aria-label="Now">
-      <time
-        className="idle-time num"
-        dateTime={now.toISOString()}
-        aria-label="Current time"
-      >
-        {timeFormat.format(now)}
-      </time>
-      <p className="idle-date">{dateFormat.format(now)}</p>
-      <IdleWeather read={weather} />
-      {yearsAgo === undefined ? null : (
-        <p className="idle-photo-memory num">
-          {yearsAgo} {yearsAgo === 1 ? "year" : "years"} ago today
-        </p>
-      )}
-      {children === undefined || children === null ? null : (
-        <div className="idle-extra">{children}</div>
-      )}
-    </section>
-  )
-}
-
-/** Today's weather, read once on entering and kept fresh; missing weather simply isn't shown. */
-function IdleWeather({
-  read,
-}: {
-  read: IdleSources["weather"]
-}): React.ReactNode {
-  const [initial, setInitial] = useState<WeatherRead>()
-
-  useEffect(() => {
-    let current = true
-
-    void read()
-      .catch(() => unavailableWeather)
-      .then((weather) => {
-        if (current) setInitial(weather)
-      })
-
-    return () => {
-      current = false
-    }
-  }, [read])
-
-  if (initial === undefined) return null
-
-  return (
-    <LiveWeather initial={initial} readWeather={read}>
-      {(weather) => {
-        if (weather.state === "unavailable") return null
-        const { current, days } = weather.forecast
-        const today = days[0]
-
-        return (
-          <p className="idle-weather">
-            <WeatherGlyph code={current?.weather_code ?? null} size={26} />
-            <span className="idle-weather-now num" aria-hidden="true">
-              {degrees(current?.temperature_c)}
-            </span>
-            {today === undefined ? null : (
-              <span className="idle-weather-range num" aria-hidden="true">
-                {degrees(today.high_c)} / {degrees(today.low_c)}
-              </span>
-            )}
-            <span className="sr-only">
-              {weatherDescription(current?.weather_code ?? null)},{" "}
-              {degrees(current?.temperature_c)}
-              {today === undefined
-                ? ""
-                : `, high ${degrees(today.high_c)}, low ${degrees(today.low_c)}`}
-            </span>
-          </p>
-        )
-      }}
-    </LiveWeather>
   )
 }
 
@@ -487,7 +380,8 @@ function Slideshow({
   return (
     <>
       <div
-        className="idle-stage"
+        data-slot="idle-stage"
+        className="absolute inset-0"
         data-motion={still ? "still" : "drift"}
         data-resting={resting}
         aria-hidden="true"
@@ -507,6 +401,14 @@ function Slideshow({
   )
 }
 
+/** A slow drift once a photo has been on screen, kept through the dwell and both fades; motion-safe only. */
+const drifts = [
+  "motion-safe:animate-idle-drift",
+  "motion-safe:animate-idle-drift-back",
+  "motion-safe:animate-idle-drift-across",
+  "motion-safe:animate-idle-drift-across-back",
+] as const
+
 /** One slot; a new photo replaces only the image inside it. */
 function Slide({
   layer,
@@ -519,14 +421,15 @@ function Slide({
 
   return (
     <div
-      className="idle-slide"
+      data-slot="idle-slide"
+      className="absolute inset-0 opacity-0 data-[front=true]:z-1 data-[front=true]:transition-opacity data-[front=true]:duration-idle-fade data-[front=true]:ease-app data-[shown=true]:opacity-100"
       data-front={layer.phase === "front"}
       data-shown={layer.phase !== "loading"}
-      data-drift={layer.key % 4}
     >
       <SlideImage
         key={layer.key}
         item={layer.item}
+        drift={layer.phase === "loading" ? undefined : drifts[layer.key % 4]}
         settle={(loaded) => settle(layer.key, loaded)}
       />
     </div>
@@ -545,9 +448,11 @@ function fitOf(image: HTMLImageElement): "cover" | "contain" {
 
 function SlideImage({
   item,
+  drift,
   settle,
 }: {
   item: WallItem
+  drift: string | undefined
   settle: (loaded: boolean) => void
 }): React.JSX.Element {
   const [fit, setFit] = useState<"cover" | "contain">("contain")
@@ -558,6 +463,10 @@ function SlideImage({
       alt=""
       decoding="async"
       data-fit={fit}
+      className={cn(
+        "size-full object-contain data-[fit=cover]:object-cover",
+        drift
+      )}
       onLoad={(event) => {
         setFit(fitOf(event.currentTarget))
         settle(true)

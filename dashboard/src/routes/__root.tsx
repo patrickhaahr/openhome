@@ -45,15 +45,26 @@ export const Route = createRootRoute({
     ],
   }),
   notFoundComponent: () => (
-    <section className="lost">
-      <p className="lost-code num" aria-hidden="true">
+    <section className="grid min-h-page-fill content-center justify-items-start gap-6">
+      <p
+        className="text-lost-code leading-lost-code font-medium tracking-lost-code text-sun tabular-nums"
+        aria-hidden="true"
+      >
         404
       </p>
-      <h1 id="page-heading" tabIndex={-1} className="lost-title">
+      <h1
+        id="page-heading"
+        tabIndex={-1}
+        className="text-title leading-none font-medium tracking-tighter"
+      >
         Page not found
       </h1>
       <p className="sr-only">There is no room by that name in this home.</p>
-      <Link to="/" className="dir-go lost-home" title="Back to Home">
+      <Link
+        to="/"
+        className="grid size-14 place-items-center rounded-full bg-wash-strong text-ink transition-colors duration-fast ease-app hover:bg-ink hover:text-ground"
+        title="Back to Home"
+      >
         <HouseIcon size={24} aria-hidden="true" />
         <span className="sr-only">Back to Home</span>
       </Link>

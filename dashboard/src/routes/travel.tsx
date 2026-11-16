@@ -6,6 +6,7 @@ import { SharedMap } from "@/components/shared-map"
 import { LoopPlanner } from "@/components/loop-planner"
 import { useMapTheme } from "@/components/daylight"
 import { PageHead } from "@/components/page-head"
+import { StateNote } from "@/components/page-tools"
 import { features } from "@/lib/features"
 import {
   unavailableMapOrigin,
@@ -86,7 +87,11 @@ function TravelContent({
     <section>
       <PageHead title={travel.title} />
       {read.state === "configured" ? (
-        <figure className="travel" ref={travelRef}>
+        <figure
+          data-slot="travel"
+          className="relative travel-frame min-h-96 overflow-hidden"
+          ref={travelRef}
+        >
           <SharedMap
             key={`${read.origin.latitude},${read.origin.longitude}`}
             origin={read.origin}
@@ -95,7 +100,9 @@ function TravelContent({
             credit={ROUTES_CREDIT}
           />
           {read.origin.source === "demo" ? (
-            <p className="travel-demo">Demo origin</p>
+            <p className="absolute top-travel-inset left-travel-inset z-3 rounded-full bg-ground px-4 py-2 text-small font-medium max-phone:top-auto max-phone:bottom-travel-above-dock">
+              Demo origin
+            </p>
           ) : null}
           <figcaption className="sr-only">
             {read.origin.source === "demo"
@@ -126,20 +133,21 @@ function MapSetup({
   reason: Extract<MapOriginRead, { state: "unavailable" }>["reason"]
 }): React.JSX.Element {
   return (
-    <div className="state-note" data-failed="true">
-      <MapTrifoldIcon size={56} weight="light" aria-hidden="true" />
-      <h2>
-        {reason === "missing-configuration"
+    <StateNote
+      icon={<MapTrifoldIcon size={56} weight="light" aria-hidden="true" />}
+      title={
+        reason === "missing-configuration"
           ? "Map setup needed"
-          : "Map unavailable"}
-      </h2>
+          : "Map unavailable"
+      }
+    >
       <p role="status" className="sr-only">
         {reason === "missing-configuration"
           ? "Set the private map origin on OpenHome to show the local area. There is no default location."
           : "OpenHome could not provide the map origin. Check Connection or try again."}
       </p>
       <CheckAgainButton compact />
-    </div>
+    </StateNote>
   )
 }
 
@@ -150,7 +158,7 @@ function MapSetup({
 function useDockHeight(travel: React.RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const element = travel.current
-    const dock = element?.querySelector(".loop-dock")
+    const dock = element?.querySelector('[data-slot="loop-dock"]')
 
     if (element === null || dock === null || dock === undefined) return
 

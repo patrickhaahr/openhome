@@ -152,7 +152,7 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
   await render(data)
 
   // The values' Food database version is credited; no Product was eaten.
-  expect(text(".food-credit")).toEqual([
+  expect(text("[data-slot='food-credit']")).toEqual([
     "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
   ])
 
@@ -182,8 +182,10 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
       ?.getAttribute("href")
   ).toBe("/food?view=trends&by=month")
 
-  expect(text(".food-trend-coverage")[0]).toMatch(/^2 of 30 days logged/)
-  expect(text(".trend-chart h2")).toEqual([
+  expect(text("[data-slot='food-trend-coverage']")[0]).toMatch(
+    /^2 of 30 days logged/
+  )
+  expect(text("[data-slot='trend-chart'] h2")).toEqual([
     "Calories",
     "Protein",
     "Energy by macronutrient",
@@ -193,10 +195,12 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
   ])
 
   // The SVG is decoration; the summary and the table carry the values.
-  for (const svg of container.querySelectorAll(".trend-chart svg"))
+  for (const svg of container.querySelectorAll("[data-slot='trend-chart'] svg"))
     expect(svg.getAttribute("aria-hidden")).toBe("true")
   // (186 + 310) / 2 kcal over the two logged days, never over all 30.
-  expect(text('figure[data-chart="calories"] .trend-summary')[0]).toMatch(
+  expect(
+    text('figure[data-chart="calories"] [data-slot="trend-summary"]')[0]
+  ).toMatch(
     /^248 kcal a logged day · Calorie Target [\d,]+ kcal · Estimated Expenditure [\d,]+ kcal$/
   )
 
@@ -231,12 +235,14 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
   ).toBeGreaterThan(0)
   // Four weigh-ins inside the range, each a dot under the Trend Weight line.
   expect(
-    container.querySelectorAll('figure[data-chart="weight"] .trend-dot')
+    container.querySelectorAll(
+      'figure[data-chart="weight"] [data-slot="trend-dot"]'
+    )
   ).toHaveLength(4)
   // Trend Weight from 78 kg: 78.07 after 78.7, 78.20 after 79.4 and 78.37 after 79.9.
-  expect(text('figure[data-chart="weight"] .trend-summary')).toEqual([
-    "Trend Weight 78.4 kg · +0.4 kg over the range",
-  ])
+  expect(
+    text('figure[data-chart="weight"] [data-slot="trend-summary"]')
+  ).toEqual(["Trend Weight 78.4 kg · +0.4 kg over the range"])
 })
 
 test("groups by ISO week and names the partial edge weeks", async () => {
@@ -280,8 +286,10 @@ test("an unreachable or rejected read shows the state note and keeps the control
   })
   await render(data, "/food?view=trends&range=180&by=month")
 
-  expect(text(".food-unavailable h2")).toEqual(["Trends unavailable"])
-  expect(text(".food-unavailable p")[0]).toMatch(/API key/)
+  expect(text("[data-slot='food-unavailable'] h2")).toEqual([
+    "Trends unavailable",
+  ])
+  expect(text("[data-slot='food-unavailable'] p")[0]).toMatch(/API key/)
   expect(text('nav[aria-label="Range"] [aria-current="page"]')).toEqual([
     "180 days",
   ])
@@ -330,7 +338,7 @@ test("a range with a Product credits Open Food Facts beside the Food database", 
 
     await render(await readNutritionSummary({ range: 30, by: "day" }))
 
-    expect(text(".food-credit")).toEqual([
+    expect(text("[data-slot='food-credit']")).toEqual([
       "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
       "Product data © Open Food Facts contributors (ODbL)",
     ])

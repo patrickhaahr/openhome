@@ -2,8 +2,21 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
+/** A key answers on itself: it presses, flashes the sun when OpenHome acknowledges, shakes when it does not. None of this is device state. */
+const answers = [
+  "data-[outcome=pending]:disabled:opacity-100 data-outcome:after:pointer-events-none data-outcome:after:absolute data-outcome:after:-inset-1.25 data-outcome:after:rounded-[inherit]",
+  "data-[outcome=pending]:after:border-2 data-[outcome=pending]:after:border-transparent data-[outcome=pending]:after:border-t-sun data-[outcome=pending]:after:border-r-sun",
+  "data-[outcome=accepted]:after:border-2 data-[outcome=accepted]:after:border-sun",
+  "data-[outcome=failed]:outline-2 data-[outcome=failed]:outline-offset-3 data-[outcome=failed]:outline-solid data-[outcome=failed]:outline-danger",
+  "motion-safe:data-[outcome=pending]:after:animate-key-spin motion-safe:data-[outcome=accepted]:animate-key-acknowledge motion-safe:data-[outcome=accepted]:after:animate-key-ripple motion-safe:data-[outcome=accepted]:after:opacity-0 motion-safe:data-[outcome=failed]:animate-led-refuse",
+  "data-[spinning=true]:[&_svg]:animate-key-spin",
+]
+
 const buttonVariants = cva(
-  "group/button relative inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-[0.9375rem] font-medium tracking-[-0.01em] whitespace-nowrap transition-[background-color,color,border-color,scale] duration-200 ease-[cubic-bezier(.2,.7,.1,1)] outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[1.125rem]",
+  [
+    answers,
+    "group/button relative inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-[0.9375rem] font-medium tracking-[-0.01em] whitespace-nowrap transition-[background-color,color,border-color,scale] duration-200 ease-[cubic-bezier(.2,.7,.1,1)] outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[1.125rem]",
+  ],
   {
     variants: {
       variant: {
@@ -17,9 +30,17 @@ const buttonVariants = cva(
         ghost:
           "text-muted-foreground hover:bg-secondary hover:text-foreground aria-expanded:bg-secondary aria-expanded:text-foreground",
         destructive:
-          "border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive hover:text-background",
+          "bg-destructive/12 bg-clip-border text-destructive hover:bg-destructive hover:text-background",
         link: "rounded-none px-0 text-primary underline decoration-1 underline-offset-[0.3em] hover:decoration-2",
-        loop: "loop-alternative items-start justify-start rounded-[0.75rem] text-base font-normal whitespace-normal",
+        /** A loop alternative on the Travel plate: hollow mark, name, distance and fit in a row. */
+        loop: "grid w-full grid-cols-[0.75rem_auto_minmax(0,1fr)_auto] items-center justify-start rounded-full border-0 bg-transparent text-left text-base font-normal whitespace-normal text-ink hover:bg-wash aria-pressed:bg-wash-strong",
+        /** Ink that stays ink under the hand: on the map the sun is reserved for the route. */
+        ink: "bg-primary text-primary-foreground",
+        /** A control floating on the photo viewer's night ground: a light plate, inverted under the hand. */
+        viewer:
+          "bg-photo-plate/80 bg-clip-border text-photo-ink hover:bg-photo-ink hover:text-photo-night",
+        /** A map control: one tone step on its plate, two under the hand. */
+        tone: "border-0 bg-wash bg-clip-border text-ink hover:bg-wash-strong focus-visible:outline-offset-2",
       },
       size: {
         default:
@@ -36,6 +57,10 @@ const buttonVariants = cva(
         "key-xl": "h-18 gap-2.5 px-8 text-lg",
         "key-round": "size-16 text-lg",
         "key-hero": "size-24",
+        plate: "h-14 min-w-12 gap-2 px-[1.125rem] max-phone:h-13",
+        "plate-lg": "h-14 min-w-12 gap-2 px-7 text-[1.0625rem] max-phone:h-13",
+        "map-key": "size-14 max-phone:size-11",
+        loop: "min-h-14 gap-3 px-4 py-2 max-phone:min-h-12",
       },
     },
     defaultVariants: {
