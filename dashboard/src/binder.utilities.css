@@ -1,0 +1,62 @@
+/* The pocket metrics feed a computed width and the turning leaf's origin, and a page is as tall
+   as the screen leaves below the bar; utilities cannot set custom properties or compute this. */
+@utility binder-spread {
+  --pocket-gap: 0.75rem;
+  --spine-gap: 1.5rem;
+  --page-room: calc(100dvh - 16.5rem);
+  width: min(
+    100%,
+    calc(
+      2 * (var(--page-room) * 0.716 + 2 * var(--pocket-gap)) + var(--spine-gap)
+    )
+  );
+  @media (max-width: 900px) {
+    --pocket-gap: 0.5rem;
+    --spine-gap: 1rem;
+  }
+  @media (max-width: 640px) {
+    --pocket-gap: 0.25rem;
+    --spine-gap: 0.5rem;
+    --page-room: calc(100dvh - 27rem);
+  }
+  /* An auto column has no width for a percentage to resolve against, so the spread names its own. */
+  @variant binder-wide {
+    --page-room: calc(100dvh - 11rem);
+    width: min(
+      calc(100vw - 37rem),
+      calc(
+        2 * (var(--page-room) * 0.716 + 2 * var(--pocket-gap)) +
+          var(--spine-gap)
+      )
+    );
+  }
+}
+
+/* The turning leaf and its two faces as one 3D unit. JS writes the leaf's inline transform while
+   it is lifted, so no transform or transition utility may compete with it. */
+@utility binder-leaf {
+  [data-lifted] > & {
+    position: relative;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  [data-lifted] > & > * {
+    background: var(--color-ground);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  [data-side="right"] > & {
+    transform-origin: calc(var(--spine-gap) / -2) 50%;
+  }
+  [data-side="left"] > & {
+    transform-origin: calc(100% + var(--spine-gap) / 2) 50%;
+  }
+  &[data-settling] {
+    transition: transform var(--settle) var(--ease);
+  }
+  & > * + * {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
+  }
+}

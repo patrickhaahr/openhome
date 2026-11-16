@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import {
+  factTerm,
   field,
   mediaMeta,
   sheetActions,
@@ -20,6 +21,10 @@ import { swipeStep } from "@/lib/binder-turn"
 import { formatDay } from "@/lib/lists"
 import { cn } from "@/lib/utils"
 import type { HouseholdUser } from "@/lib/wishlist"
+
+/** On a wide stage each column scrolls on its own beside the card. */
+const detailColumn =
+  "grid min-w-0 content-start gap-7 binder-stage-wide:row-start-1 binder-stage-wide:overflow-y-auto binder-stage-wide:overscroll-contain"
 
 type Save = (command: BinderCommand, saved: string) => Promise<boolean>
 
@@ -81,7 +86,8 @@ export function BinderSheet({
 
   return (
     <div
-      className="binder-detail"
+      data-slot="binder-detail"
+      className="grid min-h-0 touch-pan-y grid-cols-lead gap-binder-detail-gap px-binder-stage-inset pb-gutter binder-stage-wide:grid-cols-binder-turn binder-stage-wide:gap-x-binder-detail-wide-gap binder-stage-portrait:auto-rows-max binder-stage-portrait:grid-cols-1 binder-stage-portrait:content-start binder-stage-portrait:overflow-y-auto binder-stage-portrait:overscroll-contain"
       onPointerDown={(event) => {
         press.current =
           event.isPrimary &&
@@ -115,8 +121,9 @@ export function BinderSheet({
         press.current = undefined
       }}
     >
-      <div className="binder-detail-art">
+      <div className="relative aspect-binder-card h-full max-w-binder-art overflow-hidden rounded-binder-art bg-wash-strong shadow-binder-card binder-stage-wide:col-start-2 binder-stage-wide:row-start-1 binder-stage-portrait:h-auto binder-stage-portrait:w-binder-art-portrait binder-stage-portrait:max-w-full binder-stage-portrait:justify-self-center">
         <img
+          className="absolute inset-0 size-full rounded-binder-art object-cover outline -outline-offset-1 outline-binder-hairline"
           draggable={false}
           src={cardImageUrl(card.id)}
           alt={`${card.name}, ${card.card_code}`}
@@ -130,9 +137,9 @@ export function BinderSheet({
           }}
         />
       </div>
-      <div className="binder-detail-info">
-        <div className="binder-detail-about">
-          <div className="binder-detail-lead">
+      <div className="grid max-w-176 min-w-0 content-start gap-7 overflow-y-auto overscroll-contain pb-4 binder-stage-wide:contents binder-stage-portrait:max-w-none binder-stage-portrait:overflow-visible">
+        <div className={cn(detailColumn, "binder-stage-wide:col-start-1")}>
+          <div className="grid gap-2">
             <p className={sheetOwner}>
               <PersonDisc name={owner.name} />
               {owner.name}
@@ -148,19 +155,24 @@ export function BinderSheet({
             </p>
           </div>
           <CardValueLine card={card} />
-          <dl className="binder-facts">
+          <dl
+            data-slot="binder-facts"
+            className="grid grid-fill-34 gap-x-6 gap-y-4"
+          >
             {factsOf(card).map(([label, value]) => (
               <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
+                <dt className={factTerm}>{label}</dt>
+                <dd className="font-medium">{value}</dd>
               </div>
             ))}
           </dl>
           {card.text === null ? null : (
-            <p className="binder-effect">{card.text}</p>
+            <p className="rounded-plate bg-wash px-5 py-4 text-body-lg leading-normal whitespace-pre-line">
+              {card.text}
+            </p>
           )}
         </div>
-        <div className="binder-detail-own">
+        <div className={cn(detailColumn, "binder-stage-wide:col-start-3")}>
           {entry.language === "en" ? (
             <PriceHistory card={card.id} load={prices} />
           ) : null}
@@ -267,7 +279,7 @@ function EntryFields({
 
   return (
     <form
-      className="binder-fields"
+      className="grid gap-4"
       aria-label="Edit entry"
       onSubmit={(event) => {
         event.preventDefault()

@@ -184,7 +184,9 @@ async function search(code: string): Promise<void> {
 
 const pockets = (): string[] =>
   Array.from(
-    container.querySelectorAll<HTMLElement>(".pocket:not([data-empty])"),
+    container.querySelectorAll<HTMLElement>(
+      '[data-slot="pocket"]:not([data-empty])'
+    ),
     (pocket) => pocket.textContent ?? ""
   )
 
@@ -194,12 +196,12 @@ test("searches a Card Code on request and lists each variant's image and name", 
   await press(button("Add card", container))
   await type(field("Card Code", sheet()), "op99-001")
   await settle()
-  expect(sheet().querySelector(".card-results")).toBeNull()
+  expect(sheet().querySelector('[data-slot="card-results"]')).toBeNull()
 
   await press(button("Search", sheet()))
 
   const variants = Array.from(
-    sheet().querySelectorAll(".card-result"),
+    sheet().querySelectorAll('[data-slot="card-result"]'),
     (result) => nameOf(result)
   )
 
@@ -280,11 +282,11 @@ test("a catalogue outage says so and leaves the sheet ready for another search",
   await search("OP99-503")
 
   expect(sheet().textContent).toContain("The card catalogue is not answering")
-  expect(sheet().querySelector(".card-results")).toBeNull()
+  expect(sheet().querySelector('[data-slot="card-results"]')).toBeNull()
 
   await type(field("Card Code", sheet()), "OP99-002")
   await press(button("Search", sheet()))
-  expect(sheet().querySelectorAll(".card-result")).toHaveLength(2)
+  expect(sheet().querySelectorAll('[data-slot="card-result"]')).toHaveLength(2)
   expect(sheet().textContent).not.toContain("not answering")
   expect(await stored()).toEqual([])
 })
@@ -295,7 +297,7 @@ test("an unlisted code is not in the catalogue yet and offers nothing to add", a
   await search("OP99-777")
 
   expect(sheet().textContent).toContain("OP99-777 is not in the catalogue yet.")
-  expect(sheet().querySelectorAll(".card-result")).toHaveLength(0)
+  expect(sheet().querySelectorAll('[data-slot="card-result"]')).toHaveLength(0)
   expect(sheet().textContent).not.toContain("Discard draft")
   expect(await stored()).toEqual([])
 })

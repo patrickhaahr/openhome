@@ -3,7 +3,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/familjen-grotesk";
-@import "./binder.css";
 @import "./idle.css";
 @import "./backlight.css";
 @import "./food.css";
@@ -21,10 +20,22 @@
 @import "./connection.theme.css";
 @import "./weather.theme.css";
 @import "./workout.theme.css";
+@import "./binder.utilities.css";
+@import "./binder.theme.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {
   @media (min-width: 1680px) and (min-aspect-ratio: 16/10) {
+    @slot;
+  }
+}
+@custom-variant binder-stage-wide {
+  @media (min-width: 1500px) and (min-aspect-ratio: 3/2) {
+    @slot;
+  }
+}
+@custom-variant binder-stage-portrait {
+  @media (max-aspect-ratio: 1/1), (max-width: 760px) {
     @slot;
   }
 }

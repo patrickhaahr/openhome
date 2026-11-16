@@ -132,12 +132,11 @@ async function render(): Promise<void> {
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
-const folio = (): string =>
-  container.querySelector(".binder-folio")?.textContent ?? ""
+const folio = (): string => slot("binder-folio", container)?.textContent ?? ""
 
 const shownPages = (): string[] =>
   Array.from(
-    container.querySelectorAll(".binder-page"),
+    container.querySelectorAll('[data-slot="binder-page"]'),
     (page) => page.getAttribute("aria-label") ?? ""
   ).sort()
 
@@ -145,7 +144,9 @@ const pocket = (number: number): HTMLButtonElement =>
   button(new RegExp(`^Invented Card ${number},`), container)
 
 const spread = (): HTMLElement => {
-  const element = container.querySelector<HTMLElement>(".binder-spread")
+  const element = container.querySelector<HTMLElement>(
+    '[data-slot="binder-spread"]'
+  )
 
   if (element === null) throw new Error("Expected a spread")
 
@@ -422,7 +423,7 @@ describe("swiping the card stage", () => {
     await lift(pocket(18), 500)
 
     const swipe = async (from: number, to: number): Promise<void> => {
-      const detail = sheet().querySelector(".binder-detail")
+      const detail = slot("binder-detail", sheet())
 
       if (detail === null) throw new Error("Expected the card stage")
       await pointer(detail, "pointerdown", from)

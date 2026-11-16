@@ -8,7 +8,6 @@ import { audit } from "./css-classes.ts"
  */
 const allowlist = [
   "src/backlight.css",
-  "src/binder.css",
   "src/components/idle-milestone.css",
   "src/controls.css",
   "src/food-meals.css",

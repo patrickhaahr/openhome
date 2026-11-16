@@ -32,19 +32,46 @@ const disc = cva(
 )
 
 const sheet = cva(
-  "fixed z-51 grid overflow-y-auto overscroll-contain bg-plate text-ink transition-transform duration-fast ease-app outline-none max-sm:max-h-sheet-height max-sm:rounded-t-sheet",
+  "fixed z-51 grid overscroll-contain text-ink duration-fast ease-app outline-none max-sm:max-h-sheet-height max-sm:rounded-t-sheet",
   {
     variants: {
       variant: {
         plate:
-          "inset-y-0 right-0 w-sheet content-start gap-5 px-gutter pt-4 pb-8 data-ending-style:translate-x-full data-starting-style:translate-x-full max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:data-ending-style:translate-x-0 max-sm:data-ending-style:translate-y-full max-sm:data-starting-style:translate-x-0 max-sm:data-starting-style:translate-y-full",
-        // The Binder's card stage; binder.css styles it through `data-variant` until the Binder moves to utilities.
-        stage: "",
+          "inset-y-0 right-0 w-sheet content-start gap-5 overflow-y-auto bg-plate px-gutter pt-4 pb-8 transition-transform data-ending-style:translate-x-full data-starting-style:translate-x-full max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:data-ending-style:translate-x-0 max-sm:data-ending-style:translate-y-full max-sm:data-starting-style:translate-x-0 max-sm:data-starting-style:translate-y-full",
+        /** The Binder's card stage: the whole screen, fading in rather than rising. */
+        stage:
+          "inset-0 grid-rows-binder-stage content-stretch overflow-hidden bg-binder-stage transition-binder-stage data-ending-style:scale-98 data-ending-style:opacity-0 data-starting-style:scale-98 data-starting-style:opacity-0",
       },
     },
     defaultVariants: { variant: "plate" },
   }
 )
+
+const sheetHead = cva("flex min-h-12 items-center justify-end gap-4", {
+  variants: { variant: { plate: "", stage: "px-binder-stage-inset py-4" } },
+  defaultVariants: { variant: "plate" },
+})
+
+const sheetTitle = cva("mr-auto font-medium", {
+  variants: {
+    variant: {
+      plate: "text-lead tracking-title",
+      stage: "min-w-0 text-binder-card-title tracking-headline",
+    },
+  },
+  defaultVariants: { variant: "plate" },
+})
+
+/** `rail` stands the keys in the Binder's left gutter on a wide screen. */
+const personKeys = cva("", {
+  variants: {
+    variant: {
+      row: "",
+      rail: "binder-wide:col-start-1 binder-wide:row-span-full binder-wide:flex-col binder-wide:self-start binder-wide:justify-self-start binder-wide:rounded-binder-keys",
+    },
+  },
+  defaultVariants: { variant: "row" },
+})
 
 /**
  * Everyone, then one key per Household User, on one wash track. The chosen key is the ink
@@ -58,6 +85,7 @@ export function PersonKeys({
   noun,
   label = "Whose list",
   everyone = true,
+  variant,
 }: {
   owners: readonly HouseholdUser[]
   selected: string | undefined
@@ -66,10 +94,12 @@ export function PersonKeys({
   noun?: readonly [string, string]
   label?: string
   everyone?: boolean
+  variant?: VariantProps<typeof personKeys>["variant"]
 }): React.JSX.Element {
   return (
     <ViewTabs
       variant="people"
+      className={personKeys({ variant })}
       data-slot="person-keys"
       role="group"
       aria-label={label}
@@ -166,21 +196,13 @@ export function ListSheet({
         <Dialog.Backdrop className={sheetScrim} />
         <Dialog.Popup
           data-slot="sheet"
-          data-variant={variant ?? "plate"}
           className={sheet({ variant })}
           onKeyDown={onKeyDown}
         >
-          <div
-            data-slot="sheet-head"
-            className="flex min-h-12 items-center justify-end gap-4"
-          >
+          <div data-slot="sheet-head" className={sheetHead({ variant })}>
             <Dialog.Title
               data-slot="sheet-title"
-              className={
-                titleHidden
-                  ? "sr-only"
-                  : "mr-auto text-lead font-medium tracking-title"
-              }
+              className={titleHidden ? "sr-only" : sheetTitle({ variant })}
             >
               {title}
             </Dialog.Title>

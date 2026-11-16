@@ -32,6 +32,9 @@ export const cn = createCn({
         "stage-deep",
         "stage-light",
         ...Array.from({ length: 12 }, (_, index) => `progress-${index + 1}`),
+        "binder-mark",
+        "binder-stage",
+        "binder-hairline",
       ],
       text: [
         "mega",
@@ -73,6 +76,8 @@ export const cn = createCn({
         "clock",
         "vital",
         "weight",
+        "binder-card-title",
+        "binder-value",
       ],
       leading: [
         "status",
@@ -114,6 +119,8 @@ export const cn = createCn({
         "sheet",
         // Workout and Recovery
         "workout-plate",
+        "binder-keys",
+        "binder-art",
       ],
       spacing: [
         "margin",
@@ -176,6 +183,12 @@ export const cn = createCn({
         "body-trend",
         "day-rings",
         "hr-chart",
+        "binder-stage-inset",
+        "binder-turn-gap",
+        "binder-detail-gap",
+        "binder-detail-wide-gap",
+        "binder-art",
+        "binder-art-portrait",
       ],
       animate: ["stage-grow"],
     },

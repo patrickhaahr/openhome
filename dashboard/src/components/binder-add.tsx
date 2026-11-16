@@ -79,6 +79,10 @@ const languages = [
   { value: "ja", label: "JP" },
 ] as const
 
+const draftRow = "grid grid-aside-36 items-start gap-5"
+
+const draftFacts = "grid justify-items-start gap-2"
+
 /** The Binder's "Add card": a button that opens the sheet, and the write behind it. */
 export function AddCard({
   owners,
@@ -251,7 +255,7 @@ function AddSheet({
         className={
           flow.state === "idle" || flow.state === "found"
             ? "sr-only"
-            : "binder-search-note"
+            : "text-muted-ink"
         }
         role="status"
       >
@@ -262,12 +266,17 @@ function AddSheet({
             : searchMessage[flow.state](flow.code)}
       </p>
       {flow.state === "found" ? (
-        <ul className="card-results" aria-label={`Variants of ${flow.code}`}>
+        <ul
+          data-slot="card-results"
+          className="grid grid-fill-30 gap-3.5"
+          aria-label={`Variants of ${flow.code}`}
+        >
           {flow.cards.map((card) => (
             <li key={card.id}>
               <button
                 type="button"
-                className="card-result"
+                data-slot="card-result"
+                className="grid w-full content-start gap-2 text-left active:scale-97"
                 onClick={() =>
                   step({
                     type: "pick",
@@ -291,11 +300,15 @@ function AddSheet({
 /** The official image over the card's code, which stays if the picture cannot load. */
 function CardArt({ card }: { card: CardVariant }): React.JSX.Element {
   return (
-    <span className="card-art">
-      <span className="card-art-code num" aria-hidden="true">
+    <span className="relative block aspect-binder-card overflow-hidden rounded-code bg-wash-strong">
+      <span
+        className="absolute inset-x-2 bottom-2 text-label font-semibold num"
+        aria-hidden="true"
+      >
         {card.card_code}
       </span>
       <img
+        className="absolute inset-0 size-full object-cover"
         src={cardImageUrl(card.id)}
         alt=""
         width={600}
@@ -343,13 +356,13 @@ function Drafting({
         if (!busy) add()
       }}
     >
-      <div className="binder-draft">
+      <div className={draftRow}>
         <CardArt card={draft.card} />
-        <div>
+        <div className={draftFacts}>
           <p className={sheetName}>{draft.card.name}</p>
           <p className={cn(mediaMeta, "num")}>{draft.card.card_code}</p>
           {locked ? (
-            <p className="binder-search-note" role="status">
+            <p className="text-muted-ink" role="status">
               This addition is not confirmed yet. Retrying it will not add the
               card twice.
             </p>
@@ -422,12 +435,12 @@ function Added({
 
   return (
     <div className={sheetBody()}>
-      <div className="binder-draft">
+      <div className={draftRow}>
         <CardArt card={draft.card} />
-        <div>
+        <div className={draftFacts}>
           <p className={sheetName}>{draft.card.name}</p>
           <p className={cn(mediaMeta, "num")}>{draft.card.card_code}</p>
-          <p role="status" className="binder-added">
+          <p role="status" className="text-large font-medium text-ink">
             {stored === undefined
               ? `Added to ${whose} Binder.`
               : stored.quantity > draft.quantity

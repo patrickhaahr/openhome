@@ -147,8 +147,9 @@ async function stock(): Promise<void> {
 }
 
 const headerFigure = (): string =>
-  container.querySelector(".binder-value-bar .binder-value-figure")
-    ?.textContent ?? ""
+  container.querySelector(
+    '[data-slot="binder-value-bar"] [data-slot="binder-value-figure"]'
+  )?.textContent ?? ""
 
 async function press(element: HTMLButtonElement): Promise<void> {
   await act(async () => element.click())
@@ -173,7 +174,9 @@ test("the header shows the Binder Value of the priced entries, what it leaves ou
   expect(headerFigure()).toBe(formatMoney(value.dkk, "DKK"))
   expect(headerFigure()).toMatch(/^DKK\s/)
   expect(
-    container.querySelector(".binder-value-bar .binder-value-note")?.textContent
+    container.querySelector(
+      '[data-slot="binder-value-bar"] [data-slot="binder-value-note"]'
+    )?.textContent
   ).toMatch(/^2 unpriced\. Oldest price \d+ \w+( \d{4})?\.$/)
 })
 
@@ -211,18 +214,20 @@ test("a card sheet shows the Card Value in the chosen currency with its date, an
 
   const fresh = await openCard(/^Captain Marlow \(001\), OP99-001, 2 copies/)
 
-  expect(nameOf(fresh.querySelector(".binder-value") ?? fresh)).toMatch(
-    /^Card Value\s*\$?US\$2\.25Observed /
-  )
-  expect(fresh.querySelector(".binder-stale")).toBeNull()
+  expect(
+    nameOf(fresh.querySelector('[data-slot="binder-value"]') ?? fresh)
+  ).toMatch(/^Card Value\s*\$?US\$2\.25Observed /)
+  expect(fresh.querySelector('[data-slot="binder-stale"]')).toBeNull()
   await press(button("Close", document))
 
   const stale = await openCard(/^Cinder Tidemarker \(006\), OP99-006/)
 
-  expect(stale.querySelector(".binder-value-figure")?.textContent).toBe(
-    "US$2.80"
+  expect(
+    stale.querySelector('[data-slot="binder-value-figure"]')?.textContent
+  ).toBe("US$2.80")
+  expect(stale.querySelector('[data-slot="binder-stale"]')?.textContent).toBe(
+    "Stale"
   )
-  expect(stale.querySelector(".binder-stale")?.textContent).toBe("Stale")
 })
 
 test("a Japanese entry and a card the catalogue does not price say why they have no value", async () => {
@@ -231,15 +236,15 @@ test("a Japanese entry and a card the catalogue does not price say why they have
 
   const japanese = await openCard(/^Captain Marlow \(001\), OP99-001, Japanese/)
 
-  expect(japanese.querySelector(".binder-value-figure")).toBeNull()
-  expect(japanese.querySelector(".binder-value")?.textContent).toContain(
-    "English printings only"
-  )
+  expect(japanese.querySelector('[data-slot="binder-value-figure"]')).toBeNull()
+  expect(
+    japanese.querySelector('[data-slot="binder-value"]')?.textContent
+  ).toContain("English printings only")
   await press(button("Close", document))
 
   const unpriced = await openCard(/Parallel\), OP99-002/)
 
-  expect(unpriced.querySelector(".binder-value")?.textContent).toContain(
-    "no price for this card"
-  )
+  expect(
+    unpriced.querySelector('[data-slot="binder-value"]')?.textContent
+  ).toContain("no price for this card")
 })
