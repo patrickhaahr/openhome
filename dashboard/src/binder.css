@@ -10,6 +10,15 @@
   --page-room: calc(100dvh - 16.5rem);
 }
 
+/* A turning page swings toward the viewer past the screen's bottom edge; a scrollbar appearing
+   for it would narrow the whole spread mid-turn. */
+html:has(.binder) {
+  scrollbar-width: none;
+}
+html:has(.binder)::-webkit-scrollbar {
+  display: none;
+}
+
 /* The turn keys flank the spread, so the pages take the height a key row would. */
 .binder-book {
   display: grid;
