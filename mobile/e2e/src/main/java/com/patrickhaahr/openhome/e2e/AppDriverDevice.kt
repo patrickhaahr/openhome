@@ -3,13 +3,9 @@ package com.patrickhaahr.openhome.e2e
 import android.os.SystemClock
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 
 private const val NETWORK_TIMEOUT_MS = 45_000L
-private const val MILLIS_PER_SECOND = 1_000L
-private const val VIBRATION_RECORD_TIMEOUT_MS = 10_000L
-private const val VIBRATION_SETTLE_MS = 2_000L
 
 fun AppDriver.clearAppData() {
     device.executeShellCommand("pm clear $APP_PACKAGE")
@@ -67,52 +63,6 @@ fun AppDriver.reopen() {
 fun AppDriver.forceStop() {
     device.executeShellCommand("am force-stop $APP_PACKAGE")
 }
-
-/** Moves the device's real clock, the one the stored deadline and Android's alarms both go by. */
-fun AppDriver.moveClockForward(seconds: Long) {
-    if (automaticTimeSetting == null) {
-        automaticTimeSetting = device.executeShellCommand("settings get global auto_time").trim()
-        device.executeShellCommand("settings put global auto_time 0")
-    }
-    val millis = seconds * MILLIS_PER_SECOND
-    device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() + millis}")
-    clockMovedMillis += millis
-}
-
-/** Gives the device back the time it would have had; time that really passed still counts. */
-fun AppDriver.restoreClock() {
-    val setting = automaticTimeSetting ?: return
-    device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() - clockMovedMillis}")
-    device.executeShellCommand("settings put global auto_time $setting")
-    clockMovedMillis = 0
-    automaticTimeSetting = null
-}
-
-/** From here on, [assertVibrationsPlayed] counts. Android's record outlives tests and clearing the app. */
-fun AppDriver.startCountingVibrations() {
-    vibrationsBefore = vibrationsOnRecord()
-}
-
-/**
- * Exactly [expected] vibrations by Android's own record: played to the end, not refused by its
- * background rules. A vibration is recorded when it ends, so more time is given for one to appear.
- */
-fun AppDriver.assertVibrationsPlayed(expected: Int) {
-    val deadline = SystemClock.uptimeMillis() + VIBRATION_RECORD_TIMEOUT_MS
-    while ((vibrationsOnRecord() - vibrationsBefore).size < expected && SystemClock.uptimeMillis() < deadline) {
-        SystemClock.sleep(POLL_MS)
-    }
-    SystemClock.sleep(VIBRATION_SETTLE_MS)
-    assertEquals("Vibrations played", expected, (vibrationsOnRecord() - vibrationsBefore).size)
-}
-
-private fun AppDriver.vibrationsOnRecord(): Set<String> =
-    device.executeShellCommand("dumpsys vibrator_manager")
-        .substringAfter("Recent vibrations:")
-        .substringBefore("Aggregated vibration history:")
-        .lineSequence()
-        .filter { APP_PACKAGE in it && " finished |" in it && "usage: ALARM" in it }
-        .toSet()
 
 fun AppDriver.usesGestureNavigation(): Boolean =
     device.executeShellCommand("settings get secure navigation_mode").trim() == "2"

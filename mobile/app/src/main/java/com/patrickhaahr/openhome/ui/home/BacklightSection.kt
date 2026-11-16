@@ -1,21 +1,11 @@
 package com.patrickhaahr.openhome.ui.home
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,10 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
@@ -39,7 +26,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.patrickhaahr.openhome.api.BacklightRgb
 import com.patrickhaahr.openhome.api.BacklightSelection
 import com.patrickhaahr.openhome.api.BacklightStatus
 import com.patrickhaahr.openhome.ui.ProblemTag
@@ -52,52 +38,12 @@ import com.patrickhaahr.openhome.ui.design.GlyphIcon
 import com.patrickhaahr.openhome.ui.design.GlyphKey
 import com.patrickhaahr.openhome.ui.design.KeyTone
 import com.patrickhaahr.openhome.ui.design.MarkDot
-import com.patrickhaahr.openhome.ui.design.SendingArc
-import com.patrickhaahr.openhome.ui.design.key
 import com.patrickhaahr.openhome.ui.theme.Lit
 import com.patrickhaahr.openhome.ui.theme.Type
 import java.time.Instant
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlinx.coroutines.delay
 
-
-private const val FULL_TURN = 360f
-internal const val MAX_CHANNEL = 255
-internal const val MAX_LEVEL = 100
 private const val STALE_AFTER_SECONDS = 30L
-
-/** Colours for each effect's halo, by what its light does. An effect not listed gets a neutral warm drift. */
-internal val EFFECT_LIGHT =
-    mapOf(
-        "rainbow" to listOf(Color(0xFFFF3B30), Color(0xFF34C759), Color(0xFF0A84FF)),
-        "aurora" to listOf(Color(0xFF30D5A0), Color(0xFF0A84FF), Color(0xFF64D2FF)),
-        "forest" to listOf(Color(0xFF34C759), Color(0xFF8FB339), Color(0xFF1F7A4D)),
-        "fire" to listOf(Color(0xFFFF3B30), Color(0xFFFF9F0A), Color(0xFFFFD60A)),
-        "party" to listOf(Color(0xFFFF2D55), Color(0xFF0A84FF), Color(0xFFFFD60A)),
-    )
-internal val DEFAULT_EFFECT_LIGHT = listOf(Lit.Lamp, Color(0xFFFF9F0A), Color(0xFFFFF4C2))
-private val TV_SYNC_LIGHT = listOf(Color(0xFFFF7A1A), Color(0xFF3A6EFF), Color(0xFFFF3B6A))
-
-/** The Backlight is the one place colour other than the lamp belongs, because colour is the thing itself. */
-private fun BacklightSelection?.lightColors(): List<Color> =
-    when (this) {
-        null, BacklightSelection.Off -> emptyList()
-        is BacklightSelection.Color -> listOf(rgb.toColor())
-        is BacklightSelection.TvSync -> TV_SYNC_LIGHT
-        is BacklightSelection.Effect -> EFFECT_LIGHT.entries.firstOrNull { effect.contains(it.key, ignoreCase = true) }?.value ?: DEFAULT_EFFECT_LIGHT
-    }
-
-private fun BacklightRgb.toColor() = Color(red.coerceIn(0, MAX_CHANNEL), green.coerceIn(0, MAX_CHANNEL), blue.coerceIn(0, MAX_CHANNEL))
-
-private fun BacklightSelection?.level(): Int? =
-    when (this) {
-        is BacklightSelection.Color -> brightness
-        is BacklightSelection.Effect -> brightness
-        is BacklightSelection.TvSync -> brightness
-        else -> null
-    }
 
 @Composable
 fun BacklightSection(onOpenAdvanced: () -> Unit = {}, advanced: Boolean = false) {
@@ -179,56 +125,6 @@ private fun StatusMarks(status: BacklightStatus, outdated: Boolean, stale: Boole
         MarkDot(if (status.reachability == "reachable") Lit.Lamp else Lit.Alarm)
         if (stale || outdated) GlyphIcon(Glyph.Rewind, tint = Lit.Muted, size = 18.dp)
         if (status.setup != "ready") GlyphIcon(Glyph.Warn, tint = Lit.Alarm, size = 18.dp)
-    }
-}
-
-/**
- * The Backlight drawn as what it is: a dark TV on a dark wall with the requested light behind it. It
- * shows what was asked for, never what the strip is known to be doing; a stale reading dims the wall's mark.
- */
-@Composable
-private fun LitTv(intended: BacklightSelection?, sending: Boolean, stale: Boolean) {
-    val colors = intended.lightColors()
-    val level = intended.level()
-    val moving = intended is BacklightSelection.Effect || intended is BacklightSelection.TvSync
-    val orbit = rememberInfiniteTransition(label = "light")
-    val angle by orbit.animateFloat(
-        0f,
-        FULL_TURN,
-        infiniteRepeatable(tween(9_000, easing = LinearEasing), RepeatMode.Restart),
-        label = "light angle",
-    )
-    Box(Modifier.fillMaxWidth().height(184.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) { drawLight(colors, if (moving) angle else 0f, ((level ?: 80) / MAX_LEVEL.toFloat()).coerceIn(0.2f, 1f)) }
-        Box(Modifier.size(width = 196.dp, height = 112.dp).background(Lit.Ground, androidx.compose.foundation.shape.RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-            when {
-                sending -> SendingArc(Modifier.size(44.dp))
-                intended == BacklightSelection.Off -> GlyphIcon(Glyph.Moon, tint = Lit.Faint, size = 34.dp)
-                level != null -> Text("$level", style = Type.Display, color = if (stale) Lit.Muted else Lit.Ink)
-                else -> GlyphIcon(Glyph.Tv, tint = Lit.Faint, size = 34.dp)
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawLight(colors: List<Color>, angle: Float, strength: Float) {
-    if (colors.isEmpty()) return
-    val reach = size.width * 0.52f
-    colors.forEachIndexed { index, color ->
-        val turn = (angle + index * FULL_TURN / colors.size) * PI.toFloat() / 180f
-        val drift = if (colors.size == 1) 0f else size.width * 0.14f
-        val place = Offset(center.x + cos(turn) * drift, center.y + sin(turn) * drift * 0.4f)
-        drawCircle(
-            Brush.radialGradient(
-                0f to color.copy(alpha = strength),
-                0.55f to color.copy(alpha = strength * 0.75f),
-                1f to Color.Transparent,
-                center = place,
-                radius = reach,
-            ),
-            radius = reach,
-            center = place,
-        )
     }
 }
 

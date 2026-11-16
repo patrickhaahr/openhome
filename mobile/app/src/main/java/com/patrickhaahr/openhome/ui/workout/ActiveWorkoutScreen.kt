@@ -1,6 +1,7 @@
 package com.patrickhaahr.openhome.ui.workout
 
 import android.database.SQLException
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,14 +18,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.patrickhaahr.openhome.fitness.ActiveEntry
 import com.patrickhaahr.openhome.fitness.ActiveWorkout
 import com.patrickhaahr.openhome.fitness.ActiveWorkoutRepository
 import com.patrickhaahr.openhome.fitness.FinishOutcome
@@ -43,6 +47,7 @@ import com.patrickhaahr.openhome.ui.design.Glyph
 import com.patrickhaahr.openhome.ui.design.GlyphIcon
 import com.patrickhaahr.openhome.ui.design.GlyphKey
 import com.patrickhaahr.openhome.ui.design.KeyTone
+import com.patrickhaahr.openhome.ui.design.SlabKey
 import com.patrickhaahr.openhome.ui.design.key
 import com.patrickhaahr.openhome.ui.theme.Lit
 import java.time.LocalDate
@@ -348,4 +353,33 @@ internal fun KeyDialog(
         confirmButton = { confirm() },
         dismissButton = { dismiss() },
     )
+}
+
+private const val COMPLETE_GUARD_MILLIS = 400L
+
+/**
+ * The explicit confirmation of everything shown. The next Exercise appears under the same button, so
+ * the second half of a double tap must not confirm it unseen.
+ */
+@Composable
+private fun CompleteExerciseButton(entry: ActiveEntry, viewModel: ActiveWorkoutViewModel, modifier: Modifier) {
+    val focusManager = LocalFocusManager.current
+    val shownAt = remember(entry.id) { SystemClock.uptimeMillis() }
+    val onClick = {
+        if (SystemClock.uptimeMillis() - shownAt >= COMPLETE_GUARD_MILLIS) {
+            focusManager.clearFocus()
+            viewModel.completeExercise(entry.id)
+        }
+    }
+    Box(modifier.fillMaxWidth()) {
+        SlabKey(
+            Glyph.CheckDouble,
+            "Complete ${entry.exerciseName}",
+            onClick,
+            modifier = Modifier.fillMaxWidth(),
+            tone = if (entry.sets.all { it.completed }) KeyTone.Raised else KeyTone.Lamp,
+        )
+        // Centred, so a tap on these words lands on the key beneath them.
+        Spoken("Complete Exercise", Modifier.align(Alignment.Center))
+    }
 }

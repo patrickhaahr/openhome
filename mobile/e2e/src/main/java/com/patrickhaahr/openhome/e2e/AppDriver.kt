@@ -28,17 +28,18 @@ internal const val POLL_MS = 500L
 private const val SWIPE_STEPS = 20
 private const val SWIPE_MARGIN_DP = 8
 private const val DOUBLE_TAP_GAP_MS = 200L
+private const val MILLIS_PER_SECOND = 1_000L
+private const val VIBRATION_RECORD_TIMEOUT_MS = 10_000L
+private const val VIBRATION_SETTLE_MS = 2_000L
 private val ANY_TEXT = Pattern.compile(".+", Pattern.DOTALL)
-private val REST_COUNTDOWN = Pattern.compile("\\d+:\\d\\d")
 
 /** Drives the installed app from outside its process, the way the user and Android do. */
 class AppDriver {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     internal val device = UiDevice.getInstance(instrumentation)
-    internal val restCountdown = By.pkg(APP_PACKAGE).text(REST_COUNTDOWN)
-    internal var automaticTimeSetting: String? = null
-    internal var clockMovedMillis = 0L
-    internal var vibrationsBefore = emptySet<String>()
+    private var automaticTimeSetting: String? = null
+    private var clockMovedMillis = 0L
+    private var vibrationsBefore = emptySet<String>()
 
     /**
      * The app says most things with symbols, keeping the words as their accessibility names, so what
@@ -372,4 +373,50 @@ class AppDriver {
     fun showsTextContaining(text: String): Boolean = findContaining(text) != null
 
     internal fun hasObject(text: String) = findReading(text) != null
+
+    /** Moves the device's real clock, the one the stored deadline and Android's alarms both go by. */
+    fun moveClockForward(seconds: Long) {
+        if (automaticTimeSetting == null) {
+            automaticTimeSetting = device.executeShellCommand("settings get global auto_time").trim()
+            device.executeShellCommand("settings put global auto_time 0")
+        }
+        val millis = seconds * MILLIS_PER_SECOND
+        device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() + millis}")
+        clockMovedMillis += millis
+    }
+
+    /** Gives the device back the time it would have had; time that really passed still counts. */
+    fun restoreClock() {
+        val setting = automaticTimeSetting ?: return
+        device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() - clockMovedMillis}")
+        device.executeShellCommand("settings put global auto_time $setting")
+        clockMovedMillis = 0
+        automaticTimeSetting = null
+    }
+
+    /** From here on, [assertVibrationsPlayed] counts. Android's record outlives tests and clearing the app. */
+    fun startCountingVibrations() {
+        vibrationsBefore = vibrationsOnRecord()
+    }
+
+    /**
+     * Exactly [expected] vibrations by Android's own record: played to the end, not refused by its
+     * background rules. A vibration is recorded when it ends, so more time is given for one to appear.
+     */
+    fun assertVibrationsPlayed(expected: Int) {
+        val deadline = SystemClock.uptimeMillis() + VIBRATION_RECORD_TIMEOUT_MS
+        while ((vibrationsOnRecord() - vibrationsBefore).size < expected && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS)
+        }
+        SystemClock.sleep(VIBRATION_SETTLE_MS)
+        assertEquals("Vibrations played", expected, (vibrationsOnRecord() - vibrationsBefore).size)
+    }
+
+    private fun vibrationsOnRecord(): Set<String> =
+        device.executeShellCommand("dumpsys vibrator_manager")
+            .substringAfter("Recent vibrations:")
+            .substringBefore("Aggregated vibration history:")
+            .lineSequence()
+            .filter { APP_PACKAGE in it && " finished |" in it && "usage: ALARM" in it }
+            .toSet()
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -41,21 +42,28 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.patrickhaahr.openhome.fitness.ActiveEntry
 import com.patrickhaahr.openhome.fitness.ActiveSet
 import com.patrickhaahr.openhome.fitness.PreviousPerformance
+import com.patrickhaahr.openhome.fitness.REST_STEP_SECONDS
 import com.patrickhaahr.openhome.fitness.SetCheck
 import com.patrickhaahr.openhome.fitness.SetField
 import com.patrickhaahr.openhome.ui.ProblemText
+import com.patrickhaahr.openhome.ui.ScreenMargin
 import com.patrickhaahr.openhome.ui.Slab
 import com.patrickhaahr.openhome.ui.Spoken
+import com.patrickhaahr.openhome.ui.design.FigureKey
 import com.patrickhaahr.openhome.ui.design.Glyph
 import com.patrickhaahr.openhome.ui.design.GlyphIcon
+import com.patrickhaahr.openhome.ui.design.GlyphKey
+import com.patrickhaahr.openhome.ui.design.KeyTone
 import com.patrickhaahr.openhome.ui.design.Motion
 import com.patrickhaahr.openhome.ui.design.pressable
 import com.patrickhaahr.openhome.ui.formatDay
 import com.patrickhaahr.openhome.ui.formatShortDay
 import com.patrickhaahr.openhome.ui.theme.Lit
 import com.patrickhaahr.openhome.ui.theme.Type
+import kotlinx.coroutines.flow.map
 
 private val CONFIRM = 52.dp
 private val CELL_HEIGHT = 68.dp
@@ -65,7 +73,7 @@ private val CELL_SHAPE = RoundedCornerShape(16.dp)
 /** Last time, at a glance: the numbers of each Set in a line, marked by the rewind symbol and its day. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun PreviousPerformanceStrip(previous: PreviousPerformance) {
+private fun PreviousPerformanceStrip(previous: PreviousPerformance) {
     Row(
         Modifier.padding(start = 4.dp),
         verticalAlignment = Alignment.Top,
@@ -98,7 +106,7 @@ internal fun shortPerformance(set: com.patrickhaahr.openhome.fitness.WorkoutSet)
 
 /** A confirmed Set lights up. Nothing else on this screen is as bright, and nothing else needs saying. */
 @Composable
-internal fun SetRow(
+private fun SetRow(
     exerciseName: String,
     set: ActiveSet,
     showMissingValue: Boolean,
@@ -230,4 +238,80 @@ internal fun CompactValueField(
             }
         },
     )
+}
+
+/** The one Exercise being lifted, as large as the screen allows. */
+@Composable
+internal fun ExerciseFocus(
+    entry: ActiveEntry,
+    previousPerformance: PreviousPerformance?,
+    refusedSets: Set<Long>,
+    viewModel: ActiveWorkoutViewModel,
+) {
+    val selectedMeasure = entry.sets.map { it.draft.measure }.distinct().singleOrNull()
+    Column(Modifier.fillMaxWidth().padding(horizontal = ScreenMargin), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = 4.dp)) {
+            Column(Modifier.weight(1f).padding(top = 2.dp)) {
+                Text(entry.exerciseName, style = Type.Display, color = Lit.Ink)
+                Spoken(entry.exerciseCategory)
+            }
+            GlyphKey(Glyph.Trash, "Remove ${entry.exerciseName}", { viewModel.removeEntry(entry.id) }, tone = KeyTone.Quiet, size = 44.dp)
+        }
+        previousPerformance?.takeIf { it.exerciseId == entry.exerciseId }?.let { PreviousPerformanceStrip(it) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            entry.sets.forEach { set ->
+                SetRow(entry.exerciseName, set, showMissingValue = set.id in refusedSets, viewModel)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MeasureSwitch(
+                selected = selectedMeasure,
+                exerciseName = entry.exerciseName,
+                onSelect = { viewModel.setMeasure(entry.id, it) },
+            )
+            Spacer(Modifier.weight(1f))
+            if (entry.sets.size > 1) {
+                GlyphKey(Glyph.Minus, "Remove last set of ${entry.exerciseName}", { viewModel.removeLastSet(entry.id) }, tone = KeyTone.Slab)
+            }
+            GlyphKey(Glyph.Copy, "Repeat last set of ${entry.exerciseName}", { viewModel.repeatLastSet(entry.id) }, tone = KeyTone.Slab)
+            GlyphKey(Glyph.Plus, "Add set to ${entry.exerciseName}", { viewModel.addSet(entry.id) }, tone = KeyTone.Raised)
+        }
+        RestPreferenceRow(entry, viewModel)
+    }
+}
+
+/** What this Exercise's rests will be, remembered from Workout to Workout. */
+@Composable
+private fun RestPreferenceRow(entry: ActiveEntry, viewModel: ActiveWorkoutViewModel) {
+    val spoken = if (entry.rest.enabled) "Rest ${formatRest(entry.rest.seconds)}" else "Rest off"
+    Slab(padding = 8.dp, modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                Modifier.padding(start = 10.dp).semantics { contentDescription = spoken },
+                contentAlignment = Alignment.Center,
+            ) {
+                GlyphIcon(Glyph.Timer, tint = if (entry.rest.enabled) Lit.Lamp else Lit.Faint, size = 24.dp)
+            }
+            if (entry.rest.enabled) {
+                // Primes rather than a colon: the running countdown is the only m:ss on screen.
+                Text(
+                    "${entry.rest.seconds / 60}′${(entry.rest.seconds % 60).toString().padStart(2, '0')}",
+                    style = Type.Figure,
+                    color = Lit.Ink,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            if (entry.rest.enabled) {
+                FigureKey("−15", "Less rest for ${entry.exerciseName}", { viewModel.adjustRest(entry.exerciseId, -REST_STEP_SECONDS) }, size = 48.dp)
+                FigureKey("+15", "More rest for ${entry.exerciseName}", { viewModel.adjustRest(entry.exerciseId, REST_STEP_SECONDS) }, size = 48.dp)
+            }
+            LampSwitch(
+                checked = entry.rest.enabled,
+                onCheckedChange = { viewModel.setRestEnabled(entry.exerciseId, it) },
+                description = "Rest timer for ${entry.exerciseName}",
+                modifier = Modifier.padding(start = 4.dp, end = 6.dp),
+            )
+        }
+    }
 }

@@ -4,11 +4,14 @@ import android.os.SystemClock
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
+import java.util.regex.Pattern
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
 private const val SECONDS_PER_MINUTE = 60L
+private val REST_COUNTDOWN = Pattern.compile("\\d+:\\d\\d")
+private val restCountdown = By.pkg(APP_PACKAGE).text(REST_COUNTDOWN)
 
 /** The rest bar's countdown: within the app, the one line of text that is nothing but minutes and seconds. */
 private fun AppDriver.restRemaining(): Long? {
