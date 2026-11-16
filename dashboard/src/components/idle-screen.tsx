@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { LiveWeather } from "@/components/live-weather"
 import { timeFormat } from "@/components/live-clock"
-import { degrees, WeatherGlyph } from "@/components/weather-overview"
+import { degrees, WeatherGlyph } from "@/components/weather-figures"
 import {
   copenhagenDay,
   dealPages,

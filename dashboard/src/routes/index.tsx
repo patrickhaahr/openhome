@@ -8,7 +8,7 @@ import {
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight"
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { SunDay } from "@/components/daylight"
-import { WeatherNow } from "@/components/weather-overview"
+import { WeatherNow } from "@/components/weather-now"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
 import { actionLink, PageTitle } from "@/components/page-tools"

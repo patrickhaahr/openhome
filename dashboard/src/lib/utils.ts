@@ -21,6 +21,7 @@ export const cn = createCn({
         "plate",
         "connected",
         "tile",
+        "rain",
       ],
       text: [
         "mega",
@@ -50,6 +51,9 @@ export const cn = createCn({
         "date-since",
         "date-large",
         "date-milestone",
+        "figure-xl",
+        "figure-xs",
+        "unit",
       ],
       leading: [
         "status",
@@ -60,6 +64,7 @@ export const cn = createCn({
         "heading",
         "compact",
         "prose",
+        "figure-xl",
       ],
       tracking: [
         "score",
@@ -75,6 +80,7 @@ export const cn = createCn({
         "page-title",
         "title",
         "figure-tight",
+        "figure-xl",
       ],
       radius: ["poster", "art", "plate", "tile", "sheet"],
       spacing: [
@@ -119,6 +125,10 @@ export const cn = createCn({
         "part",
         "digits",
         "stack",
+        "pane-gap",
+        "condition-glyph",
+        "fit-screen",
+        "rain-lane",
       ],
     },
   },

@@ -18,7 +18,6 @@ const allowlist = [
   "src/idle.css",
   "src/photos.css",
   "src/travel.css",
-  "src/weather.css",
   "src/workout-body.css",
   "src/workout-log.css",
   "src/workout-sessions.css",

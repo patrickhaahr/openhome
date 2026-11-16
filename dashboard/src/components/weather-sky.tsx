@@ -1,6 +1,8 @@
 import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
 import { useDaylight } from "./daylight"
 import { daylight } from "@/lib/daylight"
+import { percent } from "./weather-figures"
+import { cn } from "@/lib/utils"
 import type { WeatherRead } from "@/lib/weather"
 
 type Hours = Extract<WeatherRead, { state: "fresh" }>["forecast"]["hourly"]
@@ -97,36 +99,54 @@ export function DaySky({ hours }: { hours: Hours }): React.JSX.Element | null {
           ((after.y - before.y) * (sunX - before.x)) / (after.x - before.x)
 
   return (
-    <figure className="wx-sky" aria-hidden="true">
-      <div className="wx-sky-plot">
+    <figure
+      className="grid flex-1 grid-rows-fill-hug gap-3.5"
+      aria-hidden="true"
+    >
+      <div className="relative">
         {nights(start, start + span).map((night) => (
           <span
             key={night.from}
-            className="wx-sky-night"
-            // SAFETY: CSSProperties omits custom properties; --from and --to are 0..1 shares of the day.
+            className="absolute inset-y-0 left-(--x) flex w-(--w) justify-center rounded-lg bg-wash pt-3.5 text-muted-ink"
+            // SAFETY: CSSProperties omits custom properties; --x and --w are 0..1 shares of the day, as percentages.
             style={
               {
-                "--from": share(night.from),
-                "--to": share(night.to),
+                "--x": percent(share(night.from)),
+                "--w": percent(share(night.to) - share(night.from)),
               } as React.CSSProperties
             }
           >
             <MoonIcon size={20} weight="fill" />
           </span>
         ))}
-        <div className="wx-sky-lane">
+        <div className="absolute inset-x-0 top-lane-top bottom-lane-bottom">
           {/* Stretched to the lane; the stroke keeps its width and the marks are HTML. */}
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-            <path className="wx-sky-line" d={path} />
+          <svg
+            className="size-full overflow-visible text-ink"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            <path
+              d={path}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
           </svg>
           {points.map((point, index) =>
             point.y === null || index % labelEvery !== 0 ? null : (
               <span
                 key={point.hour.starts_at}
-                className="wx-sky-temp"
-                // SAFETY: CSSProperties omits custom properties; --x and --y are 0..1 shares of the lane.
+                className="absolute top-(--y) left-(--x) -mt-2.5 -translate-x-1/2 -translate-y-full text-figure-xs font-semibold num after:absolute after:-bottom-3.5 after:left-1/2 after:size-2 after:-translate-x-1/2 after:rounded-full after:bg-ink first-of-type:after:hidden"
+                // SAFETY: CSSProperties omits custom properties; --x and --y are 0..1 shares of the lane, as percentages.
                 style={
-                  { "--x": point.x, "--y": point.y } as React.CSSProperties
+                  {
+                    "--x": percent(point.x),
+                    "--y": percent(point.y),
+                  } as React.CSSProperties
                 }
               >
                 {Math.round(point.hour.temperature_c ?? 0)}°
@@ -135,23 +155,29 @@ export function DaySky({ hours }: { hours: Hours }): React.JSX.Element | null {
           )}
           {sunY === null ? null : (
             <span
-              className="wx-sky-sun"
-              // SAFETY: CSSProperties omits custom properties; --x and --y are 0..1 shares of the lane.
-              style={{ "--x": sunX, "--y": sunY } as React.CSSProperties}
+              className="absolute top-(--y) left-(--x) size-5 -translate-1/2 rounded-full bg-sun outline-4 outline-ground"
+              // SAFETY: CSSProperties omits custom properties; --x and --y are 0..1 shares of the lane, as percentages.
+              style={
+                {
+                  "--x": percent(sunX),
+                  "--y": percent(sunY),
+                } as React.CSSProperties
+              }
             />
           )}
         </div>
-        <div className="wx-sky-rain">
+        <div className="absolute inset-x-0 bottom-0 h-rain-lane">
           {points.map((point) =>
             (point.hour.precipitation_mm ?? 0) === 0 ? null : (
               <span
                 key={point.hour.starts_at}
-                // SAFETY: CSSProperties omits custom properties; --x is a 0..1 share of the day, --h of the lane.
+                className="absolute bottom-0 left-(--x) h-(--h) w-(--w) -translate-x-1/2 rounded-t-bar bg-rain"
+                // SAFETY: CSSProperties omits custom properties; --x is a share of the day, --w and --h the bar's size with a floor.
                 style={
                   {
-                    "--x": point.x,
-                    "--h": (point.hour.precipitation_mm ?? 0) / peak,
-                    "--w": 1 / hours.length,
+                    "--x": percent(point.x),
+                    "--w": `max(0.5rem, ${percent((1 / hours.length) * 0.6)})`,
+                    "--h": `max(0.25rem, ${percent((point.hour.precipitation_mm ?? 0) / peak)})`,
                   } as React.CSSProperties
                 }
               />
@@ -159,13 +185,17 @@ export function DaySky({ hours }: { hours: Hours }): React.JSX.Element | null {
           )}
         </div>
       </div>
-      <div className="wx-sky-hours">
+      <div className="relative h-5 text-control font-medium text-muted-ink tabular-nums">
         {points.map((point, index) =>
           index % labelEvery !== 0 ? null : (
             <span
               key={point.hour.starts_at}
-              // SAFETY: CSSProperties omits custom properties; --x is a 0..1 share of the day.
-              style={{ "--x": point.x } as React.CSSProperties}
+              className={cn(
+                "absolute left-(--x) max-phone:even:hidden",
+                index === 0 ? "text-ink" : "-translate-x-1/2"
+              )}
+              // SAFETY: CSSProperties omits custom properties; --x is a 0..1 share of the day, as a percentage.
+              style={{ "--x": percent(point.x) } as React.CSSProperties}
             >
               {hourTime.format(new Date(point.hour.starts_at))}
             </span>
