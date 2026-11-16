@@ -191,10 +191,16 @@ dashboard-intent *args:
 dashboard-add component:
     bunx --bun shadcn@latest add {{quote(component)}}
 
-# Format, lint, typecheck, test, and build the dashboard in one pass
+# Fail when a stylesheet outside the allowlist defines a plain class selector (the Tailwind ratchet)
 [group('dashboard')]
 [working-directory: 'dashboard']
-dashboard-check: dashboard-format dashboard-lint dashboard-typecheck dashboard-test dashboard-build
+dashboard-check-css:
+    bun scripts/check-css.ts
+
+# Format, lint, typecheck, check CSS, test, and build the dashboard in one pass
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-check: dashboard-format dashboard-lint dashboard-typecheck dashboard-check-css dashboard-test dashboard-build
 
 # Smoke-test resized photos and serve approved albums on loopback; requires IMMICH_PUBLIC_DEMO=true
 [group('dashboard')]
