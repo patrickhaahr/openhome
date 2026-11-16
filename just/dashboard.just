@@ -201,3 +201,9 @@ dashboard-check: dashboard-format dashboard-lint dashboard-typecheck dashboard-t
 [working-directory: 'api']
 dashboard-photos-preview:
     cargo run --locked --example photos_preview
+
+# Compare the working tree's Dashboard with master's, scenario by scenario (optional scenario id filters)
+[group('dashboard')]
+[positional-arguments]
+dashboard-parity *filters: dashboard-synthetic-build
+    dashboard/tests/parity/parity.sh "$@"
