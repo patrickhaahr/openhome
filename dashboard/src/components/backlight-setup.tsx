@@ -12,7 +12,10 @@ export function BacklightSetup({
   readonly perform: (action: BacklightAction) => void
 }): React.JSX.Element {
   return (
-    <section className="led-setup" aria-labelledby="led-setup">
+    <section
+      className="relative flex flex-wrap justify-center gap-2 p-4 **:data-[slot=button]:bg-led-wash-strong **:data-[slot=button]:bg-clip-border **:data-[slot=button]:text-led-ink **:data-[slot=button]:hover:bg-led-ink **:data-[slot=button]:hover:text-led-wall"
+      aria-labelledby="led-setup"
+    >
       <h2 id="led-setup" className="sr-only">
         Save your TV Sync settings
       </h2>

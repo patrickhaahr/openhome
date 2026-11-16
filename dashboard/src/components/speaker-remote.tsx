@@ -36,21 +36,26 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
   quickGroups: [
     {
       label: "Common speaker commands",
-      kind: "quick",
       // Volume up sits above volume down in Home's vertical plate.
       commands: ["bluetooth", "optical", "volume-up", "volume-down"],
     },
   ],
+  plate: "",
+  panel: "rounded-4xl p-flow",
+  groups: "flex w-full flex-1 flex-col items-center justify-evenly gap-5",
+  identity: "",
   // The speaker's narrow plate on Controls: power over its inputs, then a rocker like the TV's.
   fullGroups: [
     {
       label: "Power and input",
-      kind: "trio",
+      place: "flex w-full justify-center",
+      keys: "grid grid-cols-pair gap-3 **:data-[command=power]:col-span-full **:data-[command=power]:mb-2 **:data-[command=power]:justify-self-center",
       commands: ["power", "bluetooth", "optical"],
     },
     {
       label: "Volume",
-      kind: "rocker",
+      place: "flex w-full justify-center",
+      keys: "flex flex-col flex-nowrap gap-1 rounded-full bg-ground p-1 **:data-[slot=button]:size-14 **:data-[slot=button]:hover:bg-clip-border",
       commands: ["volume-up", "mute", "volume-down"],
     },
   ],

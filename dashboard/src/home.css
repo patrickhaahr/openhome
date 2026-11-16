@@ -203,49 +203,6 @@ a.dir-go:hover {
   align-items: center;
   gap: 0.75rem;
 }
-.plate {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 999px;
-  background: var(--wash);
-}
-.plate-head,
-.plate .remote-groups,
-.plate .remote-group {
-  display: contents;
-}
-.plate-keys,
-.plate .remote-buttons {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-.plate-identity {
-  margin-block: 0.625rem 0.25rem;
-  color: var(--muted-ink);
-}
-.plate .control-alert {
-  max-width: 4rem;
-  padding-block: 0.5rem 0.25rem;
-  white-space: normal;
-  text-align: center;
-}
-.plate [data-slot="button"] {
-  width: 3.625rem;
-  height: 3.625rem;
-}
-.plate [data-slot="button"] svg {
-  width: 1.75rem;
-  height: 1.75rem;
-}
-.plate [data-slot="button"][data-variant="outline"] {
-  border-color: transparent;
-  background: var(--ground);
-}
 /* Recovery: today's rings straight on the paper, named by glyphs. */
 .recovery-glance {
   display: flex;
@@ -438,50 +395,6 @@ a.dir-go:hover {
     background: var(--muted-ink);
   }
 }
-.panel-keys,
-.panel-recovery {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-.control-alert {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  color: var(--danger);
-  font-size: 0.875rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-.key-link {
-  display: inline-grid;
-  place-items: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 999px;
-  background: var(--wash-strong);
-  color: var(--danger);
-  transition:
-    background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-.key-link:hover {
-  background: var(--ink);
-  color: var(--ground);
-}
-.key-ghosts {
-  display: flex;
-  gap: 0.5rem;
-}
-.key-ghosts span {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  background: var(--wash);
-}
-
 /* A key answers on itself: it presses, flashes the sun when OpenHome acknowledges, shakes
    when it does not. None of this is device state. */
 [data-slot="button"][data-outcome="pending"]:disabled {
@@ -617,11 +530,6 @@ a.dir-go:hover {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
-  }
-  .plate,
-  .plate-keys,
-  .plate .remote-buttons {
-    flex-direction: row;
   }
   .home-now {
     grid-template-columns: minmax(0, 1fr);

@@ -7,9 +7,7 @@ import { audit } from "./css-classes.ts"
  * Delete an entry in the same change that deletes its file; the check fails on a stale entry.
  */
 const allowlist = [
-  "src/backlight.css",
   "src/components/idle-milestone.css",
-  "src/controls.css",
   "src/home.css",
   "src/idle.css",
   "src/photos.css",

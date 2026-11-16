@@ -3,6 +3,11 @@ import { Await } from "@tanstack/react-router"
 import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { ControlAlert, OpenConnection } from "@/components/control-alert"
+import {
+  alertOnPlate,
+  ControlPanel,
+  PanelHead,
+} from "@/components/control-panel"
 import { Button } from "@/components/ui/button"
 import {
   connectionPausedMessages,
@@ -20,13 +25,21 @@ import type {
   IrFailure,
   IrRemoteState,
 } from "@/lib/ir"
+import { cn } from "@/lib/utils"
 import { type SingleCommand, useSingleCommand } from "@/lib/use-single-command"
 
-/** A labelled set of Remote Buttons; `kind` selects its touch layout. */
+/** A labelled set of Remote Buttons. */
 export type CommandGroup<C extends string> = {
   label: string
-  kind: "quick" | "trio" | "row" | "rocker" | "dpad" | "keypad"
   commands: C[]
+}
+
+/** A group on the full remote, with where it sits and how its keys are arranged. */
+export type FullGroup<C extends string> = CommandGroup<C> & {
+  /** Classes for the group's place among the others. */
+  place: string
+  /** Classes for the touch layout of its keys. */
+  keys: string
 }
 
 /** What distinguishes one Dashboard Remote from another. */
@@ -49,7 +62,15 @@ export type IrRemoteConfig<C extends string> = {
   /** Commands whose glyph keeps its word on the full remote, where the glyph alone is unclear. */
   worded: readonly C[]
   quickGroups: CommandGroup<C>[]
-  fullGroups: CommandGroup<C>[]
+  fullGroups: FullGroup<C>[]
+  /** Extra classes for Home's plate. */
+  plate: string
+  /** The full panel's shape: radius and padding. */
+  panel: string
+  /** The full remote's arrangement of its groups. */
+  groups: string
+  /** Extra classes for the device glyph on the full panel. */
+  identity: string
   /** The device state OpenHome never reports, shown as "Not reported". */
   unobserved: string
   explanation: string
@@ -65,7 +86,12 @@ export type IrRemoteProps<C extends string> = {
     signal: AbortSignal
   }) => Promise<IrCommandResult>
   layout: ControlLayout
+  /** Where the full panel sits on its page. */
+  className?: string | undefined
 }
+
+const quickButtons =
+  "flex flex-col flex-wrap items-center gap-2 max-phone:flex-row"
 
 const recheckFailures = new Set<IrFailure>([
   "missing-device",
@@ -127,8 +153,12 @@ export function IrRemote<C extends string>({
         <RemoteCard
           config={config}
           layout={props.layout}
+          className={props.className}
           keys={
-            <span className="key-ghosts" aria-hidden="true">
+            <span
+              className="flex gap-2 *:size-12 *:rounded-full *:bg-wash"
+              aria-hidden="true"
+            >
               <span />
               <span />
               <span />
@@ -161,7 +191,8 @@ function RemoteControls<C extends string>({
   remote,
   command: { commandState, send, clear },
   layout,
-}: Pick<IrRemoteProps<C>, "connectionState" | "layout"> & {
+  className,
+}: Pick<IrRemoteProps<C>, "connectionState" | "layout" | "className"> & {
   config: IrRemoteConfig<C>
   remote: IrRemoteState<C>
   command: SingleCommand<C, IrFailure>
@@ -180,7 +211,15 @@ function RemoteControls<C extends string>({
   const connected = connectionState === "connected"
   const available = new Set(remote.state === "available" ? remote.commands : [])
 
-  const groups = (layout === "quick" ? config.quickGroups : config.fullGroups)
+  const groups = (
+    layout === "quick"
+      ? config.quickGroups.map((group) => ({
+          ...group,
+          place: "contents",
+          keys: quickButtons,
+        }))
+      : config.fullGroups
+  )
     .map((group) => ({
       ...group,
       commands: group.commands.filter((command) => available.has(command)),
@@ -238,16 +277,17 @@ function RemoteControls<C extends string>({
 
   const keys =
     groups.length > 0 ? (
-      <div className="remote-groups" aria-busy={pending}>
+      <div className={quick ? "contents" : config.groups} aria-busy={pending}>
         {groups.map((group) => (
           <div
             key={group.label}
-            className="remote-group"
+            className={group.place}
+            data-slot="remote-group"
             role="group"
             aria-label={group.label}
           >
             {quick ? null : <h3 className="sr-only">{group.label}</h3>}
-            <div className="remote-buttons" data-kind={group.kind}>
+            <div className={group.keys}>
               {group.commands.map((command) => (
                 <RemoteButton
                   key={command}
@@ -276,7 +316,15 @@ function RemoteControls<C extends string>({
     <RemoteCard
       config={config}
       layout={layout}
-      alert={tag === undefined ? null : <ControlAlert tag={tag} />}
+      className={className}
+      alert={
+        tag === undefined ? null : (
+          <ControlAlert
+            tag={tag}
+            className={quick ? alertOnPlate : undefined}
+          />
+        )
+      }
       recovery={recovery}
       keys={keys}
       status={status}
@@ -287,6 +335,7 @@ function RemoteControls<C extends string>({
 function RemoteCard<C extends string>({
   config,
   layout,
+  className,
   alert,
   recovery,
   keys,
@@ -294,6 +343,7 @@ function RemoteCard<C extends string>({
 }: {
   config: IrRemoteConfig<C>
   layout: ControlLayout
+  className?: string | undefined
   alert?: React.ReactNode
   recovery?: React.ReactNode
   keys?: React.ReactNode
@@ -303,17 +353,20 @@ function RemoteCard<C extends string>({
   const quick = layout === "quick"
 
   return (
-    <div
-      className={quick ? "plate" : "panel"}
-      data-remote={config.id}
-      role="group"
-      aria-labelledby={headingId}
+    <ControlPanel
+      layout={layout}
+      className={quick ? config.plate : cn(config.panel, className)}
+      labelledBy={headingId}
     >
-      <div className={quick ? "plate-head" : "panel-head"}>
+      <PanelHead layout={layout}>
         {/* The device's glyph names the remote; the word stays for assistive technology. */}
         {!quick || config.plateIdentity ? (
           <config.icon
-            className={quick ? "plate-identity" : "panel-identity"}
+            className={
+              quick
+                ? "mt-2.5 mb-1 text-muted-ink"
+                : `text-muted-ink ${config.identity}`
+            }
             size={quick ? 30 : 32}
             aria-hidden="true"
           />
@@ -322,16 +375,18 @@ function RemoteCard<C extends string>({
           {config.title}
         </h2>
         {alert}
-      </div>
+      </PanelHead>
       {quick ? (
-        <div className="plate-keys">
+        <div className="flex flex-col items-center gap-2 max-phone:flex-row">
           {recovery}
           {keys}
         </div>
       ) : (
         <>
           {recovery === undefined ? null : (
-            <div className="panel-recovery">{recovery}</div>
+            <div className="flex items-center justify-center gap-2">
+              {recovery}
+            </div>
           )}
           {keys}
         </>
@@ -344,7 +399,7 @@ function RemoteCard<C extends string>({
         {status}
         <p>{config.explanation}</p>
       </div>
-    </div>
+    </ControlPanel>
   )
 }
 

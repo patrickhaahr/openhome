@@ -56,7 +56,7 @@ export function HueWheel({
 
   return (
     <div
-      className="hue-wheel"
+      className="group/wheel relative aspect-square w-led-wheel cursor-crosshair touch-none rounded-full bg-led-hue-wheel transition-fade-scale duration-mid ease-app focus-visible:outline-offset-4 aria-disabled:cursor-default aria-disabled:opacity-20 data-[active=false]:scale-92 led-stacked:w-led-disc-stacked"
       role="slider"
       tabIndex={disabled ? -1 : 0}
       aria-label="RGB color"
@@ -108,7 +108,10 @@ export function HueWheel({
         )
       }}
     >
-      <span className="hue-wheel-knob" aria-hidden="true" />
+      <span
+        className="pointer-events-none absolute top-(--knob-y) left-(--knob-x) size-11 -translate-1/2 rounded-full border-4 border-white bg-(--knob) transition-knob duration-knob group-data-[active=false]/wheel:opacity-0 group-data-[held=true]/wheel:size-14"
+        aria-hidden="true"
+      />
     </div>
   )
 }

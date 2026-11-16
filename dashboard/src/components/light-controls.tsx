@@ -2,6 +2,11 @@ import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb"
 import { LightbulbFilamentIcon } from "@phosphor-icons/react/dist/csr/LightbulbFilament"
 import { CheckAgainButton } from "@/components/check-again-button"
 import { ControlAlert, OpenConnection } from "@/components/control-alert"
+import {
+  alertOnPlate,
+  ControlPanel,
+  PanelHead,
+} from "@/components/control-panel"
 import { Button } from "@/components/ui/button"
 import {
   connectionPausedMessages,
@@ -42,6 +47,14 @@ const failureMessages: Record<LightFailure, string> = {
   unavailable:
     "Command not confirmed. Check the lights and OpenHome’s SwitchBot connection before trying again.",
 }
+
+const fullPanel = "flex-1 rounded-full p-2 max-phone:rounded-4xl"
+
+const quickKeys = "flex flex-col items-center gap-2 max-phone:flex-row"
+
+// A wall switch: the lit bulb on the upper half, the dark one below; on a phone it lies on its side.
+const fullKeys =
+  "flex flex-1 flex-col items-center gap-2 self-stretch max-phone:h-28 max-phone:flex-none max-phone:flex-row max-phone:items-stretch **:data-[slot=button]:h-auto **:data-[slot=button]:w-full **:data-[slot=button]:flex-1 **:data-[slot=button]:[&_svg:not([class*=size-])]:size-12 **:data-[command=on]:rounded-t-key-pill **:data-[command=on]:rounded-b-tile **:data-[command=on]:[&_svg]:text-sun **:data-[command=off]:rounded-t-tile **:data-[command=off]:rounded-b-key-pill max-phone:**:data-[command=on]:rounded-l-key-pill max-phone:**:data-[command=on]:rounded-r-tile max-phone:**:data-[command=off]:rounded-l-tile max-phone:**:data-[command=off]:rounded-r-key-pill"
 
 const keys = [
   { command: "on", label: "Turn on", Icon: LightbulbFilamentIcon },
@@ -89,22 +102,24 @@ export function LightControls({
   const disabled = pending || !connected
 
   return (
-    <div
-      className={quick ? "plate" : "panel"}
-      data-device="lights"
-      role="group"
-      aria-labelledby="lights-heading"
+    <ControlPanel
+      layout={layout}
+      className={quick ? "max-phone:rounded-4xl" : fullPanel}
+      labelledBy="lights-heading"
     >
-      <div className={quick ? "plate-head" : "panel-head"}>
+      <PanelHead layout={layout} bare={failure === undefined}>
         <h2 id="lights-heading" className="sr-only">
           Lights
         </h2>
         {failure === undefined ? null : (
-          <ControlAlert tag={failureTag(connected, failure)} />
+          <ControlAlert
+            tag={failureTag(connected, failure)}
+            className={quick ? alertOnPlate : undefined}
+          />
         )}
-      </div>
+      </PanelHead>
       <div
-        className={quick ? "plate-keys" : "panel-keys"}
+        className={quick ? quickKeys : fullKeys}
         role="group"
         aria-label="Light commands"
         aria-busy={pending}
@@ -145,6 +160,6 @@ export function LightControls({
           current power state.
         </p>
       </div>
-    </div>
+    </ControlPanel>
   )
 }

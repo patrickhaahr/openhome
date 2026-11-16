@@ -374,11 +374,3 @@
     translate: none;
   }
 }
-
-/* Phone: trios wrap instead of squeezing long labels into thirds. */
-@media (max-width: 640px) {
-  .remote-buttons[data-kind="trio"] {
-    display: flex;
-    flex-wrap: wrap;
-  }
-}

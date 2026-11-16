@@ -136,15 +136,13 @@ export function BedtimeDial({
 
   return (
     <section
-      className="bedtime-dial"
+      className="grid w-led-dial justify-items-center gap-led-dial-gap led-stacked:w-led-disc-stacked"
       aria-label="Bedtime Mode"
-      data-enabled={saved.enabled}
     >
-      <div className="bedtime-face">
+      <div className="relative aspect-square w-full">
         <svg
           viewBox={`0 0 ${size} ${size}`}
-          className="bedtime-ring"
-          data-dragging={dragging !== null}
+          className="size-full touch-none overflow-visible"
           onPointerMove={(event) => {
             if (dragging !== null) point(event, dragging)
           }}
@@ -158,15 +156,23 @@ export function BedtimeDial({
             commit()
           }}
         >
-          <circle className="bedtime-track" cx={centre} cy={centre} r={ring} />
+          <circle
+            className="stroke-wash-strong"
+            fill="none"
+            strokeWidth={18}
+            cx={centre}
+            cy={centre}
+            r={ring}
+          />
           {hours.map((hour) => {
             const mark = polar(centre, ring - 22, clockAngle(hour * 60))
 
             return (
               <circle
                 key={hour}
-                className="bedtime-hour"
-                data-quarter={hour % 6 === 0}
+                className={
+                  hour % 6 === 0 ? "fill-muted-ink" : "fill-line-strong"
+                }
                 cx={mark.x}
                 cy={mark.y}
                 r={hour % 6 === 0 ? 2.2 : 1.2}
@@ -174,12 +180,15 @@ export function BedtimeDial({
             )
           })}
           <path
-            className="bedtime-window"
+            className={`transition-colors duration-mid ease-app ${saved.enabled ? "stroke-bedtime-red" : "stroke-line-strong"}`}
+            fill="none"
+            strokeWidth={18}
+            strokeLinecap="round"
             d={clockArc(centre, ring, start, end)}
           />
           {at === null ? null : (
             <circle
-              className="bedtime-now"
+              className="fill-sun"
               {...(({ x, y }) => ({ cx: x, cy: y }))(
                 polar(centre, ring - 22, clockAngle(at))
               )}
@@ -195,7 +204,7 @@ export function BedtimeDial({
             return (
               <g
                 key={which}
-                className="bedtime-handle"
+                className="group/handle cursor-grab outline-none aria-disabled:cursor-default"
                 role="slider"
                 tabIndex={editable ? 0 : -1}
                 aria-label={which === "start" ? "Start" : "End"}
@@ -224,8 +233,12 @@ export function BedtimeDial({
                   )
                 }}
               >
-                <circle className="bedtime-hit" r={24} />
-                <circle className="bedtime-knob" r={15} />
+                <circle className="fill-transparent" r={24} />
+                <circle
+                  className={`fill-ground transition-r duration-fast ease-app group-focus-visible/handle:stroke-ink group-focus-visible/handle:stroke-4 group-data-[held=true]/handle:r-held ${saved.enabled ? "stroke-bedtime-red" : "stroke-line-strong"}`}
+                  strokeWidth={3}
+                  r={15}
+                />
                 <Glyph
                   x={-9}
                   y={-9}
@@ -237,7 +250,7 @@ export function BedtimeDial({
             )
           })}
         </svg>
-        <div className="bedtime-centre">
+        <div className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-2 *:pointer-events-auto **:data-[slot=button]:data-[on=true]:bg-bedtime-red **:data-[slot=button]:data-[on=true]:bg-clip-border **:data-[slot=button]:data-[on=true]:text-white">
           <Button
             size="key-round"
             variant="outline"
@@ -255,16 +268,16 @@ export function BedtimeDial({
               aria-hidden="true"
             />
           </Button>
-          <p className="bedtime-span num">
+          <p className="text-base font-medium num text-muted-ink">
             {shown.start}–{shown.end}
           </p>
         </div>
       </div>
-      <div className="bedtime-red">
+      <div className="h-11 w-41/50">
         <LightFader
           label="Red brightness"
           orientation="horizontal"
-          tone="var(--bedtime-red)"
+          tone="bg-bedtime-red"
           value={shown.brightness}
           disabled={!editable}
           onChange={(brightness) => change({ ...shown, brightness }, true)}

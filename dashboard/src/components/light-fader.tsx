@@ -6,7 +6,7 @@ type FaderProps = {
   /** 0 to 100. */
   value: number
   orientation: "vertical" | "horizontal"
-  /** The light the fill is painted in. */
+  /** The background class of the light the fill is painted in. */
   tone: string
   disabled?: boolean
   /** The controller's readable level, drawn as a quiet notch; null when nothing was read. */
@@ -14,6 +14,22 @@ type FaderProps = {
   onChange: (value: number) => void
   /** The hand lifted: a good moment to send. */
   onRelease?: () => void
+}
+
+// A vertical dimmer is a tall capsule on the wall; a horizontal one a slim pill on paper.
+const looks = {
+  vertical: {
+    track: "rounded-sheet bg-led-wash-strong",
+    figure:
+      "inset-x-0 top-3 translate-y-2 text-led-figure group-focus-visible/fader:translate-y-0 group-data-[held=true]/fader:translate-y-0",
+    glyph: "bottom-4 left-1/2 -translate-x-1/2",
+  },
+  horizontal: {
+    track: "rounded-full bg-wash-strong",
+    figure:
+      "top-1/2 right-4 translate-x-2 -translate-y-1/2 text-body-lg group-focus-visible/fader:translate-x-0 group-data-[held=true]/fader:translate-x-0",
+    glyph: "top-1/2 left-3.5 -translate-y-1/2",
+  },
 }
 
 const keySteps = new Map([
@@ -58,9 +74,16 @@ export function LightFader({
     if (next !== value) onChange(next)
   }
 
+  const glyphTone =
+    orientation === "vertical"
+      ? "text-led-glyph"
+      : value === 0
+        ? "text-muted-ink"
+        : "text-white"
+
   return (
     <div
-      className="fader"
+      className={`group/fader relative size-full cursor-grab touch-none overflow-hidden transition-transform duration-fast ease-app aria-disabled:cursor-default aria-disabled:opacity-40 data-[held=true]:scale-103 data-[held=true]:cursor-grabbing ${looks[orientation].track}`}
       role="slider"
       tabIndex={disabled ? -1 : 0}
       aria-label={label}
@@ -70,15 +93,7 @@ export function LightFader({
       aria-valuenow={value}
       aria-valuetext={`${value}%`}
       aria-disabled={disabled}
-      data-orientation={orientation}
       data-held={held}
-      // SAFETY: CSSProperties omits custom properties; --fill is 0..1, --tone a CSS colour.
-      style={
-        {
-          "--fill": value / 100,
-          "--tone": tone,
-        } as React.CSSProperties
-      }
       onPointerDown={(event) => {
         if (disabled) return
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -108,20 +123,38 @@ export function LightFader({
         if (next !== value) onChange(next)
       }}
     >
-      <span className="fader-fill" aria-hidden="true" />
+      <span
+        className={`absolute inset-0 transition-transform duration-fast ease-app group-data-[held=true]/fader:transition-none ${tone} ${
+          orientation === "vertical"
+            ? "translate-y-(--shift)"
+            : "translate-x-(--shift)"
+        }`}
+        aria-hidden="true"
+        // SAFETY: CSSProperties omits custom properties; --shift is the unfilled share of the track.
+        style={
+          {
+            "--shift": `${
+              orientation === "vertical" ? 100 - value : value - 100
+            }%`,
+          } as React.CSSProperties
+        }
+      />
       {readback === null || readback === undefined ? null : (
         <span
-          className="fader-readback"
+          className="absolute inset-x-11/50 bottom-(--at) -mb-led-notch-half h-0.75 rounded-full bg-led-ink shadow-led-notch transition-bottom duration-mid ease-app"
           aria-hidden="true"
-          // SAFETY: CSSProperties omits custom properties; --at is the 0..1 read level.
-          style={{ "--at": readback / 100 } as React.CSSProperties}
+          // SAFETY: CSSProperties omits custom properties; --at is the read level as a share of the track.
+          style={{ "--at": `${readback}%` } as React.CSSProperties}
         />
       )}
-      <span className="fader-figure num" aria-hidden="true">
+      <span
+        className={`absolute text-center font-semibold num text-white opacity-0 mix-blend-difference transition-reveal duration-fast ease-app group-focus-visible/fader:opacity-100 group-data-[held=true]/fader:opacity-100 ${looks[orientation].figure}`}
+        aria-hidden="true"
+      >
         {value}
       </span>
       <SunDimIcon
-        className="fader-glyph"
+        className={`absolute ${glyphTone} ${looks[orientation].glyph}`}
         size={22}
         weight="bold"
         aria-hidden="true"

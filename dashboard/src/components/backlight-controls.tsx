@@ -25,6 +25,14 @@ import {
 } from "@/components/backlight-delivery"
 import { BacklightReadout } from "@/components/backlight-readout"
 import { BacklightSetup } from "@/components/backlight-setup"
+import { BacklightDock, type DockKey } from "@/components/backlight-dock"
+import { lightFor, signal } from "@/components/backlight-look"
+
+// The halo behind the TV is the light itself, thrown wide: a full-size light layer under a radial mask.
+const halo =
+  "pointer-events-none absolute -z-1 halo-mask transition-fade-scale duration-mid ease-app group-data-[mode=off]/stage:scale-70 group-data-[mode=off]/stage:opacity-0 group-data-[mode=off]/stage:duration-slow"
+
+const beam = "absolute -inset-1/2 transition-colors duration-mid ease-app"
 
 type Props = {
   data: BacklightRead
@@ -252,14 +260,7 @@ export function BacklightControls({
       ? "Offline"
       : (alert ?? (status.command === "failed" ? "Retrying" : null))
 
-  const keys: {
-    id: string
-    label: string
-    detail?: string
-    selected: boolean
-    disabled: boolean
-    selection: BacklightSelection
-  }[] = [
+  const keys: DockKey[] = [
     {
       id: "off",
       label: "Off",
@@ -298,14 +299,17 @@ export function BacklightControls({
   const override =
     status?.control_source === "manual" ? status.override_expires_at : undefined
 
+  const light = lightFor(mode, effect)
+
   return (
-    <div className="led" aria-busy={pending}>
+    <div
+      className="grid h-led-screen grid-cols-led gap-led led-stacked:h-auto led-stacked:grid-cols-1 led-stacked:grid-rows-pair"
+      aria-busy={pending}
+    >
       <section
-        className="led-stage"
+        className="group/stage @container-size relative isolate min-h-0 min-w-0 overflow-hidden rounded-4xl bg-led-wall text-led-ink led-stacked:h-led-stage led-phone:h-120 led-phone:rounded-sheet"
         aria-label="LED controls"
         data-mode={mode}
-        data-effect={effect}
-        data-ready={ready}
         // SAFETY: CSSProperties omits custom properties; --led is a CSS colour, --level 0..1.
         style={
           {
@@ -314,10 +318,9 @@ export function BacklightControls({
           } as React.CSSProperties
         }
       >
-        <div className="led-marks">
+        <div className="absolute top-flow left-flow z-3 ml-3 flex min-h-12 items-center gap-3">
           <span
-            className="led-signal"
-            data-reach={status?.reachability ?? "unreachable"}
+            className={`size-2.5 rounded-full ${signal[status?.reachability ?? "unreachable"]}`}
             title={
               status === undefined
                 ? "Unavailable"
@@ -327,20 +330,25 @@ export function BacklightControls({
           />
           {status?.stale === true ? (
             <ClockCounterClockwiseIcon
-              className="led-stale"
+              className="text-led-muted"
               size={18}
               weight="bold"
               aria-hidden="true"
             />
           ) : null}
-          {tag === null ? null : <ControlAlert tag={tag} />}
+          {tag === null ? null : (
+            <ControlAlert tag={tag} className="text-led-danger" />
+          )}
         </div>
 
-        <div className="led-tools">
+        <div className="absolute top-flow right-flow z-3 flex min-h-12 items-center gap-1 **:data-[slot=button]:text-led-muted **:data-[slot=button]:hover:bg-led-wash-strong **:data-[slot=button]:hover:bg-clip-border **:data-[slot=button]:hover:text-led-ink">
           {override === undefined ? null : (
             <>
               {override === null ? null : (
-                <span className="led-until num" aria-hidden="true">
+                <span
+                  className="mr-1 text-body-lg font-medium num text-led-muted"
+                  aria-hidden="true"
+                >
                   {copenhagenClockTime(new Date(override))}
                 </span>
               )}
@@ -373,20 +381,26 @@ export function BacklightControls({
           </Button>
         </div>
 
-        <div className="led-tv">
-          <div className="led-halo led-spill" aria-hidden="true">
-            <span className="led-light" />
+        <div className="absolute top-11/25 left-47/100 aspect-video w-led-tv -translate-1/2 led-phone:top-9/25 led-phone:left-21/50 led-phone:w-led-tv-phone">
+          <div
+            className={`${halo} -inset-x-19/20 -inset-y-3/2 spill-glow`}
+            aria-hidden="true"
+          >
+            <span className={`${beam} ${light.fill} ${light.motion}`} />
           </div>
           <div
             key={`${mode}-${effect ?? ""}`}
-            className="led-halo"
+            className={`${halo} -inset-x-9/25 -inset-y-31/50 halo-glow motion-safe:animate-led-bloom`}
             aria-hidden="true"
           >
-            <span className="led-light" />
+            <span className={`${beam} ${light.fill} ${light.motion}`} />
           </div>
-          <div className="led-screen">
+          <div className="absolute inset-0 grid place-items-center overflow-hidden rounded-sm border border-led-edge bg-black transition-colors duration-mid ease-app group-data-[mode=color]/stage:screen-glow">
             {mode === "tv-sync" && ready ? (
-              <span className="led-picture" aria-hidden="true" />
+              <span
+                className="absolute inset-0 bg-led-picture before:absolute before:top-led-horizon before:left-1/2 before:aspect-square before:w-17/100 before:-translate-1/2 before:rounded-full before:bg-sun before:half-sun after:absolute after:inset-x-0 after:top-led-horizon after:h-px after:bg-led-horizon motion-safe:before:animate-led-set"
+                aria-hidden="true"
+              />
             ) : null}
             {status?.setup === "incomplete" ? (
               <BacklightSetup pending={pending} perform={perform} />
@@ -394,11 +408,11 @@ export function BacklightControls({
           </div>
         </div>
 
-        <div className="led-level">
+        <div className="absolute top-11/25 right-flow z-2 mr-2 h-led-level w-18 -translate-y-1/2 led-phone:top-9/25 led-phone:h-led-level-phone led-phone:w-14">
           <LightFader
             label="Brightness"
             orientation="vertical"
-            tone="var(--light, var(--led))"
+            tone={light.fill}
             value={brightness}
             disabled={!ready || mode === "off" || selection === undefined}
             readback={
@@ -413,37 +427,18 @@ export function BacklightControls({
           />
         </div>
 
-        <div className="led-dock" role="group" aria-label="Backlight selection">
-          {keys.map((key) => (
-            <Button
-              key={key.id}
-              variant="ghost"
-              data-key={key.id}
-              disabled={key.disabled}
-              aria-pressed={key.selected}
-              data-outcome={key.selected ? outcome : undefined}
-              title={key.label}
-              // SAFETY: CSSProperties omits custom properties; --swatch is a CSS colour.
-              style={
-                key.id === "color"
-                  ? ({ "--swatch": rgbCss(rgb) } as React.CSSProperties)
-                  : undefined
-              }
-              onClick={() =>
-                perform({ action: "select", selection: key.selection })
-              }
-            >
-              <span className="led-swatch" aria-hidden="true" />
-              <span className="sr-only">{key.label}</span>
-              {key.detail === undefined ? null : (
-                <span className="sr-only">{key.detail}</span>
-              )}
-            </Button>
-          ))}
-        </div>
+        <BacklightDock
+          keys={keys}
+          rgb={rgb}
+          outcome={outcome}
+          perform={perform}
+        />
       </section>
 
-      <aside className="led-side" aria-label="Color and Bedtime Mode">
+      <aside
+        className="grid min-h-0 grid-rows-led-side items-center justify-items-center gap-led-side led-stacked:grid-cols-2 led-stacked:grid-rows-none led-phone:grid-cols-1 led-phone:gap-10 led-phone:pt-4 led-phone:pb-8"
+        aria-label="Color and Bedtime Mode"
+      >
         <HueWheel
           rgb={rgb}
           active={mode === "color"}

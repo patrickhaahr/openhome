@@ -4,11 +4,9 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/familjen-grotesk";
 @import "./idle.css";
-@import "./backlight.css";
 @import "./components/idle-milestone.css";
 @import "./home.css";
 @import "./travel.css";
-@import "./controls.css";
 @import "./photos.css";
 @import "./gap-dash.utilities.css";
 @import "./shell.utilities.css";
@@ -21,6 +19,8 @@
 @import "./binder.theme.css";
 @import "./food.theme.css";
 @import "./food.utilities.css";
+@import "./controls.theme.css";
+@import "./backlight.utilities.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {
