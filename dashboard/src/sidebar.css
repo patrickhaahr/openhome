@@ -1,4 +1,5 @@
 @import "./binder.css";
+@import "./scrollbars.css";
 
 /* ---------- The sidebar of tabs: the other navigation layout (double-tap the logo) ---------- */
 
@@ -73,10 +74,6 @@
   width: 100%;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none;
-}
-.rail-nav::-webkit-scrollbar {
-  display: none;
 }
 .rail-nav ul {
   display: flex;

@@ -32,6 +32,40 @@ export function button(
   return match
 }
 
+/** The currency the Currency key within `scope` shows. */
+export function currencyShown(scope: ParentNode = document): string {
+  const trigger = scope.querySelector('[aria-label="Currency"]')
+
+  if (trigger === null) throw new Error("Missing Currency key")
+
+  return nameOf(trigger.querySelector('[data-slot="select-value"]') ?? trigger)
+}
+
+/** Opens the Currency key and picks `currency` from its list, which renders in a portal. */
+export async function chooseCurrency(
+  currency: string,
+  scope: ParentNode = document
+): Promise<void> {
+  const trigger = scope.querySelector('[aria-label="Currency"]')
+
+  if (!(trigger instanceof HTMLElement)) throw new Error("Missing Currency key")
+
+  await act(async () => {
+    trigger.click()
+  })
+
+  const option = Array.from(document.querySelectorAll('[role="option"]')).find(
+    (element) => nameOf(element) === currency
+  )
+
+  if (!(option instanceof HTMLElement))
+    throw new Error(`Missing currency option: ${currency}`)
+
+  await act(async () => {
+    option.click()
+  })
+}
+
 /** The open detail plate; sheets render in a portal beside the page. */
 export function sheet(): HTMLElement {
   const element = document.querySelector<HTMLElement>(".sheet")

@@ -18,6 +18,8 @@ import {
   outcomeOf,
   restAfter,
   settleDuration,
+  swipeDistance,
+  swipeStep,
   tapSlop,
   type Turn,
   type TurnEvent,
@@ -261,13 +263,25 @@ describe("dragging a page", () => {
     expect(shownPages()).toEqual(["Page 1", "Page 2"])
   })
 
-  test("never starts before the first spread or away from the edges", async () => {
+  test("from anywhere, right to left turns forward and left to right turns back", async () => {
     await render()
 
-    await slide(spread(), 20, 900)
-    await holdAndLift(spread(), 900)
-    await slide(spread(), 500, 0)
-    await holdAndLift(spread(), 0)
+    await slide(spread(), 600, 50)
+    await holdAndLift(spread(), 50)
+    await landed()
+    expect(folio()).toBe("Pages 3–4 of 4")
+
+    await slide(spread(), 400, 950)
+    await holdAndLift(spread(), 950)
+    await landed()
+    expect(folio()).toBe("Pages 1–2 of 4")
+  })
+
+  test("never turns before the first spread", async () => {
+    await render()
+
+    await slide(spread(), 500, 1000)
+    await holdAndLift(spread(), 1000)
     await landed()
     expect(folio()).toBe("Pages 1–2 of 4")
     expect(shownPages()).toEqual(["Page 1", "Page 2"])
@@ -402,6 +416,35 @@ describe("taps and drags on pockets", () => {
   })
 })
 
+describe("swiping the card stage", () => {
+  test("right to left steps to the next card, turning the spread behind it, and left to right steps back", async () => {
+    await render()
+    await lift(pocket(18), 500)
+
+    const swipe = async (from: number, to: number): Promise<void> => {
+      const detail = sheet().querySelector(".binder-detail")
+
+      if (detail === null) throw new Error("Expected the card stage")
+      await pointer(detail, "pointerdown", from)
+      await pointer(detail, "pointerup", to)
+      await settle()
+    }
+
+    const title = (): string =>
+      sheet().querySelector(".sheet-title")?.textContent ?? ""
+
+    await swipe(700, 300)
+    expect(title()).toBe("Invented Card 19")
+    expect(search).toEqual({ person: alex.id, page: 2 })
+
+    await swipe(300, 700)
+    expect(title()).toBe("Invented Card 18")
+
+    await swipe(500, 470)
+    expect(title()).toBe("Invented Card 18")
+  })
+})
+
 describe("controls", () => {
   test("the arrows and the arrow keys turn the page", async () => {
     await render()
@@ -479,20 +522,41 @@ describe("the turn decision", () => {
     expect(outcomeOf(0.9, -0.49)).toBe("complete")
   })
 
-  test("only the outer pocket column grips, and only toward a spread that exists", () => {
+  test("a tap grips only the outer pocket column, a drag either way toward a spread that exists", () => {
     const both = { back: true, forward: true }
 
-    expect(grip(box, 834, both)).toEqual({ direction: "forward", reach: 834 })
-    expect(grip(box, 832, both)).toBeUndefined()
-    expect(grip(box, 166, both)).toEqual({ direction: "back", reach: 834 })
-    expect(grip(box, 168, both)).toBeUndefined()
-    expect(grip(box, 990, { back: true, forward: false })).toBeUndefined()
-    expect(grip(box, 10, { back: false, forward: true })).toBeUndefined()
+    expect(grip(box, 834, both)).toEqual({
+      edge: "forward",
+      reach: { forward: 834, back: 500 },
+    })
+    expect(grip(box, 832, both).edge).toBeUndefined()
+    expect(grip(box, 166, both)).toEqual({
+      edge: "back",
+      reach: { forward: 500, back: 834 },
+    })
+    expect(grip(box, 168, both).edge).toBeUndefined()
+    expect(grip(box, 990, { back: true, forward: false })).toEqual({
+      edge: undefined,
+      reach: { forward: undefined, back: 500 },
+    })
+    expect(grip(box, 10, { back: false, forward: true })).toEqual({
+      edge: undefined,
+      reach: { forward: 500, back: undefined },
+    })
+  })
+
+  test("a swipe steps by its sideways travel, never by a short or upright one", () => {
+    expect(swipeStep(-swipeDistance, 0)).toBe(1)
+    expect(swipeStep(swipeDistance, 10)).toBe(-1)
+    expect(swipeStep(swipeDistance - 1, 0)).toBe(0)
+    expect(swipeStep(-80, 80)).toBe(0)
   })
 })
 
 describe("the turn lifecycle", () => {
   const run = (...events: TurnEvent[]): Turn => events.reduce(nextTurn, idle)
+
+  const grips = { edge: "forward", reach: { forward: 900, back: 500 } } as const
 
   const press: TurnEvent = {
     type: "press",
@@ -501,7 +565,7 @@ describe("the turn lifecycle", () => {
     y: 300,
     time: 0,
     pocket: false,
-    grip: { direction: "forward", reach: 900 },
+    grip: grips,
   }
 
   const release = (x: number, time: number): TurnEvent => ({
@@ -511,11 +575,11 @@ describe("the turn lifecycle", () => {
     time,
   })
 
-  const move = (x: number, time: number, pointer = 1): TurnEvent => ({
+  const move = (x: number, time: number, pointer = 1, y = 300): TurnEvent => ({
     type: "move",
     pointer,
     x,
-    y: 300,
+    y,
     time,
   })
 
@@ -529,11 +593,23 @@ describe("the turn lifecycle", () => {
       outcome: "complete",
     })
     expect(run({ ...press, pocket: true }, release(900, 20))).toBe(idle)
-    expect(run({ ...press, grip: undefined }, release(900, 20))).toBe(idle)
+    expect(
+      run({ ...press, grip: { ...grips, edge: undefined } }, release(900, 20))
+    ).toBe(idle)
   })
 
-  test("moving past the slop away from a grip is refused until release", () => {
-    const refused = run({ ...press, grip: undefined }, move(900 - tapSlop, 10))
+  test("moving upright, or toward a spread that does not exist, is refused until release", () => {
+    const upright = run(press, move(905, 10, 1, 300 + tapSlop))
+
+    expect(upright).toEqual({ phase: "refused", pointer: 1 })
+
+    const refused = run(
+      {
+        ...press,
+        grip: { edge: undefined, reach: { forward: undefined, back: 500 } },
+      },
+      move(900 - tapSlop, 10)
+    )
 
     expect(refused).toEqual({ phase: "refused", pointer: 1 })
     expect(nextTurn(refused, { type: "flip", direction: "forward" })).toBe(

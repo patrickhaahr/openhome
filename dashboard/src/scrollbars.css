@@ -1,0 +1,8 @@
+/* A dashboard on a wall screen and an iPad: scrolling stays, the bars never show, so no layout
+   narrows when one would appear. */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}

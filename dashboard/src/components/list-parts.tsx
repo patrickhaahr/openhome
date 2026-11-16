@@ -90,12 +90,18 @@ export function ListSheet({
   close,
   title,
   titleHidden = false,
+  className,
+  actions,
+  onKeyDown,
   children,
 }: {
   open: boolean
   close: () => void
   title: string
   titleHidden?: boolean
+  className?: string
+  actions?: React.ReactNode
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   children: React.ReactNode
 }): React.JSX.Element {
   // An open sheet holds a detail, an edit or an add flow: never hide it behind the slideshow.
@@ -110,11 +116,15 @@ export function ListSheet({
     >
       <Dialog.Portal>
         <Dialog.Backdrop className="sheet-scrim" />
-        <Dialog.Popup className="sheet">
+        <Dialog.Popup
+          className={className === undefined ? "sheet" : `sheet ${className}`}
+          onKeyDown={onKeyDown}
+        >
           <div className="sheet-head">
             <Dialog.Title className={titleHidden ? "sr-only" : "sheet-title"}>
               {title}
             </Dialog.Title>
+            {actions}
             <Dialog.Close render={<Button variant="outline" size="key-icon" />}>
               <XIcon size={20} aria-hidden="true" />
               <span className="sr-only">Close</span>

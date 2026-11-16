@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { CardValueLine } from "@/components/binder-value"
 import { PriceHistory } from "@/components/price-history"
@@ -9,6 +9,7 @@ import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
 import type { PricesState } from "@/lib/card-prices"
 import { maxQuantity, type BinderCommand } from "@/lib/binder-edit"
+import { swipeStep } from "@/lib/binder-turn"
 import { formatDay } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
 
@@ -44,8 +45,9 @@ function factsOf(card: BinderEntry["card"]): [string, string][] {
 
 /**
  * One Binder Entry's card sheet: the large image and every detail the Binder read carries, then
- * the entry's own quantity, language and note. Removal asks first, and only a saved removal
- * closes the sheet, so a failure leaves it open beside its error.
+ * the entry's own quantity, language and note. A sideways swipe steps to the neighbouring card.
+ * Removal asks first, and only a saved removal closes the sheet, so a failure leaves it open
+ * beside its error.
  */
 export function BinderSheet({
   entry,
@@ -53,6 +55,7 @@ export function BinderSheet({
   busy,
   save,
   prices,
+  step,
   done,
 }: {
   entry: BinderEntry
@@ -60,17 +63,53 @@ export function BinderSheet({
   busy: boolean
   save: Save
   prices: (card: string) => Promise<PricesState>
+  step: (offset: -1 | 1) => void
   done: () => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
+  const press = useRef<{ pointer: number; x: number; y: number }>(undefined)
   const alive = useSheetLifetime()
   const { card } = entry
 
   return (
-    <div className="sheet-body">
-      <div className="binder-sheet-head">
+    <div
+      className="binder-detail"
+      onPointerDown={(event) => {
+        press.current =
+          event.isPrimary &&
+          event.button === 0 &&
+          !(
+            event.target instanceof Element &&
+            event.target.closest("input, textarea, select") !== null
+          )
+            ? { pointer: event.pointerId, x: event.clientX, y: event.clientY }
+            : undefined
+      }}
+      onPointerUp={(event) => {
+        const start = press.current
+        press.current = undefined
+
+        // A mouse drag across the details selects text; that is reading, not a swipe.
+        if (
+          start?.pointer !== event.pointerId ||
+          window.getSelection()?.isCollapsed === false
+        )
+          return
+
+        const offset = swipeStep(
+          event.clientX - start.x,
+          event.clientY - start.y
+        )
+
+        if (offset !== 0) step(offset)
+      }}
+      onPointerCancel={() => {
+        press.current = undefined
+      }}
+    >
+      <div className="binder-detail-art">
         <img
-          className="binder-sheet-image"
+          draggable={false}
           src={cardImageUrl(card.id)}
           alt={`${card.name}, ${card.card_code}`}
           width={600}
@@ -82,20 +121,24 @@ export function BinderSheet({
             event.currentTarget.hidden = false
           }}
         />
-        <div className="binder-sheet-text">
-          <p className="sheet-owner">
-            <PersonDisc name={owner.name} />
-            {owner.name}
-          </p>
-          <p className="media-result-meta">
-            <span className="num">{card.card_code}</span>
-            <span>
-              Added{" "}
-              <time dateTime={entry.date_added}>
-                {formatDay(entry.date_added)}
-              </time>
-            </span>
-          </p>
+      </div>
+      <div className="binder-detail-info">
+        <div className="binder-detail-about">
+          <div className="binder-detail-lead">
+            <p className="sheet-owner">
+              <PersonDisc name={owner.name} />
+              {owner.name}
+            </p>
+            <p className="media-result-meta">
+              <span className="num">{card.card_code}</span>
+              <span>
+                Added{" "}
+                <time dateTime={entry.date_added}>
+                  {formatDay(entry.date_added)}
+                </time>
+              </span>
+            </p>
+          </div>
           <CardValueLine card={card} />
           <dl className="binder-facts">
             {factsOf(card).map(([label, value]) => (
@@ -106,70 +149,76 @@ export function BinderSheet({
             ))}
           </dl>
           {card.text === null ? null : (
-            <p className="sheet-notes">{card.text}</p>
+            <p className="binder-effect">{card.text}</p>
+          )}
+        </div>
+        <div className="binder-detail-own">
+          {entry.language === "en" ? (
+            <PriceHistory card={card.id} load={prices} />
+          ) : null}
+          <EntryFields
+            key={`${entry.quantity}-${entry.language}-${entry.note ?? ""}`}
+            entry={entry}
+            owner={owner}
+            busy={busy}
+            save={save}
+          />
+          {removing ? (
+            <div
+              className="sheet-confirm"
+              role="group"
+              aria-label="Remove card"
+            >
+              <p>
+                Remove “{card.name}” ({entry.language === "ja" ? "JP" : "EN"})
+                from {owner.name}’s Binder? This cannot be undone.
+              </p>
+              <div className="sheet-actions">
+                <Button
+                  variant="destructive"
+                  size="key"
+                  disabled={busy}
+                  onClick={() => {
+                    void save(
+                      {
+                        action: "remove",
+                        owner_id: owner.id,
+                        entry_id: entry.id,
+                      },
+                      `${card.name} removed.`
+                    ).then((saved) => {
+                      if (saved && alive()) done()
+                    })
+                  }}
+                >
+                  <TrashIcon size={18} aria-hidden="true" />
+                  Remove for good
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="key"
+                  disabled={busy}
+                  onClick={() => setRemoving(false)}
+                >
+                  Keep it
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="sheet-actions sheet-actions-end">
+              <Button
+                variant="destructive"
+                size="key"
+                disabled={busy}
+                onClick={() => setRemoving(true)}
+              >
+                <TrashIcon size={18} aria-hidden="true" />
+                Remove
+              </Button>
+            </div>
           )}
         </div>
       </div>
-      {entry.language === "en" ? (
-        <PriceHistory card={card.id} load={prices} />
-      ) : null}
-      <EntryFields
-        key={`${entry.quantity}-${entry.language}-${entry.note ?? ""}`}
-        entry={entry}
-        owner={owner}
-        busy={busy}
-        save={save}
-      />
-      {removing ? (
-        <div className="sheet-confirm" role="group" aria-label="Remove card">
-          <p>
-            Remove “{card.name}” ({entry.language === "ja" ? "JP" : "EN"}) from{" "}
-            {owner.name}’s Binder? This cannot be undone.
-          </p>
-          <div className="sheet-actions">
-            <Button
-              variant="destructive"
-              size="key"
-              disabled={busy}
-              onClick={() => {
-                void save(
-                  {
-                    action: "remove",
-                    owner_id: owner.id,
-                    entry_id: entry.id,
-                  },
-                  `${card.name} removed.`
-                ).then((saved) => {
-                  if (saved && alive()) done()
-                })
-              }}
-            >
-              <TrashIcon size={18} aria-hidden="true" />
-              Remove for good
-            </Button>
-            <Button
-              variant="ghost"
-              size="key"
-              disabled={busy}
-              onClick={() => setRemoving(false)}
-            >
-              Keep it
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="sheet-actions sheet-actions-end">
-          <Button
-            variant="destructive"
-            size="key"
-            disabled={busy}
-            onClick={() => setRemoving(true)}
-          >
-            <TrashIcon size={18} aria-hidden="true" />
-            Remove
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

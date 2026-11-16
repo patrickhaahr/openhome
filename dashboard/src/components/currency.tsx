@@ -1,5 +1,11 @@
 import { createContext, use, useCallback, useMemo, useState } from "react"
-import { Segments } from "@/components/list-parts"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { currencies, currencyCookie, type Currency } from "@/lib/currency"
 
 type CurrencyState = {
@@ -39,17 +45,29 @@ export function useCurrency(): CurrencyState {
   return state
 }
 
-const options = currencies.map((value) => ({ value, label: value }))
-
+/** One key showing the chosen currency; it opens a short list of the others. */
 export function CurrencySwitch(): React.JSX.Element {
   const { currency, choose } = useCurrency()
 
   return (
-    <Segments
-      label="Currency"
+    <Select
       value={currency}
-      options={options}
-      choose={choose}
-    />
+      onValueChange={(value) => {
+        const next = currencies.find((option) => option === value)
+
+        if (next !== undefined) choose(next)
+      }}
+    >
+      <SelectTrigger aria-label="Currency">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {currencies.map((value) => (
+          <SelectItem key={value} value={value}>
+            {value}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

@@ -21,6 +21,7 @@ import {
   cardImageUrl,
   paginate,
   pocketsPerPage,
+  pocketsPerSpread,
   viewOf,
   type BinderEntry,
   type BinderSearch,
@@ -51,8 +52,9 @@ import type { BinderAddReceipt, BinderAddition } from "@/lib/binder-add"
 /**
  * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
  * The person keys choose whose Binder; dragging or tapping a page's edge, the arrows and the arrow
- * keys turn the spread, and a pocket opens its card sheet. A read that failed offers a way to check again and never shows
- * an empty Binder.
+ * keys turn the spread, and a pocket opens its card sheet, whose arrows step to the neighbouring
+ * cards and turn the spread with them. A read that failed offers a way to check again and never
+ * shows an empty Binder.
  */
 export function BinderBook({
   data,
@@ -92,6 +94,22 @@ export function BinderBook({
     data.state === "available" && selected !== undefined
       ? data.owners.find((candidate) => candidate.id === selected.owner_id)
       : undefined
+
+  const order = view.view === "spread" ? view.entries : []
+  const at = selected === undefined ? -1 : order.indexOf(selected)
+
+  const stepCard = (offset: -1 | 1): void => {
+    const to = at + offset
+    const next = order[to]
+
+    if (view.view !== "spread" || at === -1 || next === undefined) return
+    setOpen(next.id)
+
+    const spread = Math.floor(to / pocketsPerSpread)
+
+    if (spread !== view.index)
+      choose({ person: view.owner.id, page: spread + 1 })
+  }
 
   return (
     <div className="lists binder" aria-busy={busy}>
@@ -133,6 +151,51 @@ export function BinderBook({
         open={selected !== undefined}
         close={() => setOpen(undefined)}
         title={selected?.card.name ?? "Card"}
+        className="binder-stage"
+        actions={
+          at === -1 ? null : (
+            <nav className="binder-stage-turn" aria-label="Cards">
+              <Button
+                variant="outline"
+                size="key-icon"
+                disabled={at === 0}
+                onClick={() => stepCard(-1)}
+              >
+                <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
+                <span className="sr-only">Previous card</span>
+              </Button>
+              <p className="binder-folio num" aria-live="polite">
+                {at + 1} of {order.length}
+              </p>
+              <Button
+                variant="outline"
+                size="key-icon"
+                disabled={at === order.length - 1}
+                onClick={() => stepCard(1)}
+              >
+                <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
+                <span className="sr-only">Next card</span>
+              </Button>
+            </nav>
+          )
+        }
+        onKeyDown={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            isEditing(event.target)
+          )
+            return
+
+          const offset =
+            event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
+
+          if (offset === 0) return
+          event.preventDefault()
+          stepCard(offset)
+        }}
       >
         {selected !== undefined && owner !== undefined ? (
           <>
@@ -143,6 +206,7 @@ export function BinderBook({
               busy={busy}
               save={save}
               prices={prices}
+              step={stepCard}
               done={() => setOpen(undefined)}
             />
             <FeedbackLine feedback={feedback} busy={busy} />
@@ -355,6 +419,15 @@ function Spread({
 
   return (
     <section className="binder-book" aria-label="Binder spread">
+      <Button
+        variant="outline"
+        size="key-icon"
+        disabled={!can.back}
+        onClick={() => flip("back")}
+      >
+        <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
+        <span className="sr-only">Previous pages</span>
+      </Button>
       <div
         ref={spread}
         className="binder-spread"
@@ -445,29 +518,18 @@ function Spread({
           )
         })}
       </div>
-      <div className="binder-turn">
-        <Button
-          variant="outline"
-          size="key-icon"
-          disabled={!can.back}
-          onClick={() => flip("back")}
-        >
-          <CaretLeftIcon size={20} weight="bold" aria-hidden="true" />
-          <span className="sr-only">Previous pages</span>
-        </Button>
-        <p className="binder-folio num" aria-live="polite">
-          Pages {first}–{first + 1} of {count * 2}
-        </p>
-        <Button
-          variant="outline"
-          size="key-icon"
-          disabled={!can.forward}
-          onClick={() => flip("forward")}
-        >
-          <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
-          <span className="sr-only">Next pages</span>
-        </Button>
-      </div>
+      <Button
+        variant="outline"
+        size="key-icon"
+        disabled={!can.forward}
+        onClick={() => flip("forward")}
+      >
+        <CaretRightIcon size={20} weight="bold" aria-hidden="true" />
+        <span className="sr-only">Next pages</span>
+      </Button>
+      <p className="binder-folio num" aria-live="polite">
+        Pages {first}–{first + 1} of {count * 2}
+      </p>
     </section>
   )
 }

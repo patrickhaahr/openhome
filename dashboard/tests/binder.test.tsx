@@ -36,7 +36,15 @@ import {
 import { readWatchlists } from "@/lib/watchlist.server"
 import { writeWishlist } from "@/lib/wishlist.server"
 import { startAxumFixture } from "./support/axum-fixture"
-import { button, field, nameOf, settle, sheet, type } from "./support/lists-dom"
+import {
+  button,
+  currencyShown,
+  field,
+  nameOf,
+  settle,
+  sheet,
+  type,
+} from "./support/lists-dom"
 
 // The fixture's OPTCG stand-in knows the invented OP99 cards only.
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
@@ -338,7 +346,7 @@ test("says a Binder is empty rather than showing blank pages", async () => {
   expect(container.textContent).not.toContain("Pages 1")
   expect(container.textContent).toContain("Binder ValueDKK\u00a00.00")
   expect(container.textContent).toContain("No priced cards.")
-  expect(button("EUR")).toBeDefined()
+  expect(currencyShown()).toBe("DKK")
 })
 
 test("keeps recovery controls for a failed read and recovers when OpenHome answers", async () => {
