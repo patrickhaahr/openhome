@@ -353,7 +353,7 @@ function PhotoWall({
           <p className="sr-only">This album has no available still photos.</p>
         </div>
       ) : (
-        <ul className="photo-wall">
+        <ul data-slot="photo-wall" className="photo-wall">
           {items.map((item, at) => (
             <Tile
               key={item.asset}

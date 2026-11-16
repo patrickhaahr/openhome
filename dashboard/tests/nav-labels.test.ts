@@ -75,14 +75,15 @@ function press(group: string, option: string): void {
   act(() => button.click())
 }
 
-const shell = (): HTMLElement => document.querySelector<HTMLElement>(".shell")!
+const shell = (): HTMLElement =>
+  document.querySelector<HTMLElement>('[data-slot="shell"]')!
 
 test("icon tabs keep every word as the accessible name, in the top bar and the sidebar", async () => {
   document.cookie = "openhome-nav-labels=icons; Path=/"
   await open()
 
   expect(shell().dataset.labels).toBe("icons")
-  expect(names(".topnav a")).toEqual(labels)
+  expect(names('[data-slot="topnav"] a')).toEqual(labels)
 
   // A fresh page load: the shell reads its choices once, as the server does.
   act(() => root.unmount())
@@ -91,7 +92,7 @@ test("icon tabs keep every word as the accessible name, in the top bar and the s
   await open()
 
   expect(shell().dataset.nav).toBe("side")
-  expect(names(".rail-nav a")).toEqual(labels)
+  expect(names('[data-slot="rail-nav"] a')).toEqual(labels)
 })
 
 test("the Connection page switches the layout and the top bar's labels and remembers both", async () => {
@@ -103,10 +104,10 @@ test("the Connection page switches the layout and the top bar's labels and remem
   press("Top bar tabs", "Both")
   expect(shell().dataset.labels).toBe("both")
   expect(navLabelsFromCookies(document.cookie)).toBe("both")
-  expect(names(".topnav a")).toEqual(labels)
+  expect(names('[data-slot="topnav"] a')).toEqual(labels)
 
   press("Navigation", "Sidebar")
   expect(shell().dataset.nav).toBe("side")
-  expect(document.querySelector(".topbar")).toBeNull()
+  expect(document.querySelector('[data-slot="topbar"]')).toBeNull()
   expect(navLayoutFromCookies(document.cookie)).toBe("side")
 })

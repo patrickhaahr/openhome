@@ -1,15 +1,7 @@
 // @vitest-environment happy-dom
-import { act, useState } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRouter,
-  RouterProvider,
-} from "@tanstack/react-router"
-import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import { act } from "react"
+import { expect, test, vi } from "vitest"
 import { IdleProvider, WAKE_GRACE_MS } from "@/components/idle"
-import { useIdleBlock } from "@/components/idle-block"
 import {
   DWELL_MS,
   FADE_MS,
@@ -23,153 +15,32 @@ import {
   slideSource,
   wantsIdleNow,
   type DeckPage,
-  type IdleSettings,
 } from "@/lib/idle"
 import type { LightCommand, LightCommandResult } from "@/lib/lights"
+import { unavailablePhotos, type Album, type WallRead } from "@/lib/photos"
 import {
-  unavailablePhotos,
-  type Album,
-  type AlbumRead,
-  type WallRead,
-} from "@/lib/photos"
-import { unavailableWeather } from "@/lib/weather"
-
-const TIMEOUT = 10_000
-
-/** The documented contract: a held touch that never reports its release wakes after 3 seconds. */
-const LOST_RELEASE_WAKE_MS = 3000
-
-const settings: IdleSettings = { timeoutMs: TIMEOUT, preview: false }
-
-const albumId = "5eed0000-0000-4000-8001-000000000000"
-
-const asset = (n: number): string =>
-  `5eed0000-0000-4000-8000-${String(n).padStart(12, "0")}`
-
-const album: Album = {
-  id: albumId,
-  name: "Synthetic scenes",
-  photo_count: 3,
-  cover_id: null,
-  first_month: "2025-06",
-  last_month: "2025-06",
-  missing: false,
-}
-
-const readyAlbums: AlbumRead = { state: "ready", albums: [album] }
-
-function pageOf(count: number, page = 0, next: number | null = null): WallRead {
-  return {
-    state: "ready",
-    wall: {
-      items: Array.from({ length: count }, (_, at) => ({
-        album: albumId,
-        asset: asset(page * 100 + at + 1),
-      })),
-      page,
-      next,
-      total: count,
-    },
-  }
-}
-
-function fakeSources(
-  albums: () => Promise<AlbumRead> = async () => readyAlbums,
-  page: (page: DeckPage) => Promise<WallRead> = async () => pageOf(3)
-): IdleSources & { albumReads: () => number } {
-  let reads = 0
-
-  return {
-    albums: () => {
-      reads += 1
-
-      return albums()
-    },
-    page,
-    weather: async () => unavailableWeather,
-    onThisDay: async () => ({
-      state: "ready",
-      onThisDay: { date: "10-17", items: [], page: 0, next: null, total: 0 },
-    }),
-    albumReads: () => reads,
-  }
-}
-
-let container: HTMLDivElement
-
-let root: Root
-
-let reduced = false
-
-beforeEach(() => {
-  vi.useFakeTimers()
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
-  reduced = false
-
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: query.includes("reduce") && reduced,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  }))
-
-  container = document.createElement("div")
-  document.body.append(container)
-  root = createRoot(container)
-})
-
-afterEach(async () => {
-  await act(async () => root.unmount())
-  container.remove()
-  vi.useRealTimers()
-  vi.unstubAllGlobals()
-})
-
-async function advance(ms: number): Promise<void> {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms)
-  })
-}
-
-function screen(): HTMLElement | null {
-  return document.querySelector(".idle")
-}
-
-async function render(node: React.ReactNode): Promise<void> {
-  await act(async () => root.render(node))
-}
-
-function fire(target: EventTarget, type: string): boolean {
-  const event = type.startsWith("pointer")
-    ? new PointerEvent(type, { bubbles: true, cancelable: true })
-    : type.startsWith("key")
-      ? new KeyboardEvent(type, { bubbles: true, cancelable: true, key: "a" })
-      : new MouseEvent(type, { bubbles: true, cancelable: true })
-
-  return target.dispatchEvent(event)
-}
-
-/** A page with a draft, a counter and a key, to prove waking returns to exactly this. */
-function Page({ blocked = false }: { blocked?: boolean }): React.JSX.Element {
-  const [count, setCount] = useState(0)
-  useIdleBlock(blocked)
-
-  return (
-    <div className="page">
-      <input aria-label="Draft" defaultValue="" />
-      <button type="button" onClick={() => setCount(count + 1)}>
-        Count {count}
-      </button>
-    </div>
-  )
-}
-
-function countKey(): HTMLButtonElement {
-  const key = container.querySelector("button")
-
-  if (key === null) throw new Error("Expected the count key")
-
-  return key
-}
+  advance,
+  album,
+  albumId,
+  asset,
+  container,
+  countKey,
+  fakeSources,
+  fire,
+  Holder,
+  LOST_RELEASE_WAKE_MS,
+  Page,
+  pageOf,
+  render,
+  renderRouted,
+  root,
+  screen,
+  setReduced,
+  settings,
+  slides,
+  TIMEOUT,
+  wake,
+} from "./support/idle-dom"
 
 test("reads the timeout from the server setting, with a 5-minute default and an off switch", () => {
   expect(parseIdleSettings(undefined, undefined)).toEqual({
@@ -376,12 +247,6 @@ test("a held touch keeps swallowing until its release, and a lost release still 
 })
 
 test("blocks are independent reasons: the countdown restarts only when the last is released", async () => {
-  function Holder({ held }: { held: boolean }): null {
-    useIdleBlock(held)
-
-    return null
-  }
-
   const tree = (first: boolean, second: boolean): React.ReactNode => (
     <IdleProvider settings={settings} sources={fakeSources()}>
       <Page />
@@ -481,27 +346,15 @@ test("a tap over Home's light key wakes the screen without sending a light comma
 
   const sources = fakeSources()
 
-  const rootRoute = createRootRoute({
-    component: () => (
-      <IdleProvider settings={settings} sources={sources}>
-        <LightControls
-          layout="quick"
-          connectionState="connected"
-          sendCommand={sendCommand}
-        />
-      </IdleProvider>
-    ),
-  })
-
-  const router = createRouter({
-    routeTree: rootRoute,
-    history: createMemoryHistory(),
-  })
-
-  await act(async () => {
-    await router.load()
-    root.render(<RouterProvider router={router} />)
-  })
+  await renderRouted(
+    <IdleProvider settings={settings} sources={sources}>
+      <LightControls
+        layout="quick"
+        connectionState="connected"
+        sendCommand={sendCommand}
+      />
+    </IdleProvider>
+  )
 
   const lightKey = container.querySelector<HTMLButtonElement>(
     '[data-command="on"]'
@@ -578,7 +431,7 @@ test("crossfades between two image slots, preloading only the next photo", async
 })
 
 test("reduced motion keeps the crossfade and drops the drift", async () => {
-  reduced = true
+  setReduced(true)
 
   await render(
     <IdleProvider settings={settings} sources={fakeSources()}>
@@ -783,24 +636,6 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
   )
   expect(document.querySelector('[data-front="true"]')).not.toBeNull()
 })
-
-async function wake(): Promise<void> {
-  const idle = screen()
-
-  if (idle === null) throw new Error("Expected the slideshow")
-
-  await act(async () => {
-    fire(idle, "pointerdown")
-    fire(idle, "pointerup")
-    fire(idle, "click")
-  })
-  await advance(WAKE_GRACE_MS)
-  expect(screen()).toBeNull()
-}
-
-function slides(): HTMLImageElement[] {
-  return Array.from(document.querySelectorAll(".idle-slide img"))
-}
 
 test("waking while the first photo is still loading leaves nothing behind for the next spell", async () => {
   vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))

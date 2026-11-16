@@ -84,7 +84,7 @@ function ListsPage(): React.JSX.Element {
   )
 
   return (
-    <section>
+    <section data-slot="lists">
       <PageHead title="Lists" />
       {loaded.tab === "dates" ? (
         <DateBoard

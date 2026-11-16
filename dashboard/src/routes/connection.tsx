@@ -3,6 +3,7 @@ import { useTransition } from "react"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { ShieldCheckIcon } from "@phosphor-icons/react/dist/csr/ShieldCheck"
 import { NavLayoutSwitch } from "@/components/nav-layout"
+import { PageTitle } from "@/components/page-tools"
 import { Button } from "@/components/ui/button"
 import type { ConnectionState } from "@/lib/connection"
 import { getConnectionHealth } from "@/lib/connection.functions"
@@ -184,9 +185,7 @@ function ConnectionError() {
 
   return (
     <div className="grid min-h-page-fill content-center justify-items-start gap-6">
-      <h1 id="page-heading" tabIndex={-1} className="page-title">
-        The dashboard couldn’t check the connection.
-      </h1>
+      <PageTitle>The dashboard couldn’t check the connection.</PageTitle>
       <p className="max-w-120 text-lg leading-normal text-muted-ink">
         Check your connection to the dashboard and try again.
       </p>

@@ -68,10 +68,3 @@
     height: 3rem;
   }
 }
-
-/* The photo frame's Chrome 106 WebView predates svh and drops these declarations. */
-@supports not (height: 1svh) {
-  .shell {
-    min-height: 100vh;
-  }
-}

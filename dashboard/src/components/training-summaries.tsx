@@ -79,7 +79,7 @@ export function TrainingSummaries({
   const missing = covered ? "Not recorded" : "Not synced or unavailable"
 
   return (
-    <div className="today" aria-busy={busy}>
+    <div data-slot="today" className="today" aria-busy={busy}>
       <h2 className="sr-only">Recovery day · {data.day}</h2>
       <p
         className="workout-feedback"

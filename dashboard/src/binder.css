@@ -403,9 +403,6 @@
 /* The credit shares the folio's line, in the corner the turn keys leave free, so nothing waits
    below the fold. */
 @media (min-width: 901px) {
-  .page:has(.binder) {
-    padding-bottom: 1rem;
-  }
   .binder {
     position: relative;
   }
@@ -419,10 +416,6 @@
 /* Wide screens: height limits the pockets, so the bar moves into the side gutters and the spread
    takes the full height, still centred between them. */
 @media (min-width: 1680px) and (min-aspect-ratio: 16/10) {
-  .page:has(.binder) {
-    max-width: none;
-    padding-bottom: 1.5rem;
-  }
   .binder {
     --page-room: calc(100dvh - 11rem);
     grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr);

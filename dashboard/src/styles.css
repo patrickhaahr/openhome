@@ -11,16 +11,12 @@
 @import "./lists-detail.css";
 @import "./lists-dates.css";
 @import "./binder.css";
-@import "./scrollbars.css";
-@import "./sidebar.css";
 @import "./idle.css";
 @import "./backlight.css";
 @import "./food.css";
 @import "./food-meals.css";
 @import "./food-trends.css";
 @import "./components/idle-milestone.css";
-@import "./shell.css";
-@import "./page-tools.css";
 @import "./home.css";
 @import "./travel.css";
 @import "./controls.css";
@@ -30,8 +26,14 @@
 @import "./workout-values.css";
 @import "./utilities.css";
 @import "./gap-dash.utilities.css";
+@import "./shell.utilities.css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant binder-wide {
+  @media (min-width: 1680px) and (min-aspect-ratio: 16/10) {
+    @slot;
+  }
+}
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -105,6 +107,46 @@
   --transition-duration-fast: var(--t-fast);
   --transition-duration-mid: var(--t-mid);
   --transition-duration-slow: var(--t-slow);
+  --color-plate: color-mix(in srgb, var(--ink) 7%, var(--ground));
+  --text-body-lg: 1.0625rem;
+  --text-wordmark: 1.1875rem;
+  --tracking-wordmark: -0.04em;
+  --tracking-headline: -0.045em;
+  --tracking-nav: -0.01em;
+  --tracking-tab: -0.005em;
+  --tracking-figure: -0.02em;
+  --tracking-page-title: -0.058em;
+  --leading-page-title: 0.88;
+  --spacing-page-block: clamp(1.5rem, 3vw, 2.75rem);
+  --spacing-page-block-snug: clamp(1rem, 2.2vw, 1.75rem);
+  --spacing-tabbar-room: calc(4rem + var(--bar));
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
+  --spacing-sheet-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  --spacing-topbar-gap: clamp(1rem, 2.5vw, 2.5rem);
+  --spacing-nav-bleed: calc(var(--margin) - 0.5rem);
+  --spacing-tools-room: clamp(0.75rem, 2vw, 1.5rem);
+  --spacing-note-block: clamp(2rem, 6vw, 4.5rem);
+  --spacing-title-hang: 0.06em;
+  --spacing-wordmark-gap: 0.05em;
+  --spacing-dot: 0.36em;
+  --spacing-dot-gap: 0.08em;
+  --spacing-dot-rest: 0.32em;
+  --spacing-dot-lift: 0.05em;
+  --spacing-tab-line: 1.5px;
+  --spacing-tab-line-offset: 0.45rem;
+  --spacing-hair: 0.5px;
+  --translate-skip-hidden: 200%;
+  --grid-template-columns-flanked: auto minmax(0, 1fr) auto;
+  --grid-template-columns-rail: 4rem minmax(0, 1fr);
+  --grid-template-columns-pair: auto auto;
+  --grid-template-rows-shell: auto 1fr;
+  --grid-template-rows-bar-stack: var(--bar) auto;
+  --transition-property-plate: background-color, scale;
+  --transition-property-left: left;
+  --transition-property-top: top;
+  --radius-sheet: 1.5rem;
+  --breakpoint-phone: 40.0625rem;
+  --breakpoint-tablet: 56.3125rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -127,6 +169,10 @@
   --spacing-glyph: clamp(9rem, 5rem + 14vw, 16rem);
   --spacing-glyph-nudge: 0.08em;
   --inset-signal-core: 28%;
+}
+
+@theme {
+  --border-width-halo: 1.5px;
 }
 
 @theme {
@@ -285,5 +331,40 @@
   h2,
   h3 {
     text-wrap: balance;
+  }
+  /* A dashboard on a wall screen and an iPad: scrolling stays, the bars never show, so no layout
+     narrows when one would appear. */
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+  #page-heading:focus,
+  #page-content:focus {
+    outline: none;
+  }
+  /* The sun turns the room slowly; never during reduced motion. The theme script toggles the
+     class on <html>. */
+  @media (prefers-reduced-motion: no-preference) {
+    html.theme-turning,
+    html.theme-turning *,
+    html.theme-turning *::before,
+    html.theme-turning *::after {
+      transition:
+        background-color 1.2s var(--ease),
+        color 1.2s var(--ease),
+        border-color 1.2s var(--ease),
+        fill 1.2s var(--ease),
+        stroke 1.2s var(--ease) !important;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0s !important;
+      animation-duration: 0s !important;
+    }
   }
 }

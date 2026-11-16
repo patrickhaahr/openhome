@@ -12,9 +12,6 @@
 
 /* ---------- Controls: three plates filling the screen, keys on paper inside them ---------- */
 
-.page:has(> .controls) {
-  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
-}
 .controls {
   display: grid;
   grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr) minmax(12rem, 15rem);

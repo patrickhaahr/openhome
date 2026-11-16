@@ -127,9 +127,6 @@
 }
 
 /* The first screen: the rings over their week on the paper, the night on a plate beside them. */
-.page:has(> .today) {
-  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
-}
 .today-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

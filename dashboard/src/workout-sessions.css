@@ -27,7 +27,6 @@
   align-self: end;
   font-size: clamp(1.875rem, 1.2rem + 2vw, 2.5rem);
   font-weight: 600;
-  letter-spacing: -0.045em;
   line-height: 1;
 }
 .vital-value small {

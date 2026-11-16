@@ -131,12 +131,6 @@
   letter-spacing: -0.05em;
 }
 
-/* Inside an album the photos run edge to edge. */
-.page:has(.photo-wall) {
-  max-width: none;
-  padding-inline: 0;
-  padding-bottom: 0;
-}
 .photo-head {
   display: flex;
   flex-wrap: wrap;
@@ -387,9 +381,4 @@
     display: flex;
     flex-wrap: wrap;
   }
-}
-
-/* Home already shows the time at full size. */
-.shell:has(.home) .topbar-clock {
-  display: none;
 }

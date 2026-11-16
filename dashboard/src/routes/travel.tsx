@@ -6,6 +6,7 @@ import { SharedMap } from "@/components/shared-map"
 import { LoopPlanner } from "@/components/loop-planner"
 import { useMapTheme } from "@/components/daylight"
 import { PageHead } from "@/components/page-head"
+import { StateNote } from "@/components/page-tools"
 import { features } from "@/lib/features"
 import {
   unavailableMapOrigin,
@@ -86,7 +87,7 @@ function TravelContent({
     <section>
       <PageHead title={travel.title} />
       {read.state === "configured" ? (
-        <figure className="travel" ref={travelRef}>
+        <figure data-slot="travel" className="travel" ref={travelRef}>
           <SharedMap
             key={`${read.origin.latitude},${read.origin.longitude}`}
             origin={read.origin}
@@ -126,20 +127,21 @@ function MapSetup({
   reason: Extract<MapOriginRead, { state: "unavailable" }>["reason"]
 }): React.JSX.Element {
   return (
-    <div className="state-note" data-failed="true">
-      <MapTrifoldIcon size={56} weight="light" aria-hidden="true" />
-      <h2>
-        {reason === "missing-configuration"
+    <StateNote
+      icon={<MapTrifoldIcon size={56} weight="light" aria-hidden="true" />}
+      title={
+        reason === "missing-configuration"
           ? "Map setup needed"
-          : "Map unavailable"}
-      </h2>
+          : "Map unavailable"
+      }
+    >
       <p role="status" className="sr-only">
         {reason === "missing-configuration"
           ? "Set the private map origin on OpenHome to show the local area. There is no default location."
           : "OpenHome could not provide the map origin. Check Connection or try again."}
       </p>
       <CheckAgainButton compact />
-    </div>
+    </StateNote>
   )
 }
 

@@ -1,7 +1,7 @@
 export type PlainClass = { readonly line: number; readonly selector: string }
 
 /** Theme switch toggled on <html> by lib/daylight.ts; the tokens themselves live under it. */
-const themeClasses = new Set(["dark"])
+const themeClasses = new Set(["dark", "theme-turning"])
 
 type Block = "utility" | "opaque" | "group" | "rule"
 

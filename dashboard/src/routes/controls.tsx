@@ -25,7 +25,7 @@ function ControlsPage(): React.JSX.Element {
   const { health, tvRemote, speakerRemote } = Route.useLoaderData()
 
   return (
-    <section className="controls">
+    <section data-slot="controls" className="controls">
       <PageHead title={controls.title} />
       <div className="controls-lights">
         <LightControls

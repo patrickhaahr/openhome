@@ -404,7 +404,7 @@ function WishPlate({
             <span className="num">{item.price}</span>
           )}
           {item.quantity > 1 ? (
-            <span className="num wish-quantity">
+            <span className="wish-quantity num">
               <span aria-hidden="true">×</span>
               {item.quantity}
               <span className="sr-only"> wanted</span>

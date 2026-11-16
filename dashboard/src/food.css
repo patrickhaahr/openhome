@@ -142,7 +142,6 @@ a.food-day-key:active {
 }
 .food-macro-target-amount {
   font-weight: 500;
-  letter-spacing: -0.02em;
 }
 .food-macro-target-status {
   color: var(--muted-ink);
@@ -413,7 +412,6 @@ a.food-day-key:active {
 .food-micro-percent {
   font-size: 1.125rem;
   font-weight: 500;
-  letter-spacing: -0.02em;
 }
 .food-micro-bar {
   grid-column: 1 / -1;

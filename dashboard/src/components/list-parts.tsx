@@ -66,7 +66,7 @@ export function PersonKeys({
             <PersonDisc name={owner.name} />
             {owner.name}
             {count === undefined || noun === undefined ? null : (
-              <span className="num text-label text-muted-ink group-aria-pressed/tab:text-ground/70">
+              <span className="text-label num text-muted-ink group-aria-pressed/tab:text-ground/70">
                 {count}
                 <span className="sr-only">
                   {" "}

@@ -385,7 +385,7 @@ export function WeatherOverview({
   const scale = weekScale(forecast.days)
 
   return (
-    <div className="wx" data-stale={weather.state === "stale"}>
+    <div data-slot="wx" className="wx" data-stale={weather.state === "stale"}>
       {weather.state === "stale" ? (
         <p className="sr-only">
           Showing the last cached forecast; conditions may have changed.

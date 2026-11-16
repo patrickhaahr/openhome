@@ -1,9 +1,5 @@
 /* ---------- Home: the clock and the sky on the left, the body in the middle, keys on the right ---------- */
 
-/* Home fills the screen below the bar: each column runs from the top edge to the bottom one. */
-.page:has(> .home) {
-  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
-}
 .home {
   --home-height: calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem));
 
@@ -607,21 +603,6 @@ a.dir-go:hover {
   .home-now .sun-day {
     grid-column: 1 / -1;
     grid-row: 2;
-  }
-  .topbar {
-    grid-template-columns: auto auto;
-    grid-template-rows: var(--bar) auto;
-    height: auto;
-    row-gap: 0;
-  }
-  .topnav {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    margin-inline: calc(var(--margin) * -1);
-    padding-inline: calc(var(--margin) - 0.5rem);
-  }
-  .topbar-end {
-    justify-self: end;
   }
 }
 @media (max-width: 640px) {

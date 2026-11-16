@@ -4,9 +4,6 @@
    that rises from the right edge (the bottom on a phone).
    ------------------------------------------------------------------------------------------ */
 
-.page:has(> section > .lists) {
-  padding-top: clamp(1rem, 2.2vw, 1.75rem);
-}
 .lists {
   display: grid;
   gap: clamp(1rem, 2vw, 1.5rem);
@@ -152,7 +149,6 @@
   color: var(--muted-ink);
   font-size: 1rem;
   font-weight: 500;
-  letter-spacing: 0;
 }
 
 /* ---------- The gift board ---------- */

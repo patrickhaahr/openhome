@@ -117,7 +117,6 @@
   font-size: clamp(2.75rem, 1rem + 5vw, 6rem);
   font-weight: 500;
   line-height: 0.82;
-  letter-spacing: -0.07em;
 }
 .idle-date {
   margin-top: 0.35rem;
@@ -161,7 +160,6 @@
 .idle-since-figure {
   font-size: clamp(1.15rem, 2vw, 2.1rem);
   font-weight: 500;
-  letter-spacing: -0.045em;
   line-height: 1.1;
 }
 .idle-since-figure > span {
@@ -174,7 +172,6 @@
 }
 .idle-upcoming {
   font-size: clamp(0.95rem, 1.3vw, 1.25rem);
-  letter-spacing: -0.03em;
   line-height: 1.15;
 }
 .idle-dates-lead:empty,

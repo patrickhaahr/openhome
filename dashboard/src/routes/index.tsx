@@ -11,6 +11,7 @@ import { SunDay } from "@/components/daylight"
 import { WeatherNow } from "@/components/weather-overview"
 import { LightControls } from "@/components/light-controls"
 import { LiveClock } from "@/components/live-clock"
+import { actionLink, PageTitle } from "@/components/page-tools"
 import { SpeakerRemote } from "@/components/speaker-remote"
 import { RecoveryRings } from "@/components/training-summaries"
 import { TvRemote } from "@/components/tv-remote"
@@ -44,7 +45,7 @@ function HomePage(): React.JSX.Element {
     Route.useLoaderData()
 
   return (
-    <div className="home">
+    <div data-slot="home" className="home">
       <h1 id="page-heading" tabIndex={-1} className="sr-only">
         Home
       </h1>
@@ -284,13 +285,11 @@ function Unavailable(): React.JSX.Element {
 function HomeError(): React.JSX.Element {
   return (
     <section className="grid min-h-page-fill content-center justify-items-start gap-6">
-      <h1 id="page-heading" tabIndex={-1} className="page-title">
-        Home connection unavailable
-      </h1>
+      <PageTitle>Home connection unavailable</PageTitle>
       <p className="max-w-120 text-lg leading-normal text-muted-ink">
         The dashboard could not check OpenHome. Open Connection to try again.
       </p>
-      <Link to="/connection" className="action-link">
+      <Link to="/connection" className={actionLink}>
         Open Connection <ArrowRightIcon size={20} aria-hidden="true" />
       </Link>
     </section>

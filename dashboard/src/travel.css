@@ -1,10 +1,5 @@
 /* ---------- Travel: the map is the page; every control floats on it as a plate ---------- */
 
-/* The map runs edge to edge from the top bar to the bottom of the screen. */
-.page:has(.travel) {
-  max-width: none;
-  padding: 0;
-}
 /* The photo frame's Chrome 106 WebView predates svh and drops the second declaration;
    the vh line before it keeps the map from collapsing to nothing. */
 .travel {
@@ -384,15 +379,19 @@
   filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9);
 }
 
+/* The top bar gains its navigation row (2.75rem) between the phone and the desktop; the sidebar
+   and the phone's tab bar have no bar to lose it to. */
+@media (min-width: 641px) and (max-width: 900px) {
+  [data-slot="shell"]:not([data-nav="side"]) .travel {
+    height: calc(100vh - var(--bar) - 2.75rem);
+    height: calc(100svh - var(--bar) - 2.75rem);
+  }
+}
+
 /* Portrait and phone: the planner is a full-width plate along the bottom, results stack
    above it, the controls move to the top of the right edge and the attribution rides
    above the dock (its height is published as --dock-height). */
 @media (max-width: 900px) {
-  /* The top bar gains its navigation row (2.75rem) here. */
-  .travel {
-    height: calc(100vh - var(--bar) - 2.75rem);
-    height: calc(100svh - var(--bar) - 2.75rem);
-  }
   .loop-dock {
     right: var(--travel-inset);
     max-width: none;

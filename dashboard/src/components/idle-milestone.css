@@ -9,7 +9,6 @@
   font-size: clamp(1.5rem, 3.2vw, 3.5rem);
   font-weight: 500;
   line-height: 0.95;
-  letter-spacing: -0.05em;
   overflow-wrap: anywhere;
   text-wrap: balance;
 }

@@ -36,7 +36,7 @@ function BinderPage(): React.JSX.Element {
   const mutate = useServerFn(mutateBinder)
 
   return (
-    <section>
+    <section data-slot="binder">
       <PageHead title="Binder" />
       <BinderBook
         data={data}
