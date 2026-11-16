@@ -166,6 +166,9 @@ async function scrollThrough(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const root = document.scrollingElement ?? document.documentElement
 
+    // A lazy image scrolled past within one frame may never start loading, which stalls imagesReady.
+    for (const image of document.images) image.loading = "eager"
+
     const frame = () =>
       new Promise<void>((done) => {
         requestAnimationFrame(() => done())
