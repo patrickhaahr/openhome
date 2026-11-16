@@ -10,6 +10,7 @@ import { MoonIcon } from "@phosphor-icons/react/dist/csr/Moon"
 import { SunIcon } from "@phosphor-icons/react/dist/csr/Sun"
 import { SunHorizonIcon } from "@phosphor-icons/react/dist/csr/SunHorizon"
 import { iconLink } from "@/components/nav-parts"
+import { percent } from "@/components/weather-figures"
 import { daylight, type Daylight } from "@/lib/daylight"
 import { useMinute } from "@/lib/use-minute"
 
@@ -253,6 +254,12 @@ const sunTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
 })
 
+const trace = {
+  fill: "none",
+  strokeLinecap: "round",
+  vectorEffect: "non-scaling-stroke",
+} as const
+
 /**
  * Today's arc: sunrise to sunset as a curve, the sun on it now. At night the sun waits below
  * the line as a hollow ring at the side it will rise from or has set on.
@@ -273,26 +280,50 @@ export function SunDay(): React.JSX.Element {
   const lit = points.slice(0, Math.round(sunPosition(x) * 48) + 1)
 
   return (
-    <div className="sun-day">
+    <div className="grid grid-cols-flanked items-end gap-3 text-small text-muted-ink tabular-nums max-tablet:col-span-full max-tablet:row-start-2 max-phone:col-auto max-phone:row-auto">
       <span>
         <span className="sr-only">Sunrise </span>
         <span className="num">
           {sky.sunrise === null ? "–" : sunTime.format(sky.sunrise)}
         </span>
       </span>
-      <div className="sun-day-track" aria-hidden="true">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          <line x1="0" x2="100" y1="100" y2="100" />
-          <path d={`M${points.join(" L")}`} />
+      <div className="relative h-12" aria-hidden="true">
+        <svg
+          className="absolute inset-0 size-full overflow-visible"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <line
+            className="stroke-line-strong"
+            x1="0"
+            x2="100"
+            y1="100"
+            y2="100"
+            vectorEffect="non-scaling-stroke"
+          />
+          <path
+            {...trace}
+            className="stroke-line-strong"
+            d={`M${points.join(" L")}`}
+            strokeWidth={1.25}
+            strokeDasharray="0.5 4"
+          />
           {below || lit.length < 2 ? null : (
-            <path className="sun-day-lit" d={`M${lit.join(" L")}`} />
+            <path
+              {...trace}
+              className="stroke-sun"
+              d={`M${lit.join(" L")}`}
+              strokeWidth={2.5}
+            />
           )}
         </svg>
         <span
-          className="sun-day-dot"
+          className="absolute top-(--y) left-(--x) -mt-2 -ml-2 size-4 rounded-full bg-sun data-[below=true]:border-(length:--border-width-halo) data-[below=true]:border-muted-ink data-[below=true]:bg-ground"
           data-below={below}
-          // SAFETY: CSSProperties omits custom properties; --x and --y are unitless 0..1 track coordinates read by .sun-day-dot.
-          style={{ "--x": x, "--y": y } as React.CSSProperties}
+          // SAFETY: CSSProperties omits custom properties; --x and --y are the dot's shares of the track.
+          style={
+            { "--x": percent(x), "--y": percent(y) } as React.CSSProperties
+          }
         />
       </div>
       <span>

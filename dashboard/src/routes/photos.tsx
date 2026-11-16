@@ -23,7 +23,7 @@ export const Route = createFileRoute("/photos")({
   head: () => ({ meta: [{ title: "Photos · OpenHome" }] }),
   component: PhotosPage,
   pendingComponent: () => (
-    <p role="status" className="dir-pending">
+    <p role="status" className="inline-flex text-muted-ink">
       Loading photos…
     </p>
   ),

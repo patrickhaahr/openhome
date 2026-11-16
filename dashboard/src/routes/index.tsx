@@ -21,6 +21,7 @@ import { loadGlance, type Glance, type ProgressGlance } from "@/lib/glance"
 import { sendLightCommand } from "@/lib/lights.functions"
 import { sendSpeakerCommand, sendTvCommand } from "@/lib/ir.functions"
 import { getWeather } from "@/lib/weather.functions"
+import { percent } from "@/components/weather-figures"
 import { unavailableWeather } from "@/lib/weather"
 
 export const Route = createFileRoute("/")({
@@ -45,20 +46,32 @@ function HomePage(): React.JSX.Element {
     Route.useLoaderData()
 
   return (
-    <div data-slot="home" className="home">
+    <div
+      data-slot="home"
+      className="grid min-h-fit-screen grid-cols-home gap-home-gap max-home-narrow:min-h-0 max-home-narrow:grid-cols-trail max-tablet:gap-10 max-phone:grid-cols-1"
+    >
       <h1 id="page-heading" tabIndex={-1} className="sr-only">
         Home
       </h1>
-      <section className="home-now" aria-label="Today">
+      <section
+        className="flex flex-col justify-between gap-home-stack max-home-narrow:col-start-1 max-tablet:grid max-tablet:grid-cols-home-now max-tablet:items-end max-tablet:gap-x-8 max-phone:grid-cols-1 max-phone:gap-y-6"
+        aria-label="Today"
+      >
         <LiveClock initialTime={openedAt} />
         <WeatherNow weather={weather} />
         <SunDay />
       </section>
-      <section className="home-body" aria-label="Training">
+      <section
+        className="grid grid-rows-home-body gap-home-body-gap max-home-narrow:col-start-1"
+        aria-label="Training"
+      >
         <RecoveryGlance glance={glance} />
         <ProgressGlanceCard glance={glance} />
       </section>
-      <section className="deck" aria-label="Controls">
+      <section
+        className="flex flex-col items-center justify-between gap-3 max-home-narrow:col-start-2 max-home-narrow:row-start-1 max-home-narrow:row-end-3 max-home-narrow:justify-start max-phone:col-start-1 max-phone:row-auto max-phone:flex-row max-phone:flex-wrap max-phone:justify-center"
+        aria-label="Controls"
+      >
         <LightControls
           layout="quick"
           connectionState={health.state}
@@ -88,7 +101,10 @@ function RecoveryGlance({
   glance: Glance | undefined
 }): React.JSX.Element {
   return (
-    <Link to="/recovery" className="recovery-glance">
+    <Link
+      to="/recovery"
+      className="mt-1 flex min-h-36 items-center justify-center gap-home-rings-gap text-inherit no-underline transition-lift duration-mid ease-app hover:-translate-y-0.5 active:scale-99 max-phone:gap-3"
+    >
       <h2 className="sr-only">Recovery today</h2>
       <Deferred promise={glance?.recovery} ghosts={3}>
         {(recovery) => (
@@ -109,7 +125,7 @@ function ProgressGlanceCard({
     <Link
       to="/workout"
       search={{ view: "progress", period: "4w" }}
-      className="progress-card"
+      className="group/progress flex min-h-48 text-inherit no-underline active:scale-99"
     >
       <h2 className="sr-only">Exercise progress, last 4 weeks</h2>
       <Deferred promise={glance?.progress} ghosts={0}>
@@ -118,6 +134,50 @@ function ProgressGlanceCard({
     </Link>
   )
 }
+
+const trace = {
+  fill: "none",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  vectorEffect: "non-scaling-stroke",
+} as const
+
+/** The four featured lines: the accent first, then three hues of similar lightness. */
+const series = [
+  {
+    stroke: "stroke-progress-1",
+    dot: "bg-progress-1",
+    swatch: "before:bg-progress-1",
+    draw: "motion-safe:animate-glance-draw-1",
+  },
+  {
+    stroke: "stroke-progress-2",
+    dot: "bg-progress-2",
+    swatch: "before:bg-progress-2",
+    draw: "motion-safe:animate-glance-draw-2",
+  },
+  {
+    stroke: "stroke-progress-3",
+    dot: "bg-progress-3",
+    swatch: "before:bg-progress-3",
+    draw: "motion-safe:animate-glance-draw-3",
+  },
+  {
+    stroke: "stroke-glance-4",
+    dot: "bg-glance-4",
+    swatch: "before:bg-glance-4",
+    draw: "motion-safe:animate-glance-draw-4",
+  },
+] as const
+
+const tone = (position: number) => series[position] ?? series[0]
+
+/** The waiting dots rise one after the other. */
+const waits = [
+  "motion-safe:animate-glance-wait-1",
+  "motion-safe:animate-glance-wait-2",
+  "motion-safe:animate-glance-wait-3",
+] as const
 
 const chart = { width: 640, height: 280, inset: 10 } as const
 
@@ -137,7 +197,7 @@ function ProgressGlanceChart({
 
   if (featured.length === 0)
     return (
-      <p className="progress-empty">
+      <p className="text-lead text-muted-ink">
         <span className="sr-only">No exercise trends in the last 4 weeks</span>
         <span aria-hidden="true">–</span>
       </p>
@@ -173,18 +233,22 @@ function ProgressGlanceChart({
     .join(", ")
 
   return (
-    <figure className="progress-glance">
-      <div className="progress-glance-plot">
+    <figure className="grid flex-1 grid-rows-fill-hug gap-4">
+      <div className="relative min-h-40 max-home-narrow:min-h-64">
         {/* Stretched to the column; strokes keep their width and the dots are HTML, so
             nothing distorts. */}
         <svg
+          className="absolute inset-0 size-full overflow-visible"
           viewBox={`0 0 ${chart.width} ${chart.height}`}
           preserveAspectRatio="none"
           role="img"
           aria-label={`Strength over the last 4 weeks, indexed to 100 on each exercise's first day: ${spoken}`}
         >
           <line
-            className="progress-glance-base"
+            {...trace}
+            className="stroke-muted-ink"
+            strokeWidth={1.5}
+            strokeDasharray="2 6"
             x1={chart.inset}
             x2={chart.width - chart.inset}
             y1={y(100)}
@@ -192,16 +256,19 @@ function ProgressGlanceChart({
           />
           {others.map((line) => (
             <path
+              {...trace}
               key={line.exercise.id}
-              className="progress-glance-line"
+              className="stroke-ink opacity-12 group-hover/progress:opacity-20"
+              strokeWidth={2.5}
               d={path(line)}
             />
           ))}
           {featured.map((line, position) => (
             <path
+              {...trace}
               key={line.exercise.id}
-              className="progress-glance-featured"
-              data-series={position + 1}
+              className={`${tone(position).stroke} ${tone(position).draw}`}
+              strokeWidth={4}
               d={path(line)}
             />
           ))}
@@ -212,23 +279,28 @@ function ProgressGlanceChart({
           return last === undefined ? null : (
             <span
               key={line.exercise.id}
-              className="progress-glance-end"
-              data-series={position + 1}
+              className={`absolute top-(--y) left-(--x) -mt-1.75 -ml-1.75 size-3.5 rounded-full border-3 border-ground motion-safe:animate-glance-rise ${tone(position).dot}`}
               aria-hidden="true"
-              // SAFETY: CSSProperties omits custom properties; --x and --y are 0..1 shares of the plot.
+              // SAFETY: CSSProperties omits custom properties; --x and --y are the dot's shares of the plot.
               style={
                 {
-                  "--x": x(last.date) / chart.width,
-                  "--y": y(last.index) / chart.height,
+                  "--x": percent(x(last.date) / chart.width),
+                  "--y": percent(y(last.index) / chart.height),
                 } as React.CSSProperties
               }
             />
           )
         })}
       </div>
-      <figcaption className="progress-glance-legend" aria-hidden="true">
+      <figcaption
+        className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-control font-medium tracking-nav"
+        aria-hidden="true"
+      >
         {featured.map((line, position) => (
-          <span key={line.exercise.id} data-series={position + 1}>
+          <span
+            key={line.exercise.id}
+            className={`inline-flex items-center gap-2 before:h-1 before:w-3.5 before:rounded-full ${tone(position).swatch}`}
+          >
             {line.exercise.name}
           </span>
         ))}
@@ -253,14 +325,21 @@ function Deferred<T>({
     <Suspense
       fallback={
         ghosts === 0 ? (
-          <span className="dir-loading" aria-hidden="true">
-            <span />
-            <span />
-            <span />
+          <span className="inline-flex gap-1.5" aria-hidden="true">
+            {waits.map((wait) => (
+              <span
+                key={wait}
+                className={`size-2 rounded-full bg-line-strong ${wait}`}
+              />
+            ))}
           </span>
         ) : (
           Array.from({ length: ghosts }, (_, ghost) => (
-            <span key={ghost} className="recovery-ghost" aria-hidden="true" />
+            <span
+              key={ghost}
+              className="aspect-square w-36 rounded-full border-10 border-wash"
+              aria-hidden="true"
+            />
           ))
         )
       }
@@ -275,7 +354,7 @@ function Deferred<T>({
 /** A read that failed: a quiet mark, never a zero. */
 function Unavailable(): React.JSX.Element {
   return (
-    <span className="dir-pending" title="Unavailable">
+    <span className="inline-flex text-muted-ink" title="Unavailable">
       <WarningCircleIcon size={20} aria-hidden="true" />
       <span className="sr-only">Unavailable</span>
     </span>

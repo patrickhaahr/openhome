@@ -53,6 +53,8 @@ export const cn = createCn({
         "photo-night",
         "photo-ink",
         "photo-plate",
+        // Home
+        "glance-4",
       ],
       text: [
         "mega",
@@ -112,6 +114,10 @@ export const cn = createCn({
         "idle-milestone",
         "idle-milestone-short",
         "idle-milestone-title",
+        // Home
+        "clock-time",
+        "clock-date",
+        "forecast-now",
       ],
       leading: [
         "status",
@@ -134,6 +140,8 @@ export const cn = createCn({
         "idle-tight",
         // Photos
         "photo-name",
+        // Home
+        "forecast-now",
       ],
       tracking: [
         "score",
@@ -154,6 +162,9 @@ export const cn = createCn({
         "workout-figure",
         // Food
         "food-heading",
+        // Home
+        "clock",
+        "forecast-now",
       ],
       radius: [
         "poster",
@@ -278,6 +289,12 @@ export const cn = createCn({
         "photo-head",
         "photo-empty",
         "photo-row",
+        // Home
+        "clock-hang",
+        "home-gap",
+        "home-stack",
+        "home-body-gap",
+        "home-rings-gap",
       ],
       animate: [
         "stage-grow",

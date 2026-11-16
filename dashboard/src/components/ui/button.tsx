@@ -2,8 +2,21 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
+/** A key answers on itself: it presses, flashes the sun when OpenHome acknowledges, shakes when it does not. None of this is device state. */
+const answers = [
+  "data-[outcome=pending]:disabled:opacity-100 data-outcome:after:pointer-events-none data-outcome:after:absolute data-outcome:after:-inset-1.25 data-outcome:after:rounded-[inherit]",
+  "data-[outcome=pending]:after:border-2 data-[outcome=pending]:after:border-transparent data-[outcome=pending]:after:border-t-sun data-[outcome=pending]:after:border-r-sun",
+  "data-[outcome=accepted]:after:border-2 data-[outcome=accepted]:after:border-sun",
+  "data-[outcome=failed]:outline-2 data-[outcome=failed]:outline-offset-3 data-[outcome=failed]:outline-solid data-[outcome=failed]:outline-danger",
+  "motion-safe:data-[outcome=pending]:after:animate-key-spin motion-safe:data-[outcome=accepted]:animate-key-acknowledge motion-safe:data-[outcome=accepted]:after:animate-key-ripple motion-safe:data-[outcome=accepted]:after:opacity-0 motion-safe:data-[outcome=failed]:animate-led-refuse",
+  "data-[spinning=true]:[&_svg]:animate-key-spin",
+]
+
 const buttonVariants = cva(
-  "group/button relative inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-[0.9375rem] font-medium tracking-[-0.01em] whitespace-nowrap transition-[background-color,color,border-color,scale] duration-200 ease-[cubic-bezier(.2,.7,.1,1)] outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[1.125rem]",
+  [
+    answers,
+    "group/button relative inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-[0.9375rem] font-medium tracking-[-0.01em] whitespace-nowrap transition-[background-color,color,border-color,scale] duration-200 ease-[cubic-bezier(.2,.7,.1,1)] outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring active:not-aria-[haspopup]:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[1.125rem]",
+  ],
   {
     variants: {
       variant: {

@@ -3,9 +3,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/familjen-grotesk";
-@import "./home.css";
 @import "./photos.theme.css";
 @import "./photos.utilities.css";
+@import "./home.theme.css";
 @import "./gap-dash.utilities.css";
 @import "./shell.utilities.css";
 @import "./lists.utilities.css";
