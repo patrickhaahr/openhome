@@ -1,0 +1,24 @@
+@theme inline {
+  --color-rain: light-dark(oklch(0.5 0.15 250), oklch(0.8 0.12 230));
+  --text-figure-xl: clamp(5.5rem, 1rem + 9vw, 10rem);
+  --text-figure-xs: 1.125rem;
+  --text-unit: 0.6em;
+  --leading-figure-xl: 0.8;
+  --tracking-figure-xl: -0.075em;
+  --spacing-pane-gap: clamp(2rem, 5vw, 4.5rem);
+  --spacing-condition-glyph: clamp(4rem, 2rem + 4vw, 6rem);
+  --spacing-fit-screen: max(
+    calc(100svh - var(--bar) - 2 * clamp(1.5rem, 3vw, 2.75rem)),
+    32rem
+  );
+  --spacing-rain-lane: 26%;
+  --inset-lane-top: 22%;
+  --inset-lane-bottom: 36%;
+  --radius-bar: 0.25rem;
+  --grid-template-columns-hug-fill: auto minmax(0, 1fr);
+  --grid-template-columns-figures-fill: minmax(0, 27rem) minmax(0, 1fr);
+  --grid-template-columns-week-row: 3.75rem 2rem 2.25rem minmax(0, 1fr) 2.25rem
+    3.5rem;
+  --grid-template-rows-fill-hug: minmax(0, 1fr) auto;
+  --grid-template-rows-hug-fill-hug: auto minmax(0, 1fr) auto;
+}

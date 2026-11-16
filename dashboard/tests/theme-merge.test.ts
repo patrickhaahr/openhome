@@ -1,11 +1,14 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { expect, test } from "vitest"
 import { cn } from "@/lib/utils"
 
-const styles = readFileSync(
-  new URL("../src/styles.css", import.meta.url),
-  "utf8"
-)
+const source = new URL("../src/", import.meta.url)
+
+// App-wide tokens live in styles.css, each area's own in <area>.theme.css beside it.
+const styles = readdirSync(source)
+  .filter((file) => file === "styles.css" || file.endsWith(".theme.css"))
+  .map((file) => readFileSync(new URL(file, source), "utf8"))
+  .join("\n")
 
 const tokens = (namespace: string): string[] =>
   [
