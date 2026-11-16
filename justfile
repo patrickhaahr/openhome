@@ -2,7 +2,7 @@ default:
     @just --list
 
 # Full gate across repos
-check: check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
+check: file-size-check check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
 
 # List files over the pre-commit hook's 5000-token cap, optionally under the given paths
 [positional-arguments]
