@@ -1,5 +1,5 @@
-//! Replace-window delivery for the mutable streams (`docs/noop/PUSH_PROTOCOL.md`, "Authoritative
-//! rolling-window delivery").
+//! Replace-window delivery for the mutable streams (`docs/noop/PUSH_PROTOCOL_DELIVERY.md`,
+//! "Authoritative rolling-window delivery").
 //!
 //! Every part belongs to one replacement (`replacementId`) whose stream, window and part count
 //! are fixed by the first part observed. Parts are staged durably (`replacement_part`); the part

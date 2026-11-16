@@ -1,0 +1,181 @@
+# Dashboard design: round 2
+
+## Round 2: say it with the thing itself
+
+Owner feedback: Home should be visuals, not sentences; no text for control state; no
+"Home connected"; Photos is only the album; less text everywhere.
+
+- **One h1 per page, usually sr-only.** The top bar already says where you are, so pages
+  carry no visible title, eyebrow or "Back to Home". Section headings that only repeat
+  what the content shows are sr-only too.
+- **Removed words move to assistive technology, not away.** Explanations, units already
+  shown by an icon, counts and captions become `sr-only` spans or `aria-label`s. Icon-only
+  keys keep their label as an sr-only span, so their accessible name (and text content) is
+  unchanged.
+- **Glances are visuals.** Home shows the clock, the sun's arc, the temperature with a
+  seven-day bar chart, a row of key plates (the keys name their device: a lit bulb, a TV
+  power key; only the speaker plate carries a glyph), today's Charge, Rest and Effort
+  rings on the bare paper (each named by a glyph), and a progress plate: four weeks of
+  exercise lines with three featured exercises in colour, named only by a legend.
+- **Control state is never claimed in text.** Keys show only commands the device reported.
+  A sent command draws on the key itself: pending is a sun arc spinning round it, accepted
+  is a small acknowledge bump with a sun ring rippling out; a failure shakes the key, rings
+  it red and shows a terse tag ("No answer", "Key rejected") from `command-feedback.ts`.
+  Nothing says "on" or "off".
+- **Success is a visual acknowledgement; failure stays visible.** Saves, refreshes and
+  confirmations are announced in an sr-only status region; the control itself acknowledges
+  (spinner on refresh keys, pressed tone). Failures show a red dot plus one short line.
+- **Missing data is a dash.** `data-gap="true"` draws an en dash while assistive technology
+  still reads "Unavailable". Weather never invents a value; dry hours (0 mm) and chances
+  under 20 % are quiet (sr-only) so rain stands out.
+- **Provenance as marks.** Training sync shows a freshness ring (filled sun when confirmed)
+  and one chip per stream (filled dot when covered); the full sentence is sr-only.
+- **Refresh lives top right** as a round key on every data page (Wishlist,
+  Watchlist). Workout, Recovery and Photos have none (see below). Weather has none: it refreshes itself on the forecast's
+  validity, and a stale read shows a rewind mark beside the current figures.
+- **Workout is Log, Progress and Body** behind one segmented switcher (wash track, ink pill) that
+  every segmented control on the page shares, with the period choice on the right. There is no
+  refresh key: changes reload the view themselves. Log is one plate per training session. A logged
+  Workout and a strap session on the same Copenhagen day become one plate (exercises left; effort
+  ring, stats, heart-rate trace and zone bar right) under `lib/session-log.ts`; a strap session
+  alone shows its own stats, and a map only when it has a route; a logged Workout alone shows
+  its exercises. The exercises share one grid (name, then set columns of one width) whose chips
+  carry RPE as a sun underline; the counts sit in the header, and a plate has no keys (no edit,
+  no way out to Recovery). Progress opens on 4 weeks, tone bands instead of grid lines. Body leads with the
+  current weight large, the delta over the range, one calm chart of alternating tone bands, and the
+  profile values as quiet plates with a pencil key; it fits 1280x720.
+- **Controls is three plates on one screen**, the same tone as Home's deck: the lights as a
+  tall wall switch (lit bulb on ink above, dark bulb on paper below), the TV remote in the
+  middle and the speaker's narrow remote on the right. The device glyph names each remote;
+  keys sit on paper inside the plate, and both volume rockers put + on top.
+- **Weather is one screen**: the figures on the left (now, then the week as rows whose ranges
+  share one scale), and the next 24 hours as a horizon on the right: the temperature line,
+  rain as columns beneath it, the nights as darker ground from the same sun model that turns
+  the theme, and the sun on the line at this minute. Every hourly value stays in a table
+  for assistive technology.
+- **Recovery is the day's rings and its night**: Charge, Rest and Effort as three big rings on
+  the paper with the week of days (the cartwheel) beneath them, and the night on a plate beside
+  them as a hypnogram: bedtime to wake across, a lane per stage (awake, REM, light, deep) with its
+  total beside it, every stretch a solid bar in the stage's colour and alternate hours in a darker
+  tone instead of grid lines. Nothing says "refresh"; re-tapping the chosen day reads it again, and
+  a rewind mark with the last push shows only when the sync is not confirmed. Body signals, the
+  journal and the strap's workouts follow on scroll; logged workouts stay on Workout. Portrait and
+  phone stack rings, week and night. Without ordered stages the night falls back to its totals.
+- **Food is the day's plate**: a round key either side of the day's name (no next day after today,
+  and a "Today" capsule when away from it), then a wash plate with the day's Calorie Target, eaten
+  and remaining as three large figures ("Over" in sun once past the target), the goal, Estimated
+  Expenditure and Trend Weight muted beneath ("held at BMR" when the floor applies), and protein,
+  fat and carbs as rows of eaten / target grams over a bar in the macro's colour: protein says
+  "met" once reached, fat below its floor turns the bar amber and says "below floor", carbs are
+  never graded. Without the Profile's height, sex and birth date or a Body Weight the plate says
+  "No Calorie Target yet" with Axum's reason. The goal control follows as one line ("Goal from
+  today", a capsule select of the six offered goals and an outline "Save goal" key), the Day
+  view's only write. Then the day's energy as the display figure with one
+  capsule beneath it split by macronutrient energy (protein in sun, carbs in ink, fat blue, alcohol
+  muted, 4/4/9/7 kcal per gram), and the macros as figures with a coloured dot each, then the NOVA 1
+  share as a figure with the classified kcal it is a share of and the unclassified Portions it
+  leaves out beneath it (a dash until something is classified). A total that Supplement Doses add
+  to notes their share muted beneath its figure ("2 g from supplements"), and a day with
+  Supplements ends the totals with a Supplements row: one capsule per Supplement with its doses
+  added up ("Fish oil 2 capsules"), then one per compound without a database parameter with the
+  amount taken ("Creatine monohydrate 3 g"). The Meal Logs
+  follow as wash plates in time order: the clock time large, the meal's kcal on the right, the name
+  of the saved Meal it was logged from as a capsule beneath (none for a one-off meal), the note
+  muted, then one row per Portion (Food, grams, kcal); a Product Portion shows its label name with
+  its brand muted beneath it, and a classified Portion carries a small "NOVA n" capsule after its
+  name (ink for Class 1, muted otherwise). The meal's Supplement Doses follow the Portions in the
+  same columns (Supplement, doses in its dose unit, kcal when the label states energy). A Meal Log with a photo carries its
+  thumbnail as a rounded key beside the figures (leading the plate on narrow screens); selecting
+  it opens the full photo in the night viewer Photos uses. Unknown is a dash; a total that leaves out
+  Portions without a value is drawn "≥" with the count in its title and "At least" for assistive
+  technology. After the Meal Logs, "Vitamins and minerals" lists each nutrient of the NNR 2023
+  panel in Vitamins, Minerals and Omega-3 columns: its name (an "AI" capsule marks an adequate
+  intake), the whole percentage of its Recommended Intake over a thin bar that fills in ink once
+  reached (passing it is never flagged), the amount over the reference muted beneath, the
+  "Food … · supplements …" split when a Supplement adds to it, and one line for an Upper Limit:
+  an amber dot and "Above the Upper Limit today" for a caution, red text and bar with "Cut down:
+  7-day average …" when the week's average is above it. A muted line above names whom the
+  references are for and how many of the last 7 days are logged; the sources are credited
+  beneath. Without the Profile's sex or birth date, or under 18, the panel says "No vitamin and
+  mineral panel yet" with Axum's reason. "All nutrients" opens every parameter in the database's groups on tone bands, with a muted
+  "Food … · supplements …" line under any nutrient a Supplement adds to. While
+  the Food database imports or fails, the day's place holds a state note and the day keys stay.
+  The Danish Food Composition Database is credited at the foot of the page, and Open Food Facts
+  (ODbL) beneath it whenever the day shows a Product.
+- **Food Trends is the range in plates**: the Day and Trends switch heads the Food page (the
+  Workout capsule). Trends sets the range (30, 90, 180 or 365 days, ending today) and the grouping
+  (days, ISO weeks, calendar months) as two capsule tracks, then "n of N days logged" with the
+  figures in ink, then one wash plate per series: calories across the width (eaten as ink
+  columns, the Calorie Target as a sun line, Estimated Expenditure as a dashed muted line), protein
+  (sun columns under an ink target line), energy by macronutrient (stacked columns in the Day
+  view's macro colours), the NOVA 1 share (an ink line from 0 to 100 %), weight (each period's
+  scale weight as a faint dot under the sun Trend Weight line) and the weekly change (ink columns
+  from zero against the goal rate as a sun line). Each plate names its series in a small legend
+  and carries one muted line over the whole range (means per logged day). Bands of alternating
+  tone replace gridlines. A period without a value stays empty and a line stops at it instead of
+  bridging it, so a day without Meal Logs is a gap, never a zero; an edge week or month that covers
+  only part of itself is drawn lighter. The drawings are hidden from assistive technology, which
+  reads each summary and a table of every period ("Not logged" for a missing day). No chart
+  library: plain SVG with the page's tokens. Last comes "Vitamins and minerals" across the width:
+  a summary naming Axum's Lasting Shortfalls and the nutrients to cut down, a muted basis line
+  with the rule, then the Day view's Vitamins, Minerals and Omega-3 lists as rows: the name (with
+  the "AI" capsule), a strip of one column per period on a wash-strong track whose top is 100 % of
+  the Recommended Intake (muted below it, ink once reached, never drawn past it, empty for a
+  period without a logged day, lighter for a partial edge), and the range mean on the right. A
+  Lasting Shortfall adds an amber "Short" capsule to the mean; a cut down period is a red column
+  and the row says "Cut down in n weeks" in red; a period with only a day above an Upper Limit
+  gets an amber dot under its column, and the row counts those days. Without the Profile's sex or
+  birth date, or under 18, the plate says "No vitamin and mineral coverage yet" with Axum's
+  reason while every other plate stays. The strips are hidden from assistive technology, which
+  reads the summary and a table of every nutrient (mean and logged days, shortfall, days above
+  an Upper Limit and the cut down periods by name).
+- **Photos is the pictures**: the albums as cover plates (wash plates, the cover on top, the
+  name, then a photo glyph with the count and the months), led by **All photos**, a plate two
+  columns by two rows whose cover is a mosaic of the album covers; with one album configured
+  the page opens it. An album runs edge to edge as justified rows: each photo grows by its own
+  width-to-height ratio so a row shares one height and fills the width, and the wall keeps
+  loading as it scrolls (a "Load more" key stays as the fallback). A photo opens full screen
+  on the night ground with the keys as light tone plates floating on it: count top left, close
+  top right, previous and next at mid-height (at the bottom on a phone), and a swipe steps.
+  The album and photo are in the URL. Nothing says "refresh"; only a failed preview offers
+  "Retry photo".
+- **Travel is the map**: full-bleed from the top bar to the bottom edge, with every control a
+  ground plate floating on it. The planner is one capsule docked bottom-left (walk and run
+  glyphs, 5 km, 10 km, Custom and Steps, the inline field, then the ink "Plan loops" key); the
+  loops rise above it as one plate of rows whose selected loop wears the route's sun mark;
+  2D/3D, zoom and locate are one tall plate centred on the right edge. The origin is the
+  marker (only the demo origin gets a chip), and the one small attribution sits bottom-right,
+  merged with the routing credit. In portrait the planner spans the bottom and the controls
+  move to the top of the right edge; on a phone the attribution moves to the top-left.
+- **Lists Dates is plates of figures**: since dates first, each figure large and tabular
+  ("7 years · 8 months · 3 days", wrapping only between its parts), then the yearly dates
+  as a row of countdowns in the order they come round. A quiet glyph names the kind; the
+  date and its people's discs sit beneath and beside it, and a sun disc marks today. A plate
+  opens a sheet with Edit, a Show when idle switch and Delete; one "Add a date" key adds.
+  No per-plate keys and no refresh: the view re-reads when the Copenhagen day turns.
+- **LED is the light itself**: the Backlight drawn as a TV on a night wall (always the night
+  ground, even by day) with the requested light glowing behind it. The halo _is_ the selection:
+  one colour, the picture's colours for TV Sync (the screen shows dusk with the house sun
+  setting on a horizon), or an effect moving the way its light moves (rainbow turns, aurora
+  and forest sway, fire flickers, party hops). A new choice blooms out from behind the TV.
+  A dock of discs, each a small disc of its own light, picks the mode (Off is the hollow
+  ring of a set sun); a tall dimmer on the wall's right edge fills with that light and carries
+  a notch where the controller last read back; a hue wheel (hue around, white at the heart)
+  paints the colour when touched; a 24-hour ring with midnight at the top holds the bedtime
+  window as a red arc from a moon to a sun, the sun dot at this minute, a moon switch in the
+  middle and the red level beneath. Drag either end; edits send when the hand lifts. Status
+  is marks (a signal dot, a rewind mark when stale, one-word failure tags, the spinning sun
+  arc on the chosen disc); every sentence lives in the live region and an sr-only state list.
+  This is the one page where gradients and glow are allowed, because they are the thing
+  itself, not decoration.
+- **Tap targets are at least 44 px** (key-icon 48 px, key-round 64 px, key-hero 96 px);
+  inline attribution links are the only exception.
+- **Connection** is one word in display type beside a signal disc that pulses once (and
+  shakes when not connected), a big check-again key and "Key stays on the server".
+  The top bar shows a neutral plug glyph, never a state.
+
+## Genericness test
+
+A generic model would ship a dark dashboard of rounded cards with a yellow accent (the old
+design). Changed: no cards, a light theme by day, an index list as the home, one orange used
+only as the sun, a real astronomical sun position as the identity element.
