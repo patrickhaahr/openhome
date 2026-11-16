@@ -49,6 +49,10 @@ export const cn = createCn({
         "led-edge",
         "led-horizon",
         "bedtime-red",
+        // Photos
+        "photo-night",
+        "photo-ink",
+        "photo-plate",
       ],
       text: [
         "mega",
@@ -128,6 +132,8 @@ export const cn = createCn({
         "idle-clock",
         "idle-snug",
         "idle-tight",
+        // Photos
+        "photo-name",
       ],
       tracking: [
         "score",
@@ -268,6 +274,10 @@ export const cn = createCn({
         "idle-plate-y",
         "idle-dates",
         "idle-separator",
+        // Photos
+        "photo-head",
+        "photo-empty",
+        "photo-row",
       ],
       animate: [
         "stage-grow",

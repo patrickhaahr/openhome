@@ -23,6 +23,9 @@ const buttonVariants = cva(
         loop: "grid w-full grid-cols-[0.75rem_auto_minmax(0,1fr)_auto] items-center justify-start rounded-full border-0 bg-transparent text-left text-base font-normal whitespace-normal text-ink hover:bg-wash aria-pressed:bg-wash-strong",
         /** Ink that stays ink under the hand: on the map the sun is reserved for the route. */
         ink: "bg-primary text-primary-foreground",
+        /** A control floating on the photo viewer's night ground: a light plate, inverted under the hand. */
+        viewer:
+          "bg-photo-plate/80 bg-clip-border text-photo-ink hover:bg-photo-ink hover:text-photo-night",
         /** A map control: one tone step on its plate, two under the hand. */
         tone: "border-0 bg-wash bg-clip-border text-ink hover:bg-wash-strong focus-visible:outline-offset-2",
       },

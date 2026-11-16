@@ -220,7 +220,9 @@ test("the wall loads more on request and the viewer steps across pages with one 
   const view = await setup({ albums, view: albumId, wall })
 
   try {
-    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+    expect(
+      view.container.querySelectorAll("[data-slot='photo-wall'] img")
+    ).toHaveLength(2)
     await act(async () => view.button("All albums").click())
     expect(view.open).toHaveBeenLastCalledWith(undefined)
 
@@ -248,8 +250,12 @@ test("the wall loads more on request and the viewer steps across pages with one 
     await vi.waitFor(() =>
       expect(document.querySelector('[role="dialog"]')).toBeNull()
     )
-    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(3)
-    expect(view.container.querySelector(".photo-more button")).toBeNull()
+    expect(
+      view.container.querySelectorAll("[data-slot='photo-wall'] img")
+    ).toHaveLength(3)
+    expect(
+      view.container.querySelector("[data-slot='photo-more'] button")
+    ).toBeNull()
   } finally {
     await view.cleanup()
   }
@@ -266,7 +272,9 @@ test("a failed page keeps what loaded and offers to try again", async () => {
     await act(async () => view.button("Load more").click())
     expect(view.load).toHaveBeenCalledWith("all", 1)
     expect(view.button("Try again").disabled).toBe(false)
-    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+    expect(
+      view.container.querySelectorAll("[data-slot='photo-wall'] img")
+    ).toHaveLength(2)
   } finally {
     await view.cleanup()
   }
@@ -291,15 +299,21 @@ test("retrying a failed page asks for the same cursor and ends the list when it 
   try {
     await act(async () => view.button("Load more").click())
     expect(view.container.textContent).toContain("Could not load more photos.")
-    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(2)
+    expect(
+      view.container.querySelectorAll("[data-slot='photo-wall'] img")
+    ).toHaveLength(2)
     await act(async () => view.button("Try again").click())
     expect(view.load.mock.calls).toEqual([
       ["all", 1],
       ["all", 1],
     ])
-    expect(view.container.querySelectorAll(".photo-wall img")).toHaveLength(3)
+    expect(
+      view.container.querySelectorAll("[data-slot='photo-wall'] img")
+    ).toHaveLength(3)
     expect(view.container.textContent).toContain("1 more photos loaded.")
-    expect(view.container.querySelector(".photo-more button")).toBeNull()
+    expect(
+      view.container.querySelector("[data-slot='photo-more'] button")
+    ).toBeNull()
   } finally {
     await view.cleanup()
   }
@@ -481,7 +495,7 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     // Portrait thumbnails take a portrait cell once their frame is known.
     expect(
       container
-        .querySelector<HTMLElement>(".photo-cell")
+        .querySelector<HTMLElement>("[data-slot='photo-cell']")
         ?.style.getPropertyValue("--ratio")
     ).toBe(String(400 / 600))
   } finally {

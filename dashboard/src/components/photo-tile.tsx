@@ -3,6 +3,7 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwis
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken"
 import { Button } from "@/components/ui/button"
 import { photoUrl, type WallItem } from "@/lib/photos"
+import { cn } from "@/lib/utils"
 
 // Thumbnails tell their own frame once loaded; until then a tile is a 3:2 landscape.
 const DEFAULT_RATIO = 1.5
@@ -38,21 +39,22 @@ export function Tile({
 
   return (
     <li
-      className="photo-cell"
+      data-slot="photo-cell"
+      className="relative photo-cell min-w-0"
       // SAFETY: CSSProperties omits custom properties; --ratio is the photo's width over height.
       style={{ "--ratio": ratio } as React.CSSProperties}
     >
       <button
         ref={register}
         type="button"
-        className="photo-tile"
+        className="group/tile absolute inset-0 block overflow-hidden rounded-sm bg-wash-strong focus-visible:z-1 focus-visible:outline-3 focus-visible:outline-offset-2"
         aria-label={label}
         onClick={open}
       >
         <PhotoImage
           src={photoUrl(item.album, item.asset, "thumbnail")}
           alt={alt}
-          lazy
+          variant="tile"
           measure={(width, height) => {
             const value = ratioOf(width, height)
             ratios.set(item.asset, value)
@@ -67,16 +69,22 @@ export function Tile({
 export function PhotoImage({
   src,
   alt,
-  lazy = false,
+  variant,
   measure,
 }: {
   src: string
   alt: string
-  lazy?: boolean
+  variant: "tile" | "viewer"
   measure?: (width: number, height: number) => void
 }): React.JSX.Element {
   const [state, setState] = useState<"loading" | "loaded" | "failed">("loading")
   const [attempt, setAttempt] = useState(0)
+  const tile = variant === "tile"
+
+  const statusClass = cn(
+    "absolute inset-0 flex flex-col items-center justify-center gap-4",
+    tile ? "text-muted-ink" : "text-photo-ink/72"
+  )
 
   const settle = useEffectEvent((image: HTMLImageElement) => {
     if (image.naturalWidth > 0) {
@@ -91,18 +99,24 @@ export function PhotoImage({
   }
 
   return (
-    <div className="photo-image" data-state={state}>
+    <div
+      className={cn(
+        "group/image relative size-full",
+        tile && "data-[state=loading]:bg-wash-strong"
+      )}
+      data-state={state}
+    >
       {state === "failed" ? (
-        <div className="photo-image-status" role="status">
+        <div className={statusClass} role="status">
           <ImageBrokenIcon
-            size={lazy ? 28 : 48}
+            size={tile ? 28 : 48}
             weight="light"
             aria-hidden="true"
           />
           <span className="sr-only">Photo unavailable</span>
-          {lazy ? null : (
+          {tile ? null : (
             <Button
-              variant="outline"
+              variant="viewer"
               size="key-icon"
               title="Retry photo"
               onClick={() => {
@@ -122,13 +136,19 @@ export function PhotoImage({
             ref={imageRef}
             src={`${src}${attempt ? `?retry=${attempt}` : ""}`}
             alt={alt}
-            loading={lazy ? "lazy" : "eager"}
+            className={cn(
+              "size-full group-data-[state=loading]/image:opacity-0",
+              tile
+                ? "object-cover transition-transform duration-slow ease-app group-hover/tile:scale-103 group-active/tile:scale-101"
+                : "object-contain"
+            )}
+            loading={tile ? "lazy" : "eager"}
             decoding="async"
             onLoad={(event) => settle(event.currentTarget)}
             onError={() => setState("failed")}
           />
           {state === "loading" ? (
-            <span className="photo-image-status">
+            <span className={statusClass}>
               <span className="sr-only">Loading photo…</span>
             </span>
           ) : null}

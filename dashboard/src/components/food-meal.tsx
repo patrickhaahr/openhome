@@ -1,13 +1,7 @@
 import { Amount } from "@/components/food-amount"
 import { useState } from "react"
-import { XIcon } from "@phosphor-icons/react/dist/csr/X"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { PhotoViewer, ViewerBar, ViewerStage } from "@/components/photo-viewer"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   doseCount,
   doseEnergy,
@@ -75,29 +69,20 @@ function MealPhotoKey({
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent variant="fullscreen" showCloseButton={false}>
-          <div className="photo-viewer" data-slot="food-photo-viewer">
+          <PhotoViewer data-slot="food-photo-viewer">
             <DialogTitle className="sr-only">Meal at {time}</DialogTitle>
-            <div className="photo-stage">
+            <ViewerStage>
               <img
                 src={mealPhotoUrl(photo, "photo")}
                 width={photo.width}
                 height={photo.height}
                 alt={`The meal at ${time}`}
-                className="size-full"
+                className="size-full object-contain"
                 decoding="async"
               />
-            </div>
-            <div className="photo-viewer-bar">
-              <span className="photo-viewer-where">Meal at {time}</span>
-              <DialogClose
-                render={<Button variant="outline" size="key-icon" />}
-                title="Close photo"
-              >
-                <XIcon size={22} aria-hidden="true" />
-                <span className="sr-only">Close photo</span>
-              </DialogClose>
-            </div>
-          </div>
+            </ViewerStage>
+            <ViewerBar>Meal at {time}</ViewerBar>
+          </PhotoViewer>
         </DialogContent>
       </Dialog>
     </>

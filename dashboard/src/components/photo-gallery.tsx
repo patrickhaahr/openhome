@@ -1,16 +1,12 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft"
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft"
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight"
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken"
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images"
-import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogTitle,
@@ -31,6 +27,12 @@ import {
 } from "@/lib/photos"
 import { Tile, PhotoImage } from "@/components/photo-tile"
 import { AlbumMeta, AlbumIndex } from "@/components/photo-albums"
+import {
+  PhotoViewer,
+  ViewerBar,
+  ViewerStage,
+  ViewerStep,
+} from "@/components/photo-viewer"
 
 type GalleryProps = {
   albums: AlbumRead
@@ -135,6 +137,13 @@ export function PhotoGallery({
   )
 }
 
+const noteClass = "grid justify-items-start gap-4 py-photo-empty text-muted-ink"
+
+const noteHeading =
+  "text-title leading-none font-medium tracking-tighter text-ink"
+
+const failedDot = "block size-2.5 rounded-full bg-danger"
+
 function Unavailable({
   title,
   detail,
@@ -162,9 +171,9 @@ function Unavailable({
   }
 
   return (
-    <div className="photo-empty" role="status">
+    <div className={noteClass} role="status">
       <ImageBrokenIcon size={56} weight="light" aria-hidden="true" />
-      <h2>{title}</h2>
+      <h2 className={noteHeading}>{title}</h2>
       <p className="sr-only">{detail}</p>
       <Button
         variant="outline"
@@ -178,7 +187,8 @@ function Unavailable({
         <span className="sr-only">{label}</span>
       </Button>
       {failed ? (
-        <p className="photo-failed">
+        <p>
+          <span className={failedDot} aria-hidden="true" />
           <span className="sr-only">Still unavailable. Try again later.</span>
         </p>
       ) : null}
@@ -199,7 +209,7 @@ function WallHead({
   total,
 }: Head & { total: number | null }): React.JSX.Element {
   return (
-    <header className="photo-head">
+    <header className="mb-photo-head flex flex-wrap items-center gap-x-4 gap-y-2 px-margin">
       {back === undefined ? null : (
         <Button
           variant="outline"
@@ -211,9 +221,16 @@ function WallHead({
           <span className="sr-only">All albums</span>
         </Button>
       )}
-      <h2 className="photo-head-title">{title}</h2>
+      <h2 className="min-w-0 text-lead leading-none font-medium tracking-headline">
+        {title}
+      </h2>
       {total === null ? null : (
-        <AlbumMeta count={total} span={span} unit="photos" />
+        <AlbumMeta
+          className="ms-1 me-0"
+          count={total}
+          span={span}
+          unit="photos"
+        />
       )}
     </header>
   )
@@ -347,13 +364,16 @@ function PhotoWall({
     <>
       <WallHead {...head} total={first.total} />
       {items.length === 0 ? (
-        <div className="photo-empty">
+        <div className={noteClass}>
           <ImagesIcon size={56} weight="light" aria-hidden="true" />
-          <h3>No photos here yet</h3>
+          <h3 className={noteHeading}>No photos here yet</h3>
           <p className="sr-only">This album has no available still photos.</p>
         </div>
       ) : (
-        <ul data-slot="photo-wall" className="photo-wall">
+        <ul
+          data-slot="photo-wall"
+          className="flex flex-wrap items-start gap-1 px-1 after:grow-100000 after:basis-0 max-phone:gap-0.75 max-phone:px-0.75"
+        >
           {items.map((item, at) => (
             <Tile
               key={item.asset}
@@ -369,7 +389,11 @@ function PhotoWall({
           ))}
         </ul>
       )}
-      <div ref={end} className="photo-more">
+      <div
+        ref={end}
+        data-slot="photo-more"
+        className="flex min-h-px justify-center pt-6 pb-10 empty:p-0 empty:pb-1"
+      >
         {next === null ? null : (
           <Button
             variant="outline"
@@ -378,9 +402,7 @@ function PhotoWall({
             onClick={() => void load(false)}
           >
             {loading ? "Loading photos…" : failed ? "Try again" : "Load more"}
-            {failed ? (
-              <span className="photo-failed" aria-hidden="true" />
-            ) : null}
+            {failed ? <span className={failedDot} aria-hidden="true" /> : null}
           </Button>
         )}
       </div>
@@ -408,15 +430,14 @@ function PhotoWall({
             }
           }}
         >
-          <div className="photo-viewer">
+          <PhotoViewer>
             <div className="sr-only">
               <DialogTitle>{head.title}</DialogTitle>
               <DialogDescription>
                 Photo {position} of {first.total}
               </DialogDescription>
             </div>
-            <div
-              className="photo-stage"
+            <ViewerStage
               onPointerDown={(event) => {
                 swipe.current =
                   event.pointerType === "mouse"
@@ -443,57 +464,35 @@ function PhotoWall({
                   key={current.asset}
                   src={photoUrl(current.album, current.asset, "preview")}
                   alt={`Photo ${position} from ${albumName(current)}`}
+                  variant="viewer"
                 />
               )}
-            </div>
-            <div className="photo-viewer-bar">
-              <span className="photo-viewer-where" aria-hidden="true">
-                <span className="num">
-                  {position} / {formatWhole(first.total)}
-                </span>
-                {view === ALL_PHOTOS && current !== undefined ? (
-                  <span>{albumName(current)}</span>
-                ) : null}
-                {current?.year === undefined ? null : (
-                  <span className="num">{current.year}</span>
-                )}
+            </ViewerStage>
+            <ViewerBar decorative>
+              <span className="num">
+                {position} / {formatWhole(first.total)}
               </span>
-              <DialogClose
-                render={<Button variant="outline" size="key-icon" />}
-                title="Close photo"
-              >
-                <XIcon size={22} aria-hidden="true" />
-                <span className="sr-only">Close photo</span>
-              </DialogClose>
-            </div>
-            <div className="photo-step" data-side="previous">
-              <Button
-                variant="outline"
-                size="key-icon"
-                disabled={index <= 0}
-                title="Previous photo"
-                onClick={() => go(-1)}
-              >
-                <CaretLeftIcon size={26} aria-hidden="true" />
-                <span className="sr-only">← Previous</span>
-              </Button>
-            </div>
-            <div className="photo-step" data-side="next">
-              <Button
-                variant="outline"
-                size="key-icon"
-                disabled={index === items.length - 1 && next === null}
-                title="Next photo"
-                onClick={() => go(1)}
-              >
-                <CaretRightIcon size={26} aria-hidden="true" />
-                <span className="sr-only">Next →</span>
-              </Button>
-            </div>
+              {view === ALL_PHOTOS && current !== undefined ? (
+                <span>{albumName(current)}</span>
+              ) : null}
+              {current?.year === undefined ? null : (
+                <span className="num">{current.year}</span>
+              )}
+            </ViewerBar>
+            <ViewerStep
+              side="previous"
+              disabled={index <= 0}
+              onClick={() => go(-1)}
+            />
+            <ViewerStep
+              side="next"
+              disabled={index === items.length - 1 && next === null}
+              onClick={() => go(1)}
+            />
             <span className="sr-only" aria-live="polite">
               {position} / {first.total}
             </span>
-          </div>
+          </PhotoViewer>
         </DialogContent>
       </Dialog>
     </>
