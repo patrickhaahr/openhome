@@ -10,7 +10,6 @@ const allowlist = [
   "src/backlight.css",
   "src/binder.css",
   "src/components/idle-milestone.css",
-  "src/connection.css",
   "src/controls.css",
   "src/food-meals.css",
   "src/food-trends.css",

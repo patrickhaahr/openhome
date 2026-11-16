@@ -77,7 +77,10 @@ function ConnectionPage() {
   const label = isChecking ? "Checking…" : "Check again"
 
   return (
-    <div className="link-page" data-state={health.state}>
+    <div
+      className="group/link grid min-h-page-fill content-center gap-link-stack [@media(max-width:900px)]:min-h-0 [@media(max-width:900px)]:grid-cols-1 [@media(max-width:900px)]:items-start"
+      data-state={health.state}
+    >
       <div className="sr-only">
         <h1 id="page-heading" tabIndex={-1}>
           {outcome.title}
@@ -85,15 +88,21 @@ function ConnectionPage() {
         <p>{outcome.detail}</p>
         <h2 id="status-heading">Connection status</h2>
       </div>
-      <section aria-labelledby="status-heading" className="link-hero">
-        <span className="link-signal" aria-hidden="true">
-          <span />
+      <section
+        aria-labelledby="status-heading"
+        className="flex flex-wrap items-center gap-x-link-hero gap-y-6"
+      >
+        <span
+          className="relative grid aspect-square w-signal shrink-0 place-items-center before:absolute before:inset-0 before:rounded-full before:bg-danger before:opacity-14 group-data-[state=connected]/link:before:bg-connected motion-safe:not-group-data-[state=connected]/link:animate-link-refuse motion-safe:group-data-[state=connected]/link:before:animate-link-signal"
+          aria-hidden="true"
+        >
+          <span className="absolute inset-signal-core rounded-full bg-danger group-data-[state=connected]/link:bg-connected" />
         </span>
         <div role="status" aria-live="polite" aria-atomic="true">
-          <p className="link-label">
+          <p className="text-link-status leading-status font-medium tracking-status">
             {isChecking ? "Checking connection…" : outcome.label}
           </p>
-          <p className="link-checked">
+          <p className="mt-3 text-aside text-muted-ink tabular-nums">
             <span className="sr-only">Last checked </span>
             <time dateTime={health.checkedAt}>
               {checkTime.format(new Date(health.checkedAt))}
@@ -101,7 +110,7 @@ function ConnectionPage() {
           </p>
         </div>
       </section>
-      <div className="link-tools">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
         <Button
           size="key-hero"
           variant="outline"
@@ -113,8 +122,12 @@ function ConnectionPage() {
           <ArrowClockwiseIcon size={36} aria-hidden="true" />
           <span className="sr-only">{label}</span>
         </Button>
-        <p className="link-key">
-          <ShieldCheckIcon size={20} aria-hidden="true" />
+        <p className="flex items-center gap-2 text-aside text-muted-ink">
+          <ShieldCheckIcon
+            size={20}
+            className="shrink-0 text-ink"
+            aria-hidden="true"
+          />
           <span aria-hidden="true">Key stays on the server</span>
           <span className="sr-only">
             The API key stays on the dashboard server. It is never saved on this
@@ -133,9 +146,11 @@ function ConnectionPage() {
   )
 }
 
+const setupCode = "rounded-code bg-wash-strong px-2.5 py-1 font-mono text-aside"
+
 function SetupInstructions() {
   return (
-    <section className="link-setup" aria-labelledby="setup-heading">
+    <section aria-labelledby="setup-heading">
       <div className="sr-only">
         <h3 id="setup-heading">For the installer</h3>
         <p>
@@ -143,18 +158,20 @@ function SetupInstructions() {
           restart it and check again.
         </p>
       </div>
-      <dl>
-        <div>
+      <dl className="grid gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <dt>
-            <code>OPENHOME_API_URL</code>
+            <code className={setupCode}>OPENHOME_API_URL</code>
           </dt>
-          <dd>Axum API base URL</dd>
+          <dd className="text-aside text-muted-ink">Axum API base URL</dd>
         </div>
-        <div>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <dt>
-            <code>API_KEY</code>
+            <code className={setupCode}>API_KEY</code>
           </dt>
-          <dd>The key configured on Axum</dd>
+          <dd className="text-aside text-muted-ink">
+            The key configured on Axum
+          </dd>
         </div>
       </dl>
     </section>
@@ -165,11 +182,11 @@ function ConnectionError() {
   const router = useRouter()
 
   return (
-    <div className="lost">
+    <div className="grid min-h-page-fill content-center justify-items-start gap-6">
       <h1 id="page-heading" tabIndex={-1} className="page-title">
         The dashboard couldn’t check the connection.
       </h1>
-      <p className="lost-text">
+      <p className="max-w-120 text-lg leading-normal text-muted-ink">
         Check your connection to the dashboard and try again.
       </p>
       <Button

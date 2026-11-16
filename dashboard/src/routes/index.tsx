@@ -283,11 +283,11 @@ function Unavailable(): React.JSX.Element {
 
 function HomeError(): React.JSX.Element {
   return (
-    <section className="lost">
+    <section className="grid min-h-page-fill content-center justify-items-start gap-6">
       <h1 id="page-heading" tabIndex={-1} className="page-title">
         Home connection unavailable
       </h1>
-      <p className="lost-text">
+      <p className="max-w-120 text-lg leading-normal text-muted-ink">
         The dashboard could not check OpenHome. Open Connection to try again.
       </p>
       <Link to="/connection" className="action-link">
