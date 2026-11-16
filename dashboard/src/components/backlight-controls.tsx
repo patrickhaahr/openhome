@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react"
-import { ApertureIcon } from "@phosphor-icons/react/dist/csr/Aperture"
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockwise"
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise"
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise"
@@ -16,148 +15,22 @@ import type {
   BacklightResult,
   BacklightSelection,
 } from "@/lib/backlight"
+import {
+  connectionLabel,
+  unconfirmed,
+  type Debounce,
+  type Delivery,
+  discard,
+  describe,
+} from "@/components/backlight-delivery"
+import { BacklightReadout } from "@/components/backlight-readout"
+import { BacklightSetup } from "@/components/backlight-setup"
 
 type Props = {
   data: BacklightRead
   change: (action: BacklightAction) => Promise<BacklightResult>
   /** The display clock, for the sun on the bedtime ring. */
   now?: Date
-}
-
-const modeLabel = {
-  off: "Off",
-  "tv-sync": "TV Sync",
-  color: "Color",
-  effect: "Effect",
-  other: "Other",
-}
-
-const commandLabel = {
-  idle: "No command",
-  pending: "Pending",
-  acknowledged: "Acknowledged",
-  failed: "Failed; selection saved",
-}
-
-const recoveryLabel = {
-  idle: "No recovery needed",
-  pending: "Pending",
-  retrying: "Retrying latest selection",
-  recovered: "Current selection recovered",
-  "profile-required": "TV Sync settings needed",
-}
-
-const connectionLabel = {
-  unconfigured: "Setup needed",
-  unknown: "Not checked",
-  reachable: "Reachable",
-  unreachable: "Unreachable",
-}
-
-const unconfirmed =
-  "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
-
-/** A trailing 200 ms edit that has not been sent; `timer` is its pending timeout. */
-type Debounce = {
-  readonly kind: "debounce"
-  readonly selection: BacklightSelection
-  readonly timer: ReturnType<typeof setTimeout>
-}
-
-/** The one action waiting behind the request in flight; a newer one replaces it. */
-type Waiting =
-  | Debounce
-  | { readonly kind: "queued"; readonly action: BacklightAction }
-
-/**
- * Where delivery of Backlight actions stands. Each variant carries exactly the data its phase
- * needs: the debounce timer, or the action in flight (identified by `run`) and the one thing
- * waiting behind it. This is only what the dashboard has asked for; the API's command,
- * recovery and observation facts arrive in `data` and stay separate.
- *
- * The exits of every non-terminal phase:
- * - debouncing: the timer sends it, an immediate action replaces it, or unmount clears it.
- * - sending: the response or the rejection of `change` ends it, then whatever is waiting is
- *   delivered; unmount drops the response. A request that never settles holds `sending`, see
- *   `deliver`.
- */
-type Delivery =
-  | { readonly phase: "idle" }
-  | { readonly phase: "debouncing"; readonly debounce: Debounce }
-  | {
-      readonly phase: "sending"
-      readonly run: number
-      readonly action: BacklightAction
-      readonly next: Waiting | null
-    }
-  | { readonly phase: "closed" }
-
-/** Cancel obsolete waiting work; a queued action holds nothing to release. */
-function discard(waiting: Waiting | null): void {
-  if (waiting?.kind === "debounce") clearTimeout(waiting.timer)
-}
-
-/** What the live region says about an outcome, and the tag shown beside the controls. */
-type Announcement = {
-  readonly text: string
-  readonly tag: string | null
-}
-
-/** The announcement for an action's outcome; independent of how it is delivered. */
-function describe(
-  action: BacklightAction,
-  result: BacklightResult
-): Announcement {
-  switch (result.state) {
-    case "available":
-      if (result.status.command === "failed")
-        return {
-          text: "OpenHome couldn’t confirm the command. Your selection is saved; OpenHome retries the latest selection automatically.",
-          tag: "Retrying",
-        }
-
-      if (action.action === "profile")
-        return { text: "TV Sync settings saved safely.", tag: null }
-
-      if (action.action === "bedtime")
-        return {
-          text: "Bedtime settings saved. Readable device state is listed with the Backlight state.",
-          tag: null,
-        }
-
-      if (action.action === "refresh")
-        return result.status.reachability === "reachable"
-          ? { text: "Backlight state refreshed.", tag: null }
-          : { text: "The Backlight couldn’t be reached.", tag: "No answer" }
-
-      if (result.status.command === "pending")
-        return {
-          text: "Your selection is saved and waiting for the Backlight.",
-          tag: null,
-        }
-
-      return {
-        text: "Command acknowledged. Readable device state is listed with the Backlight state.",
-        tag: null,
-      }
-    case "profile-required":
-      return {
-        text: "TV Sync settings are needed. Activate TV Sync on the controller and capture, or recover the private backup.",
-        tag: "Setup needed",
-      }
-    case "invalid-profile":
-      return {
-        text: "The saved profile is invalid. Your previous TV Sync settings were kept.",
-        tag: "Not saved",
-      }
-    case "invalid-settings":
-      return {
-        text: "Bedtime settings weren’t saved. Check the times and red brightness, then try again.",
-        tag: "Not saved",
-      }
-    case "unavailable":
-      return { text: unconfirmed, tag: "No answer" }
-  }
 }
 
 /**
@@ -516,41 +389,7 @@ export function BacklightControls({
               <span className="led-picture" aria-hidden="true" />
             ) : null}
             {status?.setup === "incomplete" ? (
-              <section className="led-setup" aria-labelledby="led-setup">
-                <h2 id="led-setup" className="sr-only">
-                  Save your TV Sync settings
-                </h2>
-                <p className="sr-only">
-                  Capture while TV Sync is active, or recover the installer’s
-                  private backup. Off stays available during setup.
-                </p>
-                <Button
-                  size="key"
-                  variant="outline"
-                  disabled={pending}
-                  title="Capture TV Sync"
-                  onClick={() =>
-                    perform({ action: "profile", source: "capture" })
-                  }
-                >
-                  <ApertureIcon size={22} aria-hidden="true" />
-                  <span aria-hidden="true">Capture</span>
-                  <span className="sr-only">Capture TV Sync</span>
-                </Button>
-                <Button
-                  size="key"
-                  variant="ghost"
-                  disabled={pending}
-                  title="Recover saved profile"
-                  onClick={() =>
-                    perform({ action: "profile", source: "backup" })
-                  }
-                >
-                  <ClockCounterClockwiseIcon size={22} aria-hidden="true" />
-                  <span aria-hidden="true">Restore</span>
-                  <span className="sr-only">Recover saved profile</span>
-                </Button>
-              </section>
+              <BacklightSetup pending={pending} perform={perform} />
             ) : null}
           </div>
         </div>
@@ -626,130 +465,13 @@ export function BacklightControls({
         )}
       </aside>
 
-      <div className="sr-only">
-        <p role="status" aria-live="polite">
-          {status === undefined
-            ? "OpenHome is unavailable. Refresh to try again."
-            : message}
-        </p>
-        <h2>Backlight state</h2>
-        <dl>
-          <dt>Control</dt>
-          <dd>
-            {status === undefined
-              ? "Unknown"
-              : status.control_source === "manual"
-                ? "Manual override"
-                : "Automatic"}
-          </dd>
-          {status?.control_source === "manual" ? (
-            <>
-              <dt>Override ends</dt>
-              <dd>
-                {status.override_expires_at === null ? (
-                  "Until another selection"
-                ) : (
-                  <time dateTime={status.override_expires_at}>
-                    {new Intl.DateTimeFormat("en-GB", {
-                      timeZone: "Europe/Copenhagen",
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }).format(new Date(status.override_expires_at))}{" "}
-                    Copenhagen
-                  </time>
-                )}
-              </dd>
-            </>
-          ) : null}
-          <dt>Selected</dt>
-          <dd>{status === undefined ? "Unknown" : modeLabel[mode]}</dd>
-          {selection?.mode === "effect" ? (
-            <>
-              <dt>Requested effect</dt>
-              <dd>
-                {status?.effects.find((item) => item.id === selection.effect)
-                  ?.name ?? selection.effect}
-              </dd>
-            </>
-          ) : null}
-          {selection?.mode === "color" ? (
-            <>
-              <dt>Requested RGB</dt>
-              <dd>
-                {selection.rgb.red}, {selection.rgb.green}, {selection.rgb.blue}
-              </dd>
-            </>
-          ) : null}
-          {selection?.mode === "color" ||
-          selection?.mode === "effect" ||
-          (selection?.mode === "tv-sync" &&
-            selection.brightness !== undefined) ? (
-            <>
-              <dt>Requested brightness</dt>
-              <dd>{selection.brightness}%</dd>
-            </>
-          ) : null}
-          <dt>Last acknowledged</dt>
-          <dd>
-            {status?.acknowledged === null || status?.acknowledged === undefined
-              ? "None"
-              : modeLabel[status.acknowledged.mode]}
-          </dd>
-          <dt>Connection</dt>
-          <dd>
-            {status === undefined
-              ? "Unavailable"
-              : connectionLabel[status.reachability]}
-          </dd>
-          <dt>Command</dt>
-          <dd>
-            {status === undefined ? "Unknown" : commandLabel[status.command]}
-          </dd>
-          <dt>Recovery</dt>
-          <dd>
-            {status === undefined ? "Unknown" : recoveryLabel[status.recovery]}
-          </dd>
-          <dt>Observation</dt>
-          <dd>{status?.stale === false ? "Fresh" : "Stale / unknown"}</dd>
-          <dt>Observed power</dt>
-          <dd>
-            {observed === null || observed === undefined
-              ? "Unknown"
-              : observed.power
-                ? "On"
-                : "Off"}
-          </dd>
-          <dt>Observed mode</dt>
-          <dd>
-            {observed === undefined || observed === null
-              ? "Unknown"
-              : modeLabel[observed.mode]}
-          </dd>
-          <dt>Observed brightness</dt>
-          <dd>
-            {observed === null || observed === undefined
-              ? "Unknown"
-              : `${observed.brightness}%`}
-          </dd>
-        </dl>
-        <p>
-          Readback reports power, mode and brightness. It does not confirm the
-          exact visible color or effect. The notch on the brightness fader marks
-          the read brightness.
-        </p>
-        {status === undefined ? null : (
-          <p>
-            Bedtime Mode: red at {status.bedtime.brightness}% ·{" "}
-            {status.bedtime.start}–{status.bedtime.end} Europe/Copenhagen, then
-            TV Sync with its saved brightness.{" "}
-            {status.bedtime.enabled === true
-              ? "Manual selections last until the next Bedtime Mode transition. Automatic resumes the routine now."
-              : "Your manual selection stays until you choose again. Automatic restores TV Sync."}{" "}
-            TV Sync restores its saved brightness. Times follow Copenhagen,
-            including summer and winter time. Settings are kept while disabled.
-          </p>
-        )}
-      </div>
+      <BacklightReadout
+        status={status}
+        observed={observed}
+        selection={selection}
+        mode={mode}
+        message={message}
+      />
     </div>
   )
 }
