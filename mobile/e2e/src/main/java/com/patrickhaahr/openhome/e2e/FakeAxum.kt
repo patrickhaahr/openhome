@@ -7,63 +7,18 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.double
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
-import mockwebserver3.SocketEffect
+
 
 const val API_KEY = "e2e-api-key"
-
-data class FixtureSet(
-    val setNumber: Int,
-    val reps: Int? = null,
-    val weightKg: Double? = null,
-    val durationSeconds: Int? = null,
-    val rpe: Int? = null,
-    val notes: String? = null,
-)
-
-data class FixtureEntry(val exerciseId: Long, val sets: List<FixtureSet>, val notes: String? = null)
-
-data class FixtureWorkout(
-    val id: Long,
-    val date: String,
-    val name: String?,
-    val notes: String? = null,
-    val entries: List<FixtureEntry> = emptyList(),
-    val clientRevision: Long? = null,
-)
-
-data class FixtureBodyWeight(val id: Long, val date: String, val weightKg: Double)
-
-data class FixtureExercise(
-    val id: Long,
-    val name: String,
-    val category: String = "calisthenics",
-    val muscleGroup: String? = null,
-    val equipment: String? = null,
-)
-
-data class FixtureProfile(
-    val heightCm: Double? = null,
-    val sex: String? = null,
-    val hrMaxBpm: Int? = null,
-    val birthDate: String? = null,
-    val clientRevision: Long? = null,
-)
 
 /**
  * The app's external boundary: an HTTP server speaking the Axum fitness contract, including its
@@ -140,47 +95,47 @@ class FakeAxum(
     fun backlightRequests(): List<Pair<String, String>> = backlightRequests.toList()
 
     private val server = MockWebServer()
-    private val detailRequests = AtomicInteger()
-    private val blockedDetails = CountDownLatch(1)
-    private val workouts = CopyOnWriteArrayList(workouts)
-    private val receipts = HashMap<String, Pair<Long, JsonObject>>()
-    private val deliveries = CopyOnWriteArrayList<String>()
-    private val exercises =
+    internal val detailRequests = AtomicInteger()
+    internal val blockedDetails = CountDownLatch(1)
+    internal val workouts = CopyOnWriteArrayList(workouts)
+    internal val receipts = HashMap<String, Pair<Long, JsonObject>>()
+    internal val deliveries = CopyOnWriteArrayList<String>()
+    internal val exercises =
         CopyOnWriteArrayList(
             exercises.map { (id, name) -> FixtureExercise(id, name, exerciseCategories[id] ?: "calisthenics") } + exerciseDetails,
         )
-    private val exerciseReceipts = HashMap<String, Pair<Long, JsonObject>>()
-    private val exerciseDeliveries = CopyOnWriteArrayList<String>()
-    private val createOrder = CopyOnWriteArrayList<String>()
-    private val editDeliveries = CopyOnWriteArrayList<Long>()
-    private val bodyWeight = CopyOnWriteArrayList(bodyWeight)
-    private val bodyWeightReceipts = HashMap<String, Pair<Long, JsonObject>>()
-    private val bodyWeightDeliveries = CopyOnWriteArrayList<String>()
-    private val profileDeliveries = CopyOnWriteArrayList<Long>()
+    internal val exerciseReceipts = HashMap<String, Pair<Long, JsonObject>>()
+    internal val exerciseDeliveries = CopyOnWriteArrayList<String>()
+    internal val createOrder = CopyOnWriteArrayList<String>()
+    internal val editDeliveries = CopyOnWriteArrayList<Long>()
+    internal val bodyWeight = CopyOnWriteArrayList(bodyWeight)
+    internal val bodyWeightReceipts = HashMap<String, Pair<Long, JsonObject>>()
+    internal val bodyWeightDeliveries = CopyOnWriteArrayList<String>()
+    internal val profileDeliveries = CopyOnWriteArrayList<Long>()
 
     @Volatile
-    private var profile = profile
+    internal var profile = profile
 
     @Volatile
-    private var losingBodyWeightResponses = false
+    internal var losingBodyWeightResponses = false
 
     @Volatile
-    private var losingProfileResponses = false
+    internal var losingProfileResponses = false
 
     @Volatile
-    private var workoutEdits = WorkoutEdits.ANSWERED
+    internal var workoutEdits = WorkoutEdits.ANSWERED
 
     @Volatile
-    private var exerciseCreates = ExerciseCreates.ANSWERED
+    internal var exerciseCreates = ExerciseCreates.ANSWERED
 
     @Volatile
-    private var workoutCreates = WorkoutCreates.ANSWERED
+    internal var workoutCreates = WorkoutCreates.ANSWERED
 
     @Volatile
-    private var failDetailsAfter: Int? = null
+    internal var failDetailsAfter: Int? = null
 
     @Volatile
-    private var releaseBlockedDetails: CountDownLatch? = null
+    internal var releaseBlockedDetails: CountDownLatch? = null
 
     init {
         server.dispatcher =
@@ -400,256 +355,9 @@ class FakeAxum(
         }
     }
 
-    private fun createWorkout(request: RecordedRequest): MockResponse {
-        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
-        val requestId = checkNotNull(body["request_id"]).jsonPrimitive.content
-        deliveries += requestId
-        return when (workoutCreates) {
-            WorkoutCreates.DROPPED -> disconnected()
-            WorkoutCreates.SERVER_ERROR -> error(HttpURLConnection.HTTP_INTERNAL_ERROR, "An internal error occurred")
-            WorkoutCreates.REFUSED -> error(UNPROCESSABLE_ENTITY, "Exercise not found")
-            WorkoutCreates.ANSWERED -> commitWorkout(requestId, body)
-            WorkoutCreates.COMMITTED_RESPONSE_LOST -> {
-                commitWorkout(requestId, body)
-                disconnected()
-            }
-        }
-    }
-
-    private fun editWorkout(id: Long, request: RecordedRequest): MockResponse {
-        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
-        val revision = checkNotNull(body["client_revision"]).jsonPrimitive.long
-        editDeliveries += revision
-        val answer = commitEdit(id, revision, body)
-        return if (workoutEdits == WorkoutEdits.COMMITTED_RESPONSE_LOST) disconnected() else answer
-    }
-
-    private fun commitEdit(id: Long, revision: Long, body: JsonObject): MockResponse =
-        synchronized(receipts) {
-            val current =
-                workouts.firstOrNull { it.id == id }
-                    ?: return error(HttpURLConnection.HTTP_NOT_FOUND, "Workout with id $id not found")
-            if ((current.clientRevision ?: 0) >= revision) return ok(detailJson(current))
-            val edited =
-                body.toFixtureWorkout(id).copy(
-                    name = if ("name" in body) body.text("name") else current.name,
-                    notes = if ("notes" in body) body.text("notes") else current.notes,
-                    clientRevision = revision,
-                )
-            workouts[workouts.indexOf(current)] = edited
-            createOrder += "edit:${edited.name}"
-            ok(detailJson(edited))
-        }
-
-    private fun createBodyWeight(request: RecordedRequest): MockResponse {
-        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
-        val requestId = checkNotNull(body["request_id"]).jsonPrimitive.content
-        bodyWeightDeliveries += requestId
-        val answer = commitBodyWeight(requestId, body)
-        return if (losingBodyWeightResponses) disconnected() else answer
-    }
-
-    private fun commitBodyWeight(requestId: String, body: JsonObject): MockResponse =
-        synchronized(bodyWeightReceipts) {
-            val arguments = JsonObject(body - "request_id")
-            val receipt = bodyWeightReceipts[requestId]
-            if (receipt != null) {
-                if (receipt.second != arguments) {
-                    return error(HttpURLConnection.HTTP_CONFLICT, "request_id was already used for a different Body Weight")
-                }
-                return ok(bodyWeightJson(bodyWeight.first { it.id == receipt.first }))
-            }
-            val date = arguments.getValue("date").jsonPrimitive.content
-            if (bodyWeight.any { it.date == date }) {
-                return error(HttpURLConnection.HTTP_CONFLICT, "Body weight for date '$date' already recorded")
-            }
-            val entry =
-                FixtureBodyWeight(
-                    id = (bodyWeight.maxOfOrNull { it.id } ?: 0) + 1,
-                    date = date,
-                    weightKg = arguments.getValue("weight_kg").jsonPrimitive.double,
-                )
-            bodyWeight += entry
-            bodyWeightReceipts[requestId] = entry.id to arguments
-            MockResponse.Builder()
-                .code(HttpURLConnection.HTTP_CREATED)
-                .addHeader("Content-Type", "application/json")
-                .body(bodyWeightJson(entry).toString())
-                .build()
-        }
-
-    private fun editProfile(request: RecordedRequest): MockResponse {
-        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
-        val revision = checkNotNull(body["client_revision"]).jsonPrimitive.long
-        profileDeliveries += revision
-        synchronized(profileDeliveries) {
-            val current = profile
-            if ((current.clientRevision ?: 0) < revision) {
-                profile =
-                    FixtureProfile(
-                        heightCm = if ("height_cm" in body) body.number("height_cm")?.double else current.heightCm,
-                        sex = if ("sex" in body) body.text("sex") else current.sex,
-                        hrMaxBpm = if ("hr_max_bpm" in body) body.number("hr_max_bpm")?.int else current.hrMaxBpm,
-                        birthDate = if ("birth_date" in body) body.text("birth_date") else current.birthDate,
-                        clientRevision = revision,
-                    )
-            }
-        }
-        return if (losingProfileResponses) disconnected() else ok(profileJson())
-    }
-
-    private fun createExercise(request: RecordedRequest): MockResponse {
-        val body = Json.parseToJsonElement(checkNotNull(request.body).utf8()).jsonObject
-        val requestId = checkNotNull(body["request_id"]).jsonPrimitive.content
-        exerciseDeliveries += requestId
-        val answer = commitExercise(requestId, body)
-        return if (exerciseCreates == ExerciseCreates.COMMITTED_RESPONSE_LOST) disconnected() else answer
-    }
-
-    private fun commitExercise(requestId: String, body: JsonObject): MockResponse =
-        synchronized(exerciseReceipts) {
-            val arguments = JsonObject(body - "request_id")
-            val receipt = exerciseReceipts[requestId]
-            if (receipt != null) {
-                if (receipt.second != arguments) {
-                    return error(HttpURLConnection.HTTP_CONFLICT, "request_id was already used for a different Exercise")
-                }
-                return ok(exerciseJson(exercises.first { it.id == receipt.first }))
-            }
-            val name = arguments.getValue("name").jsonPrimitive.content
-            if (exercises.any { it.name == name }) {
-                return error(HttpURLConnection.HTTP_CONFLICT, "Exercise '$name' already exists")
-            }
-            val exercise =
-                FixtureExercise(
-                    id = (exercises.maxOfOrNull { it.id } ?: 0) + 1,
-                    name = name,
-                    category = arguments.getValue("category").jsonPrimitive.content,
-                    muscleGroup = arguments.text("muscle_group"),
-                    equipment = arguments.text("equipment"),
-                )
-            exercises += exercise
-            exerciseReceipts[requestId] = exercise.id to arguments
-            createOrder += "exercise:$name"
-            MockResponse.Builder()
-                .code(HttpURLConnection.HTTP_CREATED)
-                .addHeader("Content-Type", "application/json")
-                .body(exerciseJson(exercise).toString())
-                .build()
-        }
-
-    private fun commitWorkout(requestId: String, body: JsonObject): MockResponse =
-        synchronized(receipts) {
-            val arguments = JsonObject(body - "request_id")
-            val receipt = receipts[requestId]
-            if (receipt != null) {
-                if (receipt.second != arguments) {
-                    return error(HttpURLConnection.HTTP_CONFLICT, "request_id was already used for a different Workout")
-                }
-                return ok(detailJson(workouts.first { it.id == receipt.first }))
-            }
-            val workout = arguments.toFixtureWorkout(id = (workouts.maxOfOrNull { it.id } ?: 0) + 1)
-            workouts += workout
-            receipts[requestId] = workout.id to arguments
-            createOrder += "workout:${workout.name}"
-            MockResponse.Builder()
-                .code(HttpURLConnection.HTTP_CREATED)
-                .addHeader("Content-Type", "application/json")
-                .body(detailJson(workout).toString())
-                .build()
-        }
-
-    private fun JsonObject.toFixtureWorkout(id: Long) =
-        FixtureWorkout(
-            id = id,
-            date = getValue("date").jsonPrimitive.content,
-            name = text("name"),
-            notes = text("notes"),
-            entries =
-                getValue("exercises").jsonArray.map { element ->
-                    val entry = element.jsonObject
-                    FixtureEntry(
-                        exerciseId = entry.getValue("exercise_id").jsonPrimitive.long,
-                        notes = entry.text("notes"),
-                        sets =
-                            entry.getValue("sets").jsonArray.map { setElement ->
-                                val set = setElement.jsonObject
-                                FixtureSet(
-                                    setNumber = set.getValue("set_number").jsonPrimitive.int,
-                                    reps = set.number("reps")?.int,
-                                    weightKg = set.number("weight_kg")?.double,
-                                    durationSeconds = set.number("duration_seconds")?.int,
-                                    rpe = set.number("rpe")?.int,
-                                    notes = set.text("notes"),
-                                )
-                            },
-                    )
-                },
-        )
-
-    private fun JsonObject.text(key: String): String? = number(key)?.content
-
-    private fun JsonObject.number(key: String): JsonPrimitive? =
-        (this[key] as? JsonPrimitive)?.takeUnless { it is JsonNull }
-
-    private fun disconnected(): MockResponse =
-        MockResponse.Builder().onResponseStart(SocketEffect.CloseSocket()).build()
-
-    private fun workoutDetail(id: Long): MockResponse {
-        releaseBlockedDetails?.let {
-            blockedDetails.countDown()
-            it.await(60, TimeUnit.SECONDS)
-        }
-        val limit = failDetailsAfter
-        if (limit != null && detailRequests.incrementAndGet() > limit) {
-            return error(HttpURLConnection.HTTP_INTERNAL_ERROR, "An internal error occurred")
-        }
-        val workout =
-            workouts.firstOrNull { it.id == id }
-                ?: return error(HttpURLConnection.HTTP_NOT_FOUND, "Workout with id $id not found")
-        return ok(detailJson(workout))
-    }
-
-    private fun pageLimit(value: String?): Int = (value?.toIntOrNull() ?: 100).coerceIn(1, 500)
-
-    private fun ok(json: Any): MockResponse =
-        MockResponse.Builder()
-            .code(HttpURLConnection.HTTP_OK)
-            .addHeader("Content-Type", "application/json")
-            .body(json.toString())
-            .build()
-
-    private fun error(status: Int, message: String): MockResponse =
-        MockResponse.Builder()
-            .code(status)
-            .addHeader("Content-Type", "application/json")
-            .body(
-                buildJsonObject {
-                    put("error", message)
-                    put("status", status)
-                }.toString(),
-            )
-            .build()
-
     private fun exercisesJson() = JsonArray(exercises.map(::exerciseJson))
 
-    private fun exerciseJson(exercise: FixtureExercise) =
-        buildJsonObject {
-            put("id", exercise.id)
-            put("name", exercise.name)
-            put("category", exercise.category)
-            put("muscle_group", exercise.muscleGroup)
-            put("equipment", exercise.equipment)
-        }
-
-    private fun bodyWeightJson(entry: FixtureBodyWeight) =
-        buildJsonObject {
-            put("id", entry.id)
-            put("date", entry.date)
-            put("weight_kg", entry.weightKg)
-        }
-
-    private fun profileJson() =
+    internal fun profileJson() =
         buildJsonObject {
             put("height_cm", profile.heightCm)
             put("sex", profile.sex)
@@ -657,74 +365,4 @@ class FakeAxum(
             put("birth_date", profile.birthDate)
             profile.clientRevision?.let { put("client_revision", it) }
         }
-
-    private fun summaryJson(workout: FixtureWorkout) =
-        buildJsonObject {
-            put("id", workout.id)
-            put("date", workout.date)
-            put("name", workout.name)
-        }
-
-    private fun detailJson(workout: FixtureWorkout): JsonObject =
-        buildJsonObject {
-            put("id", workout.id)
-            put("date", workout.date)
-            put("name", workout.name)
-            put("notes", workout.notes)
-            workout.clientRevision?.let { put("client_revision", it) }
-            put(
-                "exercises",
-                buildJsonArray {
-                    workout.entries.forEachIndexed { index, entry ->
-                        add(
-                            buildJsonObject {
-                                put("id", workout.id * 100 + index)
-                                put("order_index", index)
-                                put("notes", entry.notes)
-                                put(
-                                    "exercise",
-                                    buildJsonObject {
-                                        put("id", entry.exerciseId)
-                                        put("name", JsonPrimitive(exercises.first { it.id == entry.exerciseId }.name))
-                                        put("category", "calisthenics")
-                                    },
-                                )
-                                put("sets", JsonArray(entry.sets.map(::setJson)))
-                            },
-                        )
-                    }
-                },
-            )
-        }
-
-    private fun setJson(set: FixtureSet) =
-        buildJsonObject {
-            put("id", set.setNumber)
-            put("set_number", set.setNumber)
-            put("reps", set.reps)
-            put("weight_kg", set.weightKg)
-            put("duration_seconds", set.durationSeconds)
-            put("rpe", set.rpe)
-            put("notes", set.notes)
-        }
-}
-
-private const val UNPROCESSABLE_ENTITY = 422
-
-private enum class WorkoutEdits {
-    ANSWERED,
-    COMMITTED_RESPONSE_LOST,
-}
-
-private enum class ExerciseCreates {
-    ANSWERED,
-    COMMITTED_RESPONSE_LOST,
-}
-
-private enum class WorkoutCreates {
-    ANSWERED,
-    COMMITTED_RESPONSE_LOST,
-    DROPPED,
-    SERVER_ERROR,
-    REFUSED,
 }
