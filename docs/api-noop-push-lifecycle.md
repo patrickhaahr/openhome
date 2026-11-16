@@ -81,7 +81,7 @@ supersession; part rows keep their `batch_id` to detect part-number reuse.
 
 ## Protocol reconciliation and receiver behavior
 
-PUSH_PROTOCOL.md ("Authoritative rolling-window delivery") says retrying any part
+PUSH_PROTOCOL_DELIVERY.md ("Authoritative rolling-window delivery") says retrying any part
 is harmless, and also that a receiver rejects late parts of a superseded generation
 with `409`. The receiver reconciles them as follows: a retry is harmless in that
 it never changes rows, the ledger or the current generation, and an accepted part

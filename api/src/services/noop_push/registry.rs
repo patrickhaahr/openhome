@@ -1,4 +1,5 @@
-//! The v1 stream registry (`docs/noop/PUSH_PROTOCOL.md`, "Version 1 stream registry").
+//! The v1 stream registry (`docs/noop/PUSH_PROTOCOL_STREAMS_AND_ERRORS.md`, "Version 1 stream
+//! registry").
 //!
 //! The registry is explicit and finite: every stream lists its delivery mode, its natural-key
 //! columns (excluding the batch-scoped `deviceId`), its exported `data` members with their wire
@@ -174,10 +175,10 @@ pub const STREAMS: [Stream; 12] = [
         key: TS_KEY,
         data: &[
             required("raw", Integer),
-            // Real, not Integer: PUSH_PROTOCOL.md's integer list (`ts`, `rrMs`, `seq`, `bpm`,
-            // `red`, `ir`, `raw`) omits the aux columns, DATA_MODEL.md does not document them,
-            // and the sender picks the JSON type from the SQLite storage type (PushDao.kt
-            // `Cursor.values`), so `12.0` is possible. Any finite number is accepted.
+            // Real, not Integer: PUSH_PROTOCOL_STREAMS_AND_ERRORS.md's integer list (`ts`,
+            // `rrMs`, `seq`, `bpm`, `red`, `ir`, `raw`) omits the aux columns, DATA_MODEL.md does
+            // not document them, and the sender picks the JSON type from the SQLite storage type
+            // (PushDao.kt `Cursor.values`), so `12.0` is possible. Any finite number is accepted.
             nullable("aux1Raw", Real),
             nullable("aux2Raw", Real),
         ],

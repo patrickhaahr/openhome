@@ -10,25 +10,29 @@
 //! `food.db` queries use runtime-checked `sqlx::query`: the compile-time macros verify against
 //! `DATABASE_URL` (`app.db`), which does not contain this schema.
 
-mod import;
-mod search;
-mod workbook;
-
+use crate::services::nutrition::parameters;
+use search::{FoodIdentity, SearchIndex};
+use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::{QueryBuilder, Row, SqlitePool};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, PoisonError, RwLock};
 
-use serde::Serialize;
-use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{QueryBuilder, Row, SqlitePool};
-use thiserror::Error;
-
 pub use import::{DatasetPin, ImportError};
-use search::{FoodIdentity, SearchIndex};
 
-use super::nova::NovaClass;
-use super::parameters::{self, Unit};
+mod model;
+mod snapshots;
+use model::amount;
+pub(super) use model::source;
+pub use model::{
+    Amount, Food, FoodError, FoodGroup, FoodSearch, FoodSnapshot, FoodSummary, KeyValues,
+    NutrientParameter, ParameterGroup, ParameterValue, SnapshotValue, Source, Unavailable,
+};
+
+mod import;
+mod search;
+mod workbook;
 
 /// File name of the Food database, placed next to the main database by default.
 pub const FOOD_DB_FILE_NAME: &str = "food.db";
@@ -71,155 +75,11 @@ struct Ready {
     index: SearchIndex,
 }
 
-/// Why Food lookups cannot answer yet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Unavailable {
-    /// The pinned dataset is being downloaded or imported.
-    Importing,
-    /// The import failed and no earlier complete import exists; the next start retries.
-    Failed,
-}
-
-#[derive(Debug, Error)]
-pub enum FoodError {
-    #[error("the food database is unavailable")]
-    Unavailable(Unavailable),
-    #[error("{0}")]
-    Validation(String),
-    #[error("Food {0} was not found")]
-    NotFound(i64),
-    #[error(transparent)]
-    Database(#[from] sqlx::Error),
-}
-
 /// The pending import of the pinned dataset; run it in the background.
 pub struct FoodImport {
     database: FoodDatabase,
     pin: DatasetPin,
     cache_dir: PathBuf,
-}
-
-/// The dataset values come from, to credit wherever they are shown.
-#[derive(Debug, Serialize)]
-pub struct Source {
-    pub name: &'static str,
-    pub version: String,
-    pub credit: String,
-    pub licence: &'static str,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct FoodGroup {
-    pub id: Option<i64>,
-    pub name_da: Option<String>,
-    pub name_en: Option<String>,
-}
-
-/// A value with its unit; `value` is null when the database has no value, never zero.
-#[derive(Debug, Serialize)]
-pub struct Amount {
-    pub value: Option<f64>,
-    pub unit: Option<&'static str>,
-}
-
-/// Key values per 100 g edible part.
-#[derive(Debug, Serialize)]
-pub struct KeyValues {
-    pub energy_kcal: Amount,
-    pub energy_kj: Amount,
-    pub protein: Amount,
-    pub fat: Amount,
-    pub available_carbohydrate: Amount,
-    pub sugars: Amount,
-    pub dietary_fibre: Amount,
-    pub alcohol: Amount,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FoodSummary {
-    pub food_id: i64,
-    pub name_da: String,
-    pub name_en: String,
-    pub food_group: Option<FoodGroup>,
-    pub per_100g: KeyValues,
-    /// Grams per millilitre.
-    pub density: Amount,
-    /// Inedible percentage of the Food as bought.
-    pub waste: Amount,
-    /// The user's NOVA Class for the Food, kept in `app.db`; null while unclassified.
-    pub nova_class: Option<NovaClass>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FoodSearch {
-    pub query: String,
-    pub foods: Vec<FoodSummary>,
-    pub source: Source,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct ParameterGroup {
-    pub name_da: String,
-    pub name_en: String,
-}
-
-/// One parameter of a Food: per 100 g edible part when `per_100g`, else a property of the Food.
-#[derive(Debug, Serialize)]
-pub struct ParameterValue {
-    pub key: String,
-    pub parameter_id: i64,
-    pub name_da: String,
-    pub name_en: String,
-    pub group: ParameterGroup,
-    pub unit: Option<String>,
-    pub per_100g: bool,
-    pub value: Option<f64>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Food {
-    pub food_id: i64,
-    pub name_da: String,
-    pub name_en: String,
-    pub food_group: Option<FoodGroup>,
-    pub density: Amount,
-    pub waste: Amount,
-    /// The user's NOVA Class for the Food, kept in `app.db`; null while unclassified.
-    pub nova_class: Option<NovaClass>,
-    /// Every parameter of the dataset in its sort order, including unknown (null) values.
-    pub parameters: Vec<ParameterValue>,
-    pub source: Source,
-}
-
-/// A Food's known per-100 g values, as a Portion copies them when it is logged (ADR 0012).
-#[derive(Debug)]
-pub struct FoodSnapshot {
-    pub food_id: i64,
-    pub name_da: String,
-    pub name_en: String,
-    /// The dataset version the values come from; `FoodIDs` change between versions.
-    pub dataset_version: String,
-    /// Every known per-100 g value in database order; an unknown value is absent, never zero.
-    pub per_100g: Vec<SnapshotValue>,
-}
-
-/// One per-100 g value with its vocabulary key and unit symbol.
-#[derive(Debug, Serialize)]
-pub struct SnapshotValue {
-    pub key: String,
-    pub value: f64,
-    pub unit: String,
-}
-
-/// A per-100 g parameter of the imported dataset: what a day's nutrient totals are named by.
-#[derive(Debug)]
-pub struct NutrientParameter {
-    pub key: String,
-    pub name_da: String,
-    pub name_en: String,
-    pub group: ParameterGroup,
-    pub unit: Option<String>,
 }
 
 /// Resolves the Food database URL: `FOOD_DB_URL` when set, otherwise `DATABASE_URL` with the file
@@ -458,116 +318,6 @@ impl FoodDatabase {
     }
 }
 
-impl FoodDatabase {
-    /// The Danish and English names of the Foods in `food_ids` the current dataset has, by
-    /// `FoodID`; a missing Food is left out.
-    pub async fn names(
-        &self,
-        food_ids: &[i64],
-    ) -> Result<HashMap<i64, (String, String)>, FoodError> {
-        self.ready()?;
-        let mut names = HashMap::new();
-        if food_ids.is_empty() {
-            return Ok(names);
-        }
-        let mut query =
-            QueryBuilder::new("SELECT food_id, name_da, name_en FROM food WHERE food_id IN (");
-        let mut separated = query.separated(", ");
-        for id in food_ids {
-            separated.push_bind(*id);
-        }
-        query.push(")");
-        for row in query.build().fetch_all(&self.pool).await? {
-            names.insert(row.get("food_id"), (row.get("name_da"), row.get("name_en")));
-        }
-        Ok(names)
-    }
-
-    /// The known per-100 g values of each Food in `food_ids`, by `FoodID`. A missing Food is
-    /// [`FoodError::NotFound`].
-    pub async fn snapshots(
-        &self,
-        food_ids: &[i64],
-    ) -> Result<HashMap<i64, FoodSnapshot>, FoodError> {
-        let ready = self.ready()?;
-        let mut ids = food_ids.to_vec();
-        ids.sort_unstable();
-        ids.dedup();
-        let mut snapshots = HashMap::new();
-        if ids.is_empty() {
-            return Ok(snapshots);
-        }
-        let mut query =
-            QueryBuilder::new("SELECT food_id, name_da, name_en FROM food WHERE food_id IN (");
-        let mut separated = query.separated(", ");
-        for id in &ids {
-            separated.push_bind(*id);
-        }
-        query.push(")");
-        for row in query.build().fetch_all(&self.pool).await? {
-            let food_id: i64 = row.get("food_id");
-            snapshots.insert(
-                food_id,
-                FoodSnapshot {
-                    food_id,
-                    name_da: row.get("name_da"),
-                    name_en: row.get("name_en"),
-                    dataset_version: ready.version.clone(),
-                    per_100g: Vec::new(),
-                },
-            );
-        }
-        if let Some(missing) = ids.iter().find(|id| !snapshots.contains_key(id)) {
-            return Err(FoodError::NotFound(*missing));
-        }
-        let mut query = QueryBuilder::new(
-            "SELECT v.food_id, p.key, v.value, p.unit FROM food_value v \
-             JOIN parameter p ON p.parameter_id = v.parameter_id \
-             WHERE p.per_100g = 1 AND p.unit IS NOT NULL AND v.food_id IN (",
-        );
-        let mut separated = query.separated(", ");
-        for id in &ids {
-            separated.push_bind(*id);
-        }
-        query.push(") ORDER BY p.sort_key, p.parameter_id");
-        for row in query.build().fetch_all(&self.pool).await? {
-            if let Some(snapshot) = snapshots.get_mut(&row.get::<i64, _>("food_id")) {
-                snapshot.per_100g.push(SnapshotValue {
-                    key: row.get("key"),
-                    value: row.get("value"),
-                    unit: row.get("unit"),
-                });
-            }
-        }
-        Ok(snapshots)
-    }
-
-    /// Every per-100 g parameter of the imported dataset in database order, with the dataset to
-    /// credit.
-    pub async fn nutrient_parameters(&self) -> Result<(Vec<NutrientParameter>, Source), FoodError> {
-        let ready = self.ready()?;
-        let parameters = sqlx::query(
-            "SELECT key, name_da, name_en, group_da, group_en, unit FROM parameter \
-             WHERE per_100g = 1 ORDER BY sort_key, parameter_id",
-        )
-        .fetch_all(&self.pool)
-        .await?
-        .iter()
-        .map(|row| NutrientParameter {
-            key: row.get("key"),
-            name_da: row.get("name_da"),
-            name_en: row.get("name_en"),
-            group: ParameterGroup {
-                name_da: row.get("group_da"),
-                name_en: row.get("group_en"),
-            },
-            unit: row.get("unit"),
-        })
-        .collect();
-        Ok((parameters, source(&ready.version)))
-    }
-}
-
 impl FoodImport {
     /// Downloads and imports the pinned dataset. On failure the error is logged and any previous
     /// complete import stays in use; without one, lookups report the import failed.
@@ -630,24 +380,5 @@ fn identity(row: &sqlx::sqlite::SqliteRow) -> FoodIdentity {
         name_da: row.get("name_da"),
         name_en: row.get("name_en"),
         food_group: has_group.then_some(group),
-    }
-}
-
-/// A value in its vocabulary unit.
-fn amount(key: &'static str, value: Option<f64>) -> Amount {
-    Amount {
-        value,
-        unit: parameters::by_key(key).and_then(|parameter| Unit::symbol(parameter.unit)),
-    }
-}
-
-/// The credit for values from `version` of the Danish Food Composition Database.
-#[must_use]
-pub(super) fn source(version: &str) -> Source {
-    Source {
-        name: SOURCE_NAME,
-        version: version.to_owned(),
-        credit: format!("© {SOURCE_NAME}, version {version}"),
-        licence: SOURCE_LICENCE,
     }
 }

@@ -16,16 +16,26 @@
 //! only; it is private household data and is never logged.
 
 use chrono::{DateTime, Utc};
-use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::error::{AppError, Result};
 
 use super::calendar::{self, CalendarDay};
-use super::noop_merge::{self, WorkoutOrigin, WorkoutRow};
-use super::noop_source::{self, HrSample, NoopSync};
+use super::noop_merge::{self, WorkoutRow};
+use super::noop_source::{self, NoopSync};
 use super::route;
-use super::workouts::{self, WORKOUT_STREAMS, WorkoutCoverage};
+use super::workouts::{self, WORKOUT_STREAMS};
+
+mod heart_rate;
+mod types;
+
+use heart_rate::{
+    avg_pace, heart_rate, heart_rate_recovery, heart_rate_series, heart_rate_zones, profile_hr_max,
+};
+pub use types::{
+    HeartRate, HeartRatePoint, HeartRateRecovery, HeartRateSeries, HeartRateZone, HeartRateZones,
+    HrBasis, NoopWorkoutDetail, RecoveryMark, Unavailable, UnavailableReason,
+};
 
 /// The longest NOOP Workout whose heart rate is read. A longer one is rejected rather than
 /// truncated.
@@ -55,147 +65,6 @@ const MAX_SERIES_POINTS: i64 = 300;
 const ZONE_LOWER_EDGES: [f64; 5] = [0.50, 0.60, 0.70, 0.80, 0.90];
 /// Sample gaps at least this long are left out of the median sample interval, as the NOOP app does.
 const MAX_MEDIAN_GAP_S: i64 = 300;
-
-#[derive(Debug, Serialize)]
-pub struct NoopWorkoutDetail {
-    pub start: String,
-    pub end: String,
-    pub sport: String,
-    pub origin: WorkoutOrigin,
-    /// The NOOP device namespace of the stored row, as Workouts on a Training Day lists it.
-    pub source: String,
-    /// NOOP's recorded duration.
-    pub duration_min: Option<f64>,
-    pub distance_m: Option<f64>,
-    pub energy_kcal: Option<f64>,
-    /// Steps counted over the workout.
-    pub steps: Option<i64>,
-    /// NOOP's derived 0-100 workout strain; a model output, not a measurement.
-    pub strain_score: Option<f64>,
-    /// Whether a usable GPS route was captured.
-    pub has_route: bool,
-    /// The captured GPS route as `[latitude, longitude]` degrees in order, thinned to at most 300
-    /// points with the first and last kept. Only present when the read asked for it with
-    /// `?route=true` and a route exists. Private data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub route: Option<Vec<[f64; 2]>>,
-    /// Recorded duration over distance; null without a positive distance.
-    pub avg_pace_s_per_km: Option<f64>,
-    pub hr: HeartRate,
-    /// Downsampled strap heart rate over `[start, end)`; null without strap samples.
-    pub hr_series: Option<HeartRateSeries>,
-    /// Time in each Heart Rate Zone over `[start, end)`; null without a Max Heart Rate or strap
-    /// samples.
-    pub hr_zones: Option<HeartRateZones>,
-    /// The heart rate drop after the workout ends; null when no Max Heart Rate is set, without
-    /// strap samples, or when the end of the workout was not hard enough to measure it.
-    pub hr_recovery: Option<HeartRateRecovery>,
-    /// Why a null block of the detail is null, keyed by the block's name. A key is present only
-    /// for a block that is null.
-    pub unavailable: Unavailable,
-    /// Freshness and coverage of the workouts starting on the workout's Training Day.
-    pub noop: NoopSync<WorkoutCoverage>,
-}
-
-/// Heart rate over the workout window `[start, end)`, in beats/min.
-#[derive(Debug, Serialize)]
-pub struct HeartRate {
-    /// What the values were computed from; null when neither source has heart rate.
-    pub basis: Option<HrBasis>,
-    pub avg_bpm: Option<f64>,
-    pub min_bpm: Option<f64>,
-    pub max_bpm: Option<f64>,
-}
-
-/// Mean heart rate in workout-relative buckets; empty buckets are omitted.
-#[derive(Debug, Serialize)]
-pub struct HeartRateSeries {
-    /// Smallest multiple of 15 seconds that keeps the workout at at most 300 buckets.
-    pub bucket_s: i64,
-    pub points: Vec<HeartRatePoint>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct HeartRatePoint {
-    /// Bucket start's offset in seconds from the workout start.
-    pub t_s: i64,
-    pub bpm: f64,
-}
-
-/// Time in the five Heart Rate Zones, computed with the NOOP app's algorithm so the split matches
-/// the app's for the same Max Heart Rate.
-#[derive(Debug, Serialize)]
-pub struct HeartRateZones {
-    /// The Profile's Max Heart Rate the zones are relative to, in beats/min.
-    pub hrmax_used: i64,
-    /// Minutes below Zone 1 (under 50 % of Max Heart Rate), excluded from the percentages.
-    pub below_zone_min: f64,
-    /// Zones 1-5 in order.
-    pub zones: Vec<HeartRateZone>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct HeartRateZone {
-    pub zone: u8,
-    /// Lowest whole bpm in the zone.
-    pub lower_bpm: i64,
-    /// Highest whole bpm in the zone; Max Heart Rate for the open-ended Zone 5.
-    pub upper_bpm: i64,
-    pub minutes: f64,
-    /// Share of the time spent in Zones 1-5; 0 when there is none.
-    pub percent: f64,
-}
-
-/// The highest heart rate in the workout's final 30 s, and how far it dropped 1, 2 and 5 minutes
-/// after the end.
-#[derive(Debug, Serialize)]
-pub struct HeartRateRecovery {
-    pub end_hr_bpm: i64,
-    pub at_1_min: Option<RecoveryMark>,
-    pub at_2_min: Option<RecoveryMark>,
-    pub at_5_min: Option<RecoveryMark>,
-}
-
-/// The median heart rate within 15 s of a mark; a mark with fewer than 3 samples is null rather
-/// than interpolated.
-#[derive(Debug, Serialize)]
-pub struct RecoveryMark {
-    pub hr_bpm: i64,
-    /// End HR minus `hr_bpm`.
-    pub drop_bpm: i64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HrBasis {
-    /// The strap's samples inside the workout window.
-    StrapSamples,
-    /// The stored row's average and max, unreconciled with the strap; there is no min.
-    WorkoutRow,
-}
-
-/// Reasons for null blocks, omitted when the block is available.
-#[derive(Debug, Serialize)]
-pub struct Unavailable {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hr_series: Option<UnavailableReason>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hr_zones: Option<UnavailableReason>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hr_recovery: Option<UnavailableReason>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum UnavailableReason {
-    /// The Profile has no Max Heart Rate, and none is ever guessed.
-    HrMaxNotConfigured,
-    NoStrapSamples,
-    /// The last 300 s of the workout lack 120 s of continuous effort at 70 % of Max Heart Rate.
-    NotSustained,
-    /// Fewer than 3 samples in the workout's final 30 s.
-    NoEndSamples,
-}
 
 /// The detail of the merged NOOP Workout whose namespace is `source`, which starts at the instant
 /// `start` and, when given, whose sport is `sport` in any case. NOOP keeps workouts of different
@@ -334,193 +203,4 @@ async fn stored_route(
         .as_deref()
         .and_then(route::decode)
         .map(|fixes| route::downsample(fixes, route::MAX_ROUTE_POINTS)))
-}
-
-/// Seconds per km over the recorded duration; `None` without a positive distance.
-fn avg_pace(workout: &WorkoutRow) -> Option<f64> {
-    let distance_km = workout.distance_m.filter(|&distance| distance > 0.0)? / 1000.0;
-    Some(workout.duration_s? / distance_km)
-}
-
-/// Average, min and max over the strap samples inside the workout window, else the row's stored
-/// average and max.
-fn heart_rate(workout: &WorkoutRow, samples: &[HrSample]) -> HeartRate {
-    if samples.is_empty() {
-        let has_row_values = workout.avg_hr.is_some() || workout.max_hr.is_some();
-        return HeartRate {
-            basis: has_row_values.then_some(HrBasis::WorkoutRow),
-            avg_bpm: workout.avg_hr,
-            min_bpm: None,
-            max_bpm: workout.max_hr,
-        };
-    }
-    let bpm = || samples.iter().map(|sample| sample.bpm);
-    HeartRate {
-        basis: Some(HrBasis::StrapSamples),
-        avg_bpm: Some(bpm().sum::<i64>() as f64 / samples.len() as f64),
-        min_bpm: bpm().min().map(|bpm| bpm as f64),
-        max_bpm: bpm().max().map(|bpm| bpm as f64),
-    }
-}
-
-/// Samples are sorted by timestamp and restricted to `[start, end)` by the caller.
-fn heart_rate_series(workout: &WorkoutRow, samples: &[HrSample]) -> Option<HeartRateSeries> {
-    if samples.is_empty() {
-        return None;
-    }
-    let duration_s = workout.end_ts - workout.start_ts;
-    let base_span_s = BASE_BUCKET_S * MAX_SERIES_POINTS;
-    let bucket_s = BASE_BUCKET_S * ((duration_s + base_span_s - 1) / base_span_s).max(1);
-    let bucket = |sample: &HrSample| (sample.ts - workout.start_ts) / bucket_s;
-    let points = samples
-        .chunk_by(|a, b| bucket(a) == bucket(b))
-        .map(|samples| HeartRatePoint {
-            t_s: bucket(&samples[0]) * bucket_s,
-            bpm: samples.iter().map(|sample| sample.bpm).sum::<i64>() as f64 / samples.len() as f64,
-        })
-        .collect();
-    Some(HeartRateSeries { bucket_s, points })
-}
-
-/// The Profile's Max Heart Rate; `None` when the Profile or the value is not set.
-async fn profile_hr_max(db: &SqlitePool) -> Result<Option<i64>> {
-    let hr_max = sqlx::query_scalar!("SELECT hr_max_bpm FROM profile WHERE id = 1")
-        .fetch_optional(db)
-        .await
-        .map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("Failed to read the Max Heart Rate: {e}"))
-        })?;
-    Ok(hr_max.flatten())
-}
-
-/// Time in each zone, ported from the NOOP app's `HRZones`. Each sample is credited with the time
-/// until the next one, capped at the median sample interval; the last sample gets the median.
-/// Samples are sorted by timestamp, distinct, non-empty and restricted to `[start, end)`.
-fn heart_rate_zones(hr_max: i64, samples: &[HrSample]) -> HeartRateZones {
-    let thresholds = ZONE_LOWER_EDGES.map(|edge| edge * hr_max as f64);
-    let median_s = median_interval_s(samples);
-    let mut seconds_in = [0.0; 5];
-    let mut below_s = 0.0;
-    for (index, sample) in samples.iter().enumerate() {
-        let credit_s = samples.get(index + 1).map_or(median_s, |next| {
-            ((next.ts - sample.ts) as f64).min(median_s)
-        });
-        match thresholds
-            .iter()
-            .rposition(|&threshold| sample.bpm as f64 >= threshold)
-        {
-            Some(zone) => seconds_in[zone] += credit_s,
-            None => below_s += credit_s,
-        }
-    }
-    let zoned_s: f64 = seconds_in.iter().sum();
-    let lower_bpm = thresholds.map(|threshold| threshold.ceil() as i64);
-    let zones = (0..5)
-        .map(|zone| HeartRateZone {
-            zone: zone as u8 + 1,
-            lower_bpm: lower_bpm[zone],
-            upper_bpm: lower_bpm.get(zone + 1).map_or(hr_max, |next| next - 1),
-            minutes: seconds_in[zone] / 60.0,
-            percent: if zoned_s > 0.0 {
-                seconds_in[zone] / zoned_s * 100.0
-            } else {
-                0.0
-            },
-        })
-        .collect();
-    HeartRateZones {
-        hrmax_used: hr_max,
-        below_zone_min: below_s / 60.0,
-        zones,
-    }
-}
-
-/// The upper median of the gaps shorter than [`MAX_MEDIAN_GAP_S`], at least 1 s; 1 s without such
-/// a gap.
-fn median_interval_s(samples: &[HrSample]) -> f64 {
-    let mut gaps: Vec<i64> = samples
-        .windows(2)
-        .map(|pair| pair[1].ts - pair[0].ts)
-        .filter(|&gap| gap > 0 && gap < MAX_MEDIAN_GAP_S)
-        .collect();
-    gaps.sort_unstable();
-    gaps.get(gaps.len() / 2)
-        .map_or(1.0, |&gap| gap.max(1) as f64)
-}
-
-/// Heart Rate Recovery as the NOOP app computes it. `samples` are sorted by timestamp and span
-/// `[start, end + 315 s]`.
-fn heart_rate_recovery(
-    workout: &WorkoutRow,
-    samples: &[HrSample],
-    hr_max_bpm: i64,
-) -> std::result::Result<HeartRateRecovery, UnavailableReason> {
-    let end = workout.end_ts;
-    let lookback_start = workout.start_ts.max(end - ELIGIBILITY_LOOKBACK_S);
-    let samples: Vec<&HrSample> = samples
-        .iter()
-        .filter(|sample| sample.ts >= lookback_start && RECOVERY_BPM_RANGE.contains(&sample.bpm))
-        .collect();
-    let until_end = &samples[..samples.partition_point(|sample| sample.ts <= end)];
-
-    let threshold = hr_max_bpm as f64 * ELIGIBILITY_FRACTION_OF_HR_MAX;
-    if sustained_s(until_end, threshold) < MIN_SUSTAINED_S {
-        return Err(UnavailableReason::NotSustained);
-    }
-    let end_window = until_end
-        .iter()
-        .filter(|sample| sample.ts >= end - END_WINDOW_S);
-    if end_window.clone().count() < MIN_READING_SAMPLES {
-        return Err(UnavailableReason::NoEndSamples);
-    }
-    let end_hr_bpm = end_window
-        .map(|sample| sample.bpm)
-        .max()
-        .unwrap_or_default();
-
-    let mark = |minutes: i64| {
-        let at = end + minutes * 60;
-        let mut bpm: Vec<i64> = samples
-            .iter()
-            .filter(|sample| (sample.ts - at).abs() <= MARK_TOLERANCE_S)
-            .map(|sample| sample.bpm)
-            .collect();
-        if bpm.len() < MIN_READING_SAMPLES {
-            return None;
-        }
-        bpm.sort_unstable();
-        let middle = bpm.len() / 2;
-        let hr_bpm = if bpm.len().is_multiple_of(2) {
-            ((bpm[middle - 1] + bpm[middle]) as f64 / 2.0).round() as i64
-        } else {
-            bpm[middle]
-        };
-        Some(RecoveryMark {
-            hr_bpm,
-            drop_bpm: end_hr_bpm - hr_bpm,
-        })
-    };
-    Ok(HeartRateRecovery {
-        end_hr_bpm,
-        at_1_min: mark(1),
-        at_2_min: mark(2),
-        at_5_min: mark(5),
-    })
-}
-
-/// The longest run of seconds at or above `threshold`, where each sample at or above it is
-/// credited with the time to the next one when that is at most 10 s away.
-fn sustained_s(samples: &[&HrSample], threshold: f64) -> i64 {
-    let mut current = 0;
-    let mut longest = 0;
-    for pair in samples.windows(2) {
-        let gap = pair[1].ts - pair[0].ts;
-        if gap > MAX_CONTINUOUS_GAP_S || (pair[0].bpm as f64) < threshold {
-            current = 0;
-        } else {
-            current += gap;
-            longest = longest.max(current);
-        }
-    }
-    longest
 }
