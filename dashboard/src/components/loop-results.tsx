@@ -22,6 +22,8 @@ import {
   type LoopRead,
 } from "@/lib/route-loop"
 
+const problem = "flex items-center gap-2 text-control font-semibold text-danger"
+
 /** A failed request: Axum's outcome, a rejected target or a lost connection. */
 type Failure = Exclude<LoopRead, { state: "generated" }>
 
@@ -73,14 +75,14 @@ export function ActiveSelection({
 }): React.JSX.Element {
   return (
     <section
-      className="loop-active"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 data-[state=none]:contents data-[state=selected]:py-1 data-[state=selected]:pr-1 data-[state=selected]:pl-3"
       aria-label="Active route"
       data-state={active.state}
     >
       {active.state === "selected" ? (
         <>
           <DeviceMobileIcon size={22} aria-hidden="true" />
-          <h3>
+          <h3 className="flex-1 text-value font-medium tracking-figure-tight tabular-nums">
             {formatKilometers(active.route.distance_meters)}{" "}
             <span className="sr-only">{active.route.activity} loop</span>
           </h3>
@@ -105,11 +107,7 @@ export function ActiveSelection({
           </Button>
         </>
       ) : (
-        <p
-          className={
-            active.state === "none" ? "sr-only" : "loop-planner-problem"
-          }
-        >
+        <p className={active.state === "none" ? "sr-only" : problem}>
           {active.state === "none" ? null : (
             <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
           )}
@@ -120,7 +118,11 @@ export function ActiveSelection({
           </span>
         </p>
       )}
-      <div className="loop-active-status" role="status" aria-live="polite">
+      <div
+        className="basis-full px-3 text-small text-muted-ink empty:hidden"
+        role="status"
+        aria-live="polite"
+      >
         {status.state === "saving" ? <p>Saving the selected loop…</p> : null}
         {status.state === "checking" ? (
           <p>Checking the selected route…</p>
@@ -129,7 +131,7 @@ export function ActiveSelection({
           <p>Loop selected. Your phone can retrieve it.</p>
         ) : null}
         {status.state === "failed" ? (
-          <p className="loop-planner-problem">
+          <p className={problem}>
             {status.reason === "candidate-unavailable"
               ? "This loop is no longer available. Plan loops again to select a route."
               : "Selection could not be confirmed. Check the saved route or try selecting again."}{" "}
@@ -181,7 +183,7 @@ export function StatusMessage({
       )
     case "incomplete":
       return (
-        <p id={problemId} className="loop-planner-problem">
+        <p id={problemId} className={`${problem} px-3 py-2`}>
           {status.message}
         </p>
       )
@@ -189,8 +191,8 @@ export function StatusMessage({
       const { title, detail } = describeFailure(status.failure)
 
       return (
-        <div className="loop-planner-failure">
-          <h3>
+        <div>
+          <h3 className={`${problem} px-3 py-2`}>
             <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />
             {title}
           </h3>
@@ -232,30 +234,34 @@ export function LoopAlternatives({
   const { plan } = shown
 
   return (
-    <section className="loop-alternatives" aria-labelledby={id}>
+    <section data-slot="loop-alternatives" aria-labelledby={id}>
       <h3 id={id} className="sr-only">
         {capitalize(describePlan(plan))}
       </h3>
-      <ul>
+      <ul className="grid gap-1">
         {plan.loops.map((route, index) => (
           <li key={route.id}>
             <Button
               type="button"
               variant="loop"
-              className="h-auto"
+              size="loop"
               aria-pressed={index === shown.focused}
               data-fit={route.within_tolerance ? "within" : "outside"}
               disabled={disabled}
               onClick={() => onFocus(index)}
             >
-              <span className="loop-alternative-mark" aria-hidden="true" />
-              <span className="loop-alternative-name">
+              {/* The loop on the map wears the route's sun; the others a quiet hollow ring. */}
+              <span
+                className="size-3 rounded-full opacity-50 inset-ring-2 inset-ring-muted-ink group-aria-pressed/button:bg-sun group-aria-pressed/button:opacity-100 group-aria-pressed/button:inset-ring-0"
+                aria-hidden="true"
+              />
+              <span className="text-control font-medium text-muted-ink">
                 Loop {LETTERS[index] ?? index + 1}
               </span>
-              <span className="loop-alternative-distance">
+              <span className="justify-self-end text-stat font-medium tracking-title tabular-nums">
                 {formatKilometers(route.distance_meters)}
               </span>
-              <span className="loop-alternative-fit" aria-hidden="true">
+              <span className="inline-flex text-muted-ink" aria-hidden="true">
                 {route.within_tolerance ? (
                   <CheckIcon size={20} />
                 ) : (

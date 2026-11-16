@@ -258,7 +258,7 @@
 }
 
 /* The viewer: one photo on the night ground, the keys as light tone plates floating on it. */
-.dialog-fullscreen[data-slot="dialog-content"]:has(> .photo-viewer) {
+[data-slot="dialog-content"]:has(> .photo-viewer) {
   display: block;
   padding: 0;
   background: #0b0c0e;

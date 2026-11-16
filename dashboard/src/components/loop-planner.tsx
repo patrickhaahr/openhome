@@ -33,6 +33,16 @@ import {
   type Form,
 } from "@/components/loop-form"
 
+// A lone message hugs its words; loops get the full plate.
+const plate =
+  "grid w-travel-plate gap-2 rounded-travel-plate bg-ground p-2 not-has-[[data-slot=loop-alternatives]]:w-fit"
+
+const fieldset = "flex min-w-0 flex-wrap items-center gap-2"
+
+// The capsule draws the field: its outline marks focus, then a problem.
+const field =
+  "flex h-14 items-center gap-2 rounded-full bg-wash px-4 text-muted-ink focus-within:outline-2 focus-within:outline-ink has-aria-invalid:outline-2 has-aria-invalid:outline-danger max-phone:h-13"
+
 /**
  * Plan walking or running loops from the shared map origin by distance or
  * steps, then compare the measured alternatives on the map. Drawn routes always
@@ -186,11 +196,16 @@ export function LoopPlanner({
     selection.state !== "idle"
 
   return (
-    <div className="loop-dock" aria-busy={busy}>
+    // The planner and its results dock bottom-left; only the plates take the pointer.
+    <div
+      data-slot="loop-dock"
+      className="pointer-events-none absolute bottom-travel-inset left-travel-inset z-3 flex max-w-travel-dock flex-col items-start gap-3 *:pointer-events-auto max-tablet:right-travel-inset max-tablet:max-w-none"
+      aria-busy={busy}
+    >
       <h2 className="sr-only">Walk or run from here</h2>
       <div
         key={`${plateShown}:${shown !== undefined}`}
-        className={plateShown ? "loop-plate" : "sr-only"}
+        className={plateShown ? plate : "sr-only"}
       >
         <ActiveSelection
           active={active}
@@ -201,7 +216,8 @@ export function LoopPlanner({
             if (active.state === "selected") showActive(active.route)
           }}
         />
-        <div role="status" className="loop-planner-status">
+        {/* An empty status region stays for assistive technology without taking a row. */}
+        <div role="status" className="not-has-[>:not(.sr-only)]:sr-only">
           <StatusMessage status={status} shown={shown} problemId={problemId} />
         </div>
         {shown === undefined ? null : (
@@ -209,7 +225,9 @@ export function LoopPlanner({
             <LoopAlternatives shown={shown} onFocus={focus} disabled={saving} />
             <Button
               type="button"
-              size="key"
+              variant="ink"
+              size="plate"
+              className="w-full"
               disabled={busy || alreadySelected || candidate === undefined}
               onClick={() => void choose()}
             >
@@ -228,63 +246,56 @@ export function LoopPlanner({
         )}
       </div>
       <form
-        className="loop-bar"
+        className="flex max-w-full flex-wrap items-center gap-2 rounded-travel-bar bg-ground p-2 max-tablet:w-full"
         onSubmit={(event) => {
           event.preventDefault()
           void planLoops()
         }}
       >
-        <fieldset disabled={busy}>
+        <fieldset disabled={busy} className={fieldset}>
           <legend className="sr-only">Activity</legend>
           <ToggleGroup
-            variant="outline"
-            spacing={0}
+            variant="plate"
+            size="plate-icon"
             value={[form.activity]}
             onValueChange={([next]) => {
               if (next === "walking" || next === "running")
                 setForm({ ...form, activity: next })
             }}
           >
-            <ToggleGroupItem value="walking" size="lg">
+            <ToggleGroupItem value="walking">
               <span className="sr-only">Walk</span>
               <PersonSimpleWalkIcon size={24} aria-hidden="true" />
             </ToggleGroupItem>
-            <ToggleGroupItem value="running" size="lg">
+            <ToggleGroupItem value="running">
               <span className="sr-only">Run</span>
               <PersonSimpleRunIcon size={24} aria-hidden="true" />
             </ToggleGroupItem>
           </ToggleGroup>
         </fieldset>
-        <fieldset disabled={busy}>
+        <fieldset disabled={busy} className={fieldset}>
           <legend className="sr-only">Target</legend>
           <ToggleGroup
-            variant="outline"
-            spacing={0}
+            variant="plate"
+            size="plate"
             value={[form.target]}
             onValueChange={([next]) => {
               if (isTargetChoice(next)) setForm({ ...form, target: next })
             }}
           >
-            <ToggleGroupItem value="5k" size="lg">
-              5 km
-            </ToggleGroupItem>
-            <ToggleGroupItem value="10k" size="lg">
-              10 km
-            </ToggleGroupItem>
-            <ToggleGroupItem value="distance" size="lg">
-              Custom
-            </ToggleGroupItem>
-            <ToggleGroupItem value="steps" size="lg">
-              Steps
-            </ToggleGroupItem>
+            <ToggleGroupItem value="5k">5 km</ToggleGroupItem>
+            <ToggleGroupItem value="10k">10 km</ToggleGroupItem>
+            <ToggleGroupItem value="distance">Custom</ToggleGroupItem>
+            <ToggleGroupItem value="steps">Steps</ToggleGroupItem>
           </ToggleGroup>
           {form.target === "distance" ? (
-            <div className="loop-field">
+            <div className={field}>
               <label htmlFor={`${id}-kilometers`} className="sr-only">
                 Distance in km
               </label>
               <Input
                 id={`${id}-kilometers`}
+                variant="bare"
                 inputMode="decimal"
                 autoComplete="off"
                 {...problemFor("kilometers")}
@@ -293,18 +304,19 @@ export function LoopPlanner({
                   setForm({ ...form, kilometers: event.target.value })
                 }
               />
-              <span className="loop-field-unit" aria-hidden="true">
+              <span className="text-control" aria-hidden="true">
                 km
               </span>
             </div>
           ) : null}
           {form.target === "steps" ? (
-            <div className="loop-field">
+            <div className={field}>
               <label htmlFor={`${id}-steps`} className="sr-only">
                 Steps
               </label>
               <Input
                 id={`${id}-steps`}
+                variant="bare"
                 inputMode="numeric"
                 autoComplete="off"
                 {...problemFor("steps")}
@@ -313,13 +325,13 @@ export function LoopPlanner({
                   setForm({ ...form, steps: event.target.value })
                 }
               />
-              <span className="loop-field-unit" aria-hidden="true">
+              <span className="text-control" aria-hidden="true">
                 steps
               </span>
             </div>
           ) : null}
         </fieldset>
-        <div className="loop-field">
+        <div className={field}>
           <label htmlFor={`${id}-step-length`} className="sr-only">
             {form.activity === "running" ? "Running" : "Walking"} step length in
             cm
@@ -327,6 +339,7 @@ export function LoopPlanner({
           <FootprintsIcon size={22} aria-hidden="true" />
           <Input
             id={`${id}-step-length`}
+            variant="bare"
             inputMode="numeric"
             autoComplete="off"
             disabled={busy}
@@ -342,14 +355,20 @@ export function LoopPlanner({
               })
             }
           />
-          <span className="loop-field-unit" aria-hidden="true">
+          <span className="text-control" aria-hidden="true">
             cm
           </span>
           <p id={`${id}-step-length-hint`} className="sr-only">
             Converts steps to distance. Step counts are estimates.
           </p>
         </div>
-        <Button type="submit" size="key" disabled={busy}>
+        <Button
+          type="submit"
+          variant="ink"
+          size="plate-lg"
+          className="max-tablet:ml-auto"
+          disabled={busy}
+        >
           {status.state === "planning" ? "Planning…" : "Plan loops"}
         </Button>
       </form>

@@ -148,6 +148,9 @@ export const cn = createCn({
         // Controls and Backlight
         "led-dock",
         "key-pill",
+        // Travel
+        "travel-plate",
+        "travel-bar",
       ],
       spacing: [
         "margin",
@@ -238,6 +241,11 @@ export const cn = createCn({
         "led-dial-gap",
         "led-notch-half",
         "remote-gap",
+        // Travel
+        "travel-inset",
+        "travel-above-dock",
+        "travel-dock",
+        "travel-plate",
       ],
       animate: ["stage-grow"],
     },

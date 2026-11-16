@@ -6,7 +6,6 @@
 @import "./idle.css";
 @import "./components/idle-milestone.css";
 @import "./home.css";
-@import "./travel.css";
 @import "./photos.css";
 @import "./gap-dash.utilities.css";
 @import "./shell.utilities.css";
@@ -16,11 +15,13 @@
 @import "./weather.theme.css";
 @import "./workout.theme.css";
 @import "./binder.utilities.css";
+@import "./travel.utilities.css";
 @import "./binder.theme.css";
 @import "./food.theme.css";
 @import "./food.utilities.css";
 @import "./controls.theme.css";
 @import "./backlight.utilities.css";
+@import "./travel.theme.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {

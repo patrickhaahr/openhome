@@ -12,6 +12,8 @@ const inputVariants = cva(
         /** One large figure typed in place, such as a body weight. */
         figure:
           "h-14 w-[6.5ch] rounded-[1rem] px-3 text-right text-[2rem] font-semibold tracking-[-0.04em] text-foreground tabular-nums placeholder:text-line-strong",
+        /** A figure typed inside its own wash capsule, which draws the field and its focus. */
+        bare: "h-12 w-18 rounded-none border-0 bg-transparent p-0 text-center text-[1.125rem] font-medium text-ink tabular-nums max-phone:h-11",
       },
     },
     defaultVariants: { variant: "default" },

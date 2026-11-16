@@ -87,7 +87,11 @@ function TravelContent({
     <section>
       <PageHead title={travel.title} />
       {read.state === "configured" ? (
-        <figure data-slot="travel" className="travel" ref={travelRef}>
+        <figure
+          data-slot="travel"
+          className="relative travel-frame min-h-96 overflow-hidden"
+          ref={travelRef}
+        >
           <SharedMap
             key={`${read.origin.latitude},${read.origin.longitude}`}
             origin={read.origin}
@@ -96,7 +100,9 @@ function TravelContent({
             credit={ROUTES_CREDIT}
           />
           {read.origin.source === "demo" ? (
-            <p className="travel-demo">Demo origin</p>
+            <p className="absolute top-travel-inset left-travel-inset z-3 rounded-full bg-ground px-4 py-2 text-small font-medium max-phone:top-auto max-phone:bottom-travel-above-dock">
+              Demo origin
+            </p>
           ) : null}
           <figcaption className="sr-only">
             {read.origin.source === "demo"
@@ -152,7 +158,7 @@ function MapSetup({
 function useDockHeight(travel: React.RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const element = travel.current
-    const dock = element?.querySelector(".loop-dock")
+    const dock = element?.querySelector('[data-slot="loop-dock"]')
 
     if (element === null || dock === null || dock === undefined) return
 

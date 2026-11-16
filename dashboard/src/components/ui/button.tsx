@@ -19,7 +19,12 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/12 bg-clip-border text-destructive hover:bg-destructive hover:text-background",
         link: "rounded-none px-0 text-primary underline decoration-1 underline-offset-[0.3em] hover:decoration-2",
-        loop: "loop-alternative items-start justify-start rounded-[0.75rem] text-base font-normal whitespace-normal",
+        /** A loop alternative on the Travel plate: hollow mark, name, distance and fit in a row. */
+        loop: "grid w-full grid-cols-[0.75rem_auto_minmax(0,1fr)_auto] items-center justify-start rounded-full border-0 bg-transparent text-left text-base font-normal whitespace-normal text-ink hover:bg-wash aria-pressed:bg-wash-strong",
+        /** Ink that stays ink under the hand: on the map the sun is reserved for the route. */
+        ink: "bg-primary text-primary-foreground",
+        /** A map control: one tone step on its plate, two under the hand. */
+        tone: "border-0 bg-wash bg-clip-border text-ink hover:bg-wash-strong focus-visible:outline-offset-2",
       },
       size: {
         default:
@@ -36,6 +41,10 @@ const buttonVariants = cva(
         "key-xl": "h-18 gap-2.5 px-8 text-lg",
         "key-round": "size-16 text-lg",
         "key-hero": "size-24",
+        plate: "h-14 min-w-12 gap-2 px-[1.125rem] max-phone:h-13",
+        "plate-lg": "h-14 min-w-12 gap-2 px-7 text-[1.0625rem] max-phone:h-13",
+        "map-key": "size-14 max-phone:size-11",
+        loop: "min-h-14 gap-3 px-4 py-2 max-phone:min-h-12",
       },
     },
     defaultVariants: {

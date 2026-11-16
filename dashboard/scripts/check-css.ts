@@ -11,7 +11,6 @@ const allowlist = [
   "src/home.css",
   "src/idle.css",
   "src/photos.css",
-  "src/travel.css",
 ]
 
 const root = new URL("..", import.meta.url).pathname

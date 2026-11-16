@@ -19,30 +19,21 @@ export function MapStatus({
 }): React.JSX.Element | null {
   switch (view.state) {
     case "loading":
-      return (
-        <p className="shared-map-message" role="status">
-          Loading map…
-        </p>
-      )
+      return <MapLoading />
     case "ready": {
       const buildings = buildingsNotice({ view, perspective, coverage })
 
       if (view.tiles === "complete" && buildings === undefined) return null
 
       return (
-        <div className="shared-map-notices" role="status">
+        <MapNotices>
           {view.tiles === "incomplete" ? (
-            <div className="shared-map-notice">
-              <p>Some map tiles could not load. The map may be incomplete.</p>
-              <Button variant="outline" onClick={reload}>
-                Reload map
-              </Button>
-            </div>
+            <TilesIncomplete reload={reload} />
           ) : null}
           {buildings === undefined ? null : (
-            <p className="shared-map-notice">{buildings}</p>
+            <p className={notice}>{buildings}</p>
           )}
-        </div>
+        </MapNotices>
       )
     }
 
@@ -73,7 +64,52 @@ export function MapStatus({
   }
 }
 
-function MapFailure({
+const message =
+  "absolute inset-0 grid place-content-center justify-items-center gap-3 p-8 text-center leading-relaxed text-muted-foreground"
+
+const notice =
+  "pointer-events-auto flex w-fit flex-wrap items-center gap-x-4 gap-y-3 rounded-travel-plate bg-ground px-4 py-3 text-small"
+
+export function MapLoading(): React.JSX.Element {
+  return (
+    <p className={message} role="status">
+      Loading map…
+    </p>
+  )
+}
+
+/** Notices stack below the top edge, clear of the controls; only the notices take the pointer. */
+export function MapNotices({
+  children,
+}: {
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div
+      className="pointer-events-none absolute top-travel-inset right-travel-inset left-travel-inset mt-12 mr-20 grid justify-items-start gap-2 max-phone:mt-20"
+      role="status"
+    >
+      {children}
+    </div>
+  )
+}
+
+export function TilesIncomplete({
+  reload,
+}: {
+  reload: () => void
+}): React.JSX.Element {
+  return (
+    <div className={notice}>
+      <p>Some map tiles could not load. The map may be incomplete.</p>
+      <Button variant="outline" onClick={reload}>
+        Reload map
+      </Button>
+    </div>
+  )
+}
+
+export function MapFailure({
   title,
   detail,
   reload,
@@ -83,9 +119,11 @@ function MapFailure({
   reload: () => void
 }): React.JSX.Element {
   return (
-    <div className="shared-map-message" role="status">
-      <h3>{title}</h3>
-      <p>{detail}</p>
+    <div className={message} role="status">
+      <h3 className="text-xlarge font-travel-heading text-foreground">
+        {title}
+      </h3>
+      <p className="max-w-md">{detail}</p>
       <Button size="lg" variant="outline" onClick={reload}>
         Try again
       </Button>

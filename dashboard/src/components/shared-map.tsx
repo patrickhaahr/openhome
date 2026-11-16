@@ -29,6 +29,7 @@ import {
   buildingCoverage,
 } from "@/components/shared-map-config"
 import { MapControls } from "@/components/shared-map-controls"
+import { MapFrame } from "@/components/shared-map-frame"
 import { MapStatus } from "@/components/shared-map-status"
 
 /**
@@ -458,21 +459,14 @@ export function SharedMap({
     )
 
   return (
-    <div className="shared-map" data-map-state={view.state}>
-      <div
-        ref={container}
-        className="shared-map-canvas"
-        aria-label={
-          origin.source === "demo"
-            ? "Map of the Copenhagen demo area"
-            : "Map of the local area"
-        }
-      />
+    <MapFrame state={view.state} canvas={container} source={origin.source}>
       {view.state === "ready" && controls ? (
         <MapControls
-          perspective={perspective}
-          buildingsUnavailable={view.buildings === "unavailable"}
-          choose={choose}
+          perspective={{
+            current: perspective,
+            buildingsUnavailable: view.buildings === "unavailable",
+            choose,
+          }}
           zoom={zoom}
           recenter={recenter}
         />
@@ -483,6 +477,6 @@ export function SharedMap({
         coverage={coverage}
         reload={reload}
       />
-    </div>
+    </MapFrame>
   )
 }
