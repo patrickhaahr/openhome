@@ -35,6 +35,10 @@ export const cn = createCn({
         "binder-mark",
         "binder-stage",
         "binder-hairline",
+        // Food
+        "macro",
+        "food-caution",
+        "food-caution-ink",
       ],
       text: [
         "mega",
@@ -78,6 +82,8 @@ export const cn = createCn({
         "weight",
         "binder-card-title",
         "binder-value",
+        // Food
+        "food-unit",
       ],
       leading: [
         "status",
@@ -92,6 +98,8 @@ export const cn = createCn({
         // Workout and Recovery
         "workout-figure",
         "workout-heading",
+        // Food
+        "food-energy",
       ],
       tracking: [
         "score",
@@ -110,6 +118,8 @@ export const cn = createCn({
         "figure-xl",
         // Workout and Recovery
         "workout-figure",
+        // Food
+        "food-heading",
       ],
       radius: [
         "poster",
@@ -121,6 +131,9 @@ export const cn = createCn({
         "workout-plate",
         "binder-keys",
         "binder-art",
+        // Food
+        "food-swatch",
+        "food-row",
       ],
       spacing: [
         "margin",
@@ -189,6 +202,13 @@ export const cn = createCn({
         "binder-detail-wide-gap",
         "binder-art",
         "binder-art-portrait",
+        // Food
+        "food-flow",
+        "food-plate",
+        "food-meal",
+        "food-day",
+        "food-thumb",
+        "food-axis",
       ],
       animate: ["stage-grow"],
     },

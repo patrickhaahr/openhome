@@ -1,5 +1,7 @@
 import { useId, useRef, useState } from "react"
+import { Unit } from "@/components/food-amount"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   goalChoice,
   goalChoices,
@@ -11,6 +13,12 @@ import {
   type NutritionGoal,
   type SetGoalInput,
 } from "@/lib/nutrition"
+
+const panel = "grid gap-4 rounded-xl bg-wash p-food-plate"
+
+/** The Calorie Target, eaten and remaining figures share one look; only "over" turns sun. */
+const figure =
+  "text-title leading-none font-medium tracking-score-tight tabular-nums"
 
 /** "2,120" kcal: targets are whole kcal. */
 function kcal(value: number): string {
@@ -29,13 +37,19 @@ export function TargetStrip({
   if (targets.state === "unavailable")
     return (
       <section
-        className="food-targets"
+        data-slot="food-targets"
+        className={panel}
         data-state="unavailable"
         aria-labelledby="food-targets-heading"
       >
-        <h2 id="food-targets-heading">No Calorie Target yet</h2>
+        <h2
+          id="food-targets-heading"
+          className="text-lead font-medium tracking-food-heading"
+        >
+          No Calorie Target yet
+        </h2>
         <p>{targets.reason}.</p>
-        <p className="food-targets-hint">
+        <p className="text-small text-muted-ink">
           Height, sex, birth date and Body Weight are set on the Workout
           page&apos;s Body view.
         </p>
@@ -44,34 +58,40 @@ export function TargetStrip({
   const over = targets.remaining_kcal < 0
 
   return (
-    <section className="food-targets" aria-labelledby="food-targets-heading">
+    <section
+      data-slot="food-targets"
+      className={panel}
+      aria-labelledby="food-targets-heading"
+    >
       <h2 id="food-targets-heading" className="sr-only">
         Calorie Target
       </h2>
-      <dl className="food-target-strip">
+      <dl data-slot="food-target-strip" className="grid grid-cols-3 gap-4">
         <div>
-          <dt>Target</dt>
-          <dd className="num">
+          <dt className="text-control text-muted-ink">Target</dt>
+          <dd className={figure}>
             {kcal(targets.calorie_target_kcal)}
-            <span className="food-unit"> kcal</span>
+            <Unit> kcal</Unit>
           </dd>
         </div>
         <div>
-          <dt>Eaten</dt>
-          <dd className="num">
+          <dt className="text-control text-muted-ink">Eaten</dt>
+          <dd className={figure}>
             {kcal(targets.eaten_kcal)}
-            <span className="food-unit"> kcal</span>
+            <Unit> kcal</Unit>
           </dd>
         </div>
-        <div data-over={over ? "" : undefined}>
-          <dt>{over ? "Over" : "Remaining"}</dt>
-          <dd className="num">
+        <div>
+          <dt className="text-control text-muted-ink">
+            {over ? "Over" : "Remaining"}
+          </dt>
+          <dd className={cn(figure, over && "text-sun")}>
             {kcal(Math.abs(targets.remaining_kcal))}
-            <span className="food-unit"> kcal</span>
+            <Unit> kcal</Unit>
           </dd>
         </div>
       </dl>
-      <p className="food-target-basis">
+      <p data-slot="food-target-basis" className="text-small text-muted-ink">
         {goalName(targets.goal)} · Estimated Expenditure{" "}
         {kcal(targets.estimated_expenditure_kcal)} kcal · Trend Weight{" "}
         {formatAmount(targets.trend_weight_kg)} kg
@@ -79,7 +99,7 @@ export function TargetStrip({
           ? ` · held at BMR ${kcal(targets.bmr_kcal)} kcal`
           : ""}
       </p>
-      <ul className="food-macro-targets" aria-label="Macro Targets">
+      <ul className="grid gap-3" aria-label="Macro Targets">
         <MacroProgress
           macro="protein"
           name="Protein"
@@ -123,17 +143,37 @@ function MacroProgress({
   readonly status: "met" | "to eat" | "floor met" | "below floor" | null
 }): React.JSX.Element {
   const share = target > 0 ? Math.min(eaten / target, 1) : 1
+  const below = status === "below floor"
 
   return (
-    <li data-macro={macro} data-status={status ?? undefined}>
-      <span className="food-macro-target-name">{name}</span>
-      <span className="food-macro-target-amount num">
-        {formatAmount(eaten)} / {formatAmount(target)}
-        <span className="food-unit"> g</span>
-      </span>
-      <span className="food-macro-target-status">{status ?? ""}</span>
+    <li
+      data-macro={macro}
+      className="grid grid-cols-flanked items-baseline gap-x-3 gap-y-1"
+    >
       <span
-        className="food-macro-target-bar"
+        data-slot="food-macro-target-name"
+        className="flex items-center gap-2 font-semibold before:size-2.5 before:rounded-full before:bg-macro"
+      >
+        {name}
+      </span>
+      <span data-slot="food-macro-target-amount" className="font-medium num">
+        {formatAmount(eaten)} / {formatAmount(target)}
+        <Unit> g</Unit>
+      </span>
+      <span
+        data-slot="food-macro-target-status"
+        className={cn(
+          "text-small text-muted-ink",
+          below && "font-semibold text-ink"
+        )}
+      >
+        {status ?? ""}
+      </span>
+      <span
+        className={cn(
+          "col-span-full h-2 overflow-hidden rounded-full bg-wash-strong before:block before:h-full before:w-share before:rounded-full",
+          below ? "before:bg-food-caution" : "before:bg-macro"
+        )}
         aria-hidden="true"
         // SAFETY: CSSProperties omits custom properties; --share is the eaten share of the target.
         style={{ "--share": share } as React.CSSProperties}
@@ -141,6 +181,8 @@ function MacroProgress({
     </li>
   )
 }
+
+const goalRow = "flex flex-wrap items-center gap-x-3 gap-y-2"
 
 /** Identifies the goal Axum serves; null when it could not be read. */
 function goalSignature(goal: NutritionGoal | null): string | null {
@@ -183,7 +225,7 @@ export function GoalControl({
 
   if (goal === null)
     return (
-      <p className="food-goal" role="status">
+      <p data-slot="food-goal" className={goalRow} role="status">
         The Nutrition Goal could not be read. Reopen the page to change it.
       </p>
     )
@@ -226,15 +268,19 @@ export function GoalControl({
 
   return (
     <form
-      className="food-goal"
+      data-slot="food-goal"
+      className={goalRow}
       onSubmit={(event) => {
         event.preventDefault()
         void submit()
       }}
     >
-      <label htmlFor={`${id}-goal`}>Goal from today</label>
+      <label htmlFor={`${id}-goal`} className="text-control text-muted-ink">
+        Goal from today
+      </label>
       <select
         id={`${id}-goal`}
+        className="min-h-11 rounded-full border border-line-strong bg-raised px-3.5 text-ink focus-visible:outline-offset-2"
         value={chosen}
         disabled={busy}
         onChange={(event) => {
@@ -259,7 +305,8 @@ export function GoalControl({
         Save goal
       </Button>
       <p
-        className="food-goal-feedback"
+        data-slot="food-goal-feedback"
+        className="basis-full text-small text-muted-ink empty:hidden data-[failed=true]:text-danger"
         role={feedback?.failed === true ? "alert" : "status"}
         data-failed={feedback?.failed}
       >

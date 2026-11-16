@@ -21,7 +21,8 @@ import {
 import { TargetStrip, GoalControl } from "@/components/food-targets"
 import { Meal } from "@/components/food-meal"
 import { MicronutrientPanel, AllNutrients } from "@/components/food-nutrients"
-import { Amount, SupplementShare } from "@/components/food-amount"
+import { Amount, Credit, SupplementShare } from "@/components/food-amount"
+import { StateNote, stateNoteText } from "@/components/page-tools"
 
 const macros = [
   ["protein", "Protein"],
@@ -59,7 +60,7 @@ export function FoodDay({
   reload,
 }: FoodDayProps): React.JSX.Element {
   return (
-    <div className="food">
+    <div data-slot="food" className="grid max-w-240 gap-food-flow">
       <FoodViews view="day" />
       <DayNav day={data.day} today={data.today} />
       {data.state === "available" ? (
@@ -69,16 +70,16 @@ export function FoodDay({
         </>
       ) : null}
       <DayBody data={data} />
-      <p className="food-credit">
+      <Credit>
         Nutrient values{" "}
         {data.state === "available"
           ? `${data.data.source.credit} (${data.data.source.licence})`
           : `${foodDatabaseCredit} (CC BY 4.0)`}
-      </p>
+      </Credit>
       {data.state === "available" && hasProducts(data.data) ? (
-        <p className="food-credit">
+        <Credit>
           {`${data.data.label_source.credit} (${data.data.label_source.licence})`}
-        </p>
+        </Credit>
       ) : null}
     </div>
   )
@@ -94,28 +95,42 @@ function DayBody({
       return <Day day={data.data} />
     case "food-database-unavailable":
       return (
-        <div className="state-note food-unavailable" role="status">
-          <h2>
-            {data.database === "importing"
+        <StateNote
+          data-slot="food-unavailable"
+          role="status"
+          title={
+            data.database === "importing"
               ? "Food database importing"
-              : "Food database unavailable"}
-          </h2>
-          <p>
+              : "Food database unavailable"
+          }
+        >
+          <p className={stateNoteText}>
             {data.database === "importing"
               ? "The Danish Food Composition Database is being imported. This day shows once it is ready."
               : "The food database could not be imported. OpenHome tries again when it restarts."}
           </p>
-        </div>
+        </StateNote>
       )
     case "unavailable":
       return (
-        <div className="state-note food-unavailable" role="status">
-          <h2>Food unavailable</h2>
-          <p>{nutritionFailureMessage[data.reason]}</p>
-        </div>
+        <StateNote
+          data-slot="food-unavailable"
+          role="status"
+          title="Food unavailable"
+        >
+          <p className={stateNoteText}>
+            {nutritionFailureMessage[data.reason]}
+          </p>
+        </StateNote>
       )
   }
 }
+
+const dayKey =
+  "inline-grid size-12 place-items-center rounded-full bg-wash-strong text-ink transition-food-key duration-fast ease-app"
+
+/** The reversed look of a key under the pointer, shared by the day keys and "Today". */
+const keyHover = "hover:bg-ink hover:text-ground"
 
 /** Previous and next keys around the day's name; there is no next day after today. */
 function DayNav({
@@ -133,34 +148,50 @@ function DayNav({
     target === today ? {} : { day: target }
 
   return (
-    <nav className="food-days" aria-label="Day">
+    <nav className="flex flex-wrap items-center gap-3" aria-label="Day">
       <Link
         to="/food"
         search={searchFor(previous)}
-        className="food-day-key"
+        data-slot="food-day-key"
+        className={`${dayKey} ${keyHover} active:scale-97`}
         aria-label={`Previous day, ${dayName(previous, today)}`}
       >
         <CaretLeftIcon size={22} weight="bold" aria-hidden="true" />
       </Link>
-      <h2 className="food-day-name" aria-live="polite">
+      <h2
+        data-slot="food-day-name"
+        className="min-w-food-day text-center text-lead font-medium tracking-food-heading"
+        aria-live="polite"
+      >
         {dayName(day, today)}
       </h2>
       {day < today ? (
         <Link
           to="/food"
           search={searchFor(next)}
-          className="food-day-key"
+          data-slot="food-day-key"
+          className={`${dayKey} ${keyHover} active:scale-97`}
           aria-label={`Next day, ${dayName(next, today)}`}
         >
           <CaretRightIcon size={22} weight="bold" aria-hidden="true" />
         </Link>
       ) : (
-        <span className="food-day-key" aria-hidden="true" data-disabled="">
+        <span
+          data-slot="food-day-key"
+          className={`${dayKey} data-disabled:opacity-35`}
+          aria-hidden="true"
+          data-disabled=""
+        >
           <CaretRightIcon size={22} weight="bold" />
         </span>
       )}
       {day === today ? null : (
-        <Link to="/food" search={{}} className="food-today">
+        <Link
+          to="/food"
+          search={{}}
+          data-slot="food-today"
+          className={`ml-auto inline-flex min-h-11 items-center rounded-full bg-wash px-4.5 font-semibold text-ink ${keyHover}`}
+        >
           Today
         </Link>
       )}
@@ -173,19 +204,26 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
 
   return (
     <>
-      <section className="food-totals" aria-label="Day totals">
-        <p className="food-energy">
+      <section className="grid gap-4" aria-label="Day totals">
+        <p
+          data-slot="food-energy"
+          className="flex items-baseline gap-2 text-display leading-food-energy font-medium"
+        >
           <Amount total={day.totals.energy_kcal} unit={false} />
-          <span className="food-energy-unit">kcal</span>
+          <span className="text-lead tracking-figure-tight text-muted-ink">
+            kcal
+          </span>
         </p>
         <SupplementShare
           total={day.totals.energy_kcal}
           as="p"
-          className="food-energy-supplements"
+          slot="food-energy-supplements"
+          className="-mt-2 text-label text-muted-ink"
         />
         {split.length === 0 ? null : (
           <div
-            className="food-split"
+            data-slot="food-split"
+            className="flex h-2.5 gap-0.75 overflow-hidden rounded-full bg-wash"
             role="img"
             aria-label={`Energy from ${split
               .filter((part) => part.kcal > 0)
@@ -200,6 +238,7 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
                 <span
                   key={part.key}
                   data-macro={part.key}
+                  className="min-w-0.75 flex-(--share) bg-macro"
                   // SAFETY: CSSProperties omits custom properties; --share is the macro's energy share.
                   style={{ "--share": part.share } as React.CSSProperties}
                 />
@@ -207,17 +246,24 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
             )}
           </div>
         )}
-        <dl className="food-macros">
+        <dl
+          data-slot="food-macros"
+          className="grid grid-fit-30 gap-x-6 gap-y-3"
+        >
           {macros.map(([key, name]) => (
             <div key={key} data-macro={key}>
-              <dt>{name}</dt>
-              <dd>
+              <dt
+                className={`flex items-center gap-2 text-control text-muted-ink before:size-2.5 before:rounded-full before:bg-macro ${key === "dietary_fibre" ? "before:inset-ring-2 before:inset-ring-muted-ink" : ""}`}
+              >
+                {name}
+              </dt>
+              <dd className="text-lead font-medium">
                 <Amount total={day.totals[key]} />
               </dd>
               <SupplementShare
                 total={day.totals[key]}
                 as="dd"
-                className="food-macro-supplements"
+                className="text-label text-muted-ink"
               />
             </div>
           ))}
@@ -230,16 +276,29 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
           Meals
         </h2>
         {day.meal_logs.length === 0 ? (
-          <div className="food-empty">
-            <ForkKnifeIcon size={40} aria-hidden="true" />
-            <h3>Nothing logged</h3>
+          <div
+            data-slot="food-empty"
+            className="grid justify-items-start gap-3 py-10"
+          >
+            <ForkKnifeIcon
+              className="text-muted-ink"
+              size={40}
+              aria-hidden="true"
+            />
+            <h3 className="text-title leading-none font-medium tracking-headline">
+              Nothing logged
+            </h3>
             <p className="sr-only">
               Meals logged through the agent appear here at the time they were
               eaten.
             </p>
           </div>
         ) : (
-          <ol className="food-meals" aria-label="Meals in time order">
+          <ol
+            data-slot="food-meals"
+            className="grid gap-3"
+            aria-label="Meals in time order"
+          >
             {day.meal_logs.map((meal) => (
               <li key={meal.id}>
                 <Meal meal={meal} />
@@ -253,6 +312,9 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
     </>
   )
 }
+
+const supplement =
+  "inline-flex items-baseline gap-2 rounded-full bg-wash-strong px-3 py-1 text-small"
 
 /**
  * The day's Supplements: each Supplement's doses added together, then the compounds without a
@@ -268,23 +330,29 @@ function Supplements({
 
   return (
     <section
-      className="food-supplements"
+      data-slot="food-supplements"
+      className="grid gap-2"
       aria-labelledby="food-supplements-heading"
     >
-      <h3 id="food-supplements-heading">Supplements</h3>
-      <ul>
+      <h3
+        id="food-supplements-heading"
+        className="text-control font-medium text-muted-ink"
+      >
+        Supplements
+      </h3>
+      <ul className="flex flex-wrap gap-2">
         {day.supplement_doses.map((dose) => (
-          <li key={dose.supplement_id}>
-            <span className="food-supplement-name">{dose.name}</span>
-            <span className="food-supplement-amount num">
+          <li key={dose.supplement_id} className={supplement}>
+            <span className="font-semibold">{dose.name}</span>
+            <span className="num text-muted-ink">
               {doseCount(dose.doses, dose.dose_unit)}
             </span>
           </li>
         ))}
         {day.compounds.map((compound) => (
-          <li key={compound.name} data-compound="">
-            <span className="food-supplement-name">{compound.name}</span>
-            <span className="food-supplement-amount num">
+          <li key={compound.name} className={supplement}>
+            <span className="font-semibold">{compound.name}</span>
+            <span className="num text-muted-ink">
               {formatAmount(compound.value)} {compound.unit}
             </span>
           </li>
@@ -301,20 +369,24 @@ function NovaShare({
   readonly nova: NutritionDay["nova"]
 }): React.JSX.Element {
   return (
-    <div className="food-nova">
-      <p className="food-nova-share">
+    <div data-slot="food-nova" className="grid gap-1">
+      <p className="flex items-baseline gap-2 text-lead font-medium">
         {nova.nova_1_share === null ? (
-          <span className="food-amount gap-dash" data-gap="true">
+          <span
+            data-slot="food-amount"
+            data-gap="true"
+            className="data-[gap=true]:gap-dash"
+          >
             <span className="sr-only">Unknown</span>
           </span>
         ) : (
-          <span className="food-amount num">
+          <span data-slot="food-amount" className="num">
             {Math.round(nova.nova_1_share * 100)} %
           </span>
         )}{" "}
-        <span className="food-nova-name">NOVA 1</span>
+        <span className="text-control text-muted-ink">NOVA 1</span>
       </p>
-      <p className="food-nova-detail">{novaDetail(nova)}</p>
+      <p className="text-small text-muted-ink">{novaDetail(nova)}</p>
     </div>
   )
 }

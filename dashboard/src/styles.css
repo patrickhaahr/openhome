@@ -5,9 +5,6 @@
 @import "@fontsource-variable/familjen-grotesk";
 @import "./idle.css";
 @import "./backlight.css";
-@import "./food.css";
-@import "./food-meals.css";
-@import "./food-trends.css";
 @import "./components/idle-milestone.css";
 @import "./home.css";
 @import "./travel.css";
@@ -22,6 +19,8 @@
 @import "./workout.theme.css";
 @import "./binder.utilities.css";
 @import "./binder.theme.css";
+@import "./food.theme.css";
+@import "./food.utilities.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {

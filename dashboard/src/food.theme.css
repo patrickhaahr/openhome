@@ -1,0 +1,37 @@
+@theme inline {
+  --color-macro: var(--macro);
+  /* An amber caution that stays the same by day and night, and the ink that reads on it. */
+  --color-food-caution: #d99a00;
+  --color-food-caution-ink: #121418;
+  --spacing-food-flow: clamp(1.25rem, 3vw, 2.25rem);
+  --spacing-food-plate: clamp(1rem, 2.4vw, 1.5rem);
+  --spacing-food-meal: clamp(1.125rem, 2.2vw, 1.5rem);
+  --spacing-food-day: 10ch;
+  --spacing-food-thumb: clamp(6.5rem, 16vw, 9.5rem);
+  --spacing-food-axis: calc(min(11rem, 30%) + 1rem);
+  --text-food-unit: 0.6em;
+  --leading-food-energy: 0.9;
+  --radius-food-swatch: 3px;
+  --radius-food-row: 0.5rem;
+  --tracking-food-heading: -0.04em;
+  --grid-template-columns-portion: minmax(0, 1fr) auto minmax(4.5rem, auto);
+  --grid-template-columns-coverage: minmax(7rem, 11rem) minmax(0, 1fr) 6.5rem;
+  --grid-template-columns-periods: repeat(var(--periods), minmax(0, 1fr));
+  --transition-property-food-key: background-color, color, scale;
+}
+
+/* A macronutrient names its colour once for its subtree, as a band does for Workout. */
+@layer base {
+  [data-macro="protein"] {
+    --macro: var(--sun);
+  }
+  [data-macro="available_carbohydrate"] {
+    --macro: var(--ink);
+  }
+  [data-macro="fat"] {
+    --macro: var(--chart-4);
+  }
+  [data-macro="alcohol"] {
+    --macro: var(--muted-ink);
+  }
+}
