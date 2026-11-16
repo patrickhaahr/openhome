@@ -1,15 +1,50 @@
 import { useEffect, useReducer, useRef } from "react"
 import { Dialog } from "@base-ui/react/dialog"
+import { cva, type VariantProps } from "class-variance-authority"
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { useIdleBlock } from "@/components/idle-block"
+import { sheetScrim } from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { initial, type ListFeedback } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
 
-/** `.person-disc` is still a page class, so its chosen-key tone needs `!` to win. */
-const discClass = "person-disc group-aria-pressed/tab:bg-ground!"
+/** A person's disc; `ground` is for a disc on a tone step, and a wash disc turns ground inside a chosen key. */
+const disc = cva(
+  "inline-grid flex-none place-items-center rounded-full leading-none font-semibold text-ink",
+  {
+    variants: {
+      size: {
+        default: "size-8 text-sm",
+        heading: "size-9 text-base tracking-normal",
+        plate: "size-7 text-label",
+        household: "size-11 text-sm",
+        key: "size-14 text-2xl",
+      },
+      tone: {
+        wash: "bg-wash-strong group-aria-pressed/tab:bg-ground",
+        ground: "bg-ground",
+      },
+    },
+    defaultVariants: { size: "default", tone: "wash" },
+  }
+)
+
+const sheet = cva(
+  "fixed z-51 grid overflow-y-auto overscroll-contain bg-plate text-ink transition-transform duration-fast ease-app outline-none max-sm:max-h-sheet-height max-sm:rounded-t-sheet",
+  {
+    variants: {
+      variant: {
+        plate:
+          "inset-y-0 right-0 w-sheet content-start gap-5 px-gutter pt-4 pb-8 data-ending-style:translate-x-full data-starting-style:translate-x-full max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:data-ending-style:translate-x-0 max-sm:data-ending-style:translate-y-full max-sm:data-starting-style:translate-x-0 max-sm:data-starting-style:translate-y-full",
+        // The Binder's card stage; binder.css styles it through `data-variant` until the Binder moves to utilities.
+        stage: "",
+      },
+    },
+    defaultVariants: { variant: "plate" },
+  }
+)
 
 /**
  * Everyone, then one key per Household User, on one wash track. The chosen key is the ink
@@ -46,7 +81,7 @@ export function PersonKeys({
           aria-pressed={selected === undefined}
           onClick={() => choose(undefined)}
         >
-          <span className={discClass} aria-hidden="true">
+          <span className={disc()} aria-hidden="true">
             <UsersThreeIcon size={16} weight="bold" />
           </span>
           Everyone
@@ -82,9 +117,13 @@ export function PersonKeys({
 }
 
 /** A person's initial in a disc; decorative, since the name is always said beside it. */
-export function PersonDisc({ name }: { name: string }): React.JSX.Element {
+export function PersonDisc({
+  name,
+  size,
+  tone,
+}: { name: string } & VariantProps<typeof disc>): React.JSX.Element {
   return (
-    <span className={discClass} aria-hidden="true">
+    <span className={disc({ size, tone })} aria-hidden="true">
       {initial(name)}
     </span>
   )
@@ -99,7 +138,7 @@ export function ListSheet({
   close,
   title,
   titleHidden = false,
-  className,
+  variant,
   actions,
   onKeyDown,
   children,
@@ -108,7 +147,7 @@ export function ListSheet({
   close: () => void
   title: string
   titleHidden?: boolean
-  className?: string
+  variant?: VariantProps<typeof sheet>["variant"]
   actions?: React.ReactNode
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   children: React.ReactNode
@@ -124,13 +163,25 @@ export function ListSheet({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="sheet-scrim" />
+        <Dialog.Backdrop className={sheetScrim} />
         <Dialog.Popup
-          className={className === undefined ? "sheet" : `sheet ${className}`}
+          data-slot="sheet"
+          data-variant={variant ?? "plate"}
+          className={sheet({ variant })}
           onKeyDown={onKeyDown}
         >
-          <div className="sheet-head">
-            <Dialog.Title className={titleHidden ? "sr-only" : "sheet-title"}>
+          <div
+            data-slot="sheet-head"
+            className="flex min-h-12 items-center justify-end gap-4"
+          >
+            <Dialog.Title
+              data-slot="sheet-title"
+              className={
+                titleHidden
+                  ? "sr-only"
+                  : "mr-auto text-lead font-medium tracking-title"
+              }
+            >
               {title}
             </Dialog.Title>
             {actions}
@@ -197,9 +248,16 @@ export function FeedbackLine({
   feedback: ListFeedback | undefined
   busy: boolean
 }): React.JSX.Element {
+  const failed = feedback?.failed === true
+
   return (
     <p
-      className={feedback?.failed === true ? "list-failure" : "sr-only"}
+      data-slot={failed ? "list-failure" : undefined}
+      className={
+        failed
+          ? "flex items-baseline gap-2 text-control text-danger before:size-2 before:flex-none before:-translate-y-0.5 before:rounded-full before:bg-current"
+          : "sr-only"
+      }
       role="status"
     >
       {feedback?.text ?? (busy ? "Saving…" : "")}

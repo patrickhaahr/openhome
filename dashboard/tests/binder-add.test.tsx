@@ -176,7 +176,7 @@ async function seed(ownerId: string, card: string, quantity: number) {
 
 /** Open the add sheet and search for a code, as a person submits it. */
 async function search(code: string): Promise<void> {
-  if (document.querySelector(".sheet") === null)
+  if (document.querySelector('[data-slot="sheet"]') === null)
     await press(button("Add card", container))
   await type(field("Card Code", sheet()), code)
   await press(button("Search", sheet()))
@@ -333,7 +333,7 @@ test("a draft survives a refresh and Discard draft clears it", async () => {
   root = createRoot(container)
   await render()
   await settle()
-  expect(document.querySelector(".sheet")).toBeNull()
+  expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
 })
 
 test("a lost response replays the same addition after a remount, adding one entry", async () => {

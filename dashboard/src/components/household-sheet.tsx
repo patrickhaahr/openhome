@@ -5,6 +5,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PersonDisc } from "@/components/list-parts"
+import { sheetActions, sheetBody, sheetConfirm } from "@/components/sheet-parts"
 import { trimText } from "@/lib/lists"
 import type { HouseholdUser, Wishlist, WishlistCommand } from "@/lib/wishlist"
 
@@ -32,9 +33,9 @@ function NameRow({
   const changed = trimText(value) !== name && trimText(value) !== ""
 
   return (
-    <div className="name-row">
+    <div className="grid gap-2">
       <form
-        className="name-form"
+        className="flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault()
 
@@ -75,12 +76,12 @@ function NameRow({
       </form>
       {confirming ? (
         <div
-          className="sheet-confirm"
+          className={sheetConfirm}
           role="group"
           aria-label={`Remove ${name}`}
         >
           <p>{removal}</p>
-          <div className="sheet-actions">
+          <div className={sheetActions()}>
             <Button
               variant="destructive"
               disabled={busy}
@@ -117,7 +118,7 @@ function AddRow({
 
   return (
     <form
-      className="name-form"
+      className="flex items-center gap-2"
       onSubmit={(event) => {
         event.preventDefault()
 
@@ -165,15 +166,15 @@ export function HouseholdLists({
   save: Save
 }): React.JSX.Element {
   return (
-    <div className="sheet-body household">
+    <div className={sheetBody({ gap: "form" })}>
       {owners.map((owner) => (
         <section
           key={owner.id}
-          className="household-person"
+          className="grid gap-3 rounded-plate bg-wash p-4"
           aria-label={owner.name}
         >
-          <div className="household-name">
-            <PersonDisc name={owner.name} />
+          <div className="grid grid-cols-lead items-start gap-3">
+            <PersonDisc name={owner.name} size="household" />
             <NameRow
               label="Name"
               name={owner.name}
@@ -193,7 +194,7 @@ export function HouseholdLists({
               removal={`Remove ${owner.name} with all their wishlists, wishes and watchlist entries, and their Binder? This cannot be undone.`}
             />
           </div>
-          <div className="household-lists">
+          <div className="grid gap-2 pl-14 max-sm:pl-0">
             {lists
               .filter((list) => list.owner_id === owner.id)
               .map((list) => {

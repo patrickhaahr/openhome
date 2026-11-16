@@ -1,10 +1,9 @@
 import { useId } from "react"
-import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
-import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
-import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Segments } from "@/components/list-parts"
+import { Stepper, field } from "@/components/sheet-parts"
 import { trimText } from "@/lib/lists"
 import type { WishlistDetails, WishlistItem } from "@/lib/wishlist"
 
@@ -79,8 +78,8 @@ export function WishFields({
   const id = useId()
 
   return (
-    <div className="wish-fields">
-      <label className="field field-title" htmlFor={`${id}-title`}>
+    <div className="grid min-w-0 gap-4">
+      <label className={field({ emphasis: "title" })} htmlFor={`${id}-title`}>
         <span>Title</span>
         <Input
           id={`${id}-title`}
@@ -93,8 +92,8 @@ export function WishFields({
           autoComplete="off"
         />
       </label>
-      <div className="field-row">
-        <label className="field num" htmlFor={`${id}-price`}>
+      <div className="grid grid-cols-trail gap-4">
+        <label className={cn(field(), "num")} htmlFor={`${id}-price`}>
           <span>Price</span>
           <Input
             id={`${id}-price`}
@@ -107,40 +106,18 @@ export function WishFields({
             autoComplete="off"
           />
         </label>
-        <div className="field">
+        <div className={field()}>
           <span id={`${id}-quantity`}>Quantity</span>
-          <div
-            className="stepper"
-            role="group"
-            aria-labelledby={`${id}-quantity`}
-          >
-            <Button
-              type="button"
-              variant="outline"
-              size="key-icon"
-              disabled={disabled || draft.quantity <= 1}
-              onClick={() => edit({ quantity: draft.quantity - 1 })}
-            >
-              <MinusIcon size={18} aria-hidden="true" />
-              <span className="sr-only">One fewer</span>
-            </Button>
-            <output className="num" aria-live="polite">
-              {draft.quantity}
-            </output>
-            <Button
-              type="button"
-              variant="outline"
-              size="key-icon"
-              disabled={disabled || draft.quantity >= 999}
-              onClick={() => edit({ quantity: draft.quantity + 1 })}
-            >
-              <PlusIcon size={18} aria-hidden="true" />
-              <span className="sr-only">One more</span>
-            </Button>
-          </div>
+          <Stepper
+            labelId={`${id}-quantity`}
+            value={draft.quantity}
+            disabled={disabled}
+            max={999}
+            set={(quantity) => edit({ quantity })}
+          />
         </div>
       </div>
-      <div className="field">
+      <div className={field()}>
         <span>Priority</span>
         <Segments
           label="Priority"
@@ -151,7 +128,7 @@ export function WishFields({
         />
       </div>
       {withLink ? (
-        <label className="field" htmlFor={`${id}-url`}>
+        <label className={field()} htmlFor={`${id}-url`}>
           <span>Link</span>
           <Input
             id={`${id}-url`}
@@ -165,7 +142,7 @@ export function WishFields({
           />
         </label>
       ) : null}
-      <label className="field" htmlFor={`${id}-image`}>
+      <label className={field()} htmlFor={`${id}-image`}>
         <span>Image link</span>
         <Input
           id={`${id}-image`}
@@ -178,7 +155,7 @@ export function WishFields({
           placeholder="https://…"
         />
       </label>
-      <label className="field" htmlFor={`${id}-notes`}>
+      <label className={field()} htmlFor={`${id}-notes`}>
         <span>Notes</span>
         <Textarea
           id={`${id}-notes`}

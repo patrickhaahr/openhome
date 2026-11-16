@@ -1,4 +1,5 @@
 import { CurrencySwitch, useCurrency } from "@/components/currency"
+import { ListBarEnd } from "@/components/list-frame"
 import type { BinderEntry, BinderValue, ValueUnavailable } from "@/lib/binder"
 import { amountKey, formatMoney, type Currency } from "@/lib/currency"
 import { formatDay } from "@/lib/lists"
@@ -25,7 +26,7 @@ export function BinderValueBar({
   const { currency } = useCurrency()
 
   return (
-    <div className="lists-bar-end binder-value-bar">
+    <ListBarEnd className="binder-value-bar">
       {value === undefined ? null : (
         <p className="binder-value">
           <span className="binder-value-label">Binder Value</span>
@@ -52,7 +53,7 @@ export function BinderValueBar({
       )}
       <CurrencySwitch />
       {children}
-    </div>
+    </ListBarEnd>
   )
 }
 

@@ -6,11 +6,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
+import {
+  field,
+  mediaMeta,
+  sheetActions,
+  sheetConfirm,
+  sheetOwner,
+} from "@/components/sheet-parts"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
 import type { PricesState } from "@/lib/card-prices"
 import { maxQuantity, type BinderCommand } from "@/lib/binder-edit"
 import { swipeStep } from "@/lib/binder-turn"
 import { formatDay } from "@/lib/lists"
+import { cn } from "@/lib/utils"
 import type { HouseholdUser } from "@/lib/wishlist"
 
 type Save = (command: BinderCommand, saved: string) => Promise<boolean>
@@ -125,11 +133,11 @@ export function BinderSheet({
       <div className="binder-detail-info">
         <div className="binder-detail-about">
           <div className="binder-detail-lead">
-            <p className="sheet-owner">
+            <p className={sheetOwner}>
               <PersonDisc name={owner.name} />
               {owner.name}
             </p>
-            <p className="media-result-meta">
+            <p className={mediaMeta}>
               <span className="num">{card.card_code}</span>
               <span>
                 Added{" "}
@@ -164,16 +172,12 @@ export function BinderSheet({
             save={save}
           />
           {removing ? (
-            <div
-              className="sheet-confirm"
-              role="group"
-              aria-label="Remove card"
-            >
+            <div className={sheetConfirm} role="group" aria-label="Remove card">
               <p>
                 Remove “{card.name}” ({entry.language === "ja" ? "JP" : "EN"})
                 from {owner.name}’s Binder? This cannot be undone.
               </p>
-              <div className="sheet-actions">
+              <div className={sheetActions()}>
                 <Button
                   variant="destructive"
                   size="key"
@@ -205,7 +209,7 @@ export function BinderSheet({
               </div>
             </div>
           ) : (
-            <div className="sheet-actions sheet-actions-end">
+            <div className={sheetActions({ placement: "end" })}>
               <Button
                 variant="destructive"
                 size="key"
@@ -279,8 +283,8 @@ function EntryFields({
         )
       }}
     >
-      <div className="field-row">
-        <label className="field num" htmlFor={`${id}-quantity`}>
+      <div className="grid grid-cols-trail gap-4">
+        <label className={cn(field(), "num")} htmlFor={`${id}-quantity`}>
           <span>Quantity</span>
           <Input
             id={`${id}-quantity`}
@@ -296,7 +300,7 @@ function EntryFields({
             onChange={(event) => setQuantity(event.target.value)}
           />
         </label>
-        <div className="field">
+        <div className={field()}>
           <span id={`${id}-language`}>Language</span>
           <Segments
             label="Language"
@@ -307,7 +311,7 @@ function EntryFields({
           />
         </div>
       </div>
-      <label className="field" htmlFor={`${id}-note`}>
+      <label className={field()} htmlFor={`${id}-note`}>
         <span>Note</span>
         <Textarea
           id={`${id}-note`}
@@ -318,7 +322,7 @@ function EntryFields({
           onChange={(event) => setNote(event.target.value)}
         />
       </label>
-      <div className="sheet-actions">
+      <div className={sheetActions()}>
         <Button type="submit" size="key" disabled={busy || !dirty || !valid}>
           Save changes
         </Button>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { cva } from "class-variance-authority"
 import { CalendarHeartIcon } from "@phosphor-icons/react/dist/csr/CalendarHeart"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { OpenConnection } from "@/components/control-alert"
@@ -8,6 +9,13 @@ import {
   DateFigure,
   DateKindGlyph,
 } from "@/components/date-sheet"
+import {
+  BoardHeading,
+  ListBar,
+  ListBarEnd,
+  ListEmpty,
+  ListsFrame,
+} from "@/components/list-frame"
 import {
   FeedbackLine,
   ListSheet,
@@ -26,6 +34,7 @@ import {
   type ImportantDatesState,
 } from "@/lib/important-dates"
 import { formatDay, type PersonSearch } from "@/lib/lists"
+import { cn } from "@/lib/utils"
 import type { HouseholdUser } from "@/lib/wishlist"
 
 type Open = { kind: "date"; id: string } | { kind: "add" }
@@ -84,15 +93,13 @@ export function DateBoard({
 
   if (data.state === "unavailable")
     return (
-      <div className="lists">
-        {lead === undefined ? null : <div className="lists-bar">{lead}</div>}
-        <div className="lists-empty">
-          <CalendarHeartIcon size={48} weight="light" aria-hidden="true" />
-          <h2>Dates unavailable</h2>
+      <ListsFrame>
+        {lead === undefined ? null : <ListBar>{lead}</ListBar>}
+        <ListEmpty icon={CalendarHeartIcon} title="Dates unavailable">
           <p>{importantDateFailureMessage[data.reason]}</p>
           <OpenConnection />
-        </div>
-      </div>
+        </ListEmpty>
+      </ListsFrame>
     )
 
   const { owners, dates } = data
@@ -109,8 +116,8 @@ export function DateBoard({
       : undefined
 
   return (
-    <div className="lists" aria-busy={busy}>
-      <div className="lists-bar">
+    <ListsFrame aria-busy={busy}>
+      <ListBar>
         {lead}
         {owners.length === 0 ? null : (
           <PersonKeys
@@ -122,27 +129,25 @@ export function DateBoard({
             choose={(person) => choose({ person })}
           />
         )}
-        <div className="lists-bar-end">
+        <ListBarEnd>
           <Button size="key" onClick={() => setOpen({ kind: "add" })}>
             <PlusIcon size={20} weight="bold" aria-hidden="true" />
             Add a date
           </Button>
-        </div>
-      </div>
+        </ListBarEnd>
+      </ListBar>
       {open === undefined ? (
         <FeedbackLine feedback={feedback} busy={busy} />
       ) : null}
       {shown.length === 0 ? (
-        <div className="lists-empty">
-          <CalendarHeartIcon size={48} weight="light" aria-hidden="true" />
-          <h2>No dates yet</h2>
+        <ListEmpty icon={CalendarHeartIcon} title="No dates yet">
           <p>
             Add the days you count from, like when you met, and the ones that
             come round every year.
           </p>
-        </div>
+        </ListEmpty>
       ) : (
-        <div className="dates">
+        <div className="grid gap-dates">
           {groups.map((group) => {
             const items = shown.filter((date) => date.kind === group.kind)
 
@@ -151,23 +156,19 @@ export function DateBoard({
             return (
               <section
                 key={group.kind}
-                className="dates-group"
+                className="grid gap-3.5"
                 data-kind={group.kind}
                 aria-label={group.label}
               >
-                <h2 className="board-heading">
+                <BoardHeading count={items.length} noun={["date", "dates"]}>
                   {group.label}
-                  <span className="board-count num">
-                    {items.length}
-                    <span className="sr-only">
-                      {" "}
-                      {items.length === 1 ? "date" : "dates"}
-                    </span>
-                  </span>
-                </h2>
-                <ul className="date-plates">
+                </BoardHeading>
+                <ul
+                  data-slot="date-plates"
+                  className={plates({ kind: group.kind })}
+                >
                   {items.map((date) => (
-                    <li key={date.id}>
+                    <li key={date.id} className="grid">
                       <DatePlate
                         date={date}
                         people={
@@ -229,9 +230,27 @@ export function DateBoard({
           </>
         ) : null}
       </ListSheet>
-    </div>
+    </ListsFrame>
   )
 }
+
+const plates = cva("grid gap-plates", {
+  variants: {
+    kind: { since: "grid-fill-80", yearly: "grid-fill-54" },
+  },
+})
+
+const plate = cva(
+  "grid w-full grid-rows-date gap-2.5 rounded-plate bg-wash px-4.5 pt-3.5 pb-4 text-left transition duration-fast ease-app hover:bg-wash-strong active:scale-98",
+  {
+    variants: {
+      kind: {
+        since: "min-h-46 max-sm:min-h-0",
+        yearly: "min-h-38 max-sm:min-h-0",
+      },
+    },
+  }
+)
 
 /** A date's plate: its title, the live figure large, then the date and its people. */
 function DatePlate({
@@ -248,23 +267,33 @@ function DatePlate({
   return (
     <button
       type="button"
-      className="date-plate"
+      className={plate({ kind: date.kind })}
       data-kind={date.kind}
       data-today={today}
       onClick={open}
     >
-      <span className="date-plate-head">
+      <span className="flex min-w-0 items-center gap-2 text-muted-ink">
         <DateKindGlyph kind={date.kind} size={16} />
-        <span className="date-plate-title">{date.title}</span>
+        <span
+          data-slot="date-plate-title"
+          className="truncate text-body-lg font-medium text-ink"
+        >
+          {date.title}
+        </span>
         {today ? (
-          <span className="date-mark">
+          <span
+            className={cn(
+              "size-3 flex-none rounded-full bg-sun",
+              people.length === 0 && "ml-auto"
+            )}
+          >
             <span className="sr-only">Today</span>
           </span>
         ) : null}
         {people.length === 0 ? null : (
-          <span className="date-plate-people">
+          <span className="ml-auto flex flex-none gap-1">
             {people.map((person) => (
-              <PersonDisc key={person.id} name={person.name} />
+              <PersonDisc key={person.id} name={person.name} size="plate" />
             ))}
             <span className="sr-only">
               {people.map((person) => person.name).join(" and ")}
@@ -273,8 +302,8 @@ function DatePlate({
         )}
       </span>
       <DateFigure date={date} />
-      <span className="date-plate-foot">
-        <span className="date-plate-meta num">
+      <span className="flex items-center gap-3">
+        <span className="flex flex-wrap gap-x-3 gap-y-1 text-control num text-muted-ink">
           <time dateTime={date.date}>{formatDay(date.date)}</time>
           {date.kind === "since" && date.elapsed !== null ? (
             <span>

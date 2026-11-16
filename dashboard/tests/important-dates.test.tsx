@@ -157,7 +157,7 @@ async function click(
 
 function titles(): string[] {
   return Array.from(
-    container.querySelectorAll(".date-plate-title"),
+    container.querySelectorAll('[data-slot="date-plate-title"]'),
     (title) => title.textContent ?? ""
   )
 }
@@ -339,16 +339,19 @@ test("adds a tagged date, filters by person, edits it, switches idle and deletes
   expect(together?.person_ids).toHaveLength(2)
   // Since dates lead, with Axum's figure on the plate.
   expect(titles()[0]).toBe("Together")
-  expect(container.querySelector(".date-figure")?.textContent).toMatch(
-    /\d+ years/
-  )
+  expect(
+    container.querySelector('[data-slot="date-figure"]')?.textContent
+  ).toMatch(/\d+ years/)
   expect(container.textContent).toContain("14 Feb 2019")
 
   search = { person: memberA.id }
   await render()
   expect(titles()).toEqual(["Together", "A friend's birthday"])
 
-  await click(/Together/, container.querySelector(".date-plates") ?? container)
+  await click(
+    /Together/,
+    container.querySelector('[data-slot="date-plates"]') ?? container
+  )
   await click("Edit", sheet())
   await type(field("Title", sheet()), "Together again")
   await click("Yearly", sheet())
@@ -468,7 +471,7 @@ test.each([
     expect((await available()).dates.map((date) => date.title).sort()).toEqual(
       dates
     )
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
   }
 )
 
@@ -496,7 +499,7 @@ test("without session storage a lost date addition retried in the same form repe
   expect((await available()).dates.map((date) => date.title)).toEqual([
     "Together",
   ])
-  expect(document.querySelector(".sheet")).toBeNull()
+  expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
 })
 
 test("a saved date stays acknowledged when the view cannot be re-read, and its retry intention is spent", async () => {
@@ -507,10 +510,10 @@ test("a saved date stays acknowledged when the view cannot be re-read, and its r
   expect((await available()).dates.map((date) => date.title)).toEqual([
     "Together",
   ])
-  expect(document.querySelector(".sheet")).toBeNull()
-  expect(container.querySelector(".list-failure")?.textContent).toContain(
-    "Saved to OpenHome, but the view could not update"
-  )
+  expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
+  expect(
+    container.querySelector('[data-slot="list-failure"]')?.textContent
+  ).toContain("Saved to OpenHome, but the view could not update")
   expect(titles()).toEqual([])
   expect(sessionStorage.getItem("openhome.pending-date")).toBeNull()
 })

@@ -1,0 +1,16 @@
+/* Grids whose tracks are sized in spacing steps, which no core utility can repeat or fill. */
+@utility grid-fill-* {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(calc(var(--spacing) * --value(number)), 100%), 1fr)
+  );
+}
+@utility grid-fit-* {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(calc(var(--spacing) * --value(number)), 100%), 1fr)
+  );
+}
+@utility grid-aside-* {
+  grid-template-columns: calc(var(--spacing) * --value(number)) minmax(0, 1fr);
+}

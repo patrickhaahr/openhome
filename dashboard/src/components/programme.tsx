@@ -1,8 +1,17 @@
 import { useState } from "react"
+import { cva } from "class-variance-authority"
 import { FilmSlateIcon } from "@phosphor-icons/react/dist/csr/FilmSlate"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Link } from "@tanstack/react-router"
 import { OpenConnection } from "@/components/control-alert"
+import {
+  BoardHeading,
+  ListBar,
+  ListBarEnd,
+  ListEmpty,
+  ListsFrame,
+  keyLink,
+} from "@/components/list-frame"
 import {
   FeedbackLine,
   ListSheet,
@@ -10,6 +19,7 @@ import {
   PersonKeys,
   useListSave,
 } from "@/components/list-parts"
+import { mediaMeta } from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { WatchAdd, type SearchMedia } from "@/components/watch-add"
 import { WatchDetail } from "@/components/watch-sheet"
@@ -71,15 +81,13 @@ export function Programme({
 
   if (data.state === "unavailable")
     return (
-      <div className="lists">
-        {lead === undefined ? null : <div className="lists-bar">{lead}</div>}
-        <div className="lists-empty">
-          <FilmSlateIcon size={48} weight="light" aria-hidden="true" />
-          <h2>Watchlists unavailable</h2>
+      <ListsFrame>
+        {lead === undefined ? null : <ListBar>{lead}</ListBar>}
+        <ListEmpty icon={FilmSlateIcon} title="Watchlists unavailable">
           <p>{watchlistFailureMessage[data.reason]}</p>
           <OpenConnection />
-        </div>
-      </div>
+        </ListEmpty>
+      </ListsFrame>
     )
 
   const { owners, entries } = data
@@ -106,8 +114,8 @@ export function Programme({
   const selectedOwner = selected === undefined ? undefined : ownerOf(selected)
 
   return (
-    <div className="lists" aria-busy={busy}>
-      <div className="lists-bar">
+    <ListsFrame aria-busy={busy}>
+      <ListBar>
         {lead}
         {owners.length === 0 ? null : (
           <PersonKeys
@@ -118,7 +126,7 @@ export function Programme({
             choose={(person) => choose({ person })}
           />
         )}
-        <div className="lists-bar-end">
+        <ListBarEnd>
           <Button
             size="key"
             disabled={owners.length === 0}
@@ -127,22 +135,20 @@ export function Programme({
             <PlusIcon size={20} weight="bold" aria-hidden="true" />
             Add a title
           </Button>
-        </div>
-      </div>
+        </ListBarEnd>
+      </ListBar>
       {open === undefined ? (
         <FeedbackLine feedback={feedback} busy={busy} />
       ) : null}
       {owners.length === 0 ? (
-        <div className="lists-empty">
-          <FilmSlateIcon size={48} weight="light" aria-hidden="true" />
-          <h2>No one here yet</h2>
+        <ListEmpty icon={FilmSlateIcon} title="No one here yet">
           <p>Household members are added under Wish.</p>
-          <Link to="/lists" search={{ tab: "wish" }} className="key-link-text">
+          <Link to="/lists" search={{ tab: "wish" }} className={keyLink}>
             Open wishes
           </Link>
-        </div>
+        </ListEmpty>
       ) : (
-        <div className="programme">
+        <div className="grid gap-board">
           {rows.map((row) => {
             const items = shown.filter((entry) => entry.status === row.status)
 
@@ -154,22 +160,15 @@ export function Programme({
             return (
               <section
                 key={row.status}
-                className="programme-row"
+                className="grid gap-3.5"
                 data-status={row.status}
                 aria-label={row.label}
               >
-                <h2 className="board-heading">
+                <BoardHeading count={items.length} noun={["title", "titles"]}>
                   {row.label}
-                  <span className="board-count num">
-                    {items.length}
-                    <span className="sr-only">
-                      {" "}
-                      {items.length === 1 ? "title" : "titles"}
-                    </span>
-                  </span>
-                </h2>
+                </BoardHeading>
                 {items.length === 0 ? (
-                  <p className="programme-empty">
+                  <p className="text-muted-ink">
                     {row.status === "watching"
                       ? "Nothing on right now."
                       : row.status === "planned"
@@ -177,9 +176,9 @@ export function Programme({
                         : "Nothing finished yet."}
                   </p>
                 ) : (
-                  <ul className="programme-titles">
+                  <ul className={titles({ status: row.status })}>
                     {items.map((entry) => (
-                      <li key={entry.id}>
+                      <li key={entry.id} className="grid">
                         <ProgrammeTitle
                           entry={entry}
                           owner={
@@ -237,9 +236,44 @@ export function Programme({
           </>
         ) : null}
       </ListSheet>
-    </div>
+    </ListsFrame>
   )
 }
+
+const titles = cva("grid gap-titles", {
+  variants: {
+    status: {
+      // Two across at most: a third of the row is always too narrow for a column.
+      watching: "grid-cols-now",
+      planned: "grid-fill-35 max-sm:grid-fill-26",
+      completed: "grid-fill-27 max-sm:grid-fill-21",
+    },
+  },
+})
+
+const programmeTitle = cva(
+  "group/title grid w-full text-left transition duration-fast ease-app active:scale-98",
+  {
+    variants: {
+      status: {
+        watching:
+          "grid-aside-25 items-start gap-4.5 rounded-tile bg-tile p-2.5 hover:bg-wash-strong max-sm:grid-aside-26 max-sm:gap-4",
+        planned: "content-start gap-2.5",
+        completed: "content-start gap-2.5",
+      },
+    },
+  }
+)
+
+const programmeName = cva("line-clamp-2 font-medium", {
+  variants: {
+    status: {
+      watching: "pt-1 text-programme leading-heading tracking-title",
+      planned: "text-control leading-tight",
+      completed: "text-small leading-tight text-muted-ink",
+    },
+  },
+})
 
 /**
  * A poster and its line: on "Watching now" a wide plate with the story, elsewhere the poster
@@ -255,19 +289,32 @@ function ProgrammeTitle({
   open: () => void
 }): React.JSX.Element {
   return (
-    <button type="button" className="programme-title" onClick={open}>
-      <span className="programme-poster">
-        <WatchlistPoster title={entry.title} path={entry.poster_path} />
-        {owner === undefined ? null : (
-          <span className="programme-owner">
-            <PersonDisc name={owner.name} />
-            <span className="sr-only">{owner.name}’s</span>
-          </span>
-        )}
-      </span>
-      <span className="programme-text">
-        <span className="programme-name">{entry.title}</span>
-        <span className="programme-meta">
+    <button
+      type="button"
+      data-slot="programme-title"
+      className={programmeTitle({ status: entry.status })}
+      onClick={open}
+    >
+      <WatchlistPoster
+        title={entry.title}
+        path={entry.poster_path}
+        chip={
+          owner === undefined ? undefined : (
+            <>
+              <PersonDisc name={owner.name} tone="ground" />
+              <span className="sr-only">{owner.name}’s</span>
+            </>
+          )
+        }
+      />
+      <span className="grid content-start gap-1">
+        <span
+          data-slot="programme-name"
+          className={programmeName({ status: entry.status })}
+        >
+          {entry.title}
+        </span>
+        <span className={mediaMeta}>
           <KindGlyph kind={entry.kind} size={14} />
           {entry.status === "completed" && entry.completion_date !== null ? (
             <span className="num">
@@ -281,7 +328,9 @@ function ProgrammeTitle({
           )}
         </span>
         {entry.status === "watching" && entry.overview !== null ? (
-          <span className="programme-overview">{entry.overview}</span>
+          <span className="mt-1 line-clamp-3 text-control leading-prose text-muted-ink">
+            {entry.overview}
+          </span>
         ) : null}
       </span>
     </button>

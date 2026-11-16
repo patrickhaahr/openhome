@@ -7,9 +7,6 @@
 @import "./workout-sessions.css";
 @import "./workout-body.css";
 @import "./workout-log.css";
-@import "./lists.css";
-@import "./lists-detail.css";
-@import "./lists-dates.css";
 @import "./binder.css";
 @import "./idle.css";
 @import "./backlight.css";
@@ -27,6 +24,7 @@
 @import "./utilities.css";
 @import "./gap-dash.utilities.css";
 @import "./shell.utilities.css";
+@import "./lists.utilities.css";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant binder-wide {
@@ -84,6 +82,7 @@
   --color-sun-glow: var(--sun-glow);
   --color-danger: var(--danger);
   --color-scrim: var(--scrim);
+  --color-tile: var(--tile);
   --text-mega: var(--t-mega);
   --text-display: var(--t-xl);
   --text-title: var(--t-l);
@@ -96,6 +95,24 @@
   --text-figure-md: 2rem;
   --text-figure-lg: 2.25rem;
   --text-score: clamp(2.25rem, 1.2rem + 3.6vw, 4rem);
+  --text-small: 0.875rem;
+  --text-large: 1.125rem;
+  --text-xlarge: 1.25rem;
+  --text-name: clamp(1.75rem, 1.3rem + 1.4vw, 2.5rem);
+  --text-art: clamp(1.375rem, 1rem + 1.1vw, 2rem);
+  --text-poster: clamp(1.125rem, 0.9rem + 0.7vw, 1.5rem);
+  --text-programme: clamp(1.25rem, 1.05rem + 0.6vw, 1.625rem);
+  --text-date: clamp(1.5rem, 1.1rem + 1.1vw, 2.125rem);
+  --text-date-since: clamp(1.5rem, 0.95rem + 1.05vw, 2.125rem);
+  --text-date-large: clamp(1.875rem, 1.4rem + 1.2vw, 2.5rem);
+  --text-date-milestone: clamp(2rem, 1.3rem + 1.8vw, 3rem);
+  --tracking-title: -0.035em;
+  --tracking-figure-tight: -0.03em;
+  --leading-poster: 0.95;
+  --leading-figure: 0.98;
+  --leading-heading: 1.02;
+  --leading-compact: 1.2;
+  --leading-prose: 1.45;
   --tracking-score: -0.055em;
   --tracking-score-tight: -0.05em;
   --tracking-caption: 0.14em;
@@ -103,6 +120,27 @@
   --spacing-bar: var(--bar);
   --spacing-ring-baseline: 38%;
   --spacing-glance-ring: min(9rem, calc((100% - 1.5rem) / 3));
+  --spacing-flow: clamp(1rem, 2vw, 1.5rem);
+  --spacing-board: clamp(1.5rem, 3vw, 2.5rem);
+  --spacing-plates: clamp(0.75rem, 1.4vw, 1.125rem);
+  --spacing-dates: clamp(1.25rem, 2.4vw, 2rem);
+  --spacing-titles: clamp(0.875rem, 1.6vw, 1.375rem);
+  --spacing-callout: clamp(1.5rem, 4vw, 3rem);
+  --spacing-gutter: clamp(1.25rem, 3vw, 2rem);
+  --spacing-sheet: min(34rem, 100%);
+  --spacing-sheet-height: 92svh;
+  --spacing-detail-art: clamp(8rem, 30dvh, 20rem);
+  --spacing-part: 0.3em;
+  --spacing-digits: 2.5ch;
+  --spacing-stack: 0.3rem;
+  --grid-template-columns-lead: auto minmax(0, 1fr);
+  --grid-template-columns-trail: minmax(0, 1fr) auto;
+  --grid-template-columns-now: repeat(
+    auto-fill,
+    minmax(min(100%, max(22rem, 34%)), 1fr)
+  );
+  --grid-template-rows-art: auto 1fr;
+  --grid-template-rows-date: auto 1fr auto;
   --ease-app: var(--ease);
   --transition-duration-fast: var(--t-fast);
   --transition-duration-mid: var(--t-mid);
@@ -147,6 +185,10 @@
   --radius-sheet: 1.5rem;
   --breakpoint-phone: 40.0625rem;
   --breakpoint-tablet: 56.3125rem;
+  --radius-poster: 0.625rem;
+  --radius-art: 0.875rem;
+  --radius-plate: 1rem;
+  --radius-tile: 1.25rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -232,6 +274,7 @@
   --sun-glow: rgb(255 91 31 / 22%);
   --danger: #b42318;
   --scrim: rgb(244 244 240 / 86%);
+  --tile: rgb(18 20 24 / 4.5%);
 
   --margin: clamp(1.25rem, 3.2vw, 2.5rem);
   --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
@@ -294,6 +337,7 @@
   --sun-glow: rgb(255 106 46 / 26%);
   --danger: #ff8a7a;
   --scrim: rgb(11 12 14 / 84%);
+  --tile: rgb(236 236 230 / 5.5%);
   --chart-4: #7aa2ff;
   --chart-5: #6c7078;
 }

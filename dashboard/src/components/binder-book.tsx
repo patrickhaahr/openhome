@@ -10,6 +10,12 @@ import { BinderSheet } from "@/components/binder-sheet"
 import { BinderValueBar } from "@/components/binder-value"
 import { useReducedMotion } from "@/components/idle-screen"
 import {
+  ListBar,
+  ListEmpty,
+  ListsFrame,
+  keyLink,
+} from "@/components/list-frame"
+import {
   FeedbackLine,
   ListSheet,
   PersonKeys,
@@ -112,9 +118,9 @@ export function BinderBook({
   }
 
   return (
-    <div className="lists binder" aria-busy={busy}>
+    <ListsFrame className="binder" aria-busy={busy}>
       {view.view === "empty" || view.view === "spread" ? (
-        <div className="lists-bar">
+        <ListBar>
           <PersonKeys
             owners={view.owners}
             selected={view.owner.id}
@@ -132,7 +138,7 @@ export function BinderBook({
               refresh={refresh}
             />
           </BinderValueBar>
-        </div>
+        </ListBar>
       ) : null}
       {selected === undefined ? (
         <FeedbackLine feedback={feedback} busy={busy} />
@@ -151,7 +157,7 @@ export function BinderBook({
         open={selected !== undefined}
         close={() => setOpen(undefined)}
         title={selected?.card.name ?? "Card"}
-        className="binder-stage"
+        variant="stage"
         actions={
           at === -1 ? null : (
             <nav className="binder-stage-turn" aria-label="Cards">
@@ -213,7 +219,7 @@ export function BinderBook({
           </>
         ) : null}
       </ListSheet>
-    </div>
+    </ListsFrame>
   )
 }
 
@@ -231,9 +237,7 @@ function Body({
   switch (view.view) {
     case "unavailable":
       return (
-        <div className="lists-empty">
-          <CardsIcon size={48} weight="light" aria-hidden="true" />
-          <h2>Binder unavailable</h2>
+        <ListEmpty icon={CardsIcon} title="Binder unavailable">
           <p>{binderFailureMessage[view.reason]}</p>
           <div className="binder-recovery">
             <CheckAgainButton check={refresh} />
@@ -242,28 +246,27 @@ function Body({
               <OpenConnection />
             )}
           </div>
-        </div>
+        </ListEmpty>
       )
     case "no-household":
       return (
-        <div className="lists-empty">
-          <CardsIcon size={48} weight="light" aria-hidden="true" />
-          <h2>No one here yet</h2>
+        <ListEmpty icon={CardsIcon} title="No one here yet">
           <p>Household members are added under Wish.</p>
-          <Link to="/lists" search={{ tab: "wish" }} className="key-link-text">
+          <Link to="/lists" search={{ tab: "wish" }} className={keyLink}>
             Open wishes
           </Link>
-        </div>
+        </ListEmpty>
       )
     case "empty":
       return (
-        <div className="lists-empty">
-          <CardsIcon size={48} weight="light" aria-hidden="true" />
-          <h2>{view.owner.name}’s Binder is empty</h2>
+        <ListEmpty
+          icon={CardsIcon}
+          title={<>{view.owner.name}’s Binder is empty</>}
+        >
           <p>
             Ask Hermes to add cards from a photo, or add one by its Card Code.
           </p>
-        </div>
+        </ListEmpty>
       )
     case "spread":
       return (

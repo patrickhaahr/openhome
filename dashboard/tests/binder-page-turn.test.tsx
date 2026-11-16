@@ -24,7 +24,7 @@ import {
   type Turn,
   type TurnEvent,
 } from "@/lib/binder-turn"
-import { button, settle, sheet } from "./support/lists-dom"
+import { button, settle, sheet, slot } from "./support/lists-dom"
 
 const alex = { id: "5a02863d-0c3f-4e11-9a2e-2e99334b5a93", name: "Alex" }
 
@@ -355,7 +355,7 @@ describe("taps and drags on pockets", () => {
     await lift(card, 300)
     await landed()
 
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(slot("sheet")).toBeNull()
     expect(folio()).toBe("Pages 1–2 of 4")
   })
 
@@ -380,7 +380,7 @@ describe("taps and drags on pockets", () => {
     await lift(card, 300)
     await landed()
 
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(slot("sheet")).toBeNull()
     expect(folio()).toBe("Pages 3–4 of 4")
   })
 
@@ -393,7 +393,7 @@ describe("taps and drags on pockets", () => {
     await lift(card, 800)
     await landed()
 
-    expect(document.querySelector(".sheet")).toBeNull()
+    expect(slot("sheet")).toBeNull()
     expect(folio()).toBe("Pages 1–2 of 4")
 
     await pointer(card, "pointerdown", 950)
@@ -430,8 +430,7 @@ describe("swiping the card stage", () => {
       await settle()
     }
 
-    const title = (): string =>
-      sheet().querySelector(".sheet-title")?.textContent ?? ""
+    const title = (): string => slot("sheet-title", sheet())?.textContent ?? ""
 
     await swipe(700, 300)
     expect(title()).toBe("Invented Card 19")

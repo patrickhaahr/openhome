@@ -17,7 +17,7 @@ const buttonVariants = cva(
         ghost:
           "text-muted-foreground hover:bg-secondary hover:text-foreground aria-expanded:bg-secondary aria-expanded:text-foreground",
         destructive:
-          "border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive hover:text-background",
+          "bg-destructive/12 bg-clip-border text-destructive hover:bg-destructive hover:text-background",
         link: "rounded-none px-0 text-primary underline decoration-1 underline-offset-[0.3em] hover:decoration-2",
         loop: "loop-alternative items-start justify-start rounded-[0.75rem] text-base font-normal whitespace-normal",
       },

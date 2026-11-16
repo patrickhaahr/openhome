@@ -178,7 +178,9 @@ async function debounced(): Promise<void> {
 
 async function open(title: string): Promise<void> {
   const plate = Array.from(
-    container.querySelectorAll<HTMLButtonElement>(".programme-title")
+    container.querySelectorAll<HTMLButtonElement>(
+      '[data-slot="programme-title"]'
+    )
   ).find((element) => element.textContent?.includes(title))
 
   if (plate === undefined) throw new Error(`Missing title ${title}`)
@@ -240,7 +242,7 @@ test("adds a TMDB title and a hand-written one for the chosen person, and delete
   ).toContain("A Paper Garden")
   expect(
     container
-      .querySelector<HTMLImageElement>(".programme-title img")
+      .querySelector<HTMLImageElement>('[data-slot="programme-title"] img')
       ?.getAttribute("src")
   ).toBe("https://image.tmdb.org/t/p/w342/synthetic.jpg")
   expect(
@@ -258,7 +260,7 @@ test("adds a TMDB title and a hand-written one for the chosen person, and delete
   await click("Delete for good", sheet())
   expect(
     Array.from(
-      container.querySelectorAll(".programme-name"),
+      container.querySelectorAll('[data-slot="programme-name"]'),
       (name) => name.textContent
     )
   ).toEqual(["A Paper Garden"])
@@ -321,9 +323,9 @@ test("status keys and date corrections persist, failures say so, and the person 
 
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await click("Planned", sheet())
-  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
-    "OpenHome rejected the API key"
-  )
+  expect(
+    sheet().querySelector('[data-slot="list-failure"]')?.textContent
+  ).toContain("OpenHome rejected the API key")
   expect(sheet().textContent).not.toContain("synthetic-rejected-key")
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   expect(
@@ -459,7 +461,7 @@ test("TMDB outages leave hand planning open, and found details keep a completed 
   await debounced()
   await click(
     /^A Quiet Orbit/,
-    sheet().querySelector(".media-results") ?? sheet()
+    sheet().querySelector('[data-slot="media-results"]') ?? sheet()
   )
   expect(sheet().textContent).toContain("A fictional journey")
   expect(

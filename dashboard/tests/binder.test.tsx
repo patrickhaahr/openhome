@@ -452,7 +452,7 @@ test("a pocket opens a sheet with the large image and the card's details", async
   expect(open.querySelector("img")?.getAttribute("src")).toBe(
     "/binder-image/OP99-001"
   )
-  expect(open.querySelector(".sheet-title")?.textContent).toBe(
+  expect(open.querySelector('[data-slot="sheet-title"]')?.textContent).toBe(
     "Captain Marlow (001)"
   )
 
@@ -546,7 +546,7 @@ test("removes an entry only after confirmation, keeping the other entries and th
   expect((await stored()).entries.map((entry) => entry.card.id)).toEqual([
     "OP99-002",
   ])
-  expect(document.querySelector(".sheet")).toBeNull()
+  expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
   expect(cards()).toEqual(["OP99-002"])
   expect((await readCardImage({ card: "OP99-001" })).status).toBe(200)
 })
@@ -560,9 +560,9 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await type(field("Quantity", sheet()), "4")
   await press(button("Save changes", sheet()))
-  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
-    "OpenHome rejected the API key"
-  )
+  expect(
+    sheet().querySelector('[data-slot="list-failure"]')?.textContent
+  ).toContain("OpenHome rejected the API key")
   expect(sheet().textContent).not.toContain("synthetic-rejected-key")
   expect(field("Quantity", sheet()).value).toBe("4")
   vi.stubEnv("API_KEY", key)
@@ -573,7 +573,7 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
   await press(button("Remove", sheet()))
   vi.stubEnv("API_KEY", "synthetic-rejected-key")
   await press(button("Remove for good", sheet()))
-  expect(sheet().querySelector(".list-failure")).not.toBeNull()
+  expect(sheet().querySelector('[data-slot="list-failure"]')).not.toBeNull()
   expect(sheet().querySelector('[aria-label="Remove card"]')).not.toBeNull()
   vi.stubEnv("API_KEY", key)
   expect(await stored().then((data) => data.entries)).toHaveLength(2)
@@ -581,9 +581,9 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
 
   await press(button("JP", sheet()))
   await press(button("Save changes", sheet()))
-  expect(sheet().querySelector(".list-failure")?.textContent).toContain(
-    "already holds the card in that language"
-  )
+  expect(
+    sheet().querySelector('[data-slot="list-failure"]')?.textContent
+  ).toContain("already holds the card in that language")
   expect(button("JP", sheet()).getAttribute("aria-pressed")).toBe("true")
   expect(
     (await stored()).entries.map((entry) => [entry.language, entry.quantity])
@@ -595,7 +595,7 @@ test("a failed edit or removal keeps the sheet open with its error and the draft
   await press(button("EN", sheet()))
   await type(field("Quantity", sheet()), "4")
   await press(button("Save changes", sheet()))
-  expect(sheet().querySelector(".list-failure")).toBeNull()
+  expect(sheet().querySelector('[data-slot="list-failure"]')).toBeNull()
   expect((await stored()).entries[0]).toMatchObject({ quantity: 4 })
 })
 

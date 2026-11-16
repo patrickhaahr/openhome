@@ -1,9 +1,20 @@
 import { useState } from "react"
+import { cva } from "class-variance-authority"
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix"
 import { GiftIcon } from "@phosphor-icons/react/dist/csr/Gift"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { OpenConnection } from "@/components/control-alert"
 import { HouseholdLists } from "@/components/household-sheet"
+import {
+  BoardHeading,
+  ListBar,
+  ListBarEnd,
+  ListEmpty,
+  ListsFrame,
+  WishMark,
+  listKey,
+  listKeys,
+} from "@/components/list-frame"
 import {
   FeedbackLine,
   ListSheet,
@@ -77,15 +88,13 @@ export function GiftBoard({
 
   if (data.state === "unavailable")
     return (
-      <div className="lists">
-        {lead === undefined ? null : <div className="lists-bar">{lead}</div>}
-        <div className="lists-empty">
-          <GiftIcon size={48} weight="light" aria-hidden="true" />
-          <h2>Wishlists unavailable</h2>
+      <ListsFrame>
+        {lead === undefined ? null : <ListBar>{lead}</ListBar>}
+        <ListEmpty icon={GiftIcon} title="Wishlists unavailable">
           <p>{wishlistFailureMessage[data.reason]}</p>
           <OpenConnection />
-        </div>
-      </div>
+        </ListEmpty>
+      </ListsFrame>
     )
 
   const { owners, lists, items } = data
@@ -144,7 +153,7 @@ export function GiftBoard({
           label: person.name,
           heading: (
             <>
-              <PersonDisc name={person.name} />
+              <PersonDisc name={person.name} size="heading" />
               {person.name}
             </>
           ),
@@ -181,8 +190,8 @@ export function GiftBoard({
     selectedList === undefined ? undefined : ownerOf(selectedList)
 
   return (
-    <div className="lists" aria-busy={busy}>
-      <div className="lists-bar">
+    <ListsFrame aria-busy={busy}>
+      <ListBar>
         {lead}
         {owners.length === 0 ? null : (
           <PersonKeys
@@ -193,7 +202,7 @@ export function GiftBoard({
             choose={(person) => choose({ person, list: undefined })}
           />
         )}
-        <div className="lists-bar-end">
+        <ListBarEnd>
           <Button
             variant="outline"
             size="key-icon"
@@ -213,17 +222,17 @@ export function GiftBoard({
             <PlusIcon size={20} weight="bold" aria-hidden="true" />
             Add a wish
           </Button>
-        </div>
-      </div>
+        </ListBarEnd>
+      </ListBar>
       {owner === undefined ? null : (
         <div
-          className="list-keys"
+          className={listKeys}
           role="group"
           aria-label={`${owner.name}’s lists`}
         >
           <button
             type="button"
-            className="list-key"
+            className={listKey()}
             aria-pressed={list === undefined}
             onClick={() => choose({ person: owner.id, list: undefined })}
           >
@@ -235,12 +244,12 @@ export function GiftBoard({
               <button
                 key={candidate.id}
                 type="button"
-                className="list-key"
+                className={listKey()}
                 aria-pressed={list?.id === candidate.id}
                 onClick={() => choose({ person: owner.id, list: candidate.id })}
               >
                 {candidate.name}
-                <span className="num">
+                <span className="text-label font-medium num text-muted-ink">
                   {listCounts.get(candidate.id) ?? 0}
                   <span className="sr-only"> wishes</span>
                 </span>
@@ -252,9 +261,7 @@ export function GiftBoard({
         <FeedbackLine feedback={feedback} busy={busy} />
       ) : null}
       {owners.length === 0 ? (
-        <div className="lists-empty">
-          <GiftIcon size={48} weight="light" aria-hidden="true" />
-          <h2>No one here yet</h2>
+        <ListEmpty icon={GiftIcon} title="No one here yet">
           <p>Add a household member, then their first list.</p>
           <Button
             variant="outline"
@@ -262,31 +269,28 @@ export function GiftBoard({
           >
             Add a household member
           </Button>
-        </div>
+        </ListEmpty>
       ) : (
         <div
-          className="board"
+          className="group/board grid gap-board"
           data-density={shown <= 3 ? "few" : shown <= 8 ? "some" : "many"}
         >
           {groups.map((group) => (
             <section
               key={group.key}
-              className="board-group"
+              className="grid gap-3.5"
               aria-label={group.label}
             >
-              <h2 className={group.hidden ? "sr-only" : "board-heading"}>
+              <BoardHeading
+                count={group.items.length}
+                noun={["wish", "wishes"]}
+                hidden={group.hidden}
+              >
                 {group.heading}
-                <span className="board-count num">
-                  {group.items.length}
-                  <span className="sr-only">
-                    {" "}
-                    {group.items.length === 1 ? "wish" : "wishes"}
-                  </span>
-                </span>
-              </h2>
-              <ul className="plates">
+              </BoardHeading>
+              <ul className="grid grid-fill-50 gap-plates group-data-[density=few]/board:grid-fill-72 group-data-[density=some]/board:grid-fill-58 max-sm:grid-fill-38">
                 {group.items.map((item) => (
-                  <li key={item.id}>
+                  <li key={item.id} className="grid">
                     <WishPlate
                       item={item}
                       image={imageOf(item)}
@@ -296,10 +300,11 @@ export function GiftBoard({
                   </li>
                 ))}
                 {group.items.length === 0 ? (
-                  <li>
+                  <li className="grid">
                     <button
                       type="button"
-                      className="wish-plate wish-plate-add"
+                      data-slot="wish-plate"
+                      className={wishPlate({ kind: "add" })}
                       onClick={() => setOpen({ kind: "add", ...group.add })}
                     >
                       <PlusIcon size={28} aria-hidden="true" />
@@ -370,9 +375,22 @@ export function GiftBoard({
         />
         <FeedbackLine feedback={feedback} busy={busy} />
       </ListSheet>
-    </div>
+    </ListsFrame>
   )
 }
+
+const wishPlate = cva(
+  "group/plate relative grid w-full overflow-hidden rounded-plate text-left transition duration-fast ease-app hover:bg-wash-strong active:scale-98",
+  {
+    variants: {
+      kind: {
+        wish: "grid-rows-art bg-tile",
+        add: "min-h-48 grid-rows-none place-items-center content-center gap-2 bg-wash font-medium text-muted-ink",
+      },
+    },
+    defaultVariants: { kind: "wish" },
+  }
+)
 
 /** One wish: the image fills the plate; title, price and quantity sit beneath it. */
 function WishPlate({
@@ -389,29 +407,33 @@ function WishPlate({
   return (
     <button
       type="button"
-      className="wish-plate"
+      data-slot="wish-plate"
+      className={wishPlate()}
       data-priority={item.priority}
       onClick={open}
     >
       <WishArt title={item.title} image={image} />
-      {item.priority === "high" ? (
-        <i className="wish-mark" aria-hidden="true" />
-      ) : null}
-      <span className="wish-text">
-        <span className="wish-title">{item.title}</span>
-        <span className="wish-meta">
+      {item.priority === "high" ? <WishMark /> : null}
+      <span className="grid content-start gap-stack px-3.5 pt-3 pb-3.5">
+        <span
+          data-slot="wish-title"
+          className="line-clamp-2 text-base leading-tight font-medium tracking-nav group-data-[priority=low]/plate:text-muted-ink"
+        >
+          {item.title}
+        </span>
+        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-control text-muted-ink">
           {item.price === null ? null : (
-            <span className="num">{item.price}</span>
+            <span className="font-semibold num text-ink">{item.price}</span>
           )}
           {item.quantity > 1 ? (
-            <span className="wish-quantity num">
+            <span className="num">
               <span aria-hidden="true">×</span>
               {item.quantity}
               <span className="sr-only"> wanted</span>
             </span>
           ) : null}
           {caption === undefined ? null : (
-            <span className="wish-caption">{caption}</span>
+            <span className="ml-auto text-label">{caption}</span>
           )}
         </span>
         <span className="sr-only">

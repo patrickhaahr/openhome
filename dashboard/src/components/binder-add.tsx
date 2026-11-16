@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch"
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass"
-import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import {
   FeedbackLine,
@@ -11,10 +10,21 @@ import {
   useListSave,
   useSheetLifetime,
 } from "@/components/list-parts"
+import {
+  Stepper,
+  field,
+  linkInput,
+  mediaMeta,
+  mediaTitle,
+  sheetActions,
+  sheetBody,
+  sheetName,
+} from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
+import { cn } from "@/lib/utils"
 import {
   additionOf,
   advance,
@@ -198,16 +208,16 @@ function AddSheet({
 
   return (
     <form
-      className="sheet-body"
+      className={sheetBody()}
       aria-label="Search by Card Code"
       onSubmit={(event) => {
         event.preventDefault()
         void search(code)
       }}
     >
-      <label className="field" htmlFor={`${id}-code`}>
+      <label className={field()} htmlFor={`${id}-code`}>
         <span>Card Code</span>
-        <span className="link-input">
+        <span className={linkInput}>
           <MagnifyingGlassIcon size={22} aria-hidden="true" />
           <Input
             id={`${id}-code`}
@@ -221,11 +231,15 @@ function AddSheet({
             onChange={(event) => setCode(event.target.value)}
           />
           {flow.state === "searching" ? (
-            <CircleNotchIcon size={22} className="spin" aria-hidden="true" />
+            <CircleNotchIcon
+              size={22}
+              className="animate-spin"
+              aria-hidden="true"
+            />
           ) : null}
         </span>
       </label>
-      <div className="sheet-actions">
+      <div className={sheetActions()}>
         <Button
           type="submit"
           disabled={flow.state === "searching" || trimText(code) === ""}
@@ -264,7 +278,7 @@ function AddSheet({
                 }
               >
                 <CardArt card={card} />
-                <span className="media-result-title">{card.name}</span>
+                <span className={mediaTitle}>{card.name}</span>
               </button>
             </li>
           ))}
@@ -321,7 +335,7 @@ function Drafting({
 
   return (
     <form
-      className="sheet-body"
+      className={sheetBody()}
       aria-label="Add this card"
       onSubmit={(event) => {
         event.preventDefault()
@@ -332,8 +346,8 @@ function Drafting({
       <div className="binder-draft">
         <CardArt card={draft.card} />
         <div>
-          <p className="sheet-name">{draft.card.name}</p>
-          <p className="media-result-meta num">{draft.card.card_code}</p>
+          <p className={sheetName}>{draft.card.name}</p>
+          <p className={cn(mediaMeta, "num")}>{draft.card.card_code}</p>
           {locked ? (
             <p className="binder-search-note" role="status">
               This addition is not confirmed yet. Retrying it will not add the
@@ -342,7 +356,7 @@ function Drafting({
           ) : null}
         </div>
       </div>
-      <fieldset className="field">
+      <fieldset className={field()}>
         <legend>Add to</legend>
         <ViewTabs variant="people">
           {owners.map((owner) => (
@@ -360,39 +374,16 @@ function Drafting({
           ))}
         </ViewTabs>
       </fieldset>
-      <div className="field">
+      <div className={field()}>
         <span id={`${id}-quantity`}>Quantity</span>
-        <div
-          className="stepper"
-          role="group"
-          aria-labelledby={`${id}-quantity`}
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="key-icon"
-            disabled={frozen || draft.quantity <= 1}
-            onClick={() => edit({ quantity: draft.quantity - 1 })}
-          >
-            <MinusIcon size={18} aria-hidden="true" />
-            <span className="sr-only">One fewer</span>
-          </Button>
-          <output className="num" aria-live="polite">
-            {draft.quantity}
-          </output>
-          <Button
-            type="button"
-            variant="outline"
-            size="key-icon"
-            disabled={frozen}
-            onClick={() => edit({ quantity: draft.quantity + 1 })}
-          >
-            <PlusIcon size={18} aria-hidden="true" />
-            <span className="sr-only">One more</span>
-          </Button>
-        </div>
+        <Stepper
+          labelId={`${id}-quantity`}
+          value={draft.quantity}
+          disabled={frozen}
+          set={(quantity) => edit({ quantity })}
+        />
       </div>
-      <div className="field">
+      <div className={field()}>
         <span>Language</span>
         <Segments
           label="Language"
@@ -402,7 +393,7 @@ function Drafting({
           disabled={frozen}
         />
       </div>
-      <div className="sheet-actions sheet-submit">
+      <div className={sheetActions({ placement: "submit" })}>
         <Button type="submit" size="key-xl" disabled={busy}>
           <PlusIcon size={20} weight="bold" aria-hidden="true" />
           {locked ? "Retry add" : "Add card"}
@@ -430,12 +421,12 @@ function Added({
   const whose = owner === undefined ? "the" : `${owner.name}’s`
 
   return (
-    <div className="sheet-body">
+    <div className={sheetBody()}>
       <div className="binder-draft">
         <CardArt card={draft.card} />
         <div>
-          <p className="sheet-name">{draft.card.name}</p>
-          <p className="media-result-meta num">{draft.card.card_code}</p>
+          <p className={sheetName}>{draft.card.name}</p>
+          <p className={cn(mediaMeta, "num")}>{draft.card.card_code}</p>
           <p role="status" className="binder-added">
             {stored === undefined
               ? `Added to ${whose} Binder.`
@@ -445,7 +436,7 @@ function Added({
           </p>
         </div>
       </div>
-      <div className="sheet-actions sheet-submit">
+      <div className={sheetActions({ placement: "submit" })}>
         <Button type="button" size="key" onClick={another}>
           Add another card
         </Button>

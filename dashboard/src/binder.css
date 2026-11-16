@@ -235,7 +235,7 @@
 
 /* ---------- The card stage: the card as large as the screen allows, its facts beside it ---------- */
 
-.sheet.binder-stage {
+[data-slot="sheet"][data-variant="stage"] {
   inset: 0;
   width: auto;
   grid-template-rows: auto minmax(0, 1fr);
@@ -246,17 +246,17 @@
   background: color-mix(in srgb, var(--ink) 4%, var(--ground));
   transition-property: opacity, scale;
 }
-.sheet.binder-stage[data-starting-style],
-.sheet.binder-stage[data-ending-style] {
+[data-slot="sheet"][data-variant="stage"][data-starting-style],
+[data-slot="sheet"][data-variant="stage"][data-ending-style] {
   translate: none;
   opacity: 0;
   scale: 0.98;
 }
-.binder-stage .sheet-head {
+[data-variant="stage"] [data-slot="sheet-head"] {
   gap: 1rem;
   padding: 1rem clamp(1.25rem, 3vw, 2.5rem);
 }
-.binder-stage .sheet-title {
+[data-variant="stage"] [data-slot="sheet-title"] {
   min-width: 0;
   font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.25rem);
   letter-spacing: -0.045em;
@@ -426,7 +426,7 @@
       "people book credits";
     column-gap: 2rem;
   }
-  .binder > .lists-bar {
+  .binder > [data-slot="lists-bar"] {
     display: contents;
   }
   .binder-book {
@@ -457,7 +457,7 @@
     text-align: right;
   }
   .binder > .binder-book,
-  .binder > .lists-empty {
+  .binder > [data-slot="lists-empty"] {
     grid-area: book;
   }
   /* An auto column has no width for a percentage to resolve against, so the spread names its own. */

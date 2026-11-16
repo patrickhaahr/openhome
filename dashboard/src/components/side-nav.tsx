@@ -18,6 +18,7 @@ import {
   TabFace,
   tabLink,
 } from "@/components/nav-parts"
+import { sheetScrim } from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { features, type Feature } from "@/lib/features"
 
@@ -152,7 +153,7 @@ export function TabBar(): React.JSX.Element {
               <TabFace Icon={DotsThreeIcon} label="More" face="bar" />
             </Dialog.Trigger>
             <Dialog.Portal>
-              <Dialog.Backdrop className="sheet-scrim" />
+              <Dialog.Backdrop className={sheetScrim} />
               {/* Navigation moves focus to the page heading, so closing must not reclaim it. */}
               <Dialog.Popup
                 className="fixed inset-x-0 bottom-0 z-51 grid gap-4 rounded-t-sheet bg-plate px-5 pt-4 pb-sheet-bottom text-ink transition-transform duration-mid ease-app outline-none data-ending-style:translate-y-full data-starting-style:translate-y-full"
