@@ -165,7 +165,10 @@ export function WishDetail({
       <dl className="sheet-figures">
         <div>
           <dt className="sr-only">Price</dt>
-          <dd className="num" data-gap={item.price === null}>
+          <dd
+            className="num data-[gap=true]:gap-dash-7"
+            data-gap={item.price === null}
+          >
             {item.price ?? "Unavailable"}
           </dd>
         </div>

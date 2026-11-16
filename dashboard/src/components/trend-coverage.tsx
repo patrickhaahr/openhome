@@ -268,7 +268,7 @@ function CoverageRowItem({
       </span>
       <span className="trend-coverage-percent num">
         {row.percent_of_recommended === null ? (
-          <span data-gap="true" />
+          <span data-gap="true" className="gap-dash" />
         ) : (
           formatPercent(row.percent_of_recommended)
         )}

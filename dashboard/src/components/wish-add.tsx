@@ -5,6 +5,7 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PersonDisc, useSheetLifetime } from "@/components/list-parts"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { WishArt } from "@/components/wish-sheet"
 import {
   WishFields,
@@ -327,14 +328,14 @@ export function WishAdd({
           withLink={false}
         />
       </div>
-      <fieldset className="field destination">
+      <fieldset className="field">
         <legend>For</legend>
-        <div className="view-tabs person-keys">
+        <ViewTabs variant="people">
           {owners.map((owner) => (
             <button
               key={owner.id}
               type="button"
-              className="view-tab person-key"
+              {...viewTab("person")}
               aria-pressed={ownerId === owner.id}
               disabled={busy}
               onClick={() => {
@@ -348,10 +349,10 @@ export function WishAdd({
               {owner.name}
             </button>
           ))}
-        </div>
+        </ViewTabs>
       </fieldset>
       {ownerId === undefined ? null : (
-        <fieldset className="field destination">
+        <fieldset className="field">
           <legend>List</legend>
           <div className="list-keys">
             {ownerLists.map((item) => (

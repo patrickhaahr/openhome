@@ -270,7 +270,7 @@ export function WatchAdd({
             </Button>
           </div>
         </div>
-        <fieldset className="field destination">
+        <fieldset className="field">
           <legend>For whom?</legend>
           <div className="whom-keys">
             {owners.map((owner) => (

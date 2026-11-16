@@ -295,7 +295,10 @@ export function BodyProfile({
                         <RulerIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Height</span>
                       </dt>
-                      <dd data-gap={data.profile.height_cm === null}>
+                      <dd
+                        data-gap={data.profile.height_cm === null}
+                        className="data-[gap=true]:gap-dash-5.5"
+                      >
                         {data.profile.height_cm === null
                           ? "Not configured"
                           : numberFormat.format(data.profile.height_cm)}
@@ -309,7 +312,10 @@ export function BodyProfile({
                         <GenderIntersexIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Sex</span>
                       </dt>
-                      <dd data-gap={data.profile.sex === null}>
+                      <dd
+                        data-gap={data.profile.sex === null}
+                        className="data-[gap=true]:gap-dash-5.5"
+                      >
                         {data.profile.sex ?? "Not configured"}
                       </dd>
                     </div>
@@ -318,7 +324,10 @@ export function BodyProfile({
                         <HeartbeatIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Maximum heart rate</span>
                       </dt>
-                      <dd data-gap={data.profile.hr_max_bpm === null}>
+                      <dd
+                        data-gap={data.profile.hr_max_bpm === null}
+                        className="data-[gap=true]:gap-dash-5.5"
+                      >
                         {data.profile.hr_max_bpm === null
                           ? "Not configured"
                           : data.profile.hr_max_bpm}
@@ -332,7 +341,10 @@ export function BodyProfile({
                         <CakeIcon size={20} aria-hidden="true" />
                         <span className="sr-only">Birth date</span>
                       </dt>
-                      <dd data-gap={data.profile.birth_date === null}>
+                      <dd
+                        data-gap={data.profile.birth_date === null}
+                        className="data-[gap=true]:gap-dash-5.5"
+                      >
                         {data.profile.birth_date === null
                           ? "Not configured"
                           : birthDay.format(

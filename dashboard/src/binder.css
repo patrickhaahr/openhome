@@ -439,7 +439,7 @@
   .binder-book {
     column-gap: 1rem;
   }
-  .binder .person-keys {
+  .binder [data-slot="person-keys"] {
     grid-area: people;
     flex-direction: column;
     align-self: start;

@@ -102,7 +102,7 @@ function MicronutrientRow({
       </span>
       <span className="food-micro-percent num">
         {nutrient.percent_of_recommended === null ? (
-          <span data-gap="true">
+          <span data-gap="true" className="gap-dash">
             <span className="sr-only">Unknown</span>
           </span>
         ) : (
@@ -117,7 +117,7 @@ function MicronutrientRow({
       />
       <span className="food-micro-amount num">
         {nutrient.amount === null ? (
-          <span data-gap="true">
+          <span data-gap="true" className="gap-dash">
             <span className="sr-only">Unknown</span>
           </span>
         ) : (

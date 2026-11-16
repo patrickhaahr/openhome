@@ -90,7 +90,9 @@ function RecoveryGlance({
     <Link to="/recovery" className="recovery-glance">
       <h2 className="sr-only">Recovery today</h2>
       <Deferred promise={glance?.recovery} ghosts={3}>
-        {(recovery) => <RecoveryRings data={recovery} missing="Not recorded" />}
+        {(recovery) => (
+          <RecoveryRings data={recovery} missing="Not recorded" size="glance" />
+        )}
       </Deferred>
     </Link>
   )

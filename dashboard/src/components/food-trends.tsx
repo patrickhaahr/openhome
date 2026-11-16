@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { exactSearch, FoodViews } from "@/components/food-views"
 import { TrendChart } from "@/components/trend-chart"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { CoverageTrends } from "@/components/trend-coverage"
 import { formatDecimal, formatSigned, formatWhole } from "@/lib/number-format"
 import { foodDatabaseCredit } from "@/lib/nutrition"
@@ -114,35 +115,35 @@ function TrendControls({
 }): React.JSX.Element {
   return (
     <div className="food-trend-controls">
-      <nav className="view-tabs" aria-label="Range">
+      <ViewTabs as="nav" aria-label="Range">
         {trendRanges.map((range) => (
           <Link
             key={range}
             to="/food"
             search={searchFor({ range, by: defaultAggregation(range) })}
             activeOptions={exactSearch}
-            className="view-tab"
+            {...viewTab()}
             aria-current={range === choice.range ? "page" : undefined}
           >
             {range}
             <span className="food-trend-unit"> days</span>
           </Link>
         ))}
-      </nav>
-      <nav className="view-tabs" aria-label="Group by">
+      </ViewTabs>
+      <ViewTabs as="nav" aria-label="Group by">
         {aggregations.map((by) => (
           <Link
             key={by}
             to="/food"
             search={searchFor({ range: choice.range, by })}
             activeOptions={exactSearch}
-            className="view-tab"
+            {...viewTab()}
             aria-current={by === choice.by ? "page" : undefined}
           >
             {aggregationNames[by]}
           </Link>
         ))}
-      </nav>
+      </ViewTabs>
     </div>
   )
 }

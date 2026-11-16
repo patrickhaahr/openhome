@@ -6,7 +6,7 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { Button } from "@/components/ui/button"
 import { NoopDetail } from "@/components/noop-detail"
 import { DayStrip } from "@/components/day-strip"
-import { ScoreRing } from "@/components/score-ring"
+import { ScoreRing, type RingSize } from "@/components/score-ring"
 import { chargeBand, ringShare } from "@/lib/recovery-score"
 import {
   trainingFailureMessage,
@@ -247,7 +247,7 @@ function Rings({
 }): React.JSX.Element {
   return (
     <div className="today-rings">
-      <RecoveryRings data={data} missing={missing} />
+      <RecoveryRings data={data} missing={missing} size="hero" />
     </div>
   )
 }
@@ -256,9 +256,11 @@ function Rings({
 export function RecoveryRings({
   data,
   missing,
+  size,
 }: {
   readonly data: RecoveryDay
   readonly missing: string
+  readonly size: RingSize
 }): React.JSX.Element {
   const charge = data.derived_scores.recovery.value
   const rest = data.derived_scores.rest.value
@@ -268,6 +270,7 @@ export function RecoveryRings({
     <>
       <ScoreRing
         kind="charge"
+        size={size}
         icon={LightningIcon}
         share={ringShare(charge, 100)}
         band={chargeBand(charge)}
@@ -277,6 +280,8 @@ export function RecoveryRings({
       />
       <ScoreRing
         kind="rest"
+        size={size}
+        stagger={size === "hero" ? 1 : 0}
         icon={MoonIcon}
         share={ringShare(rest, 100)}
         band={chargeBand(rest)}
@@ -286,6 +291,8 @@ export function RecoveryRings({
       />
       <ScoreRing
         kind="effort"
+        size={size}
+        stagger={size === "hero" ? 2 : 0}
         icon={HeartbeatIcon}
         share={ringShare(effort, 100)}
         band={effort === null ? "none" : "fair"}

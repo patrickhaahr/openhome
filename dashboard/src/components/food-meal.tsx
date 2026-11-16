@@ -119,7 +119,7 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
             </span>
             <span className="food-portion-kcal num">
               {portion.nutrients.energy_kcal.value === null ? (
-                <span data-gap="true">
+                <span data-gap="true" className="gap-dash">
                   <span className="sr-only">Energy unknown</span>
                 </span>
               ) : (

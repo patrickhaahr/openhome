@@ -1,35 +1,5 @@
 /* ---------- Workout views ---------- */
 
-.view-tabs {
-  display: flex;
-  gap: 0.25rem;
-  overflow-x: auto;
-  margin-bottom: clamp(1.25rem, 3vw, 2rem);
-}
-.view-tab {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.75rem;
-  padding-inline: 1.125rem;
-  border-radius: 999px;
-  color: var(--muted-ink);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  white-space: nowrap;
-  text-decoration: none;
-  transition:
-    background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-.view-tab:hover {
-  background: var(--wash-strong);
-  color: var(--ink);
-}
-.view-tab[aria-current="page"] {
-  background: var(--ink);
-  color: var(--ground);
-}
-
 @media (max-width: 900px) {
   /* Portrait: the switch beside the speaker, the TV remote across the width beneath. */
   .controls {

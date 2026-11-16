@@ -106,7 +106,7 @@ async function refresh(): Promise<void> {
 }
 
 function ring(label: string): string | null | undefined {
-  return Array.from(container.querySelectorAll(".score-ring"))
+  return Array.from(container.querySelectorAll('[data-slot="score-ring"]'))
     .map((element) => element.getAttribute("aria-label"))
     .find((name) => name?.startsWith(`${label}:`) === true)
 }

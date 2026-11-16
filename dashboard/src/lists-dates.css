@@ -149,14 +149,6 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-.date-people .person-key {
-  background: var(--wash-strong);
-  color: var(--ink);
-}
-.date-people .person-key[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--ground);
-}
 .field-hint {
   color: var(--muted-ink);
   font-size: 0.875rem;

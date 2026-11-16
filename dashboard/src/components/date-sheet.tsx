@@ -6,6 +6,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { viewTab } from "@/components/view-tabs"
 import {
   importantDateCommand,
   figureParts,
@@ -208,7 +209,7 @@ function DateForm({
                 <button
                   key={owner.id}
                   type="button"
-                  className="view-tab person-key"
+                  {...viewTab("chip")}
                   aria-pressed={tagged}
                   disabled={busy}
                   onClick={() =>

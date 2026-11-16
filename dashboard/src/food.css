@@ -468,9 +468,3 @@ a.food-day-key:active {
 .food-micro-list [data-limit="cut_down"] .food-micro-limit::before {
   background: var(--danger);
 }
-
-/* Missing data is a dash; assistive technology still reads "Unknown". */
-.food [data-gap="true"]::before {
-  content: "–";
-  color: var(--muted-ink);
-}

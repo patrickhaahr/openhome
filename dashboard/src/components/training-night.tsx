@@ -73,7 +73,7 @@ export function Night({
       <div className="today-night-head">
         <MoonIcon size={22} weight="fill" aria-hidden="true" />
         {staged !== undefined ? null : sessions.length === 0 ? (
-          <p data-gap="true">
+          <p data-gap="true" className="gap-dash-5.5">
             <span className="sr-only">
               {data.noop.coverage.sleep_sessions === "covered"
                 ? "No sleep sessions recorded for this night."
@@ -86,7 +86,10 @@ export function Night({
         <dl className="today-night-stats">
           <div>
             <dt>Efficiency</dt>
-            <dd data-gap={efficiency === null}>
+            <dd
+              data-gap={efficiency === null}
+              className="data-[gap=true]:gap-dash-5.5"
+            >
               {efficiency === null
                 ? missing
                 : `${Math.round(efficiency * 100)}%`}
@@ -94,7 +97,10 @@ export function Night({
           </div>
           <div>
             <dt>Wake-ups</dt>
-            <dd data-gap={disturbances === null}>
+            <dd
+              data-gap={disturbances === null}
+              className="data-[gap=true]:gap-dash-5.5"
+            >
               {disturbances === null ? missing : disturbances}
             </dd>
           </div>
@@ -128,7 +134,10 @@ export function Night({
               return (
                 <div key={stage} data-stage={stage}>
                   <dt>{stageNames[stage]}</dt>
-                  <dd data-gap={minutes === null}>
+                  <dd
+                    data-gap={minutes === null}
+                    className="data-[gap=true]:gap-dash-5.5"
+                  >
                     {minutes === null ? missing : shortDuration(minutes)}
                   </dd>
                 </div>

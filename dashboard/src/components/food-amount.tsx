@@ -14,7 +14,7 @@ export function Amount({
 }): React.JSX.Element {
   if (total.value === null)
     return (
-      <span className="food-amount" data-gap="true">
+      <span className="food-amount gap-dash" data-gap="true">
         <span className="sr-only">Unknown</span>
       </span>
     )

@@ -322,7 +322,10 @@ test("switches between Household Users' Binders", async () => {
   await add(second, { card: "OP99-010", quantity: 4 })
   await render()
 
-  const names = Array.from(container.querySelectorAll(".person-key"), nameOf)
+  const names = Array.from(
+    container.querySelectorAll('[data-slot="view-tab"]'),
+    nameOf
+  )
 
   expect(names).toEqual(["Alex", "Robin"])
   expect(cards()).toEqual(["OP99-001", "OP99-002"])

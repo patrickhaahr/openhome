@@ -268,35 +268,6 @@ a.dir-go:hover {
 .recovery-glance:active {
   scale: 0.99;
 }
-.recovery-glance .score-ring {
-  width: 9rem;
-}
-.recovery-glance .score-ring circle {
-  stroke-width: 9;
-}
-.recovery-glance .score-ring-figure {
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.125rem;
-  padding-top: 0;
-}
-.recovery-glance .score-ring-figure span {
-  font-size: 2.25rem;
-  letter-spacing: -0.05em;
-}
-.recovery-glance .score-ring figcaption {
-  display: none;
-}
-.score-ring .score-ring-icon {
-  width: 1.75rem;
-  height: 1.75rem;
-  rotate: none;
-  color: var(--band);
-}
-.score-ring[data-kind="effort"] .score-ring-icon {
-  color: var(--effort);
-}
 .recovery-ghost {
   width: 9rem;
   aspect-ratio: 1;
@@ -683,11 +654,5 @@ a.dir-go:hover {
   /* Three rings share the phone's width instead of pushing the page wider. */
   .recovery-glance {
     gap: 0.75rem;
-  }
-  .recovery-glance .score-ring {
-    width: min(9rem, calc((100% - 1.5rem) / 3));
-  }
-  .recovery-glance .score-ring-figure span {
-    font-size: 1.75rem;
   }
 }

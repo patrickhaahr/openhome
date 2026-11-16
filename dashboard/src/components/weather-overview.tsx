@@ -68,7 +68,11 @@ function Measure({
   unit: string
 }): React.JSX.Element {
   if (amount === null || amount === undefined)
-    return <span data-gap="true">Unavailable</span>
+    return (
+      <span data-gap="true" className="gap-dash-4">
+        Unavailable
+      </span>
+    )
 
   return (
     <>
@@ -456,7 +460,10 @@ export function WeatherOverview({
                 </span>
               </p>
               <dl>
-                <div className="wx-day-low" data-gap={day.low_c === null}>
+                <div
+                  className="wx-day-low data-[gap=true]:gap-dash-4"
+                  data-gap={day.low_c === null}
+                >
                   <dt className="sr-only">Low</dt>
                   <dd>
                     <span aria-hidden="true">{degrees(day.low_c)}</span>
@@ -476,7 +483,10 @@ export function WeatherOverview({
                     />
                   )}
                 </div>
-                <div className="wx-day-high" data-gap={day.high_c === null}>
+                <div
+                  className="wx-day-high data-[gap=true]:gap-dash-4"
+                  data-gap={day.high_c === null}
+                >
                   <dt className="sr-only">High</dt>
                   <dd>
                     <span aria-hidden="true">{degrees(day.high_c)}</span>
@@ -484,14 +494,17 @@ export function WeatherOverview({
                   </dd>
                 </div>
                 <div
-                  className="wx-day-rain"
+                  className="wx-day-rain data-[gap=true]:gap-dash-4"
                   data-dry={day.precipitation_mm === 0}
                   data-gap={day.precipitation_mm === null}
                 >
                   <dt className="sr-only">Precipitation</dt>
                   <dd>{value(day.precipitation_mm, "mm")}</dd>
                 </div>
-                <div className="sr-only" data-gap={day.wind_ms === null}>
+                <div
+                  className="sr-only data-[gap=true]:gap-dash-4"
+                  data-gap={day.wind_ms === null}
+                >
                   <dt>Max wind</dt>
                   <dd>{value(day.wind_ms, "m/s")}</dd>
                 </div>

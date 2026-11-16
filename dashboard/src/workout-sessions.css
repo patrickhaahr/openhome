@@ -259,19 +259,6 @@
   color: var(--muted-ink);
   font-variant-numeric: tabular-nums;
 }
-.noop-detail-head .score-ring {
-  width: 6.5rem;
-  gap: 0.25rem;
-}
-.noop-detail-head .score-ring circle {
-  stroke-width: 11;
-}
-.noop-detail-head .score-ring-figure span {
-  font-size: 1.75rem;
-}
-.noop-detail-head .score-ring figcaption {
-  font-size: 0.6875rem;
-}
 .noop-detail-glance {
   display: grid;
   gap: 1.25rem;

@@ -12,6 +12,7 @@ import { z } from "zod"
 import { BodyProfile } from "@/components/body-profile"
 import { PageHead } from "@/components/page-head"
 import { ExerciseProgress } from "@/components/exercise-progress"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { Workouts } from "@/components/workouts"
 import { trainingSearch } from "@/lib/training"
 import { bodyRange } from "@/lib/body-profile"
@@ -89,7 +90,7 @@ function WorkoutPage(): React.JSX.Element {
   const mutateBody = useServerFn(mutateBodyProfile)
 
   const switcher = (
-    <nav className="view-tabs" aria-label="Workout views">
+    <ViewTabs as="nav" variant="bar" aria-label="Workout views">
       {views.map((view) => (
         <Link
           key={view.label}
@@ -100,14 +101,14 @@ function WorkoutPage(): React.JSX.Element {
             includeSearch: true,
             explicitUndefined: true,
           }}
-          className="view-tab"
+          {...viewTab()}
           aria-current={data.view === (view.view ?? "log") ? "page" : undefined}
         >
           <view.Icon size={20} weight="bold" aria-hidden="true" />
           {view.label}
         </Link>
       ))}
-    </nav>
+    </ViewTabs>
   )
 
   return (

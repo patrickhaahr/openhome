@@ -30,6 +30,7 @@
 @import "./photos.css";
 @import "./workout-values.css";
 @import "./utilities.css";
+@import "./gap-dash.utilities.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -86,8 +87,21 @@
   --text-display: var(--t-xl);
   --text-title: var(--t-l);
   --text-lead: var(--t-m);
+  --text-control: 0.9375rem;
+  --text-label: 0.8125rem;
+  --text-caption: 0.75rem;
+  --text-micro: 0.6875rem;
+  --text-figure-sm: 1.75rem;
+  --text-figure-md: 2rem;
+  --text-figure-lg: 2.25rem;
+  --text-score: clamp(2.25rem, 1.2rem + 3.6vw, 4rem);
+  --tracking-score: -0.055em;
+  --tracking-score-tight: -0.05em;
+  --tracking-caption: 0.14em;
   --spacing-margin: var(--margin);
   --spacing-bar: var(--bar);
+  --spacing-ring-baseline: 38%;
+  --spacing-glance-ring: min(9rem, calc((100% - 1.5rem) / 3));
   --ease-app: var(--ease);
   --transition-duration-fast: var(--t-fast);
   --transition-duration-mid: var(--t-mid);
@@ -99,6 +113,18 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@theme {
+  --animate-score-fill: score-fill 1.1s var(--ease) both;
+  --animate-score-fill-2: score-fill 1.1s var(--ease) 90ms both;
+  --animate-score-fill-3: score-fill 1.1s var(--ease) 180ms both;
+
+  @keyframes score-fill {
+    from {
+      stroke-dashoffset: var(--ring-length);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------------------------------

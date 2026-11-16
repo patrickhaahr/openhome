@@ -304,7 +304,7 @@ function NovaShare({
     <div className="food-nova">
       <p className="food-nova-share">
         {nova.nova_1_share === null ? (
-          <span className="food-amount" data-gap="true">
+          <span className="food-amount gap-dash" data-gap="true">
             <span className="sr-only">Unknown</span>
           </span>
         ) : (

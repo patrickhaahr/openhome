@@ -70,7 +70,6 @@
 }
 
 /* Every segmented control here is one capsule on a wash track; the chosen segment is the ink pill. */
-.view-tabs,
 .body-ranges,
 .view-bar [data-slot="toggle-group"] {
   display: flex;
@@ -81,11 +80,6 @@
   border-radius: 999px;
   background: var(--wash);
 }
-.view-bar .view-tabs {
-  margin-bottom: 0;
-  overflow: visible;
-}
-.view-tab,
 .body-range,
 .view-bar [data-slot="toggle-group-item"] {
   min-height: 2.75rem;
@@ -97,32 +91,13 @@
   font-size: 0.9375rem;
   font-weight: 500;
 }
-.view-tab {
-  gap: 0.5rem;
-  padding-inline: 1rem 1.25rem;
-}
-.view-tab:hover,
 .view-bar [data-slot="toggle-group-item"]:hover {
   background: var(--wash-strong);
   color: var(--ink);
 }
-.view-tab[aria-current="page"],
 .view-bar [data-slot="toggle-group-item"][aria-pressed="true"] {
   background: var(--ink);
   color: var(--ground);
-}
-.view-tab[aria-current="page"] svg {
-  color: var(--sun);
-}
-
-/* A missing value is a quiet dash; assistive technology still reads the words. */
-:is(.today, .body) [data-gap="true"] {
-  font-size: 0 !important;
-}
-:is(.today, .body) [data-gap="true"]::before {
-  content: "–" / "";
-  color: var(--muted-ink);
-  font-size: 1.375rem;
 }
 
 .today-failure {
@@ -274,93 +249,6 @@
   align-self: center;
   justify-content: center;
   gap: clamp(0.75rem, 2.5vw, 2.5rem);
-}
-.score-ring {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 0.75rem;
-  margin: 0;
-}
-.score-ring svg {
-  width: 100%;
-  aspect-ratio: 1;
-  rotate: -90deg;
-  overflow: visible;
-}
-.score-ring circle {
-  fill: none;
-  stroke-width: 9;
-}
-.score-ring-track {
-  stroke: var(--wash-strong);
-}
-.score-ring-arc {
-  stroke: var(--band);
-  stroke-linecap: round;
-  stroke-dashoffset: var(--ring-offset);
-}
-.score-ring[data-kind="effort"] .score-ring-arc {
-  stroke: var(--effort);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .score-ring-arc {
-    animation: ring-fill 1.1s var(--ease) both;
-  }
-  .today-rings .score-ring:nth-child(2) .score-ring-arc {
-    animation-delay: 90ms;
-  }
-  .today-rings .score-ring:nth-child(3) .score-ring-arc {
-    animation-delay: 180ms;
-  }
-}
-@keyframes ring-fill {
-  from {
-    stroke-dashoffset: var(--ring-length);
-  }
-}
-.score-ring-figure {
-  position: absolute;
-  inset: 0 0 auto;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  aspect-ratio: 1;
-  padding-top: 38%;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.today-rings .score-ring-figure {
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  padding-top: 0;
-}
-.today-rings .score-ring figcaption {
-  display: none;
-}
-.score-ring-value {
-  display: inline-flex;
-  align-items: baseline;
-}
-.score-ring-value > span {
-  font-size: clamp(2.25rem, 1.2rem + 3.6vw, 4rem);
-  font-weight: 600;
-  letter-spacing: -0.055em;
-}
-.score-ring-figure small {
-  margin-left: 0.1em;
-  color: var(--muted-ink);
-  font-size: clamp(1rem, 0.7rem + 1vw, 1.5rem);
-  font-weight: 500;
-}
-.score-ring figcaption {
-  color: var(--muted-ink);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 /* ---------- The night ---------- */

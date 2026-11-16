@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank"
 import { ChartLineIcon } from "@phosphor-icons/react/dist/csr/ChartLine"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 
 /**
  * Links in the Food page's switches are current only for their exact search, so Router's own
@@ -24,20 +25,20 @@ export function FoodViews({
   readonly view: (typeof views)[number]["view"]
 }): React.JSX.Element {
   return (
-    <nav className="view-tabs food-views" aria-label="Food views">
+    <ViewTabs as="nav" aria-label="Food views">
       {views.map((option) => (
         <Link
           key={option.view}
           to="/food"
           search={option.view === "day" ? {} : { view: "trends" }}
           activeOptions={exactSearch}
-          className="view-tab"
+          {...viewTab()}
           aria-current={option.view === view ? "page" : undefined}
         >
           <option.Icon size={20} weight="bold" aria-hidden="true" />
           {option.label}
         </Link>
       ))}
-    </nav>
+    </ViewTabs>
   )
 }

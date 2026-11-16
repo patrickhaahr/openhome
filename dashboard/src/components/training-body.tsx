@@ -163,7 +163,12 @@ function Vital({
       <VitalIcon className="vital-icon" size={22} aria-hidden="true" />
       <p className="sr-only">{label}</p>
       <p className="vital-value num">
-        <span data-gap={value === null}>{figure}</span>
+        <span
+          data-gap={value === null}
+          className="data-[gap=true]:gap-dash-5.5"
+        >
+          {figure}
+        </span>
         {value === null || unit === "" ? null : <small>{unit}</small>}
       </p>
       {delta === null ? null : (

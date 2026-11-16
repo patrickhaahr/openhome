@@ -411,6 +411,7 @@ function StrapPane({
         <div className="session-strap-top">
           <ScoreRing
             kind="effort"
+            size="strap"
             share={ringShare(effort, 100)}
             band={effort === null ? "none" : "fair"}
             figure={effort === null ? null : String(Math.round(effort))}

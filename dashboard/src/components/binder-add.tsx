@@ -13,6 +13,7 @@ import {
 } from "@/components/list-parts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
 import {
   additionOf,
@@ -341,14 +342,14 @@ function Drafting({
           ) : null}
         </div>
       </div>
-      <fieldset className="field destination">
+      <fieldset className="field">
         <legend>Add to</legend>
-        <div className="view-tabs person-keys">
+        <ViewTabs variant="people">
           {owners.map((owner) => (
             <button
               key={owner.id}
               type="button"
-              className="view-tab person-key"
+              {...viewTab("person")}
               aria-pressed={draft.owner_id === owner.id}
               disabled={frozen}
               onClick={() => edit({ owner_id: owner.id })}
@@ -357,7 +358,7 @@ function Drafting({
               {owner.name}
             </button>
           ))}
-        </div>
+        </ViewTabs>
       </fieldset>
       <div className="field">
         <span id={`${id}-quantity`}>Quantity</span>

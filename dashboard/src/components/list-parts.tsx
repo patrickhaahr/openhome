@@ -4,8 +4,12 @@ import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree"
 import { XIcon } from "@phosphor-icons/react/dist/csr/X"
 import { useIdleBlock } from "@/components/idle-block"
 import { Button } from "@/components/ui/button"
+import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { initial, type ListFeedback } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
+
+/** `.person-disc` is still a page class, so its chosen-key tone needs `!` to win. */
+const discClass = "person-disc group-aria-pressed/tab:bg-ground!"
 
 /**
  * Everyone, then one key per Household User, on one wash track. The chosen key is the ink
@@ -29,15 +33,20 @@ export function PersonKeys({
   everyone?: boolean
 }): React.JSX.Element {
   return (
-    <div className="view-tabs person-keys" role="group" aria-label={label}>
+    <ViewTabs
+      variant="people"
+      data-slot="person-keys"
+      role="group"
+      aria-label={label}
+    >
       {everyone ? (
         <button
           type="button"
-          className="view-tab person-key"
+          {...viewTab("person")}
           aria-pressed={selected === undefined}
           onClick={() => choose(undefined)}
         >
-          <span className="person-disc" aria-hidden="true">
+          <span className={discClass} aria-hidden="true">
             <UsersThreeIcon size={16} weight="bold" />
           </span>
           Everyone
@@ -50,14 +59,14 @@ export function PersonKeys({
           <button
             key={owner.id}
             type="button"
-            className="view-tab person-key"
+            {...viewTab("person")}
             aria-pressed={selected === owner.id}
             onClick={() => choose(owner.id)}
           >
             <PersonDisc name={owner.name} />
             {owner.name}
             {count === undefined || noun === undefined ? null : (
-              <span className="person-count num">
+              <span className="num text-label text-muted-ink group-aria-pressed/tab:text-ground/70">
                 {count}
                 <span className="sr-only">
                   {" "}
@@ -68,14 +77,14 @@ export function PersonKeys({
           </button>
         )
       })}
-    </div>
+    </ViewTabs>
   )
 }
 
 /** A person's initial in a disc; decorative, since the name is always said beside it. */
 export function PersonDisc({ name }: { name: string }): React.JSX.Element {
   return (
-    <span className="person-disc" aria-hidden="true">
+    <span className={discClass} aria-hidden="true">
       {initial(name)}
     </span>
   )
@@ -144,6 +153,7 @@ export function Segments<T extends string>({
   options,
   choose,
   disabled = false,
+  fit = false,
 }: {
   label: string
   value: T | undefined
@@ -154,14 +164,19 @@ export function Segments<T extends string>({
   }>
   choose: (value: T) => void
   disabled?: boolean
+  fit?: boolean
 }): React.JSX.Element {
   return (
-    <div className="view-tabs segments" role="group" aria-label={label}>
+    <ViewTabs
+      variant={fit ? "fit" : "segments"}
+      role="group"
+      aria-label={label}
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
-          className="view-tab"
+          {...viewTab("segment")}
           aria-pressed={value === option.value}
           disabled={disabled}
           onClick={() => choose(option.value)}
@@ -170,7 +185,7 @@ export function Segments<T extends string>({
           {option.label}
         </button>
       ))}
-    </div>
+    </ViewTabs>
   )
 }
 

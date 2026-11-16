@@ -117,12 +117,14 @@ export function NavLayoutSwitch(): React.JSX.Element {
   return (
     <div className="nav-switches">
       <Segments
+        fit
         label="Navigation"
         value={layout}
         options={options}
         choose={choose}
       />
       <Segments
+        fit
         label="Top bar tabs"
         value={labels}
         options={labelOptions}

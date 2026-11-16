@@ -334,9 +334,6 @@
   .view-bar-tools {
     width: 100%;
   }
-  .view-tabs {
-    width: 100%;
-  }
   .view-bar [data-slot="toggle-group"],
   .body-ranges {
     width: 100%;
@@ -345,14 +342,5 @@
   .body-range {
     flex: 1 1 0;
     padding-inline: 0.25rem;
-  }
-  .view-tab {
-    flex: 1 1 0;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.125rem;
-    min-height: 3.5rem;
-    padding-inline: 0.25rem;
-    font-size: 0.8125rem;
   }
 }

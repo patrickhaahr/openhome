@@ -125,6 +125,7 @@ export function NoopDetail({
         </div>
         <ScoreRing
           kind="effort"
+          size="detail"
           share={ringShare(data.strain_score, 100)}
           band={data.strain_score === null ? "none" : "fair"}
           figure={
@@ -333,7 +334,11 @@ function HeartRateRecovery({
       </p>
       <ol>
         {marks.map(([mark, reading]) => (
-          <li key={mark} data-gap={reading === null}>
+          <li
+            key={mark}
+            data-gap={reading === null}
+            className="data-[gap=true]:gap-dash-5.5"
+          >
             <span className="hr-recovery-mark">{mark}</span>
             <span
               className="hr-recovery-bar"
