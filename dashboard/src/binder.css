@@ -10,15 +10,6 @@
   --page-room: calc(100dvh - 16.5rem);
 }
 
-/* A turning page swings toward the viewer past the screen's bottom edge; a scrollbar appearing
-   for it would narrow the whole spread mid-turn. */
-html:has(.binder) {
-  scrollbar-width: none;
-}
-html:has(.binder)::-webkit-scrollbar {
-  display: none;
-}
-
 /* The turn keys flank the spread, so the pages take the height a key row would. */
 .binder-book {
   display: grid;
@@ -321,12 +312,7 @@ html:has(.binder)::-webkit-scrollbar {
   max-width: 44rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: none;
   padding-bottom: 1rem;
-}
-.binder-detail-info::-webkit-scrollbar,
-.binder-detail::-webkit-scrollbar {
-  display: none;
 }
 .binder-detail-about,
 .binder-detail-own {
@@ -350,11 +336,6 @@ html:has(.binder)::-webkit-scrollbar {
     grid-row: 1;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-width: none;
-  }
-  .binder-detail-about::-webkit-scrollbar,
-  .binder-detail-own::-webkit-scrollbar {
-    display: none;
   }
   .binder-detail-about {
     grid-column: 1;
@@ -393,7 +374,6 @@ html:has(.binder)::-webkit-scrollbar {
     align-content: start;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-width: none;
   }
   .binder-detail-art {
     justify-self: center;
