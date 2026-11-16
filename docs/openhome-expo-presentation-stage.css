@@ -1,0 +1,297 @@
+    /* ===========================================
+       THEME TOKENS
+       Change these values to recolor the full deck.
+       =========================================== */
+    :root {
+      --stage-bg: #020304;
+      --slide-bg: #07090d;
+      --surface: #0e1219;
+      --surface-strong: #151b24;
+      --line: #313947;
+      --text: #f5f2ea;
+      --muted: #a8afbd;
+      --yellow: #f7c84b;
+      --mint: #71dca6;
+      --danger: #ff705d;
+      --font-display: 'Archivo', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ===========================================
+       RESET
+       =========================================== */
+    * {
+      box-sizing: border-box;
+    }
+
+    h1,
+    h2,
+    h3,
+    p,
+    figure,
+    pre {
+      margin: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    /* ===========================================
+       FIXED 16:9 STAGE: MANDATORY BASE STYLES
+       Include this ENTIRE file in every presentation.
+       Slides are authored at 1920×1080 and scaled as a whole.
+       =========================================== */
+
+    /* 1. Lock the browser viewport */
+    html,
+    body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--stage-bg, #000);
+    }
+
+    /* 2. Full-window deck viewport */
+    .deck-viewport {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: var(--stage-bg, #000);
+    }
+
+    /* 3. Fixed 16:9 design canvas.
+       JavaScript sets transform: translate(...) scale(...). */
+    .deck-stage {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        transform-origin: 0 0;
+        background: var(--slide-bg, #fff);
+    }
+
+    /* 4. Slides stack inside the fixed stage.
+       Content must be laid out at 1920×1080, not reflowed per device. */
+    .slide {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        background: var(--slide-bg, #fff);
+    }
+
+    .slide.active,
+    .slide.visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        z-index: 1;
+    }
+
+    /* 5. Keep media inside authored slide bounds */
+    img,
+    video,
+    canvas,
+    svg {
+        max-width: 100%;
+        max-height: 100%;
+    }
+
+    /* 6. Presentation chrome stays outside the slide design system */
+    .deck-controls {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        z-index: 1000;
+    }
+
+    /* 7. Print one fixed-size slide per page */
+    @media print {
+        html,
+        body {
+            width: 1920px;
+            height: auto;
+            overflow: visible;
+            background: #fff;
+        }
+
+        .deck-viewport {
+            position: static;
+            overflow: visible;
+            background: #fff;
+        }
+
+        .deck-stage {
+            position: static;
+            width: auto;
+            height: auto;
+            transform: none !important;
+            background: none;
+        }
+
+        .slide {
+            position: relative;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            width: 1920px;
+            height: 1080px;
+            break-after: page;
+            page-break-after: always;
+        }
+
+        .slide:last-child {
+            break-after: auto;
+            page-break-after: auto;
+        }
+
+        .deck-controls {
+            display: none !important;
+        }
+    }
+
+    /* 8. Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.2s !important;
+        }
+    }
+
+    /* ===========================================
+       SHARED SLIDE ATMOSPHERE
+       =========================================== */
+    body {
+      color: var(--text);
+      font-family: var(--font-display);
+    }
+
+    .slide::after {
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      content: '';
+      opacity: 0.32;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .slide-number {
+      position: absolute;
+      right: 72px;
+      top: 58px;
+      color: var(--muted);
+      font: 600 22px/1 var(--font-mono);
+      letter-spacing: 0.12em;
+    }
+
+    .kicker {
+      color: var(--yellow);
+      font: 600 23px/1.2 var(--font-mono);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .slide-title {
+      max-width: 1460px;
+      margin-top: 20px;
+      color: var(--text);
+      font: 900 92px/0.97 var(--font-display);
+      letter-spacing: -0.055em;
+    }
+
+    .slide-copy {
+      color: var(--muted);
+      font: 500 36px/1.35 var(--font-display);
+      letter-spacing: -0.02em;
+    }
+
+    .content-frame {
+      position: absolute;
+      inset: 64px 76px 72px;
+    }
+
+    .top-rule {
+      position: absolute;
+      left: 76px;
+      right: 76px;
+      top: 112px;
+      height: 3px;
+      background: var(--line);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.8s var(--ease) 0.1s;
+    }
+
+    .top-rule::after {
+      position: absolute;
+      right: 0;
+      top: -8px;
+      width: 18px;
+      height: 18px;
+      content: '';
+      border: 3px solid var(--yellow);
+      border-radius: 50%;
+      background: var(--slide-bg);
+    }
+
+    .slide.visible .top-rule {
+      transform: scaleX(1);
+    }
+
+    /* ===========================================
+       ENTRANCE ANIMATIONS
+       =========================================== */
+    .reveal,
+    .reveal-left,
+    .reveal-scale {
+      opacity: 0;
+      transition:
+        opacity 0.65s var(--ease),
+        transform 0.65s var(--ease),
+        filter 0.65s var(--ease);
+    }
+
+    .reveal {
+      transform: translateY(40px);
+    }
+
+    .reveal-left {
+      transform: translateX(-55px);
+    }
+
+    .reveal-scale {
+      filter: blur(7px);
+      transform: scale(0.94);
+    }
+
+    .slide.visible .reveal,
+    .slide.visible .reveal-left,
+    .slide.visible .reveal-scale {
+      opacity: 1;
+      filter: blur(0);
+      transform: none;
+    }
+
+    .delay-1 { transition-delay: 0.12s; }
+    .delay-2 { transition-delay: 0.24s; }
+    .delay-3 { transition-delay: 0.36s; }
+    .delay-4 { transition-delay: 0.48s; }
+    .delay-5 { transition-delay: 0.60s; }
+
