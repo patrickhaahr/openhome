@@ -2,10 +2,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { audit } from "./css-classes.ts"
 
-/**
- * Page stylesheets that still define plain classes while the Tailwind migration (#305) is under way.
- * Delete an entry in the same change that deletes its file; the check fails on a stale entry.
- */
+/** Stylesheets allowed plain class selectors. Empty since #305: styles are utilities and tokens. */
 const allowlist: string[] = []
 
 const root = new URL("..", import.meta.url).pathname

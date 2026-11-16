@@ -172,7 +172,7 @@ export function WeightChart({
 
   return (
     <figure
-      className="relative overflow-hidden rounded-workout-plate bg-tile"
+      className="relative overflow-hidden rounded-panel bg-tile"
       ref={figure}
     >
       <svg

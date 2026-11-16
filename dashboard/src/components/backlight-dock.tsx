@@ -26,7 +26,7 @@ export function BacklightDock({
 }): React.JSX.Element {
   return (
     <div
-      className="absolute bottom-flow left-1/2 z-2 flex max-w-led-dock -translate-x-1/2 items-center gap-1.5 rounded-full bg-led-wash p-2 **:aria-pressed:-translate-y-1.5 **:aria-pressed:bg-transparent **:aria-pressed:inset-ring-2 **:aria-pressed:inset-ring-led-ink **:data-[slot=button]:size-15 **:data-[slot=button]:p-0 **:data-[slot=button]:text-led-ink **:data-[slot=button]:transition-dock **:data-[slot=button]:duration-dock **:data-[slot=button]:ease-app **:data-[slot=button]:hover:bg-led-wash-strong **:data-[slot=button]:hover:bg-clip-border led-phone:w-led-dock led-phone:flex-wrap led-phone:justify-center led-phone:rounded-led-dock led-phone:**:data-[slot=button]:size-12"
+      className="absolute bottom-flow left-1/2 z-2 flex max-w-led-dock -translate-x-1/2 items-center gap-1.5 rounded-full bg-led-wash p-2 **:aria-pressed:-translate-y-1.5 **:aria-pressed:bg-transparent **:aria-pressed:inset-ring-2 **:aria-pressed:inset-ring-led-ink **:data-[slot=button]:size-15 **:data-[slot=button]:p-0 **:data-[slot=button]:text-led-ink **:data-[slot=button]:transition-dock **:data-[slot=button]:duration-dock **:data-[slot=button]:ease-app **:data-[slot=button]:hover:bg-led-wash-strong **:data-[slot=button]:hover:bg-clip-border led-phone:w-led-dock led-phone:flex-wrap led-phone:justify-center led-phone:rounded-panel led-phone:**:data-[slot=button]:size-12"
       role="group"
       aria-label="Backlight selection"
     >

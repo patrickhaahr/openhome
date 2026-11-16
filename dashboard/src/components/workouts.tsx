@@ -199,7 +199,7 @@ function Session({
   return (
     <article
       data-slot="session"
-      className="grid min-w-0 gap-5 rounded-workout-plate bg-tile p-session"
+      className="grid min-w-0 gap-5 rounded-panel bg-tile p-session"
       data-kind={layout}
       aria-labelledby={`session-${session.key}`}
     >

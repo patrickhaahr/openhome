@@ -11,7 +11,6 @@
   --color-led-horizon: rgb(255 210 180 / 55%);
   --color-bedtime-red: light-dark(#e8261c, #ff3b2f);
   --text-led-figure: 1.375rem;
-  --radius-led-dock: 1.75rem;
   --radius-key-pill: 999px;
   --shadow-led-notch: 0 0 0 1px rgb(0 0 0 / 35%);
   --spacing-led: clamp(1rem, 2.4vw, 2rem);

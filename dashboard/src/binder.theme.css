@@ -5,7 +5,6 @@
   --color-binder-hairline: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   --text-binder-card-title: clamp(1.5rem, 1.1rem + 1.2vw, 2.25rem);
   --text-binder-value: clamp(1.75rem, 1.4rem + 1vw, 2.5rem);
-  --radius-binder-keys: 1.75rem;
   --radius-binder-art: clamp(0.75rem, 1.5vw, 1.25rem);
   --shadow-binder-card:
     0 1px 2px rgb(0 0 0 / 0.2), 0 1.5rem 4rem -1rem rgb(0 0 0 / 0.35);

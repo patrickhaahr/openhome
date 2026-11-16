@@ -35,7 +35,7 @@ import {
 
 // A lone message hugs its words; loops get the full plate.
 const plate =
-  "grid w-travel-plate gap-2 rounded-travel-plate bg-ground p-2 not-has-[[data-slot=loop-alternatives]]:w-fit"
+  "grid w-travel-plate gap-2 rounded-panel bg-ground p-2 not-has-[[data-slot=loop-alternatives]]:w-fit"
 
 const fieldset = "flex min-w-0 flex-wrap items-center gap-2"
 

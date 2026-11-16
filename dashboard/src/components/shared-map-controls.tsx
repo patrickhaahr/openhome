@@ -24,7 +24,7 @@ export function MapControls({
 }): React.JSX.Element {
   return (
     // One tall plate on the right edge, centred like Home's deck.
-    <div className="absolute top-1/2 right-travel-inset z-2 grid -translate-y-1/2 justify-items-center gap-2 rounded-travel-plate bg-ground p-2 max-tablet:top-travel-inset max-tablet:translate-none">
+    <div className="absolute top-1/2 right-travel-inset z-2 grid -translate-y-1/2 justify-items-center gap-2 rounded-panel bg-ground p-2 max-tablet:top-travel-inset max-tablet:translate-none">
       {perspective === undefined ? null : (
         <ToggleGroup
           aria-label="Map perspective"

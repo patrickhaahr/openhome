@@ -135,7 +135,7 @@ export function NoopDetail({
   return (
     <article
       data-slot="noop-detail"
-      className="grid gap-6 rounded-workout-plate bg-tile p-plate"
+      className="grid gap-6 rounded-panel bg-tile p-plate"
     >
       <header className="flex items-center gap-6 pr-14">
         <div className="flex-1">

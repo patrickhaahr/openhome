@@ -196,6 +196,7 @@
   --radius-art: 0.875rem;
   --radius-plate: 1rem;
   --radius-tile: 1.25rem;
+  --radius-panel: 1.75rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -246,7 +247,6 @@
   --ground: #f4f4f0;
   --raised: #ffffff;
   --ink: #121418;
-  --ink-2: #2a2d33;
   --muted-ink: #5a5f69;
   --line: rgb(18 20 24 / 12%);
   --line-strong: rgb(18 20 24 / 26%);
@@ -324,7 +324,6 @@
   --ground: #0b0c0e;
   --raised: #16171a;
   --ink: #ecece6;
-  --ink-2: #cfd0ca;
   --muted-ink: #9a9ea6;
   --line: rgb(236 236 230 / 12%);
   --line-strong: rgb(236 236 230 / 26%);

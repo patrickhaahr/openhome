@@ -67,7 +67,7 @@ const personKeys = cva("", {
   variants: {
     variant: {
       row: "",
-      rail: "binder-wide:col-start-1 binder-wide:row-span-full binder-wide:flex-col binder-wide:self-start binder-wide:justify-self-start binder-wide:rounded-binder-keys",
+      rail: "binder-wide:col-start-1 binder-wide:row-span-full binder-wide:flex-col binder-wide:self-start binder-wide:justify-self-start binder-wide:rounded-panel",
     },
   },
   defaultVariants: { variant: "row" },

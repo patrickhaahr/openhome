@@ -68,7 +68,7 @@ const message =
   "absolute inset-0 grid place-content-center justify-items-center gap-3 p-8 text-center leading-relaxed text-muted-foreground"
 
 const notice =
-  "pointer-events-auto flex w-fit flex-wrap items-center gap-x-4 gap-y-3 rounded-travel-plate bg-ground px-4 py-3 text-small"
+  "pointer-events-auto flex w-fit flex-wrap items-center gap-x-4 gap-y-3 rounded-panel bg-ground px-4 py-3 text-small"
 
 export function MapLoading(): React.JSX.Element {
   return (

@@ -7,7 +7,6 @@
   );
   --spacing-travel-dock: calc(100% - 2 * var(--travel-inset) - 20rem);
   --spacing-travel-plate: min(23rem, 100%);
-  --radius-travel-plate: 1.75rem;
   --radius-travel-bar: 2.25rem;
   --font-weight-travel-heading: 650;
 }

@@ -70,7 +70,7 @@ export function Night({
 
   return (
     <section
-      className="flex flex-col gap-5 rounded-workout-plate bg-tile p-plate"
+      className="flex flex-col gap-5 rounded-panel bg-tile p-plate"
       aria-label="Sleep"
     >
       <div className="grid grid-cols-flanked items-center gap-night-head max-[700px]:grid-cols-lead">

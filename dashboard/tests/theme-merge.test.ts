@@ -41,6 +41,14 @@ const cases = {
     keeps: null,
   }),
   spacing: (name: string) => ({ replaces: ["p-4", `p-${name}`], keeps: null }),
+  radius: (name: string) => ({
+    replaces: ["rounded-md", `rounded-${name}`],
+    keeps: null,
+  }),
+  animate: (name: string) => ({
+    replaces: ["animate-spin", `animate-${name}`],
+    keeps: null,
+  }),
 } satisfies Record<string, Case>
 
 for (const [namespace, pairs] of Object.entries(cases)) {

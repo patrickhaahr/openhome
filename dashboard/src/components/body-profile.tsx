@@ -396,7 +396,7 @@ export function BodyProfile({
   )
 }
 
-const bodyPlate = "grid gap-3 rounded-workout-plate bg-tile p-5"
+const bodyPlate = "grid gap-3 rounded-panel bg-tile p-5"
 
 const profileValue =
   "flex min-h-16 flex-wrap items-center gap-3 rounded-sheet bg-tile py-2 pr-16 pl-3"
