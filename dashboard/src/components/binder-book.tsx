@@ -206,6 +206,7 @@ export function BinderBook({
               busy={busy}
               save={save}
               prices={prices}
+              step={stepCard}
               done={() => setOpen(undefined)}
             />
             <FeedbackLine feedback={feedback} busy={busy} />

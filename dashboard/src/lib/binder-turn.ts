@@ -13,13 +13,19 @@ export const turnStep = { forward: 1, back: -1 } as const satisfies Record<
 
 type Sample = { readonly x: number; readonly time: number }
 
-/** Which turn a press can start, and how far the pointer travels to lay the page on the far side. */
-export type Grip = { readonly direction: TurnDirection; readonly reach: number }
+/**
+ * What a press can do: a tap on an outer pocket column turns toward that `edge`, and a drag turns
+ * whichever way it moves, its `reach` being how far the pointer travels to lay the page over.
+ */
+export type Grip = {
+  readonly edge: TurnDirection | undefined
+  readonly reach: Readonly<Record<TurnDirection, number | undefined>>
+}
 
 /**
- * One gesture on the spread. A press may still be a tap; moving past the slop makes it a drag that
- * follows the pointer when the press gripped a page, or a refused drag that turns nothing when it
- * did not. Releasing settles a drag, and a tap in a grip away from a pocket turns the page. A settled
+ * One gesture on the spread. A press may still be a tap; moving sideways past the slop makes it a
+ * drag that follows the pointer toward a spread that exists, and any other move a refused drag that
+ * turns nothing. Releasing settles a drag, and a tap on an edge away from a pocket turns the page. A settled
  * completion leaves the page turned until the next spread replaces this one; every other phase ends
  * back at idle.
  */
@@ -32,7 +38,7 @@ export type Turn =
       readonly y: number
       readonly time: number
       readonly pocket: boolean
-      readonly grip: Grip | undefined
+      readonly grip: Grip
     }
   | {
       readonly phase: "dragging"
@@ -60,7 +66,7 @@ export type TurnEvent =
       readonly y: number
       readonly time: number
       readonly pocket: boolean
-      readonly grip: Grip | undefined
+      readonly grip: Grip
     }
   | {
       readonly type: "move"
@@ -102,21 +108,40 @@ export function outcomeOf(progress: number, velocity: number): TurnOutcome {
   return progress >= 0.5 ? "complete" : "cancel"
 }
 
-/** Which turn a press at `x` can start: one pocket column from either edge of the spread, never past the first or last spread. */
+/**
+ * What a press at `x` can do. Only a spread that exists can be turned to. A drag lays the page over
+ * at least half the spread, so one pressed near the spine still turns gradually.
+ */
 export function grip(
   box: { readonly left: number; readonly right: number },
   x: number,
   can: Readonly<Record<TurnDirection, boolean>>
-): Grip | undefined {
-  const edge = (box.right - box.left) / 6
+): Grip {
+  const width = box.right - box.left
+  const edge = width / 6
 
-  if (can.forward && x >= box.right - edge)
-    return { direction: "forward", reach: x - box.left }
+  return {
+    edge:
+      can.forward && x >= box.right - edge
+        ? "forward"
+        : can.back && x <= box.left + edge
+          ? "back"
+          : undefined,
+    reach: {
+      forward: can.forward ? Math.max(x - box.left, width / 2) : undefined,
+      back: can.back ? Math.max(box.right - x, width / 2) : undefined,
+    },
+  }
+}
 
-  if (can.back && x <= box.left + edge)
-    return { direction: "back", reach: box.right - x }
+/** A swipe needs this much sideways travel, in CSS pixels, and more sideways than up or down. */
+export const swipeDistance = 48
 
-  return undefined
+/** Which neighbour a released swipe steps to: right to left is the next, left to right the previous. */
+export function swipeStep(dx: number, dy: number): -1 | 0 | 1 {
+  if (Math.abs(dx) < swipeDistance || Math.abs(dx) <= Math.abs(dy)) return 0
+
+  return dx < 0 ? 1 : -1
 }
 
 function travel(direction: TurnDirection, origin: number, x: number): number {
@@ -163,36 +188,36 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
       if (event.type === "lose") return idle
 
       if (event.type === "release")
-        return turn.grip !== undefined && !turn.pocket
+        return turn.grip.edge !== undefined && !turn.pocket
           ? {
               phase: "settling",
-              direction: turn.grip.direction,
+              direction: turn.grip.edge,
               outcome: "complete",
             }
           : idle
 
-      if (Math.hypot(event.x - turn.x, event.y - turn.y) < tapSlop) return turn
+      const dx = event.x - turn.x
+      const dy = event.y - turn.y
 
-      if (turn.grip === undefined)
+      if (Math.hypot(dx, dy) < tapSlop) return turn
+
+      const direction = dx < 0 ? "forward" : "back"
+      const reach = turn.grip.reach[direction]
+
+      if (Math.abs(dx) <= Math.abs(dy) || reach === undefined)
         return { phase: "refused", pointer: turn.pointer }
 
       return {
         phase: "dragging",
         pointer: turn.pointer,
-        direction: turn.grip.direction,
+        direction,
         origin: turn.x,
-        reach: turn.grip.reach,
-        progress: progressOf(
-          turn.grip.direction,
-          turn.x,
-          turn.grip.reach,
-          event.x
-        ),
+        reach,
+        progress: progressOf(direction, turn.x, reach, event.x),
         last: { x: event.x, time: event.time },
         velocity:
           event.time > turn.time
-            ? travel(turn.grip.direction, turn.x, event.x) /
-              (event.time - turn.time)
+            ? travel(direction, turn.x, event.x) / (event.time - turn.time)
             : 0,
       }
     case "dragging": {

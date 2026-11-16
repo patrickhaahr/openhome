@@ -276,6 +276,8 @@
   gap: clamp(1.5rem, 4vw, 4rem);
   min-height: 0;
   padding: 0 clamp(1.25rem, 3vw, 2.5rem) clamp(1.25rem, 3vw, 2rem);
+  /* Sideways touches are swipes between cards; the browser keeps vertical scrolling. */
+  touch-action: pan-y;
 }
 .binder-detail-art {
   position: relative;

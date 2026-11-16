@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash"
 import { CardValueLine } from "@/components/binder-value"
 import { PriceHistory } from "@/components/price-history"
@@ -9,6 +9,7 @@ import { PersonDisc, Segments, useSheetLifetime } from "@/components/list-parts"
 import { cardImageUrl, type BinderEntry } from "@/lib/binder"
 import type { PricesState } from "@/lib/card-prices"
 import { maxQuantity, type BinderCommand } from "@/lib/binder-edit"
+import { swipeStep } from "@/lib/binder-turn"
 import { formatDay } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
 
@@ -44,8 +45,9 @@ function factsOf(card: BinderEntry["card"]): [string, string][] {
 
 /**
  * One Binder Entry's card sheet: the large image and every detail the Binder read carries, then
- * the entry's own quantity, language and note. Removal asks first, and only a saved removal
- * closes the sheet, so a failure leaves it open beside its error.
+ * the entry's own quantity, language and note. A sideways swipe steps to the neighbouring card.
+ * Removal asks first, and only a saved removal closes the sheet, so a failure leaves it open
+ * beside its error.
  */
 export function BinderSheet({
   entry,
@@ -53,6 +55,7 @@ export function BinderSheet({
   busy,
   save,
   prices,
+  step,
   done,
 }: {
   entry: BinderEntry
@@ -60,16 +63,53 @@ export function BinderSheet({
   busy: boolean
   save: Save
   prices: (card: string) => Promise<PricesState>
+  step: (offset: -1 | 1) => void
   done: () => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
+  const press = useRef<{ pointer: number; x: number; y: number }>(undefined)
   const alive = useSheetLifetime()
   const { card } = entry
 
   return (
-    <div className="binder-detail">
+    <div
+      className="binder-detail"
+      onPointerDown={(event) => {
+        press.current =
+          event.isPrimary &&
+          event.button === 0 &&
+          !(
+            event.target instanceof Element &&
+            event.target.closest("input, textarea, select") !== null
+          )
+            ? { pointer: event.pointerId, x: event.clientX, y: event.clientY }
+            : undefined
+      }}
+      onPointerUp={(event) => {
+        const start = press.current
+        press.current = undefined
+
+        // A mouse drag across the details selects text; that is reading, not a swipe.
+        if (
+          start?.pointer !== event.pointerId ||
+          window.getSelection()?.isCollapsed === false
+        )
+          return
+
+        const offset = swipeStep(
+          event.clientX - start.x,
+          event.clientY - start.y
+        )
+
+        if (offset !== 0) step(offset)
+      }}
+      onPointerCancel={() => {
+        press.current = undefined
+      }}
+    >
       <div className="binder-detail-art">
         <img
+          draggable={false}
           src={cardImageUrl(card.id)}
           alt={`${card.name}, ${card.card_code}`}
           width={600}
