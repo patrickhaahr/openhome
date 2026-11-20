@@ -1,5 +1,4 @@
 #!/bin/sh
-# Reversible payload masks for the Alexa paths verified on this webOS 6 TV.
 set -eu
 DIR=/var/lib/openhome-tv
 EMPTY=$DIR/alexa-empty
@@ -49,7 +48,6 @@ chmod 555 "$EMPTY"
 [ -f "$NOEXEC" ] || : > "$NOEXEC"
 chmod 000 "$NOEXEC"
 
-# Close cached web apps before masking their payload; no unrelated WAM restart.
 status=0
 lock_apps true || status=1
 for id in amazon.alexa.view amazon.alexapr; do
@@ -67,7 +65,6 @@ for base in /usr/sbin /var/palm/jail/*/usr/sbin; do
     done
 done
 
-# Cover LS2 activation as well as direct execution. Do not alter the hub itself.
 for pair in 'plugin amazon-alexa-adapter' 'vsk amazon-alexa-vsk'; do
     set -- $pair
     target=/usr/share/luna-service2/services.d/amazon.alexa.adapter.$1.service
@@ -78,10 +75,8 @@ for pair in 'plugin amazon-alexa-adapter' 'vsk amazon-alexa-vsk'; do
     mask "$replacement" "$target"
 done
 
-# The hub caches Exec lines; reload them without restarting the hub or apps.
 timeout -t 15 /usr/sbin/ls-control scan-services || status=1
 
-# Only the two confirmed native Alexa binaries; Prime Video is unaffected.
 for proc in /proc/[0-9]*; do
     executable=$(readlink "$proc/exe" 2>/dev/null || true)
     case "$executable" in

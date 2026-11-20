@@ -1,5 +1,4 @@
 #!/bin/sh
-# Small supervised Node client, independent of LG Home's CRIU snapshots.
 set -eu
 dir=/var/lib/openhome-tv
 pidfile=$dir/client-supervisor.pid
@@ -17,8 +16,6 @@ case "${1:-start}" in
         sleep 1
         ;;
     supervise)
-        # The kernel releases this lock after crashes and power loss. Children
-        # close descriptor 9 so they cannot keep a dead supervisor's lock alive.
         exec 9> "$dir/client.lock"
         flock -n 9 || exit 0
         echo $$ > "$pidfile"
@@ -29,7 +26,6 @@ case "${1:-start}" in
             child=$!
             wait "$child" || true
             child=''
-            # Bound disk use even if configuration/network is temporarily unavailable.
             tail -n 30 "$dir/client.log" > "$dir/client.log.tmp"
             cat "$dir/client.log.tmp" > "$dir/client.log"
             rm -f "$dir/client.log.tmp"

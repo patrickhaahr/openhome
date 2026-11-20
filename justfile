@@ -2,12 +2,25 @@ default:
     @just --list
 
 # Full gate across repos
-check: file-size-check check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
+check: file-size-check comment-check check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
 
 # List files over the pre-commit hook's 5000-token cap, optionally under the given paths
 [positional-arguments]
 file-size-check *paths:
     @bash scripts/file-size-check.sh "$@"
+
+# Fail when a file holds more comments than scripts/comment-baseline.json allows (ADR 0018)
+comment-check:
+    @python3 scripts/comments.py check
+
+# Lock in comment deletions by rewriting scripts/comment-baseline.json to the current counts
+comment-baseline:
+    @python3 scripts/comments.py update
+
+# List comments as JSON lines, optionally under the given paths
+[positional-arguments]
+comment-list *paths:
+    @python3 scripts/comments.py list "$@"
 
 # Remove API, MCP and CLI Rust build artifacts (next build recompiles)
 [group('build')]

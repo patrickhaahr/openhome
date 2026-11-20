@@ -1,14 +1,3 @@
-//! The preview's ECB stand-in: the 90-day and full-history reference-rate files at their
-//! production paths, in the real files' shape, with invented rates that drift a little each day.
-//! The 90-day file holds every working day of the last 90 calendar days up to the latest working
-//! day on or before today in Copenhagen. The history file holds every working day of the last
-//! year, newest first on a single line, so the startup pass backfills prices observed months ago.
-//! Every request is logged to stderr (`ECB stand-in: GET <path> -> <status>`).
-//! `OPENHOME_PREVIEW_ECB=outage` makes both answer 503, so the startup pass fails and no rates
-//! are stored. `OPENHOME_PREVIEW_ECB=missed-day` leaves one working day out of the history file,
-//! as if the service had been down that day, and runs a second pass [`NEXT_PASS`] after startup
-//! as the next day's pass would, whose 90-day file holds the day.
-
 use std::time::Duration;
 
 use axum::{Router, http::StatusCode, response::IntoResponse, routing::get};
@@ -18,7 +7,6 @@ use sqlx::SqlitePool;
 
 const HISTORY_DAYS: u64 = 365;
 const RECENT_DAYS: u64 = 90;
-/// The seeded `OP99-015` price is this many days old, so its day is the one missed.
 const MISSED_DAYS_AGO: u64 = 31;
 pub const NEXT_PASS: Duration = Duration::from_secs(90);
 const RECENT_PATH: &str = "/stats/eurofxref/eurofxref-hist-90d.xml";
@@ -43,7 +31,6 @@ fn date(day: CalendarDay) -> NaiveDate {
     NaiveDate::parse_from_str(&day.to_string(), "%Y-%m-%d").expect("a calendar day is a date")
 }
 
-/// The ECB publishes on working days only.
 fn working_day(mut day: CalendarDay) -> CalendarDay {
     while matches!(date(day).weekday(), Weekday::Sat | Weekday::Sun) {
         day = day.previous();
@@ -51,7 +38,6 @@ fn working_day(mut day: CalendarDay) -> CalendarDay {
     day
 }
 
-/// Invented USD and DKK per euro with four decimals, stable for a given day.
 fn rates(day: CalendarDay) -> (String, String) {
     let n = u64::try_from(date(day).num_days_from_ce()).expect("dates are after year zero");
     let (usd, dkk) = (10_800 + n * 7 % 600, 74_600 + n * 3 % 40);
@@ -77,7 +63,6 @@ fn latest() -> CalendarDay {
     working_day(CalendarDay::of(chrono::Utc::now()))
 }
 
-/// Working days from the latest back `span` calendar days, newest first.
 fn working_days(span: u64) -> Vec<CalendarDay> {
     let newest = latest();
     (0..span)
@@ -127,7 +112,6 @@ fn answer(down: bool, path: &str, body: impl FnOnce() -> String) -> impl IntoRes
     (status, body)
 }
 
-/// The rate client for a loopback stand-in. Never the live ECB.
 pub async fn ecb(mode: Mode) -> anyhow::Result<Ecb> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
@@ -142,7 +126,6 @@ pub async fn ecb(mode: Mode) -> anyhow::Result<Ecb> {
             get(move || async move { answer(down, HISTORY_PATH, move || history_file(mode)) }),
         );
     tokio::spawn(async move { axum::serve(listener, provider).await });
-    // Without the scheme: test harnesses take the first `http://127.0.0.1:<port>` they see as Axum's URL.
     eprintln!(
         "ECB: loopback reference rates at {address}{}",
         if down { " (outage: answers 503)" } else { "" }
@@ -151,7 +134,6 @@ pub async fn ecb(mode: Mode) -> anyhow::Result<Ecb> {
     Ecb::new(at(RECENT_PATH)?, at(HISTORY_PATH)?)
 }
 
-/// The pass the next day would run, so a missed day's refill is observable in one sitting.
 pub async fn next_pass(db: SqlitePool, ecb: Ecb) {
     tokio::time::sleep(NEXT_PASS).await;
     eprintln!("ECB stand-in: the next day's pass");

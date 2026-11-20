@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Lists files the global git-file-size-guard pre-commit hook would block, using
-# its rules against the working tree instead of the index, so a split can be
-# checked before anything is staged. Keep the rules in step with that hook.
 set -euo pipefail
 
 max_tokens=5000

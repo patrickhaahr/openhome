@@ -86,7 +86,6 @@ impl OpenHomeTools {
             query.push(("owner_id".into(), owner));
         }
         if let Some(status) = request.status {
-            // Serialize only the typed enum; query encoding belongs to the HTTP client.
             let value = match status {
                 WatchStatus::Planned => "planned",
                 WatchStatus::Watching => "watching",

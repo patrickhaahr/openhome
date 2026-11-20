@@ -1,14 +1,3 @@
-//! Isolated, loopback-only health, Wishlist, Watchlist, Binder, fitness, map, walking-loop and nutrition seam for
-//! tests and synthetic previews. Uses production routes, migrations and authentication without
-//! household configuration; the map explicitly serves the unrelated Copenhagen demo origin.
-//!
-//! Nutrition serves a few synthetic Foods and one synthetic Open Food Facts product
-//! (`providers::SYNTHETIC_BARCODE`); `--food-database=importing` keeps the Food database
-//! importing instead, for unavailable states.
-//!
-//! Loops come from a loopback provider serving synthetic squares that are not real paths. Set
-//! `OPENROUTESERVICE_URL` to a household instance to plan real loops from the demo origin instead.
-
 use std::sync::Arc;
 
 use openhome_api::{
@@ -28,7 +17,6 @@ use tokio::net::TcpListener;
 #[allow(dead_code)]
 mod binder;
 
-// One backfill pass: the tests need prices to convert, not the daily job.
 #[path = "dashboard_preview/ecb.rs"]
 #[allow(dead_code)]
 mod ecb;
@@ -36,7 +24,6 @@ mod ecb;
 #[path = "support/providers.rs"]
 mod providers;
 
-// The preview also seeds Meal Logs; these tests log their own.
 #[path = "support/foods.rs"]
 #[allow(dead_code)]
 mod foods;
@@ -66,7 +53,6 @@ async fn main() -> anyhow::Result<()> {
     };
     let key = auth::ApiKey::new("synthetic-dashboard-api-key".to_string());
     let demo_origin = MapOrigin::parse(None, None, Some("true"))?;
-    // A configured household instance plans real loops; otherwise serve synthetic ones.
     let endpoint =
         match ProviderEndpoint::parse(std::env::var("OPENROUTESERVICE_URL").ok().as_deref())? {
             Some(endpoint) => endpoint,
@@ -106,8 +92,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Synthetic NOOP observations, ingested through the existing push protocol. Empty windows are
-/// real applied replacements; no fixture claims coverage merely because a measurement exists.
 async fn seed_training(db: &sqlx::SqlitePool) -> anyhow::Result<()> {
     use chrono::DateTime;
     use noop_push::ingest::{self, ContentCoding};
@@ -135,7 +119,6 @@ async fn seed_training(db: &sqlx::SqlitePool) -> anyhow::Result<()> {
                 "activeKcalEst": null, "spo2Red": null, "spo2Ir": null,
             }
         });
-        // Ordered segments totalling light 260, deep 90 and rem 100 minutes.
         let stages = serde_json::to_string(
             &[
                 (0, 130, "light"),
@@ -225,7 +208,6 @@ async fn seed_training(db: &sqlx::SqlitePool) -> anyhow::Result<()> {
             .await?;
         }
     }
-    // Leave a gap in the series and no samples at the five-minute recovery mark.
     let records: Vec<Value> = (0..=735).step_by(5).filter(|offset| !(90..150).contains(offset))
         .map(|offset| json!({ "type": "record", "key": { "ts": start + offset },
             "data": { "bpm": if offset < 570 { 150 } else if offset < 600 { 165 } else if offset < 690 { 120 } else { 110 } } }))

@@ -34,7 +34,6 @@ pub async fn serve(app: Router) -> SocketAddr {
     address
 }
 
-/// An in-memory database. One connection, because every in-memory connection is its own database.
 pub async fn memory_db() -> SqlitePool {
     SqlitePoolOptions::new()
         .max_connections(1)
@@ -43,14 +42,10 @@ pub async fn memory_db() -> SqlitePool {
         .unwrap()
 }
 
-/// The API's training routes behind its API-key layer, over a NOOP mirror where both strap
-/// namespaces pushed 2026-09-14 (the real rows: imported strain 3.1, computed strain 0.0, and an
-/// evening NOOP Workout) and a training log with one Workout that day.
 pub async fn start_api() -> String {
     start_api_with_foods(food_database(true).await).await
 }
 
-/// The API routes over `foods`, for Food database reads.
 pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let labels = open_food_facts().await;
     let catalogue = binder::optcg().await;
@@ -84,10 +79,8 @@ pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     format!("http://{}", serve(app).await)
 }
 
-/// The barcode of the synthetic product: a restricted-circulation GS1 number, never a package.
 pub const SYNTHETIC_BARCODE: &str = "2001234567893";
 
-/// Open Food Facts on loopback: it knows one synthetic skyr and nothing else.
 pub async fn open_food_facts() -> OpenFoodFacts {
     let provider = Router::new().route(
         "/api/v2/product/{barcode}",
@@ -120,8 +113,6 @@ pub async fn open_food_facts() -> OpenFoodFacts {
     OpenFoodFacts::new(url.parse().unwrap()).unwrap()
 }
 
-/// A Food database: when `imported`, one complete import of the pinned dataset holding a
-/// synthetic Skyr; otherwise empty, so lookups report importing.
 pub async fn food_database(imported: bool) -> FoodDatabase {
     let db = memory_db().await;
     let pin = DatasetPin::pinned();
@@ -165,7 +156,6 @@ pub async fn food_database(imported: bool) -> FoodDatabase {
     foods
 }
 
-/// The NOOP mirror: both strap namespaces' 2026-09-14 rows and replacement coverage.
 pub async fn noop_mirror() -> SqlitePool {
     let noop_db = memory_db().await;
     noop_push::initialize(&noop_db).await.unwrap();
@@ -228,7 +218,6 @@ pub async fn noop_mirror() -> SqlitePool {
         .unwrap();
     }
 
-    // 18:00-19:15 local time on 2026-09-14.
     sqlx::query(
         "INSERT INTO workout (source_id, device_id, start_ts, sport, end_ts, source, duration_s, \
              avg_hr, max_hr) \
@@ -242,7 +231,6 @@ pub async fn noop_mirror() -> SqlitePool {
     noop_db
 }
 
-/// The training log: one Pull Workout on 2026-09-14.
 pub async fn training_log() -> SqlitePool {
     let db = memory_db().await;
     sqlx::migrate!("../api/migrations").run(&db).await.unwrap();
@@ -259,8 +247,6 @@ pub async fn training_log() -> SqlitePool {
     db
 }
 
-/// The adapter, answering clients that present `API_KEY` and calling `api_url` with
-/// `key_for_api`.
 pub async fn start_mcp(api_url: &str, key_for_api: &str) -> String {
     let api = OpenHomeApi::new(
         parse_api_url(api_url).unwrap(),

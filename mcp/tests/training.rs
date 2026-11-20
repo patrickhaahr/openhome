@@ -268,7 +268,6 @@ async fn noop_workout_detail_forwards_one_workout_and_api_errors_unchanged() {
         }
     };
 
-    // The NOOP Workout exactly as workouts_on_day lists it.
     let listed = api_get_read(&api, "2026-09-14", "workouts").await["noop_workouts"][0].clone();
     let result = call(
         listed["source"].as_str().unwrap(),
@@ -286,7 +285,6 @@ async fn noop_workout_detail_forwards_one_workout_and_api_errors_unchanged() {
         json!({"basis": "workout_row", "avg_bpm": 88.0, "min_bpm": null, "max_bpm": 141.0})
     );
 
-    // The listed sport, when passed, is a third path segment.
     let with_sport = call(
         listed["source"].as_str().unwrap(),
         listed["start"].as_str().unwrap(),
@@ -318,7 +316,6 @@ async fn noop_workout_detail_forwards_one_workout_and_api_errors_unchanged() {
     );
     assert_eq!(invalid.structured_content.unwrap()["status"], 400);
 
-    // A slash stays inside the one encoded `source` segment, so it cannot reach another route.
     let missing = call("my-whoop/../../health", "2026-09-14T18:00:00+02:00", None)
         .await
         .unwrap();

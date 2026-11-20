@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Call the run's MCP adapter over Streamable HTTP, the way Hermes does.
-# Usage: mcp.sh tools/list
-#        mcp.sh call <tool> '<json arguments>'
-# Prints the JSON-RPC result; exits 2 when the tool result has isError=true.
 . "$(dirname "$0")/common.sh"
 load_run
 H=(-H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream")

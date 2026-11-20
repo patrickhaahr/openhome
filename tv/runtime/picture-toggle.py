@@ -23,7 +23,6 @@ def read():
             or dimension.get("_3dStatus") != "2d"):
         raise ValueError("The Cinema/night profiles are configured for default-input 2D SDR only")
     mode = response.get("settings", {}).get("pictureMode")
-    # JSON strings and these literals are Unicode in both supported runtimes.
     if not isinstance(mode, type("")) or not mode:
         raise ValueError("Missing current picture mode")
     return mode

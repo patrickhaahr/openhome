@@ -19,7 +19,6 @@ if not backup.exists():
         file.write(original)
     backup.chmod(0o600)
 
-# Write in place, like Input Hook's own UI, so its file watcher reloads the map.
 script = """
 var fs = require('fs');
 var config = %s;

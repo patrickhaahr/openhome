@@ -1,4 +1,3 @@
-//! Explicitly enabled loopback preview of approved demo albums; never connects a household database.
 use openhome_api::{
     AppState, DockerCache, auth, routes,
     services::photos::{PhotoService, PhotoSize},

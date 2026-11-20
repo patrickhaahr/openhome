@@ -1,6 +1,3 @@
-//! MCP-to-API contract: the adapter in front of the real OpenHome API training routes, driven by
-//! an MCP Streamable HTTP client.
-
 mod common;
 
 use axum::Router;
@@ -363,13 +360,11 @@ async fn returns_api_errors_as_tool_errors() {
         Some(api_get(&api, "2026-02-30").await)
     );
 
-    // The argument stays one path segment, so it cannot reach another API route.
     let escape = recovery_on_day(&client, "../../health").await;
     assert_eq!(escape.is_error, Some(true));
     assert_eq!(escape.structured_content.unwrap()["status"], 400);
     client.cancel().await.unwrap();
 
-    // The API rejecting the adapter's key reaches the caller as the API's 401.
     let misconfigured = connect(&start_mcp(&api, "wrong-key").await, API_KEY)
         .await
         .unwrap();

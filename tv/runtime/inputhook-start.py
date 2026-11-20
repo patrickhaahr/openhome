@@ -7,8 +7,6 @@ import subprocess
 import sys
 import time
 
-# LG's luna-send can exit without a reply with closed stdin. Pear's native
-# client handles noninteractive LS2 calls reliably; keep it ahead of system tools.
 os.environ["PATH"] = "/var/lib/pearwebos:" + os.environ.get("PATH", "/usr/bin:/bin")
 
 
@@ -28,7 +26,6 @@ def run(command):
 
 
 try:
-    # scan-services leaves cached developer-service launchers unchanged on this TV.
     run(["ls-control", "scan-volatile-dirs"])
     reply = json.loads(run(["luna-send-n", "-n", "1",
                            "luna://org.webosbrew.inputhook.service/start", "{}"]))

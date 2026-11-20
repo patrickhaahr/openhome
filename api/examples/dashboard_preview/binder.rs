@@ -1,12 +1,3 @@
-//! The preview's OPTCG catalogue stand-in: invented cards in the real catalogue's wire shape, with
-//! PNG images served under `.jpg` names like the real thing. A variant's `card_image` names the
-//! file the catalogue serves, which is not always its id (`OP99-020`'s special print). Every request is logged to stderr
-//! (`OPTCG stand-in: GET <path> -> <status>`), so a verifier can count what Axum asked for in the
-//! stack log. Code `OP99-503` simulates an outage; any other unknown code answers 404.
-//! `OPENHOME_PREVIEW_PRICES=history` starts every observation [`HISTORY_DAYS`] days earlier and
-//! lets the preview move the catalogue forward one day at a time (see `prices.rs`), so the real
-//! refresh job builds a Price History with a gap.
-
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicI64, Ordering},
@@ -52,15 +43,12 @@ struct SeedCard {
     text: String,
 }
 
-/// How far back the history mode starts the catalogue's observations.
 pub const HISTORY_DAYS: i64 = 12;
 
 pub fn history_mode() -> bool {
     std::env::var("OPENHOME_PREVIEW_PRICES").as_deref() == Ok("history")
 }
 
-/// Where the stand-in's clock stands: observations are the seeded ones moved `back` days earlier
-/// and `advance` days forward, with prices that settle on the seeded one at the end.
 pub struct Control {
     back: i64,
     advance: AtomicI64,
@@ -214,8 +202,6 @@ async fn image(Path(file): Path<String>) -> impl IntoResponse {
     }
 }
 
-/// The catalogue client for a loopback stand-in, with the handle that moves its clock. Never the
-/// live service: it is one volunteer's server.
 pub async fn stand_in() -> anyhow::Result<Catalogue> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
@@ -233,7 +219,6 @@ pub async fn stand_in() -> anyhow::Result<Catalogue> {
             control: control.clone(),
         });
     tokio::spawn(async move { axum::serve(listener, provider).await });
-    // Without the scheme: test harnesses take the first `http://127.0.0.1:<port>` they see as Axum's URL.
     eprintln!(
         "OPTCG: loopback catalogue at {address} (invented OP99 cards; OP99-503 simulates an outage)"
     );

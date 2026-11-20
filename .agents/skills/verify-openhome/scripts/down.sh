@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Stop only the process groups this checkout's verify run started,. Evidence stays.
 . "$(dirname "$0")/common.sh"
 load_run
 for pgid in "$MCP_PGID" "$STACK_PGID"; do

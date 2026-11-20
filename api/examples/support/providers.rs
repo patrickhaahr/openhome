@@ -1,7 +1,3 @@
-//! Synthetic loopback upstreams shared by the dashboard examples: openrouteservice-shaped walking
-//! loops, TMDB-shaped titles and an Open Food Facts-shaped product. Nothing here is a real path,
-//! title, product or household record.
-
 use axum::{
     Json,
     extract::{Path, Query},
@@ -15,7 +11,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
-/// A TMDB service backed by a loopback provider that knows two fictional titles.
 pub async fn synthetic_tmdb() -> anyhow::Result<TmdbService> {
     let provider = axum::Router::new()
         .route("/3/search/{kind}", get(provider_search))
@@ -26,11 +21,8 @@ pub async fn synthetic_tmdb() -> anyhow::Result<TmdbService> {
     TmdbService::new("synthetic-provider-token", url.parse()?)
 }
 
-/// The barcode of the synthetic product: a restricted-circulation GS1 number, never a real
-/// package.
 pub const SYNTHETIC_BARCODE: &str = "2001234567893";
 
-/// An Open Food Facts client backed by a loopback provider that knows one fictional skyr.
 pub async fn synthetic_open_food_facts() -> anyhow::Result<OpenFoodFacts> {
     let provider = axum::Router::new().route(
         "/api/v2/product/{barcode}",
@@ -68,9 +60,6 @@ fn synthetic_product(barcode: &str) -> (StatusCode, Json<Value>) {
     )
 }
 
-/// Answer round trips on loopback in openrouteservice's response shape. Each seed draws a square
-/// in its own direction from the requested origin, slightly off the requested length, so a
-/// search finds distinct alternatives. Squares follow no real streets.
 pub async fn synthetic_provider() -> anyhow::Result<ProviderEndpoint> {
     let provider = axum::Router::new().route(
         "/ors/v2/directions/foot-walking/geojson",
@@ -83,7 +72,6 @@ pub async fn synthetic_provider() -> anyhow::Result<ProviderEndpoint> {
         .ok_or_else(|| anyhow::anyhow!("synthetic provider URL is empty"))
 }
 
-// Synthetic upstream exercises the real private adapter without a provider token or household data.
 fn provider_title(kind: &str, id: i64) -> Value {
     let mut item = json!({ "id": id, "overview": "A fictional journey through distant skies, with an unexpected friendship along the way.", "poster_path": "/synthetic.jpg" });
     if kind == "movie" {
@@ -149,7 +137,6 @@ fn synthetic_trip(request: &Value) -> Value {
     ];
     let round_trip = &request["options"]["round_trip"];
     let length = round_trip["length"].as_f64().unwrap_or_default();
-    // Direction east/north and length share per seed.
     let ([east, north], share) = match round_trip["seed"].as_u64() {
         Some(1) => ([1.0, 1.0], 1.02),
         Some(2) => ([-1.0, 1.0], 0.97),

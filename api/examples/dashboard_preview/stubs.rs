@@ -1,6 +1,3 @@
-//! Loopback stand-ins for the upstreams the API integrates with. Each speaks the real upstream's
-//! wire shape, so the production Integration Services run unchanged.
-
 use std::collections::HashMap;
 
 use axum::{
@@ -28,7 +25,6 @@ struct Controls {
     edifier: Vec<String>,
 }
 
-/// The IR bridge reports the full command sets and accepts every command.
 pub async fn ir_bridge() -> anyhow::Result<String> {
     let controls: Controls = serde_json::from_str(include_str!("seed/controls.json"))?;
     serve(
@@ -55,7 +51,6 @@ pub async fn ir_bridge() -> anyhow::Result<String> {
     .await
 }
 
-/// The `SwitchBot` bridge accepts light commands without touching any device.
 pub async fn switchbot_bridge() -> anyhow::Result<String> {
     serve(Router::new().route(
         "/lights/{state}",
@@ -89,7 +84,6 @@ struct DaySeed {
     wind_ms: f64,
 }
 
-/// An Open-Meteo forecast from `seed/weather.json`, dated from the current Copenhagen day.
 pub async fn open_meteo() -> anyhow::Result<Url> {
     let seed: &'static WeatherSeed = Box::leak(Box::new(serde_json::from_str(include_str!(
         "seed/weather.json"
@@ -107,7 +101,6 @@ fn forecast(seed: &WeatherSeed) -> Value {
     let local = now.with_timezone(&Copenhagen);
     let offset = i64::from(local.offset().fix().local_minus_utc());
     let first_day = local.date_naive();
-    // Local midnight of `first_day` read as if it were UTC, so local clock arithmetic stays simple.
     let first_local_midnight = first_day.and_time(NaiveTime::MIN).and_utc().timestamp();
     let midnight = |index: i64| first_local_midnight + index * 86_400 - offset;
     let day_of = |timestamp: i64| {
@@ -116,7 +109,6 @@ fn forecast(seed: &WeatherSeed) -> Value {
             .clamp(0, 6) as usize
     };
     let hour_start = now.timestamp().div_euclid(3600) * 3600;
-    // Daily temperature swings between the low at 03:00 and the high at 15:00.
     let temperature = |timestamp: i64| {
         let hour = (timestamp + offset).rem_euclid(86_400) as f64 / 3600.0;
         let day = &seed.days[day_of(timestamp)];

@@ -1,8 +1,5 @@
 #include "commands/lg_tv/commands.h"
 
-// LG TVs use NEC 32-bit frames for these standard remote functions.
-// Sources: https://github.com/IvanGlinkin/Default-IR-vendors-samples/tree/main/LG/TV
-//          https://github.com/trodemaster/rc/blob/main/reference/LG_C4_IR_Codes.txt
 const IrCommand kLgTvCommands[] = {
     {'P', "power", "LG TV Power", 0x20DF10EF, 1, 0},
     {'I', "input", "LG TV Input", 0x20DFD02F, 1, 0},

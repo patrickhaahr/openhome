@@ -134,7 +134,6 @@ async fn meal_tools_save_list_log_by_name_rename_and_delete_through_the_api_unch
     )
     .await;
     assert_eq!(null_portions.is_error, Some(true));
-    // The Meal Log keeps what it logged.
     let day = wishlist_call(&client, "nutrition_day", json!({"day": "2026-10-29"}))
         .await
         .structured_content

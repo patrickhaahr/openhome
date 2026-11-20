@@ -191,7 +191,6 @@ async fn meal_log_tools_forward_logs_receipts_days_and_errors_unchanged() {
     client.cancel().await.unwrap();
 }
 
-/// A synthetic 1x1 PNG, base64-encoded.
 const PIXEL_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 #[tokio::test]
@@ -266,9 +265,6 @@ async fn meal_log_photos_forward_unchanged_including_a_full_size_payload() {
     assert_eq!(removed["photo"], Value::Null);
     assert_eq!(day().await, json!([removed]));
 
-    // A full 10 MB photo is about 14 MB of base64, above rmcp's 4 MiB default: it passes the
-    // adapter and reaches the API, which rejects these bytes as no image. One byte more is the
-    // API's 413. "/9j/" encodes a JPEG signature and "QUFB" three more bytes.
     for (repeats, status) in [(3_495_252, 400), (3_495_253, 413)] {
         let photo = format!("/9j/{}", "QUFB".repeat(repeats));
         let rejected = wishlist_call(&client, "log_meal", meal("mcp-photo-2", &photo)).await;

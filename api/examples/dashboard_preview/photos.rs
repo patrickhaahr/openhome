@@ -1,8 +1,3 @@
-//! A loopback Immich whose albums hold drawn scenes: no photographs, no people, no places.
-//! Every photo has its own aspect ratio and capture time, so the gallery's justified rows,
-//! album date spans and the merged newest-first view are all exercised. A few more photos fall
-//! on fixed month-days in earlier years, including today's, so "on this day" always has matches.
-
 use std::collections::HashMap;
 
 use axum::{
@@ -28,13 +23,10 @@ struct PhotoSeed {
     on_this_day: Vec<DaySeed>,
 }
 
-/// Photos taken on one month-day in earlier years, spread over the albums.
 #[derive(Deserialize)]
 struct DaySeed {
-    /// `MM-DD`, or `today` for the household's date when the preview starts.
     day: String,
     years_ago: Vec<i32>,
-    /// Photos for each of those years.
     photos: u32,
 }
 
@@ -43,12 +35,9 @@ struct AlbumSeed {
     name: String,
     photos: u32,
     hue: f64,
-    /// sea, bloom, city, snow, forest or hills.
     scene: String,
-    /// The month (`YYYY-MM`) of the album's first photo.
     from: String,
     months: u32,
-    /// The owner's chosen cover, as a photo number; otherwise Immich's first photo.
     cover: Option<u32>,
 }
 
@@ -56,8 +45,6 @@ fn photo_seed() -> PhotoSeed {
     serde_json::from_str(include_str!("seed/photos.json")).expect("photos.json is valid")
 }
 
-/// Version 4 and RFC 4122 variant bits keep the ids valid UUIDs; the low 48 bits carry the
-/// album and photo numbers, and bit 48 tells albums from photos.
 fn tagged(low: u128) -> Uuid {
     let version = 4u128 << 76;
     let variant = 0b10u128 << 62;
@@ -72,8 +59,6 @@ fn asset_id(album: usize, photo: u32) -> Uuid {
     tagged(((album as u128) << 32) | u128::from(photo))
 }
 
-/// The selected albums: every seeded album, or the first `OPENHOME_PREVIEW_ALBUMS` of them
-/// (set it to 1 to preview a household with a single album).
 pub fn album_ids() -> Vec<Uuid> {
     let seeded = photo_seed().albums.len();
     let count = std::env::var("OPENHOME_PREVIEW_ALBUMS")
@@ -83,7 +68,6 @@ pub fn album_ids() -> Vec<Uuid> {
     (0..count).map(album_id).collect()
 }
 
-/// A deterministic value in [0, 1) for any seed (splitmix64).
 fn rand(seed: u64) -> f64 {
     let mut z = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
@@ -95,7 +79,6 @@ fn photo_key(album: usize, photo: u32) -> u64 {
     (album as u64) << 32 | u64::from(photo)
 }
 
-/// Mostly landscape, with a real share of portrait, square and wide frames.
 fn ratio(album: usize, photo: u32) -> (u32, u32) {
     const FRAMES: [(u32, u32); 10] = [
         (3, 2),
@@ -112,7 +95,6 @@ fn ratio(album: usize, photo: u32) -> (u32, u32) {
     FRAMES[(rand(photo_key(album, photo) ^ 0xf0) * FRAMES.len() as f64) as usize]
 }
 
-/// The newest photo comes first, as an Immich album sorted newest first lists it.
 fn taken(album: &AlbumSeed, key: u64, photo: u32) -> String {
     let start =
         NaiveDate::parse_from_str(&format!("{}-01", album.from), "%Y-%m-%d").expect("YYYY-MM");
@@ -125,8 +107,6 @@ fn taken(album: &AlbumSeed, key: u64, photo: u32) -> String {
     format!("{}.000Z", time.format("%Y-%m-%dT%H:%M:%S"))
 }
 
-/// Each album's anniversary photos, numbered after its regular ones, as (number, capture time).
-/// Noon UTC keeps every one on its day in Copenhagen.
 fn dated_photos(seed: &PhotoSeed, album: usize) -> Vec<(u32, String)> {
     let today = openhome_api::services::photos::copenhagen_today(chrono::Utc::now());
     let mut next = seed.albums[album].photos;
@@ -141,7 +121,6 @@ fn dated_photos(seed: &PhotoSeed, album: usize) -> Vec<(u32, String)> {
         };
         for &ago in &entry.years_ago {
             let year = today.year() - ago;
-            // 29 February in a common year is kept on the 28th, where "on this day" finds it.
             let Some(date) = day
                 .with_year(year)
                 .or_else(|| NaiveDate::from_ymd_opt(year, 2, 28))
@@ -202,7 +181,6 @@ pub async fn immich() -> anyhow::Result<Url> {
                     let Some(album) = seed.albums.get(index) else {
                         return StatusCode::NOT_FOUND.into_response();
                     };
-                    // Immich keeps the frame: a small short side for thumbnails, a larger one for previews.
                     let short = if query.get("size").map(String::as_str) == Some("preview") {
                         810
                     } else {

@@ -1,7 +1,3 @@
-    /* ===========================================
-       SLIDE PRESENTATION CONTROLLER
-       Handles fixed-stage scaling and all navigation methods.
-       =========================================== */
     class SlidePresentation {
       constructor() {
         this.slides = [...document.querySelectorAll('.slide')];
@@ -103,10 +99,6 @@
       }
     }
 
-    /* ===========================================
-       INLINE TEXT EDITOR
-       Press E or use the top-left hotzone. Changes persist locally.
-       =========================================== */
     class InlineEditor {
       constructor() {
         this.isActive = false;
@@ -148,10 +140,6 @@
     const presentation = new SlidePresentation();
     const editor = new InlineEditor();
 
-    /* ===========================================
-       EDITOR INTERACTIONS
-       JavaScript grace period prevents the edit button disappearing on hover.
-       =========================================== */
     const hotzone = document.querySelector('.edit-hotzone');
     const editToggle = document.getElementById('editToggle');
     let hideTimeout = null;

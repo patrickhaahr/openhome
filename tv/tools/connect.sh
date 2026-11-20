@@ -7,7 +7,6 @@ if timeout 8 ssh -S "$socket" -o BatchMode=yes -o ConnectTimeout=3 \
     root@10.0.40.2 true >/dev/null 2>&1; then
     exit 0
 fi
-# A reboot can leave a local master/socket whose remote transport is dead.
 timeout 3 ssh -S "$socket" -O exit root@10.0.40.2 >/dev/null 2>&1 || true
 rm -f "$socket"
 exec ssh -M -S "$PWD/tv/private/ssh.sock" -o ControlPersist=3600 \

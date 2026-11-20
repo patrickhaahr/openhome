@@ -11,8 +11,6 @@ SCRIPT = Path(__file__).resolve().parent.parent / "runtime/inputhook-start.py"
 if len(sys.argv) > 1 and Path(sys.argv[1]).is_file():
     SCRIPT = Path(sys.argv.pop(1)).resolve()
 
-# Model the platform boundary: normal rescans retain cached developer-service
-# definitions; volatile rescans load the already-elevated definition from disk.
 PLATFORM = '''#!/usr/bin/env python3
 import os
 from pathlib import Path
@@ -72,8 +70,6 @@ class InputHookStartupTests(unittest.TestCase):
         self.assertFalse((self.directory / "active-service").exists())
 
     def test_unacknowledged_startup_fails_without_activating_service(self):
-        # The registry refresh succeeds but the cached sandboxed launcher stays: the service
-        # answers returnValue=false, which must fail boot rather than count as started.
         result = self.run_startup("stale-cache")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("did not acknowledge", result.stderr)

@@ -30,7 +30,6 @@ async fn important_date_tools_forward_explicit_tags_receipts_and_figures_unchang
     let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
         .await
         .unwrap();
-    // Tags are required: a date with no person_ids at all is rejected before Axum.
     let untagged = client
         .call_tool(
             CallToolRequestParams::new("add_important_date").with_arguments(

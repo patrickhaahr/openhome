@@ -8,7 +8,6 @@ import tarfile
 
 from tv_paths import SSH, TV_ROOT as root
 
-# Read the CLI's existing credential without ever printing it or writing it to Git.
 key_file = Path(os.environ.get("OPENHOME_API_KEY_FILE", Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "openhome/api-key"))
 key = os.environ.get("OPENHOME_API_KEY") or key_file.read_text().strip()
 if not key or any(c.isspace() for c in key):
@@ -26,7 +25,6 @@ with tarfile.open(fileobj=buffer, mode="w") as archive:
     for name, (content, mode) in files.items():
         info = tarfile.TarInfo(name); info.size = len(content); info.mode = mode; info.mtime = 1700000000
         archive.addfile(info, io.BytesIO(content))
-# Backup once, before touching any current UI. The API key is piped in-memory over SSH.
 subprocess.run(SSH + ["test -d /var/lib/pearwebos && { test -d /var/lib/pearwebos-baseline || cp -a /var/lib/pearwebos /var/lib/pearwebos-baseline; } && { test ! -x /var/lib/openhome-tv/client-service.sh || /var/lib/openhome-tv/client-service.sh stop; } && umask 077 && tar -C / -xf -"], input=buffer.getvalue(), check=True)
 with (root / "private/pear-install.tar").open("rb") as package:
     subprocess.run(SSH + ["/var/lib/pearwebos/pearwebos unmount && tar -C /var/lib/pearwebos -xf - && /var/lib/openhome-tv/client-service.sh start && /var/lib/pearwebos/pearwebos on"], stdin=package, check=True)

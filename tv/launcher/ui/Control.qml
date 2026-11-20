@@ -33,7 +33,6 @@ Item {
         ink: control.primary ? "#000000" : "#ecece6"
         opacity: control.pending ? 0.4 : 1
     }
-    // Acknowledgement is a temporary ring, never an inferred device state.
     Rectangle {
         visible: control.pending
         anchors.centerIn: parent

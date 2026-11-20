@@ -26,12 +26,10 @@ fn mix(a: Rgb, b: Rgb, t: f64) -> Rgb {
     std::array::from_fn(|i| a[i] * (1.0 - t) + b[i] * t)
 }
 
-/// One photo's fixed choices: its light, its sun and its layout.
 struct Frame {
     hue: f64,
     key: u64,
     aspect: f64,
-    /// 0 is midday, 1 is a low evening sun.
     dusk: f64,
     sun: (f64, f64),
 }
@@ -41,7 +39,6 @@ impl Frame {
         rand(self.key.wrapping_mul(31).wrapping_add(salt))
     }
 
-    /// A sky that warms and deepens towards the horizon, with soft bands of cloud.
     fn sky(&self, x: f64, v: f64, horizon: f64) -> Rgb {
         let height = (v / horizon).clamp(0.0, 1.0);
         let top = hsl(
@@ -75,7 +72,6 @@ impl Frame {
         }
     }
 
-    /// Haze: far things fade towards the sky's own colour at the horizon.
     fn haze(&self, color: Rgb, depth: f64) -> Rgb {
         mix(color, hsl(self.hue - 20.0 * self.dusk, 0.35, 0.8), depth)
     }
@@ -106,7 +102,6 @@ fn hills(frame: &Frame, x: f64, v: f64, snow: bool) -> Rgb {
             };
             let saturation = if snow { 0.12 } else { 0.38 };
             let mut ground = hsl(frame.hue + 15.0 + depth * 8.0, saturation, lightness);
-            // Light from the sun's side, shade on the other.
             let slope = (x * (2.0 + depth * 1.4) + frame.pick(10 + layer) * TAU).cos();
             ground = mix(
                 ground,
@@ -130,7 +125,6 @@ fn sea(frame: &Frame, x: f64, v: f64) -> Rgb {
         return frame.sky(x, v, horizon);
     }
     if v < horizon {
-        // A low island on the horizon.
         return frame.haze(hsl(frame.hue + 140.0, 0.25, 0.32), 0.45);
     }
     let depth = (v - horizon) / (1.0 - horizon);
@@ -154,7 +148,6 @@ fn sea(frame: &Frame, x: f64, v: f64) -> Rgb {
             0.55 * (1.0 - (x - sx).abs() / column),
         );
     }
-    // Beach in the near corner on some frames.
     if frame.pick(33) > 0.5 && v > 0.9 - 0.12 * (x / frame.aspect) {
         water = hsl(38.0, 0.35, 0.72 - 0.12 * depth);
     }
@@ -187,7 +180,6 @@ fn city(frame: &Frame, x: f64, v: f64) -> Rgb {
             color = frame.haze(wall, if layer == 0 { 0.35 } else { 0.0 });
         }
     }
-    // A street of warm light at the bottom edge.
     if v > 0.93 {
         color = mix(
             hsl(frame.hue + 200.0, 0.15, 0.14),
@@ -238,11 +230,9 @@ fn bloom(frame: &Frame, x: f64, v: f64) -> Rgb {
         v.powf(0.8) + leaves * 0.12,
     );
     let size = 0.16;
-    // Flowers reach into neighbouring cells, so each pixel checks the 3x3 cells around it.
     for (dx, dy) in (0..9).map(|i| (f64::from(i % 3) - 1.0, f64::from(i / 3) - 1.0)) {
         let cx = (x / size).floor() + dx;
         let cy = (v / size).floor() + dy;
-        // Shifted by one so the cells left of and above the frame stay non-negative.
         let cell = (cx + 1.0) as u64 * 7919 + (cy + 1.0) as u64;
         if frame.pick(700 + cell) < 0.35 {
             continue;
@@ -290,7 +280,6 @@ pub(super) fn picture(width: u32, height: u32, album: &AlbumSeed, key: u64) -> V
     for y in 0..height {
         let v = f64::from(y) / f64::from(height);
         for column in 0..width {
-            // In height units, so circles stay round in every frame.
             let x = f64::from(column) / f64::from(height);
             let color = match album.scene.as_str() {
                 "sea" => sea(&frame, x, v),

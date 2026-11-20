@@ -11,7 +11,6 @@ retry() {
     return 1
 }
 status=0
-# Privacy failures must never prevent Alexa blocking (or vice versa).
 retry "$DIR/alexa-block.sh" || status=1
 retry "$DIR/privacy-settings.sh" || status=1
 exit "$status"

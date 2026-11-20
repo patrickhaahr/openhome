@@ -95,7 +95,6 @@ enum Adguard {
     },
 }
 
-/// The API call selected by the parsed command.
 struct Request {
     post: bool,
     path: &'static str,
