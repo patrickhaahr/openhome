@@ -1,5 +1,3 @@
-//! Logged workouts with nested exercises and sets.
-
 mod common;
 
 use axum::Router;
@@ -7,10 +5,6 @@ use common::send_request_with_method;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
-
-// ---------------------------------------------------------------------------
-// Workout logging (#7)
-// ---------------------------------------------------------------------------
 
 fn sample_workout_body() -> serde_json::Value {
     json!({
@@ -98,7 +92,6 @@ async fn test_get_workout_embeds_exercises_and_sets_in_order() {
 
     let exercises = body["exercises"].as_array().unwrap();
     assert_eq!(exercises.len(), 2);
-    // order_index order
     assert_eq!(exercises[0]["exercise"]["name"], "Pull-up");
     assert_eq!(exercises[0]["exercise"]["category"], "calisthenics");
     assert_eq!(exercises[0]["order_index"], 0);
@@ -109,12 +102,10 @@ async fn test_get_workout_embeds_exercises_and_sets_in_order() {
     assert_eq!(sets.len(), 2);
     assert_eq!(sets[0]["set_number"], 1);
     assert_eq!(sets[0]["reps"], 10);
-    // added-weight convention: bodyweight pull-up stores weight_kg null
     assert_eq!(sets[0]["weight_kg"], serde_json::Value::Null);
     assert_eq!(sets[0]["rpe"], 8);
     assert_eq!(sets[1]["weight_kg"], 5.0);
 
-    // timed hold: duration_seconds with reps null
     let hold_sets = exercises[1]["sets"].as_array().unwrap();
     assert_eq!(hold_sets[0]["duration_seconds"], 12);
     assert_eq!(hold_sets[0]["reps"], serde_json::Value::Null);
@@ -170,10 +161,8 @@ async fn test_list_workouts_newest_first_with_filters() {
     assert_eq!(status, StatusCode::OK);
     let workouts = list.as_array().unwrap();
     assert_eq!(workouts.len(), 3);
-    // newest-first
     assert_eq!(workouts[0]["name"], "Week 4");
     assert_eq!(workouts[2]["name"], "Week 1");
-    // history list shape: id, date, name
     assert!(workouts[0]["id"].is_number());
     assert!(workouts[0]["date"].is_string());
     assert!(workouts[0]["exercises"].is_null());
@@ -261,7 +250,6 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     let created = create_sample_workout(&app).await;
     let id = created["id"].as_i64().unwrap();
 
-    // explicit null clears the name; absent notes keep their value
     let (status, body) = send_request_with_method(
         app.clone(),
         &format!("/api/workouts/{id}"),
@@ -275,7 +263,6 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     assert_eq!(body["notes"], "Felt strong");
     assert!(body.get("body_weight_kg").is_none());
 
-    // absent name keeps the cleared value
     let (status, body) = send_request_with_method(
         app.clone(),
         &format!("/api/workouts/{id}"),
@@ -288,7 +275,6 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
     assert_eq!(body["notes"], "updated");
     assert_eq!(body["name"], serde_json::Value::Null);
 
-    // clearing persists
     let (status, fetched) = send_request_with_method(
         app,
         &format!("/api/workouts/{id}"),
@@ -333,7 +319,6 @@ async fn test_create_workout_rolls_back_on_bad_exercise_reference() {
     let app = common::test_app().await;
 
     let mut body = sample_workout_body();
-    // second entry references a non-existent exercise -> FK violation mid-transaction
     body["exercises"][1]["exercise_id"] = json!(99999);
 
     let (status, _) = send_request_with_method(
@@ -347,7 +332,6 @@ async fn test_create_workout_rolls_back_on_bad_exercise_reference() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 
-    // nothing may persist
     let (status, list) = send_request_with_method(
         app.clone(),
         "/api/workouts",
@@ -464,7 +448,6 @@ async fn test_delete_exercise_conflict_when_logged_in_workout() {
     let app = common::test_app().await;
     create_sample_workout(&app).await;
 
-    // Pull-up is referenced by workout_exercises
     let (_, response) = send_request_with_method(
         app.clone(),
         "/api/exercises",

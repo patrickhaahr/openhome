@@ -1,40 +1,3 @@
-//! Nutrition Summary: every Trends series over a range of Copenhagen days, by day, ISO week
-//! (Monday to Sunday) or calendar month.
-//!
-//! - **Range**: `from` through `to`, both included, 1 to [`MAX_SUMMARY_DAYS`] days, ending on or
-//!   before today. Periods are cut at the range: the first and last week or month cover only
-//!   their days inside it and say `partial`, so a 30-day range always sums exactly 30 days.
-//! - **Logged days**: a day counts as logged when it has a Meal Log, even one of Supplement Doses
-//!   alone. Other days are missing: their intake is left out of the means, never counted as zero,
-//!   and a period without a logged day has null intake.
-//! - **Intake** (energy, protein and energy per macronutrient at 4/4/9/7 kcal per gram) is the
-//!   mean over the logged days that know each metric (`known_days`); `intake_days` counts
-//!   known-energy days. Each metric is independent, so unknown energy never erases known
-//!   protein and an unknown value never contributes a zero. Estimated Expenditure still learns
-//!   from known-energy days only (`targets`).
-//! - **NOVA 1 share**: Class 1 and classified energy are summed over the period first, then
-//!   divided (`NovaEnergy`); daily shares are never averaged.
-//! - **Targets**: the Calorie Target, Estimated Expenditure and protein target are the mean of
-//!   each day's value over the period's days that have one, from the target engine. Reading a
-//!   summary reads its days, so, as for the Nutrition Day, it fixes the weekly target record of
-//!   every week up to this one that has none yet (ADR 0014); a backfill afterwards never moves a
-//!   Calorie Target the summary has shown.
-//! - **Weight**: Trend Weight on the period's last day; scale weight is the mean of its
-//!   weigh-ins. The weekly change is the Trend Weight change over the period in kg per week, from
-//!   the day before it to its last day, or over the 7 days ending on its last day when the period
-//!   is shorter than a week; null without a Trend Weight at both ends. The goal rate is the mean
-//!   of each day's Nutrition Goal change in kg per week, negative to lose.
-//! - **Sources**: the Danish Food Composition Database versions the range's Portions copied
-//!   their values from, and Open Food Facts when a Product Portion is in the range, to credit
-//!   wherever the summary is shown.
-//! - **Micronutrients**: each period's and the range's coverage of the micronutrient panel
-//!   (`coverage`), or, without the Profile's sex or birth date or below 18 years on the range's
-//!   last day, why there is none; the rest of the summary does not depend on it.
-//!
-//! Every input is read once for the whole range: the Meal Logs with their key nutrients, and for
-//! the coverage the panel's day totals (`Diary::load`), from the 6 days before `from` that the
-//! first trailing 7-day averages need through `to`.
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -56,25 +19,19 @@ use super::targets::{
 };
 use crate::services::training::calendar::{self, CalendarDay};
 
-/// The longest range one summary covers, in calendar days.
 pub const MAX_SUMMARY_DAYS: i64 = 365;
 const KCAL_PER_G_ALCOHOL: f64 = 7.0;
-/// The shortest span a weekly change is measured over, in days.
 const WEEK_DAYS: usize = 7;
 
-/// How days are grouped into periods.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Aggregation {
     Day,
-    /// ISO weeks, Monday to Sunday.
     Week,
-    /// Calendar months.
     Month,
 }
 
 impl Aggregation {
-    /// The calendar bounds of the period containing `day`.
     fn bounds(self, day: CalendarDay) -> (CalendarDay, CalendarDay) {
         match self {
             Self::Day => Some((day, day)),
@@ -99,44 +56,30 @@ pub struct NutritionSummary {
     pub to: CalendarDay,
     pub aggregation: Aggregation,
     pub time_zone: &'static str,
-    /// Days with Meal Logs in the range.
     pub logged_days: usize,
-    /// Days left out of intake means.
     pub missing_days: usize,
-    /// Micronutrient coverage over the whole range, or why there is none.
     pub micronutrients: MicronutrientCoverage,
-    /// The Danish Food Composition Database versions the range's Portions copied their values
-    /// from, sorted by version; empty without Portions.
     pub sources: Vec<Source>,
-    /// Open Food Facts when a Product Portion is in the range; null otherwise.
     pub label_source: Option<LabelSource>,
-    /// In date order.
     pub periods: Vec<Period>,
 }
 
-/// One day, week or month of the range.
 #[derive(Debug, Serialize)]
 pub struct Period {
-    /// The first and last day the period covers inside the range.
     pub start: CalendarDay,
     pub end: CalendarDay,
     pub days: usize,
-    /// The calendar week or month reaches past the range, so the period covers only part of it.
     pub partial: bool,
     pub logged_days: usize,
     pub missing_days: usize,
-    /// Logged days whose energy is known: the days the energy mean covers.
     pub intake_days: usize,
-    /// Known logged days for each metric; an unknown value is never a day of zero intake.
     pub known_days: KnownDays,
     pub energy: EnergySummary,
     pub protein: ProteinSummary,
-    /// Mean energy from each macronutrient over the logged days that know each value.
     pub macro_energy: MacroEnergy,
     pub nova: NovaShare,
     pub weight: WeightSummary,
     pub weight_change: WeightChange,
-    /// Null when the range has no micronutrient coverage.
     pub micronutrients: Option<PeriodCoverage>,
 }
 
@@ -149,24 +92,19 @@ pub struct KnownDays {
     pub alcohol: usize,
 }
 
-/// kcal per day; null when no day has the value.
 #[derive(Debug, Serialize)]
 pub struct EnergySummary {
-    /// Mean over the logged days that know each value.
     pub eaten_kcal: Option<f64>,
     pub calorie_target_kcal: Option<f64>,
     pub estimated_expenditure_kcal: Option<f64>,
 }
 
-/// Grams per day; null when no day has the value.
 #[derive(Debug, Serialize)]
 pub struct ProteinSummary {
-    /// Mean over the logged days that know each value.
     pub eaten_g: Option<f64>,
     pub target_g: Option<f64>,
 }
 
-/// kcal per day at 4/4/9/7 kcal per gram, over the logged days that know each value.
 #[derive(Debug, Serialize)]
 pub struct MacroEnergy {
     pub protein_kcal: Option<f64>,
@@ -177,23 +115,17 @@ pub struct MacroEnergy {
 
 #[derive(Debug, Serialize)]
 pub struct WeightSummary {
-    /// On the period's last day.
     pub trend_weight_kg: Option<f64>,
-    /// The mean of the period's weigh-ins.
     pub scale_weight_kg: Option<f64>,
     pub weigh_ins: usize,
 }
 
-/// kg per week, negative for a loss.
 #[derive(Debug, Serialize)]
 pub struct WeightChange {
-    /// The Trend Weight's change.
     pub kg_per_week: Option<f64>,
-    /// The Nutrition Goal's change.
     pub goal_kg_per_week: f64,
 }
 
-/// A mean over the values given.
 #[derive(Clone, Copy, Debug, Default)]
 struct Mean {
     sum: f64,
@@ -213,7 +145,6 @@ impl Mean {
     }
 }
 
-/// A mean of the days that know this metric; an unknown day never contributes a zero.
 #[derive(Clone, Copy, Debug, Default)]
 struct Known(Mean);
 
@@ -227,7 +158,6 @@ impl Known {
     }
 }
 
-/// One day's Portions and Supplement Doses.
 #[derive(Default)]
 struct Eaten<'a> {
     portions: Vec<&'a StoredPortion>,
@@ -240,11 +170,9 @@ impl Eaten<'_> {
     }
 }
 
-/// A period's days added up.
 #[derive(Default)]
 struct Sums {
     logged_days: usize,
-    /// Logged days whose energy is known.
     intake_days: usize,
     energy: Known,
     protein: Known,
@@ -260,7 +188,6 @@ struct Sums {
 }
 
 impl Sums {
-    /// A logged day contributes each known metric independently of its energy.
     fn add_eaten(&mut self, eaten: &Eaten<'_>) {
         self.logged_days += 1;
         self.nova = self.nova + NovaEnergy::of(&eaten.portions);
@@ -275,13 +202,11 @@ impl Sums {
     }
 }
 
-/// What micronutrient coverage is judged from, when the panel is available.
 struct CoverageInputs {
     person: Result<Person, Vec<Missing>>,
     diary: Diary,
 }
 
-/// Everything read for the range, by day.
 struct Inputs<'a> {
     aggregation: Aggregation,
     eaten: BTreeMap<CalendarDay, Eaten<'a>>,
@@ -292,7 +217,6 @@ struct Inputs<'a> {
 }
 
 impl Inputs<'_> {
-    /// One period from its days, which share calendar bounds, with its micronutrient tally.
     fn period(&self, days: &[(CalendarDay, Plan)]) -> Option<(Period, Option<Tally>)> {
         let (start, end) = (days.first()?.0, days.last()?.0);
         let (calendar_start, calendar_end) = self.aggregation.bounds(start);
@@ -364,8 +288,6 @@ impl Inputs<'_> {
         Some((period, tally))
     }
 
-    /// The Trend Weight change in kg per week over the `days` ending on `end`, or over the week
-    /// ending on it when `days` is shorter.
     fn weekly_change(&self, end: CalendarDay, days: usize) -> Option<f64> {
         let span = days.max(WEEK_DAYS);
         let before = end.checked_sub_days(u64::try_from(span).ok()?)?;
@@ -374,7 +296,6 @@ impl Inputs<'_> {
     }
 }
 
-/// Parses the range: 1 to [`MAX_SUMMARY_DAYS`] days ending on or before `today`.
 fn range(
     query: &SummaryQuery,
     today: CalendarDay,
@@ -395,9 +316,6 @@ fn range(
     Ok((from, to))
 }
 
-/// The summary of `query`'s range by its aggregation. Every input is read once for the whole
-/// range; reading may fix weekly target records (`targets::plan`), with `today` deciding which
-/// weeks have started.
 pub async fn nutrition_summary(
     db: &SqlitePool,
     query: &SummaryQuery,

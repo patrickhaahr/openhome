@@ -1,6 +1,3 @@
-//! Non-persistent product URL assistance and stored product pictures. Untrusted pages supply
-//! editable suggestions only; pictures are fetched here so browsers never contact the shop.
-
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,7 +13,6 @@ const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 const MAX_REDIRECTS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(8);
 
-/// Raster formats only: SVG is a document that can carry script, so it is never relayed.
 const IMAGE_TYPES: [&str; 5] = [
     "image/jpeg",
     "image/png",
@@ -41,7 +37,6 @@ pub enum MetadataStatus {
     Unavailable,
 }
 
-/// A preview never claims that an item was stored. Save reviewed fields separately.
 #[derive(Debug, Serialize)]
 pub struct MetadataPreview {
     pub status: MetadataStatus,
@@ -53,8 +48,6 @@ pub struct MetadataPreview {
 
 #[derive(Clone, Default)]
 pub struct MetadataService {
-    // Unit transport tests retain the production address policy, then connect vetted demo
-    // hosts to controlled loopback responders. No runtime setting can bypass SSRF checks.
     #[cfg(test)]
     hosts: std::collections::HashMap<String, (Vec<SocketAddr>, SocketAddr)>,
     #[cfg(test)]
@@ -63,20 +56,16 @@ pub struct MetadataService {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FetchError {
-    /// The address is not a public HTTP(S) destination.
     Blocked,
-    /// The destination did not answer with what was asked for, in time and within size.
     Unavailable,
 }
 
-/// A stored product picture, re-served by Axum with its verified raster type.
 #[derive(Debug)]
 pub struct ProductImage {
     pub content_type: &'static str,
     pub body: Vec<u8>,
 }
 
-/// What a page or a picture must be for a fetch to keep it.
 struct Wanted {
     accept: &'static str,
     max_bytes: usize,
@@ -95,7 +84,6 @@ const PICTURE: Wanted = Wanted {
     types: &IMAGE_TYPES,
 };
 
-/// The declared type must match the bytes, so a mislabelled document is never relayed.
 fn image_type(declared: &str, body: &[u8]) -> Option<&'static str> {
     let detected = match body {
         [0xff, 0xd8, 0xff, ..] => "image/jpeg",
@@ -158,7 +146,6 @@ fn public_ip(ip: IpAddr) -> bool {
                 return public_ip(IpAddr::V4(v4));
             }
             let segments = ip.segments();
-            // Only global unicast, excluding special-use, documentation and 6to4 ranges.
             (segments[0] & 0xe000) == 0x2000
                 && !(segments[0] == 0x2001 && (segments[1] < 0x200 || segments[1] == 0xdb8))
                 && segments[0] != 0x2002
@@ -224,8 +211,6 @@ impl MetadataService {
         }
     }
 
-    /// Fetch a stored picture with the same public-destination rules as page previews.
-    /// The caller passes only an item's stored `image_url`, never a URL from a request.
     pub async fn image(&self, value: &str) -> Result<ProductImage, FetchError> {
         let url = public_url(value)?;
         let timeout = TIMEOUT;
@@ -278,8 +263,6 @@ impl MetadataService {
             } else {
                 addresses
             };
-            // Pin the exact DNS answers we vetted: resolving again would allow DNS rebinding.
-            // Disable environment proxies, cookies, automatic redirects and compression.
             let client = reqwest::Client::builder()
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
@@ -362,7 +345,6 @@ fn suggested_url(base: &Url, value: &str) -> Option<String> {
 
 fn extract(url: &Url, html: &str) -> MetadataPreview {
     let document = Html::parse_document(html);
-    // Fixed selectors; parser failures simply preserve manual entry.
     let meta_selector = Selector::parse("meta").ok();
     let mut meta = std::collections::HashMap::new();
     if let Some(selector) = &meta_selector {
@@ -403,7 +385,6 @@ fn extract(url: &Url, html: &str) -> MetadataPreview {
                 .or_else(|| meta.get("og:price:currency"))?;
             suggestion(&format!("{currency} {amount}"), 100)
         });
-    // Keep the fetched URL, not untrusted canonical/og:url destinations.
     MetadataPreview {
         status: if title.is_some() && image_url.is_some() && price.is_some() {
             MetadataStatus::Ready

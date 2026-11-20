@@ -1,6 +1,5 @@
 use serde::Deserialize;
 
-/// An absent field preserves its stored value; explicit null clears a nullable field.
 #[derive(Default)]
 pub enum Patch<T> {
     #[default]

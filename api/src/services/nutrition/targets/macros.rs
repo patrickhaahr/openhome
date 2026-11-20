@@ -4,13 +4,10 @@ use crate::services::nutrition::meal_logs::{KeyNutrients, Total};
 use crate::services::training::calendar::CalendarDay;
 use serde::Serialize;
 
-/// A macro eaten against its target or floor.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MacroStatus {
-    /// At or above the target.
     Met,
-    /// Below it: protein still to eat, or fat below its floor.
     Below,
 }
 
@@ -28,7 +25,6 @@ pub struct FatFloor {
     pub status: MacroStatus,
 }
 
-/// Shown, never graded.
 #[derive(Debug, Serialize)]
 pub struct CarbsTarget {
     pub target_g: f64,
@@ -42,7 +38,6 @@ pub struct MacroTargets {
     pub carbs: CarbsTarget,
 }
 
-/// How the week's Estimated Expenditure was found.
 #[derive(Debug, Serialize)]
 pub struct ExpenditureBasis {
     pub window_start: String,
@@ -53,8 +48,6 @@ pub struct ExpenditureBasis {
     pub blend_weight: f64,
 }
 
-/// A day's targets beside what was eaten, rounded for display: kcal to whole numbers, grams to
-/// tenths and kg to hundredths.
 #[derive(Debug, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Targets {
@@ -95,7 +88,6 @@ fn status(eaten: f64, target: f64) -> MacroStatus {
 }
 
 impl Targets {
-    /// `plan` beside the day's `totals`; nothing eaten counts as zero.
     #[must_use]
     pub fn new(plan: Plan, totals: &KeyNutrients<Total>) -> Self {
         let plan = match plan {
@@ -158,7 +150,6 @@ impl Targets {
     }
 }
 
-/// Why a day has no targets, naming what to add.
 fn reason(day: CalendarDay, missing: &[Missing]) -> String {
     let profile: Vec<&str> = missing
         .iter()

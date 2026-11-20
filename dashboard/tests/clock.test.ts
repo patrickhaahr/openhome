@@ -8,7 +8,6 @@ import { LiveClock } from "@/components/live-clock"
 test("rolls the rendered clock and date over midnight and catches up when the display becomes visible", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   vi.useFakeTimers()
-  // This is 23:59:30 in Copenhagen, independently of the browser's own time zone.
   vi.setSystemTime(new Date("2026-10-11T21:59:30.000Z"))
   const container = document.createElement("div")
   document.body.append(container)

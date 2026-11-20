@@ -8,13 +8,11 @@ use crate::services::training::calendar::{self, CalendarDay};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-/// Which Meal Logs to load.
 pub(in crate::services::nutrition) enum Selection<'a> {
     One(&'a str),
     Days(CalendarDay, CalendarDay),
 }
 
-/// One snapshotted Portion value as read.
 struct ValueRow {
     portion_id: i64,
     key: String,
@@ -23,16 +21,12 @@ struct ValueRow {
     source: ValueSource,
 }
 
-/// Which snapshotted Portion values to load.
 #[derive(Clone, Copy, Debug)]
 pub(in crate::services::nutrition) enum Values<'a> {
     All,
-    /// Only these keys, so a long range never reads the hundreds of values it does not use.
     Only(&'a [&'a str]),
 }
 
-/// Loads Meal Logs in time order with their Portions and Supplement Doses, with the Portion
-/// values `values` selects. Doses keep every amount.
 pub(in crate::services::nutrition) async fn load(
     db: &SqlitePool,
     selection: &Selection<'_>,
@@ -73,8 +67,6 @@ pub(in crate::services::nutrition) async fn load_on(
     )
     .fetch_all(&mut *db)
     .await?;
-    // Driven from the Meal Logs to each Portion's values by primary key, so a range reads only
-    // its own Portions' values, and for a key list one seek per Portion and key.
     let values: Vec<ValueRow> = match values {
         Values::All => {
             sqlx::query_as!(
@@ -169,7 +161,6 @@ pub(in crate::services::nutrition) async fn load_on(
         .collect())
 }
 
-/// One Meal Log, or `None` when it does not exist.
 pub(super) async fn find(db: &SqlitePool, id: &str) -> Result<Option<MealLog>> {
     load(db, &Selection::One(id), Values::Only(&KEY_NUTRIENTS))
         .await?
@@ -183,8 +174,6 @@ pub(super) fn not_found() -> MealLogError {
     MealLogError::NotFound("Meal Log not found; list meal_logs for its id".into())
 }
 
-/// Meal Logs of one day, or of an inclusive range of up to [`MAX_RANGE_DAYS`] days, in time
-/// order.
 pub async fn meal_logs(db: &SqlitePool, query: &MealLogsQuery) -> Result<MealLogs> {
     let (from, to) = match (&query.day, &query.from, &query.to) {
         (Some(day), None, None) => {

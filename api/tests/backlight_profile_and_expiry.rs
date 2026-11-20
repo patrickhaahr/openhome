@@ -1,5 +1,3 @@
-//! Backlight profile requirements and expiring commands.
-
 mod backlight_support;
 mod common;
 

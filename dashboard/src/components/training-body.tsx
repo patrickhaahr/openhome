@@ -13,7 +13,6 @@ import {
   type TrainingState,
 } from "@/lib/training"
 
-/** The body signals and journal for the selected day. */
 export function Body({
   data,
   week,
@@ -25,7 +24,6 @@ export function Body({
   readonly trends: TrainingState["trends"]
   readonly missing: string
 }): React.JSX.Element {
-  // Days up to the selected one, oldest first: the baseline never looks ahead of the day shown.
   const weekly = (pick: (day: RecoveryDay) => number | null) =>
     week
       .filter((entry) => entry.day <= data.day)
@@ -133,7 +131,6 @@ function trendPoints(
   return read.state === "available" ? read.data.daily_points : []
 }
 
-/** One body signal: a glyph, today's figure, and how far it sits from its own recent days. */
 function Vital({
   icon: VitalIcon,
   label,
@@ -225,7 +222,6 @@ function toneOf(
 ): Band {
   if (delta === null || baseline === null || better === "neither") return "none"
 
-  // Within 3 % of the recent average reads as steady rather than a change.
   if (Math.abs(delta) <= Math.abs(baseline) * 0.03) return "fair"
 
   return delta > 0 === (better === "higher") ? "good" : "poor"

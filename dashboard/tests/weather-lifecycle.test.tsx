@@ -40,7 +40,6 @@ test("expires an open forecast, retries failure, pauses while hidden and recover
     expect(container.textContent).toBe("fresh")
     expect(reads).toBe(0)
 
-    // Resuming just before expiry can return Axum's still-fresh cached read.
     await act(async () => {
       document.dispatchEvent(new Event("visibilitychange"))
     })
@@ -167,12 +166,10 @@ test("keeps one read through hide/show, then ignores late reads after replacemen
     })
     expect(reads).toBe(1)
 
-    // Hiding and showing during a read never starts a second one.
     await show("hidden")
     await show("visible")
     expect(reads).toBe(1)
 
-    // A read that settles while hidden applies its result but schedules nothing.
     await show("hidden")
     await act(async () => {
       resolve?.(unavailable)
@@ -193,8 +190,6 @@ test("keeps one read through hide/show, then ignores late reads after replacemen
     })
     expect(reads).toBe(3)
 
-    // A new forecast replaces the effect while a read is in flight: the old
-    // result is discarded and polling follows the new validity.
     const replacement = weatherReadSchema.parse({
       ...fixture,
       forecast: {
@@ -221,7 +216,6 @@ test("keeps one read through hide/show, then ignores late reads after replacemen
     })
     expect(reads).toBe(4)
 
-    // Disposal during a read ignores its result and removes the listener.
     await act(async () => {
       root.unmount()
     })

@@ -7,7 +7,6 @@ use super::types::{CurrentOperation, Exchange, Packet, ProfileSource, Status, Tr
 use super::{BacklightService, protocol};
 
 impl BacklightService {
-    /// Read or set the controller's native same-tone hold without changing lighting intent.
     pub async fn inactivity(&self, seconds: Option<u16>) -> Result<InactivitySettings> {
         if seconds.is_some_and(|value| !(120..=1800).contains(&value)) {
             return Err(AppError::Validation(

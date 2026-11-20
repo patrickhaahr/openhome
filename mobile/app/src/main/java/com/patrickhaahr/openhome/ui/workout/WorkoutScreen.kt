@@ -90,7 +90,6 @@ class WorkoutViewModel(
             .map<SyncSnapshot, SyncStatus?> { it.overall }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** What only the user can settle; everything queued behind these waits for them. */
     val refusedExercises: StateFlow<List<RefusedExercise>> =
         combine(fitness.observeExercises(), syncStatus.observe()) { exercises, snapshot ->
             exercises.mapNotNull { exercise ->
@@ -139,7 +138,6 @@ fun WorkoutRoute(
     val workout = (active as? ActiveLookup.Loaded)?.workout
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box(Modifier.fillMaxWidth()) {
-            // Waits for storage, so Start Empty is never shown as primary by mistake.
             when {
                 active == ActiveLookup.Loading -> Unit
                 workout != null -> PlateStage { ResumePlate(workout, onOpenActiveWorkout, it) }
@@ -200,18 +198,15 @@ private fun TopMarks(sync: SyncStatus?, onSyncNow: () -> Unit, onOpenProfile: ()
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         OpenHomeMark(Modifier.size(32.dp))
-        // In the corner the plate's curve leaves free, so it never sits on the casting.
         Box(Modifier.weight(1f)) { sync?.let { SyncStatusLine(it, onSyncNow = onSyncNow) } }
         Box(Modifier.background(Lit.Ground, CircleShape)) { ProfileKey(onOpenProfile) }
     }
 }
 
-/** The plate is larger than the phone: it hangs off the right edge, the way the real thing fills a bar. */
 @Composable
 private fun PlateStage(plate: @Composable (Modifier) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val diameter = maxWidth * PLATE_TO_WIDTH
-        // A larger child is laid out centred on its parent, so this is measured from there.
         val overhang = (diameter - maxWidth) / 2
         Box(Modifier.fillMaxWidth().height(diameter + PLATE_TOP).padding(top = PLATE_TOP)) {
             plate(
@@ -223,7 +218,6 @@ private fun PlateStage(plate: @Composable (Modifier) -> Unit) {
     }
 }
 
-/** Repeating is the usual session, so it is the plate itself; with no History, it simply starts empty. */
 @Composable
 private fun StartPlate(
     latest: WorkoutSummary?,
@@ -248,7 +242,6 @@ private fun StartPlate(
 
 private fun String.engraving(): String = "${split(" · ").joinToString(" · ").uppercase()} · "
 
-/** An unfinished Workout turns the plate dark: it lights one segment for every Set confirmed. */
 @Composable
 private fun ResumePlate(workout: ActiveWorkout, onClick: () -> Unit, modifier: Modifier) {
     val sets = workout.entries.flatMap { it.sets }
@@ -264,7 +257,6 @@ private fun ResumePlate(workout: ActiveWorkout, onClick: () -> Unit, modifier: M
     Spoken("${formatDay(workout.date)} · ${pluralize(confirmed, "Set")} confirmed")
 }
 
-/** What the plate would repeat: when it was, what it was called and how much of it there was. */
 @Composable
 private fun LastWorkout(latest: WorkoutSummary?) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
@@ -294,7 +286,6 @@ private fun LastWorkout(latest: WorkoutSummary?) {
     }
 }
 
-/** The three things beside the plate: an empty bar, the log of everything lifted, and the shelf of Exercises. */
 @Composable
 private fun Bench(
     overview: FitnessOverview,
@@ -343,7 +334,6 @@ private fun BenchKey(glyph: Glyph, description: String, figure: Int, onClick: ()
     }
 }
 
-/** What only the user can settle is the one place this screen uses a sentence. */
 @Composable
 private fun RefusedCard(title: String, message: String, description: String, onClick: () -> Unit) {
     Row(

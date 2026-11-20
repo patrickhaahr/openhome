@@ -1,27 +1,3 @@
-//! Micronutrient coverage over a range, for the Nutrition Summary: each vitamin and mineral of the
-//! micronutrient panel per period and over the whole range, judged day by day exactly as the
-//! Nutrition Day's panel judges it ([`Diary::assess`](super::micronutrients::Diary::assess)), so
-//! supplement-only Upper Limits and EPA+DHA work the same way.
-//!
-//! - **Recommended Intake**: the mean of each logged day's percentage of its Recommended Intake.
-//!   A logged day is one with a Meal Log, as the summary counts it, so a day of Supplement Doses
-//!   alone counts with the amounts its doses list, and a day without Meal Logs is left out. A
-//!   logged day whose amount is unknown (no Portion has a value and no dose lists it) is left out
-//!   of that nutrient's mean: unknown is never zero. Each day uses its own age band, so a
-//!   birthday inside the range is handled day by day.
-//! - **Upper Limits**: the days whose amount is above any of the nutrient's Upper Limits (the
-//!   Day view's caution, or a day above within a cut down), and whether the trailing 7-day
-//!   average was above one on any day of the period with Meal Logs (the Day view's cut down). A
-//!   window ending on a day without Meal Logs only repeats earlier days, so it is not counted,
-//!   and a period without Meal Logs is never flagged; a period's first logged days can still be
-//!   cut down by the days before it. Both are null for a nutrient without an Upper Limit.
-//! - **Lasting shortfall**: the range's mean is below [`SHORTFALL_BELOW_PERCENT`] of the
-//!   Recommended Intake over at least [`SHORTFALL_MIN_LOGGED_DAYS`] logged days with a known
-//!   amount. NNR 2023 sets a recommended intake about two standard deviations above the average
-//!   requirement, so the average requirement sits at roughly 70 to 85 % of it: a habitual intake
-//!   below 70 % is below what most people need, not just below the target, and a week of logs is
-//!   the least that shows a habit. Reaching or passing the Recommended Intake is never flagged.
-
 use std::ops::AddAssign;
 
 use serde::Serialize;
@@ -30,34 +6,24 @@ use super::micronutrients::references::{Group, REFERENCES, Reference};
 use super::micronutrients::{Citation, DayAssessment, SOURCES, Unavailable};
 use super::targets::round_to;
 
-/// A range mean below this percentage of the Recommended Intake is a shortfall.
 pub const SHORTFALL_BELOW_PERCENT: f64 = 70.0;
-/// The fewest logged days with a known amount that make a shortfall lasting.
 pub const SHORTFALL_MIN_LOGGED_DAYS: usize = 7;
 
-/// One nutrient over a period or the range.
 #[derive(Debug, Serialize)]
 pub struct NutrientCoverage {
     pub key: &'static str,
-    /// The mean over logged days with a known amount, rounded to 0.1; null without one.
     pub percent_of_recommended: Option<f64>,
     pub averaged_days: usize,
-    /// Days above an Upper Limit; null for a nutrient without one.
     pub days_above_upper_limit: Option<usize>,
-    /// A trailing 7-day average ending on a day with Meal Logs was above an Upper Limit; null
-    /// for a nutrient without one.
     pub seven_day_average_above_upper_limit: Option<bool>,
 }
 
-/// A period's coverage of every nutrient of the panel, in the panel's order.
 #[derive(Debug, Serialize)]
 pub struct PeriodCoverage {
-    /// Logged days evaluated against the references.
     pub logged_days: usize,
     pub nutrients: Vec<NutrientCoverage>,
 }
 
-/// One nutrient over the range, with what names it.
 #[derive(Debug, Serialize)]
 pub struct RangeNutrient {
     #[serde(flatten)]
@@ -65,12 +31,10 @@ pub struct RangeNutrient {
     pub name: &'static str,
     pub group: Group,
     pub unit: &'static str,
-    /// An NNR adequate intake (AI), less certain than a recommended intake (RI).
     pub adequate_intake: bool,
     pub lasting_shortfall: bool,
 }
 
-/// When a range mean is a lasting shortfall.
 #[derive(Debug, Serialize)]
 pub struct ShortfallRule {
     pub below_percent: f64,
@@ -79,15 +43,12 @@ pub struct ShortfallRule {
 
 #[derive(Debug, Serialize)]
 pub struct Coverage {
-    /// Logged days evaluated against the references.
     pub logged_days: usize,
     pub shortfall: ShortfallRule,
-    /// In the panel's order.
     pub nutrients: Vec<RangeNutrient>,
     pub sources: &'static [Citation],
 }
 
-/// The range's coverage, or why there is none.
 #[derive(Debug, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum MicronutrientCoverage {
@@ -103,7 +64,6 @@ struct NutrientTally {
     cut_down: bool,
 }
 
-/// Days added up, one tally per nutrient in the panel's order.
 #[derive(Clone, Debug)]
 pub(super) struct Tally {
     logged_days: usize,
@@ -132,7 +92,6 @@ impl AddAssign<&Self> for Tally {
 }
 
 impl Tally {
-    /// Adds one day; only a day with Meal Logs is a logged day.
     pub(super) fn add(&mut self, day: &DayAssessment) {
         let logged = day.has_meal_logs;
         self.logged_days += usize::from(logged);
@@ -199,7 +158,6 @@ impl Tally {
 }
 
 impl NutrientTally {
-    /// The unrounded mean percentage.
     fn mean(self) -> Option<f64> {
         (self.averaged_days > 0).then(|| self.percent_sum / self.averaged_days as f64)
     }

@@ -1,9 +1,5 @@
 package com.patrickhaahr.openhome.fitness
 
-/**
- * Fitness domain as the UI sees it, matching CONTEXT.md. Dates are `YYYY-MM-DD` calendar days and are
- * never shifted through a time zone. Null means absent; it is never replaced with zero or a default.
- */
 data class WorkoutSummary(
     val id: Long,
     val date: String,
@@ -28,10 +24,6 @@ data class WorkoutEntry(
     val sets: List<WorkoutSet>,
 )
 
-/**
- * A Set has reps or a duration; a Timed Hold has a duration and null reps.
- * [addedWeightKg] is Added Weight: null means bodyweight, a value is external kilograms.
- */
 data class WorkoutSet(
     val id: Long,
     val setNumber: Long,
@@ -42,7 +34,6 @@ data class WorkoutSet(
     val notes: String?,
 )
 
-/** What an Exercise's most recent logged Workout actually recorded, never a target. */
 data class PreviousPerformance(val exerciseId: Long, val date: String, val sets: List<WorkoutSet>)
 
 data class Exercise(

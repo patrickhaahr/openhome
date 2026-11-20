@@ -1,5 +1,3 @@
-//! Test app, devices and clock shared by the backlight test files.
-
 #![allow(dead_code)]
 
 use crate::common;
@@ -25,7 +23,6 @@ pub(super) async fn app() -> Router {
         }))
 }
 
-/// Synthetic controller at the complete GATT-operation boundary.
 pub(super) struct ManualDevice {
     pub(super) packets: std::sync::Mutex<Vec<Vec<openhome_api::services::backlight::Packet>>>,
 }
@@ -45,7 +42,6 @@ impl openhome_api::services::backlight::GattTransport for ManualDevice {
                 return Err(openhome_api::services::backlight::TransportError::Superseded);
             }
             self.packets.lock().unwrap().push(writes.to_vec());
-            // Known synthetic TV Sync profile, brightness and power replies.
             Ok(openhome_api::services::backlight::Exchange {
                 reconnected: false,
                 writes_accepted: !writes.is_empty(),

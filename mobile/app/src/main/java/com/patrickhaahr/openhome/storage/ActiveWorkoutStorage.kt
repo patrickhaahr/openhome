@@ -15,24 +15,18 @@ import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Whether a Set is logged as reps or as a Timed Hold; a choice per row, not an Exercise type. A past
- * Set may hold both, which the API allows, and repeating it keeps both.
- */
 enum class SetMeasure(val usesReps: Boolean, val usesSeconds: Boolean) {
     REPS(usesReps = true, usesSeconds = false),
     HOLD(usesReps = false, usesSeconds = true),
     REPS_AND_HOLD(usesReps = true, usesSeconds = true),
 }
 
-/** The single row is what limits the app to one Active Workout. It is never synchronized. */
 @Entity(tableName = "active_workout")
 data class ActiveWorkoutEntity(
     @PrimaryKey val id: Int = SINGLE_ROW_ID,
     val date: String,
     val name: String,
     val notes: String,
-    /** The Exercise being logged, so resuming returns to it. Going to one never confirms anything. */
     @ColumnInfo(name = "current_entry_id") val currentEntryId: Long? = null,
 )
 
@@ -61,10 +55,6 @@ data class ActiveEntryEntity(
     @ColumnInfo(name = "order_index") val orderIndex: Long,
 )
 
-/**
- * Values are kept as typed, so a half-entered number survives process death unchanged. They become
- * numbers only when a Set is confirmed; `completed` is never true for a row that does not parse.
- */
 @Entity(
     tableName = "active_sets",
     foreignKeys =
@@ -116,7 +106,6 @@ interface ActiveWorkoutDao {
     @Query("SELECT * FROM active_workout WHERE id = $SINGLE_ROW_ID")
     suspend fun load(): ActiveWorkoutWithEntries?
 
-    /** Ignored when an Active Workout exists, so starting can never replace one. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWorkout(workout: ActiveWorkoutEntity)
 

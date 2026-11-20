@@ -54,7 +54,6 @@ private data class FormProblems(
     val general: String? = null,
 )
 
-/** Saves in the app's scope: once the user has pressed Save, leaving the screen cannot lose it. */
 private class ExerciseFormViewModel(
     private val library: ExerciseLibrary,
     private val activeWorkouts: ActiveWorkoutRepository,
@@ -119,7 +118,6 @@ private sealed interface RefusedLookup {
     data class Loaded(val refused: RefusedExercise?) : RefusedLookup
 }
 
-/** Works without a connection: the Exercise is usable as soon as it is saved on the device. */
 @Composable
 fun NewExerciseRoute(initialName: String, addToWorkout: Boolean, onSaved: () -> Unit) {
     val viewModel = exerciseFormViewModel()
@@ -133,7 +131,6 @@ fun NewExerciseRoute(initialName: String, addToWorkout: Boolean, onSaved: () -> 
     )
 }
 
-/** Correcting what Axum refused. Workouts already logged with this Exercise simply follow the fix. */
 @Composable
 fun FixExerciseRoute(exerciseId: Long, onSaved: () -> Unit) {
     val viewModel = exerciseFormViewModel()
@@ -234,7 +231,6 @@ private fun ExerciseForm(
     }
 }
 
-/** Rings or iron: the two kinds of Exercise, side by side. */
 @Composable
 private fun CategoryField(selected: String?, problem: String?, onSelect: (String) -> Unit) {
     Spoken("Category")

@@ -9,10 +9,6 @@ use super::{BODY_WEIGHT_REPLAY, accepted_target, validate_date};
 use crate::error::{AppError, Result};
 use crate::services::nutrition::meal_logs::parse_request_id;
 
-// ---------------------------------------------------------------------------
-// Body weight (#8)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Deserialize)]
 pub struct ListBodyWeight {
     from: Option<String>,
@@ -22,7 +18,6 @@ pub struct ListBodyWeight {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateBodyWeight {
-    /// Makes this record safe to retry: see [`replay_body_weight`]. Without it, a repeat is a conflict.
     request_id: Option<String>,
     date: String,
     weight_kg: f64,
@@ -63,7 +58,6 @@ pub(super) async fn list_body_weight(
     Ok(Json(entries))
 }
 
-/// A Body Weight record's retry identity: its `request_id` and the arguments a retry must repeat.
 struct BodyWeightReceipt {
     request_id: String,
     request: String,
@@ -85,10 +79,6 @@ impl BodyWeightReceipt {
     }
 }
 
-/// Follows the `request_id` receipt pattern: a retry answers with the record it already created, the
-/// same `request_id` with changed arguments is a conflict, and a removed record stays removed. A new
-/// `request_id` for a recorded date is not a retry, so it stays the duplicate-date conflict.
-/// `None` means this `request_id` has not been accepted.
 async fn replay_body_weight(
     state: &crate::AppState,
     receipt: &BodyWeightReceipt,
@@ -173,7 +163,6 @@ pub(super) async fn create_body_weight(
             tx.rollback().await.map_err(|e| {
                 AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
             })?;
-            // A simultaneous retry that won the write lock holds this date under this request_id.
             if let Some(receipt) = &receipt
                 && let Some(entry) = replay_body_weight(&state, receipt).await?
             {
@@ -191,7 +180,6 @@ pub(super) async fn create_body_weight(
     };
 
     if let Some(receipt) = &receipt {
-        // The insert above holds the write lock, so simultaneous retries serialize here.
         let claimed = sqlx::query_scalar!(
             r#"
             INSERT INTO body_weight_receipts (request_id, body_weight_id, request)

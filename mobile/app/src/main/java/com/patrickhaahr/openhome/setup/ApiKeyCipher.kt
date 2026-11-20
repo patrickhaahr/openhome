@@ -12,7 +12,6 @@ import javax.crypto.spec.GCMParameterSpec
 
 class SealedApiKey(val ciphertext: ByteArray, val iv: ByteArray)
 
-/** Seals the API Key with an AES key that stays inside the Android Keystore. */
 class ApiKeyCipher {
     fun seal(apiKey: String): SealedApiKey {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -20,7 +19,6 @@ class ApiKeyCipher {
         return SealedApiKey(cipher.doFinal(apiKey.toByteArray(Charsets.UTF_8)), cipher.iv)
     }
 
-    /** Null when the Keystore can no longer open it, such as after a key was invalidated. */
     fun open(sealed: SealedApiKey): String? =
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION)

@@ -1,5 +1,3 @@
-//! Exact logged Set history for one resolved Exercise over up to 90 Copenhagen calendar days.
-
 use serde::Serialize;
 use sqlx::SqlitePool;
 
@@ -8,7 +6,6 @@ use crate::error::{AppError, Result};
 use super::calendar::{CalendarDay, TIME_ZONE_NAME};
 use super::workouts::LoggedSet;
 
-/// Joined Set rows, counting an Exercise entry without Sets as one row.
 const MAX_HISTORY_ROWS: usize = 500;
 
 #[derive(Debug, Serialize)]
@@ -33,7 +30,6 @@ pub struct HistoryWorkout {
     pub date: String,
     pub name: Option<String>,
     pub notes: Option<String>,
-    /// Repeated entries of the same Exercise stay distinct and in logged order.
     pub entries: Vec<HistoryEntry>,
 }
 

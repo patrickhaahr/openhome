@@ -1,4 +1,3 @@
-/** Secure UUID generation also works on the private display’s HTTP origin. */
 export function createRequestId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   bytes[6] = ((bytes[6] ?? 0) & 15) | 64

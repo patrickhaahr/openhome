@@ -1,16 +1,13 @@
 import { z } from "zod"
 
-/** Household identities and stable destinations returned by Axum. */
 export const householdUser = z.object({ id: z.uuid(), name: z.string() })
 
-/** A household-visible named Wishlist. */
 export const wishlist = z.object({
   id: z.uuid(),
   owner_id: z.uuid(),
   name: z.string(),
 })
 
-/** Rich desired item, without purchase or reservation state. */
 export const wishlistItem = z.object({
   id: z.uuid(),
   list_id: z.uuid(),
@@ -24,16 +21,12 @@ export const wishlistItem = z.object({
   priority: z.enum(["low", "normal", "high"]),
 })
 
-/** One configured person, without authentication or active-user state. */
 export type HouseholdUser = z.infer<typeof householdUser>
 
-/** A named collection owned by a configured person. */
 export type Wishlist = z.infer<typeof wishlist>
 
-/** An existing generic desired thing. */
 export type WishlistItem = z.infer<typeof wishlistItem>
 
-/** Sanitized failure classes; upstream diagnostic text never reaches the browser. */
 export type WishlistFailure =
   | "missing-configuration"
   | "invalid-configuration"
@@ -44,7 +37,6 @@ export type WishlistFailure =
   | "conflict"
   | "not-found"
 
-/** Complete shared read, or an unavailable outcome that must never look like an empty household. */
 export type WishlistState =
   | {
       readonly state: "available"
@@ -54,12 +46,10 @@ export type WishlistState =
     }
   | { readonly state: "unavailable"; readonly reason: WishlistFailure }
 
-/** Mutation receipts describe persistence separately from an uncertain transport outcome. */
 export type WishlistMutation =
   | { readonly state: "saved" }
   | { readonly state: "failed"; readonly reason: WishlistFailure }
 
-/** Item write protocol; Axum owns field limits and HTTP(S) URL validation. */
 export const wishlistDetails = z.object({
   title: z.string(),
   url: z.string().nullable().optional(),
@@ -70,17 +60,14 @@ export const wishlistDetails = z.object({
   priority: z.string().optional(),
 })
 
-/** Editable item fields carried unchanged to the API. */
 export type WishlistDetails = z.infer<typeof wishlistDetails>
 
 const ownerTarget = z.object({ owner_id: z.uuid() })
 
 const listTarget = ownerTarget.extend({ list_id: z.uuid() })
 
-/** Explicit destination for a non-persistent metadata preview. */
 export const wishlistMetadataRequest = listTarget.extend({ url: z.string() })
 
-/** Editable suggestions, never a persistence receipt. */
 export const wishlistMetadata = z.object({
   status: z.enum(["ready", "partial", "unavailable"]),
   url: z.string(),
@@ -89,19 +76,16 @@ export const wishlistMetadata = z.object({
   price: z.string().nullable(),
 })
 
-/** A successful read can still report unavailable extraction and allow manual entry. */
 export type WishlistMetadataResult =
   | { state: "preview"; data: z.infer<typeof wishlistMetadata> }
   | { state: "failed"; reason: WishlistFailure }
 
-/** Shared preview operation for the selected owner/list. */
 export type WishlistMetadataLoader = (
   request: z.infer<typeof wishlistMetadataRequest>
 ) => Promise<WishlistMetadataResult>
 
 const itemTarget = listTarget.extend({ item_id: z.uuid() })
 
-/** Protocol shape only; Axum owns text validation and destination policy. */
 export const wishlistCommand = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("create-owner"), name: z.string() }),
   ownerTarget.extend({ kind: z.literal("rename-owner"), name: z.string() }),
@@ -119,10 +103,8 @@ export const wishlistCommand = z.discriminatedUnion("kind", [
   itemTarget.extend({ kind: z.literal("remove-item") }),
 ])
 
-/** Every write carries the intended stable destination. */
 export type WishlistCommand = z.infer<typeof wishlistCommand>
 
-/** Actionable static copy, safe for public failure evidence. */
 export const wishlistFailureMessage: Record<WishlistFailure, string> = {
   "missing-configuration":
     "Connect OpenHome in Connection before opening wishlists.",
@@ -140,10 +122,6 @@ export const wishlistFailureMessage: Record<WishlistFailure, string> = {
     "This owner, list or wish is no longer available. Refresh to see the current lists.",
 }
 
-/**
- * The wish's picture, relayed through the dashboard so the API key stays on the server and the
- * shop is never contacted by the browser. The version changes when the stored address does.
- */
 export function wishImageUrl(
   ownerId: string,
   item: WishlistItem

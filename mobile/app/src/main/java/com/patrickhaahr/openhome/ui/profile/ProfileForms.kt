@@ -71,7 +71,6 @@ private data class ProfileProblems(
 
 private data class BodyWeightProblems(val weight: String? = null, val date: String? = null, val general: String? = null)
 
-/** Saves in the app's scope: once the user has pressed Save, leaving the screen cannot lose it. */
 private class ProfileFormsViewModel(
     private val records: ProfileRecords,
     private val saveScope: CoroutineScope,
@@ -93,7 +92,6 @@ private class ProfileFormsViewModel(
         if (saving) return
         saving = true
         saveScope.launch {
-            // Stays set once saved: the form is on its way out and a second tap must not save again.
             when (val outcome = runCatching { records.saveProfile(draft) }.getOrNull()) {
                 ProfileSave.Saved -> return@launch onSaved()
                 is ProfileSave.Invalid ->
@@ -105,7 +103,6 @@ private class ProfileFormsViewModel(
         }
     }
 
-    /** What was said about the date before no longer applies to the one now chosen. */
     fun bodyWeightDateChanged() {
         bodyWeightProblemsNow.value = bodyWeightProblemsNow.value.copy(date = null)
     }
@@ -137,7 +134,6 @@ private class ProfileFormsViewModel(
 private fun profileFormsViewModel(): ProfileFormsViewModel =
     appViewModel { ProfileFormsViewModel(it.profileRecords, it.saveScope) }
 
-/** Works without a connection: the edit is the Profile as soon as it is saved on the device. */
 @Composable
 fun EditProfileRoute(onSaved: () -> Unit) {
     val viewModel = profileFormsViewModel()
@@ -209,7 +205,6 @@ private fun ProfileForm(initial: Profile, problems: ProfileProblems, onSave: (Pr
     }
 }
 
-/** A sex stored by another client that nutrition cannot use stays selectable until it is changed. Tapping the chosen one clears it. */
 @Composable
 private fun SexField(selected: String?, stored: String?, onSelect: (String?) -> Unit) {
     val choices = (PROFILE_SEXES + listOfNotNull(stored)).distinct()
@@ -271,7 +266,6 @@ private fun DateKey(date: String?, description: String, glyph: Glyph, onClick: (
     }
 }
 
-/** Recording only: a date already recorded stays as it is, here and on the server. */
 @Composable
 fun RecordBodyWeightRoute(onSaved: () -> Unit) {
     val viewModel = profileFormsViewModel()

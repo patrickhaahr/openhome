@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -32,7 +31,6 @@ import { startAxumFixture } from "./support/axum-fixture"
 import { startLossyAxum } from "./support/lost-response"
 import { button, field, nameOf, settle, sheet, type } from "./support/lists-dom"
 
-// The fixture's OPTCG stand-in knows the invented OP99 cards; OP99-503 is its outage code.
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
 let root: Root
@@ -174,7 +172,6 @@ async function seed(ownerId: string, card: string, quantity: number) {
   if (!response.ok) throw new Error(`Binder addition failed ${response.status}`)
 }
 
-/** Open the add sheet and search for a code, as a person submits it. */
 async function search(code: string): Promise<void> {
   if (document.querySelector('[data-slot="sheet"]') === null)
     await press(button("Add card", container))

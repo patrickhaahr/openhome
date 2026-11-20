@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -60,7 +59,6 @@ beforeEach(() => {
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
   vi.stubEnv("API_KEY", key)
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
-  // happy-dom keeps cookies across tests; expire the one under test.
   document.cookie = `${currencyCookieName}=; Path=/; Max-Age=0`
   container = document.createElement("div")
   document.body.append(container)
@@ -81,7 +79,6 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-/** A page load: the server reads the cookie, the Binder renders from it. */
 async function load(): Promise<void> {
   const data = await readBinder()
 
@@ -111,7 +108,6 @@ async function load(): Promise<void> {
   )
 }
 
-/** Alex's Binder: two English cards, one stale, and two entries with no Card Value. */
 async function stock(): Promise<void> {
   await writeWishlist({ kind: "create-owner", name: "Alex" })
   const data = await readBinder()

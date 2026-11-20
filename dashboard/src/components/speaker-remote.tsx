@@ -30,13 +30,10 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
   },
   plateIcons: {},
   plateIdentity: true,
-  // Glyphs only, as on Home; each key keeps its name for assistive technology.
   worded: [],
-  // Choosing the input and adjusting volume are the everyday speaker actions.
   quickGroups: [
     {
       label: "Common speaker commands",
-      // Volume up sits above volume down in Home's vertical plate.
       commands: ["bluetooth", "optical", "volume-up", "volume-down"],
     },
   ],
@@ -44,7 +41,6 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
   panel: "rounded-4xl p-flow",
   groups: "flex w-full flex-1 flex-col items-center justify-evenly gap-5",
   identity: "",
-  // The speaker's narrow plate on Controls: power over its inputs, then a rocker like the TV's.
   fullGroups: [
     {
       label: "Power and input",
@@ -59,13 +55,11 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
       commands: ["volume-up", "mute", "volume-down"],
     },
   ],
-  // Input matters most for the speaker, so the label covers every unreported state.
   unobserved: "Observed state",
   explanation:
     "Commands are sent to the speaker by infrared. OpenHome does not report whether the speaker is on, its input, its volume or what is playing.",
 }
 
-/** An Edifier speaker remote whose buttons come from the commands OpenHome reports. */
 export function SpeakerRemote(
   props: IrRemoteProps<SpeakerCommand>
 ): React.JSX.Element {

@@ -26,13 +26,11 @@ type NavLayoutState = {
 
 const NavLayoutContext = createContext<NavLayoutState | null>(null)
 
-/** The server reads these cookies before first paint; Cookie Store API is missing on older iPad Safari. */
 function remember(cookie: string): void {
   // oxlint-disable-next-line unicorn/no-document-cookie -- see remember's comment.
   document.cookie = cookie
 }
 
-/** Holds the choices the server read from the cookies; a choice rewrites its cookie and re-renders. */
 export function NavLayoutProvider({
   initial,
   children,
@@ -69,13 +67,8 @@ export function useNavLayout(): NavLayoutState {
   return state
 }
 
-/** The id of the sr-only sentence that tells assistive technology about the logo's double tap. */
 export const logoHintId = "logo-hint"
 
-/**
- * The logo's click: the first goes Home at once; a second within the double-tap window
- * stays on Home and switches the navigation between the top bar and the sidebar.
- */
 export function useLogoTaps(): (event: React.MouseEvent) => void {
   const { layout, choose } = useNavLayout()
   const previous = useRef<number | undefined>(undefined)
@@ -83,7 +76,6 @@ export function useLogoTaps(): (event: React.MouseEvent) => void {
   return (event) => {
     const now = Date.now()
 
-    // Browsers number a mouse double click (detail 2); touch taps are timed instead.
     if (event.detail === 2 || isDoubleTap(previous.current, now)) {
       event.preventDefault()
       previous.current = undefined
@@ -107,10 +99,6 @@ const labelOptions = [
   { value: "both", label: "Both" },
 ] as const satisfies ReadonlyArray<{ value: NavLabels; label: string }>
 
-/**
- * The plain switches: the layout (the logo's double tap does the same) and how the top
- * bar names its tabs.
- */
 export function NavLayoutSwitch(): React.JSX.Element {
   const { layout, labels, choose, chooseLabels } = useNavLayout()
 

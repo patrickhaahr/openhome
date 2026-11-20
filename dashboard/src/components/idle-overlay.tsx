@@ -16,10 +16,6 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Copenhagen",
 })
 
-/**
- * The tone plate in the corner: a large clock, the date and today's weather. `children` is the
- * slot for later idle content (the important-dates counter), set beneath them on the same plate.
- */
 export function IdleOverlay({
   weather,
   children,
@@ -64,7 +60,6 @@ export function IdleOverlay({
   )
 }
 
-/** Today's weather, read once on entering and kept fresh; missing weather simply isn't shown. */
 function IdleWeather({
   read,
 }: {

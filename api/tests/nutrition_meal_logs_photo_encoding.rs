@@ -1,6 +1,3 @@
-//! Meal Log photo processing and media through the nutrition routes: stored format, scaling,
-//! rejection and colour handling, over a real `app.db` and a real `food.db`.
-
 mod common;
 #[path = "nutrition_support/meal_logs.rs"]
 mod support;
@@ -14,8 +11,6 @@ use support::{Nutrition, at, breakfast, synthetic, with_photo};
 #[tokio::test]
 async fn a_photo_is_stored_upright_without_metadata_as_avif_with_a_thumbnail() {
     let api = Nutrition::start().await;
-    // A 2400x1200 sensor frame the camera held a quarter turn (EXIF orientation 6), with a GPS
-    // position and a camera make.
     let jpeg = synthetic::jpeg_with_gps(2400, 1200, 6);
     assert!(synthetic::contains(&jpeg, synthetic::CAMERA));
 
@@ -51,17 +46,14 @@ async fn a_photo_is_stored_upright_without_metadata_as_avif_with_a_thumbnail() {
             (status, content_type.as_deref()),
             (StatusCode::OK, Some("image/avif"))
         );
-        // Re-encoded from pixels: no EXIF block, camera make or GPS position survives.
         assert!(!synthetic::contains(&avif, b"Exif"), "{url}");
         assert!(!synthetic::contains(&avif, synthetic::CAMERA), "{url}");
-        // Upright: the sensor's red left half is now the top, its blue right half the bottom.
         let (decoded, (red, _, blue)) = synthetic::avif_pixel(&avif, top.0, top.1);
         assert_eq!(decoded, size, "{url}");
         assert!(red > 180 && blue < 80, "top of {url} is ({red}, {blue})");
         let (_, (red, _, blue)) = synthetic::avif_pixel(&avif, bottom.0, bottom.1);
         assert!(blue > 180 && red < 80, "bottom of {url} is ({red}, {blue})");
     }
-    // Only the AVIF photo and thumbnail are kept, never the uploaded JPEG.
     assert_eq!(
         api.photo_files(),
         [format!("{id}.avif"), format!("{id}.thumbnail.avif")]
@@ -84,7 +76,6 @@ async fn photos_are_scaled_down_to_their_long_side_and_never_up() {
     .enumerate()
     {
         let mut body = at("2026-10-29T12:00:00+01:00", &format!("scaled-{index}"));
-        // A data URL, as some agents send it, is accepted too.
         body["photo"] = json!(format!(
             "data:image/png;base64,{}",
             synthetic::base64(&synthetic::png(width, height))
@@ -191,7 +182,6 @@ async fn an_undecodable_or_oversized_photo_rejects_the_whole_request_and_writes_
         "no photo field: {response}"
     );
 
-    // Nothing was written: no Meal Log, no change, no file, and no request_id consumed.
     assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
     assert_eq!(api.day("2026-10-28").await, [existing]);
     assert_eq!(api.photo_files(), Vec::<String>::new());
@@ -208,8 +198,6 @@ async fn an_undecodable_or_oversized_photo_rejects_the_whole_request_and_writes_
 async fn wide_gamut_photo_pixels_are_normalized_and_tagged_srgb_without_retaining_the_profile() {
     use image::{ImageEncoder, codecs::png::PngEncoder};
     let api = Nutrition::start().await;
-    // Display P3 (128, 200, 64) maps to approximately sRGB (103, 202, 19).
-    // This patch is inside both gamuts, so the test distinguishes conversion from relabelling.
     let pixels = image::RgbImage::from_pixel(32, 32, image::Rgb([128, 200, 64]));
     let profile = moxcms::ColorProfile::new_display_p3().encode().unwrap();
     let mut png = Vec::new();

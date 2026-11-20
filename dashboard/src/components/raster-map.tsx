@@ -21,10 +21,6 @@ import {
   type MapRoutes,
 } from "@/lib/map"
 
-/**
- * OpenStreetMap's own raster tiles: keyless under its tile policy for light use,
- * with visible attribution and the browser's Referer left intact.
- */
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 const ATTRIBUTION =
@@ -32,7 +28,6 @@ const ATTRIBUTION =
 
 const LOCAL_ZOOM = 14
 
-/** A stalled style, tile server or import must not leave either map loading forever. */
 const LOAD_TIMEOUT_MS = 20_000
 
 type AttemptResource<Resource extends { remove(): void }> =
@@ -41,29 +36,18 @@ type AttemptResource<Resource extends { remove(): void }> =
   | { phase: "running"; map: Resource }
   | { phase: "released" }
 
-/** One map attempt's resource, as seen by the library callbacks that outlive it. */
 export type MapAttempt<Resource extends { remove(): void }> = {
   phase(): AttemptResource<Resource>["phase"]
-  /** Takes a created map; one made after release is removed at once. */
   adopt(map: Resource): void
-  /** First proof of life: stops the timeout. False for a released or repeated call. */
   settle(): boolean
-  /** Stops the timeout and removes the map. Safe to repeat. */
   release(): void
 }
 
-/**
- * The owner of one attempt to bring up a map: the pending import, its load
- * timeout and the map it yields. It advances importing, starting, running and
- * released only forwards, so a late import, tile, style or graphics event that
- * finds the attempt released does nothing. Both maps share it.
- */
 export function startMapAttempt<Resource extends { remove(): void }>({
   onTimeout,
   onMap,
 }: {
   onTimeout: () => void
-  /** Publishes the adopted map, then `undefined` when it is released. */
   onMap: (map: Resource | undefined) => void
 }): MapAttempt<Resource> {
   let resource: AttemptResource<Resource> = { phase: "importing" }
@@ -105,7 +89,6 @@ export function startMapAttempt<Resource extends { remove(): void }>({
   }
 }
 
-/** Overlay colors from the dashboard theme the map is drawn under. */
 export type RasterPalette = {
   readonly origin: string
   readonly casing: string
@@ -121,7 +104,6 @@ function prefersReducedMotion(): boolean {
   return matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
-/** Leaflet takes `[latitude, longitude]`; map lines are GeoJSON order. */
 function latLngs(line: MapLine): Array<[number, number]> {
   return line.coordinates.map(([longitude, latitude]) => [latitude, longitude])
 }
@@ -130,12 +112,6 @@ function routeBounds(lines: ReadonlyArray<MapLine>): LatLngBoundsExpression {
   return lines.flatMap(latLngs)
 }
 
-/**
- * The shared map for browsers without WebGL2, such as the photo frame's
- * Mali-400 WebView: OpenStreetMap image tiles under the same origin, routes and
- * controls, flat and north-up. Image tiles need no GPU parsing, which also
- * suits its 512 MB of memory. Leaflet loads after mount and is removed on unmount.
- */
 export function RasterMap({
   origin,
   routes,
@@ -147,11 +123,8 @@ export function RasterMap({
   origin: MapOrigin
   routes: MapRoutes | undefined
   palette: RasterPalette
-  /** Night darkens the light OSM tiles to sit in the night dashboard. */
   shade: "day" | "night"
-  /** An extra credit merged into the map's one attribution. */
   credit?: string | undefined
-  /** The zoom and recentre plate; a map that only shows a route can go without. */
   controls?: boolean
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
@@ -161,7 +134,6 @@ export function RasterMap({
   const [view, setView] = useState<RasterView>({ state: "loading" })
   const [attempt, setAttempt] = useState(0)
   const leaflet = useRef<typeof Leaflet | undefined>(undefined)
-  // Counts created maps, so overlays are drawn again on each new one.
   const [created, setCreated] = useState(0)
 
   useEffect(() => {
@@ -214,12 +186,10 @@ export function RasterMap({
         const tiles = L.tileLayer(TILE_URL, {
           maxZoom: 18,
           attribution: ATTRIBUTION,
-          // Keep fewer off-screen tiles decoded on a 512 MB frame.
           keepBuffer: 1,
           updateWhenZooming: false,
         })
 
-        // Any tile proves the provider answers; later failures only thin the map.
         tiles.on("tileload", () => {
           if (owner.settle()) setView({ state: "ready", tiles: "complete" })
         })
@@ -259,7 +229,6 @@ export function RasterMap({
 
     const lines = routes?.lines ?? []
 
-    // Alternatives first, so the highlighted route is drawn above shared streets.
     const ordered = lines
       .map((line, index) => ({ line, focused: index === routes?.focused }))
       .sort((left, right) => Number(left.focused) - Number(right.focused))
@@ -313,7 +282,6 @@ export function RasterMap({
       interactive: false,
     }).addTo(group)
 
-    // Highlighting another alternative keeps the viewport the household chose.
     if (
       routes === undefined ||
       lines.length === 0 ||

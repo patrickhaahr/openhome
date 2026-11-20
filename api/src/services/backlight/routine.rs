@@ -1,4 +1,3 @@
-//! Daily Copenhagen wall-clock policy, independent of Bluetooth and elapsed timers.
 use super::{Brightness, Rgb, Selection};
 use chrono::{DateTime, Duration, NaiveTime, Timelike, Utc};
 use chrono_tz::Europe::Copenhagen;
@@ -14,7 +13,6 @@ pub struct BedtimeSettings {
     pub end: NaiveTime,
     pub brightness: Brightness,
 }
-/// Partial routine update; omitted settings retain their durable values.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BedtimeUpdate {
@@ -80,24 +78,16 @@ pub enum ControlSource {
     Automatic,
     Manual,
 }
-/// Who currently decides the intended selection. A manual selection always carries
-/// its own data; Automatic carries none, so the two cannot disagree.
 #[derive(Clone, Copy)]
 enum Control {
     Automatic,
     Manual(BacklightOverride),
 }
-/// The intended selection and where it comes from. A manual decision's selection lives only
-/// in its override and an automatic one's only in the routine, so the two cannot disagree.
 #[derive(Clone, Copy)]
 enum Decision {
     Automatic { selection: Selection },
     Manual(BacklightOverride),
 }
-/// The complete policy decision: intended selection, its source and the next due
-/// transition. Independent of device delivery; a failed write never changes it. Only
-/// `Policy` transitions construct one, and its fields are read through accessors, so a
-/// selection and override that disagree cannot be persisted.
 pub struct Target {
     bedtime: BedtimeSettings,
     decision: Decision,
@@ -133,7 +123,6 @@ impl Target {
             Decision::Manual(value) => value.selection,
         }
     }
-    /// The manual override to persist; `None` while Automatic.
     #[must_use]
     pub fn manual_override(&self) -> Option<BacklightOverride> {
         match self.decision {
@@ -157,17 +146,11 @@ impl Target {
         self.manual_override().and_then(|value| value.expires_at)
     }
 }
-/// Owns every guarded policy transition: select, Automatic, Bedtime edit and
-/// time-driven resolution (also used at startup). Each consumes the current policy
-/// and yields the next `Target`; the clock is always the current wall time, so
-/// missed transitions are never replayed.
 pub struct Policy {
     bedtime: BedtimeSettings,
     control: Control,
 }
 impl Policy {
-    /// Rebuild from persisted or live state. `override_selection` and expiry apply only
-    /// when the source is Manual.
     #[must_use]
     pub fn new(
         bedtime: BedtimeSettings,
@@ -184,7 +167,6 @@ impl Policy {
         };
         Self { bedtime, control }
     }
-    /// Restore from a stored override record (startup).
     pub fn restored(bedtime: BedtimeSettings, stored: Option<BacklightOverride>) -> Self {
         let control = stored.map_or(Control::Automatic, Control::Manual);
         Self { bedtime, control }
@@ -197,9 +179,6 @@ impl Policy {
             _ => None,
         }
     }
-    /// Current target: an unexpired override keeps its selection and expiry; an
-    /// expired or absent one yields the routine's selection. Used by startup and
-    /// the background routine.
     #[must_use]
     pub fn resolve(self, now: DateTime<Utc>) -> Target {
         let evaluation = evaluate(&self.bedtime, now);
@@ -211,8 +190,6 @@ impl Policy {
             evaluation.next_transition,
         )
     }
-    /// Manual selection that lasts until the routine's next actual transition
-    /// (indefinitely while the routine is disabled).
     #[must_use]
     pub fn select(self, selection: Selection, now: DateTime<Utc>) -> Target {
         let evaluation = evaluate(&self.bedtime, now);
@@ -227,7 +204,6 @@ impl Policy {
             evaluation.next_transition,
         )
     }
-    /// Clear any override and adopt the routine's current selection.
     #[must_use]
     pub fn automatic(self, now: DateTime<Utc>) -> Target {
         let evaluation = evaluate(&self.bedtime, now);
@@ -238,9 +214,6 @@ impl Policy {
             evaluation.next_transition,
         )
     }
-    /// Apply a validated Bedtime edit. Supplying `enabled` clears the override; otherwise an
-    /// unexpired override stays selected and takes the edited window's next transition
-    /// as its expiry.
     pub fn edit(
         mut self,
         update: BedtimeUpdate,
@@ -265,7 +238,6 @@ impl Policy {
         ))
     }
 }
-/// A narrow wall-clock input shared by API commands and the background routine.
 pub trait Clock: Send + Sync {
     fn now(&self) -> DateTime<Utc>;
 }
@@ -279,8 +251,6 @@ pub struct Evaluation {
     pub selection: Selection,
     pub next_transition: Option<DateTime<Utc>>,
 }
-/// Includes Start, excludes End. Search actual UTC minutes so local clock changes
-/// cannot create an elapsed-24-hour drift or an imaginary transition.
 #[must_use]
 pub fn evaluate(settings: &BedtimeSettings, now: DateTime<Utc>) -> Evaluation {
     let inside = |instant: DateTime<Utc>| {
@@ -351,8 +321,6 @@ mod policy_tests {
             None,
         );
         let target = policy.resolve("2026-10-23T21:30:00Z".parse().unwrap());
-        // Outside the window's start, an unexpired manual Off would have leaked; instead
-        // 23:30 Copenhagen sits inside the window, so Automatic resolves the routine red.
         assert!(matches!(target.selection(), Selection::Color { .. }));
         assert!(target.manual_override().is_none());
         assert_eq!(source(&target), "automatic");

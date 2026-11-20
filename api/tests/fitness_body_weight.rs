@@ -1,15 +1,9 @@
-//! Body weight records.
-
 mod common;
 
 use common::send_request_with_method;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
-
-// ---------------------------------------------------------------------------
-// Body weight (#8)
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn test_body_weight_record_and_list_sorted_by_date() {
@@ -45,7 +39,6 @@ async fn test_body_weight_record_and_list_sorted_by_date() {
     assert_eq!(status, StatusCode::OK);
     let entries = list.as_array().unwrap();
     assert_eq!(entries.len(), 3);
-    // chronological: one row per date, sorted by date
     assert_eq!(entries[0]["date"], "2026-09-01");
     assert_eq!(entries[1]["date"], "2026-09-03");
     assert_eq!(entries[2]["date"], "2026-09-05");

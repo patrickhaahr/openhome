@@ -1,5 +1,3 @@
-//! Household-visible Wishlists. The API resolves destinations and owns retry identity.
-
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -204,7 +202,6 @@ async fn get_list(db: &SqlitePool, id: &str) -> Result<Wishlist> {
     .ok_or_else(|| WishlistError::NotFound("Wishlist not found; discover wishlists first".into()))
 }
 
-/// Require an explicit owner/list pair before metadata assistance or item writes.
 pub async fn require_list_owner(db: &SqlitePool, owner_id: &str, list_id: &str) -> Result<()> {
     let list = get_list(db, list_id).await?;
     if list.owner_id != owner_id {
@@ -283,15 +280,12 @@ pub async fn add_item(
     quantity(request.quantity)?;
     priority(&request.priority)?;
     let details = request.details();
-    // Replay before resolving: a changed default or newly created list cannot move an accepted request.
     if let Some(item) = previous(db, &request.request_id).await? {
         return item.replay(db, &request).await;
     }
     let list = destination(db, &request, default_list_id).await?;
     let id = Uuid::new_v4().to_string();
     let mut transaction = db.begin().await?;
-    // Claim before inserting, in one transaction. Receipts have no foreign key so delayed
-    // retries cannot recreate a deleted item, list or owner. Failed writes consume no ID.
     let claimed = sqlx::query!(
         "INSERT INTO wishlist_addition_receipts (request_id, item_id, title, requested_owner_id, requested_list_id, details) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
         request.request_id, id, request.title, request.owner_id, request.list_id, details)
@@ -319,14 +313,12 @@ pub async fn add_item(
         .await
 }
 
-/// Rename-only changes preserve stable IDs and ownership.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rename {
     pub name: String,
 }
 
-/// Partial item edits preserve the original addition's retry identity and destination.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditItem {
@@ -406,14 +398,12 @@ fn optional_url(value: Option<String>) -> Result<Option<String>> {
 
 impl AddItem {
     fn details(&self) -> String {
-        // Fixed JSON keys also backfill legacy title-only receipts in migration 0008.
         serde_json::json!({"url":self.url,"image_url":self.image_url,"notes":self.notes,
             "price":self.price,"quantity":self.quantity,"priority":self.priority})
         .to_string()
     }
 }
 
-/// Rename one configured household member.
 pub async fn rename_owner(db: &SqlitePool, id: &str, request: Rename) -> Result<HouseholdUser> {
     let name = text(&request.name, "name", 200)?;
     sqlx::query_as!(
@@ -427,7 +417,6 @@ pub async fn rename_owner(db: &SqlitePool, id: &str, request: Rename) -> Result<
     .ok_or_else(|| WishlistError::NotFound("Household User not found".into()))
 }
 
-/// Delete a member and cascade all their lists/items. Addition receipts remain retired.
 pub async fn remove_owner(db: &SqlitePool, id: &str) -> Result<()> {
     let removed = sqlx::query!("DELETE FROM household_users WHERE id = ?", id)
         .execute(db)
@@ -435,7 +424,6 @@ pub async fn remove_owner(db: &SqlitePool, id: &str) -> Result<()> {
     changed(removed.rows_affected())
 }
 
-/// Rename a list only within its explicit owner.
 pub async fn rename_list(
     db: &SqlitePool,
     owner_id: &str,
@@ -455,7 +443,6 @@ pub async fn rename_list(
     .ok_or_else(|| WishlistError::NotFound("Wishlist not found for this Household User".into()))
 }
 
-/// Remove a list and its items only within its explicit owner.
 pub async fn remove_list(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()> {
     let removed = sqlx::query!(
         "DELETE FROM wishlists WHERE id = ? AND owner_id = ?",
@@ -467,7 +454,6 @@ pub async fn remove_list(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()
     changed(removed.rows_affected())
 }
 
-/// Read one item through its complete owner/list/item destination.
 pub async fn item(
     db: &SqlitePool,
     owner_id: &str,
@@ -480,7 +466,6 @@ pub async fn item(
         .ok_or_else(|| WishlistError::NotFound("Wishlist Item not found for this owner and list".into()))
 }
 
-/// Atomically patch supplied fields, without moving an item or changing its retry receipt.
 pub async fn edit_item(
     db: &SqlitePool,
     owner_id: &str,
@@ -529,7 +514,6 @@ pub async fn edit_item(
         .ok_or_else(|| WishlistError::NotFound("Wishlist Item not found for this owner and list".into()))
 }
 
-/// Remove a title through the complete owner/list/item destination.
 pub async fn remove_item(db: &SqlitePool, owner_id: &str, list_id: &str, id: &str) -> Result<()> {
     let removed = sqlx::query!(
         "DELETE FROM wishlist_items WHERE id = ? AND list_id = ? AND EXISTS (SELECT 1 FROM wishlists WHERE id = ? AND owner_id = ?)", id, list_id, list_id, owner_id).execute(db).await?;

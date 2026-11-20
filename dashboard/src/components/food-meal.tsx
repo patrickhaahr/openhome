@@ -15,7 +15,6 @@ import {
   type Portion,
 } from "@/lib/nutrition"
 
-/** A portion's name, then its grams, then its energy, in aligned columns. */
 const portionRow =
   "grid grid-cols-portion items-baseline gap-x-4 gap-y-2 max-sm:gap-x-3"
 
@@ -38,7 +37,6 @@ export function Meal({ meal }: { readonly meal: MealLog }): React.JSX.Element {
   )
 }
 
-/** The meal's thumbnail; selecting it shows the full photo over the page. */
 function MealPhotoKey({
   photo,
   time,
@@ -165,10 +163,6 @@ function MealDetails({ meal }: { readonly meal: MealLog }): React.JSX.Element {
   )
 }
 
-/**
- * A Food's name, or a Product's label name with its brand beneath it, and the NOVA Class it was
- * logged with; an unclassified Portion has no class mark.
- */
 function PortionTitle({
   portion,
 }: {

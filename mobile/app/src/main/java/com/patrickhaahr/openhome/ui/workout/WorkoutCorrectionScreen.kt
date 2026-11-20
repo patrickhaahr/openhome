@@ -69,7 +69,6 @@ import kotlinx.serialization.json.Json
 
 private val SET_NUMBER_WIDTH = 24.dp
 
-/** The form as the user left it; [showMissing] once saving has found rows still to fill in. */
 @Serializable
 private data class CorrectionForm(
     val original: CorrectionDraft,
@@ -80,14 +79,12 @@ private data class CorrectionForm(
         get() = draft != original
 }
 
-/** Whole in saved state, so Android reclaiming the process does not lose what has been typed. */
 private val FORM_SAVER =
     Saver<CorrectionForm?, String>(
         save = { form -> form?.let { Json.encodeToString(it) } },
         restore = { Json.decodeFromString(it) },
     )
 
-/** Saves in the app's scope: once the user has pressed Save, leaving the screen cannot lose it. */
 private class WorkoutCorrectionViewModel(
     private val corrections: WorkoutCorrections,
     private val saveScope: CoroutineScope,
@@ -128,10 +125,6 @@ private class WorkoutCorrectionViewModel(
     }
 }
 
-/**
- * Editing a finished Workout. Nothing changes until Save, which needs no connection; back with unsaved
- * changes asks before dropping them. [pickedExercise] is what the picker chose, to be added here.
- */
 @Composable
 fun WorkoutCorrectionRoute(
     workoutId: Long,

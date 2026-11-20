@@ -11,16 +11,12 @@ use crate::services::training::calendar::CalendarDay;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
 
-/// Every logged day's intake of the panel's nutrients.
 #[derive(Debug, Default)]
 pub struct Diary {
     days: BTreeMap<CalendarDay, Vec<DayIntake>>,
 }
 
 impl Diary {
-    /// The Meal Logs needed to evaluate every day from `from` through `to`, including the
-    /// trailing window before `from`. One query sums each day's Portions per parameter, so a
-    /// year reads one row per day rather than every Portion value.
     pub async fn load(
         db: &SqlitePool,
         from: CalendarDay,
@@ -82,7 +78,6 @@ impl Diary {
         Ok(Self { days })
     }
 
-    /// The panel for `day`, which must lie in the range the diary was loaded for.
     #[must_use]
     pub fn evaluate(
         &self,
@@ -121,8 +116,6 @@ impl Diary {
         }))
     }
 
-    /// `day` against the references, unrounded, exactly as [`Self::evaluate`] judges it; or why
-    /// there is no panel that day. `day` must lie in the range the diary was loaded for.
     pub(in crate::services::nutrition) fn assess(
         &self,
         person: &Result<Person, Vec<Missing>>,
@@ -135,7 +128,6 @@ impl Diary {
         })
     }
 
-    /// Each nutrient of `day` in the order of [`REFERENCES`].
     fn nutrients(&self, sex: Sex, band: AgeBand, day: CalendarDay) -> Vec<NutrientDay> {
         let intakes = self.days.get(&day);
         REFERENCES
@@ -178,8 +170,6 @@ impl Diary {
             .collect()
     }
 
-    /// The mean of one Upper Limit's share over the logged days of `day`'s trailing window that
-    /// know it, and how many days that is.
     fn trailing_average(
         &self,
         nutrient: usize,
@@ -197,22 +187,18 @@ impl Diary {
     }
 }
 
-/// SQLite returned JSON the query itself built in another shape.
 fn decode_error(error: serde_json::Error) -> MealLogError {
     MealLogError::Database(sqlx::Error::Decode(Box::new(error)))
 }
 
-/// The trailing window ending with `day`.
 fn window(day: CalendarDay) -> (CalendarDay, CalendarDay) {
     (day.checked_sub_days(TRAILING_DAYS - 1).unwrap_or(day), day)
 }
 
-/// The first day whose Meal Logs evaluating `day` reads.
 pub(in crate::services::nutrition) fn trailing_start(day: CalendarDay) -> CalendarDay {
     window(day).0
 }
 
-/// The person, their age and age band on `day`, or why the references do not cover them.
 fn references_on(
     person: &Result<Person, Vec<Missing>>,
     day: CalendarDay,
@@ -246,8 +232,6 @@ fn references_on(
     Ok((person, age, band))
 }
 
-/// Why there is no panel on `day`, if there is none. A panel on the last day of a range means
-/// every earlier day the person was an adult has one too, since age only grows.
 pub(in crate::services::nutrition) fn unavailable_on(
     person: &Result<Person, Vec<Missing>>,
     day: CalendarDay,
@@ -255,7 +239,6 @@ pub(in crate::services::nutrition) fn unavailable_on(
     references_on(person, day).err()
 }
 
-/// Why the panel is unavailable, naming the Profile values to add.
 fn missing_reason(missing: &[Missing]) -> String {
     let names: Vec<&str> = missing
         .iter()

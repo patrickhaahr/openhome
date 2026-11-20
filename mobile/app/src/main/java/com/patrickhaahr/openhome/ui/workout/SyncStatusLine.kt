@@ -20,7 +20,6 @@ import com.patrickhaahr.openhome.ui.design.KeyTone
 import com.patrickhaahr.openhome.ui.theme.Lit
 import com.patrickhaahr.openhome.ui.theme.Type
 
-/** A quiet cloud: routine states never interrupt, and only a failed attempt offers an action or uses words. */
 @Composable
 fun SyncStatusLine(status: SyncStatus, modifier: Modifier = Modifier, onSyncNow: (() -> Unit)? = null) {
     val needsTheUser = status.needsTheUser()

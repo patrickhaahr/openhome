@@ -43,7 +43,6 @@ fn validate_url(raw: &str) -> Result<Url> {
     };
 
     let host_lower = host.to_lowercase();
-    // The top-level label covers `localhost`, `*.localhost` and `*.local`.
     if matches!(host_lower.rsplit('.').next(), Some("localhost" | "local")) {
         return Err(AppError::Validation(
             "URL host is not allowed (localhost or .local)".to_string(),

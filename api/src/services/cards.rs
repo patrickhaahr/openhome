@@ -1,11 +1,3 @@
-//! Cards (`CONTEXT.md`, Card): every printed variant of a Card Code as the OPTCG catalogue lists
-//! it, stored the first time the code is searched for. Details are a snapshot and never edited,
-//! except the latest price, which the daily refresh updates (`price_refresh`).
-//! Each variant's official image is fetched once and kept as AVIF in the same row, so reads never
-//! touch the catalogue. A catalogue failure writes nothing. A code the catalogue does not list is
-//! remembered until the next Copenhagen day, so repeating it does not hammer a volunteer's server
-//! while a card listed later can still be found.
-
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
@@ -20,9 +12,6 @@ use super::optcg::{CatalogueCard, Optcg, Unavailable};
 use super::price_history;
 use super::training::CalendarDay;
 
-/// One lock for every first lookup: the catalogue is a volunteer's server and a code is fetched
-/// once, so a concurrent search waits here and then finds the stored cards. At household scale
-/// serialising the rare miss costs nothing, while a lock per code would need a map to clean up.
 static FIRST_LOOKUP: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 const IMAGE: Settings = Settings {
@@ -52,8 +41,6 @@ impl From<Unavailable> for CardsError {
 
 type Result<T> = std::result::Result<T, CardsError>;
 
-/// The code printed on a card, such as `OP01-001`: a set prefix (letters, then at most two
-/// digits), a hyphen and a three-digit card number. Stored and compared in upper case.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardCode(String);
 
@@ -84,9 +71,6 @@ impl CardCode {
     }
 }
 
-/// A variant identifier: the catalogue's image identifier, kept opaque (`OP01-001_p1`,
-/// `OP09-078-r1`, `EB03_OP09-034_p1`). Only a charset and length safe for a URL path segment and
-/// a database key is checked, since the catalogue's own spellings keep varying.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardId(String);
 
@@ -133,10 +117,8 @@ pub struct Card {
     pub attribute: Option<String>,
     pub sub_types: Option<String>,
     pub text: Option<String>,
-    /// The catalogue's `TCGplayer` market price in USD, EUR and DKK, or why there is none.
     #[serde(flatten)]
     pub valuation: Valuation,
-    /// Authenticated read of the stored AVIF.
     pub image_path: String,
 }
 
@@ -146,8 +128,6 @@ pub struct Search {
     pub cards: Vec<Card>,
 }
 
-/// Every variant of `code`, in catalogue order; empty when the catalogue does not list it. Asks
-/// the catalogue only when nothing is stored for the code and it was not found unlisted today.
 pub async fn search(db: &SqlitePool, catalogue: &Optcg, code: &CardCode) -> Result<Search> {
     let today = CalendarDay::of(chrono::Utc::now()).to_string();
     Ok(Search {
@@ -171,7 +151,6 @@ async fn cards_of(
         return Ok(cards);
     }
     let listed = catalogue.card(code).await?;
-    // An addition the catalogue does not list writes nothing: no variants, images or marker.
     if wanted.is_some_and(|id| !listed.iter().any(|card| card.id == *id)) {
         return Ok(Vec::new());
     }
@@ -194,8 +173,6 @@ pub async fn image(db: &SqlitePool, id: &CardId) -> Result<Vec<u8>> {
     .ok_or_else(|| CardsError::NotFound("Card not found".into()))
 }
 
-/// `Some` when the API already has the answer: the stored cards, or nothing for a code found
-/// unlisted today.
 async fn known(db: &SqlitePool, code: &CardCode, today: &str) -> Result<Option<Vec<Card>>> {
     let cards = stored(db, code).await?;
     let code = code.as_str();
@@ -300,9 +277,6 @@ pub async fn by_ids(db: &SqlitePool, ids: &[&str]) -> Result<HashMap<String, Car
         .collect())
 }
 
-/// A Card not stored yet is looked up through each Card Code its id contains, in order, until
-/// one code's variants include it. The id's spelling is only a lookup hint that the catalogue's
-/// variant list verifies, so a wrong guess can only end in `None`: the catalogue does not list it.
 pub async fn listed(db: &SqlitePool, catalogue: &Optcg, id: &CardId) -> Result<Option<Card>> {
     if let Some(card) = by_ids(db, &[id.as_str()]).await?.remove(id.as_str()) {
         return Ok(Some(card));
@@ -320,8 +294,6 @@ pub async fn listed(db: &SqlitePool, catalogue: &Optcg, id: &CardId) -> Result<O
     Ok(None)
 }
 
-/// Every substring of the id that is a Card Code, by position. An id is ASCII, and a code ends
-/// three digits after its first hyphen, so each start position yields at most one candidate.
 fn codes_in(id: &CardId) -> impl Iterator<Item = CardCode> + '_ {
     (0..id.as_str().len()).filter_map(|start| {
         let tail = &id.as_str()[start..];
@@ -330,14 +302,11 @@ fn codes_in(id: &CardId) -> impl Iterator<Item = CardCode> + '_ {
     })
 }
 
-/// Fetches and encodes every image first, then writes all variants in one transaction, so a
-/// failure leaves nothing behind. A concurrent search that stored the same variants wins.
 async fn store(db: &SqlitePool, catalogue: &Optcg, listed: &[CatalogueCard]) -> Result<()> {
     let mut images = Vec::with_capacity(listed.len());
     for card in listed {
         let source = Source::from_bytes(catalogue.image(&card.image_url).await?)
             .map_err(|_| CardsError::DataUnavailable)?;
-        // The encoder's decode bound is the target, so the stored image keeps its source size.
         let [avif] = avif_encoder::encode(source, IMAGE, [avif_encoder::MAX_SIDE])
             .await
             .map_err(|error| match error {

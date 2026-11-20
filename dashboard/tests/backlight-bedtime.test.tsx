@@ -152,7 +152,6 @@ test("Bedtime dial never collapses the window, saves one settled edit, and sprin
         />
       )
     )
-    // Walking End back onto Start hops over it instead of emptying the window.
     await press("End", "ArrowDown", "ArrowDown", "ArrowDown", "ArrowDown")
     expect(shown("End")).toBe("22:45")
     await press("End", "PageUp", "PageUp", "PageUp", "ArrowUp")

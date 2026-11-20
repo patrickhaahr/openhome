@@ -27,7 +27,6 @@ type Check<C extends string> = {
 type Harness<C extends string> = {
   commands: C[]
   checks: () => number
-  /** Re-run the page's checks, as any Check again on the page does. */
   recheck: () => Promise<void>
   resolve: (result: IrCommandResult) => Promise<void>
   reject: (error: Error) => Promise<void>
@@ -57,7 +56,6 @@ const synthetic: IrRemoteState<TvCommand> = {
   commands: ["power", "volume-up", "up", "ok", "hdmi-1", "1", "0"],
 }
 
-/** Render a remote in a router whose checks return each health and discovery outcome in turn. */
 async function renderRemote<C extends string>(
   Remote: (props: IrRemoteProps<C>) => React.JSX.Element,
   layout: ControlLayout,
@@ -86,7 +84,6 @@ async function renderRemote<C extends string>(
   let remote = Promise.resolve(current.remote)
 
   const rootRoute = createRootRoute({
-    // Each load is one health check and discovery, like the real route loaders.
     loader: () => {
       current = checks[loads] ?? current
       remote = Promise.resolve(current.remote)
@@ -95,7 +92,6 @@ async function renderRemote<C extends string>(
       return { connectionState: current.connection }
     },
     component: function Page() {
-      // Re-render after each check, as pages do when their loader data changes.
       useRouterState({ select: (state) => state.matches[0]?.updatedAt })
 
       return createElement(Remote, {

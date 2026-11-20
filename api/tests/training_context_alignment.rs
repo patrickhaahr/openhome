@@ -1,9 +1,3 @@
-//! Training Context: logged training, body weight and recovery aligned by day.
-
-//! Training Context (`GET /api/training/context/{from_day}/{to_day}`): Workouts and Body Weight
-//! logged through the fitness API beside NOOP rows pushed through the real push endpoint, on one
-//! Copenhagen date axis.
-
 mod common;
 mod training_context_support;
 
@@ -20,7 +14,6 @@ use training_context_support::{
     API_KEY, COMPUTED, IMPORTED, SOURCE, at, context_ok, daily, day, mirror, noop_workout, sync,
 };
 
-/// Seeded exercise library ids.
 const PULL_UP: i64 = 11;
 
 const RING_DIP: i64 = 10;
@@ -56,7 +49,6 @@ async fn aligns_logged_training_body_weight_and_recovery_by_day() {
                 "2026-09-28",
                 json!({"totalSleepMin": 420.0, "restingHr": 50.0}),
             ),
-            // A bare imported sleep total that NOOP's scored computed night replaces.
             daily("2026-09-30", json!({"totalSleepMin": 300.0})),
         ],
         &[
@@ -121,7 +113,6 @@ async fn aligns_logged_training_body_weight_and_recovery_by_day() {
         json!({"date": "2026-09-28", "name": "Mobility", "notes": null, "exercises": []}),
     )
     .await;
-    // Logged in the evening of the 29th; the NOOP session after midnight stays on the 30th.
     let push = log_workout(
         &app,
         json!({
@@ -136,7 +127,6 @@ async fn aligns_logged_training_body_weight_and_recovery_by_day() {
 
     let body = context_ok(&app, "2026-09-28", "2026-10-01").await;
     let covered = sync("confirmed", "confirmed", "covered");
-    // A day without NOOP values: the rows are covered, so the nulls are recorded absences.
     let without_recovery = |day: &str, workouts: Value, body_weight: Value| {
         json!({
             "day": day,
@@ -257,7 +247,6 @@ async fn reports_recovery_and_workout_freshness_separately() {
     let mut mirror = Mirror::empty().await;
     let from_ts = day("2026-09-28").start().timestamp();
     let to_ts = day("2026-09-30").start().timestamp();
-    // Only the workout stream has arrived, during the second day.
     for device in [IMPORTED, COMPUTED] {
         mirror
             .push(

@@ -1,5 +1,3 @@
-//! A synthetic workbook shaped like DTU's Danish Food Composition Database, for Food database
-//! and Meal Log tests.
 #![allow(dead_code)]
 
 use std::fmt::Write;
@@ -15,7 +13,6 @@ pub struct SyntheticParameter {
     pub sort_key: i64,
     pub group_da: &'static str,
     pub group_en: &'static str,
-    /// Glycerol is defined on the Parameter sheet but, as in DTU's workbook, has no data column.
     pub has_column: bool,
 }
 
@@ -97,7 +94,6 @@ pub struct SyntheticFood {
     pub name_da: &'static str,
     pub name_en: &'static str,
     pub group: (i64, &'static str, &'static str),
-    /// `ParameterID` and value; an absent parameter is an empty cell.
     pub values: Vec<(i64, f64)>,
 }
 
@@ -176,7 +172,6 @@ pub fn first_dataset() -> Vec<u8> {
     )
 }
 
-/// A later dataset: Skyr's protein changes, Banana is dropped and Rye bread is new.
 pub fn second_dataset() -> Vec<u8> {
     workbook(
         &parameters("g/100g"),
@@ -184,7 +179,6 @@ pub fn second_dataset() -> Vec<u8> {
     )
 }
 
-/// The sheets and header layout of DTU's `FCDB_6.1_Dataset.xlsx`.
 pub fn workbook(parameters: &[SyntheticParameter], foods: &[SyntheticFood]) -> Vec<u8> {
     let mut book = Workbook::new();
     book.add_worksheet()

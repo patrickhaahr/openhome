@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "scripts" / "comment-baseline.json"
 
-EXCLUDED = ("/vendor/", "dashboard/.intent/")
+EXCLUDED = ("/vendor/", "dashboard/.intent/", "routeTree.gen.ts")
 C_LIKE = {".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".kt", ".kts", ".css", ".qml", ".cpp", ".c", ".h", ".java"}
 HASH = {".py", ".sh"}
 SQL = {".sql"}
@@ -22,7 +22,7 @@ DIRECTIVE = re.compile(
     r"/ ?<reference |"
     r"noqa|type: ?ignore|pyright:|mypy:|fmt: ?(?:off|on|skip)|pylint:|"
     r"NOLINT|clang-format |"
-    r"SAFETY:|"
+    r"SAFETY:|@vitest-environment|noinspection |"
     r"language=|region\b|endregion\b|"
     r"-\*-.*-\*-"
     r")"
@@ -146,11 +146,14 @@ def _scan_c_like(src: str, ext: str):
                     break
                 j += 1
             line += src.count("\n", i, j)
-            i = j + 1
+            i = j if j < n and src[j] == "\n" else j + 1
             continue
         if c == "'" and ext in {".kt", ".kts"}:
             m = re.match(r"'(?:\\.|[^\\'\n])+'", src[i:])
             i += len(m.group(0)) if m else 1
+            continue
+        if templ and c == "/" and (src[i - 1 : i] == "<" or src[i + 1 : i + 2] == ">"):
+            i += 1
             continue
         if templ and c == "/" and _regex_allowed(src, i):
             j = i + 1
@@ -166,7 +169,7 @@ def _scan_c_like(src: str, ext: str):
                 elif src[j] == "/" and not in_class:
                     break
                 j += 1
-            i = j + 1
+            i = j if j < n and src[j] == "\n" else j + 1
             continue
         i += 1
 
@@ -244,9 +247,18 @@ def scan_source(src: str, ext: str, name: str = "") -> list[Comment]:
     else:
         return []
     out = []
+    safety_until = -9
     for kind, a, b, l1, l2 in spans:
+        if ext in {".tsx", ".jsx"} and kind == "block":
+            m_open = re.search(r"\{[ \t]*$", src[:a])
+            m_close = re.match(r"[ \t]*\}", src[b:])
+            if m_open and m_close:
+                a, b = m_open.start(), b + m_close.end()
         text = src[a:b]
         body = re.sub(r"^(?://[/!]?|/\*+!?|#|--)", "", text).rstrip("*/").strip()
+        if body.startswith("SAFETY:") or (l1 == safety_until + 1 and kind == "line"):
+            safety_until = l2
+            continue
         if DIRECTIVE.match(body) or text.startswith("#!"):
             continue
         if (ext == ".rs" and text.startswith(("///", "//!"))) or (text.startswith("/**") and ext != ".css"):

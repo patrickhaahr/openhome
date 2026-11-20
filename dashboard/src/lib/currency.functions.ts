@@ -11,7 +11,6 @@ const readRequestCurrency = createServerOnlyFn((): Currency =>
   parseCurrency(getCookie(currencyCookieName))
 )
 
-/** The remembered currency: the request cookie on the server, so the first paint is right. */
 export function readCurrency(): Currency {
   return typeof document === "undefined"
     ? readRequestCurrency()

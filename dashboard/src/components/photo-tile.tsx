@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { photoUrl, type WallItem } from "@/lib/photos"
 import { cn } from "@/lib/utils"
 
-// Thumbnails tell their own frame once loaded; until then a tile is a 3:2 landscape.
 const DEFAULT_RATIO = 1.5
 
 const ratios = new Map<string, number>()
@@ -13,12 +12,6 @@ const ratios = new Map<string, number>()
 function ratioOf(width: number, height: number): number {
   return Math.min(2.4, Math.max(0.5, width / height))
 }
-
-/**
- * The wall's single page request, owned by `load` in `PhotoWall`: idle, reading the page at a
- * cursor, or that read failed and the same cursor is offered again. Loaded items and the next
- * cursor are separate view data that a failure never touches.
- */
 
 export function Tile({
   item,
@@ -94,7 +87,6 @@ export function PhotoImage({
   })
 
   const imageRef = (image: HTMLImageElement | null): void => {
-    // SSR thumbnails can finish before React attaches its load/error listeners.
     if (image !== null && image.complete) settle(image)
   }
 

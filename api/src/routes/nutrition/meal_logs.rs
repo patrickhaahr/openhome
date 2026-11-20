@@ -73,8 +73,6 @@ fn multipart_error(error: &MultipartError) -> MealLogError {
     }
 }
 
-/// Attaches or replaces a Meal Log's photo from the multipart file field `photo`, for apps that
-/// upload files; other fields are ignored.
 pub(super) async fn upload_photo(
     State(state): State<AppState>,
     Extension(photos): Extension<MealPhotos>,
@@ -133,7 +131,6 @@ pub(super) async fn thumbnail(
     media(&photos, &photo_id, Variant::Thumbnail).await
 }
 
-/// A stored AVIF file. A photo ID always names the same image, so clients may cache it for good.
 async fn media(
     photos: &MealPhotos,
     photo_id: &str,

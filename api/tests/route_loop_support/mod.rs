@@ -1,5 +1,3 @@
-//! Provider mock and loop geometry builders shared by the route loop test files.
-
 #![allow(dead_code)]
 
 use crate::common;
@@ -22,10 +20,8 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::body_partial_json;
 use wiremock::matchers::method;
 
-/// The unrelated central Copenhagen demo origin.
 pub(super) const ORIGIN: [f64; 2] = [12.5692, 55.6869];
 
-/// Round trips one search may request.
 pub(super) const MAX_ATTEMPTS: u64 = 6;
 
 pub(super) async fn app(origin: Option<MapOrigin>, provider: Option<&MockServer>) -> Router {
@@ -70,8 +66,6 @@ pub(super) fn walk(meters: u32) -> Value {
     })
 }
 
-/// A closed rectangle from `start`, `side` metres per edge towards `[east, north]` signs,
-/// sampled every ~50 m.
 pub(super) fn rectangle(
     start: [f64; 2],
     side_meters: u32,
@@ -109,7 +103,6 @@ pub(super) const SOUTH_WEST: [f64; 2] = [-1.0, -1.0];
 
 pub(super) const SOUTH_EAST: [f64; 2] = [1.0, -1.0];
 
-/// A square loop from the origin in one direction, `perimeter` metres long.
 pub(super) fn square(perimeter: u32, direction: [f64; 2]) -> Value {
     trip(
         &rectangle(ORIGIN, perimeter / 4, direction),
@@ -124,7 +117,6 @@ pub(super) fn trip(coordinates: &[[f64; 2]], summary_meters: f64) -> Value {
             "type": "Feature",
             "geometry": {
                 "type": "LineString",
-                // The provider may append elevation; only longitude and latitude are kept.
                 "coordinates": coordinates.iter().map(|[lon, lat]| json!([lon, lat, 12.0])).collect::<Vec<_>>()
             },
             "properties": { "summary": { "distance": summary_meters, "duration": 3600.0 } }
@@ -132,7 +124,6 @@ pub(super) fn trip(coordinates: &[[f64; 2]], summary_meters: f64) -> Value {
     })
 }
 
-/// Answer the round trip requested with `seed`, exactly `times` times.
 pub(super) async fn answer_seed(
     server: &MockServer,
     seed: u32,
@@ -149,7 +140,6 @@ pub(super) async fn answer_seed(
         .await;
 }
 
-/// Answer every round trip alike, exactly `times` times.
 pub(super) async fn provider(response: ResponseTemplate, times: u64) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

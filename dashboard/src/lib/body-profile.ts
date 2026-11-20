@@ -1,37 +1,29 @@
 import { z } from "zod"
 
-/** The existing singleton Profile; null means the value is not configured. */
 export const profile = z.object({
   height_cm: z.number().nullable(),
   sex: z.string().nullable(),
   hr_max_bpm: z.number().int().nullable(),
-  /** `YYYY-MM-DD`; nutrition targets need it for BMR. */
   birth_date: z.iso.date().nullable(),
 })
 
-/** Shared fitness configuration as served by Axum. */
 export type Profile = z.infer<typeof profile>
 
-/** A daily Body Weight record, kept separately from Workouts. */
 export const bodyWeight = z.object({
   id: z.number().int(),
   date: z.iso.date(),
   weight_kg: z.number(),
 })
 
-/** Body Weight history in Axum's chronological order. */
 export type BodyWeight = z.infer<typeof bodyWeight>
 
-/** Optional calendar bounds for the authenticated history read. */
 export const bodyRange = z.object({
   from: z.iso.date().optional().catch(undefined),
   to: z.iso.date().optional().catch(undefined),
 })
 
-/** Date filters retained in the Workout URL. */
 export type BodyRange = z.infer<typeof bodyRange>
 
-/** Supported writes; omitted Profile fields preserve values, explicit null clears them. */
 export const bodyCommand = z.discriminatedUnion("kind", [
   profile.partial().extend({ kind: z.literal("profile") }),
   z.object({
@@ -41,10 +33,8 @@ export const bodyCommand = z.discriminatedUnion("kind", [
   }),
 ])
 
-/** One shared Profile patch or new daily Body Weight record. */
 export type BodyCommand = z.infer<typeof bodyCommand>
 
-/** Sanitized failures; no private upstream diagnostics reach the display. */
 export type BodyFailure =
   | "missing-configuration"
   | "invalid-configuration"
@@ -54,7 +44,6 @@ export type BodyFailure =
   | "invalid"
   | "duplicate-date"
 
-/** A complete read, distinguished from empty or unconfigured values. */
 export type BodyState =
   | {
       readonly state: "available"
@@ -63,12 +52,10 @@ export type BodyState =
     }
   | { readonly state: "unavailable"; readonly reason: BodyFailure }
 
-/** Persistence is confirmed only by a parsed Axum receipt. */
 export type BodyMutation =
   | { readonly state: "saved" }
   | { readonly state: "failed"; readonly reason: BodyFailure }
 
-/** Static, actionable copy for failures. */
 export const bodyFailureMessage: Record<BodyFailure, string> = {
   "missing-configuration":
     "Connect OpenHome in Connection to read your profile and body weight.",
@@ -84,20 +71,11 @@ export const bodyFailureMessage: Record<BodyFailure, string> = {
     "Body weight is already recorded for this date. Reload to review it, or choose another date. The existing record has not been replaced.",
 }
 
-/** The sexes the Calorie Target and micronutrient references are defined for, as stored. */
 export const profileSexes = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
 ] as const
 
-/**
- * The editor's value for a stored sex: a supported sex in its canonical spelling (Axum reads it
- * case-insensitively and trimmed), "" when unset, and any other text unchanged so the editor
- * can show it rather than silently replace it.
- *
- * @param value - The Profile's stored sex.
- * @returns The value the sex select starts from.
- */
 export function profileSex(value: string | null): string {
   if (value === null) return ""
   const canonical = value.trim().toLowerCase()
@@ -105,7 +83,6 @@ export function profileSex(value: string | null): string {
   return profileSexes.some((sex) => sex.value === canonical) ? canonical : value
 }
 
-/** Editable Profile fields, preserving exact stored number text. */
 type ProfileDraft = {
   height: string
   sex: string
@@ -113,7 +90,6 @@ type ProfileDraft = {
   birthDate: string
 }
 
-/** Text inputs retain exact stored numbers until a user changes them. */
 export function profileDraft(value: Profile): ProfileDraft {
   return {
     height: value.height_cm === null ? "" : String(value.height_cm),
@@ -123,7 +99,6 @@ export function profileDraft(value: Profile): ProfileDraft {
   }
 }
 
-/** Accept decimal commas on the household keyboard; blank optional numbers clear a field. */
 export function optionalNumber(value: string): number | null {
   const trimmed = value.trim().replace(",", ".")
 
@@ -132,7 +107,6 @@ export function optionalNumber(value: string): number | null {
   return /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : Number.NaN
 }
 
-/** Only edited fields are sent, so an unrelated concurrent Profile change is preserved. */
 export function profilePatch(
   initial: ReturnType<typeof profileDraft>,
   draft: ReturnType<typeof profileDraft>

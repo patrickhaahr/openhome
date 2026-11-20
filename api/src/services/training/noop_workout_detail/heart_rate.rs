@@ -13,14 +13,11 @@ use super::{
     ZONE_LOWER_EDGES,
 };
 
-/// Seconds per km over the recorded duration; `None` without a positive distance.
 pub(super) fn avg_pace(workout: &WorkoutRow) -> Option<f64> {
     let distance_km = workout.distance_m.filter(|&distance| distance > 0.0)? / 1000.0;
     Some(workout.duration_s? / distance_km)
 }
 
-/// Average, min and max over the strap samples inside the workout window, else the row's stored
-/// average and max.
 pub(super) fn heart_rate(workout: &WorkoutRow, samples: &[HrSample]) -> HeartRate {
     if samples.is_empty() {
         let has_row_values = workout.avg_hr.is_some() || workout.max_hr.is_some();
@@ -40,7 +37,6 @@ pub(super) fn heart_rate(workout: &WorkoutRow, samples: &[HrSample]) -> HeartRat
     }
 }
 
-/// Samples are sorted by timestamp and restricted to `[start, end)` by the caller.
 pub(super) fn heart_rate_series(
     workout: &WorkoutRow,
     samples: &[HrSample],
@@ -62,7 +58,6 @@ pub(super) fn heart_rate_series(
     Some(HeartRateSeries { bucket_s, points })
 }
 
-/// The Profile's Max Heart Rate; `None` when the Profile or the value is not set.
 pub(super) async fn profile_hr_max(db: &SqlitePool) -> Result<Option<i64>> {
     let hr_max = sqlx::query_scalar!("SELECT hr_max_bpm FROM profile WHERE id = 1")
         .fetch_optional(db)
@@ -73,9 +68,6 @@ pub(super) async fn profile_hr_max(db: &SqlitePool) -> Result<Option<i64>> {
     Ok(hr_max.flatten())
 }
 
-/// Time in each zone, ported from the NOOP app's `HRZones`. Each sample is credited with the time
-/// until the next one, capped at the median sample interval; the last sample gets the median.
-/// Samples are sorted by timestamp, distinct, non-empty and restricted to `[start, end)`.
 pub(super) fn heart_rate_zones(hr_max: i64, samples: &[HrSample]) -> HeartRateZones {
     let thresholds = ZONE_LOWER_EDGES.map(|edge| edge * hr_max as f64);
     let median_s = median_interval_s(samples);
@@ -115,8 +107,6 @@ pub(super) fn heart_rate_zones(hr_max: i64, samples: &[HrSample]) -> HeartRateZo
     }
 }
 
-/// The upper median of the gaps shorter than [`MAX_MEDIAN_GAP_S`], at least 1 s; 1 s without such
-/// a gap.
 fn median_interval_s(samples: &[HrSample]) -> f64 {
     let mut gaps: Vec<i64> = samples
         .windows(2)
@@ -128,8 +118,6 @@ fn median_interval_s(samples: &[HrSample]) -> f64 {
         .map_or(1.0, |&gap| gap.max(1) as f64)
 }
 
-/// Heart Rate Recovery as the NOOP app computes it. `samples` are sorted by timestamp and span
-/// `[start, end + 315 s]`.
 pub(super) fn heart_rate_recovery(
     workout: &WorkoutRow,
     samples: &[HrSample],
@@ -188,8 +176,6 @@ pub(super) fn heart_rate_recovery(
     })
 }
 
-/// The longest run of seconds at or above `threshold`, where each sample at or above it is
-/// credited with the time to the next one when that is at most 10 s away.
 fn sustained_s(samples: &[&HrSample], threshold: f64) -> i64 {
     let mut current = 0;
     let mut longest = 0;

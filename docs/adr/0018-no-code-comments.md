@@ -15,14 +15,17 @@ repeatable process for shrinking the baseline.
 
 ## Exemptions
 
-- Tool directives (`eslint-disable`, `@ts-expect-error`, `noqa`, shebangs, and
-  similar). They are configuration, not prose.
+- Tool directives (`eslint-disable`, `@ts-expect-error`, `noqa`, shebangs,
+  `@vitest-environment`, `noinspection`, and similar). They are configuration,
+  not prose.
 - `SAFETY:` comments. The dashboard's
   `require-safety-comment-for-type-assertion` rule requires one on every
   non-const type assertion, and Rust convention requires one on every `unsafe`
-  block. Each one marks an escape hatch in the type system, which is itself the
-  thing to remove.
-- Vendored code under `vendor/` and the generated `dashboard/.intent/` hooks.
+  block. The lines that continue a `SAFETY:` note are exempt with it. Each
+  one marks an escape hatch in the type system, which is itself the thing to
+  remove.
+- Vendored code under `vendor/`, the generated `dashboard/.intent/` hooks and
+  the generated `routeTree.gen.ts`.
 
 These are not exempt, but stay in the baseline for the reasons given:
 

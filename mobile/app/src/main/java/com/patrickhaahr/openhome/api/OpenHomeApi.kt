@@ -12,12 +12,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** The largest page the Axum list endpoints serve; they clamp `limit` to it and default to 100. */
 private const val PAGE_SIZE = 500
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
-/** Why a call to the Axum API did not produce a usable answer. */
 sealed class ApiFailure(message: String, cause: Throwable? = null) : Exception(message, cause) {
     class Unreachable(cause: IOException) : ApiFailure("Axum API unreachable", cause)
 
@@ -27,7 +25,6 @@ sealed class ApiFailure(message: String, cause: Throwable? = null) : Exception(m
 
     class UnreadableResponse(cause: Throwable? = null) : ApiFailure("Unreadable Axum API response", cause)
 
-    /** More rows share one date than a page can hold, so `to`/`from` paging cannot pass them. */
     class HistoryCannotBePaged(val date: String) : ApiFailure("Cannot page past $date")
 }
 
@@ -37,7 +34,6 @@ fun newOpenHomeHttpClient(): OkHttpClient =
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-/** Authenticated calls to the Axum API; every failure surfaces as an [ApiFailure]. */
 class OpenHomeApi(
     private val baseUrl: HttpUrl,
     private val apiKey: String,
@@ -48,7 +44,6 @@ class OpenHomeApi(
         classDiscriminator = "mode"
     }
 
-    /** `/api/health` sits behind the API Key check, so success proves both the address and the key. */
     suspend fun checkConnection() {
         val health =
             try {
@@ -91,23 +86,18 @@ class OpenHomeApi(
 
     suspend fun profile(): ApiProfile = get("api/profile")
 
-    /** Answers with the same Workout however many times one `request_id` is delivered. */
     suspend fun createWorkout(workout: ApiWorkoutCreate): ApiWorkoutCreated =
         post("api/workouts", json.encodeToString(workout))
 
-    /** Answers with the same Exercise however many times one `request_id` is delivered. */
     suspend fun createExercise(exercise: ApiExerciseCreate): ApiExercise =
         post("api/exercises", json.encodeToString(exercise))
 
-    /** Delivering the same revision again, or an older one, changes nothing and answers the Workout as it is. */
     suspend fun editWorkout(id: Long, edit: ApiWorkoutEdit): ApiWorkoutCreated =
         send("PATCH", "api/workouts/$id", json.encodeToString(edit))
 
-    /** Answers with the same record however many times one `request_id` is delivered. */
     suspend fun createBodyWeight(entry: ApiBodyWeightCreate): ApiBodyWeight =
         post("api/body_weight", json.encodeToString(entry))
 
-    /** Delivering the same revision again, or an older one, changes nothing and answers the Profile as it is. */
     suspend fun editProfile(edit: ApiProfileEdit): ApiProfile =
         send("PATCH", "api/profile", json.encodeToString(edit))
 
@@ -126,22 +116,16 @@ class OpenHomeApi(
         return decode(execute(request))
     }
 
-    /** The whole History, newest first: the list endpoint alone returns only its newest page. */
     suspend fun allWorkoutSummaries(): List<ApiWorkoutSummary> =
         collectAllPages(id = ApiWorkoutSummary::id, date = ApiWorkoutSummary::date) { boundary ->
             get("api/workouts", "limit" to PAGE_SIZE.toString(), "to" to boundary)
         }
 
-    /** Every Body Weight record, oldest first: the list endpoint alone returns only its oldest page. */
     suspend fun allBodyWeight(): List<ApiBodyWeight> =
         collectAllPages(id = ApiBodyWeight::id, date = ApiBodyWeight::date) { boundary ->
             get("api/body_weight", "limit" to PAGE_SIZE.toString(), "from" to boundary)
         }
 
-    /**
-     * Walks a date-ordered list whose boundary is inclusive, because several rows can share a date.
-     * It stops only on a page that adds nothing, so a smaller server page cannot end History early.
-     */
     private suspend fun <T> collectAllPages(
         id: (T) -> Long,
         date: (T) -> String,

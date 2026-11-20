@@ -10,7 +10,6 @@ import { PathIcon } from "@phosphor-icons/react/dist/csr/Path"
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHorizontal"
 import { HardDrivesIcon } from "@phosphor-icons/react/dist/csr/HardDrives"
 
-/** Destinations delivered by later release slices, not claims of provider health. */
 export const features = [
   {
     id: "weather",
@@ -113,5 +112,4 @@ export const features = [
   },
 ] as const
 
-/** One destination's display metadata, independent of provider configuration or health. */
 export type Feature = (typeof features)[number]

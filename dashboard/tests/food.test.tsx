@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import { expect, test } from "vitest"
 import { z } from "zod"
@@ -24,7 +23,6 @@ import {
 test("opens on today with the day's Meal Logs in time order, totals, all nutrients and the credit", async () => {
   const now = Date.now()
 
-  // Logged out of order; the day lists them by time.
   const later = await logMeal({
     eatenAt: new Date(now - 60_000),
     portions: [{ food_id: 3, grams: 120 }],
@@ -77,7 +75,6 @@ test("opens on today with the day's Meal Logs in time order, totals, all nutrien
   ).toBe("315 kcal")
 
   if (earlier.day === later.day) {
-    // 93 + 222 + 108 kcal. The banana has no alcohol value, so that total is a lower bound.
     expect(text("[data-slot='food-energy'] [data-slot='food-amount']")).toEqual(
       ["423"]
     )
@@ -107,7 +104,6 @@ test("opens on today with the day's Meal Logs in time order, totals, all nutrien
     "Vitamins",
     "Minerals and inorganic substances",
   ])
-  // Only the oats carry iron, so the day's iron is a lower bound.
   expect(rows("[data-slot='food-nutrient-groups'] dl div")).toContain(
     "Iron ≥At least 2.4 mg"
   )
@@ -117,7 +113,6 @@ test("opens on today with the day's Meal Logs in time order, totals, all nutrien
 })
 
 test("a Product Portion is named with its brand and the day credits Open Food Facts", async () => {
-  // The fixture's synthetic Open Food Facts product: a restricted-circulation barcode.
   const barcode = "2001234567893"
 
   const linked = await fetch(`${ready.url}/api/nutrition/products`, {
@@ -152,7 +147,6 @@ test("a Product Portion is named with its brand and the day credits Open Food Fa
     )
     ?.querySelectorAll("[data-slot='food-portions'] li")
 
-  // The label's 76 kcal per 100 g, not the linked Skyr's 62.
   expect(
     [...(portions ?? [])].map((row) =>
       [...row.children].map((child) => normalize(child.textContent)).join(" ")
@@ -255,7 +249,6 @@ test("a Meal Log copied from a saved Meal names the Meal, and a one-off meal nam
     ).toBeNull()
 })
 
-/** A synthetic Supplement's label, per dose. */
 type SyntheticSupplement = {
   readonly name: string
   readonly dose_unit: DoseUnit
@@ -267,7 +260,6 @@ type SyntheticSupplement = {
   }>
 }
 
-/** Adds a synthetic Supplement through the API, as the agent does from a label. */
 async function addSupplement(body: SyntheticSupplement): Promise<string> {
   const response = await fetch(`${ready.url}/api/nutrition/supplements`, {
     method: "POST",
@@ -359,7 +351,6 @@ test("the day shows a Supplements row, each meal's Supplement Doses and the supp
     "Vitamin D3 1 capsule",
     "Creatine 1 scoop",
   ])
-  // The skyr's 93 kcal and 0.3 g fat, plus what the fish oil's label states.
   expect(
     text("[data-slot='food-meal'] header [data-slot='food-amount']")
   ).toContain("111 kcal")

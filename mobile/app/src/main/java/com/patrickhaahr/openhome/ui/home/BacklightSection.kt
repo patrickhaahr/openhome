@@ -118,7 +118,6 @@ private fun BacklightStatus?.observationIsOld(outdated: Boolean, now: Instant): 
     return outdated || stale || old
 }
 
-/** Marks, not sentences: is the controller there, is the reading old, who is in charge. */
 @Composable
 private fun StatusMarks(status: BacklightStatus, outdated: Boolean, stale: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -143,7 +142,6 @@ private fun ModeDisc(label: String, glyph: Glyph, enabled: Boolean, isSelected: 
     }
 }
 
-/** Every sentence the screen doesn't say out loud, for assistive technology: nothing is claimed by silence. */
 @Composable
 private fun BacklightFacts(status: BacklightStatus, outdated: Boolean, old: Boolean) {
     Spoken("Intended: ${status.label(status.intended)}")
@@ -178,7 +176,6 @@ private fun BacklightStatus.label(selection: BacklightSelection?): String =
         is BacklightSelection.Effect -> "${effects.find { it.id == selection.effect }?.name ?: selection.effect} at ${selection.brightness}%"
     }
 
-/** On the Advanced screen the three independent facts are readable: asked, acknowledged, seen. */
 @Composable
 private fun VisibleFacts(status: BacklightStatus, old: Boolean, outdated: Boolean) {
     FactRow(Glyph.Arrow, status.label(status.intended))

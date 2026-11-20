@@ -1,8 +1,3 @@
-//! Recovery Day: Copenhagen wake days and daylight saving bounds.
-
-//! Recovery Day reads (`GET /api/training/days/{day}/recovery`) against a NOOP mirror filled
-//! through the real push endpoint, next to the in-memory training log the test app always has.
-
 mod common;
 mod training_recovery_support;
 
@@ -16,13 +11,9 @@ use training_recovery_support::{COMPUTED, IMPORTED, SOURCE, covered_mirror, slee
 #[tokio::test]
 async fn sleep_nights_are_grouped_by_copenhagen_wake_day() {
     let sessions = [
-        // 22:00 → 23:50 on 2026-09-19.
         sleep(1_789_848_000, 1_789_854_600, json!({})),
-        // 23:55 on 09-19 → 00:10 on 09-20, still 2026-09-19 in UTC.
         sleep(1_789_854_900, 1_789_855_800, json!({})),
-        // 23:00 → 23:59:59 on 09-20.
         sleep(1_789_938_000, 1_789_941_599, json!({})),
-        // 23:30 on 09-20 → midnight: the end bound belongs to the next day.
         sleep(1_789_939_800, 1_789_941_600, json!({})),
     ];
     let mirror = covered_mirror(&[], &[], &[], &sessions).await;
@@ -88,21 +79,14 @@ async fn day_bounds_and_offsets_follow_daylight_saving() {
             )
             .await;
     }
-    // Local midnights 2026-03-28 → 2026-03-31 and 2026-10-24 → 2026-10-28.
     let spring = [
-        // 23:30 CET → 08:00 CEST: 7.5 hours across the skipped hour.
         sleep(1_774_737_000, 1_774_764_000, json!({})),
-        // 23:15 → 23:45 CEST: inside the 23-hour day.
         sleep(1_774_818_900, 1_774_820_700, json!({})),
-        // 00:05 → 00:15 CEST on 03-30: inside a naive 24-hour day, but on the next local day.
         sleep(1_774_821_900, 1_774_822_500, json!({})),
     ];
     let autumn = [
-        // 23:00 CEST → 07:00 CET: 9 hours across the repeated hour.
         sleep(1_792_875_600, 1_792_908_000, json!({})),
-        // 23:00 → 23:30 CET: past a naive 24-hour day, but inside the 25-hour one.
         sleep(1_792_965_600, 1_792_967_400, json!({})),
-        // 23:35 CET → 00:10 CET on 10-26.
         sleep(1_792_967_700, 1_792_969_800, json!({})),
     ];
     mirror

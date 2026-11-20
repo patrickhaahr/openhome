@@ -58,7 +58,6 @@ async fn milestones_follow_calendar_anniversaries_and_round_day_boundaries() {
             json!({"kind":"anniversary","years":4}),
         ),
         ("2025-01-31", "since", "2025-02-28", Value::Null),
-        // 248,000 days is also the 679th anniversary: the anniversary wins.
         (
             "2000-01-01",
             "since",
@@ -184,7 +183,6 @@ async fn dates_tag_zero_one_or_two_members_and_report_figures_for_the_requested_
     assert_eq!(together["replayed"], false);
     let together = &together["important_date"];
     assert_eq!(together["title"], "Together");
-    // Tags come back ordered by name, whatever order they were given in.
     assert_eq!(together["person_ids"], json!([alex, robin]));
     assert_eq!(together["show_when_idle"], true);
     let (_, birthday) = add(&app, json!({"title":"Alex's birthday","date":"1992-11-04","kind":"yearly","person_ids":[alex],"request_id":"birthday"})).await;
@@ -195,7 +193,6 @@ async fn dates_tag_zero_one_or_two_members_and_report_figures_for_the_requested_
     let listed = list(&app, "?on=2026-05-26").await;
     assert_eq!(listed["on"], "2026-05-26");
     let dates = listed["dates"].as_array().unwrap();
-    // Since first, then yearly dates by their next occurrence.
     assert_eq!(
         dates.iter().map(|date| &date["title"]).collect::<Vec<_>>(),
         ["Together", "Alex's birthday", "A friend's birthday"]
@@ -212,13 +209,11 @@ async fn dates_tag_zero_one_or_two_members_and_report_figures_for_the_requested_
         dates[1]["next"],
         json!({"date":"2026-11-04","days_until":162,"years":34})
     );
-    // 29 February falls back to 28 February in a common year.
     assert_eq!(
         dates[2]["next"],
         json!({"date":"2027-02-28","days_until":278,"years":27})
     );
 
-    // Before a date happens it has no elapsed figure and counts down to itself.
     let early = list(&app, "?on=2024-02-01").await;
     assert_eq!(early["dates"][0]["elapsed"], Value::Null);
     assert_eq!(
@@ -252,7 +247,6 @@ async fn dates_tag_zero_one_or_two_members_and_report_figures_for_the_requested_
         assert_eq!(status, StatusCode::BAD_REQUEST, "{query}");
     }
 
-    // Removing a member removes only their tag.
     let (status, _) = request(
         &app,
         Method::DELETE,
@@ -305,14 +299,12 @@ async fn additions_replay_by_request_id_and_never_infer_or_duplicate_tags() {
         invalid[field] = value;
         assert_eq!(add(&app, invalid).await.0, status, "{field}");
     }
-    // Tags are required, even when a date concerns no one.
     let mut untagged = fresh.clone();
     untagged.as_object_mut().unwrap().remove("person_ids");
     assert_eq!(
         add(&app, untagged).await.0,
         StatusCode::UNPROCESSABLE_ENTITY
     );
-    // Rejected additions consume no request ID.
     assert_eq!(add(&app, fresh).await.0, StatusCode::CREATED);
 
     let path = format!(
@@ -327,7 +319,6 @@ async fn additions_replay_by_request_id_and_never_infer_or_duplicate_tags() {
         request(&app, Method::DELETE, &path, Value::Null).await.0,
         StatusCode::NOT_FOUND
     );
-    // A removed date cannot be recreated by an old retry.
     assert_eq!(add(&app, body).await.0, StatusCode::CONFLICT);
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM important_date_people")

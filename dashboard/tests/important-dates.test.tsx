@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -81,7 +80,6 @@ afterEach(async () => {
   await act(async () => root.unmount())
   container.remove()
 
-  // Cleanup reads Axum directly, not through a proxy a test left behind.
   for (const stop of proxies.splice(0)) await stop()
   vi.stubEnv("OPENHOME_API_URL", fixture.url)
 
@@ -176,7 +174,6 @@ test("lead figures read years, months and days for since and a countdown for yea
   }
 
   expect(leadFigure(base)).toBe("2 years · 3 months · 12 days")
-  // Idle's elapsed counter stays independent of the separately rendered milestone lead.
   expect(
     leadFigure({ ...base, milestone: { kind: "day_count", days: 1000 } })
   ).toBe("2 years · 3 months · 12 days")
@@ -337,7 +334,6 @@ test("adds a tagged date, filters by person, edits it, switches idle and deletes
     show_when_idle: false,
   })
   expect(together?.person_ids).toHaveLength(2)
-  // Since dates lead, with Axum's figure on the plate.
   expect(titles()[0]).toBe("Together")
   expect(
     container.querySelector('[data-slot="date-figure"]')?.textContent
@@ -419,7 +415,6 @@ test("the shared idle read returns only dates opted into room visibility", async
   expect(read.dates.map((date) => date.title)).toEqual(["Together"])
 })
 
-/** Axum commits the next date addition, but its response never reaches the Dashboard. */
 async function loseNextAddition(): Promise<void> {
   const proxy = await startLossyAxum(
     fixture.url,
@@ -467,7 +462,6 @@ test.each([
     if (same) expect(again).toEqual(first)
     else expect(again?.request_id).not.toBe(first?.request_id)
 
-    // Axum committed the lost request, so a recognised retry adds nothing.
     expect((await available()).dates.map((date) => date.title).sort()).toEqual(
       dates
     )

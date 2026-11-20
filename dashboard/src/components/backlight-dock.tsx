@@ -12,7 +12,6 @@ export type DockKey = {
   selection: BacklightSelection
 }
 
-/** Every light the strip knows, each drawn as a small disc of itself; the chosen one rises. */
 export function BacklightDock({
   keys,
   rgb,
@@ -54,7 +53,6 @@ export function BacklightDock({
               perform({ action: "select", selection: key.selection })
             }
           >
-            {/* Your own colour sits inside a ring of every colour. */}
             {key.id === "color" ? (
               <span
                 className="absolute inset-1.25 rounded-full bg-led-hue-ring"

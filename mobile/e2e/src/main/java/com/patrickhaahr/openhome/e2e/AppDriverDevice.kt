@@ -11,14 +11,12 @@ fun AppDriver.clearAppData() {
     device.executeShellCommand("pm clear $APP_PACKAGE")
 }
 
-/** A cold start: any running process is gone first, as after the system or the user killed it. */
 fun AppDriver.relaunch() {
     device.executeShellCommand("am force-stop $APP_PACKAGE")
     device.executeShellCommand("am start -W -n $APP_PACKAGE/com.patrickhaahr.openhome.MainActivity")
     assertTrue("App did not reach the foreground", device.wait(Until.hasObject(By.pkg(APP_PACKAGE)), TIMEOUT_MS))
 }
 
-/** The real radio: Wi-Fi off leaves the emulator's metered mobile data as the default network. */
 fun AppDriver.setWifi(enabled: Boolean) {
     device.executeShellCommand("svc wifi ${if (enabled) "enable" else "disable"}")
     val wanted = if (enabled) "WIFI" else "CELLULAR"
@@ -29,7 +27,6 @@ fun AppDriver.setWifi(enabled: Boolean) {
     }
 }
 
-/** The default network's transport as Android itself reports it. */
 private fun AppDriver.defaultNetworkTransport(): String? {
     val dump = device.executeShellCommand("dumpsys connectivity")
     val network = Regex("Active default network: (\\d+)").find(dump)?.groupValues?.get(1) ?: return null
@@ -41,7 +38,6 @@ fun AppDriver.pressBackButton() {
     device.pressBack()
 }
 
-/** Leaves the app and ends its process, as Android does to a background app, and keeps its alarms. */
 fun AppDriver.killInBackground() {
     device.pressHome()
     device.waitForIdle()
@@ -53,13 +49,11 @@ fun AppDriver.killInBackground() {
     }
 }
 
-/** Opening the app with no force-stop first, so whatever Android was keeping for it is still there. */
 fun AppDriver.reopen() {
     device.executeShellCommand("am start -W -n $APP_PACKAGE/com.patrickhaahr.openhome.MainActivity")
     assertTrue("App did not reach the foreground", device.wait(Until.hasObject(By.pkg(APP_PACKAGE)), TIMEOUT_MS))
 }
 
-/** A force-stop, which also drops the app's alarms, leaving the app closed. */
 fun AppDriver.forceStop() {
     device.executeShellCommand("am force-stop $APP_PACKAGE")
 }
@@ -67,7 +61,6 @@ fun AppDriver.forceStop() {
 fun AppDriver.usesGestureNavigation(): Boolean =
     device.executeShellCommand("settings get secure navigation_mode").trim() == "2"
 
-/** The system back gesture: a drag inward from the screen's edge. */
 fun AppDriver.swipeBackGesture() {
     device.swipe(1, device.displayHeight / 2, device.displayWidth / 2, device.displayHeight / 2, 25)
 }

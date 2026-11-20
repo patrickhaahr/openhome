@@ -1,12 +1,8 @@
-//! Private origin for the dashboard's shared maps.
-
 use serde::Serialize;
 
-/// Central Copenhagen demonstration point, unrelated to any household.
 const DEMO_LATITUDE: f64 = 55.6869;
 const DEMO_LONGITUDE: f64 = 12.5692;
 
-/// Where shared maps open. Only authenticated clients receive the coordinates; never log them.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub struct MapOrigin {
     latitude: f64,
@@ -14,7 +10,6 @@ pub struct MapOrigin {
     source: MapOriginSource,
 }
 
-/// Whether the origin is the household's private configuration or the explicit public demo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MapOriginSource {
@@ -23,14 +18,11 @@ pub enum MapOriginSource {
 }
 
 impl MapOrigin {
-    /// Longitude and latitude for server-side integrations; never log them.
     #[must_use]
     pub fn coordinates(self) -> [f64; 2] {
         [self.longitude, self.latitude]
     }
 
-    /// Private coordinates must be supplied together. The demo origin is only used when explicitly
-    /// enabled and never combined with private coordinates, so it cannot become a silent default.
     pub fn parse(
         latitude: Option<&str>,
         longitude: Option<&str>,
@@ -77,7 +69,6 @@ impl MapOrigin {
     }
 }
 
-/// Origin read for map clients, without echoing configuration errors.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum MapOriginRead {
@@ -85,7 +76,6 @@ pub enum MapOriginRead {
     Unavailable { reason: MapUnavailable },
 }
 
-/// Expected reasons a map cannot be centered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MapUnavailable {

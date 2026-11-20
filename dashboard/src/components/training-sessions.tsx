@@ -22,7 +22,6 @@ function sportIcon(sport: string): React.JSX.Element {
   return <HeartbeatIcon size={26} aria-hidden="true" />
 }
 
-/** The day's strap recordings, opened in place; logged Workouts live in Workout › Log. */
 export function Sessions({
   day,
   selected,

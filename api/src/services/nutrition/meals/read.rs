@@ -4,7 +4,6 @@ use crate::services::nutrition::supplements;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-/// A stored item as `load` reads it.
 pub(super) struct StoredItem {
     pub(super) meal_id: String,
     pub(super) grams: f64,
@@ -42,7 +41,6 @@ impl StoredItem {
     }
 }
 
-/// Every stored item of one Meal, or of every Meal, in order.
 pub(super) async fn stored_items_on(
     db: &mut sqlx::SqliteConnection,
     id: Option<&str>,
@@ -61,7 +59,6 @@ pub(super) async fn stored_items_on(
     .await?)
 }
 
-/// One Meal, or every Meal by name.
 async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Meal>> {
     load_on(&mut *db.acquire().await?, id).await
 }
@@ -103,7 +100,6 @@ pub(super) fn not_found() -> MealError {
     MealError::NotFound("Meal not found; list meals for its id".into())
 }
 
-/// Every Meal by name, with its items in order.
 pub async fn meals(db: &SqlitePool) -> Result<Meals> {
     Ok(Meals {
         meals: load(db, None).await?,

@@ -10,7 +10,6 @@ use crate::services::training::calendar::CalendarDay;
 use chrono::{DateTime, TimeDelta, Utc};
 use std::collections::BTreeMap;
 
-/// A retry key trimmed of surrounding whitespace.
 pub(crate) fn parse_request_id(value: &str) -> std::result::Result<String, String> {
     let value = value.trim();
     if value.is_empty()
@@ -28,7 +27,6 @@ pub(super) fn request_id(value: &str) -> Result<String> {
     parse_request_id(value).map_err(MealLogError::Validation)
 }
 
-/// Parses an eaten-at time to whole seconds. Past times are backfills; the future is refused.
 pub(super) fn eaten_at(value: &str, now: DateTime<Utc>) -> Result<DateTime<Utc>> {
     let at = DateTime::parse_from_rfc3339(value.trim())
         .ok()
@@ -57,7 +55,6 @@ pub(super) fn utc_text(at: DateTime<Utc>) -> String {
     at.format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
-/// A note trimmed of surrounding whitespace; empty is no note.
 pub(super) fn note(value: Option<String>) -> Result<Option<String>> {
     let Some(value) = value else {
         return Ok(None);
@@ -78,7 +75,6 @@ pub(super) fn note(value: Option<String>) -> Result<Option<String>> {
     Ok(Some(value.to_owned()))
 }
 
-/// What a Portion is of: a Food or a linked Product. A Meal names its items the same way.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(in crate::services::nutrition) enum Item {
     Food(i64),
@@ -86,7 +82,6 @@ pub(in crate::services::nutrition) enum Item {
 }
 
 impl Item {
-    /// How an error message names the item.
     pub(in crate::services::nutrition) fn describe(&self) -> String {
         match self {
             Self::Food(food_id) => format!("food_id {food_id}"),
@@ -94,7 +89,6 @@ impl Item {
         }
     }
 
-    /// The receipt form of the item with `grams`.
     pub(in crate::services::nutrition) fn normalized(&self, grams: f64) -> serde_json::Value {
         match self {
             Self::Food(food_id) => serde_json::json!({"food_id": food_id, "grams": grams}),
@@ -105,7 +99,6 @@ impl Item {
     }
 }
 
-/// Parses a reference to exactly one Food (`food_id`) or Product (`barcode`).
 pub(in crate::services::nutrition) fn parse_item(
     food_id: Option<i64>,
     barcode: Option<String>,
@@ -120,7 +113,6 @@ pub(in crate::services::nutrition) fn parse_item(
     }
 }
 
-/// Checks an amount of edible grams.
 pub(in crate::services::nutrition) fn check_grams(grams: f64) -> std::result::Result<(), String> {
     if !grams.is_finite() || grams <= 0.0 || grams > MAX_GRAMS {
         return Err(format!(
@@ -130,7 +122,6 @@ pub(in crate::services::nutrition) fn check_grams(grams: f64) -> std::result::Re
     Ok(())
 }
 
-/// A validated Portion request.
 pub(super) struct ValidPortion {
     pub(super) item: Item,
     pub(super) grams: f64,
@@ -138,8 +129,6 @@ pub(super) struct ValidPortion {
 }
 
 impl ValidPortion {
-    /// The receipt form: `[food_id, grams]` for a Food without estimates, as receipts were
-    /// first written, so their retries still match.
     pub(super) fn normalized(&self) -> serde_json::Value {
         match &self.item {
             Item::Food(food_id) if self.estimates.is_empty() => {
@@ -155,11 +144,9 @@ impl ValidPortion {
     }
 }
 
-/// The most energy 100 g can hold: pure fat.
 const MAX_KCAL_PER_100G: f64 = 900.0;
 const MAX_KJ_PER_100G: f64 = 3_800.0;
 
-/// Checks an estimate: a per-100 g vocabulary key with a plausible, non-negative value.
 fn estimate(key: &str, value: f64) -> Result<()> {
     let invalid = |reason: &str| {
         Err(MealLogError::Validation(format!(
@@ -212,7 +199,6 @@ pub(super) fn doses(requests: Vec<DoseRequest>) -> Result<Vec<(String, f64)>> {
     supplements::parse_doses(requests).map_err(MealLogError::Validation)
 }
 
-/// A Meal Log holds at least one Portion or Supplement Dose.
 pub(super) fn check_items(portions: usize, doses: usize) -> Result<()> {
     if portions + doses == 0 {
         return Err(MealLogError::Validation(
@@ -230,7 +216,6 @@ pub(super) fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
     }
 }
 
-/// The calendar day `text` names.
 pub fn parse_day(text: &str, field: &str) -> Result<CalendarDay> {
     CalendarDay::parse(text).ok_or_else(|| {
         MealLogError::Validation(format!(

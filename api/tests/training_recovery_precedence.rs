@@ -1,8 +1,3 @@
-//! Recovery Day: imported and computed values, and which sleep night wins.
-
-//! Recovery Day reads (`GET /api/training/days/{day}/recovery`) against a NOOP mirror filled
-//! through the real push endpoint, next to the in-memory training log the test app always has.
-
 mod common;
 mod training_recovery_support;
 
@@ -16,7 +11,6 @@ use training_recovery_support::{
 
 #[tokio::test]
 async fn imported_values_win_field_by_field_and_computed_values_fill_nulls() {
-    // Real 2026-09-14: the strap's imported strain beats NOOP's computed 0.0.
     let real = real_mirror().await.recovery_day("2026-09-14").await;
     assert_eq!(
         real["derived_scores"]["strain"],
@@ -49,7 +43,6 @@ async fn imported_values_win_field_by_field_and_computed_values_fill_nulls() {
         body["derived_scores"],
         json!({
             "recovery": measured(json!(64.0), "score_0_100", COMPUTED),
-            // A computed zero is a value, not a gap.
             "strain": measured(json!(0.0), "score_0_100", COMPUTED),
             "rest": absent("score_0_100"),
         })
@@ -107,7 +100,6 @@ async fn skin_temperature_deviation_and_respiratory_rate_follow_imported_first_p
     );
     assert_eq!(imported_only["respiratory_rate"], absent("breaths/min"));
 
-    // A computed zero is a value, not a gap.
     let computed_only = mirror.recovery_day("2026-09-22").await;
     assert_eq!(
         computed_only["skin_temp_deviation"],
@@ -163,7 +155,6 @@ async fn an_edited_night_takes_the_whole_computed_sleep_block() {
                 measured(json!(0.2237417943), "fraction", COMPUTED)
             );
             assert_eq!(sleep["deep"], measured(json!(36.5), "min", COMPUTED));
-            // The block moves whole: the edit's null replaces the imported count.
             assert_eq!(sleep["disturbances"], absent("count"));
         } else {
             assert_eq!(sleep["total"], measured(json!(480.0), "min", IMPORTED));
@@ -174,7 +165,6 @@ async fn an_edited_night_takes_the_whole_computed_sleep_block() {
             assert_eq!(sleep["deep"], measured(json!(90.0), "min", IMPORTED));
             assert_eq!(sleep["disturbances"], measured(json!(4), "count", IMPORTED));
         }
-        // Values outside the sleep block keep imported precedence either way.
         assert_eq!(
             body["resting_hr"],
             measured(json!(48.0), "beats/min", IMPORTED)
@@ -207,8 +197,6 @@ async fn a_scored_computed_night_replaces_a_bare_imported_sleep_total() {
         measured(json!(0.93), "fraction", COMPUTED)
     );
 
-    // An import that carries efficiency is scored, so it keeps precedence and computed values
-    // only fill its gaps.
     let scored = covered_mirror(
         &[daily(
             "2026-09-20",
@@ -231,8 +219,6 @@ async fn a_scored_computed_night_replaces_a_bare_imported_sleep_total() {
 
 #[tokio::test]
 async fn rest_scores_the_night_against_the_need_and_regularity_of_the_nights_before() {
-    // Seven nights of exactly 8 h at efficiency 1 ending before 2026-09-20: need stays 8 h and
-    // the regularity is 1 (no spread), so the 10-point consistency term is full.
     let history: Vec<Value> = (1..=7)
         .map(|nights_ago| {
             let start = SEP_20 - nights_ago * 86_400;
@@ -247,13 +233,11 @@ async fn rest_scores_the_night_against_the_need_and_regularity_of_the_nights_bef
         .await
         .recovery_day("2026-09-20")
         .await;
-    // 50 duration + 20 efficiency + (190 / 480 / 0.5) x 20 = 15.83 restorative + 10 consistency.
     assert_eq!(
         body["derived_scores"]["rest"],
         measured(json!(95.83), "score_0_100", DERIVED)
     );
 
-    // Without the history the same night scores a neutral 0.5 consistency: 5 points.
     let body = covered_mirror(&[night], &[], &[], &[])
         .await
         .recovery_day("2026-09-20")
@@ -266,8 +250,6 @@ async fn rest_scores_the_night_against_the_need_and_regularity_of_the_nights_bef
 
 #[tokio::test]
 async fn sleep_stages_are_ordered_clamped_to_the_session_and_null_without_segments() {
-    // 22:00 → 23:00 on 2026-09-19 after an adjusted start of 22:10; the first segment begins
-    // before it and the last runs past the end. The segments arrive out of order.
     let stages = r#"[{"start":1789850000,"end":1789851000,"stage":"wake"},{"start":1789848000,"end":1789848900,"stage":"light"},{"start":1789848900,"end":1789850000,"stage":"deep"},{"start":1789851000,"end":1789853000,"stage":"rem"}]"#;
     let adjusted = sleep(
         1_789_848_000,
@@ -301,7 +283,6 @@ async fn sleep_stages_are_ordered_clamped_to_the_session_and_null_without_segmen
 
 #[tokio::test]
 async fn richer_computed_sessions_replace_the_imported_night() {
-    // 22:00 → 06:30 on the night waking 2026-09-20, fully staged when `staged`.
     let night = |staged: bool| {
         let stages = r#"[{"start":1789848000,"end":1789863000,"stage":"light"},{"start":1789863000,"end":1789878600,"stage":"deep"}]"#;
         let stages = if staged { json!(stages) } else { Value::Null };

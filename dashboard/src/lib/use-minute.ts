@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react"
 
-/**
- * The display's one clock: hydrates from the rendered instant, then ticks on minute
- * boundaries while the page is visible and catches up when it becomes visible again.
- */
 export function useMinute(initialTime: string): Date {
   const [now, setNow] = useState(() => new Date(initialTime))
 

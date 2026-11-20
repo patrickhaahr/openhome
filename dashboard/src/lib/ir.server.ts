@@ -9,10 +9,8 @@ import {
 import { speakerCommand, type SpeakerCommand } from "./speaker"
 import { tvCommand, type TvCommand } from "./tv"
 
-// Axum's IR device request has a 10-second timeout. Allow a command to return its outcome.
 const commandTimeoutMs = 12000
 
-// Discovery only fills the remotes; a stalled bridge should not hold their cards on "Checking…".
 const discoveryTimeoutMs = 6000
 
 const remotes = z.object({
@@ -22,7 +20,6 @@ const remotes = z.object({
   }),
 })
 
-/** Classify an unsuccessful Axum response; only exact known errors earn specific guidance. */
 async function classifyFailure(
   response: Response
 ): Promise<"missing-device" | "unsupported-command" | "unavailable"> {
@@ -32,7 +29,6 @@ async function classifyFailure(
     return "missing-device"
   }
 
-  // The IR remote rejects commands it does not know; discovery may be stale.
   if (response.status === 404 && message === "Unknown command") {
     return "unsupported-command"
   }
@@ -40,7 +36,6 @@ async function classifyFailure(
   return "unavailable"
 }
 
-/** Keep the reported Commands that have Remote Buttons, in remote order. */
 function withButtons<C extends string>(
   options: readonly C[],
   reported: string[]
@@ -50,7 +45,6 @@ function withButtons<C extends string>(
   return options.filter((command) => names.has(command))
 }
 
-/** Ask Axum which Commands each IR Remote reports, keeping only those with Remote Buttons. */
 export async function readIrRemotes(): Promise<IrRemotes> {
   const result = await requestOpenHome({
     path: "/api/ir",
@@ -80,28 +74,18 @@ export async function readIrRemotes(): Promise<IrRemotes> {
           },
         }
       }
-    } catch {
-      // An unreadable response cannot establish which commands are available.
-    }
+    } catch {}
 
     return unavailableRemotes("unavailable")
   }
 
   const reason = await classifyFailure(response)
 
-  // A stale-command answer cannot apply to discovery.
   return unavailableRemotes(
     reason === "unsupported-command" ? "unavailable" : reason
   )
 }
 
-/**
- * Dispatch one Command through Axum. Provider messages never become observed device state or public copy.
- *
- * @param options.remote - Axum's path segment for the IR Remote that sends the Command.
- * @param options.command - A Command parsed against that remote's Remote Buttons.
- * @returns Whether OpenHome acknowledged the Command, with a sanitized failure reason.
- */
 export async function dispatchIrCommand({
   remote,
   command,
@@ -123,7 +107,6 @@ export async function dispatchIrCommand({
 
   if (await isAcknowledged(response)) return { state: "accepted" }
 
-  // A successful status without an acknowledgement cannot confirm the command.
   if (response.ok) return { state: "failed", reason: "unavailable" }
 
   return { state: "failed", reason: await classifyFailure(response) }

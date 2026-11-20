@@ -15,9 +15,7 @@ use super::{
     MAX_RECORDS, RECORD_COUNT_MISMATCH, Record, Window,
 };
 
-/// Frames and validates a decoded NDJSON entity as a batch of either delivery mode.
 pub fn parse_batch(entity: &[u8]) -> Result<Batch, IngestError> {
-    // Every line, including the last, ends with LF; there is no trailing material.
     let content = entity.strip_suffix(b"\n").ok_or(MALFORMED_NDJSON)?;
     let mut lines = content.split(|byte| *byte == b'\n');
     let header_line = object_line(lines.next().unwrap_or_default())?;
@@ -37,9 +35,6 @@ pub fn parse_batch(entity: &[u8]) -> Result<Batch, IngestError> {
         }
         let record = parse_record(header.stream, line)?;
         if let Some(window) = window {
-            // The selector is the first key column (registry invariant). Day keys must be real
-            // `YYYY-MM-DD` dates; a record outside the declared window would escape its
-            // absence-means-delete scope.
             let selector_value = &record.key[0];
             if matches!(selector_value, KeyValue::Text(day) if !is_day(day)) {
                 return Err(INVALID_RECORD);
@@ -68,7 +63,6 @@ pub fn parse_batch(entity: &[u8]) -> Result<Batch, IngestError> {
     })
 }
 
-/// A line must be exactly one JSON object: no blank line, BOM, array, or surrounding whitespace.
 fn object_line(line: &[u8]) -> Result<&[u8], IngestError> {
     if line.first() == Some(&b'{') && line.last() == Some(&b'}') {
         Ok(line)
@@ -77,8 +71,6 @@ fn object_line(line: &[u8]) -> Result<&[u8], IngestError> {
     }
 }
 
-/// Deserializes one line. A JSON syntax error is malformed NDJSON (400); valid JSON of the wrong
-/// shape is `invalid` (422).
 fn parse_line<'a, T: Deserialize<'a>>(
     line: &'a [u8],
     invalid: IngestError,
@@ -129,7 +121,6 @@ struct RawWindow {
     parts: u32,
 }
 
-/// A member that must be present but may be `null` (plain `Option` members may be omitted).
 fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
@@ -138,7 +129,6 @@ where
     Option::deserialize(deserializer)
 }
 
-/// Records that a member was present with any value, including `null`.
 fn presence<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
     Value::deserialize(deserializer).map(Some)
 }
@@ -154,7 +144,6 @@ struct Header {
 }
 
 fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
-    // Check the version first: a batch from another major version may not share this shape.
     let probe: VersionProbe = parse_line(line, INVALID_HEADER)?;
     let supported = matches!(
         &probe.protocol_version,
@@ -170,7 +159,6 @@ fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
     }
     let stream =
         registry::stream(&header.stream).ok_or(IngestError::Unprocessable("unsupported_stream"))?;
-    // The registry fixes each stream's delivery mode; `window` belongs to replace_window only.
     let selector = match (stream.replace_window(), header.delivery.as_str()) {
         (None, "append") if header.window.is_none() => None,
         (Some(spec), "replace_window") => Some(spec.selector),
@@ -206,8 +194,6 @@ fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
                 return Err(INVALID_CURSOR);
             }
             let window = parse_window(selector, header.window)?;
-            // An empty window is one zero-record part; a multi-part replacement never has an
-            // empty part.
             if header.record_count == 0 && window.parts != 1 {
                 return Err(EMPTY_BATCH);
             }
@@ -226,8 +212,6 @@ fn parse_header(line: &[u8]) -> Result<Header, IngestError> {
     })
 }
 
-/// Validates the `window` member: canonical `replacementId`, the stream's selector, non-empty
-/// half-open bounds of the selector's type, and `1 <= part <= parts`.
 fn parse_window(selector: Selector, window: Option<Value>) -> Result<Window, IngestError> {
     let raw: RawWindow = window
         .and_then(|window| serde_json::from_value(window).ok())
@@ -260,7 +244,6 @@ fn parse_window(selector: Selector, window: Option<Value>) -> Result<Window, Ing
     })
 }
 
-/// A canonical `YYYY-MM-DD` calendar date.
 fn is_day(value: &str) -> bool {
     value.len() == 10
         && NaiveDate::parse_from_str(value, "%Y-%m-%d")
@@ -271,14 +254,6 @@ fn is_canonical_uuid(value: &str) -> bool {
     Uuid::parse_str(value).is_ok_and(|uuid| uuid.hyphenated().to_string() == value)
 }
 
-/// Enforces `startCursor.rowId < first < ... <= final == endCursor.rowId` as far as the receiver
-/// can see it: records carry no row IDs, so `recordCount` strictly increasing positive positions
-/// must fit in `(startCursor.rowId, endCursor.rowId]` (`(0, endCursor.rowId]` for a first batch).
-/// `keySha256` is checked for shape only and is never recomputed or interpreted.
-///
-/// Requiring positive row IDs, and using 0 as the floor when `startCursor` is null, is
-/// deliberate: it matches SQLite `rowid` semantics (the protocol maps `rowId` to it) and the
-/// sender's own invariant (`.noop/PushModels.kt`, `PushAppendRecord`: `rowId > 0`).
 fn cursors_are_valid(start: Option<&Cursor>, end: &Cursor, record_count: u32) -> bool {
     let well_formed = |cursor: &Cursor| {
         cursor.row_id > 0
@@ -292,7 +267,6 @@ fn cursors_are_valid(start: Option<&Cursor>, end: &Cursor, record_count: u32) ->
         return false;
     }
     let floor = start.map_or(0, |cursor| cursor.row_id);
-    // Both row IDs are positive, so the difference cannot overflow.
     end.row_id - floor >= i64::from(record_count)
 }
 
@@ -304,7 +278,6 @@ struct RawRecord {
     data: Members,
 }
 
-/// A JSON object that rejects duplicate member names instead of keeping the last one.
 struct Members(Map<String, Value>);
 
 impl<'de> Deserialize<'de> for Members {
@@ -339,7 +312,6 @@ fn parse_record(stream: &Stream, line: &[u8]) -> Result<Record, IngestError> {
     if raw.kind != "record" {
         return Err(INVALID_RECORD);
     }
-    // Keys contain exactly the registry columns; unknown data members are ignored.
     if raw.key.0.len() != stream.key.len() {
         return Err(INVALID_RECORD);
     }
@@ -376,8 +348,6 @@ fn key_value(column: &Column, value: &Value) -> Option<KeyValue> {
     }
 }
 
-/// Converts a data member to its registry type. Integers reject fractions and exponents; reals
-/// accept any JSON number (always finite once parsed).
 fn data_value(column: &Column, value: &Value) -> Option<DataValue> {
     match (column.ty, value) {
         (_, Value::Null) if column.nullable => Some(DataValue::Null),

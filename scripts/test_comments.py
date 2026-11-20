@@ -19,6 +19,12 @@ class Scanning(unittest.TestCase):
         self.assertEqual(texts("echo $# ${#a}  # yes\n", ".sh"), ["# yes"])
         self.assertEqual(texts("SELECT '--' -- yes\n", ".sql"), ["-- yes"])
 
+    def test_unterminated_quote_in_jsx_text_keeps_line_numbers(self):
+        [c] = scan_source("const a = <p>Don't stop</p>;\nconst b = 1;\n// c\n", ".tsx")
+        self.assertEqual(c.line, 3)
+        [d] = scan_source("const a = <p>{x} / {y}</p>;\n// d\n", ".tsx")
+        self.assertEqual(d.line, 2)
+
     def test_nested_rust_block_comment_is_one_comment(self):
         self.assertEqual(texts("/* a /* b */ c */ x\n", ".rs"), ["/* a /* b */ c */"])
 
@@ -26,6 +32,8 @@ class Scanning(unittest.TestCase):
         src = "#!/usr/bin/env node\n// eslint-disable-next-line x\n// @ts-expect-error y\n// SAFETY: z\n"
         self.assertEqual(texts(src, ".ts"), [])
         self.assertEqual(texts("import x  # noqa: F401\n", ".py"), [])
+        self.assertEqual(texts("// @vitest-environment happy-dom\n// noinspection X\n", ".ts"), [])
+        self.assertEqual(texts("// SAFETY: a\n// b\nunsafe {}\n// c\n", ".rs"), ["// c"])
 
     def test_doc_and_trailing_comments_are_classified(self):
         [doc, trailing] = scan_source("/// d\nfn f() {} // t\n", ".rs")
@@ -41,6 +49,12 @@ class Stripping(unittest.TestCase):
     def test_leaves_other_blank_lines_alone(self):
         src = "a = 1\n\n\ndef f():\n    # c\n    return 1\n"
         self.assertEqual(strip_source(src, ".py", {5}), "a = 1\n\n\ndef f():\n    return 1\n")
+
+
+class JsxStripping(unittest.TestCase):
+    def test_strips_jsx_expression_comments_with_their_braces(self):
+        src = "<div>\n  {/* c */}\n  <b>{x}</b> {/* t */}\n</div>\n"
+        self.assertEqual(strip_source(src, ".tsx", {2, 3}), "<div>\n  <b>{x}</b>\n</div>\n")
 
 
 class Ratchet(unittest.TestCase):

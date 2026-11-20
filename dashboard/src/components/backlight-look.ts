@@ -1,9 +1,7 @@
 import type { BacklightStatus } from "@/lib/backlight"
 
-/** How a selection paints the wall: the light's background and how it moves. */
 export type Light = { readonly fill: string; readonly motion: string }
 
-// Without a gradient the light is the chosen colour itself (the stage's --led).
 const colour: Light = { fill: "bg-(--led)", motion: "" }
 
 const tvSync: Light = { fill: "bg-led-tv-sync", motion: "" }
@@ -46,14 +44,12 @@ const effects = new Map<string, Light>([
   ],
 ])
 
-/** The light a mode or effect makes; each effect moves the way its light does. */
 export function lightFor(mode: string, effect: string | undefined): Light {
   if (mode === "tv-sync") return tvSync
 
   return (effect === undefined ? undefined : effects.get(effect)) ?? colour
 }
 
-/** A dock key drawn as a small disc of its light; `motion` runs while it is chosen. */
 export type Chip = { readonly fill: string; readonly motion: string }
 
 const inset = "inset-2 led-phone:inset-1.5"
@@ -108,7 +104,6 @@ export function chipFor(id: string): Chip {
   return chips.get(id) ?? noChip
 }
 
-/** Reachable: a lit dot. Not yet checked: a ring. Unreachable: a red ring that shakes once. */
 export const signal = {
   reachable: "bg-led-ink",
   unknown: "border-2 border-led-muted",

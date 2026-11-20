@@ -1,4 +1,3 @@
-//! Selected-album Immich reads. No originals, shared links or EXIF cross this boundary.
 use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Utc};
 use reqwest::{Client, StatusCode, header};
 use serde::{Deserialize, Serialize};
@@ -11,15 +10,12 @@ use tokio::sync::{Mutex, Semaphore};
 use url::Url;
 use uuid::Uuid;
 
-/// Maximum photos returned per gallery page.
 pub const PAGE_SIZE: usize = 60;
-/// Maximum albums in the `IMMICH_ALBUM_IDS` allowlist.
 pub const MAX_ALBUMS: usize = 24;
 const ASSET_LIMIT: usize = 20_000;
 const METADATA_LIMIT: usize = 8 * 1024 * 1024;
 const CACHE_TTL: Duration = Duration::from_secs(30);
 
-/// Only resized formats supported by the installed Immich API.
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PhotoSize {
@@ -27,7 +23,6 @@ pub enum PhotoSize {
     Preview,
 }
 
-/// Sanitized failures; provider text and URLs are never returned or logged.
 #[derive(Debug, thiserror::Error)]
 pub enum PhotoError {
     #[error("Photo setup needed")]
@@ -42,7 +37,6 @@ pub enum PhotoError {
     InvalidDate,
 }
 
-/// A calendar month and day without a year, written `MM-DD`; 29 February is a valid day.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MonthDay {
     month: u32,
@@ -50,7 +44,6 @@ pub struct MonthDay {
 }
 
 impl MonthDay {
-    /// `MM-DD` with two digits each, checked against a leap year so `02-29` is accepted.
     pub fn parse(value: &str) -> Result<Self, PhotoError> {
         let (month, day) = value.split_once('-').ok_or(PhotoError::InvalidDate)?;
         if month.len() != 2
@@ -65,7 +58,6 @@ impl MonthDay {
         Ok(Self { month, day })
     }
 
-    /// The month and day of a calendar date.
     #[must_use]
     pub fn of(date: NaiveDate) -> Self {
         Self {
@@ -74,8 +66,6 @@ impl MonthDay {
         }
     }
 
-    /// Whether a capture date falls on this month and day. In a year without 29 February,
-    /// 28 February also gathers the leap-day photos so they still come round.
     fn matches(self, date: NaiveDate, year: i32) -> bool {
         let leap_day = date.month() == 2 && date.day() == 29;
         Self::of(date) == self || (leap_day && self.month == 2 && self.day == 28 && !is_leap(year))
@@ -92,15 +82,12 @@ fn is_leap(year: i32) -> bool {
     NaiveDate::from_ymd_opt(year, 2, 29).is_some()
 }
 
-/// The household's calendar date at an instant: Europe/Copenhagen, as every `OpenHome` day.
 #[must_use]
 pub fn copenhagen_today(now: DateTime<Utc>) -> NaiveDate {
     now.with_timezone(&chrono_tz::Europe::Copenhagen)
         .date_naive()
 }
 
-/// Safe album metadata without provider identities, locations or paths. The span is only the
-/// first and last month (`YYYY-MM`) a photo was taken; no day, time or place leaves Axum.
 #[derive(Clone, Serialize)]
 pub struct AlbumSummary {
     pub id: Uuid,
@@ -112,7 +99,6 @@ pub struct AlbumSummary {
     pub missing: bool,
 }
 
-/// One bounded page of photo identities, never original filenames or EXIF.
 #[derive(Serialize)]
 pub struct AlbumPage {
     pub album: AlbumSummary,
@@ -121,14 +107,12 @@ pub struct AlbumPage {
     pub next_page: Option<usize>,
 }
 
-/// One photo in the merged view, named by the selected album that grants access to it.
 #[derive(Serialize)]
 pub struct MergedPhoto {
     pub album: Uuid,
     pub asset: Uuid,
 }
 
-/// One bounded page across every selected album, newest first; capture times stay in Axum.
 #[derive(Serialize)]
 pub struct MergedPage {
     pub photo_count: usize,
@@ -137,8 +121,6 @@ pub struct MergedPage {
     pub next_page: Option<usize>,
 }
 
-/// A photo taken on the requested month and day in an earlier year. Only the capture year
-/// leaves Axum with it; the time of day, EXIF and the provider's timestamps stay here.
 #[derive(Serialize)]
 pub struct OnThisDayPhoto {
     pub album: Uuid,
@@ -147,7 +129,6 @@ pub struct OnThisDayPhoto {
     pub years_ago: i32,
 }
 
-/// One bounded page of photos taken on `date` (`MM-DD`) in earlier years, newest year first.
 #[derive(Serialize)]
 pub struct OnThisDayPage {
     pub date: String,
@@ -176,11 +157,8 @@ struct ProviderAsset {
     is_trashed: bool,
     #[serde(default)]
     is_offline: bool,
-    /// Capture time written with a `Z`. When Immich knows the photo's zone these are the
-    /// digits of that zone's wall clock; otherwise they are the UTC instant.
     #[serde(default)]
     local_date_time: Option<String>,
-    /// Read only for whether Immich knows the capture zone; nothing else of EXIF is kept.
     #[serde(default)]
     exif_info: Option<ProviderExif>,
 }
@@ -197,8 +175,6 @@ struct CachedAlbum {
     taken: Vec<Option<NaiveDateTime>>,
 }
 
-/// The local wall-clock capture time: the photo's own zone when Immich knows it, else the
-/// instant in Europe/Copenhagen, so a photo at 23:30 UTC in winter falls on the next day.
 fn taken_at(asset: &ProviderAsset) -> Option<NaiveDateTime> {
     let time = DateTime::parse_from_rfc3339(asset.local_date_time.as_deref()?).ok()?;
     let zoned = asset
@@ -218,7 +194,6 @@ fn month(time: NaiveDateTime) -> String {
     format!("{:04}-{:02}", time.year(), time.month())
 }
 
-/// One shared client with bounded album metadata and four concurrent image reads.
 #[derive(Clone)]
 pub struct PhotoService {
     client: Client,
@@ -229,7 +204,6 @@ pub struct PhotoService {
 }
 
 impl PhotoService {
-    /// Missing configuration disables photos; malformed or partial setup fails startup safely.
     pub fn configure(
         base: Option<&str>,
         key: Option<&str>,
@@ -250,7 +224,6 @@ impl PhotoService {
         Self::new(base_url, key, selected).map(Some)
     }
 
-    /// An installer-supplied server root and explicit album allowlist; no runtime library discovery.
     pub fn new(mut base_url: Url, key: &str, mut selected: Vec<Uuid>) -> anyhow::Result<Self> {
         if !matches!(base_url.scheme(), "https" | "http")
             || !base_url.username().is_empty()
@@ -312,7 +285,6 @@ impl PhotoService {
         if !self.selected.contains(&id) {
             return Err(PhotoError::NotFound);
         }
-        // Coalesce parallel metadata reads, including thumbnail membership checks.
         let mut cache = self.albums.lock().await;
         if cache
             .get(&id)
@@ -339,7 +311,6 @@ impl PhotoService {
             .filter(|asset| asset.kind == "IMAGE" && !asset.is_trashed && !asset.is_offline)
             .map(|asset| (asset.id, taken_at(&asset)))
             .unzip();
-        // The owner's chosen cover when it is a served still, else the first photo.
         let cover_id = album
             .album_thumbnail_asset_id
             .filter(|cover| assets.contains(cover))
@@ -365,7 +336,6 @@ impl PhotoService {
         Ok(cache)
     }
 
-    /// List only configured albums; deleted albums remain understandable and cannot broaden access.
     pub async fn list(&self) -> Result<Vec<AlbumSummary>, PhotoError> {
         let mut result = Vec::with_capacity(self.selected.len());
         for &id in self.selected.iter() {
@@ -386,7 +356,6 @@ impl PhotoService {
         Ok(result)
     }
 
-    /// Bound browser work to 60 thumbnails; out-of-range pages never silently show another page.
     pub async fn page(&self, id: Uuid, page: usize) -> Result<AlbumPage, PhotoError> {
         let start = page.checked_mul(PAGE_SIZE).ok_or(PhotoError::InvalidPage)?;
         let cache = self.album(id).await?;
@@ -408,8 +377,6 @@ impl PhotoService {
         })
     }
 
-    /// Every selected album's photos, de-duplicated by asset in album order and sorted newest
-    /// first; undated photos follow. Removed albums drop out; access still goes through each album.
     async fn newest_first(&self) -> Result<Vec<(Option<NaiveDateTime>, Uuid, Uuid)>, PhotoError> {
         let mut seen = HashSet::new();
         let mut photos = Vec::new();
@@ -426,12 +393,10 @@ impl PhotoService {
                 }
             }
         }
-        // Stable, so equal times keep album order.
         photos.sort_by_key(|photo| std::cmp::Reverse(photo.0));
         Ok(photos)
     }
 
-    /// Every selected album's photos merged newest first, 60 to a page.
     pub async fn merged(&self, page: usize) -> Result<MergedPage, PhotoError> {
         let start = page.checked_mul(PAGE_SIZE).ok_or(PhotoError::InvalidPage)?;
         let photos = self.newest_first().await?;
@@ -451,8 +416,6 @@ impl PhotoService {
         })
     }
 
-    /// Photos taken on `day` in years before `today`'s, newest first, 60 to a page. The day is
-    /// the photo's local capture date (see `taken_at`); `today` is the household's date.
     pub async fn on_this_day(
         &self,
         day: MonthDay,
@@ -488,7 +451,6 @@ impl PhotoService {
         })
     }
 
-    /// Recheck selected-album membership before reading a resized asset; never fall back to originals.
     pub async fn image(
         &self,
         album_id: Uuid,

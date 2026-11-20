@@ -1,6 +1,3 @@
-//! Product portions through the nutrition routes: label values, linked Foods, relinking and NOVA
-//! classes, with Open Food Facts mocked by `wiremock`, over a real `app.db` and a real `food.db`.
-
 mod common;
 #[path = "nutrition_support/products.rs"]
 mod support;
@@ -34,7 +31,6 @@ async fn a_product_portion_takes_label_values_first_and_its_linked_food_fills_th
             &json!(200.0)
         )
     );
-    // The label's energy and macronutrients win; the Food has the fibre and alcohol it lacks.
     assert_eq!(
         portion["nutrients"],
         json!({
@@ -47,8 +43,6 @@ async fn a_product_portion_takes_label_values_first_and_its_linked_food_fills_th
         })
     );
     let day = api.day().await;
-    // The label's vitamin D (1.5 µg per 100 g, from grams) wins over the Food's 0 µg, and its
-    // kJ comes from the label's kcal rather than the Food's 260 kJ.
     assert_eq!(
         (
             &nutrient(&day, "vitamin_d")["value"],
@@ -60,7 +54,6 @@ async fn a_product_portion_takes_label_values_first_and_its_linked_food_fills_th
     );
     assert_eq!(day["label_source"]["licence"], "ODbL");
     assert_eq!(day["meal_logs"], json!([meal_log]));
-    // A summary over the day credits both sources too.
     let (status, summary) = api
         .send(
             Method::GET,
@@ -86,7 +79,6 @@ async fn a_product_portion_takes_label_values_first_and_its_linked_food_fills_th
 async fn estimates_fill_only_the_values_no_source_has() {
     let api = Api::start().await;
     api.linked_skyr(1693).await;
-    // The chicken has no carbohydrate, fibre or alcohol value; nothing has EPA for the skyr.
     let portions = json!([
         {"food_id": 907, "grams": 200, "estimates": {"dietary_fibre": 0.5, "available_carbohydrate": 1}},
         {"barcode": SKYR, "grams": 100, "estimates": {"epa": 0.002}},
@@ -109,7 +101,6 @@ async fn estimates_fill_only_the_values_no_source_has() {
             &amount(None, "g", None),
         )
     );
-    // The chicken's own EPA (0.01 g per 100 g) and the skyr's estimate add up.
     assert_eq!(nutrient(&api.day().await, "epa")["value"], json!(0.022));
     let (status, replay) = api.log(meal(&portions, "estimated-1")).await;
     assert_eq!((status, &replay["meal_log"]), (StatusCode::OK, &meal_log));
@@ -164,7 +155,6 @@ async fn relinking_a_product_changes_only_future_portions() {
         .logged(json!([{"barcode": SKYR, "grams": 100}]), "after")
         .await;
 
-    // The past Portion keeps the skyr Food's fibre; the new one takes the chicken's gaps.
     let day = api.day().await;
     assert_eq!(day["meal_logs"], json!([before, after]));
     assert_eq!(
@@ -186,7 +176,6 @@ async fn relinking_a_product_changes_only_future_portions() {
             &amount(Some(80.0), "kcal", Some("label")),
         )
     );
-    // Replacing a past Portion snapshots the Product as it is linked now.
     let id = before["id"].as_str().unwrap();
     let (status, replaced) = api
         .send(
@@ -243,7 +232,6 @@ async fn the_nova_1_share_counts_classified_kcal_with_products_taking_the_open_f
     let (_, preview) = api.lookup(SKYR).await;
     assert_eq!(preview["product"]["nova_class"], 3);
 
-    // Nothing classified yet: no share rather than zero.
     api.logged(json!([{"food_id": 2, "grams": 100}]), "apple")
         .await;
     assert_eq!(
@@ -254,7 +242,6 @@ async fn the_nova_1_share_counts_classified_kcal_with_products_taking_the_open_f
         })
     );
 
-    // Classifying the skyr Food leaves the Product on Open Food Facts' class.
     for (food_id, nova_class) in [(1693, 1), (3, 1), (907, 1)] {
         let (status, body) = api
             .send(
@@ -283,8 +270,6 @@ async fn the_nova_1_share_counts_classified_kcal_with_products_taking_the_open_f
         .collect();
     assert_eq!(classes, [&json!(3), &json!(1), &json!(1)]);
 
-    // Banana 90 kcal and chicken 150 kcal are Class 1 of 400 classified kcal, beside the
-    // 160 kcal Class 3 skyr; the unclassified 50 kcal apple is left out.
     assert_eq!(
         api.day().await["nova"],
         json!({

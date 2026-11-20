@@ -15,7 +15,6 @@ const readRequestNavPrefs = createServerOnlyFn((): NavPrefs => ({
   labels: parseNavLabels(getCookie(navLabelsCookieName)),
 }))
 
-/** The remembered navigation: the request cookies on the server, so the first paint is right. */
 export function readNavPrefs(): NavPrefs {
   return typeof document === "undefined"
     ? readRequestNavPrefs()

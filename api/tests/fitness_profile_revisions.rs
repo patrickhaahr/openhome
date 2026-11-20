@@ -1,5 +1,3 @@
-//! Replay-safe Profile edits (`client_revision`): the contract the Android outbox retries against.
-
 mod common;
 
 use axum::Router;
@@ -72,7 +70,6 @@ async fn a_newer_revision_applies_and_its_null_clears() {
     assert_eq!(read(&app).await, body);
 }
 
-/// The first edit may create the row, and it still has to protect against what follows it.
 #[tokio::test]
 async fn the_first_edit_records_its_revision() {
     let app = common::test_app().await;
@@ -89,7 +86,6 @@ async fn the_first_edit_records_its_revision() {
 async fn a_client_without_revisions_behaves_as_before_and_leaves_the_revision_alone() {
     let app = common::test_app().await;
 
-    // Never having seen a revision, the shape it reads and writes is the existing one.
     let (status, body) = patch(&app, json!({ "height_cm": 175.0 })).await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.get("client_revision").is_none(), "{body}");

@@ -1,6 +1,3 @@
-//! Meal Log requests through the nutrition routes: retries, validation, updates, deletes and the
-//! food database being unavailable, over a real `app.db` and a real `food.db`.
-
 mod common;
 #[path = "nutrition_support/meal_logs.rs"]
 mod support;
@@ -17,7 +14,6 @@ async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a
     let api = Nutrition::start().await;
     let meal_log = api.logged(breakfast("breakfast-1")).await;
 
-    // The same instant written in UTC with the same note after trimming is the same request.
     let mut retry = breakfast("breakfast-1");
     retry["eaten_at"] = json!("2026-10-29T07:15:00Z");
     retry["note"] = json!("after the run");
@@ -62,7 +58,6 @@ async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a
     );
     assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
 
-    // A rejected request consumes no request_id.
     let mut unknown = at("2026-10-29T09:00:00+01:00", "rejected-first");
     unknown["portions"][0]["food_id"] = json!(424_242);
     let (status, body) = api.log(unknown).await;
@@ -73,9 +68,6 @@ async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a
     assert_eq!(status, StatusCode::CREATED);
 }
 
-/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
-/// of replaying a fabricated one, and the refusals keep the shared order: changed arguments,
-/// then deletion, then the missing result.
 #[tokio::test]
 async fn a_legacy_receipt_directs_the_client_to_read_first_and_deletion_is_reported_before_it() {
     let api = Nutrition::start().await;
@@ -194,7 +186,6 @@ async fn an_update_changes_time_note_or_portions_and_a_delete_removes_the_log() 
     let id = meal_log["id"].as_str().unwrap().to_owned();
     let uri = format!("/api/nutrition/meal-logs/{id}");
 
-    // Moving it to the evening before moves it to that day; omitted fields stay.
     let (status, moved) = api
         .send(
             Method::PATCH,
@@ -214,7 +205,6 @@ async fn an_update_changes_time_note_or_portions_and_a_delete_removes_the_log() 
     assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
     assert_eq!(api.day("2026-10-28").await, std::slice::from_ref(&moved));
 
-    // Replacing Portions snapshots the current database; null clears the note.
     api.reimport("2", second_dataset()).await;
     let (status, corrected) = api
         .send(
@@ -270,7 +260,6 @@ async fn while_the_food_database_is_unavailable_logs_stay_readable_and_editable(
     let api = Nutrition::start().await;
     let meal_log = api.logged(breakfast("breakfast-1")).await;
     let id = meal_log["id"].as_str().unwrap().to_owned();
-    // The next start re-imports a new pin; until it completes, Food lookups are unavailable.
     let pin = DatasetPin {
         version: "2".into(),
         url: format!("{}/files/never.xlsx", api.server.uri())

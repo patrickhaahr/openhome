@@ -33,21 +33,14 @@ import {
   type Form,
 } from "@/components/loop-form"
 
-// A lone message hugs its words; loops get the full plate.
 const plate =
   "grid w-travel-plate gap-2 rounded-panel bg-ground p-2 not-has-[[data-slot=loop-alternatives]]:w-fit"
 
 const fieldset = "flex min-w-0 flex-wrap items-center gap-2"
 
-// The capsule draws the field: its outline marks focus, then a problem.
 const field =
   "flex h-14 items-center gap-2 rounded-full bg-wash px-4 text-muted-ink focus-within:outline-2 focus-within:outline-ink has-aria-invalid:outline-2 has-aria-invalid:outline-danger max-phone:h-13"
 
-/**
- * Plan walking or running loops from the shared map origin by distance or
- * steps, then compare the measured alternatives on the map. Drawn routes always
- * come from the provider's geometry.
- */
 export function LoopPlanner({
   plan,
   initialActive,
@@ -68,7 +61,6 @@ export function LoopPlanner({
   const [form, setForm] = useState<Form>(INITIAL_FORM)
   const [status, setStatus] = useState<Status>({ state: "idle" })
   const [shown, setShown] = useState<Shown | undefined>(undefined)
-  // Planning or saving the Active Route is declared busy.
   useIdleBlock(
     status.state === "planning" ||
       selection.state === "saving" ||
@@ -88,7 +80,6 @@ export function LoopPlanner({
     const result = await plan(read.request)
 
     if (result.state !== "generated") {
-      // Earlier loops stay on screen and on the map, labelled with their own target.
       setStatus({ state: "failed", failure: result })
 
       return
@@ -170,7 +161,6 @@ export function LoopPlanner({
 
   const problemId = `${id}-problem`
 
-  /** Marks the input a problem belongs to and describes it with the message. */
   function problemFor(
     field: Field,
     hint?: string
@@ -186,8 +176,6 @@ export function LoopPlanner({
       : { "aria-invalid": invalid, "aria-describedby": describedBy }
   }
 
-  // The plate only exists on screen while it has something to say; otherwise its
-  // words stay with assistive technology.
   const plateShown =
     shown !== undefined ||
     active.state !== "none" ||
@@ -196,7 +184,6 @@ export function LoopPlanner({
     selection.state !== "idle"
 
   return (
-    // The planner and its results dock bottom-left; only the plates take the pointer.
     <div
       data-slot="loop-dock"
       className="pointer-events-none absolute bottom-travel-inset left-travel-inset z-3 flex max-w-travel-dock flex-col items-start gap-3 *:pointer-events-auto max-tablet:right-travel-inset max-tablet:max-w-none"
@@ -216,7 +203,6 @@ export function LoopPlanner({
             if (active.state === "selected") showActive(active.route)
           }}
         />
-        {/* An empty status region stays for assistive technology without taking a row. */}
         <div role="status" className="not-has-[>:not(.sr-only)]:sr-only">
           <StatusMessage status={status} shown={shown} problemId={problemId} />
         </div>

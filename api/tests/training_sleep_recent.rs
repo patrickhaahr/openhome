@@ -1,5 +1,3 @@
-//! Recent Sleep Nights through the authenticated API and the real NOOP push fixture.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -57,7 +55,6 @@ async fn reports_newest_first_with_explicit_unsynced_and_covered_gaps() {
     let mut mirror = Mirror::empty().await;
     let pushed_at = iso(Utc::now());
 
-    // Complete imported data on the older night; an edited computed session wins on today.
     mirror
         .push(
             SOURCE,

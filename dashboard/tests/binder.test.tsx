@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { createServer } from "node:http"
 import { act } from "react"
 import {
@@ -46,7 +45,6 @@ import {
   type,
 } from "./support/lists-dom"
 
-// The fixture's OPTCG stand-in knows the invented OP99 cards only.
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
 let root: Root
@@ -204,7 +202,6 @@ const cards = (): (string | undefined)[] =>
       ?.replace("/binder-image/", "")
   )
 
-/** Twenty entries, added out of Card Code order: the first spread is full and the second holds two. */
 const alex: Addition[] = [
   { card: "OP99-010" },
   { card: "OP99-004_p1" },
@@ -434,7 +431,6 @@ async function stored() {
   return data
 }
 
-/** The note field; its label cannot be matched by text once the textarea holds one. */
 function note(): HTMLTextAreaElement {
   const found = sheet().querySelector("textarea")
 

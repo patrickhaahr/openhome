@@ -21,7 +21,6 @@ pub(super) async fn nutrition_day(
     ))
 }
 
-/// Every Trends series over a range of up to 365 days, by day, ISO week or calendar month.
 pub(super) async fn nutrition_summary(
     State(state): State<AppState>,
     query: Result<Query<SummaryQuery>, QueryRejection>,
@@ -38,7 +37,6 @@ pub(super) async fn nutrition_summary(
     ))
 }
 
-/// Today in Copenhagen: the day a goal change takes effect from.
 fn today() -> CalendarDay {
     CalendarDay::of(chrono::Utc::now())
 }
@@ -49,7 +47,6 @@ pub(super) async fn nutrition_goal(
     Ok(Json(goals::nutrition_goal(&state.db, today()).await?))
 }
 
-/// Sets the Nutrition Goal from today.
 pub(super) async fn set_nutrition_goal(
     State(state): State<AppState>,
     request: Result<Json<SetGoal>, JsonRejection>,

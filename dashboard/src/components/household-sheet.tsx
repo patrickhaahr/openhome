@@ -11,7 +11,6 @@ import type { HouseholdUser, Wishlist, WishlistCommand } from "@/lib/wishlist"
 
 type Save = (command: WishlistCommand, saved: string) => Promise<boolean>
 
-/** One name with a save key; removal asks once, inline. */
 function NameRow({
   label,
   name,
@@ -103,7 +102,6 @@ function NameRow({
   )
 }
 
-/** A name field with an add key, cleared after a confirmed save. */
 function AddRow({
   label,
   busy,
@@ -151,7 +149,6 @@ function AddRow({
   )
 }
 
-/** The household and each person's named lists: rename, remove, add. */
 export function HouseholdLists({
   owners,
   lists,

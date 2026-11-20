@@ -31,7 +31,6 @@ const loopback = new Set(["127.0.0.1", "localhost", "[::1]"])
 
 const mapHost = "tiles.openfreemap.org"
 
-/** Notices that mean the map stand-ins below did not hold. */
 const forbiddenTexts = [
   "Some map tiles could not load",
   "Map tiles unavailable",
@@ -47,10 +46,6 @@ const flatPng = (() => {
   return PNG.sync.write(png)
 })()
 
-/**
- * A style with the building source the map expects and no tiles in it, so the map renders its
- * own routes and markers on a flat ground without reaching the provider.
- */
 function mapStyle(pathname: string): string {
   return JSON.stringify({
     version: 8,
@@ -126,7 +121,6 @@ async function perform(page: Page, step: Step): Promise<void> {
   }
 }
 
-/** Waits until no request has been open for a quiet spell, the closest thing to "loaded". */
 function networkQuiet(page: Page): () => Promise<void> {
   let open = 0
   let changed = Date.now()
@@ -161,12 +155,10 @@ async function frames(page: Page): Promise<void> {
   )
 }
 
-/** Visits the whole scroll height so lazy images start, then returns to the top. */
 async function scrollThrough(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const root = document.scrollingElement ?? document.documentElement
 
-    // A lazy image scrolled past within one frame may never start loading, which stalls imagesReady.
     for (const image of document.images) image.loading = "eager"
 
     const frame = () =>
@@ -202,7 +194,6 @@ async function imagesReady(page: Page, whole: boolean): Promise<void> {
     whole,
     { timeout: settleTimeout }
   )
-  // decode() on an image that never started loading (lazy, off screen) waits forever.
   await page.evaluate(async () => {
     await Promise.all(
       [...document.images].flatMap((image) =>
@@ -225,7 +216,6 @@ async function themeHolds(page: Page, theme: Theme): Promise<string | null> {
   return root.dark === (theme === "night") ? null : `theme is not ${theme}`
 }
 
-/** Two consecutive identical screenshots, so no frame is caught mid-change. */
 async function stableShot(page: Page, fullPage: boolean): Promise<Buffer> {
   const shoot = () => page.screenshot({ fullPage, animations: "disabled" })
   let previous = await shoot()
@@ -287,10 +277,6 @@ async function render(
   return { state: "captured", png: await stableShot(page, whole), problems }
 }
 
-/**
- * Renders one job on one Dashboard in a fresh context: cookies hold the currency and navigation
- * choices and session storage holds drafts, so nothing may carry over between captures.
- */
 export async function capture(
   browser: Browser,
   origin: string,
@@ -311,7 +297,6 @@ export async function capture(
   const problems: string[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  // A browser call without its own timeout (evaluate, screenshot) must not stall the whole run.
   const deadline = new Promise<never>((_, fail) => {
     timer = setTimeout(
       () => fail(new Error("capture took over 2 minutes")),

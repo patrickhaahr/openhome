@@ -46,7 +46,6 @@ const entries = z.object({
   ),
 })
 
-/** The eight cards `features/binder.md` adds so Alex's Binder has a second spread. */
 const additions = [
   ["OP99-001", "en"],
   ["OP99-001", "ja"],
@@ -66,7 +65,6 @@ async function read<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   return schema.parse(await response.json())
 }
 
-/** Writes once, before any capture: both Dashboards read this one API, so scenarios only read. */
 async function seedBinder(): Promise<void> {
   const alex = (await read("/api/household-users", owners)).find(
     (owner) => owner.name === "Alex"
@@ -97,7 +95,6 @@ async function seedBinder(): Promise<void> {
       entries
     )
 
-    // Some invented cards have no price, but once the reference rates are in, the rest are valued.
     const priced = binder.entries.some(
       (entry) => entry.card.card_value !== null
     )
@@ -124,7 +121,6 @@ async function stylesheet(origin: string): Promise<string> {
 const blocked = new Set<string>()
 
 async function shoot(browser: Browser, job: Job): Promise<[Shot, Shot]> {
-  // One instant for both sides: the synthetic data is relative to the real clock.
   const now = Date.now()
 
   return Promise.all([
@@ -149,7 +145,6 @@ async function pair(browser: Browser, job: Job): Promise<Row> {
   const differs = ([a, b]: [Shot, Shot]) =>
     a.state === "captured" && b.state === "captured" && !a.png.equals(b.png)
 
-  // Request-time data (the hour strip, a check time) can straddle a boundary between the two sides.
   if (differs(shots)) {
     shots = await shoot(browser, job)
     retried = true
@@ -215,8 +210,6 @@ await seedBinder()
 
 const browser = await chromium.launch({
   executablePath: env("PARITY_CHROMIUM"),
-  // Partial raster repaints image tiles on top of stale ones and leaves a few pixels at rounded
-  // corners differing between two identical renders.
   args: ["--font-render-hinting=none", "--disable-partial-raster"],
 })
 
@@ -274,5 +267,4 @@ console.log(
 
 console.log(`Report: ${join(dir, "index.html")}`)
 
-// Diffs are for people to judge; only a capture the harness could not trust fails the run.
 if (failed.length > 0) process.exitCode = 1

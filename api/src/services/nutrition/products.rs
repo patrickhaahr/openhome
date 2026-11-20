@@ -1,14 +1,3 @@
-//! Products (`CONTEXT.md`, Product): packaged foods identified by their barcode.
-//!
-//! A lookup previews a barcode from Open Food Facts with Foods to link it to and stores nothing.
-//! Linking stores the Product (its label values per 100 g, its NOVA Class and its linked Food)
-//! once; afterwards a lookup or a logged Portion reads the stored Product without asking Open
-//! Food Facts again. Re-linking changes only the Food future Portions take their gaps from: past
-//! Portions keep their snapshots (ADR 0012).
-//!
-//! Linking follows the `request_id` receipt pattern: a retry replays the accepted Product and the
-//! same `request_id` with another barcode or Food is a conflict.
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -19,17 +8,14 @@ use super::nova;
 use super::open_food_facts::{LabelProduct, Lookup, OpenFoodFacts, ProviderError};
 use super::parameters;
 
-/// Foods suggested for linking a previewed Product.
 pub const SUGGESTED_FOODS: usize = 5;
 const MAX_REQUEST_ID_CHARS: usize = 128;
-/// Search terms taken from a product name's own words have at least this many letters.
 const MIN_NAME_WORD_CHARS: usize = 4;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProductError {
     #[error("{0}")]
     Validation(String),
-    /// Open Food Facts does not know the barcode.
     #[error("Open Food Facts has no product with barcode {0}")]
     NotFound(String),
     #[error("{0}")]
@@ -44,14 +30,10 @@ pub enum ProductError {
 
 type Result<T> = std::result::Result<T, ProductError>;
 
-/// A barcode's canonical digits: EAN-8, or GTIN-13 (a 12-digit UPC-A gains its leading zero and a
-/// GTIN-14 with a leading zero loses it), so one package always names one Product.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Barcode(String);
 
 impl Barcode {
-    /// Parses the digits printed under the bars; spaces are ignored. The GS1 check digit must
-    /// match, except for 8 digits, which may also be a UPC-E code.
     pub fn parse(text: &str) -> Result<Self> {
         let digits: String = text.chars().filter(|c| !c.is_whitespace()).collect();
         let invalid = || {
@@ -81,7 +63,6 @@ impl Barcode {
     }
 }
 
-/// The GS1 mod-10 check: weights 3 and 1 alternate from the digit before the check digit.
 fn check_digit_matches(digits: &str) -> bool {
     let values: Vec<u32> = digits.chars().filter_map(|c| c.to_digit(10)).collect();
     let Some((check, data)) = values.split_last() else {
@@ -96,7 +77,6 @@ fn check_digit_matches(digits: &str) -> bool {
     (10 - sum % 10) % 10 == *check
 }
 
-/// Open Food Facts, credited wherever label values are shown.
 #[derive(Debug, Serialize)]
 pub struct LabelSource {
     pub name: &'static str,
@@ -105,7 +85,6 @@ pub struct LabelSource {
     pub licence: &'static str,
 }
 
-/// Open Food Facts data is available under the Open Database License.
 pub const LABEL_SOURCE: LabelSource = LabelSource {
     name: "Open Food Facts",
     url: "https://world.openfoodfacts.org",
@@ -113,7 +92,6 @@ pub const LABEL_SOURCE: LabelSource = LabelSource {
     licence: "ODbL",
 };
 
-/// One label value per 100 g, in its vocabulary key and unit.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LabelAmount {
     pub key: String,
@@ -121,7 +99,6 @@ pub struct LabelAmount {
     pub unit: String,
 }
 
-/// The Food a Product is linked to.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LinkedFood {
     pub food_id: i64,
@@ -134,21 +111,15 @@ pub struct Product {
     pub barcode: String,
     pub name: Option<String>,
     pub brand: Option<String>,
-    /// NOVA Class 1-4 from Open Food Facts; null when it has none.
     pub nova_class: Option<u8>,
-    /// Every label value per 100 g in vocabulary order; a value the label lacks is absent.
     pub label_per_100g: Vec<LabelAmount>,
-    /// The linked Food; null in a preview.
     pub food: Option<LinkedFood>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ProductLookup {
-    /// Whether the barcode is a stored Product; otherwise this is a preview and nothing is
-    /// stored.
     pub linked: bool,
     pub product: Product,
-    /// Foods to link a preview to, best first; empty for a linked Product.
     pub suggested_foods: Vec<FoodSummary>,
     pub source: LabelSource,
 }
@@ -165,13 +136,11 @@ pub struct LinkProduct {
 pub struct Linked {
     pub product: Product,
     pub replayed: bool,
-    /// Whether this link stored a new Product rather than re-linking or replaying.
     #[serde(skip)]
     pub created: bool,
     pub source: LabelSource,
 }
 
-/// A stored Product as Portions snapshot it.
 #[derive(Debug)]
 pub(super) struct StoredProduct {
     pub barcode: String,
@@ -181,20 +150,15 @@ pub(super) struct StoredProduct {
     pub food_id: i64,
     food_name_da: String,
     food_name_en: String,
-    /// In vocabulary order.
     pub label: Vec<LabelAmount>,
 }
 
 impl StoredProduct {
-    /// Whether `food`, read under the linked `FoodID`, is still the Food the Product was linked
-    /// to. As for a Meal's Foods, a later dataset that gives the `FoodID` to another Food changes
-    /// both names, while a corrected Food keeps at least one.
     pub(super) fn links(&self, food: &FoodSnapshot) -> bool {
         food.food_id == self.food_id
             && (food.name_da == self.food_name_da || food.name_en == self.food_name_en)
     }
 
-    /// The linked Food's English name as it was linked.
     pub(super) fn food_name_en(&self) -> &str {
         &self.food_name_en
     }
@@ -222,7 +186,6 @@ fn vocabulary_position(key: &str) -> usize {
         .unwrap_or(usize::MAX)
 }
 
-/// The stored Products among `barcodes`, by canonical barcode.
 pub(super) async fn stored(
     db: &SqlitePool,
     barcodes: &[&Barcode],
@@ -279,7 +242,6 @@ async fn find(db: &SqlitePool, barcode: &Barcode) -> Result<Option<StoredProduct
     Ok(stored(db, &[barcode]).await?.remove(barcode.as_str()))
 }
 
-/// Reads the barcode from Open Food Facts; an unknown barcode is [`ProductError::NotFound`].
 async fn fetch(provider: &OpenFoodFacts, barcode: &Barcode) -> Result<LabelProduct> {
     match provider.product(barcode.as_str()).await? {
         Lookup::Found(product) => Ok(product),
@@ -287,8 +249,6 @@ async fn fetch(provider: &OpenFoodFacts, barcode: &Barcode) -> Result<LabelProdu
     }
 }
 
-/// A linked barcode's stored Product, without calling Open Food Facts; otherwise a preview from
-/// Open Food Facts with suggested Foods, storing nothing.
 pub async fn lookup(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -304,7 +264,6 @@ pub async fn lookup(
             source: LABEL_SOURCE,
         });
     }
-    // A preview leads to linking, which needs Foods: spend no provider read without them.
     foods.check_ready()?;
     let label = fetch(provider, &barcode).await?;
     let mut suggested_foods = suggest(foods, &label).await?;
@@ -332,7 +291,6 @@ pub async fn lookup(
     })
 }
 
-/// Foods matching the product's generic name, name, categories or name words, best first.
 async fn suggest(foods: &FoodDatabase, label: &LabelProduct) -> Result<Vec<FoodSummary>> {
     let mut terms: Vec<String> = Vec::new();
     terms.extend(label.generic_name.clone());
@@ -358,7 +316,6 @@ async fn suggest(foods: &FoodDatabase, label: &LabelProduct) -> Result<Vec<FoodS
         }
         let found = match foods.search(&term, Some(SUGGESTED_FOODS)).await {
             Ok(found) => found.foods,
-            // A term the search refuses (too long, no letters) suggests nothing.
             Err(FoodError::Validation(_)) => continue,
             Err(error) => return Err(error.into()),
         };
@@ -386,7 +343,6 @@ fn request_id(value: &str) -> Result<String> {
     Ok(value.to_owned())
 }
 
-/// The current Product for an accepted `request_id`, or `None` when it is new.
 async fn replay(
     db: &SqlitePool,
     request_id: &str,
@@ -426,9 +382,6 @@ async fn replay(
     }))
 }
 
-/// Stores a Product linked to `food_id`, or re-links a stored one. A new barcode is read from
-/// Open Food Facts; a stored one is not, and keeps its label values. Re-linking changes only
-/// future Portions.
 pub async fn link(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -458,7 +411,6 @@ pub async fn link(
 
     let code = barcode.as_str();
     let mut transaction = db.begin().await?;
-    // Claim first so simultaneous retries serialize on the receipt.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO product_link_receipts (request_id, barcode, food_id) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
         request_id, code, request.food_id)

@@ -16,19 +16,13 @@ import {
 
 const panel = "grid gap-4 rounded-xl bg-wash p-food-plate"
 
-/** The Calorie Target, eaten and remaining figures share one look; only "over" turns sun. */
 const figure =
   "text-title leading-none font-medium tracking-score-tight tabular-nums"
 
-/** "2,120" kcal: targets are whole kcal. */
 function kcal(value: number): string {
   return formatAmount(Math.round(value))
 }
 
-/**
- * The day's Calorie Target, eaten and remaining, with the goal and Estimated Expenditure behind
- * it, then protein, fat and carbs against their targets; or why there is no target yet.
- */
 export function TargetStrip({
   targets,
 }: {
@@ -128,7 +122,6 @@ export function TargetStrip({
   )
 }
 
-/** One macro eaten against its target as a figure and a bar; carbs carry no status. */
 function MacroProgress({
   macro,
   name,
@@ -184,7 +177,6 @@ function MacroProgress({
 
 const goalRow = "flex flex-wrap items-center gap-x-3 gap-y-2"
 
-/** Identifies the goal Axum serves; null when it could not be read. */
 function goalSignature(goal: NutritionGoal | null): string | null {
   if (goal === null) return null
   const { direction, rate_kg_per_week, effective_from } = goal.goal
@@ -192,7 +184,6 @@ function goalSignature(goal: NutritionGoal | null): string | null {
   return `${direction} ${rate_kg_per_week} ${effective_from ?? ""}`
 }
 
-/** The Nutrition Goal from today: the Day view's only write. */
 export function GoalControl({
   goal,
   save,
@@ -205,8 +196,6 @@ export function GoalControl({
   const id = useId()
   const current = goal === null ? undefined : goalChoice(goal.goal)
   const [chosen, setChosen] = useState<string>(current?.key ?? "")
-  // The choice starts again from the goal Axum serves whenever that goal changes, such as when
-  // it could first not be read; adjusting during render keeps the save feedback.
   const signature = goalSignature(goal)
   const [shown, setShown] = useState(signature)
 

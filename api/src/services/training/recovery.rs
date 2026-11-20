@@ -1,12 +1,3 @@
-//! Recovery Day: one Copenhagen day's sleep and recovery values from the NOOP mirror.
-//!
-//! The Sleep Night is the one that wakes on the day: its sessions end inside the day's local
-//! bounds, matching NOOP's daily rows, which are keyed by wake day. Every value carries its unit
-//! and the namespace it was selected from, and the `noop` block says how far the receiver's copy
-//! can be trusted, so a missing sync is never mistaken for a recorded null.
-//! Training Context and metric trends read focused measurements here without loading sessions;
-//! edit detection and daily source selection remain private to this module.
-
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -23,38 +14,27 @@ use super::noop_source::{
 };
 use super::rest;
 
-/// Sessions one Sleep Night may hold. A larger night is rejected rather than truncated.
 pub const MAX_SLEEP_SESSIONS: usize = 24;
-/// Journal rows one day may hold across namespaces, before one entry per question is kept. A
-/// larger journal is rejected rather than truncated.
 pub const MAX_JOURNAL_ROWS: usize = 64;
 
 #[derive(Debug, Serialize)]
 pub struct RecoveryDay {
     pub day: String,
     pub time_zone: &'static str,
-    /// Local midnight at the start of the day.
     pub day_start: String,
-    /// Local midnight at the end of the day (exclusive).
     pub day_end: String,
     pub sleep: Sleep,
     pub resting_hr: Measurement<f64>,
-    /// Nightly heart-rate variability as RMSSD.
     pub hrv_rmssd: Measurement<f64>,
-    /// Nightly skin temperature as a deviation from the user's baseline, not an absolute temperature.
     pub skin_temp_deviation: Measurement<f64>,
     pub respiratory_rate: Measurement<f64>,
-    /// Nightly blood-oxygen saturation, in percent.
     pub spo2: Measurement<f64>,
-    /// Steps NOOP counted over the day.
     pub steps: Measurement<i64>,
     pub derived_scores: DerivedScores,
-    /// The Journal Entries logged against the day, by question.
     pub journal: Vec<JournalEntry>,
     pub noop: NoopSync<RecoveryCoverage>,
 }
 
-/// A value with its unit and the NOOP device namespace it was selected from (`null` with it).
 #[derive(Debug, Serialize)]
 pub struct Measurement<T> {
     pub value: Option<T>,
@@ -72,14 +52,12 @@ impl<T> Measurement<T> {
     }
 }
 
-/// The daily measurements Training Context includes, without sleep sessions or Journal Entries.
 pub(super) struct TrainingMeasurements {
     pub sleep_duration: Measurement<f64>,
     pub resting_hr: Measurement<f64>,
     pub hrv_rmssd: Measurement<f64>,
 }
 
-/// A daily NOOP measurement available as a metric trend.
 #[derive(Debug, Clone, Copy)]
 pub enum NoopMetric {
     SleepDuration,
@@ -110,7 +88,6 @@ impl NoopMetric {
     }
 }
 
-/// NOOP's daily sleep summary for the night plus the sessions it was drawn from.
 #[derive(Debug, Serialize)]
 pub struct Sleep {
     pub total: Measurement<f64>,
@@ -122,7 +99,6 @@ pub struct Sleep {
     pub sessions: Vec<SleepSession>,
 }
 
-/// One stretch of a sleep session in a single stage (`awake`, `light`, `deep` or `rem`).
 #[derive(Debug, Serialize)]
 pub struct SleepStage {
     pub start: String,
@@ -132,14 +108,11 @@ pub struct SleepStage {
 
 #[derive(Debug, Serialize)]
 pub struct SleepSession {
-    /// The start NOOP shows: the user's adjusted start when edited, else the detected start.
     pub start: String,
     pub end: String,
     pub detected_start: String,
     pub duration_min: f64,
     pub stage_min: Option<StageMinutes>,
-    /// The stage segments in time order, clamped to `start..end`; `None` when the session has no
-    /// time-ordered staging.
     pub stages: Option<Vec<SleepStage>>,
     pub efficiency_fraction: Option<f64>,
     pub resting_hr_bpm: Option<f64>,
@@ -149,36 +122,29 @@ pub struct SleepSession {
     pub source: &'static str,
 }
 
-/// Scores NOOP derives from the strap data; observations of NOOP's model, not measurements.
 #[derive(Debug, Serialize)]
 pub struct DerivedScores {
     pub recovery: Measurement<f64>,
     pub strain: Measurement<f64>,
-    /// Sleep score, derived by `OpenHome` from NOOP's published Rest formula (see [`rest`]) because
-    /// NOOP does not push it. Its source is [`REST_SOURCE`], not a NOOP namespace.
     pub rest: Measurement<f64>,
 }
 
-/// One answer the user logged in NOOP against the day; never shifted to another day.
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct JournalEntry {
     pub question: String,
     pub answered_yes: bool,
     pub numeric_value: Option<f64>,
     pub notes: Option<String>,
-    /// The NOOP device namespace the entry was read from.
     #[sqlx(rename = "device_id")]
     pub source: String,
 }
 
-/// Coverage of the streams behind a Sleep Night and its daily values.
 #[derive(Debug, Serialize)]
 pub struct NoopCoverage {
     pub daily_metrics: Coverage,
     pub sleep_sessions: Coverage,
 }
 
-/// Coverage of every stream a Recovery Day reads.
 #[derive(Debug, Serialize)]
 pub struct RecoveryCoverage {
     #[serde(flatten)]
@@ -186,8 +152,6 @@ pub struct RecoveryCoverage {
     pub journal: Coverage,
 }
 
-/// A Recovery Day without its Journal Entries: the Sleep Night waking on the day, the day's
-/// resolved daily values, and the sync state of both.
 pub(super) struct Night {
     pub sleep: Sleep,
     daily: ResolvedDaily,
@@ -204,10 +168,8 @@ const SCORE: &str = "score_0_100";
 const DEGREES_CELSIUS: &str = "degC";
 const BREATHS_PER_MINUTE: &str = "breaths/min";
 const PERCENT: &str = "percent";
-/// The `source` of a value `OpenHome` computes from NOOP's data rather than reads from a NOOP namespace.
 pub const REST_SOURCE: &str = "openhome-derived";
 
-/// The streams a Recovery Day reads; their watermark is the Recovery Day's `last_push_at`.
 pub(super) const RECOVERY_STREAMS: [Stream; 2] = [Stream::DailyMetric, Stream::SleepSession];
 
 pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<RecoveryDay> {
@@ -257,8 +219,6 @@ pub async fn recovery_day(pool: &SqlitePool, day: CalendarDay) -> Result<Recover
     })
 }
 
-/// The Sleep Night waking on `day` with the day's daily values. Journal Entries are not read, so
-/// their pushes and bounds cannot affect it.
 pub(super) async fn night(pool: &SqlitePool, day: CalendarDay) -> Result<Night> {
     let Some(installation) = noop_source::active_installation(pool).await? else {
         let daily = noop_merge::merge_daily(None, None, false);
@@ -292,8 +252,6 @@ pub(super) async fn night(pool: &SqlitePool, day: CalendarDay) -> Result<Night> 
     })
 }
 
-/// Freshness and coverage of the rows a Recovery Day of `day` reads. `last_push_at` is the
-/// watermark of [`RECOVERY_STREAMS`].
 pub(super) async fn day_sync(
     pool: &SqlitePool,
     installation: &Installation,
@@ -322,8 +280,6 @@ fn sleep(daily: &ResolvedDaily, sessions: Vec<SleepSession>) -> Sleep {
     }
 }
 
-/// The three daily measurements used by Training Context. Edited sleep is resolved with a bounded
-/// lookup, so the full Sleep Night's session cap and Journal Entries cannot affect this read.
 pub(super) async fn training_measurements(
     pool: &SqlitePool,
     installation: &Installation,
@@ -338,8 +294,6 @@ pub(super) async fn training_measurements(
     })
 }
 
-/// One metric trend's daily measurement. Only sleep duration needs edited-Sleep-Night evidence;
-/// resting heart rate and HRV are selected entirely from the daily rows.
 pub(super) async fn metric_measurement(
     pool: &SqlitePool,
     installation: &Installation,
@@ -351,8 +305,6 @@ pub(super) async fn metric_measurement(
     Ok(metric.measurement(&daily))
 }
 
-/// Whether a computed session waking on this Copenhagen day was edited in NOOP. Summary reads use
-/// this bounded lookup; the full Recovery Day reuses the sessions it already fetched.
 async fn sleep_edited(
     pool: &SqlitePool,
     installation: &Installation,
@@ -411,7 +363,6 @@ async fn daily_metrics(
     ))
 }
 
-/// Both namespaces' sessions that end on `day`, before source selection.
 async fn sleep_sessions(
     pool: &SqlitePool,
     installation: &Installation,
@@ -472,7 +423,6 @@ async fn sleep_sessions(
         .collect())
 }
 
-/// The Journal Entries recorded against `day`, one per question across namespaces.
 async fn journal_entries(
     pool: &SqlitePool,
     installation: &Installation,

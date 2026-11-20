@@ -24,7 +24,6 @@ const shortDate = new Intl.DateTimeFormat("en-GB", {
 
 type LiveClockProps = { readonly initialTime: string }
 
-/** The Home clock: the time as the largest thing in the room, the day beneath it. */
 export function LiveClock({ initialTime }: LiveClockProps): React.JSX.Element {
   const now = useMinute(initialTime)
 

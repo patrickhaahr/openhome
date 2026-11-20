@@ -26,7 +26,6 @@ import {
 function reason(status: number): WorkoutFailure {
   if (status === 400) return "invalid"
 
-  // Axum answers 422 when an entry names an Exercise that is not stored; typed writes rule out body-shape 422s.
   if (status === 422) return "missing-exercise"
 
   if (status === 404) return "not-found"
@@ -34,19 +33,10 @@ function reason(status: number): WorkoutFailure {
   return "unavailable"
 }
 
-/** One authenticated Axum read, or a sanitized failure; never a partial value. */
 export type Read<T> =
   | { readonly state: "read"; readonly data: T }
   | { readonly state: "failed"; readonly reason: WorkoutFailure }
 
-/**
- * Read and parse one authenticated Axum fitness resource.
- *
- * @param path - The Axum path.
- * @param schema - The response contract.
- * @param query - Query parameters.
- * @returns The parsed body, or a sanitized failure class.
- */
 export async function read<T>(
   path: `/api/${string}`,
   schema: z.ZodType<T>,
@@ -80,13 +70,10 @@ function minDay(a: string, b: string): string {
   return a < b ? a : b
 }
 
-/** Days one Training Context read covers at most. */
 const contextDays = 90
 
-/** A quiet month of strap sessions is shown even when no Workout was logged in it. */
 const minimumDays = 28
 
-/** Strap detail reads in flight at once; each is a small read of the NOOP mirror. */
 const detailBatch = 8
 
 async function inBatches<T, R>(
@@ -103,7 +90,6 @@ async function inBatches<T, R>(
   return results
 }
 
-/** The strap's sessions from `from` through `to`, or undefined when any part could not be read. */
 async function readStrapSessions(
   from: string,
   to: string
@@ -133,22 +119,11 @@ async function readStrapSessions(
   return sessions
 }
 
-/**
- * Read the exercise library and the Log: recent logged Workouts with their sets, the strap's
- * sessions over the same days, each strap session's detail, and the entries they pair into.
- *
- * Incomplete reads of OpenHome never become an empty history; a strap that cannot be read only
- * leaves the logged Workouts standing alone.
- *
- * @param search - How much history to list.
- * @returns The Log, or a sanitized unavailable outcome.
- */
 export async function readWorkouts(
   search: WorkoutSearch
 ): Promise<WorkoutState> {
   const shown = search.shown ?? historyStep
 
-  // One extra row reveals whether older Workouts exist without a count endpoint.
   const [exercises, history] = await Promise.all([
     read("/api/exercises", exercise.array()),
     read("/api/workouts", workoutSummary.array(), {
@@ -174,7 +149,6 @@ export async function readWorkouts(
 
   for (const detail of details) {
     if (detail.state === "read") workouts.push(detail.data)
-    // Removed since the list was read: leave it out rather than fail the Log.
     else if (detail.reason !== "not-found")
       return { state: "unavailable", reason: detail.reason }
   }
@@ -190,7 +164,6 @@ export async function readWorkouts(
 
   const paired = pairSessions(workouts, summaries ?? [])
 
-  // Routes are only for sessions that stand alone; a paired session shows its exercises instead.
   const reads = await inBatches(paired, async (session) => {
     const path =
       session.strap === undefined ? undefined : noopDetailPath(session.strap)

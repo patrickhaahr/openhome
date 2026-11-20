@@ -9,7 +9,6 @@ type Session = RecoveryDay["sleep"]["sessions"][number]
 
 type Stage = NonNullable<Session["stages"]>[number]["stage"]
 
-/** Conventional hypnogram order: awake on top, deep at the bottom. */
 const lanes = [
   "awake",
   "rem",
@@ -33,7 +32,6 @@ const clock = new Intl.DateTimeFormat("en-GB", {
   hourCycle: "h23",
 })
 
-/** Hour ticks inside the night, away from both edges so no label sits on a time above it. */
 function hourTicks(from: number, to: number): readonly number[] {
   const span = to - from
   const first = Math.ceil(from / hour)
@@ -45,17 +43,11 @@ function hourTicks(from: number, to: number): readonly number[] {
   ).filter((time) => (time - from) / span > 0.04 && (to - time) / span > 0.04)
 }
 
-/**
- * One night in time order: bedtime to wake across, a lane per stage, each stretch of the
- * session as a solid bar in its lane. The totals sit beside the lanes. The graphic is
- * decorative; a table of the segments carries it for assistive technology.
- */
 export function Hypnogram({
   session,
   asleep = null,
 }: {
   readonly session: Session
-  /** The night's minutes asleep, shown between bedtime and wake. */
   readonly asleep?: number | null
 }): React.JSX.Element {
   const from = Date.parse(session.start)
@@ -78,7 +70,6 @@ export function Hypnogram({
 
   const ticks = hourTicks(from, to)
 
-  // Alternate hours are a darker ground, so the hours read without a line between them.
   const bands = ticks.filter((_, index) => index % 2 === 0)
 
   return (

@@ -5,7 +5,6 @@ import {
 } from "@/lib/important-dates"
 import { formatDay } from "@/lib/lists"
 
-/** A passive lead slot; its parent owns loading and midnight refresh. No qualifying date means no markup. */
 export function IdleMilestone({
   dates,
 }: {

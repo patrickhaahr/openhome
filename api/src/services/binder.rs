@@ -43,7 +43,6 @@ pub enum Language {
     Ja,
 }
 
-/// A copy count of at least 1. `u32` keeps a sum of additions inside SQLite's `i64`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Quantity(NonZeroU32);
 
@@ -66,7 +65,6 @@ impl Quantity {
     }
 }
 
-/// A Binder is only its owner's entries: there is no Binder record.
 #[derive(Debug, Serialize)]
 pub struct BinderEntry {
     pub id: String,
@@ -75,7 +73,6 @@ pub struct BinderEntry {
     pub language: Language,
     pub quantity: i64,
     pub note: Option<String>,
-    /// The Europe/Copenhagen calendar day the entry was first added.
     pub date_added: String,
 }
 
@@ -92,8 +89,6 @@ pub struct AddEntry {
 
 #[derive(Serialize)]
 pub struct Addition {
-    /// A replay returns the stored response exactly as it was recorded, whatever its shape was
-    /// then, so a retry never differs from the first answer when rates or prices have moved on.
     pub entry: Box<RawValue>,
     pub replayed: bool,
 }
@@ -190,7 +185,6 @@ async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<Receipt>> 
 
 pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) -> Result<Addition> {
     let request = Checked::parse(request)?;
-    // Resolve accepted retries before discovery, so a removed owner cannot revive an addition.
     if let Some(receipt) = previous(db, &request.request_id).await? {
         return receipt.replay(db, &request).await;
     }
@@ -220,7 +214,6 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
     let quantity = request.quantity.get();
     let card_id = request.card_id.as_str();
     let mut tx = db.begin().await?;
-    // A supplied note replaces the stored one; an omitted note keeps it.
     let stored = sqlx::query!(
         r#"INSERT INTO binder_entries (id, owner_id, card_id, language, quantity, note, date_added)
            VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -250,7 +243,6 @@ pub async fn add_entry(db: &SqlitePool, catalogue: &Optcg, request: AddEntry) ->
         serde_json::to_string(&entry).map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
     let accepted = RawValue::from_string(result.clone())
         .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
-    // The receipt claim serializes simultaneous retries; the loser rolls back its merge.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO binder_addition_receipts
             (request_id, entry_id, owner_id, card_id, language, quantity, note, result)
@@ -292,7 +284,6 @@ pub struct EntriesFilter {
     pub owner_id: Option<String>,
 }
 
-/// One owner's Binder Value; an empty Binder is worth zero.
 #[derive(Debug, Serialize)]
 pub struct OwnerValue {
     pub owner_id: String,
@@ -306,7 +297,6 @@ pub struct Entries {
     pub binder_values: Vec<OwnerValue>,
 }
 
-/// Every Household User in scope has a Binder, so each gets a Binder Value even with no entries.
 pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Entries> {
     let owner_id = filter.owner_id.as_deref();
     let entries = load(db, owner_id, None).await?;
@@ -334,7 +324,6 @@ pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Entries> 
     })
 }
 
-/// Read only the complete owner/entry destination.
 pub async fn entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<BinderEntry> {
     load(db, Some(owner_id), Some(id))
         .await?
@@ -396,8 +385,6 @@ async fn load(
         .collect()
 }
 
-/// Absent fields keep their stored value and a null note clears it. Quantity and language have
-/// no empty state, so null for either is rejected.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditEntry {
@@ -417,8 +404,6 @@ fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
     }
 }
 
-/// A language that another entry of the same owner and Card already holds returns 409 and the
-/// whole correction is rolled back, so entries are never merged silently.
 pub async fn edit_entry(
     db: &SqlitePool,
     owner_id: &str,
@@ -460,7 +445,6 @@ pub async fn edit_entry(
     entry(db, owner_id, id).await
 }
 
-/// Deletion is final. The accepted addition receipt stays retired.
 pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()> {
     let removed = sqlx::query!(
         "DELETE FROM binder_entries WHERE id = ? AND owner_id = ?",
@@ -475,7 +459,6 @@ pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<(
     Ok(())
 }
 
-/// The catalogue's prices are for English printings, so a Japanese entry has no price at all.
 fn priced_for(mut card: Card, language: Language) -> Card {
     if language == Language::Ja {
         card.valuation = Valuation::Unpriced(Unpriced::JapanesePrinting);
@@ -483,8 +466,6 @@ fn priced_for(mut card: Card, language: Language) -> Card {
     card
 }
 
-/// A normal print (its id is the Card Code) precedes its parallels, which keep catalogue order.
-/// Prefixes compare alphabetically, so a new set slots in without a table to maintain.
 fn card_code_order(card_code: &str, card_id: &str, position: i64) -> (String, u32, u32, bool, i64) {
     let (set, number) = card_code.split_once('-').unwrap_or((card_code, ""));
     let letters = set.bytes().take_while(u8::is_ascii_alphabetic).count();

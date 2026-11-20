@@ -3,10 +3,6 @@ import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs"
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { cn } from "@/lib/utils"
 
-/**
- * A failure drawn first and worded second: a warning mark and one or two words. Hidden from
- * assistive technology because the control's live region already says it in full.
- */
 export function ControlAlert({
   tag,
   className,
@@ -28,7 +24,6 @@ export function ControlAlert({
   )
 }
 
-/** A round key to the Connection page, named for assistive technology. */
 export function OpenConnection(): React.JSX.Element {
   return (
     <Link

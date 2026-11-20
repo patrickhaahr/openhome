@@ -1,5 +1,3 @@
-//! Bounded daily measurements and ISO-week means. Missing days stay null and do not enter means.
-
 use std::collections::HashMap;
 
 use serde::Serialize;
@@ -13,12 +11,9 @@ use super::recovery;
 
 pub use super::recovery::NoopMetric;
 
-/// Body Weight's unit; the daily Body Weight log stores kilograms.
 pub(super) const KILOGRAMS: &str = "kg";
-/// The source of a Body Weight value: the daily Body Weight log, its only source.
 pub(super) const BODY_WEIGHT_SOURCE: &str = "body_weight";
 
-/// The four metrics agreed for the initial trend contract.
 #[derive(Debug, Clone, Copy)]
 pub enum Metric {
     BodyWeight,
@@ -61,7 +56,6 @@ pub struct MetricTrend {
     pub to_day: String,
     pub time_zone: &'static str,
     pub unit: &'static str,
-    /// NOOP installation and watermark are null for daily Body Weight or before the first push.
     pub installation_id: Option<String>,
     pub last_push_at: Option<String>,
     pub daily_points: Vec<DailyPoint>,
@@ -73,24 +67,19 @@ pub struct DailyPoint {
     pub day: String,
     pub value: Option<f64>,
     pub unit: &'static str,
-    /// `body_weight` for a daily log entry; a NOOP namespace for mirrored values.
     pub source: Option<&'static str>,
-    /// Null for Body Weight, which is entered directly into `OpenHome`.
     pub freshness: Option<Freshness>,
     pub coverage: Option<Coverage>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct WeeklySummary {
-    /// Monday and Sunday of the complete ISO week, even for a partial requested week.
     pub week_start: String,
     pub week_end: String,
-    /// First and last days of this week inside the requested interval.
     pub range_start: String,
     pub range_end: String,
     pub calendar_days: usize,
     pub observed_days: usize,
-    /// Arithmetic mean of observed daily values; null when no day was measured.
     pub mean: Option<f64>,
     pub unit: &'static str,
 }
@@ -258,7 +247,6 @@ pub async fn metric_trend(
     })
 }
 
-/// Daily Body Weight records from `from_day` through `to_day`, keyed by day.
 pub(super) async fn body_weights(
     db: &SqlitePool,
     from_day: CalendarDay,

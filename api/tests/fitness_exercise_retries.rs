@@ -1,5 +1,3 @@
-//! Duplicate-safe Exercise creation (`request_id`): the contract the Android outbox retries against.
-
 mod common;
 
 use axum::Router;
@@ -33,7 +31,6 @@ async fn post(app: &Router, body: Value) -> (StatusCode, Value) {
     .await
 }
 
-/// How many Exercises hold `name`, read back through the public list.
 async fn named(app: &Router, name: &str) -> usize {
     let (status, body) = send_request_with_method(
         app.clone(),
@@ -77,7 +74,6 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_exercis
     assert_eq!(first["name"], NAME);
     assert_eq!(first["muscle_group"], "back");
     assert_eq!(first["equipment"], "rings");
-    // The client never saw that answer, and the API goes away with its in-memory state.
     db.close().await;
 
     let db = open_file_database(&path).await;
@@ -138,7 +134,6 @@ async fn a_name_another_exercise_holds_conflicts_and_consumes_no_request_id() {
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(named(&app, NAME).await, 1);
 
-    // Once the name is corrected, the id that was refused can still create it.
     let mut renamed = exercise(KEY);
     renamed["name"] = json!("Offline Ring Row 2");
     let (status, body) = post(&app, renamed).await;
@@ -172,7 +167,6 @@ async fn an_old_retry_cannot_recreate_a_deleted_exercise_or_claim_its_reused_id(
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
-    // SQLite hands the highest id out again, so this Exercise takes the deleted one's id.
     let mut other = exercise("phone-exercise-2");
     other["name"] = json!("Took Its Id");
     let (status, other) = post(&app, other).await;
@@ -185,8 +179,6 @@ async fn an_old_retry_cannot_recreate_a_deleted_exercise_or_claim_its_reused_id(
     assert_eq!(named(&app, NAME).await, 0);
 }
 
-/// Changed arguments are judged before the cleared target, so a retried Exercise whose arguments
-/// no longer match reports that, not its deletion.
 #[tokio::test]
 async fn changed_arguments_are_refused_before_a_deleted_exercises_target() {
     let app = common::test_app().await;

@@ -6,7 +6,6 @@ use crate::services::nutrition::supplements::{self, DoseRequest};
 use sqlx::SqlitePool;
 use std::collections::HashSet;
 
-/// Parses an item reference with its grams.
 pub(in crate::services::nutrition) fn item(
     request: MealItemRequest,
 ) -> std::result::Result<(Item, f64), String> {
@@ -15,7 +14,6 @@ pub(in crate::services::nutrition) fn item(
     Ok((item, request.grams))
 }
 
-/// Parses up to 50 items, each Food or Product listed once.
 pub(super) fn items(requests: Vec<MealItemRequest>) -> Result<Vec<(Item, f64)>> {
     if requests.len() > MAX_PORTIONS {
         return Err(validation(format!(
@@ -43,7 +41,6 @@ pub(super) fn doses(requests: Vec<DoseRequest>) -> Result<Vec<(String, f64)>> {
     supplements::parse_doses(requests).map_err(validation)
 }
 
-/// A Meal holds at least one Food, Product or Supplement Dose.
 pub(super) fn check_items(items: usize, doses: usize) -> Result<()> {
     if items + doses == 0 {
         return Err(validation(
@@ -53,7 +50,6 @@ pub(super) fn check_items(items: usize, doses: usize) -> Result<()> {
     Ok(())
 }
 
-/// A Meal item ready to write: a Food with the names it is saved with, or a linked Product.
 pub(super) enum CheckedItem {
     Food {
         food_id: i64,
@@ -68,8 +64,6 @@ pub(super) enum CheckedItem {
     },
 }
 
-/// Checks every item against the current Food database and the linked Products; Supplement
-/// Doses alone need no Food database.
 pub(super) async fn check(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -123,8 +117,6 @@ pub(super) async fn check(
         .collect()
 }
 
-/// The arguments a receipt compares on retry. Doses are left out when there are none, so
-/// receipts written before Supplements existed still match.
 pub(super) fn normalized(
     name: &str,
     items: &[(Item, f64)],
@@ -144,7 +136,6 @@ pub(super) fn normalized(
     serde_json::to_string(&request).map_err(|error| sqlx::Error::Encode(Box::new(error)).into())
 }
 
-/// Checks that every dose names a stored Supplement.
 pub(super) async fn check_doses(db: &SqlitePool, doses: &[(String, f64)]) -> Result<()> {
     supplements::resolve(db, doses).await?;
     Ok(())

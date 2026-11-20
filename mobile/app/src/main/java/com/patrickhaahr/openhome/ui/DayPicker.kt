@@ -17,7 +17,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** Chooses a calendar day, starting on [date] when there is one, from [earliest] up to [latest]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DayPicker(

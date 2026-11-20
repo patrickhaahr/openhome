@@ -5,18 +5,12 @@ use super::{double_option, parse_client_revision};
 use crate::error::{AppError, Result};
 use crate::services::training::calendar::CalendarDay;
 
-// ---------------------------------------------------------------------------
-// Profile (#8)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, serde::Serialize)]
 pub struct Profile {
     height_cm: Option<f64>,
     sex: Option<String>,
     hr_max_bpm: Option<i64>,
-    /// `YYYY-MM-DD`; the BMR formula and the NNR age bands need it.
     birth_date: Option<String>,
-    /// Where a client that downloads this Profile continues its edit revisions from.
     #[serde(skip_serializing_if = "Option::is_none")]
     client_revision: Option<i64>,
 }
@@ -25,7 +19,6 @@ const HR_MAX_BPM_RANGE: std::ops::RangeInclusive<i64> = 100..=240;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfile {
-    /// Makes this edit safe to replay: see [`update_profile`]. Without it every call applies.
     client_revision: Option<i64>,
     #[serde(default, with = "double_option")]
     height_cm: Option<Option<f64>>,
@@ -37,7 +30,6 @@ pub struct UpdateProfile {
     birth_date: Option<Option<String>>,
 }
 
-/// A birth date: a canonical `YYYY-MM-DD` day from 1900 up to today in Copenhagen.
 fn parse_birth_date(text: &str) -> Result<String> {
     let invalid = || {
         AppError::Validation(
@@ -66,7 +58,6 @@ pub(super) async fn get_profile(State(state): State<crate::AppState>) -> Result<
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch profile: {e}")))?;
 
-    // Not-configured response: the single row simply carries null fields.
     Ok(Json(row.unwrap_or(Profile {
         height_cm: None,
         sex: None,
@@ -76,10 +67,6 @@ pub(super) async fn get_profile(State(state): State<crate::AppState>) -> Result<
     })))
 }
 
-/// With a `client_revision`, an edit applies only if it is newer than the last one applied. An older
-/// or repeated revision is an edit this client has already superseded or delivered, so it changes
-/// nothing and answers with the current Profile: a retry after a lost response and a late delivery
-/// both end as acknowledged, without restoring an older revision.
 pub(super) async fn update_profile(
     State(state): State<crate::AppState>,
     Json(payload): Json<UpdateProfile>,
@@ -109,9 +96,6 @@ pub(super) async fn update_profile(
         .map(|text| parse_birth_date(&text))
         .transpose()?;
 
-    // Clearable upsert: absent field keeps the current value (stays NULL on
-    // first create), explicit null sets NULL (documented in api/AGENTS.md).
-    // Single statement keeps concurrent first PATCHes atomic.
     let height_set = payload.height_cm.is_some();
     let height_cm = payload.height_cm.flatten();
     let sex_set = payload.sex.is_some();
@@ -148,7 +132,6 @@ pub(super) async fn update_profile(
     .await
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to update profile: {e}")))?;
 
-    // No row: a revision this Profile has already moved past.
     match profile {
         Some(profile) => Ok(Json(profile)),
         None => get_profile(State(state)).await,

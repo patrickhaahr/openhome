@@ -22,7 +22,6 @@ import { Body } from "@/components/training-body"
 import { Sessions } from "@/components/training-sessions"
 import { FailurePlate, WorkoutFeedback } from "@/components/workout-parts"
 
-/** The selected day as rings over its week, beside its night; then its body and its strap sessions. Words stay for AT. */
 export function TrainingSummaries({
   data,
   selectDay,
@@ -173,7 +172,6 @@ export function TrainingSummaries({
 
                     void run(async () => {
                       await open(undefined)
-                      // Wait until run releases the disabled controls before restoring focus.
                       requestAnimationFrame(() => {
                         const button =
                           selection === undefined
@@ -225,7 +223,6 @@ function ReadFailure({
   )
 }
 
-/** Provenance for assistive technology; a stale sync draws no mark on the page. */
 function Sync({
   data,
 }: {
@@ -241,7 +238,6 @@ function Sync({
   )
 }
 
-/** Charge, Rest and Effort for the selected day. */
 function Rings({
   data,
   missing,
@@ -256,7 +252,6 @@ function Rings({
   )
 }
 
-/** The three day rings, shared by Recovery and Home; a glyph names each ring, the words stay for AT. */
 export function RecoveryRings({
   data,
   missing,

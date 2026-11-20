@@ -9,18 +9,15 @@ import {
 import { getIdleDates } from "@/lib/important-dates.functions"
 import { useCopenhagenDay } from "@/lib/use-copenhagen-day"
 
-/** Optional lead content, or a render slot sharing the filtered dates and their midnight refresh. */
 export type IdleDatesLead =
   | React.ReactNode
   | ((dates: readonly ImportantDate[]) => React.ReactNode)
 
-/** Important Dates on the clock plate. The optional lead slot holds the milestone line. */
 export function IdleDates({
   lead,
   read = getIdleDates,
 }: {
   lead?: IdleDatesLead
-  /** The authenticated dates read, separated from the room-display lifecycle. */
   read?: () => Promise<ImportantDatesState>
 }): React.ReactNode {
   const day = useCopenhagenDay()
@@ -44,9 +41,7 @@ function IdleDateContent({
       (read) => {
         if (current) setData(read)
       },
-      () => {
-        /* Keep the clock and weather when the read fails. */
-      }
+      () => {}
     )
 
     return () => {

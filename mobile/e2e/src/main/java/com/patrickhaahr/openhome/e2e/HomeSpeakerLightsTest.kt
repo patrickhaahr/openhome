@@ -6,7 +6,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
-/** Authenticated HTTP requests and observable UI; no household integration or inferred device state. */
 class HomeSpeakerLightsTest {
     private val app = AppDriver()
     private val api = FakeAxum()
@@ -44,14 +43,12 @@ class HomeSpeakerLightsTest {
         assertEquals(listOf("/api/lights/on" to "", "/api/lights/off" to ""), api.lightRequests())
     }
 
-    // Home calls end at a 5 s call timeout, so each hold is observed without scrolling and released at once.
     @Test fun aCommandInFlightBlocksItsGroupSoAPressCannotBeDuplicated() {
         app.tap("Home")
         val releaseLight = api.holdCommands()
         app.tapDescription("Lights On")
         app.assertVisible("Sending On…")
         app.assertButtonEnabled("Lights Off", false)
-        // A second press of the same control while it is held must not reach Axum.
         app.tapDescription("Lights On")
         releaseLight.countDown()
         app.assertVisible("On acknowledged by Axum. Lights state is unobserved.")
@@ -95,7 +92,6 @@ class HomeSpeakerLightsTest {
         api.tvStatusCode = 503
         app.described("Speaker Volume +")
         app.tapScrolledText("Refresh Speaker controls")
-        // Refresh replaces the longer command error; locate the section again after its reflow.
         app.described("Speaker Volume +")
         app.assertVisibleBelow("Speaker controls unavailable. Axum API answered HTTP 503. Refresh to try again.")
         app.assertButtonEnabled("Speaker Volume +", false)

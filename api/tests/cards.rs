@@ -36,7 +36,6 @@ async fn get(app: &Router, uri: &str) -> (StatusCode, Value) {
     send_request_with_method(app.clone(), uri, Method::GET, None, Some("test-api-key")).await
 }
 
-/// A flat red PNG, which the catalogue serves under a `.jpg` name.
 fn png(width: u32, height: u32) -> Vec<u8> {
     let pixels = RgbImage::from_pixel(width, height, Rgb([200, 30, 30]));
     let mut bytes = Vec::new();
@@ -152,7 +151,6 @@ async fn first_lookup_stores_every_variant_and_later_lookups_ask_nobody() {
     assert_eq!(cards[1]["id"], "OP01-001_p1");
     assert_eq!(cards[1]["card_value"], Value::Null);
     assert_eq!(cards[1]["value_unavailable"], "no_catalogue_price");
-    // The card and its two images.
     assert_eq!(requests(&server).await, 3);
 
     let (status, again) = get(&app, "/api/binder/cards?card_code=OP01-001").await;
@@ -509,7 +507,6 @@ async fn every_catalogue_failure_is_a_sanitised_503_that_stores_nothing() {
             "{name} followed a redirect"
         );
 
-        // Nothing was stored: once the catalogue recovers, the code is asked for again.
         server.reset().await;
         mount_card(&server).await;
         let (status, found) = get(&app, "/api/binder/cards?card_code=OP01-001").await;

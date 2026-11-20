@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -89,7 +88,6 @@ const point = (observed_on: string, usd: number): PricePoint => ({
   rate_date: observed_on,
 })
 
-/** Four days of observations with two days missing in the middle. */
 const withGap: PricesState = {
   state: "read",
   points: [
@@ -114,7 +112,6 @@ async function render(
   await settle()
 }
 
-/** Intl puts a no-break space between a currency code and its amount. */
 const plain = (text: string | null | undefined): string =>
   (text ?? "").replaceAll("\u00a0", " ")
 

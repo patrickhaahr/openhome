@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// Axum requests here use the server transport, which is not subject to browser CORS.
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -91,7 +90,6 @@ async function click(text: string): Promise<void> {
   })
 }
 
-/** Re-selecting the pressed day reads it again, as the refresh key once did. */
 async function refresh(): Promise<void> {
   const current = container.querySelector<HTMLButtonElement>(
     '[data-slot="today-day"][aria-pressed="true"]'
@@ -157,7 +155,6 @@ test("draws the selected day as rings, a week of days, its night and body, and i
   expect(ring("Charge")).toBe("Charge: 78 % recovery")
   expect(ring("Rest")).toBe("Rest: 87 % rest")
   expect(ring("Effort")).toBe("Effort: strain 35 of 100")
-  // A strip of days, not a week with arrows.
   expect(container.querySelectorAll('[data-slot="today-day"]')).toHaveLength(28)
   expect(container.textContent).not.toContain("Previous week")
   expect(container.textContent).not.toContain("Next week")
@@ -177,7 +174,6 @@ test("draws the selected day as rings, a week of days, its night and body, and i
     true
   )
   expect(vitals).toContain("StepsNot recorded")
-  // The night in time order: lanes awake to deep, segments clamped to the edited 23:05 start.
   expect(
     Array.from(container.querySelectorAll('[data-slot="hypno-lane"]')).map(
       (lane) => [lane.getAttribute("data-stage"), lane.children.length]
@@ -193,7 +189,6 @@ test("draws the selected day as rings, a week of days, its night and body, and i
       (label) => label.textContent
     )
   ).toEqual(["Awake0:00", "REM1:40", "Light4:15", "Deep1:30"])
-  // Bedtime, the night's sleep, then wake.
   expect(
     container.querySelector('[data-slot="hypno-times"]')?.textContent
   ).toBe("23:057:3006:30")
@@ -222,7 +217,6 @@ test("draws the selected day as rings, a week of days, its night and body, and i
     container.querySelectorAll('[data-slot="night-history-bars"] span')
   ).toHaveLength(30)
   expect(buttonNamed("Open Run / walk")).toBeDefined()
-  // Logged Workouts live in Workout › Log, not beside the strap's recordings.
   expect(container.textContent).not.toContain("Synthetic pull")
   expect(container.textContent).not.toContain("Open logged")
   expect(container.textContent).not.toContain("Refresh training")
@@ -321,7 +315,6 @@ test("the day strip reaches into older days as it is scrolled and keeps every da
     )
   })
 
-  // Days after the selected one fill in toward today first.
   await act(async () => {
     await vi.waitFor(() => expect(loadDays).toHaveBeenCalledTimes(1))
     await new Promise<void>((resolve) => setTimeout(resolve, 300))
@@ -407,7 +400,6 @@ test("closing a detail restores its session button, falling back to the selected
     sport: "Run / walk",
   }
   await render()
-  // A deep link to another day's session has no button on this day.
   await closeDetail()
   expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true")
   expect(document.activeElement?.getAttribute("data-slot")).toBe("today-day")

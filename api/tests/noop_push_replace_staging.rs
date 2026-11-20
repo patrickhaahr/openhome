@@ -1,5 +1,3 @@
-//! NOOP push replace streams: multi-part staging and retries.
-
 mod common;
 mod noop_push_support;
 
@@ -30,7 +28,6 @@ async fn out_of_order_parts_apply_atomically_once_the_last_part_arrives() {
     .await;
     assert_eq!(reply.status, StatusCode::OK);
 
-    // Replacement over [2, 9): day 5 is absent from every part and must be deleted.
     let replacement = id(101);
     let part = |n: u32, records: &[Value]| {
         replace_part(
@@ -91,7 +88,6 @@ async fn out_of_order_parts_apply_atomically_once_the_last_part_arrives() {
     );
     assert_eq!(count(&db, "SELECT COUNT(*) FROM batch_ledger").await, 4);
 
-    // Retrying any part after the apply replays its ack and changes nothing.
     sqlx::query("UPDATE daily_metric SET recovery = 99.0 WHERE day = '2026-08-02'")
         .execute(&db)
         .await
@@ -231,7 +227,6 @@ async fn byte_identical_part_retries_replay_the_ack_across_encodings() {
         "replay does not re-apply"
     );
 
-    // A retried part of a still-incomplete replacement replays too and stays staged.
     let staged = replace_part(
         "sleepSession",
         BATCH_2,

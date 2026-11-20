@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import type { Feature } from "@/lib/features"
 
-/** A link to one feature; its face is the label unless the caller draws one. */
 export function FeatureLink({
   feature,
   className,
@@ -17,7 +16,6 @@ export function FeatureLink({
 }): React.JSX.Element {
   const to = implementedRoute(feature.id)
 
-  // Implemented features use their own typed routes; the rest share the placeholder.
   return to === undefined ? (
     <Link
       to="/$feature"

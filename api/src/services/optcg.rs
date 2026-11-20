@@ -1,11 +1,3 @@
-//! OPTCG catalogue reads (optcgapi.com, ADR 0017). It is one volunteer's server, so every call is
-//! a single bounded GET: a short timeout, a byte cap and no redirects or retries. Nothing the
-//! catalogue sends is trusted. A variant's image URL is fetched only when it names the configured
-//! origin, and every failure is [`Unavailable`], so upstream text never reaches a caller.
-//!
-//! The catalogue answers `api/sets/card/{code}/` with a JSON array of variants, or 404
-//! `{"error":"Card not found."}` for a code it does not list. It serves PNGs under `.jpg` names.
-
 use std::time::Duration;
 
 use reqwest::{Client, Response, StatusCode, header};
@@ -20,17 +12,14 @@ pub const PRODUCTION_URL: &str = "https://optcgapi.com/";
 const TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_CARD_BYTES: usize = 256 * 1024;
 const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
-/// Normal print plus parallels; a code with more variants than this is not believable.
 const MAX_VARIANTS: usize = 20;
 const MAX_TEXT_CHARS: usize = 200;
 const MAX_CARD_TEXT_CHARS: usize = 4_000;
 const MAX_PRICE_USD: f64 = 1_000_000.0;
 
-/// Unreachable, slow, refused, oversized or malformed; the cause is only logged.
 #[derive(Debug)]
 pub struct Unavailable;
 
-/// Why a read failed. Logs carry this and our own identifiers only, never what the catalogue sent.
 #[derive(Debug, Clone, Copy)]
 enum Reason {
     BadUrl,
@@ -63,7 +52,6 @@ pub struct Optcg {
 #[derive(Debug)]
 pub struct Price {
     pub usd: f64,
-    /// `YYYY-MM-DD`: the day the catalogue observed the price.
     pub observed_on: String,
 }
 
@@ -71,7 +59,6 @@ pub struct Price {
 pub struct CatalogueCard {
     pub id: CardId,
     pub card_code: CardCode,
-    /// On the adapter's configured origin, which is checked before a card is returned.
     pub image_url: Url,
     pub name: String,
     pub set_id: Option<String>,
@@ -89,7 +76,6 @@ pub struct CatalogueCard {
     pub price: Option<Price>,
 }
 
-/// Every field is read loosely (`life` is `"5"`, other cards may send numbers) and checked after.
 #[derive(Deserialize)]
 struct Raw {
     card_name: Option<Value>,
@@ -122,7 +108,6 @@ impl Optcg {
         Ok(Self { client, base_url })
     }
 
-    /// Every variant of `code`; empty when the catalogue does not list it.
     pub async fn card(&self, code: &CardCode) -> Result<Vec<CatalogueCard>, Unavailable> {
         let url = self
             .base_url
@@ -155,7 +140,6 @@ impl Optcg {
         Ok(cards)
     }
 
-    /// The variant's official image bytes (a PNG or JPEG) from its catalogue URL.
     pub async fn image(&self, url: &Url) -> Result<Vec<u8>, Unavailable> {
         let response = self.get(url.clone()).await?;
         if !response.status().is_success() {
@@ -173,7 +157,6 @@ impl Optcg {
     }
 }
 
-/// Bounds untrusted bodies even when `Content-Length` is missing or wrong.
 async fn read_capped(mut response: Response, limit: usize) -> Result<Vec<u8>, Unavailable> {
     if response
         .headers()
@@ -197,8 +180,6 @@ async fn read_capped(mut response: Response, limit: usize) -> Result<Vec<u8>, Un
     Ok(bytes)
 }
 
-/// Only the catalogue's own answer means "unlisted": any other 404 (a proxy, a moved endpoint)
-/// would otherwise be remembered as unlisted for the day.
 fn not_listed(body: &[u8]) -> Result<Vec<CatalogueCard>, Unavailable> {
     #[derive(Deserialize)]
     struct NotFound {

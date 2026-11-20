@@ -11,16 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
-/** Available commands and command feedback are independent observations; neither implies the speaker's state. */
 data class SpeakerState(val commands: Set<String> = emptySet(), val feedback: CommandFeedback = CommandFeedback.Idle)
 
-/**
- * Immediate Home calls share neither fitness's Wi-Fi policy nor its persistent outbox. Speaker (refresh and send)
- * and Lights are two independent groups, each with one busy guard and one transition owner here. Exits: response
- * or [ApiFailure] settles; ViewModel cancellation cancels the call; the Home client's 5 s call timeout
- * (AppContainer.homeHttpClient, no connection retry) surfaces as [ApiFailure.Unreachable]. Nothing is queued or retried.
- * Only [ApiFailure] is handled: any other exception escapes uncaught (no handler is installed), ends the process, and the relaunch starts Home idle, since nothing here is persisted.
- */
 class SpeakerLightsViewModel(private val setup: SetupService, private val client: OkHttpClient) : ViewModel() {
     private val mutableSpeaker = MutableStateFlow(SpeakerState())
     val speaker = mutableSpeaker.asStateFlow()

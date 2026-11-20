@@ -1,11 +1,3 @@
-//! Workouts on a Training Day: the Workouts logged in `OpenHome` for one Copenhagen date beside the
-//! NOOP Workouts that started on it.
-//!
-//! The two stay separate lists. `OpenHome` Workouts are date-only and NOOP Workouts are timed, so
-//! nothing pairs a NOOP Workout with a logged one. The `noop` block says whether an empty or short
-//! NOOP list is a recorded absence or a sync that has not arrived; even a covered empty list only
-//! means NOOP recorded no workout, not that the user did not train.
-
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -19,26 +11,18 @@ use super::noop_source::{
     Stream,
 };
 
-/// Logged Set rows one Training Day may hold (an Exercise without Sets, or a Workout without
-/// Exercises, counts as one). A larger day is rejected rather than truncated.
 pub const MAX_LOGGED_ROWS: usize = 500;
-/// NOOP workout rows, across all namespaces, one Training Day may hold.
 pub const MAX_NOOP_WORKOUTS: usize = 24;
 
-/// The stream NOOP Workouts are read from; its watermark is the read's `last_push_at`.
 pub(super) const WORKOUT_STREAMS: [Stream; 1] = [Stream::Workout];
 
 #[derive(Debug, Serialize)]
 pub struct WorkoutsOnDay {
     pub day: String,
     pub time_zone: &'static str,
-    /// Local midnight at the start of the day.
     pub day_start: String,
-    /// Local midnight at the end of the day (exclusive).
     pub day_end: String,
-    /// Workouts logged in `OpenHome` with this date, in the order they were created.
     pub workouts: Vec<LoggedWorkout>,
-    /// NOOP Workouts whose start falls inside the day, by start.
     pub noop_workouts: Vec<NoopWorkout>,
     pub noop: NoopSync<WorkoutCoverage>,
 }
@@ -48,7 +32,6 @@ pub struct LoggedWorkout {
     pub id: i64,
     pub name: Option<String>,
     pub notes: Option<String>,
-    /// In logged order.
     pub exercises: Vec<LoggedExercise>,
 }
 
@@ -58,7 +41,6 @@ pub struct LoggedExercise {
     pub exercise: String,
     pub category: String,
     pub notes: Option<String>,
-    /// By set number.
     pub sets: Vec<LoggedSet>,
 }
 
@@ -66,32 +48,26 @@ pub struct LoggedExercise {
 pub struct LoggedSet {
     pub set_number: i64,
     pub reps: Option<i64>,
-    /// Weight added to the body; null for a bodyweight Set.
     pub added_weight_kg: Option<f64>,
-    /// Timed Hold duration.
     pub hold_duration_s: Option<i64>,
     pub rpe: Option<i64>,
     pub notes: Option<String>,
 }
 
-/// One NOOP Workout as NOOP stored it. Heart rate is the stored average and peak.
 #[derive(Debug, Serialize)]
 pub struct NoopWorkout {
     pub start: String,
     pub end: String,
     pub sport: String,
     pub origin: WorkoutOrigin,
-    /// NOOP's recorded duration.
     pub duration_min: Option<f64>,
     pub avg_hr_bpm: Option<f64>,
     pub max_hr_bpm: Option<f64>,
-    /// NOOP's derived 0-100 workout strain; a model output, not a measurement.
     pub strain_score: Option<f64>,
     pub energy_kcal: Option<f64>,
     pub distance_m: Option<f64>,
     pub steps: Option<i64>,
     pub notes: Option<String>,
-    /// The NOOP device namespace of the stored row.
     pub source: String,
 }
 
@@ -137,8 +113,6 @@ pub async fn workouts_on_day(
     })
 }
 
-/// Freshness and coverage of the NOOP workout rows starting on `day`. `last_push_at` is the
-/// watermark of [`WORKOUT_STREAMS`].
 pub(super) async fn day_sync(
     pool: &SqlitePool,
     installation: &Installation,
@@ -154,7 +128,6 @@ pub(super) async fn day_sync(
     })
 }
 
-/// The day's logged Workouts with their Exercises and Sets, from one ordered join.
 async fn logged_workouts(db: &SqlitePool, day: CalendarDay) -> Result<Vec<LoggedWorkout>> {
     let date = day.to_string();
     let limit = MAX_LOGGED_ROWS as i64 + 1;
@@ -249,7 +222,6 @@ async fn logged_workouts(db: &SqlitePool, day: CalendarDay) -> Result<Vec<Logged
     Ok(workouts)
 }
 
-/// The installation's workouts that start on `day`, strap namespaces first, before selection.
 pub(super) async fn noop_workout_rows(
     pool: &SqlitePool,
     installation: &Installation,
@@ -300,8 +272,6 @@ pub(super) async fn noop_workout_rows(
     records
         .into_iter()
         .map(|record| {
-            // Starts are bounded by CalendarDay. Validate ends before merge arithmetic so a
-            // malformed pushed timestamp cannot overflow or disappear during deduplication.
             calendar::from_unix(record.end_ts).ok_or_else(|| {
                 anyhow::anyhow!("NOOP timestamp {} is out of range", record.end_ts)
             })?;

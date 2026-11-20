@@ -115,9 +115,7 @@ test.each([
 )
 
 test("bounds a stalled health check so the connection screen remains usable", async () => {
-  const upstream = createServer(() => {
-    /* Deliberately leave the response pending. */
-  })
+  const upstream = createServer(() => {})
 
   const privateUrl = await listen(upstream)
   const url = await dashboard({ url: privateUrl, key: apiKey })

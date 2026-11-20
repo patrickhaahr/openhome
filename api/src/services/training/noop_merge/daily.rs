@@ -1,6 +1,5 @@
 use super::Namespace;
 
-/// A resolved value and the namespace it came from; a null value has no source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sourced<T> {
     pub value: Option<T>,
@@ -16,7 +15,6 @@ impl<T: Copy> Sourced<T> {
     }
 }
 
-/// The `daily_metric` fields a Recovery Day reads.
 #[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct DailyRow {
     pub total_sleep_min: Option<f64>,
@@ -36,8 +34,6 @@ pub struct DailyRow {
 }
 
 impl DailyRow {
-    /// A sleep total without efficiency or stages: the shape of a strap-imported night that NOOP
-    /// has not scored.
     const fn is_bare_sleep_aggregate(&self) -> bool {
         self.total_sleep_min.is_some()
             && self.efficiency.is_none()
@@ -65,8 +61,6 @@ pub struct ResolvedDaily {
     pub steps: Sourced<i64>,
 }
 
-/// Resolves one day's imported and computed rows. `sleep_edited` is whether a computed session
-/// waking on that day was edited by the user.
 pub fn merge_daily(
     imported: Option<&DailyRow>,
     computed: Option<&DailyRow>,

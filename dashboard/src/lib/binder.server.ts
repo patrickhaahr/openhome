@@ -45,14 +45,11 @@ async function read<T>(
     const parsed = schema.safeParse(await result.response.json())
 
     if (parsed.success) return { state: "read", data: parsed.data }
-  } catch {
-    /* Only safe protocol values are read. */
-  }
+  } catch {}
 
   return { state: "unavailable", reason: "unavailable" }
 }
 
-/** Read owners and every Binder in parallel through the server-held credential. */
 export async function readBinder(): Promise<BinderState> {
   const [owners, entries] = await Promise.all([
     read("/api/household-users", householdUser.array()),
@@ -81,7 +78,6 @@ function writeFailure(status: number): BinderWriteFailure {
   return "unavailable"
 }
 
-/** Forward one owner-targeted edit or removal; only Axum's stored result confirms persistence. */
 export async function writeBinder(
   command: BinderCommand
 ): Promise<BinderMutation> {
@@ -119,14 +115,11 @@ export async function writeBinder(
   try {
     if (binderEntry.safeParse(await response.json()).success)
       return { state: "saved" }
-  } catch {
-    /* An invalid acknowledgement cannot confirm a saved entry. */
-  }
+  } catch {}
 
   return { state: "failed", reason: "unavailable" }
 }
 
-/** One Card's whole Price History, converted by Axum at each point's own date. */
 export async function readCardPrices(input: {
   card: string
 }): Promise<PricesState> {
@@ -144,7 +137,6 @@ export async function readCardPrices(input: {
     : { state: "unavailable" }
 }
 
-/** Search by Card Code through Start's server boundary; the catalogue is never reached by the browser. */
 export async function searchBinderCards(input: {
   card_code: string
 }): Promise<CardSearchResult> {
@@ -171,9 +163,7 @@ export async function searchBinderCards(input: {
       return parsed.data.cards.length === 0
         ? { state: "unlisted" }
         : { state: "found", cards: parsed.data.cards }
-  } catch {
-    /* Never expose private catalogue diagnostics. */
-  }
+  } catch {}
 
   return { state: "failed" }
 }
@@ -192,7 +182,6 @@ function additionFailure(status: number): AddFailure {
 
 const addition = z.object({ entry: binderEntry, replayed: z.boolean() })
 
-/** Forward one explicit-owner addition; only a parsed receipt confirms that it was stored. */
 export async function addBinderEntry(
   command: BinderAddition
 ): Promise<BinderAddReceipt> {
@@ -212,16 +201,13 @@ export async function addBinderEntry(
   try {
     if (addition.safeParse(await result.response.json()).success)
       return { state: "saved" }
-  } catch {
-    /* An invalid acknowledgement cannot confirm a saved addition. */
-  }
+  } catch {}
 
   return { state: "failed", reason: "unavailable" }
 }
 
 const imageLimit = 2 * 1024 * 1024
 
-/** Relay one stored AVIF as bounded bytes, never upstream headers or error bodies. */
 export async function readCardImage(input: {
   card: string
 }): Promise<Response> {

@@ -1,4 +1,3 @@
-//! Local Backlight control. Private packets and identifiers never enter the HTTP contract.
 mod bluetooth;
 mod delivery;
 mod device;
@@ -27,17 +26,13 @@ pub use types::{
     TransportFuture,
 };
 
-// H605C drops an idle link after about twenty seconds. Frequent power queries
-// keep it alive without reasserting the intended lighting selection.
 const PROBE_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 pub struct BacklightService {
     db: SqlitePool,
     state: Arc<Mutex<Status>>,
-    // All capture/read/write exchanges share this lock for the complete operation.
     worker: Arc<Mutex<()>>,
-    // Persistence follows submission order independently of slow device operations.
     submission: Arc<Mutex<()>>,
     revision: Arc<AtomicU64>,
     transport: Option<Arc<dyn GattTransport>>,
@@ -77,7 +72,6 @@ impl BacklightService {
             .map(serde_json::from_str)
             .transpose()
             .map_err(anyhow::Error::from)?;
-        // Startup applies current wall time; expired overrides are dropped, not replayed.
         let target = Policy::restored(bedtime, manual_override).resolve(clock.now());
         let service = Self {
             db,

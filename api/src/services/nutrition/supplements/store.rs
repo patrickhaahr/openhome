@@ -9,7 +9,6 @@ use sqlx::SqlitePool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Every Supplement by name, or the one with `id`.
 async fn load(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Supplement>> {
     load_on(&mut *db.acquire().await?, id).await
 }
@@ -76,7 +75,6 @@ fn not_found() -> SupplementError {
     SupplementError::NotFound("Supplement not found; list supplements for its id".into())
 }
 
-/// The Supplements with these IDs, by ID; missing IDs are left out.
 pub(in crate::services::nutrition) async fn stored(
     db: &SqlitePool,
     ids: &[&str],
@@ -92,7 +90,6 @@ pub(in crate::services::nutrition) async fn stored(
         .collect())
 }
 
-/// Every Supplement by name.
 pub async fn supplements(db: &SqlitePool) -> Result<Supplements> {
     Ok(Supplements {
         supplements: load(db, None).await?,
@@ -131,7 +128,6 @@ async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Opti
     }))
 }
 
-/// Maps the unique name index to a conflict.
 fn unique_name(error: sqlx::Error, name: &str) -> SupplementError {
     match &error {
         sqlx::Error::Database(database) if database.is_unique_violation() => {
@@ -144,7 +140,6 @@ fn unique_name(error: sqlx::Error, name: &str) -> SupplementError {
     }
 }
 
-/// Writes a Supplement's amounts and compounds; the caller removes the previous ones first.
 async fn insert_label(
     transaction: &mut sqlx::SqliteConnection,
     id: &str,
@@ -170,8 +165,6 @@ async fn insert_label(
     Ok(())
 }
 
-/// Adds a Supplement with its per-dose label, with an immutable receipt for its `request_id`.
-/// Rejected requests consume no `request_id` and write nothing.
 pub async fn add_supplement(db: &SqlitePool, request: AddSupplement) -> Result<Added> {
     let request_id = parse_request_id(&request.request_id).map_err(validation)?;
     let name = UniqueName::parse(&request.name, "name", "Supplement").map_err(validation)?;
@@ -191,7 +184,6 @@ pub async fn add_supplement(db: &SqlitePool, request: AddSupplement) -> Result<A
 
     let id = Uuid::new_v4().to_string();
     let mut transaction = db.begin().await?;
-    // Claim first so simultaneous retries serialize on the receipt.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO supplement_receipts (request_id, supplement_id, request) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
         request_id, id, normalized)
@@ -246,8 +238,6 @@ fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
     }
 }
 
-/// Renames a Supplement, changes its dose unit or replaces its amounts or compounds, together.
-/// Meal Logs keep the doses they copied; Meals naming it log its new label from now on.
 pub async fn update_supplement(
     db: &SqlitePool,
     id: &str,
@@ -303,8 +293,6 @@ pub async fn update_supplement(
     find(db, id).await?.ok_or_else(not_found)
 }
 
-/// Deletes a Supplement no Meal names. Meal Logs keep the doses they copied, and its receipt
-/// stays, so an old retry cannot recreate it.
 pub async fn delete_supplement(db: &SqlitePool, id: &str) -> Result<()> {
     let meals = sqlx::query_scalar!(
         "SELECT DISTINCT m.name FROM meal_supplement_doses d JOIN meals m ON m.id = d.meal_id
@@ -323,7 +311,6 @@ pub async fn delete_supplement(db: &SqlitePool, id: &str) -> Result<()> {
         .execute(db)
         .await
         .map_err(|error| match &error {
-            // A Meal saved with it since the check above.
             sqlx::Error::Database(database) if database.is_foreign_key_violation() => {
                 SupplementError::Conflict(
                     "A Meal takes this Supplement; update_meal it without it before deleting it"

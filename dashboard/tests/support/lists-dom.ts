@@ -1,6 +1,5 @@
 import { act } from "react"
 
-/** The accessible text of an element: aria-label, else its text without decorative parts. */
 export function nameOf(element: Element): string {
   const label = element.getAttribute("aria-label")
 
@@ -16,7 +15,6 @@ export function nameOf(element: Element): string {
   return (copy.textContent ?? "").replace(/\s+/g, " ").trim()
 }
 
-/** The first button named exactly `name` (or matching a pattern) within `scope`. */
 export function button(
   name: string | RegExp,
   scope: ParentNode = document
@@ -32,7 +30,6 @@ export function button(
   return match
 }
 
-/** The currency the Currency key within `scope` shows. */
 export function currencyShown(scope: ParentNode = document): string {
   const trigger = scope.querySelector('[aria-label="Currency"]')
 
@@ -41,7 +38,6 @@ export function currencyShown(scope: ParentNode = document): string {
   return nameOf(trigger.querySelector('[data-slot="select-value"]') ?? trigger)
 }
 
-/** Opens the Currency key and picks `currency` from its list, which renders in a portal. */
 export async function chooseCurrency(
   currency: string,
   scope: ParentNode = document
@@ -66,7 +62,6 @@ export async function chooseCurrency(
   })
 }
 
-/** The first element carrying `data-slot="name"` within `scope`, if any. */
 export function slot(
   name: string,
   scope: ParentNode = document
@@ -74,7 +69,6 @@ export function slot(
   return scope.querySelector(`[data-slot="${name}"]`)
 }
 
-/** The open detail plate; sheets render in a portal beside the page. */
 export function sheet(): HTMLElement {
   const element = document.querySelector<HTMLElement>('[data-slot="sheet"]')
 
@@ -83,7 +77,6 @@ export function sheet(): HTMLElement {
   return element
 }
 
-/** A labelled input or textarea within `scope`. */
 export function field(
   label: string,
   scope: ParentNode = document
@@ -103,7 +96,6 @@ export function field(
   return input
 }
 
-/** Type as a person would: through the native setter, so React sees the change. */
 export async function type(
   input: HTMLInputElement | HTMLTextAreaElement,
   value: string
@@ -119,7 +111,6 @@ export async function type(
   })
 }
 
-/** Settle timers and promises queued by a click, such as closing a sheet after a save. */
 export async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))

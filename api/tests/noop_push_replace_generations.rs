@@ -1,5 +1,3 @@
-//! NOOP push replace streams: conflicts, generations and receiver state id fences.
-
 mod common;
 mod noop_push_support;
 
@@ -137,7 +135,6 @@ async fn a_new_generation_supersedes_an_incomplete_one_and_late_parts_are_409() 
     );
     assert_eq!(post(&db, &old_part_1, true).await.status, StatusCode::OK);
 
-    // A different generation (with different bounds) supersedes the incomplete one.
     let new = replace_part(
         "dailyMetric",
         &id(3),
@@ -168,7 +165,6 @@ async fn a_new_generation_supersedes_an_incomplete_one_and_late_parts_are_409() 
         "superseded staging is discarded"
     );
 
-    // Other streams and scopes have independent generations.
     let journal_part = replace_part(
         "journal",
         &id(4),
@@ -362,7 +358,6 @@ async fn rotating_receiver_state_id_discards_staging_and_generation_fences() {
         61
     );
 
-    // The new generation has no fence and no staging: the old parts form a fresh replacement.
     assert_eq!(post(&db, &old_part_2, true).await.status, StatusCode::OK);
     assert_eq!(count(&db, "SELECT COUNT(*) FROM journal").await, 1);
     assert_eq!(post(&db, &old_part_1, true).await.status, StatusCode::OK);

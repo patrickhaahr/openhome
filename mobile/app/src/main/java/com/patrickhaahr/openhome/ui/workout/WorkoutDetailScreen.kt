@@ -158,7 +158,6 @@ private fun WorkoutDetail(workout: Workout, sync: SyncStatus?, onSyncNow: () -> 
     }
 }
 
-/** There is one Active Workout at a time, so an unfinished one is resumed rather than replaced. */
 @Composable
 private fun RepeatAction(active: ActiveLookup, onRepeat: () -> Unit, onResume: () -> Unit, modifier: Modifier) {
     when (active) {
@@ -210,7 +209,6 @@ private fun SetRow(set: WorkoutSet) {
     }
 }
 
-/** Added Weight reads as "+40 kg" and null as "Bodyweight"; a Timed Hold shows its duration, not reps. */
 fun describePerformance(set: WorkoutSet): String {
     val amount =
         listOfNotNull(

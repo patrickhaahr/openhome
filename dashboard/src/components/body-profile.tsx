@@ -33,9 +33,7 @@ type BodyProfileProps = {
   readonly data: BodyState
   readonly range: BodyRange
   readonly change: (command: BodyCommand) => Promise<BodyMutation>
-  /** Read the view again after a write. */
   readonly reload: () => Promise<void>
-  /** The view switcher, which sits at the start of the toolbar. */
   readonly lead?: React.ReactNode
   readonly filter: (range: BodyRange) => Promise<void>
 }
@@ -63,7 +61,6 @@ const oneDecimal = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 1,
 })
 
-/** Shared Profile editing and daily Body Weight logging, with no derived health values. */
 export function BodyProfile({
   data,
   range,
@@ -72,12 +69,10 @@ export function BodyProfile({
   lead,
   filter,
 }: BodyProfileProps): React.JSX.Element {
-  // Keep the draft above the read-dependent view so an outage cannot discard it.
   const [editing, setEditing] = useState<ProfileEditing>()
   const [busy, setBusy] = useState(false)
   const locked = useRef(false)
   const [feedback, setFeedback] = useState<Feedback>()
-  // An open profile edit or a save in flight holds the slideshow off.
   useIdleBlock(editing !== undefined || busy)
 
   async function save(command: BodyCommand): Promise<boolean> {
@@ -415,7 +410,6 @@ function directionMark(change: number): string {
   return change < 0 ? "▼" : "■"
 }
 
-/** The latest weigh-in, large, and how far it moved across the range shown. */
 function WeightFigure({
   history,
 }: {

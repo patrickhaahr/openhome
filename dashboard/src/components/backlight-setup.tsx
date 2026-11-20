@@ -3,7 +3,6 @@ import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockC
 import { Button } from "@/components/ui/button"
 import type { BacklightAction } from "@/lib/backlight"
 
-/** The way out of an incomplete setup: capture TV Sync, or recover the installer's backup. */
 export function BacklightSetup({
   pending,
   perform,

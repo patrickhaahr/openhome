@@ -1,10 +1,8 @@
 import { z } from "zod"
 import { binderEntry, binderFailureMessage, type BinderFailure } from "./binder"
 
-/** Quantity is stored as an unsigned 32-bit count. */
 export const maxQuantity = 4294967295
 
-/** An edit names only what changes: an absent field is kept and a null note clears it. */
 export const binderCommand = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("edit"),
@@ -21,7 +19,6 @@ export const binderCommand = z.discriminatedUnion("action", [
   }),
 ])
 
-/** A write always carries its selected owner. */
 export type BinderCommand = z.infer<typeof binderCommand>
 
 export type BinderWriteFailure =
@@ -30,12 +27,10 @@ export type BinderWriteFailure =
   | "conflict"
   | "not-found"
 
-/** Confirmation of persistence, separate from uncertain network outcomes. */
 export type BinderMutation =
   | { state: "saved" }
   | { state: "failed"; reason: BinderWriteFailure }
 
-/** Actionable copy without upstream error bodies. */
 export const binderWriteMessage: Record<BinderWriteFailure, string> = {
   ...binderFailureMessage,
   unreachable:

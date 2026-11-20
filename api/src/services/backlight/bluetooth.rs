@@ -20,15 +20,6 @@ impl Bluetooth {
                 .map_err(|_| "Invalid BACKLIGHT_BLUETOOTH_ADDRESS")?,
         }))
     }
-    /// One complete exchange, kept as straight-line async control flow: acquire (session,
-    /// adapter, discovery, connect), resolve characteristics, ordered writes, then
-    /// correlated queries. The caller serializes exchanges and bounds this future, so
-    /// cancellation at any `.await` is safe: owned `BlueR` handles drop with it, no write
-    /// is retried here, and only an `Unavailable` exchange outcome (including setup or
-    /// protocol failure) is disconnected (below) so a healthy link persists. `current` is
-    /// the only supersession check; it runs after setup and before
-    /// every write, so an obsolete multi-frame upload never sends later frames.
-    /// Writes that completed stay accepted even if readback fails.
     async fn exchange_inner(
         &self,
         writes: &[Packet],
@@ -42,7 +33,6 @@ impl Bluetooth {
             .default_adapter()
             .await
             .map_err(|_| TransportError::Unavailable)?;
-        // Discovery is needed when BlueZ has no cached device after host startup.
         let discovery = adapter
             .discover_devices()
             .await
@@ -109,7 +99,6 @@ impl Bluetooth {
                 return Err(TransportError::Superseded);
             }
             for packet in writes {
-                // A fresh A3 header resets an interrupted upload. Never activate a superseded scene.
                 if !current() {
                     return Err(TransportError::Superseded);
                 }
@@ -123,7 +112,6 @@ impl Bluetooth {
             for query in queries {
                 match query_reply(&write, notifications.as_mut(), query).await {
                     Ok(reply) => replies.push(reply),
-                    // Completed writes remain acknowledged even when readback times out.
                     Err(_) => break,
                 }
             }
@@ -136,8 +124,6 @@ impl Bluetooth {
         let result = tokio::time::timeout(Duration::from_secs(18), operation)
             .await
             .unwrap_or(Err(TransportError::Unavailable));
-        // Keep a healthy link across commands. Disconnecting after Off races the
-        // controller's advertising restart when TV Sync is requested immediately.
         if matches!(result, Err(TransportError::Unavailable)) {
             let _ = tokio::time::timeout(Duration::from_secs(2), device.disconnect()).await;
         }

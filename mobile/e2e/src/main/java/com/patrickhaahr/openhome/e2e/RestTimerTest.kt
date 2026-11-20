@@ -8,16 +8,11 @@ private const val SQUAT = 1L
 private const val PULL_UP = 2L
 private const val RING_ROW = "Ring Row"
 
-/** What a fresh default rest can read after the taps that started it, however slow the device. */
 private val FRESH_DEFAULT_REST = 120L..150L
 private val A_MINUTE_INTO_DEFAULT_REST = 60L..90L
 private const val A_MINUTE = 60L
 private const val LONG_PAST_ANY_REST = 1_000L
 
-/**
- * Rest timing through the real app, its real database, Android's real alarms and the device's real
- * clock, which the test moves instead of waiting. Only Axum is replaced, at its HTTP boundary.
- */
 class RestTimerTest {
     private val app = AppDriver()
     private val api =
@@ -76,13 +71,11 @@ class RestTimerTest {
         app.assertChecked("$row performed", true)
     }
 
-    /** What the Exercise's card says about its rests, which can be below the fold. */
     private fun assertCardSays(exercise: String, line: String) {
         app.described("Rest timer for $exercise")
         app.assertVisibleBelow(line)
     }
 
-    /** Several rows, one rest, one vibration: through other tabs, a restart and a repeated press. */
     @Test
     fun completeExerciseRunsOneDefaultRestThatVibratesOnceAtItsDeadline() {
         repeatLast()
@@ -94,7 +87,6 @@ class RestTimerTest {
         app.moveClockForward(A_MINUTE)
         app.assertRestRemaining(A_MINUTE_INTO_DEFAULT_REST)
 
-        // It follows the user around and leaves everything under it usable.
         app.tap("Home")
         app.assertVisible("Rest · Squat")
         app.assertRestRemaining(A_MINUTE_INTO_DEFAULT_REST)
@@ -107,7 +99,6 @@ class RestTimerTest {
         app.moveClockPastRestDeadline()
         app.assertVibrationsPlayed(1)
 
-        // Showing it again is not expiring again, nor starting again.
         app.tap("Home")
         app.tap("Workout")
         app.relaunch()
@@ -116,7 +107,6 @@ class RestTimerTest {
         app.assertVisible("Rest over")
         app.assertVibrationsPlayed(1)
 
-        // A second press on an Exercise with everything confirmed confirms nothing.
         app.goToExercise("Squat")
         app.tapBelow("Complete Exercise")
         app.assertVisible("Rest over")
@@ -128,7 +118,6 @@ class RestTimerTest {
         app.assertVibrationsPlayed(1)
     }
 
-    /** Only the moment a row becomes confirmed counts, and a new rest replaces the one running. */
     @Test
     fun confirmingASetRunsARestWhileUncheckingOrEditingDoesNot() {
         repeatLast()
@@ -154,7 +143,6 @@ class RestTimerTest {
         confirm("Squat set 2")
         app.assertRestRemaining(FRESH_DEFAULT_REST)
 
-        // A skipped rest never ends, and the alarms replaced or dropped along the way never fire.
         app.tapDescription("Skip rest")
         app.moveClockForward(LONG_PAST_ANY_REST)
         app.assertNoRest()
@@ -171,7 +159,6 @@ class RestTimerTest {
         confirm("Squat set 1")
         app.assertRestRemaining(150L..180L)
 
-        // Adjusting the running rest moves its deadline and is remembered the same way.
         app.tapDescription("Less rest")
         assertCardSays("Squat", "Rest 2:45")
         app.assertRestRemaining(135L..165L)
@@ -191,7 +178,6 @@ class RestTimerTest {
         app.goToExercise("Squat")
         assertCardSays("Squat", "Rest 2:45")
 
-        // A later Workout on the same Exercise keeps it too.
         app.tapBelow("Discard Workout")
         app.tap("Discard")
         repeatLast()
@@ -209,7 +195,6 @@ class RestTimerTest {
         assertCardSays("Squat", "Rest off")
         app.assertSwitchedOn("Rest timer for Squat", false)
 
-        // Logging carries on without a rest, and the choice outlives the process.
         confirm("Squat set 2")
         app.assertNoRest()
         app.relaunch()
@@ -226,7 +211,6 @@ class RestTimerTest {
         app.assertVisible("Rest · Pull-Up")
         app.assertRestRemaining(FRESH_DEFAULT_REST)
 
-        // Turning one Exercise's rest off leaves another's running; back on, it runs its duration again.
         app.goToExercise("Squat")
         app.tapScrolledTo("Rest timer for Squat")
         app.assertSwitchedOn("Rest timer for Squat", true)
@@ -238,7 +222,6 @@ class RestTimerTest {
         app.assertVisible("Rest · Squat")
     }
 
-    /** The form has no tabs under the bar, and its Save must stay reachable and working above it. */
     @Test
     fun theBarLeavesACorrectingFormUsable() {
         repeatLast()
@@ -248,7 +231,6 @@ class RestTimerTest {
         app.tapBelow("History")
         app.tap("Usual session")
         app.tap("Edit Workout")
-        // The rest bar is on every destination, so only the form's own field says the form has replaced the detail.
         app.described("Squat set 1 reps")
         app.assertVisible("Rest · Squat")
         app.assertNoBottomTabs()
@@ -261,7 +243,6 @@ class RestTimerTest {
         app.assertRestRemaining(1L..FRESH_DEFAULT_REST.last)
     }
 
-    /** A force-stop takes the alarm with it, so the restart has to put it back from the stored deadline. */
     @Test
     fun aRestartContinuesTheDeadlineInsteadOfStartingOver() {
         repeatLast()
@@ -281,7 +262,6 @@ class RestTimerTest {
         app.assertVibrationsPlayed(1)
     }
 
-    /** Android's alarm brings the app back to end the rest, with nothing of it running. */
     @Test
     fun aRestEndingWithTheProcessGoneStillVibratesOnce() {
         repeatLast()
@@ -297,7 +277,6 @@ class RestTimerTest {
         app.assertVibrationsPlayed(1)
     }
 
-    /** Nothing could vibrate on time, and opening the app long after is no moment to start. */
     @Test
     fun aRestThatEndedWhileForceStoppedIsShownOverWithoutVibrating() {
         repeatLast()
@@ -334,10 +313,6 @@ class RestTimerTest {
         app.assertVibrationsPlayed(0)
     }
 
-    /**
-     * Sync can find that the Exercise being rested from is one this device already holds under another
-     * name; the two local rows become one, and neither the rest nor its remembered duration is lost.
-     */
     @Test
     fun mergingTheExerciseKeepsItsRestAndRememberedDuration() {
         api.putExercise(FixtureExercise(PULL_UP, RING_ROW, "calisthenics"))

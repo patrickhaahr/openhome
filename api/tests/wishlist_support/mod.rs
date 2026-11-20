@@ -1,5 +1,3 @@
-//! Request, owner and list helpers shared by the wishlist test files.
-
 #![allow(dead_code)]
 
 use crate::common::send_request_with_method;

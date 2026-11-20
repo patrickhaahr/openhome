@@ -10,7 +10,6 @@ import {
   type LoopRead,
 } from "./route-loop"
 
-/** Plan loops through Axum; the API key and route planner stay server-side. */
 export const planLoops = createServerFn({ method: "POST" })
   .validator(loopRequest)
   .handler(async ({ data }) => {
@@ -20,7 +19,6 @@ export const planLoops = createServerFn({ method: "POST" })
     return generateLoops(data)
   })
 
-/** A dropped RPC renders recovery guidance instead of an error boundary. */
 export async function requestLoops(
   request: Parameters<typeof planLoops>[0]["data"]
 ): Promise<LoopRead> {
@@ -31,7 +29,6 @@ export async function requestLoops(
   }
 }
 
-/** Restore the selected route through Start's credential-holding server boundary. */
 export const getActiveRoute = createServerFn({ method: "GET" }).handler(
   async () => {
     setResponseHeader("Cache-Control", "no-store")
@@ -41,7 +38,6 @@ export const getActiveRoute = createServerFn({ method: "GET" }).handler(
   }
 )
 
-/** Persist a deliberate choice through Axum; comparison never writes. */
 export const chooseRoute = createServerFn({ method: "POST" })
   .validator(routeSelection)
   .handler(async ({ data }) => {
@@ -51,7 +47,6 @@ export const chooseRoute = createServerFn({ method: "POST" })
     return selectActiveRoute(data)
   })
 
-/** Failed RPCs keep route planning and recovery reachable. */
 export async function loadActiveRoute(): Promise<ActiveRouteRead> {
   try {
     return await getActiveRoute()
@@ -60,7 +55,6 @@ export async function loadActiveRoute(): Promise<ActiveRouteRead> {
   }
 }
 
-/** A dropped selection RPC never claims that a route was saved. */
 export async function requestRouteSelection(
   routeId: string
 ): Promise<RouteSelectionRead> {

@@ -1,6 +1,5 @@
 import { z } from "zod"
 
-/** LG TV Commands the dashboard has Remote Buttons for; OpenHome reports which are available. */
 export const tvCommand = z.enum([
   "power",
   "input",
@@ -35,10 +34,8 @@ export const tvCommand = z.enum([
   "hdmi-3",
 ])
 
-/** One LG TV Command; an acknowledgement never establishes the TV's power or volume. */
 export type TvCommand = z.infer<typeof tvCommand>
 
-/** Remote Button labels, phrased as actions rather than observed TV state. */
 export const tvCommandLabels: Record<TvCommand, string> = {
   power: "Power",
   input: "Input",

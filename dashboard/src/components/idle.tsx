@@ -14,13 +14,10 @@ import {
 import { IdleContext } from "@/components/idle-block"
 import { slideMemory, wantsIdleNow, type IdleSettings } from "@/lib/idle"
 
-/** After the waking gesture's last event, how long stray events (a late click) are swallowed. */
 export const WAKE_GRACE_MS = 450
 
-/** A held finger that never reports its release still wakes after this long. */
 const WAKE_LIMIT_MS = 3000
 
-/** Events from the waking gesture that must never reach a control under the slideshow. */
 const swallowed = [
   "pointerup",
   "pointercancel",
@@ -37,23 +34,13 @@ const swallowed = [
   "keypress",
 ] as const
 
-/** Activity that restarts the inactivity countdown while awake. */
 const activity = ["pointerdown", "pointermove", "keydown", "wheel"] as const
 
-/**
- * The room's phase. Each variant carries the focus it needs: a showing phase remembers where focus
- * was so waking can return it, and the awake phase that follows holds it until the focus effect
- * hands it back once.
- */
 type Phase =
   | { readonly tag: "awake"; readonly handBack: Element | null }
   | { readonly tag: "idle"; readonly restoreFocus: Element | null }
   | { readonly tag: "waking"; readonly restoreFocus: Element | null }
 
-/**
- * Phase and blockers are separate facts: a block is a reason not to enter idle, never a phase, so
- * several can be held at once and each is released on its own.
- */
 type Room = {
   readonly phase: Phase
   readonly blockers: ReadonlySet<symbol>
@@ -71,7 +58,6 @@ const initialRoom: Room = {
   blockers: new Set(),
 }
 
-/** Where focus returns when a showing phase ends; null when nothing was focused. */
 function wokenTo(phase: Phase): Phase {
   return {
     tag: "awake",
@@ -79,11 +65,6 @@ function wokenTo(phase: Phase): Phase {
   }
 }
 
-/**
- * The single transition boundary. Every timer and listener only reports an event; whether it still
- * applies is decided here against the latest state, so a callback that outlives its cause (a
- * countdown firing just after a block, a wake landing just after a block woke the room) is a no-op.
- */
 function reduceRoom(room: Room, event: RoomEvent): Room {
   const { phase, blockers } = room
 
@@ -107,7 +88,6 @@ function reduceRoom(room: Room, event: RoomEvent): Room {
       return { phase: wokenTo(phase), blockers }
 
     case "blocked":
-      // Declared busy or conversation activity takes the room back at once.
       return {
         phase: phase.tag === "awake" ? phase : wokenTo(phase),
         blockers: new Set(blockers).add(event.token),
@@ -123,14 +103,6 @@ function reduceRoom(room: Room, event: RoomEvent): Room {
   }
 }
 
-/**
- * Watches for inactivity and shows the Idle Slideshow over the dashboard without unmounting it,
- * so the page, its scroll and any draft are exactly as they were on waking. Anything that calls
- * `useIdleBlock(true)` holds the slideshow off; a block that appears while idle wakes it.
- *
- * Timers and window listeners are effects that only report events to one reducer; each effect's
- * cleanup (phase change, block, unmount) clears them, and the reducer ignores any that still land.
- */
 export function IdleProvider({
   settings,
   overlay,
@@ -138,9 +110,7 @@ export function IdleProvider({
   children,
 }: {
   settings: IdleSettings
-  /** Extra content for the overlay plate, beneath the clock, date and weather. */
   overlay?: React.ReactNode
-  /** Where photos and weather come from; tests pass synthetic reads. */
   sources?: IdleSources
   children: React.ReactNode
 }): React.JSX.Element {
@@ -159,7 +129,6 @@ export function IdleProvider({
     return () => send({ type: "released", token })
   }, [])
 
-  // The countdown starts afresh whenever the dashboard wakes or its last block is released.
   useEffect(() => {
     if (!awake || blocked || timeoutMs === null) return
     let last = Date.now()
@@ -188,7 +157,6 @@ export function IdleProvider({
     }
   }, [awake, blocked, timeoutMs])
 
-  // A synthetic preview may ask for the slideshow straight away.
   useEffect(() => {
     if (!wantsIdleNow({ timeoutMs, preview }, window.location.search)) return
 
@@ -199,7 +167,6 @@ export function IdleProvider({
     return () => clearTimeout(timer)
   }, [timeoutMs, preview])
 
-  // Focus moves onto the slideshow while it shows and returns to where it was.
   useEffect(() => {
     if (phase.tag === "idle") {
       screen.current?.focus({ preventScroll: true })
@@ -214,10 +181,6 @@ export function IdleProvider({
       target.focus({ preventScroll: true })
   }, [phase])
 
-  // While the slideshow shows, the first touch or key only wakes, and nothing of it gets through.
-  // This stays one sequential protocol: the wake event starts a single settle timer, each trailing
-  // event of the same gesture restarts it, and it settles once the gesture goes quiet. It is keyed
-  // on `showing`, not the exact phase, so idle -> waking keeps the timer and listeners running.
   useEffect(() => {
     if (!showing) return
     let finish: ReturnType<typeof setTimeout> | undefined
@@ -235,7 +198,6 @@ export function IdleProvider({
     function wake(event: Event): void {
       swallow(event)
       send({ type: "input" })
-      // The release normally settles it; a lost release must not leave the room asleep.
       settle(event.type === "keydown" ? WAKE_GRACE_MS : WAKE_LIMIT_MS)
     }
 

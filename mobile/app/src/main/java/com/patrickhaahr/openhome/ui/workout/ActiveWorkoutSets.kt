@@ -70,7 +70,6 @@ private val CELL_HEIGHT = 68.dp
 private val SET_SHAPE = RoundedCornerShape(24.dp)
 private val CELL_SHAPE = RoundedCornerShape(16.dp)
 
-/** Last time, at a glance: the numbers of each Set in a line, marked by the rewind symbol and its day. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PreviousPerformanceStrip(previous: PreviousPerformance) {
@@ -96,7 +95,6 @@ private fun PreviousPerformanceStrip(previous: PreviousPerformance) {
     }
 }
 
-/** A Set in the fewest marks: 8 ×, 30 s, +20. */
 internal fun shortPerformance(set: com.patrickhaahr.openhome.fitness.WorkoutSet): String =
     listOfNotNull(
         set.reps?.let { "$it×" },
@@ -104,7 +102,6 @@ internal fun shortPerformance(set: com.patrickhaahr.openhome.fitness.WorkoutSet)
         set.addedWeightKg?.let { "+${com.patrickhaahr.openhome.ui.plainNumber(it)}" },
     ).joinToString(" ")
 
-/** A confirmed Set lights up. Nothing else on this screen is as bright, and nothing else needs saying. */
 @Composable
 private fun SetRow(
     exerciseName: String,
@@ -165,7 +162,6 @@ private fun SetRow(
     }
 }
 
-/** Keeps its own text, so a save finishing later can never move the cursor or undo typing. */
 @Composable
 private fun RowScope.SetValueField(
     set: ActiveSet,
@@ -191,7 +187,6 @@ private fun RowScope.SetValueField(
     )
 }
 
-/** A figure in a well, with its unit tucked in the corner. Its description labels it the way a heading would. */
 @Composable
 internal fun CompactValueField(
     value: String,
@@ -240,7 +235,6 @@ internal fun CompactValueField(
     )
 }
 
-/** The one Exercise being lifted, as large as the screen allows. */
 @Composable
 internal fun ExerciseFocus(
     entry: ActiveEntry,
@@ -280,7 +274,6 @@ internal fun ExerciseFocus(
     }
 }
 
-/** What this Exercise's rests will be, remembered from Workout to Workout. */
 @Composable
 private fun RestPreferenceRow(entry: ActiveEntry, viewModel: ActiveWorkoutViewModel) {
     val spoken = if (entry.rest.enabled) "Rest ${formatRest(entry.rest.seconds)}" else "Rest off"
@@ -293,7 +286,6 @@ private fun RestPreferenceRow(entry: ActiveEntry, viewModel: ActiveWorkoutViewMo
                 GlyphIcon(Glyph.Timer, tint = if (entry.rest.enabled) Lit.Lamp else Lit.Faint, size = 24.dp)
             }
             if (entry.rest.enabled) {
-                // Primes rather than a colon: the running countdown is the only m:ss on screen.
                 Text(
                     "${entry.rest.seconds / 60}′${(entry.rest.seconds % 60).toString().padStart(2, '0')}",
                     style = Type.Figure,

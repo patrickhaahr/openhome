@@ -13,7 +13,6 @@ private const val SECONDS_PER_MINUTE = 60L
 private val REST_COUNTDOWN = Pattern.compile("\\d+:\\d\\d")
 private val restCountdown = By.pkg(APP_PACKAGE).text(REST_COUNTDOWN)
 
-/** The rest bar's countdown: within the app, the one line of text that is nothing but minutes and seconds. */
 private fun AppDriver.restRemaining(): Long? {
     repeat(TAP_ATTEMPTS) {
         try {
@@ -22,13 +21,11 @@ private fun AppDriver.restRemaining(): Long? {
                 minutes.toLong() * SECONDS_PER_MINUTE + seconds.toLong()
             }
         } catch (_: StaleObjectException) {
-            // Find it again.
         }
     }
     error("The rest countdown kept changing and could not be read")
 }
 
-/** A moved clock reaches the screen within a second or so; the wide [seconds] allow for a slow device. */
 fun AppDriver.assertRestRemaining(seconds: LongRange) {
     val deadline = SystemClock.uptimeMillis() + TIMEOUT_MS
     var shown = restRemaining()
@@ -39,20 +36,17 @@ fun AppDriver.assertRestRemaining(seconds: LongRange) {
     assertTrue("Rest remaining should be within $seconds, was $shown", shown != null && shown in seconds)
 }
 
-/** No countdown and no finished rest, given the time one would need to appear. */
 fun AppDriver.assertNoRest() {
     device.waitForIdle()
     assertNull("Did not expect a rest countdown", device.wait(Until.findObject(restCountdown), ABSENCE_WAIT_MS))
     assertAbsent("Rest over")
 }
 
-/** Moves the clock to just past the deadline of the rest on screen. */
 fun AppDriver.moveClockPastRestDeadline() {
     moveClockForward(checkNotNull(restRemaining()) { "No rest is running" } + 1)
     assertVisible("Rest over")
 }
 
-/** Completes the Setup Flow against [api] and waits for the app's launch destination. */
 fun AppDriver.completeSetup(api: FakeAxum) {
     submitSetup(api.baseUrl, API_KEY)
     assertOnWorkoutTab()
@@ -72,7 +66,6 @@ fun AppDriver.assertOnWorkoutTab() {
     assertVisible("Last Workout")
 }
 
-/** The tabs along the bottom of the screen, in order, and which of them is the selected tab. */
 fun AppDriver.assertBottomTabs(vararg expected: String, selected: String) {
     device.waitForIdle()
     val tabs =
@@ -87,11 +80,6 @@ fun AppDriver.assertBottomTabs(vararg expected: String, selected: String) {
     )
 }
 
-/**
- * The tab bar is removed as soon as navigation settles on the destination, but the screen being left stays
- * on the accessibility tree through its exit transition. Waits until nothing selected remains, so a bar
- * that is still being removed is not mistaken for one that stayed; a bar that stays fails after the timeout.
- */
 fun AppDriver.assertNoBottomTabs() {
     device.waitForIdle()
     assertTrue(

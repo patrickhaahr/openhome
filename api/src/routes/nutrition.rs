@@ -1,5 +1,3 @@
-//! Nutrition endpoints under `/api/nutrition`.
-
 use crate::AppState;
 use crate::services::nutrition::food_database::FoodDatabase;
 use crate::services::nutrition::meal_photos::{MealPhotos, PHOTO_BODY_LIMIT};
@@ -24,11 +22,7 @@ use overview::{nutrition_day, nutrition_goal, nutrition_summary, set_nutrition_g
 use supplements::{add_supplement, delete_supplement, list_supplements, update_supplement};
 
 pub fn router(foods: FoodDatabase, photos: MealPhotos, labels: OpenFoodFacts) -> Router<AppState> {
-    // Only the routes that carry a photo raise Axum's default body limit.
     let photo_limit = DefaultBodyLimit::max(PHOTO_BODY_LIMIT);
-    // Foods come from food.db with their NOVA Classes from app.db; Meals, Supplements, Meal Logs
-    // and Products live in app.db and take values from food.db and Open Food Facts; Meal Logs keep photos in
-    // the data directory.
     Router::new()
         .route("/api/nutrition/foods", get(search_foods))
         .route("/api/nutrition/foods/{food_id}", get(food))

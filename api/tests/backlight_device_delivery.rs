@@ -1,5 +1,3 @@
-//! Backlight device delivery: accepted, failed and superseded exchanges.
-
 mod backlight_support;
 mod common;
 
@@ -21,14 +19,11 @@ async fn disconnecting_after_durable_acceptance_completes_the_accepted_device_wo
     device.device.packets.lock().unwrap().clear();
     let latest =
         serde_json::json!({"mode":"color","rgb":{"red":0,"green":0,"blue":255},"brightness":10});
-    // Hold the accepted whole operation so its request cannot finish while it is abandoned.
     device.block.store(true, SeqCst);
     let request = tokio::spawn(select(app.clone(), latest.clone()));
     tokio::time::timeout(std::time::Duration::from_secs(2), device.entered.notified())
         .await
         .unwrap();
-    // The target persisted before the exchange started: the requesting client no longer
-    // matters, and dropping it must never cancel the detached device work.
     let (_, durable) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
     assert_eq!(durable["intended"], latest);
     assert_eq!(durable["command"], "pending");
@@ -52,8 +47,6 @@ async fn off_write_not_applied_reports_failure_while_readback_stays_honest() {
         CurrentOperation, Exchange, GattTransport, Packet, TransportFuture,
     };
     use std::sync::Arc;
-    // The controller answers every query but applies no write; a receipt or readback
-    // alone never becomes acceptance.
     struct UnappliedDevice;
     impl GattTransport for UnappliedDevice {
         fn matches_device(&self, _: &str) -> bool {
@@ -111,8 +104,6 @@ async fn a_superseded_exchange_that_finished_writing_stays_acknowledged() {
         Arc,
         atomic::{AtomicBool, Ordering::SeqCst},
     };
-    // Characteristic writes happen the moment they are sent: after an exchange's last
-    // frame nothing undoes it, so bookkeeping records it even after supersession.
     struct SentDevice {
         hold: AtomicBool,
         entered: tokio::sync::Notify,
@@ -162,8 +153,6 @@ async fn a_superseded_exchange_that_finished_writing_stays_acknowledged() {
                     self.entered.notify_one();
                     self.release.acquire().await.unwrap().forget();
                 }
-                // No check after the hold sent its frames: supersession never rewinds
-                // an exchange that already wrote.
                 Ok(Self::replies())
             })
         }
@@ -200,8 +189,6 @@ async fn a_superseded_exchange_that_finished_writing_stays_acknowledged() {
     .unwrap();
     device.release.add_permits(1);
     let (_, superseded_status) = earlier.await.unwrap();
-    // The finished write is a physical fact independent of the superseding intent, but
-    // only the still-current revision may claim acknowledgment.
     assert_eq!(superseded_status["acknowledged"], first);
     assert_eq!(superseded_status["command"], "pending");
     assert_eq!(superseded_status["recovery"], "pending");

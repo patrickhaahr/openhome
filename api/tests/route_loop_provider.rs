@@ -1,5 +1,3 @@
-//! Route loop provider handling: overshoot, retries, invalid answers and the time budget.
-
 mod common;
 mod route_loop_support;
 
@@ -20,7 +18,6 @@ use wiremock::matchers::method;
 #[tokio::test]
 async fn corrects_later_requests_for_a_provider_that_overshoots() {
     let server = MockServer::start().await;
-    // 6.25 km for 5 km overshoots by 25%, so the next request asks for 4 km.
     answer_seed(&server, 1, ok(square(6250, NORTH_EAST)), 1).await;
     Mock::given(method("POST"))
         .and(|request: &Request| {
@@ -51,7 +48,6 @@ async fn reuses_completed_searches_but_retries_interrupted_ones() {
     let (_, second) = generate(app.clone(), walk(5000)).await;
     assert_eq!(first["plan"]["search"], "exhausted");
     assert_eq!(first, second);
-    // The same distance as steps reuses the loops and estimates steps with its own length.
     let (_, steps) = generate(
         app,
         json!({
@@ -119,7 +115,6 @@ async fn rejects_invalid_provider_responses_without_inventing_a_route() {
         json!({ "features": [] }),
         json!({ "type": "FeatureCollection" }),
     ] {
-        // An invalid answer ends the search rather than spending more attempts.
         let server = provider(ok(response), 1).await;
         let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
         assert_eq!(
@@ -139,7 +134,6 @@ async fn reports_no_route_refusal_and_outage_outcomes_without_upstream_text() {
             MAX_ATTEMPTS,
             "no-route",
         ),
-        // No walkable way near the origin: other seeds cannot help.
         (
             ResponseTemplate::new(404).set_body_json(json!({ "error": { "code": 2010 } })),
             1,
@@ -155,7 +149,6 @@ async fn reports_no_route_refusal_and_outage_outcomes_without_upstream_text() {
             1,
             "provider-unavailable",
         ),
-        // A rate-limited or over-quota instance is a provider failure (ADR 0008).
         (
             ResponseTemplate::new(429).set_body_json(json!({ "error": { "code": 2099 } })),
             1,
@@ -226,14 +219,12 @@ async fn a_request_queued_behind_the_same_target_reuses_the_first_answer() {
     assert_eq!(status_b, StatusCode::OK);
     assert_eq!(first, second, "both callers must receive the same plan");
     assert_eq!(first["plan"]["search"], "complete");
-    // The identical target is searched once; the queued caller reuses its answer.
     assert_eq!(server.received_requests().await.unwrap().len(), 3);
 }
 
 #[tokio::test]
 async fn calibrates_the_next_request_from_an_unsuitable_loop_overshoot() {
     let server = MockServer::start().await;
-    // An unsuitable 6.25 km loop starting 780 m away still measures a 25% overshoot.
     let far_start = [ORIGIN[0] + 0.01, ORIGIN[1]];
     answer_seed(
         &server,
@@ -242,7 +233,6 @@ async fn calibrates_the_next_request_from_an_unsuitable_loop_overshoot() {
         1,
     )
     .await;
-    // Only an attempt at the calibrated 4 km length is answered; seeds 5 and 6 are never spent.
     for (seed, direction) in [(2, NORTH_WEST), (3, SOUTH_WEST), (4, SOUTH_EAST)] {
         Mock::given(method("POST"))
             .and(move |request: &Request| {
@@ -269,8 +259,6 @@ async fn calibrates_the_next_request_from_an_unsuitable_loop_overshoot() {
 #[tokio::test]
 async fn interrupts_with_partial_loops_when_no_attempt_may_start_after_the_time_budget() {
     let server = MockServer::start().await;
-    // Three slow attempts spend the 20 s budget; the third retraces the first, so the search
-    // is still incomplete when the budget cuts before a fourth attempt.
     for (seed, direction) in [(1, NORTH_EAST), (2, NORTH_WEST), (3, NORTH_EAST)] {
         answer_seed(
             &server,
@@ -288,7 +276,6 @@ async fn interrupts_with_partial_loops_when_no_attempt_may_start_after_the_time_
     let plan = &body["plan"];
     assert_eq!(plan["search"], "interrupted");
     let measured = distances(plan);
-    // Both distinct loops are still shown next to the interrupted search.
     assert_eq!(measured.len(), 2);
     for distance in &measured {
         assert!((distance - 5000.0).abs() < 15.0, "{distance}");
@@ -307,8 +294,6 @@ async fn partial_loops_survive_invalid_geometry_after_a_retained_loop() {
         answer_seed(&server, seed, ok(square(5000, SOUTH_WEST)), 0).await;
     }
 
-    // The invalid second answer ends the search rather than spending more attempts, but
-    // the first retained loop remains available next to the interrupted search.
     let (_, body) = generate(app(demo(), Some(&server)).await, walk(5000)).await;
     let plan = &body["plan"];
     assert_eq!(plan["search"], "interrupted");

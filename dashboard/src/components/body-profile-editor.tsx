@@ -15,7 +15,6 @@ import {
 } from "@/lib/body-profile"
 import { trainingDayOn } from "@/lib/workout"
 
-/** A real `YYYY-MM-DD` day no later than today in Copenhagen. */
 const field = "grid gap-1"
 
 const fieldLabel = "text-label text-muted-ink"
@@ -59,7 +58,6 @@ export function ProfileEditor({
 
   const id = useId()
 
-  // A sex stored by another client that the targets cannot use stays selectable until changed.
   const unsupportedSex =
     original.sex === "" ||
     profileSexes.some((sex) => sex.value === original.sex)
@@ -240,7 +238,6 @@ export function WeightEditor({
 }): React.JSX.Element {
   const [date, setDate] = useState(() => trainingDayOn(new Date()))
   const [weight, setWeight] = useState("")
-  // A typed weight is a draft.
   useIdleBlock(weight !== "")
 
   const [problem, setProblem] = useState<{

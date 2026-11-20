@@ -1,18 +1,6 @@
-//! The v1 stream registry (`docs/noop/PUSH_PROTOCOL_STREAMS_AND_ERRORS.md`, "Version 1 stream
-//! registry").
-//!
-//! The registry is explicit and finite: every stream lists its delivery mode, its natural-key
-//! columns (excluding the batch-scoped `deviceId`), its exported `data` members with their wire
-//! types, and the upsert that stores a record in the stream's typed table in `noop.db`.
-//! Replace-window streams also carry the SQL that finds and deletes rows absent from a complete
-//! replacement.
-
-/// Wire type of one registry column.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnType {
-    /// A JSON number without fraction or exponent that fits in `i64`.
     Integer,
-    /// Any finite JSON number.
     Real,
     Text,
     Boolean,
@@ -43,22 +31,15 @@ const fn nullable(name: &'static str, ty: ColumnType) -> Column {
 
 use ColumnType::{Boolean, Integer, Real, Text};
 
-/// How a stream is delivered. Fixed by the registry; a header naming the other mode is invalid.
 #[derive(Debug)]
 pub enum Delivery {
-    /// Idempotent upserts guarded by insertion cursors.
     Append,
-    /// Authoritative replacement of every row in a half-open window.
     ReplaceWindow(ReplaceWindow),
 }
 
-/// The column a replace-window stream's window bounds apply to. It is always the first key
-/// column, whose name equals the selector's wire name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Selector {
-    /// `YYYY-MM-DD` bounds over the `day` key.
     Day,
-    /// Integer Unix-second bounds over the `startTs` key.
     StartTs,
 }
 
@@ -75,10 +56,7 @@ impl Selector {
 #[derive(Debug)]
 pub struct ReplaceWindow {
     pub selector: Selector,
-    /// Binds `source_id`, `device_id`, `startInclusive`, `endExclusive`; returns the key columns
-    /// (registry order) of every stored row in that scope and window.
     pub window_keys_sql: &'static str,
-    /// Binds `source_id`, `device_id`, then the key columns in registry order.
     pub delete_sql: &'static str,
 }
 
@@ -86,10 +64,8 @@ pub struct ReplaceWindow {
 pub struct Stream {
     pub name: &'static str,
     pub delivery: Delivery,
-    /// Natural-key columns in registry order. Key columns are never nullable.
     pub key: &'static [Column],
     pub data: &'static [Column],
-    /// Binds `source_id`, `device_id`, then the key columns and the data columns in registry order.
     pub upsert_sql: &'static str,
 }
 
@@ -105,7 +81,6 @@ impl Stream {
 
 const TS_KEY: &[Column] = &[required("ts", Integer)];
 
-/// The complete v1 registry, in wire order: the 8 append streams, then the 4 mutable ones.
 pub const STREAMS: [Stream; 12] = [
     Stream {
         name: "hrSample",
@@ -175,10 +150,6 @@ pub const STREAMS: [Stream; 12] = [
         key: TS_KEY,
         data: &[
             required("raw", Integer),
-            // Real, not Integer: PUSH_PROTOCOL_STREAMS_AND_ERRORS.md's integer list (`ts`,
-            // `rrMs`, `seq`, `bpm`, `red`, `ir`, `raw`) omits the aux columns, DATA_MODEL.md does
-            // not document them, and the sender picks the JSON type from the SQLite storage type
-            // (PushDao.kt `Cursor.values`), so `12.0` is possible. Any finite number is accepted.
             nullable("aux1Raw", Real),
             nullable("aux2Raw", Real),
         ],
@@ -210,9 +181,6 @@ pub const STREAMS: [Stream; 12] = [
              ON CONFLICT (source_id, device_id, ts) DO UPDATE SET \
              x = excluded.x, y = excluded.y, z = excluded.z, dyn_accel = excluded.dyn_accel",
     },
-    // Mutable streams. Per the protocol, timestamps and counts are integers and every metric or
-    // measurement is any finite number (so `restingHr` accepts `58` or `58.0`); only `endTs`,
-    // `source`, `userEdited` and `answeredYes` are required.
     Stream {
         name: "dailyMetric",
         delivery: Delivery::ReplaceWindow(ReplaceWindow {
@@ -351,7 +319,6 @@ pub const STREAMS: [Stream; 12] = [
     },
 ];
 
-/// Looks up a stream by its wire name.
 #[must_use]
 pub fn stream(name: &str) -> Option<&'static Stream> {
     STREAMS.iter().find(|stream| stream.name == name)

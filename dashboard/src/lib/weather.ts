@@ -30,12 +30,10 @@ const forecast = z.object({
   valid_until: z.iso.datetime({ offset: true }),
   timezone: z.literal("Europe/Copenhagen"),
   current: current.nullable(),
-  // Older Axum instances can still serve current/daily weather during rollout.
   hourly: z.array(hour).max(24).default([]),
   days: z.array(day).length(7),
 })
 
-/** The normalized Axum contract, stripping unknown provider and private fields. */
 export const weatherRead = z.discriminatedUnion("state", [
   z.object({ state: z.literal("fresh"), forecast }),
   z.object({ state: z.literal("stale"), forecast }),
@@ -45,16 +43,13 @@ export const weatherRead = z.discriminatedUnion("state", [
   }),
 ])
 
-/** Weather available for rendering, or a sanitized connection/provider failure. */
 export type WeatherRead = z.infer<typeof weatherRead>
 
-/** A failed transport or RPC must never become fabricated weather. */
 export const unavailableWeather: WeatherRead = {
   state: "unavailable",
   reason: "provider-unavailable",
 }
 
-/** WMO descriptions; unknown and missing codes never imply clear skies. */
 export function weatherDescription(code: number | null): string {
   switch (code) {
     case 0:

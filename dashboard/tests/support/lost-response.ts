@@ -7,10 +7,6 @@ import {
 } from "node:http"
 import { z } from "zod"
 
-/**
- * A proxy to Axum that forwards every request but, for the first request `lose` accepts,
- * lets Axum commit it and then drops the connection, as a lost response does.
- */
 export async function startLossyAxum(
   upstream: string,
   lose: (request: IncomingMessage) => boolean

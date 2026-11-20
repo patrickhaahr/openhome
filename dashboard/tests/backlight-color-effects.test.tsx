@@ -78,7 +78,6 @@ test("RGB and brightness edits coalesce, keep the newest edit during dispatch, a
         />
       )
     )
-    // Six hue steps of 5° from red land on orange; Home then two pages set 20 %.
     await press("RGB color", ...Array<string>(6).fill("ArrowRight"))
     await press("Brightness", "Home", "PageUp", "PageUp")
     expect(accepted).toEqual([])

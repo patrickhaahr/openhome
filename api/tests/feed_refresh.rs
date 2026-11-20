@@ -73,7 +73,6 @@ async fn test_should_reject_private_host_feed_url() {
     );
 }
 
-/// Adds one source entry the way a parsed refresh would: identified per Feed by its guid.
 async fn store_feed_item(
     pool: &sqlx::SqlitePool,
     feed_id: i64,
@@ -91,8 +90,6 @@ async fn store_feed_item(
     .await
 }
 
-/// Deduplication against already stored items rests on the `feed_items` schema: the same item is
-/// stored once per Feed, while another Feed may store it.
 #[tokio::test]
 async fn test_feed_items_are_deduplicated_per_feed() {
     let (_app, state) = test_app_with_db().await;

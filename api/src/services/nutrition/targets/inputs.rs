@@ -8,14 +8,12 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
 
-/// Trend Weight by day: the moving average after each weigh-in, in date order.
 #[derive(Clone, Debug, Default)]
 pub struct TrendWeight {
     points: Vec<(CalendarDay, f64)>,
 }
 
 impl TrendWeight {
-    /// Smooths weigh-ins given in date order, one per day; the first one seeds the average.
     #[must_use]
     pub fn of(weigh_ins: &[(CalendarDay, f64)]) -> Self {
         let mut trend: Option<f64> = None;
@@ -30,20 +28,16 @@ impl TrendWeight {
         Self { points }
     }
 
-    /// The Trend Weight on `day`, carried from the last weigh-in on or before it; `None` before
-    /// the first weigh-in.
     #[must_use]
     pub fn on(&self, day: CalendarDay) -> Option<f64> {
         let after = self.points.partition_point(|(weighed, _)| *weighed <= day);
         after.checked_sub(1).map(|index| self.points[index].1)
     }
 
-    /// The first weigh-in, which seeds the average.
     pub(super) fn first(&self) -> Option<(CalendarDay, f64)> {
         self.points.first().copied()
     }
 
-    /// The first weigh-in from `from` through `to`, with its Trend Weight.
     pub(super) fn first_between(
         &self,
         from: CalendarDay,
@@ -56,7 +50,6 @@ impl TrendWeight {
     }
 }
 
-/// Sex as the Mifflin–St Jeor formula and the NNR 2023 references take it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sex {
     Male,
@@ -64,7 +57,6 @@ pub enum Sex {
 }
 
 impl Sex {
-    /// `male` or `female` in any case; the Profile stores free text, and nothing else is guessed.
     pub(in crate::services::nutrition) fn parse(text: &str) -> Option<Self> {
         match text.trim().to_lowercase().as_str() {
             "male" => Some(Self::Male),
@@ -74,7 +66,6 @@ impl Sex {
     }
 }
 
-/// Data a target needs and does not have.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Missing {
@@ -84,7 +75,6 @@ pub enum Missing {
     BodyWeight,
 }
 
-/// The Profile values the BMR formula needs.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Body {
     height_cm: f64,
@@ -93,7 +83,6 @@ pub(super) struct Body {
 }
 
 impl Body {
-    /// The Profile's values, or what it lacks.
     pub(super) async fn read(db: &SqlitePool) -> Result<Result<Self, Vec<Missing>>, sqlx::Error> {
         let row = sqlx::query!(
             r#"SELECT height_cm, sex, birth_date AS "birth_date?" FROM profile WHERE id = 1"#
@@ -123,7 +112,6 @@ impl Body {
         })
     }
 
-    /// Mifflin–St Jeor resting energy in kcal per day at `weight_kg` on `day`.
     pub(super) fn bmr(self, weight_kg: f64, day: CalendarDay) -> Option<f64> {
         let age = f64::from(day.years_since(self.birth_date)?);
         let offset = match self.sex {
@@ -134,7 +122,6 @@ impl Body {
     }
 }
 
-/// Body Weight up to `to`, in date order.
 pub(in crate::services::nutrition) async fn weigh_ins(
     db: &SqlitePool,
     to: CalendarDay,
@@ -153,8 +140,6 @@ pub(in crate::services::nutrition) async fn weigh_ins(
         .collect())
 }
 
-/// Each day's known logged energy from `from` through `to`, Portions and Supplement Doses alike;
-/// days without Meal Logs, or whose logged energy is all unknown, are left out.
 pub(super) async fn logged_energy(
     db: &SqlitePool,
     from: CalendarDay,

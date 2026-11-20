@@ -78,7 +78,6 @@ test("opens focused views through persistent navigation, restores browser histor
       root.render(createElement(RouterProvider, { router }))
     })
 
-    // Wishes and watching share one destination; the old pages are not in the navigation.
     expect(document.querySelector('nav a[href="/wishlist"]')).toBeNull()
     expect(document.querySelector('nav a[href="/watchlist"]')).toBeNull()
 
@@ -230,7 +229,6 @@ test("opens focused views through persistent navigation, restores browser histor
       "Workouts unavailable"
     )
 
-    // The retired Today view and old day links land on Recovery, keeping the day.
     await act(async () => {
       await router.navigate({
         to: "/workout",

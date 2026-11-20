@@ -25,7 +25,6 @@ async function checkHealth(): Promise<ConnectionState> {
   }
 }
 
-/** Read private runtime configuration and return only an authenticated health outcome. */
 export async function readConnectionHealth(): Promise<ConnectionHealth> {
   const state = await checkHealth()
 

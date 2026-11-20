@@ -46,14 +46,11 @@ async function read<T>(
     const parsed = schema.safeParse(await result.response.json())
 
     if (parsed.success) return { state: "read", data: parsed.data }
-  } catch {
-    /* Parse only safe protocol values. */
-  }
+  } catch {}
 
   return { state: "unavailable", reason: "unavailable" }
 }
 
-/** Read the household and today's figures in parallel through the server-held credential. */
 export async function readImportantDates(): Promise<ImportantDatesState> {
   const [owners, dates] = await Promise.all([
     read("/api/household-users", householdUser.array()),
@@ -72,7 +69,6 @@ export async function readImportantDates(): Promise<ImportantDatesState> {
   }
 }
 
-/** Read only the dates explicitly allowed on the shared room display. */
 export async function readIdleDates(): Promise<ImportantDatesState> {
   const dates = await read("/api/important-dates", importantDates, {
     show_when_idle: "true",
@@ -88,7 +84,6 @@ export async function readIdleDates(): Promise<ImportantDatesState> {
   }
 }
 
-/** Forward one operation; only an API receipt confirms persistence. */
 export async function writeImportantDate(
   command: ImportantDateCommand
 ): Promise<ImportantDateMutation> {
@@ -152,9 +147,7 @@ export async function writeImportantDate(
         : importantDate
 
     if (schema.safeParse(body).success) return { state: "saved" }
-  } catch {
-    /* An invalid acknowledgement cannot confirm a saved date. */
-  }
+  } catch {}
 
   return { state: "failed", reason: "unavailable" }
 }

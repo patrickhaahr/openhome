@@ -33,7 +33,6 @@ pub struct WorkoutDetail {
     date: String,
     name: Option<String>,
     notes: Option<String>,
-    /// Where a client that downloads this Workout continues its edit revisions from.
     #[serde(skip_serializing_if = "Option::is_none")]
     client_revision: Option<i64>,
     exercises: Vec<WorkoutExercise>,

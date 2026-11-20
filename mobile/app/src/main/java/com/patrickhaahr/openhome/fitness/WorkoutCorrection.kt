@@ -12,14 +12,12 @@ import com.patrickhaahr.openhome.sync.QueuedEntry
 import com.patrickhaahr.openhome.sync.QueuedWorkout
 import kotlinx.serialization.Serializable
 
-/** A finished Workout being corrected, as typed. Its notes on entries and Sets are kept, not edited. */
 @Serializable
 data class CorrectionDraft(
     val date: String,
     val name: String,
     val notes: String,
     val entries: List<CorrectionEntry>,
-    /** The next row's key, so a row added to the draft never shares one with another. */
     val firstFreeKey: Long,
 ) {
     val hasSets: Boolean
@@ -35,7 +33,6 @@ data class CorrectionDraft(
             entry.copy(sets = entry.sets.map { it.copy(values = it.values.copy(measure = measure)) })
         }
 
-    /** A new row continues the measure of the row before it, as when logging. */
     fun addingSet(entryKey: Long): CorrectionDraft =
         updatingEntry(entryKey) { entry ->
             val measure = entry.sets.lastOrNull()?.values?.measure ?: entry.newSetMeasure
@@ -53,7 +50,6 @@ data class CorrectionDraft(
 
     fun removingEntry(entryKey: Long): CorrectionDraft = copy(entries = entries.filterNot { it.key == entryKey })
 
-    /** [offset] is -1 for earlier and +1 for later; there is nowhere to go past either end. */
     fun movingEntry(entryKey: Long, offset: Int): CorrectionDraft {
         val from = entries.indexOfFirst { it.key == entryKey }
         val to = from + offset
@@ -71,7 +67,6 @@ data class CorrectionEntry(
     val exerciseId: Long,
     val exerciseName: String,
     val notes: String?,
-    /** Which measure a first row starts on, should this entry have none left to continue from. */
     val newSetMeasure: SetMeasure,
     val sets: List<CorrectionSet>,
 )
@@ -79,7 +74,6 @@ data class CorrectionEntry(
 @Serializable
 data class CorrectionSet(val key: Long, val values: SetDraft, val notes: String?)
 
-/** An Exercise chosen from the Library, with the measure it was last logged in. */
 data class PickedExercise(val id: Long, val name: String, val measure: SetMeasure)
 
 private fun emptySetDraft(measure: SetMeasure) =
@@ -88,19 +82,13 @@ private fun emptySetDraft(measure: SetMeasure) =
 sealed interface CorrectionSave {
     data object Saved : CorrectionSave
 
-    /** Nothing was saved: at least one row does not parse, and it says why itself. */
     data object InvalidSets : CorrectionSave
 
-    /** Nothing was saved: taking the last Set away would leave no record of the session. */
     data object NoSetsLeft : CorrectionSave
 
     data object WorkoutGone : CorrectionSave
 }
 
-/**
- * Corrections of finished Workouts. Each commits together with its queued sync, on the same local
- * Workout, so History has it at once and whatever already refers to the Workout still does.
- */
 class WorkoutCorrections(
     private val database: OpenHomeDatabase,
     private val outbox: FitnessOutbox,
@@ -141,15 +129,9 @@ class WorkoutCorrections(
         return PickedExercise(exercise.id, exercise.name, measureLastLogged(exerciseId))
     }
 
-    /** Taken from what was actually logged, never from the Exercise Category. */
     private suspend fun measureLastLogged(exerciseId: Long): SetMeasure =
         dao.latestSetOfExercise(exerciseId)?.measure() ?: SetMeasure.REPS
 
-    /**
-     * Every outcome but [CorrectionSave.Saved] changed nothing. A cancelled or failed save rolls back whole,
-     * so the draft stays the caller's to retry or discard; a committed one is local history whatever
-     * delivery later does, and its sync is scheduled below or, failing that, on the next app start.
-     */
     suspend fun save(workoutId: Long, draft: CorrectionDraft): CorrectionSave {
         val saved =
             database.withTransaction {
@@ -167,7 +149,6 @@ class WorkoutCorrections(
                 outbox.enqueueWorkoutCorrection(workoutId, QueuedWorkout(draft.date, name, notes, entries, revision))
                 CorrectionSave.Saved
             }
-        // After the commit: if the process dies first, the next app start schedules it from the outbox.
         if (saved == CorrectionSave.Saved) scheduler.schedule()
         return saved
     }
@@ -198,7 +179,6 @@ class WorkoutCorrections(
     }
 }
 
-/** In the order shown, numbered from it. Null when a row does not parse. */
 private fun CorrectionDraft.toQueuedEntries(): List<QueuedEntry>? =
     entries.mapIndexed { entryIndex, entry ->
         val sets =

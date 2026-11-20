@@ -25,7 +25,6 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   vi.useFakeTimers()
   vi.setSystemTime(new Date("2026-10-17T12:00:00.000Z"))
-  // happy-dom keeps cookies across tests; expire the one under test.
   document.cookie = "openhome-nav=; Path=/; Max-Age=0"
   document.cookie = "openhome-nav-labels=; Path=/; Max-Age=0"
   container = document.createElement("div")
@@ -40,7 +39,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-/** A stand-in logo: the shell's logos are router links with this same click handler. */
 function Logo({ clicks }: { clicks: Array<boolean> }): React.JSX.Element {
   const { layout } = useNavLayout()
   const onClick = useLogoTaps()
@@ -52,7 +50,6 @@ function Logo({ clicks }: { clicks: Array<boolean> }): React.JSX.Element {
       onClick={(event) => {
         onClick(event)
         clicks.push(event.defaultPrevented)
-        // The test stays on this page; the router would go Home here.
         event.preventDefault()
       }}
     >
@@ -126,7 +123,6 @@ test("a single click goes Home without switching; a second within 350 ms switche
   expect(clicks).toEqual([false, true])
   expect(navLayoutFromCookies(document.cookie)).toBe("side")
 
-  // The pair is spent: the next click navigates again, and another pair switches back.
   vi.advanceTimersByTime(200)
   click(logo())
   expect(logo().dataset.layout).toBe("side")

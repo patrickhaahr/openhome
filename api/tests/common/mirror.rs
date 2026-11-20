@@ -1,4 +1,3 @@
-//! A NOOP push mirror filled through the real push endpoint, for training-read tests.
 #![allow(dead_code)]
 
 use axum::body::Body;
@@ -13,20 +12,14 @@ const PUSH_TOKEN: &str = "test-push-token";
 
 #[derive(Clone, Copy)]
 pub enum Window {
-    /// A `dailyMetric` window of `YYYY-MM-DD` days.
     Days(&'static str, &'static str),
-    /// A `sleepSession` window of Unix seconds.
     Starts(i64, i64),
-    /// A `workout` window of Unix seconds.
     WorkoutStarts(i64, i64),
-    /// A `journal` window of `YYYY-MM-DD` days.
     JournalDays(&'static str, &'static str),
 }
 
-/// Records one append batch may carry under the push protocol.
 const MAX_BATCH_RECORDS: usize = 5_000;
 
-/// A `workout` record from `start_ts` to `end_ts`: every metric null except `fields`.
 pub fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, fields: Value) -> Value {
     let mut data = json!({
         "endTs": end_ts, "source": source, "durationS": null, "energyKcal": null, "avgHr": null,
@@ -43,11 +36,9 @@ pub fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, field
     json!({"type": "record", "key": {"startTs": start_ts, "sport": sport}, "data": data})
 }
 
-/// A NOOP push mirror that fixtures are pushed into through the push endpoint.
 pub struct Mirror {
     pub db: SqlitePool,
     ids: u64,
-    /// The sender's last append row id, shared by every append stream.
     row_id: i64,
 }
 
@@ -65,7 +56,6 @@ impl Mirror {
         format!("00000000-0000-4000-8000-{:012x}", self.ids)
     }
 
-    /// Pushes one complete replacement window, recorded as accepted at `accepted_at`.
     pub async fn push(
         &mut self,
         source: &str,
@@ -78,7 +68,6 @@ impl Mirror {
             .await;
     }
 
-    /// Pushes part 1 of a `parts`-part replacement; with more than one part it stays staged.
     pub async fn push_first_part(
         &mut self,
         source: &str,
@@ -117,8 +106,6 @@ impl Mirror {
         self.send(&header, records, accepted_at).await;
     }
 
-    /// Appends `(ts, bpm)` strap heart rate samples as `hrSample` batches of at most 5,000
-    /// records.
     pub async fn push_hr_samples(
         &mut self,
         source: &str,
@@ -152,7 +139,6 @@ impl Mirror {
         }
     }
 
-    /// Posts one batch through the push endpoint and records it as accepted at `accepted_at`.
     async fn send(&self, header: &Value, records: &[Value], accepted_at: &str) {
         let mut entity = String::new();
         for line in std::iter::once(header).chain(records) {

@@ -8,11 +8,9 @@ plugins {
 android {
     namespace = "com.patrickhaahr.openhome"
     compileSdk = 36
-    // The devenv Android SDK is read-only, so AGP cannot fetch a different version.
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
-        // Distinct from Expo's com.example.openhome.expo so both can stay installed.
         applicationId = "com.patrickhaahr.openhome"
         minSdk = 24
         targetSdk = 36
@@ -22,7 +20,6 @@ android {
 
     buildTypes {
         debug {
-            // Device tests clear app data; a separate identity keeps them away from a real install.
             applicationIdSuffix = ".debug"
             resValue("string", "app_name", "OpenHome Dev")
         }
@@ -45,7 +42,6 @@ android {
     lint {
         warningsAsErrors = true
         abortOnError = true
-        // Freshness depends on the day the gate runs, not on this code. The SDK level follows devenv's.
         disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "OldTargetApi")
     }
 

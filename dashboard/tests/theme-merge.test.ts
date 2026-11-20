@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils"
 
 const source = new URL("../src/", import.meta.url)
 
-// App-wide tokens live in styles.css, each area's own in <area>.theme.css beside it.
 const styles = readdirSync(source)
   .filter((file) => file === "styles.css" || file.endsWith(".theme.css"))
   .map((file) => readFileSync(new URL(file, source), "utf8"))
@@ -19,8 +18,6 @@ const tokens = (namespace: string): string[] =>
 
 type Pair = readonly [string, string]
 
-// Each token's utility must replace a built-in of its kind, and must keep a sibling of another
-// kind that shares its prefix (`text-ink` beside `text-mega`).
 type Case = (name: string) => { replaces: Pair; keeps: Pair | null }
 
 const cases = {

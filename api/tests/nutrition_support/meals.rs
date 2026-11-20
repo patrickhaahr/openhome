@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -19,13 +18,9 @@ use tempfile::TempDir;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method, matchers::path};
 
 pub(super) const API_KEY: &str = "test-api-key";
-/// A synthetic restricted-circulation GS1 number: never a real package.
 pub(super) const SKYR: &str = "2001234567893";
-/// A valid barcode that is never linked.
 pub(super) const UNLINKED: &str = "2009876543213";
 
-/// The nutrition routes over one `app.db`, a `food.db` imported from `wiremock`, and Open Food
-/// Facts on the same `wiremock` server, which knows one synthetic skyr.
 pub(super) struct Api {
     pub(super) server: MockServer,
     pub(super) dir: TempDir,
@@ -34,7 +29,6 @@ pub(super) struct Api {
 }
 
 impl Api {
-    /// Imports the first synthetic dataset as version "1".
     pub(super) async fn start() -> Self {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -67,13 +61,11 @@ impl Api {
         }
     }
 
-    /// Imports `bytes` as `version` into the same `food.db`, as a pin change on restart does.
     pub(super) async fn reimport(&mut self, version: &str, bytes: Vec<u8>) {
         let foods = import(&self.server, &self.dir, version, bytes).await;
         self.app = app(&self.server, &self.dir, foods, self.state.clone());
     }
 
-    /// The same data while a new pin is still being imported.
     pub(super) async fn importing(self) -> Self {
         let pin = DatasetPin {
             version: "never".into(),
@@ -102,7 +94,6 @@ impl Api {
             .await
     }
 
-    /// Saves `body`, expecting a new Meal, and returns it.
     pub(super) async fn saved(&self, body: Value) -> Value {
         let (status, saved) = self.save(body).await;
         assert_eq!(status, StatusCode::CREATED, "{saved}");
@@ -140,7 +131,6 @@ impl Api {
             .await
     }
 
-    /// Logs `body`, expecting a new Meal Log, and returns it.
     pub(super) async fn logged(&self, body: Value) -> Value {
         let (status, logged) = self.log(body).await;
         assert_eq!(status, StatusCode::CREATED, "{logged}");
@@ -217,7 +207,6 @@ pub(super) fn app(
     }))
 }
 
-/// Skyr then chicken, as the user named them.
 pub(super) fn protein_bowl(request_id: &str) -> Value {
     json!({
         "name": "  Protein   bowl ",
@@ -226,7 +215,6 @@ pub(super) fn protein_bowl(request_id: &str) -> Value {
     })
 }
 
-/// Logs the Meal named `name` at breakfast time on 2026-10-29.
 pub(super) fn by_name(name: &str, request_id: &str) -> Value {
     json!({
         "eaten_at": "2026-10-29T08:15:00+01:00",
@@ -235,7 +223,6 @@ pub(super) fn by_name(name: &str, request_id: &str) -> Value {
     })
 }
 
-/// Logs `barcode` alone at `eaten_at` on 2026-10-29.
 pub(super) fn product_at(barcode: &str, eaten_at: &str, request_id: &str) -> Value {
     json!({
         "eaten_at": format!("2026-10-29T{eaten_at}+01:00"),

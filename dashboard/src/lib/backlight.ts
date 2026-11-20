@@ -6,7 +6,6 @@ const clockTime = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM from 00:00 to 23:59.")
 
-/** Editable window fields, also checked by the authoritative API. */
 export const bedtimeFields = z
   .object({
     start: clockTime,
@@ -20,7 +19,6 @@ export const bedtimeFields = z
 
 const effectId = z.enum(["forest", "aurora", "rainbow", "fire", "party"])
 
-/** A requested setting, independent of the controller's observable state. */
 export const backlightSelection = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("off") }).strict(),
   z
@@ -44,10 +42,8 @@ export const backlightSelection = z.discriminatedUnion("mode", [
     .strict(),
 ])
 
-/** The durable manual target sent through the private OpenHome transport. */
 export type BacklightSelection = z.infer<typeof backlightSelection>
 
-/** Sanitized API status; intention and acknowledgment do not establish observed state. */
 export const backlightStatus = z.object({
   effects: z
     .array(
@@ -82,7 +78,6 @@ export const backlightStatus = z.object({
   next_transition: z.string().datetime().nullable(),
 })
 
-/** Validated dashboard requests; the API owns scheduling and device operations. */
 export const backlightAction = z.discriminatedUnion("action", [
   z.object({ action: z.literal("select"), selection: backlightSelection }),
   z.object({
@@ -110,18 +105,14 @@ export const backlightAction = z.discriminatedUnion("action", [
     ),
 ])
 
-/** A validated request accepted by the dashboard's server boundary. */
 export type BacklightAction = z.infer<typeof backlightAction>
 
-/** Intended, accepted and readable device state with independent freshness and setup. */
 export type BacklightStatus = z.infer<typeof backlightStatus>
 
-/** A validated status or a sanitized unavailable result without private failure details. */
 export type BacklightRead =
   | { state: "available"; status: BacklightStatus }
   | { state: "unavailable" }
 
-/** Sanitized action outcome; an available status can still report a failed command. */
 export type BacklightResult =
   | BacklightRead
   | { state: "profile-required" }

@@ -1,5 +1,3 @@
-//! NOOP push replace streams: applying windows and deleting absent keys.
-
 mod common;
 mod noop_push_support;
 
@@ -179,7 +177,6 @@ async fn each_mutable_stream_replaces_its_window_and_leaves_rows_outside_untouch
         .await;
         assert_ok(&reply, &replace_ack(stream, &id(1), 4));
 
-        // Window [3, 6): 3 is updated, 4 is new, 5 is absent and deleted; 1 and 8 are outside.
         let replacement = [build(3, 2), build(4, 2)];
         let reply = post(
             &db,

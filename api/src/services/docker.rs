@@ -284,19 +284,19 @@ mod tests {
     #[test]
     fn test_parse_uptime_seconds_with_minutes() {
         let result = parse_uptime_seconds(Some("Up 5 minutes"));
-        assert_eq!(result, Some(300)); // 5 * 60
+        assert_eq!(result, Some(300));
     }
 
     #[test]
     fn test_parse_uptime_seconds_with_hours() {
         let result = parse_uptime_seconds(Some("Up 2 hours"));
-        assert_eq!(result, Some(7200)); // 2 * 3600
+        assert_eq!(result, Some(7200));
     }
 
     #[test]
     fn test_parse_uptime_seconds_with_days() {
         let result = parse_uptime_seconds(Some("Up 1 day"));
-        assert_eq!(result, Some(86400)); // 1 * 86400
+        assert_eq!(result, Some(86400));
     }
 
     #[test]
@@ -338,19 +338,19 @@ mod tests {
     #[test]
     fn test_parse_uptime_seconds_handles_plural_minutes() {
         let result = parse_uptime_seconds(Some("Up 10 minutes"));
-        assert_eq!(result, Some(600)); // 10 * 60
+        assert_eq!(result, Some(600));
     }
 
     #[test]
     fn test_parse_uptime_seconds_handles_plural_hours() {
         let result = parse_uptime_seconds(Some("Up 3 hours"));
-        assert_eq!(result, Some(10800)); // 3 * 3600
+        assert_eq!(result, Some(10800));
     }
 
     #[test]
     fn test_parse_uptime_seconds_handles_plural_days() {
         let result = parse_uptime_seconds(Some("Up 7 days"));
-        assert_eq!(result, Some(604800)); // 7 * 86400
+        assert_eq!(result, Some(604800));
     }
 
     #[test]

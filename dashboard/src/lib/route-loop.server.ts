@@ -12,12 +12,10 @@ import {
   type LoopRequest,
 } from "./route-loop"
 
-/** Ask Axum for loops using server-held credentials; only Axum reaches the route planner. */
 export async function generateLoops(request: LoopRequest): Promise<LoopRead> {
   const result = await requestOpenHome({
     path: "/api/routes/loops",
     method: "POST",
-    // Axum starts no attempt after 20 seconds and allows each 10; leave room for its response.
     timeoutMs: 40_000,
     json: request,
   })
@@ -27,7 +25,6 @@ export async function generateLoops(request: LoopRequest): Promise<LoopRead> {
   try {
     const body: unknown = await result.response.json()
 
-    // Axum explains targets outside its supported ranges.
     if (result.response.status === 400) {
       const rejection = loopRejection.safeParse(body)
 
@@ -46,7 +43,6 @@ export async function generateLoops(request: LoopRequest): Promise<LoopRead> {
   }
 }
 
-/** Read the selected route from Axum even when its routing provider is offline. */
 export async function readActiveRoute(): Promise<ActiveRouteRead> {
   const result = await requestOpenHome({
     path: "/api/routes/active",
@@ -66,7 +62,6 @@ export async function readActiveRoute(): Promise<ActiveRouteRead> {
   }
 }
 
-/** Select an Axum-generated identity; no client geometry is sent or trusted. */
 export async function selectActiveRoute(selection: {
   route_id: string
 }): Promise<RouteSelectionRead> {
@@ -87,9 +82,7 @@ export async function selectActiveRoute(selection: {
 
         if (parsed.success && parsed.data.state === "selected")
           return parsed.data
-      } catch {
-        // A malformed acknowledgement cannot confirm a persisted selection.
-      }
+      } catch {}
     }
   }
 

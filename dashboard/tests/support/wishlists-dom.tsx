@@ -43,7 +43,6 @@ export let refreshWork: Promise<void> = Promise.resolve()
 
 export let metadataWork: Promise<unknown> = Promise.resolve()
 
-/** What a test sets before rendering: the route search, the link reader and the failures to simulate. */
 type Harness = {
   search: WishSearch
   metadata: WishlistMetadataLoader
@@ -95,7 +94,6 @@ afterEach(async () => {
 
   for (const stop of proxies.splice(0)) await stop()
 
-  // Clean through the public API; receipts intentionally remain retired.
   const response = await fetch(`${apiUrl}/api/household-users`, {
     headers: { Authorization: "Bearer synthetic-dashboard-api-key" },
   })
@@ -176,7 +174,6 @@ export async function click(
   await press(button(name, scope))
 }
 
-/** Wait out the link debounce, then the read it started. */
 export async function debounced(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -185,13 +182,11 @@ export async function debounced(): Promise<void> {
   await settle()
 }
 
-/** Unmounts and mounts the board afresh in the same container, as a reload would. */
 export async function remount(): Promise<void> {
   await act(async () => root.unmount())
   root = createRoot(container)
 }
 
-/** An input in the open sheet, found by its current value. */
 export function valued(
   value: string,
   scope: ParentNode = sheet()
@@ -245,7 +240,6 @@ export async function available(): Promise<
   return data
 }
 
-/** A person with named lists, made through the API. */
 export async function household(people: Record<string, string[]>) {
   for (const [name, lists] of Object.entries(people)) {
     await writeWishlist({ kind: "create-owner", name })
@@ -285,7 +279,6 @@ export async function household(people: Record<string, string[]>) {
   }
 }
 
-/** Axum commits the next wish addition, but its response never reaches the Dashboard. */
 export async function loseNextAddition(): Promise<void> {
   const proxy = await startLossyAxum(
     apiUrl,
@@ -296,7 +289,6 @@ export async function loseNextAddition(): Promise<void> {
   vi.stubEnv("OPENHOME_API_URL", proxy.url)
 }
 
-/** Browser storage that refuses every call, as in private browsing. */
 export function withoutSessionStorage(): void {
   const refuse = () => {
     throw new DOMException("Storage is disabled", "SecurityError")
@@ -331,7 +323,6 @@ export async function wish(
   expect(saved.state).toBe("saved")
 }
 
-/** The wish additions the board has sent so far, in order. */
 export function additions() {
   return sent.flatMap((command) =>
     command.kind === "add-item" ? [command] : []

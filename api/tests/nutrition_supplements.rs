@@ -1,6 +1,3 @@
-//! Supplements and Supplement Doses through the nutrition routes, over a real `app.db` and a real
-//! `food.db` imported from a synthetic DTU-shaped workbook served by `wiremock`.
-
 mod common;
 #[path = "nutrition_support/supplements.rs"]
 mod support;
@@ -18,7 +15,6 @@ async fn a_supplement_keeps_per_dose_amounts_in_parameter_units_under_a_unique_n
 
     assert_eq!(oil["name"], "Omega-3 fish oil");
     assert_eq!(oil["dose_unit"], "capsule");
-    // Label units become the parameter's unit, and energy is completed in kJ as for labels.
     assert_eq!(
         oil["amounts"],
         json!([
@@ -120,7 +116,6 @@ async fn a_supplement_amount_needs_a_parameter_key_its_unit_and_a_form_where_lim
         json!({"name": "Pill", "dose_unit": "pill", "request_id": "pill", "amounts": [
             {"key": "zinc", "value": 10, "unit": "mg"},
         ]}),
-        // A parameter is never a named compound.
         json!({"name": "D", "dose_unit": "tablet", "request_id": "d", "compounds": [
             {"name": "Vitamin D", "value": 25, "unit": "µg"},
         ]}),
@@ -171,8 +166,6 @@ async fn a_retried_addition_replays_conflicts_on_changes_and_never_recreates_a_d
     assert_eq!(api.supplements().await, Vec::<Value>::new());
 }
 
-/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
-/// of replaying a fabricated one; the Supplement stays, and the client reads it first.
 #[tokio::test]
 async fn a_legacy_receipt_directs_the_client_to_read_the_supplement_first() {
     let api = Api::start().await;
@@ -222,7 +215,6 @@ async fn updating_a_supplement_renames_it_or_replaces_its_amounts_together() {
     );
     let (status, body) = api.update(&oil["id"], json!({"name": "creatine"})).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
-    // A Supplement keeps at least one amount or compound.
     let (status, body) = api.update(&creatine["id"], json!({"compounds": []})).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
     assert_eq!(api.supplements().await, [creatine, updated]);

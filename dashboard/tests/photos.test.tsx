@@ -95,7 +95,6 @@ type Data = {
   photo?: string
 }
 
-/** The gallery with its open photo held like the URL holds it. */
 async function setup(
   data: Data,
   more: (album: string, page: number) => Promise<WallRead> = async () =>
@@ -238,7 +237,6 @@ test("the wall loads more on request and the viewer steps across pages with one 
     expect(document.querySelectorAll('[role="dialog"] img')).toHaveLength(1)
     expect(view.preview()).toBe(`/photo-media/${albumId}/${second}/preview`)
 
-    // The last loaded photo's next reads the following page, then shows its first photo.
     await act(async () => view.button("Next →").click())
     expect(view.load).toHaveBeenCalledWith(albumId, 1)
     expect(view.preview()).toBe(`/photo-media/${albumId}/${third}/preview`)
@@ -492,7 +490,6 @@ test("photos loaded before hydration do not remain behind loading placeholders",
     await act(async () => {})
     expect(container.textContent).not.toContain("Loading photo…")
     expect(container.querySelectorAll('[data-state="loaded"]')).toHaveLength(2)
-    // Portrait thumbnails take a portrait cell once their frame is known.
     expect(
       container
         .querySelector<HTMLElement>("[data-slot='photo-cell']")

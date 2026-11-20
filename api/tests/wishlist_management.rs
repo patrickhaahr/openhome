@@ -1,5 +1,3 @@
-//! Wishlist management: owners, lists, items and upgrades.
-
 mod common;
 mod wishlist_support;
 
@@ -211,7 +209,6 @@ async fn upgrading_existing_wishlists_preserves_accepted_addition_receipts() {
         .unwrap();
     let member = owner(&app, "Member A").await;
     let target = list(&app, &member, "Ideas").await;
-    // A pre-0007 accepted addition, as stored by the original #97 API.
     sqlx::query("INSERT INTO wishlist_items (id, list_id, title, request_id, requested_list_id) VALUES ('legacy-item', ?, 'A book', 'legacy-request', ?)")
         .bind(target["id"].as_str().unwrap())
         .bind(target["id"].as_str().unwrap())

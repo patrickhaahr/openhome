@@ -11,10 +11,6 @@ use super::{WORKOUT_REPLAY, accepted_target, double_option, parse_client_revisio
 use crate::error::{AppError, Result};
 use crate::services::nutrition::meal_logs::parse_request_id;
 
-// ---------------------------------------------------------------------------
-// Workouts (#7)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Deserialize)]
 pub struct ListWorkouts {
     from: Option<String>,
@@ -22,8 +18,6 @@ pub struct ListWorkouts {
     limit: Option<i64>,
 }
 
-// Absent fields stay out of the Serialize form, which a Workout receipt compares on retry, so a
-// field added later cannot make an earlier receipt mismatch its own retry.
 #[derive(Debug, Deserialize, Serialize)]
 struct SetInput {
     set_number: i64,
@@ -50,7 +44,6 @@ struct WorkoutExerciseInput {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateWorkout {
-    /// Makes this create safe to retry: see [`replay_workout`]. Without it every call creates.
     request_id: Option<String>,
     date: String,
     name: Option<String>,
@@ -60,7 +53,6 @@ pub struct CreateWorkout {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateWorkout {
-    /// Makes this edit safe to replay: see [`update_workout`]. Without it every call applies.
     client_revision: Option<i64>,
     date: Option<String>,
     #[serde(default, with = "double_option")]
@@ -77,8 +69,6 @@ pub struct WorkoutSummary {
     name: Option<String>,
 }
 
-/// A set must have reps or duration (timed hold), never both null. RPE is 1-10.
-/// `weight_kg` is *added* weight: null for bodyweight, not zero.
 fn validate_set(set: &SetInput) -> Result<()> {
     if set.reps.is_none() && set.duration_seconds.is_none() {
         return Err(AppError::Validation(format!(
@@ -203,7 +193,6 @@ pub(super) async fn get_workout(
     Ok(Json(workout))
 }
 
-/// A Workout create's retry identity: its `request_id` and the arguments a retry must repeat.
 struct WorkoutReceipt {
     request_id: String,
     request: String,
@@ -234,9 +223,6 @@ impl WorkoutReceipt {
     }
 }
 
-/// Follows the `request_id` receipt pattern: a retry answers with the Workout it already created,
-/// the same `request_id` with changed arguments is a conflict, and a deleted Workout stays deleted.
-/// `None` means this `request_id` has not been accepted.
 async fn replay_workout(
     state: &crate::AppState,
     receipt: &WorkoutReceipt,
@@ -298,7 +284,6 @@ pub(super) async fn create_workout(
     .last_insert_rowid();
 
     if let Some(receipt) = &receipt {
-        // The insert above holds the write lock, so simultaneous retries serialize here.
         let claimed = sqlx::query_scalar!(
             r#"
             INSERT INTO workout_receipts (request_id, workout_id, request)
@@ -333,10 +318,6 @@ pub(super) async fn create_workout(
     Ok((StatusCode::CREATED, Json(workout)))
 }
 
-/// With a `client_revision`, an edit applies only if it is newer than the last one applied. An older
-/// or repeated revision is an edit this client has already superseded or delivered, so it changes
-/// nothing and answers with the current Workout: a retry after a lost response and a late delivery
-/// both end as acknowledged, without restoring an older revision.
 pub(super) async fn update_workout(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
@@ -354,10 +335,6 @@ pub(super) async fn update_workout(
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to start transaction: {e}")))?;
 
-    // Clearable partial update: absent field keeps the current value, explicit
-    // null sets NULL (nullable fields only; date is NOT NULL so null = keep).
-    // Exercises/sets: when 'exercises' is present, replace the whole nested
-    // list (delete children, re-insert). When absent, keep the current entries.
     let name_set = payload.name.is_some();
     let name = payload.name.flatten();
     let notes_set = payload.notes.is_some();
@@ -389,7 +366,6 @@ pub(super) async fn update_workout(
         tx.rollback().await.map_err(|e| {
             AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
         })?;
-        // No such Workout, which this read reports, or a revision it has already moved past.
         return get_workout_detail(&state, id).await.map(Json);
     }
 

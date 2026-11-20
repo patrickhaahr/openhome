@@ -48,7 +48,6 @@ async fn replay(db: &SqlitePool, request_id: &str, request: &str) -> Result<Opti
     }))
 }
 
-/// The photo columns of a Meal Log row: all set for a stored photo, all null without one.
 #[derive(Default)]
 pub(super) struct PhotoColumns {
     pub(super) id: Option<String>,
@@ -70,9 +69,6 @@ impl PhotoColumns {
     }
 }
 
-/// Encodes and stores `upload`, waiting for any encode already running. The returned photo's
-/// files are unreferenced until a committed row names them: the caller must remove them if its
-/// write fails or loses a replay race.
 pub(super) async fn store_photo(photos: &MealPhotos, upload: Upload) -> Result<StoredPhoto> {
     let encoded = photos.encode(upload).await?;
     let id = photos.store(&encoded).await?;
@@ -83,9 +79,6 @@ pub(super) async fn store_photo(photos: &MealPhotos, upload: Upload) -> Result<S
     })
 }
 
-/// Logs a meal: its Portions with snapshots of their Foods and its optional photo, at its time,
-/// with an immutable receipt for its `request_id`. Rejected requests consume no `request_id` and
-/// write nothing.
 pub async fn log_meal(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -155,8 +148,6 @@ pub async fn log_meal(
         photo: PhotoColumns::of(photo.as_ref()),
     };
     let inserted = insert_log(db, &row, &prepared, &prepared_doses).await;
-    // Only a committed insert hands the new files to its row. A failure or a replay-losing
-    // retry (`Ok(None)`) wrote nothing that references them.
     let referenced = matches!(inserted, Ok(Some(_)));
     if !referenced && let Some(photo) = &photo {
         photos.remove(&photo.id).await;
@@ -174,7 +165,6 @@ pub async fn log_meal(
     })
 }
 
-/// A Meal Log row to insert with its receipt.
 struct NewLog<'a> {
     id: &'a str,
     request_id: &'a str,
@@ -186,8 +176,6 @@ struct NewLog<'a> {
     photo: PhotoColumns,
 }
 
-/// Inserts the receipt and all Meal Log data together and returns its accepted snapshot.
-/// `None` means a simultaneous retry claimed the receipt first; nothing is written then.
 async fn insert_log(
     db: &SqlitePool,
     row: &NewLog<'_>,
@@ -195,7 +183,6 @@ async fn insert_log(
     doses: &[StoredDose],
 ) -> Result<Option<MealLog>> {
     let mut transaction = db.begin().await?;
-    // Claim first so simultaneous retries serialize on the receipt.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO meal_log_receipts (request_id, meal_log_id, request) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
         row.request_id, row.id, row.normalized)

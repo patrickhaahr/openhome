@@ -54,7 +54,9 @@ Leave these in place: they are outside the four labels.
   editing one breaks `sqlx migrate` on the Pi.
 
 The scanner already skips directives (`eslint-disable`, `@ts-expect-error`,
-`noqa` and similar), `SAFETY:` notes, `vendor/` and `dashboard/.intent/`.
+`noqa`, `@vitest-environment`, `noinspection` and similar), `SAFETY:` notes
+with their continuation lines, `vendor/`, `dashboard/.intent/` and
+`routeTree.gen.ts`.
 
 Done when every block has a label, a reason in a few words, and its
 destination.
@@ -82,7 +84,7 @@ Done when every decision record is in an ADR and every excuse is in an issue.
 Pass every entry's `path:line` (each line of a block) to
 `python3 scripts/comments.py strip <path:line>...`. It removes own-line
 comments together with the blank line they leave behind, and cuts trailing
-comments off their line. Then run the formatter for each area touched.
+comments off their line; a JSX `{/* ... */}` goes with its braces. Then run the formatter for each area touched.
 
 Done when `just comment-list <scope>` shows only the entries you labelled to
 keep.

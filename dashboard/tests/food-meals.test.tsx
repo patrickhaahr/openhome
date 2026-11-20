@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import { expect, test, vi } from "vitest"
 import { mealTime, shiftDay } from "@/lib/nutrition"
@@ -114,7 +113,6 @@ test("a meal's photo shows as a thumbnail, opens in full on selection and is rel
     "600",
   ])
 
-  // The relay holds the API key server-side and passes only the AVIF bytes on.
   for (const size of ["thumbnail", "photo"]) {
     const relayed = await readMealPhoto({ photo: photoId, size })
     expect(relayed.status).toBe(200)
@@ -138,7 +136,6 @@ test("a meal's photo shows as a thumbnail, opens in full on selection and is rel
 })
 
 test("the day shows its NOVA 1 share of classified energy and each Portion's NOVA Class", async () => {
-  // Classes outlive Meal Logs, so this day gets a fixture of its own.
   const nova = await startAxumFixture()
 
   try {
@@ -183,8 +180,6 @@ test("the day shows its NOVA 1 share of classified energy and each Portion's NOV
 
     await render(await readNutritionDay({ day: meal.day }))
 
-    // Banana 90 and chicken 110 kcal are NOVA 1 of 276 classified kcal; the skyr Product is
-    // Open Food Facts' Class 3 and the rice is left out unclassified.
     expect(rows("[data-slot='food-nova']")).toEqual([
       "72 % NOVA 1 Unprocessed or minimally processed, of 276 classified kcal · 1 unclassified portion left out",
     ])

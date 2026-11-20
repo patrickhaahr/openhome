@@ -40,7 +40,6 @@ function parseConfiguration():
       state: "ready",
       connection: {
         baseUrl: url,
-        // Headers encapsulates the credential; only fetch receives it.
         headers: new Headers({ Authorization: `Bearer ${apiKey}` }),
       },
     }
@@ -49,7 +48,6 @@ function parseConfiguration():
   }
 }
 
-/** A JSON request body value; `undefined` fields are omitted when serialized. */
 type JsonValue =
   | string
   | number
@@ -63,7 +61,6 @@ type OpenHomeResponse =
   | { state: "received"; response: Response }
   | { state: Exclude<ConnectionState, "connected" | "unavailable"> }
 
-/** Shared private transport; callers parse responses and serialize only safe outcomes. */
 export async function requestOpenHome({
   path,
   method,
@@ -82,7 +79,6 @@ export async function requestOpenHome({
   if (config.state !== "ready") return config
 
   const { baseUrl, headers } = config.connection
-  // Preserve an installer-supplied deployment prefix, with or without a trailing slash.
   baseUrl.pathname = `${baseUrl.pathname.replace(/\/$/, "")}${path}`
 
   if (query) baseUrl.search = new URLSearchParams(query).toString()
@@ -105,7 +101,6 @@ export async function requestOpenHome({
 
     return { state: "received", response }
   } catch {
-    // Transport errors can contain private URLs. Never serialize or log the raw error.
     return { state: "unreachable" }
   }
 }
@@ -114,7 +109,6 @@ const acknowledgement = z.object({ message: z.string() })
 
 const errorBody = z.object({ error: z.string() })
 
-/** Whether Axum accepted a command; any other body cannot confirm it. */
 export async function isAcknowledged(response: Response): Promise<boolean> {
   if (!response.ok) return false
 
@@ -125,11 +119,6 @@ export async function isAcknowledged(response: Response): Promise<boolean> {
   }
 }
 
-/**
- * Read Axum's error message for exact classification only.
- *
- * @returns The message, or undefined when the body is not Axum's error shape. Never serialize it.
- */
 export async function readErrorMessage(
   response: Response
 ): Promise<string | undefined> {
@@ -142,13 +131,6 @@ export async function readErrorMessage(
   }
 }
 
-/**
- * Read a relayed media body whole, holding at most `limit` bytes.
- *
- * @param response - Axum's response, already checked for status and content type.
- * @param limit - The most bytes to accept.
- * @returns The body, or undefined when it is larger than `limit`, missing or fails mid-stream.
- */
 export async function readBoundedBody(
   response: Response,
   limit: number

@@ -3,8 +3,6 @@ use serde_json::Value;
 
 use super::Namespace;
 
-/// The `sleep_session` fields a Recovery Day reads; raw motion and sleep-state streams are never
-/// selected.
 #[derive(Debug, Clone)]
 pub struct SessionRow {
     pub namespace: Namespace,
@@ -20,13 +18,10 @@ pub struct SessionRow {
 }
 
 impl SessionRow {
-    /// The start NOOP displays: the user's adjustment when present, else the detected start.
     pub fn effective_start_ts(&self) -> i64 {
         self.start_ts_adjusted.unwrap_or(self.start_ts)
     }
 
-    /// 0 without staging, 1 when staging covers under 95% of the session, 2 otherwise
-    /// (including staging whose coverage cannot be measured).
     pub(super) fn richness(&self) -> u8 {
         let Some(stages) = self
             .stages_json
@@ -43,8 +38,6 @@ impl SessionRow {
     }
 }
 
-/// Selects one wake day's sessions: every imported session, unless the computed sessions are
-/// strictly richer. Returns them ordered by effective start.
 pub fn merge_sleep_sessions(sessions: Vec<SessionRow>) -> Vec<SessionRow> {
     let (imported, computed): (Vec<_>, Vec<_>) = sessions
         .into_iter()
@@ -60,7 +53,6 @@ pub fn merge_sleep_sessions(sessions: Vec<SessionRow>) -> Vec<SessionRow> {
     selected
 }
 
-/// Seconds of `[start, end)` stage segments over the session span; `None` when either is empty.
 fn covered_fraction(stages_json: &str, span_seconds: i64) -> Option<f64> {
     let covered = covered_seconds(stages_json);
     if span_seconds <= 0 || covered <= 0.0 {
@@ -88,7 +80,6 @@ fn covered_seconds(stages_json: &str) -> f64 {
     covered
 }
 
-/// Minutes per sleep stage decoded from `stages_json`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
 pub struct StageMinutes {
     pub awake: f64,
@@ -97,9 +88,6 @@ pub struct StageMinutes {
     pub rem: f64,
 }
 
-/// Decodes the stage shapes NOOP stores: a `{awake, light, deep, rem}` minutes object, or an array
-/// of `{start, end, stage}` segments (Unix seconds) or `{stage, min}` entries. `None` when the JSON
-/// is unreadable or records no time in bed.
 pub fn stage_minutes(stages_json: &str) -> Option<StageMinutes> {
     let mut totals = StageMinutes::default();
     match serde_json::from_str::<Value>(stages_json).ok()? {
@@ -142,7 +130,6 @@ pub fn stage_minutes(stages_json: &str) -> Option<StageMinutes> {
     (in_bed > 0.0).then_some(totals)
 }
 
-/// One ordered stage segment of a sleep session, in Unix seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StageSegment {
     pub start: i64,
@@ -150,10 +137,6 @@ pub struct StageSegment {
     pub stage: &'static str,
 }
 
-/// Decodes `{start, end, stage}` segments (Unix seconds) in time order, clamped to
-/// `[from, to]`. `wake` is reported as `awake`, as in `stage_minutes`. Segments that are
-/// unreadable, of an unknown stage or empty after clamping are dropped. `None` when the JSON
-/// holds no such segment, as for the minutes-object and `{stage, min}` shapes.
 pub fn stage_segments(stages_json: &str, from: i64, to: i64) -> Option<Vec<StageSegment>> {
     let Value::Array(entries) = serde_json::from_str::<Value>(stages_json).ok()? else {
         return None;

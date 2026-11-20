@@ -55,8 +55,6 @@ impl ProviderHours {
                 if timestamp.rem_euclid(3600) != 0 {
                     return Err(());
                 }
-                // Open-Meteo precipitation is stamped at the END of its interval.
-                // Never shift by array index across a missing hour or a DST transition.
                 let next = timestamp
                     .checked_add(3600)
                     .and_then(|end| self.time.binary_search(&end).ok());
@@ -155,8 +153,6 @@ impl ProviderForecast {
             _ => return Err(()),
         };
         let first_day = now.with_timezone(&Copenhagen).date_naive();
-        // Daily Unix timestamps retain the provider's fixed request offset across DST.
-        // Copenhagen's offset is still used for the current date and hourly labels.
         let daily_offset = FixedOffset::east_opt(self.utc_offset_seconds).ok_or(())?;
         let hourly = match (self.hourly, self.hourly_units) {
             (Some(hours), Some(units)) => hours.normalize(&units)?,

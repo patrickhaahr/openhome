@@ -1,8 +1,3 @@
-/* The photo frame's Chrome 106 WebView predates svh and drops the second declaration; the vh line
-   keeps the map from collapsing. A utility cannot declare a property twice or set a custom
-   property. The inset exists only inside the frame: on Workout's route map the offsets that use
-   it do not apply. Between the phone and the desktop the top bar gains its 2.75rem
-   navigation row; the sidebar has no bar. */
 @utility travel-frame {
   --travel-inset: clamp(1rem, 2vw, 1.5rem);
   --dock-height: 0px;
@@ -16,9 +11,6 @@
   }
 }
 
-/* MapLibre and Leaflet class this element and their sheets are unlayered, so they beat every
-   utility: each declaration a vendor sheet also sets carries !important. Leaflet's panes carry
-   z-indexes up to 1000; z-index 0 keeps them below the plates. */
 @utility map-canvas {
   position: absolute !important;
   inset: 0;
@@ -29,9 +21,6 @@
   }
 }
 
-/* The vendors' own attribution DOM, reached from the map root because no utility can be put on
-   it. The attribution is licence-required: small and quiet in the corner on a ground backing.
-   !important marks each declaration a vendor sheet also sets. */
 @utility map-chrome {
   & :is(.maplibregl-ctrl-bottom-right, .leaflet-bottom.leaflet-right) {
     right: var(--travel-inset) !important;
@@ -55,17 +44,14 @@
   & :is(.maplibregl-ctrl-attrib, .leaflet-control-attribution) a {
     color: --theme(--color-foreground) !important;
   }
-  /* OSM only publishes light tiles; one filter on the pane darkens them for night. */
   &[data-map-shade="night"] .leaflet-tile-pane {
     filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9);
   }
-  /* Portrait and phone: the attribution rides above the full-width planner dock. */
   @media (max-width: 900px) {
     & :is(.maplibregl-ctrl-bottom-right, .leaflet-bottom.leaflet-right) {
       bottom: --theme(--spacing-travel-above-dock) !important;
     }
   }
-  /* Phone: the controls take the right edge, so the attribution moves to the top-left. */
   @media (max-width: 640px) {
     & :is(.maplibregl-ctrl-bottom-right, .leaflet-bottom.leaflet-right) {
       inset: var(--travel-inset) auto auto var(--travel-inset) !important;

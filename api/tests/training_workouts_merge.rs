@@ -1,8 +1,3 @@
-//! Workouts on a Training Day: logged and NOOP Workouts merged on one day.
-
-//! Workouts on a Training Day (`GET /api/training/days/{day}/workouts`): Workouts logged through
-//! the fitness API beside NOOP Workouts pushed through the real push endpoint.
-
 mod common;
 mod training_workouts_support;
 
@@ -21,7 +16,6 @@ const RING_DIP: i64 = 10;
 
 const PLANCHE_HOLD: i64 = 1;
 
-/// A NOOP Workout as the API reports it: every metric null except `fields`.
 fn reported(
     start: &str,
     end: &str,
@@ -45,8 +39,6 @@ fn reported(
     workout
 }
 
-/// `expected` after the JSON text round trip the response body takes: `serde_json`'s default float
-/// parser may land one ulp away from the exact quotient the test computes.
 fn as_parsed(expected: &Value) -> Value {
     serde_json::from_str(&expected.to_string()).unwrap()
 }
@@ -89,7 +81,6 @@ async fn rejects_days_that_are_not_canonical_calendar_dates() {
 async fn shows_the_overnight_noop_workout_on_its_local_start_day() {
     let mirror = mirror_with(&[real_noop_workout()], &[], REAL_PUSH_AT).await;
     let app = app(&mirror).await;
-    // The session began on the evening of the 25th in the training log's reckoning.
     let evening = log_workout(
         &app,
         json!({
@@ -128,14 +119,12 @@ async fn shows_the_overnight_noop_workout_on_its_local_start_day() {
                 "imported_device_id": IMPORTED,
                 "computed_device_id": COMPUTED,
                 "last_push_at": "2026-09-26T03:51:38+02:00",
-                // The push arrived during the 26th, so later sessions that day may still come.
                 "freshness": "partial",
                 "coverage": {"workouts": "covered"},
             },
         }))
     );
 
-    // The logged Workout keeps its own date; nothing moves it next to the NOOP Workout.
     let previous = workouts_on(&app, "2026-09-25").await;
     assert_eq!(previous["workouts"][0]["id"], evening);
     assert_eq!(previous["noop_workouts"], json!([]));
@@ -163,7 +152,6 @@ async fn keeps_multiple_workouts_on_both_sides_distinct() {
                        "routePolyline": "abc"}),
             ),
         ],
-        // A bout NOOP detected at noon, away from both logged sessions.
         &[noop_workout(
             1_790_416_800,
             1_790_420_400,
@@ -207,7 +195,6 @@ async fn keeps_multiple_workouts_on_both_sides_distinct() {
         }),
     )
     .await;
-    // An empty Workout is still a logged Workout.
     let empty = log_workout(
         &app,
         json!({"date": "2026-09-26", "name": "Mobility", "notes": null, "exercises": []}),
@@ -297,7 +284,6 @@ async fn resolves_one_activity_stored_twice_like_noop() {
     let mirror = mirror_with(
         std::slice::from_ref(&manual),
         &[
-            // The same row in the computed namespace, and the detector's wider shadow of it.
             manual.clone(),
             noop_workout(
                 1_790_437_800,

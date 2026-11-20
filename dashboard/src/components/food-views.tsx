@@ -3,10 +3,6 @@ import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank"
 import { ChartLineIcon } from "@phosphor-icons/react/dist/csr/ChartLine"
 import { ViewTabs, viewTab } from "@/components/view-tabs"
 
-/**
- * Links in the Food page's switches are current only for their exact search, so Router's own
- * active state never marks a second choice beside the chosen one.
- */
 export const exactSearch = {
   exact: true,
   includeSearch: true,
@@ -18,7 +14,6 @@ const views = [
   { view: "trends", label: "Trends", Icon: ChartLineIcon },
 ] as const
 
-/** The Food page's Day and Trends switch; Day keeps a clean URL and opens on today. */
 export function FoodViews({
   view,
 }: {

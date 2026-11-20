@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { copenhagenDay } from "./important-dates"
 
-/** The Copenhagen day, changing at its actual midnight even across daylight-saving changes. */
 export function useCopenhagenDay(): string {
   const [day, setDay] = useState(() => copenhagenDay(new Date()))
 
@@ -13,7 +12,6 @@ export function useCopenhagenDay(): string {
       const now = Date.now()
       const today = copenhagenDay(new Date(now))
       setDay(today)
-      // Find the first instant of the next Copenhagen day; it can be 23, 24 or 25 hours away.
       let low = now
       let high = now + 27 * 60 * 60 * 1000
 

@@ -16,10 +16,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.patrickhaahr.openhome.R
 
-/**
- * A dark house with one lamp: everything is black until it is lit, and only light is yellow. Surfaces
- * step up in lightness and never carry a line or a shadow.
- */
 object Lit {
     val Ground = Color(0xFF000000)
     val Slab = Color(0xFF121210)
@@ -42,7 +38,6 @@ val Familjen =
         Font(R.font.familjen_semibold, FontWeight.SemiBold),
     )
 
-/** Everything that counts is a number, and numbers that change must not jitter. */
 private const val TABULAR = "tnum"
 
 private fun style(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, tracking: Double = 0.0) =
@@ -56,7 +51,6 @@ private fun style(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, 
     )
 
 object Type {
-    /** The one enormous thing on a screen: a weight, a countdown, a date. */
     val Giant = style(84, 84, FontWeight.SemiBold, -0.05)
     val Display = style(40, 42, FontWeight.SemiBold, -0.035)
     val Title = style(28, 31, FontWeight.SemiBold, -0.025)
@@ -122,7 +116,6 @@ private val OpenHomeShapes =
         extraLarge = RoundedCornerShape(36.dp),
     )
 
-/** The only appearance: the app follows no system light theme and no wallpaper colors. */
 @Composable
 fun OpenHomeTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = OpenHomeColors, typography = OpenHomeTypography, shapes = OpenHomeShapes, content = content)

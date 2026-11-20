@@ -1,10 +1,3 @@
-//! Training Context: a compact view of a training block on one Europe/Copenhagen date axis.
-//!
-//! Every day from `from_day` through `to_day` has an entry, even with nothing logged or synced. An
-//! entry summarizes the Workouts logged that date and the NOOP Workouts starting that local day,
-//! as two lists that are never paired, beside daily Body Weight and the Recovery Day's sleep
-//! duration, resting heart rate and HRV. Exact Sets and sleep sessions stay in the focused reads.
-
 use std::collections::HashMap;
 use std::io;
 
@@ -24,11 +17,7 @@ use super::recovery::{
 use super::trend::{self, BODY_WEIGHT_SOURCE, KILOGRAMS};
 use super::workouts::{self, WORKOUT_STREAMS, WorkoutCoverage};
 
-/// Logged Exercise entries a Training Context may hold (a Workout without Exercises counts as
-/// one). A larger block is rejected rather than truncated.
 pub const MAX_LOGGED_ENTRIES: usize = 1000;
-/// Bytes the serialized JSON response may take. Row caps bound the entries but not the free-text
-/// Workout, Exercise and NOOP sport names in them. A larger body is rejected rather than truncated.
 pub const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 
 #[derive(Debug, Serialize)]
@@ -37,11 +26,9 @@ pub struct TrainingContext {
     pub to_day: String,
     pub time_zone: &'static str,
     pub noop: ContextSync,
-    /// One entry per calendar day, oldest first.
     pub days: Vec<ContextDay>,
 }
 
-/// The NOOP installation and the watermarks behind each day's freshness.
 #[derive(Debug, Serialize)]
 pub struct ContextSync {
     pub installation_id: Option<String>,
@@ -52,26 +39,18 @@ pub struct ContextSync {
 
 #[derive(Debug, Serialize)]
 pub struct PushWatermarks {
-    /// `dailyMetric` and `sleepSession` in both strap namespaces, as for a Recovery Day.
     pub recovery: Option<String>,
-    /// `workout` in every workout namespace, as for Workouts on a Training Day.
     pub workouts: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ContextDay {
     pub day: String,
-    /// Workouts logged in `OpenHome` with this date, in the order they were created.
     pub workouts: Vec<WorkoutSummary>,
-    /// NOOP Workouts whose start falls inside the local day, by start; never paired with a logged
-    /// Workout.
     pub noop_workouts: Vec<NoopWorkoutSummary>,
-    /// The daily Body Weight record; `source` is `body_weight` when one exists.
     pub body_weight: Measurement<f64>,
-    /// The Recovery Day's total sleep for the Sleep Night waking on this day.
     pub sleep_duration: Measurement<f64>,
     pub resting_hr: Measurement<f64>,
-    /// Nightly heart-rate variability as RMSSD.
     pub hrv_rmssd: Measurement<f64>,
     pub noop: ContextDaySync,
 }
@@ -80,23 +59,17 @@ pub struct ContextDay {
 pub struct WorkoutSummary {
     pub id: i64,
     pub name: Option<String>,
-    /// In logged order; repeated entries of one Exercise stay separate.
     pub exercises: Vec<ExerciseSummary>,
 }
 
-/// One Exercise entry's Sets, reduced to counts and bests; exact Sets stay in the focused reads.
 #[derive(Debug, Serialize)]
 pub struct ExerciseSummary {
     pub exercise: String,
     pub sets: i64,
     pub best_reps: Option<i64>,
-    /// Heaviest weight added to the body; null when every Set was bodyweight.
     pub best_added_weight_kg: Option<f64>,
-    /// Longest Timed Hold.
     pub best_hold_duration_s: Option<i64>,
     pub best_rpe: Option<i64>,
-    /// Volume: reps (or, for a weighted Timed Hold, seconds) times Added Weight; bodyweight Sets
-    /// add zero. Null without Sets.
     pub volume_kg: Option<f64>,
 }
 
@@ -106,27 +79,19 @@ pub struct NoopWorkoutSummary {
     pub end: String,
     pub sport: String,
     pub origin: WorkoutOrigin,
-    /// NOOP's recorded duration.
     pub duration_min: Option<f64>,
     pub avg_hr_bpm: Option<f64>,
-    /// NOOP's derived 0-100 workout strain; a model output, not a measurement.
     pub strain_score: Option<f64>,
-    /// Steps the strap or phone counted over the workout.
     pub steps: Option<i64>,
-    /// The NOOP device namespace of the stored row.
     pub source: String,
 }
 
-/// Each NOOP read behind a day's values, with the freshness and coverage of that read's rows.
 #[derive(Debug, Serialize)]
 pub struct ContextDaySync {
-    /// The Recovery Day's rows, behind `sleep_duration`, `resting_hr` and `hrv_rmssd`.
     pub recovery: DaySync<NoopCoverage>,
-    /// The Training Day's NOOP workout rows, behind `noop_workouts`.
     pub workouts: DaySync<WorkoutCoverage>,
 }
 
-/// The route validates the 1 through 90 day bound before calling this function.
 pub async fn training_context(
     db: &SqlitePool,
     noop_db: &SqlitePool,
@@ -220,8 +185,6 @@ pub async fn training_context(
     Ok(context)
 }
 
-/// Whether `value`'s compact JSON, as the response writes it, fits in `limit` bytes. Serialization
-/// stops at the first byte past the limit.
 fn serializes_within(value: &impl Serialize, limit: usize) -> Result<bool> {
     struct Budget(usize);
 
@@ -246,7 +209,6 @@ fn serializes_within(value: &impl Serialize, limit: usize) -> Result<bool> {
     }
 }
 
-/// Logged Workouts by date, each Exercise entry summarized in one grouped query.
 async fn logged_workouts(
     db: &SqlitePool,
     from_day: CalendarDay,
@@ -324,7 +286,6 @@ async fn logged_workouts(
     Ok(by_day)
 }
 
-/// A value the receiver has not established: no installation has pushed yet.
 const fn missing(unit: &'static str) -> Measurement<f64> {
     Measurement {
         value: None,
@@ -353,7 +314,6 @@ mod tests {
 
     #[test]
     fn size_budget_includes_its_limit() {
-        // `"abcd"` is six bytes of JSON.
         assert!(serializes_within(&"abcd", 6).unwrap());
         assert!(!serializes_within(&"abcd", 5).unwrap());
         assert!(!serializes_within(&vec!["abcd"; 1000], 6).unwrap());

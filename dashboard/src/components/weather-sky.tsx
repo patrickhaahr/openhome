@@ -9,7 +9,6 @@ type Hours = Extract<WeatherRead, { state: "fresh" }>["forecast"]["hourly"]
 
 const hourMs = 3_600_000
 
-/** Labels every third hour, so the line carries the trend and the figures stay few. */
 const labelEvery = 3
 
 const hourTime = new Intl.DateTimeFormat("en-GB", {
@@ -18,7 +17,6 @@ const hourTime = new Intl.DateTimeFormat("en-GB", {
   minute: "2-digit",
 })
 
-/** The stretches of [from, to] the sun is down, from the same model that turns the theme. */
 function nights(from: number, to: number): { from: number; to: number }[] {
   const days = [from, to]
     .map((at) => daylight(new Date(at)))
@@ -44,11 +42,6 @@ function nights(from: number, to: number): { from: number; to: number }[] {
   return dark.filter((night) => night.to > night.from)
 }
 
-/**
- * The next day as one horizon: temperature as a line, rain as columns beneath it, the
- * nights as darker ground and the sun on the line at this minute. Drawn for the eye only;
- * the hourly table carries every value for assistive technology.
- */
 export function DaySky({ hours }: { hours: Hours }): React.JSX.Element | null {
   const { now } = useDaylight()
   const first = hours.at(0)
@@ -67,7 +60,6 @@ export function DaySky({ hours }: { hours: Hours }): React.JSX.Element | null {
   const coldest = Math.min(...temperatures)
   const warmest = Math.max(...temperatures)
 
-  /** 0 at the top of the line's lane, 1 at the bottom. */
   const drop = (celsius: number) =>
     warmest === coldest ? 0.5 : (warmest - celsius) / (warmest - coldest)
 
@@ -120,7 +112,6 @@ export function DaySky({ hours }: { hours: Hours }): React.JSX.Element | null {
           </span>
         ))}
         <div className="absolute inset-x-0 top-lane-top bottom-lane-bottom">
-          {/* Stretched to the lane; the stroke keeps its width and the marks are HTML. */}
           <svg
             className="size-full overflow-visible text-ink"
             viewBox="0 0 100 100"

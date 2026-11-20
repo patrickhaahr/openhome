@@ -26,7 +26,6 @@ import { useSingleCommand } from "@/lib/use-single-command"
 
 type LightControlsProps = {
   connectionState: ConnectionState
-  /** Home's plate or the focused Controls panel. */
   layout: ControlLayout
   sendCommand: (options: {
     data: LightCommand
@@ -52,7 +51,6 @@ const fullPanel = "flex-1 rounded-full p-2 max-phone:rounded-4xl"
 
 const quickKeys = "flex flex-col items-center gap-2 max-phone:flex-row"
 
-// A wall switch: the lit bulb on the upper half, the dark one below; on a phone it lies on its side.
 const fullKeys =
   "flex flex-1 flex-col items-center gap-2 self-stretch max-phone:h-28 max-phone:flex-none max-phone:flex-row max-phone:items-stretch **:data-[slot=button]:h-auto **:data-[slot=button]:w-full **:data-[slot=button]:flex-1 **:data-[slot=button]:[&_svg:not([class*=size-])]:size-12 **:data-[command=on]:rounded-t-key-pill **:data-[command=on]:rounded-b-tile **:data-[command=on]:[&_svg]:text-sun **:data-[command=off]:rounded-t-tile **:data-[command=off]:rounded-b-key-pill max-phone:**:data-[command=on]:rounded-l-key-pill max-phone:**:data-[command=on]:rounded-r-tile max-phone:**:data-[command=off]:rounded-l-tile max-phone:**:data-[command=off]:rounded-r-key-pill"
 
@@ -61,11 +59,6 @@ const keys = [
   { command: "off", label: "Turn off", Icon: LightbulbIcon },
 ] as const
 
-/**
- * Two keys, a lit bulb and a dark one. The press answers on the key itself; the sentence
- * stays in the live region. OpenHome never reports the lights' power, so nothing on screen
- * claims it.
- */
 export function LightControls({
   layout,
   connectionState,

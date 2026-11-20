@@ -44,12 +44,10 @@ impl Cache {
 struct Provider {
     client: Client,
     endpoint: ProviderEndpoint,
-    // One search at a time keeps repeated taps from piling work onto the household's instance.
     gate: Arc<Mutex<()>>,
     cache: Arc<std::sync::Mutex<Cache>>,
 }
 
-/// Plans loops from the shared map origin. Clones share one provider gate and cache.
 #[derive(Clone)]
 pub struct LoopPlanner {
     origin: Option<MapOrigin>,
@@ -57,7 +55,6 @@ pub struct LoopPlanner {
 }
 
 impl LoopPlanner {
-    /// The endpoint is supplied by bootstrap, allowing a controlled provider at the HTTP seam.
     pub fn new(
         origin: Option<MapOrigin>,
         endpoint: Option<ProviderEndpoint>,
@@ -77,7 +74,6 @@ impl LoopPlanner {
         Ok(Self { origin, provider })
     }
 
-    /// Seek distinct loops for the request, or explain why none is shown.
     pub async fn generate(&self, request: LoopRequest) -> LoopRead {
         let Some(origin) = self.origin else {
             return LoopRead::Unavailable {
@@ -98,7 +94,6 @@ impl LoopPlanner {
     }
 }
 
-/// What one round trip contributed to a search.
 enum Attempt {
     Kept,
     Duplicate,
@@ -106,7 +101,6 @@ enum Attempt {
     NoRoute,
 }
 
-/// Accumulation survives individual refusals; termination is decided by the search loop.
 struct SearchProgress {
     kept: Vec<MeasuredLoop>,
     overshoot: Vec<f64>,
@@ -154,8 +148,6 @@ impl Provider {
         self.cache.lock().ok()?.get(key)
     }
 
-    /// Request round trips with successive seeds until enough distinct loops match the target,
-    /// the attempts or time run out, or the provider fails.
     async fn search(
         &self,
         origin: [f64; 2],
@@ -170,7 +162,6 @@ impl Provider {
             tracing::warn!("Route provider busy with another search");
             return Err(LoopUnavailable::ProviderUnavailable);
         };
-        // A request queued behind an identical one reuses its answer.
         if let Some(found) = self.cached(key) {
             return Ok(found);
         }
@@ -199,12 +190,9 @@ impl Provider {
                             None => Attempt::Unsuitable,
                         }
                     }
-                    // Before any loop, no walkable way near the origin means no seed can start
-                    // one; afterwards it only concerns this seed's generated waypoints.
                     Err(Refusal::NoRoute { origin_unroutable })
                         if origin_unroutable && progress.kept.is_empty() =>
                     {
-                        // Preserve a preceding unsuitable verdict, if any.
                         return Err(progress.empty_reason);
                     }
                     Err(Refusal::NoRoute { .. }) => Attempt::NoRoute,
@@ -226,7 +214,6 @@ impl Provider {
             SearchEnd::Exhausted
         };
         let found = progress.finish(end)?;
-        // An interrupted search is retried next time rather than remembered.
         if end != SearchEnd::Interrupted
             && let Ok(mut cache) = self.cache.lock()
         {
@@ -242,8 +229,6 @@ impl Provider {
         length: u32,
         seed: u32,
     ) -> Result<ProviderTrip, Refusal> {
-        // The profile already prefers footways and paths. Green and quiet weightings would need
-        // external green and noise datasets that a standard self-hosted build does not have.
         let body = json!({
             "coordinates": [origin],
             "preference": "recommended",
@@ -254,7 +239,6 @@ impl Provider {
                 "avoid_features": activity.avoided_features()
             }
         });
-        // Logs carry status, provider code and error kind only: never the origin-bearing body.
         let response = self
             .client
             .post(self.endpoint.0.clone())
@@ -283,7 +267,6 @@ impl Provider {
             .ok()
             .map(|body| body.error.code);
         match code {
-            // 2009: no route between the generated waypoints; 2010: no walkable way near one.
             Some(code @ (2009 | 2010)) if status.is_client_error() => Err(Refusal::NoRoute {
                 origin_unroutable: code == 2010,
             }),
@@ -299,8 +282,6 @@ impl Provider {
     }
 }
 
-/// Keep `candidate` when it mostly follows other ways than every kept loop. A matching loop also
-/// replaces near-misses it retraces, so a near-miss never crowds out a match on the same streets.
 fn keep(kept: &mut Vec<MeasuredLoop>, candidate: MeasuredLoop) -> Attempt {
     let retraced = |loop_: &MeasuredLoop| !distinct(&candidate, loop_);
     if !kept.iter().any(retraced) {
@@ -320,13 +301,11 @@ fn keep(kept: &mut Vec<MeasuredLoop>, candidate: MeasuredLoop) -> Attempt {
     Attempt::Duplicate
 }
 
-/// Why the provider returned no loop for one attempt.
 enum Refusal {
     NoRoute { origin_unroutable: bool },
     Unavailable,
 }
 
-/// The length to request next: the target, corrected by how much earlier loops overshot.
 pub(super) fn calibrated_length(target: f64, overshoot: &[f64]) -> u32 {
     let ratio = if overshoot.is_empty() {
         1.0
@@ -381,8 +360,6 @@ struct ProviderSummary {
 }
 
 impl ProviderTrip {
-    /// The loop's coordinates and its length measured from them, or `None` when the response
-    /// is not one plausible line.
     fn geometry(self) -> Option<(Vec<[f64; 2]>, f64)> {
         let [feature] = <[ProviderFeature; 1]>::try_from(self.features).ok()?;
         if feature.geometry.kind != "LineString"
@@ -395,7 +372,6 @@ impl ProviderTrip {
             .coordinates
             .iter()
             .map(|point| match point.as_slice() {
-                // Elevation, when present, is a third value and is not displayed.
                 [longitude, latitude, ..]
                     if longitude.is_finite()
                         && latitude.is_finite()

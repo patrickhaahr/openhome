@@ -41,19 +41,10 @@ const splitNames = {
 
 type FoodDayProps = {
   readonly data: NutritionDayState
-  /** Set the Nutrition Goal from today: the Day view's only write. */
   readonly saveGoal: (goal: SetGoalInput) => Promise<GoalMutation>
-  /** Read the day again after the goal changed. */
   readonly reload: () => Promise<void>
 }
 
-/**
- * The Food page's Day view: one Copenhagen day's Calorie Target, eaten and remaining with the
- * macros against their targets and the goal control, then its Meal Logs in time order with the
- * day's energy and macronutrient totals and their supplement share, the Supplements taken, the
- * vitamins and minerals against their Recommended Intakes and Upper Limits, every nutrient on
- * request, and the Food database's credit.
- */
 export function FoodDay({
   data,
   saveGoal,
@@ -129,10 +120,8 @@ function DayBody({
 const dayKey =
   "inline-grid size-12 place-items-center rounded-full bg-wash-strong text-ink transition-food-key duration-fast ease-app"
 
-/** The reversed look of a key under the pointer, shared by the day keys and "Today". */
 const keyHover = "hover:bg-ink hover:text-ground"
 
-/** Previous and next keys around the day's name; there is no next day after today. */
 function DayNav({
   day,
   today,
@@ -143,7 +132,6 @@ function DayNav({
   const previous = shiftDay(day, -1)
   const next = shiftDay(day, 1)
 
-  // Today is the page's default, so it keeps a clean URL.
   const searchFor = (target: string) =>
     target === today ? {} : { day: target }
 
@@ -316,10 +304,6 @@ function Day({ day }: { readonly day: NutritionDay }): React.JSX.Element {
 const supplement =
   "inline-flex items-baseline gap-2 rounded-full bg-wash-strong px-3 py-1 text-small"
 
-/**
- * The day's Supplements: each Supplement's doses added together, then the compounds without a
- * database parameter as amounts taken. Nothing when no Supplement was taken.
- */
 function Supplements({
   day,
 }: {
@@ -362,7 +346,6 @@ function Supplements({
   )
 }
 
-/** The share of the day's classified energy from NOVA Class 1, with what it leaves out. */
 function NovaShare({
   nova,
 }: {

@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -23,7 +22,6 @@ pub(super) const API_KEY: &str = "test-api-key";
 pub(super) const CHICKEN: i64 = 907;
 pub(super) const BANANA: i64 = 3;
 
-/// The nutrition routes and the Profile and Body Weight routes over one `app.db`.
 pub(super) struct Api {
     pub(super) _server: MockServer,
     pub(super) _dir: TempDir,
@@ -98,7 +96,6 @@ impl Api {
         .await;
     }
 
-    /// Logs one meal at noon on `day` of `(food_id, grams)` Portions.
     pub(super) async fn eat(&self, day: &str, portions: &[(i64, f64)]) {
         let request_id = format!("meal-{}", self.logs.fetch_add(1, Ordering::Relaxed));
         let portions: Vec<Value> = portions
@@ -150,7 +147,6 @@ impl Api {
         body
     }
 
-    /// Each period's `field`, in order.
     pub(super) async fn series(
         &self,
         from: &str,
@@ -170,7 +166,6 @@ impl Api {
     }
 }
 
-/// Today in Copenhagen, `offset` days from now.
 pub(super) fn day_from_today(offset: i64) -> String {
     let today = Utc::now()
         .with_timezone(&chrono_tz::Europe::Copenhagen)
@@ -183,9 +178,6 @@ pub(super) fn day_from_today(offset: i64) -> String {
     day.unwrap().to_string()
 }
 
-/// Three logged days: Thursday 2 April (1,500 kcal of chicken), Saturday 4 April (900 kcal of
-/// chicken and 450 kcal of banana) and Monday 6 April (1,500 kcal of chicken). Chicken is NOVA 1
-/// and banana NOVA 3.
 pub(super) async fn three_logged_days(api: &Api) {
     api.eat("2026-04-02", &[(CHICKEN, 1000.0)]).await;
     api.eat("2026-04-04", &[(CHICKEN, 600.0), (BANANA, 500.0)])

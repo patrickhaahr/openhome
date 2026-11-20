@@ -1,20 +1,7 @@
-//! A NOOP Workout's captured route: decoded from NOOP's stored polyline and thinned for display.
-//!
-//! NOOP stores a route as a Google Encoded Polyline, precision 5 (about 1 m), latitude and
-//! longitude only: `RouteMath.encode` and `RouteMath.decode` in `Strand/App/GpsWorkoutRecorder.swift`
-//! of the NOOP app. The decoder here follows `RouteMath.decode`: it keeps the points it can parse,
-//! stops cleanly at a truncated value, and drops anything off the surface of the earth.
-//!
-//! Route coordinates are private household data, like the map origin in `services::map`: they are
-//! only returned to authenticated clients and must never be logged.
-
-/// Points a returned route keeps at most, the first and last always among them.
 pub const MAX_ROUTE_POINTS: usize = 300;
 
-/// One decoded fix as `[latitude, longitude]` in degrees.
 pub type Fix = [f64; 2];
 
-/// Decodes a precision-5 polyline; `None` when it holds no usable point.
 #[must_use]
 pub fn decode(encoded: &str) -> Option<Vec<Fix>> {
     let bytes = encoded.as_bytes();
@@ -39,8 +26,6 @@ pub fn decode(encoded: &str) -> Option<Vec<Fix>> {
     (!fixes.is_empty()).then_some(fixes)
 }
 
-/// One zigzag varint, advancing `at`; `None` when the string ends mid-value or a value is too
-/// long to be a coordinate.
 fn signed(bytes: &[u8], at: &mut usize) -> Option<i64> {
     let (mut result, mut shift) = (0_i64, 0_u32);
     loop {
@@ -62,7 +47,6 @@ fn signed(bytes: &[u8], at: &mut usize) -> Option<i64> {
     })
 }
 
-/// Keeps at most `limit` fixes, evenly spaced by index, always including the first and the last.
 #[must_use]
 pub fn downsample(fixes: Vec<Fix>, limit: usize) -> Vec<Fix> {
     if fixes.len() <= limit || limit < 2 {
@@ -78,10 +62,8 @@ pub fn downsample(fixes: Vec<Fix>, limit: usize) -> Vec<Fix> {
 mod tests {
     use super::*;
 
-    /// The Google documentation's example: (38.5, -120.2), (40.7, -120.95), (43.252, -126.453).
     const GOOGLE_EXAMPLE: &str = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
 
-    /// Fixes within a hundred-thousandth of a degree, the polyline's own resolution.
     fn same(actual: Option<Vec<Fix>>, expected: &[Fix]) {
         let actual = actual.expect("a route");
         assert_eq!(actual.len(), expected.len());
@@ -100,7 +82,6 @@ mod tests {
 
     #[test]
     fn keeps_what_it_can_parse_of_a_truncated_string() {
-        // The third pair is cut after its latitude.
         same(
             decode("_p~iF~ps|U_ulLnnqC_mqN"),
             &[[38.5, -120.2], [40.7, -120.95]],

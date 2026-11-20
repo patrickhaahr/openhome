@@ -75,7 +75,6 @@ async fn test_pause_endpoint_returns_422_for_invalid_json() {
     )
     .await;
 
-    // Invalid JSON should return 422
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
@@ -93,7 +92,6 @@ async fn test_undefined_endpoint_returns_404() {
 async fn test_status_endpoint_rejects_non_get_requests() {
     let app = common::test_app().await;
 
-    // POST to status endpoint should return 405 Method Not Allowed
     let (status, _body) = common::send_request_with_method(
         app,
         "/api/adguard/status",
@@ -110,7 +108,6 @@ async fn test_status_endpoint_rejects_non_get_requests() {
 async fn test_enable_endpoint_rejects_get_requests() {
     let app = common::test_app().await;
 
-    // GET to enable endpoint should return 405 Method Not Allowed
     let (status, _body) =
         common::send_request(app, "/api/adguard/enable", Some("test-api-key")).await;
 
@@ -188,8 +185,6 @@ async fn test_pause_endpoint_with_adguard_service() {
 async fn test_all_adguard_routes_are_registered() {
     let app = common::test_app().await;
 
-    // The router should have routes defined for all adguard endpoints
-    // We can verify this by checking they don't return 404
     let status_response =
         common::send_request(app.clone(), "/api/adguard/status", Some("test-api-key")).await;
     assert_ne!(status_response.0, StatusCode::NOT_FOUND);
@@ -239,7 +234,6 @@ async fn test_pause_endpoint_returns_422_when_minutes_missing() {
     )
     .await;
 
-    // Missing required field should return 422
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
@@ -257,6 +251,5 @@ async fn test_pause_endpoint_rejects_zero_minutes() {
     )
     .await;
 
-    // Zero minutes is not valid - should be a validation error
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }

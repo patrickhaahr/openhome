@@ -1,6 +1,3 @@
-//! Meals that take Supplement Doses through the nutrition routes, over a real `app.db` and a real
-//! `food.db`.
-
 mod common;
 #[path = "nutrition_support/supplements.rs"]
 mod support;
@@ -41,7 +38,6 @@ async fn a_meal_takes_supplement_doses_by_reference_and_logs_them_with_dose_over
             },
         ])
     );
-    // A Meal holds references, so a Supplement edit reaches its next log.
     api.update(
         &oil["id"],
         json!({"amounts": [{"key": "epa", "value": 250, "unit": "mg"}]}),
@@ -85,7 +81,6 @@ async fn a_meal_takes_supplement_doses_by_reference_and_logs_them_with_dose_over
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
 
-    // A Supplement a Meal takes cannot be deleted until the Meal no longer takes it.
     let (status, body) = api.delete(&creatine["id"]).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert!(

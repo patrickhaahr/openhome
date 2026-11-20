@@ -26,7 +26,6 @@ import {
 } from "@/lib/watchlist"
 import type { HouseholdUser } from "@/lib/wishlist"
 
-/** One deliberate lookup through the private Axum provider adapter. */
 export type SearchMedia = (input: {
   kind: WatchlistEntry["kind"]
   query: string
@@ -38,13 +37,8 @@ type Found =
   | { state: "found"; query: string; results: MediaMetadata[] }
   | { state: "unavailable"; query: string }
 
-/** The search state and the keystroke that feeds it. */
 export type MediaSearch = { found: Found; type: (query: string) => void }
 
-/**
- * Search as you type, gently: 400 ms after the last key, at least two characters, both kinds at
- * once; a newer query makes older answers stale and they are dropped.
- */
 export function useMediaSearch(
   search: SearchMedia,
   kinds: ReadonlyArray<WatchlistEntry["kind"]> = ["movie", "series"]
@@ -53,7 +47,6 @@ export function useMediaSearch(
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const latest = useRef(0)
 
-  // A closed plate searches nothing more.
   useEffect(() => () => clearTimeout(timer.current), [])
 
   function type(text: string): void {
@@ -85,7 +78,6 @@ export function useMediaSearch(
           return
         }
 
-        // Interleave movies and series so the best of each comes first.
         const lists = answers.map((answer) =>
           answer.state === "available" ? answer.results : []
         )
@@ -108,7 +100,6 @@ export function useMediaSearch(
   return { found, type }
 }
 
-/** Search results as small posters; each one is a key. */
 export function MediaResults({
   found,
   pick,
@@ -186,9 +177,7 @@ function readPending(ownerId: string): Plan | undefined {
     )
 
     if (parsed.success && parsed.data.action === "add") return parsed.data
-  } catch {
-    /* Private browsing may disable storage. */
-  }
+  } catch {}
 
   return undefined
 }
@@ -199,12 +188,9 @@ function storePending(ownerId: string, plan: Plan | undefined): void {
 
     if (plan) sessionStorage.setItem(key, JSON.stringify(plan))
     else sessionStorage.removeItem(key)
-  } catch {
-    /* The mounted flow keeps its in-memory retry identity. */
-  }
+  } catch {}
 }
 
-/** Find the title, then say who it is for; one tap on a person adds it. */
 export function WatchAdd({
   owners,
   person,
@@ -230,7 +216,6 @@ export function WatchAdd({
   async function add(owner: HouseholdUser, chosen: Choice): Promise<void> {
     const title = trimText(chosen.title)
 
-    // A lost response retried with the same title and person keeps its request ID.
     const previous = pending.current ?? readPending(owner.id)
 
     pending.current =

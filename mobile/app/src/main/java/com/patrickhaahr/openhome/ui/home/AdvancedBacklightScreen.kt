@@ -69,7 +69,6 @@ private fun minutesOf(text: String): Int? =
         hours * 60 + minutes
     }.getOrNull()
 
-/** The day as a ring with midnight on top: the bedtime window in red, and this minute as the lit dot. */
 @Composable
 private fun BedtimeDial(start: String, end: String, active: Boolean, modifier: Modifier, center: @Composable () -> Unit) {
     val now = remember { LocalTime.now(HOUSEHOLD_ZONE).let { it.hour * 60 + it.minute } }
@@ -169,7 +168,6 @@ internal fun AdvancedBacklightInputs(
                 Glyph.Check,
                 "Save bedtime routine",
                 {
-                    // Submission is enabled only for a parsed brightness in the server's range.
                     saveBedtime(BacklightBedtimeUpdate(active.takeIf { it != bedtime.enabled }, start, end, level!!))
                 },
                 modifier = Modifier.fillMaxWidth(),

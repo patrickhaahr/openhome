@@ -35,11 +35,9 @@ import { defaultIdleSettings } from "@/lib/idle"
 
 const rootRoute = getRouteApi("__root__")
 
-/** A top bar on the horizon line, one content landmark, and focus after rendered navigation. */
 export function DashboardShell(): React.JSX.Element {
   const router = useRouter()
   const { openedAt, nav, currency, idle } = rootRoute.useLoaderData()
-  // The server's settings arrive with the first page; client navigations carry none.
   const [idleSettings] = useState(() => idle ?? defaultIdleSettings)
 
   useEffect(
@@ -71,17 +69,11 @@ export function DashboardShell(): React.JSX.Element {
   )
 }
 
-/**
- * The page column. Each page that fills the screen, or runs edge to edge, names its root with
- * a data-slot and this column answers: a phone always clears the tab bar below it.
- */
 const page =
   "mx-auto w-full max-w-360 px-margin pt-page-block pb-16 in-data-[nav=side]:col-2 in-data-[nav=side]:row-1 max-phone:col-1 max-phone:row-1 max-phone:pb-tabbar-room phone:has-[>:is([data-slot=home],[data-slot=wx],[data-slot=controls],[data-slot=today])]:pb-page-block has-[>:is([data-slot=lists],[data-slot=binder])]:pt-page-block-snug tablet:has-[[data-slot=binder]]:pb-4 binder-wide:has-[[data-slot=binder]]:max-w-none binder-wide:has-[[data-slot=binder]]:pb-6 has-[[data-slot=photo-wall]]:max-w-none has-[[data-slot=photo-wall]]:px-0 phone:has-[[data-slot=photo-wall]]:pb-0 has-[[data-slot=travel]]:max-w-none has-[[data-slot=travel]]:p-0"
 
-/** The chosen layout from 641 px up; a phone always gets the bottom tab bar. */
 function Shell(): React.JSX.Element {
   const { layout, labels } = useNavLayout()
-  // Under the Idle Slideshow the page stays mounted, exactly as it was, but out of reach.
   const asleep = useIdlePhase() !== "awake"
 
   return (

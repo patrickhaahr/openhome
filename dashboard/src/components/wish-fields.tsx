@@ -9,7 +9,6 @@ import type { WishlistDetails, WishlistItem } from "@/lib/wishlist"
 
 type Priority = WishlistItem["priority"]
 
-/** Every editable field of a wish as typed; Axum owns the limits and URL rules. */
 export type WishDraft = {
   title: string
   url: string
@@ -42,7 +41,6 @@ export function draftOf(item: WishlistItem): WishDraft {
   }
 }
 
-/** Trimmed write arguments, stable across retries; blank optional fields are null. */
 export function detailsOf(draft: WishDraft): Required<WishlistDetails> {
   const optional = (value: string): string | null => trimText(value) || null
 
@@ -63,7 +61,6 @@ const priorities = [
   { value: "high", label: "High" },
 ] as const satisfies ReadonlyArray<{ value: Priority; label: string }>
 
-/** Title first and large; the rest as quiet plates. No selects: priority is three keys. */
 export function WishFields({
   draft,
   edit,

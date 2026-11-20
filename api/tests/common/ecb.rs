@@ -1,4 +1,3 @@
-//! A synthetic ECB reference-rate server: the 90-day and history files at their production paths.
 #![allow(dead_code)]
 
 use std::fmt::Write;
@@ -18,7 +17,6 @@ use wiremock::{
 pub const RECENT_PATH: &str = "/stats/eurofxref/eurofxref-hist-90d.xml";
 pub const HISTORY_PATH: &str = "/stats/eurofxref/eurofxref-hist.xml";
 
-/// One stored rate day, as the daily job would have stored it.
 pub async fn store_day(db: &SqlitePool, date: &str, usd: &str, dkk: &str) {
     let rates = DailyRates {
         date: CalendarDay::parse(date).unwrap(),
@@ -28,7 +26,6 @@ pub async fn store_day(db: &SqlitePool, date: &str, usd: &str, dkk: &str) {
     exchange_rates::store(db, &[rates]).await.unwrap();
 }
 
-/// A one-day file in the real shape: one dated Cube holding each currency's rate per euro.
 pub fn file(date: &str, usd: &str, dkk: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -46,8 +43,6 @@ pub fn file(date: &str, usd: &str, dkk: &str) -> String {
     )
 }
 
-/// The 90-day and history files' shape: every day under one `Cube`, newest first, on a single line. A day
-/// with no DKK rate stands for the ECB's old days that lack some currencies.
 pub fn history_file(days: &[(&str, &str, Option<&str>)]) -> String {
     let mut cubes = String::new();
     for (date, usd, dkk) in days {
@@ -66,7 +61,6 @@ pub fn history_file(days: &[(&str, &str, Option<&str>)]) -> String {
     )
 }
 
-/// Serve the 90-day file; clears whatever the server served before, the history file included.
 pub async fn serve(server: &MockServer, response: ResponseTemplate) {
     server.reset().await;
     Mock::given(method("GET"))
@@ -80,7 +74,6 @@ pub async fn serve_history(server: &MockServer, response: ResponseTemplate) {
     also(server, HISTORY_PATH, response).await;
 }
 
-/// Another path on the same server, such as a redirect's target.
 pub async fn also(server: &MockServer, at: &str, response: ResponseTemplate) {
     Mock::given(method("GET"))
         .and(path(at))

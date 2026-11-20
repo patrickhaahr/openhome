@@ -94,7 +94,6 @@ function HomePage(): React.JSX.Element {
   )
 }
 
-/** Today's three rings on the paper; tapping them opens the day on Recovery. */
 function RecoveryGlance({
   glance,
 }: {
@@ -115,7 +114,6 @@ function RecoveryGlance({
   )
 }
 
-/** Four weeks of strength; tapping it opens Workout's progress view. */
 function ProgressGlanceCard({
   glance,
 }: {
@@ -142,7 +140,6 @@ const trace = {
   vectorEffect: "non-scaling-stroke",
 } as const
 
-/** The four featured lines: the accent first, then three hues of similar lightness. */
 const series = [
   {
     stroke: "stroke-progress-1",
@@ -172,7 +169,6 @@ const series = [
 
 const tone = (position: number) => series[position] ?? series[0]
 
-/** The waiting dots rise one after the other. */
 const waits = [
   "motion-safe:animate-glance-wait-1",
   "motion-safe:animate-glance-wait-2",
@@ -183,10 +179,6 @@ const chart = { width: 640, height: 280, inset: 10 } as const
 
 const dayMs = 86_400_000
 
-/**
- * Each recent exercise as a line indexed to 100: the featured ones in colour and named in the
- * legend beneath, the rest quiet. Exact values stay on the Progress view.
- */
 function ProgressGlanceChart({
   progress,
 }: {
@@ -235,8 +227,6 @@ function ProgressGlanceChart({
   return (
     <figure className="grid flex-1 grid-rows-fill-hug gap-4">
       <div className="relative min-h-40 max-home-narrow:min-h-64">
-        {/* Stretched to the column; strokes keep their width and the dots are HTML, so
-            nothing distorts. */}
         <svg
           className="absolute inset-0 size-full overflow-visible"
           viewBox={`0 0 ${chart.width} ${chart.height}`}
@@ -315,7 +305,6 @@ function Deferred<T>({
   children,
 }: {
   promise: Promise<T | null> | undefined
-  /** Placeholder rings while the read is in flight; zero draws the waiting dots. */
   ghosts: number
   children: (value: T) => React.ReactNode
 }): React.JSX.Element {
@@ -351,7 +340,6 @@ function Deferred<T>({
   )
 }
 
-/** A read that failed: a quiet mark, never a zero. */
 function Unavailable(): React.JSX.Element {
   return (
     <span className="inline-flex text-muted-ink" title="Unavailable">

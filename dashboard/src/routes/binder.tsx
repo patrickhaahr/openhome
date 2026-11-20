@@ -11,12 +11,10 @@ import {
   searchCards,
 } from "@/lib/binder.functions"
 
-/** Each Household User's Binder as spreads of two facing 3×3 pocket pages of official card images, with adding by Card Code and each card's sheet for correcting or removing it. */
 export const Route = createFileRoute("/binder")({
   head: () => ({ meta: [{ title: "Binder · OpenHome" }] }),
   validateSearch: binderSearch,
   loader: () => loadBinder(),
-  // Choosing a person or turning a spread never reads again; entering the page always does.
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: 0,
   headers: () => ({ "Cache-Control": "no-store" }),

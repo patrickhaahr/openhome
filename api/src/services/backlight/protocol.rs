@@ -10,7 +10,6 @@ pub fn frame(payload: &[u8]) -> Packet {
 fn valid(packet: &Packet, command: u8) -> bool {
     packet[0] == 0xaa && packet[1] == command && packet.iter().fold(0, |a, b| a ^ b) == 0
 }
-/// Native picture-inactivity settings, independent of the saved TV Sync profile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct InactivitySettings {
     pub enabled: bool,
@@ -84,7 +83,6 @@ impl InactivitySettings {
         ])
     }
 }
-/// Stored privately; never serialize this type in capability responses or logs.
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TvSyncProfile {
     video: Packet,

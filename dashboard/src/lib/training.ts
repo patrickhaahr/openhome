@@ -23,17 +23,14 @@ const syncFields = {
   freshness,
 }
 
-/** An API-selected observation with its actual unit and source; null stays missing. */
 export const measurement = z.object({
   value: nullableNumber,
   unit: z.string(),
   source: z.string().nullable(),
 })
 
-/** One measurement, interpreted by Axum. */
 export type Measurement = z.infer<typeof measurement>
 
-/** The supported Recovery Day read, including selected sleep sessions and Journal Entries. */
 export const recoveryDay = z.object({
   day: z.iso.date(),
   time_zone: z.string(),
@@ -57,7 +54,6 @@ export const recoveryDay = z.object({
             rem: z.number(),
           })
           .nullable(),
-        // Time-ordered segments clamped to the session; null when it has none.
         stages: z
           .object({
             start: timestamp,
@@ -103,7 +99,6 @@ export const recoveryDay = z.object({
   }),
 })
 
-/** Recovery Day as returned by Axum. */
 export type RecoveryDay = z.infer<typeof recoveryDay>
 
 const noopSelection = z.object({
@@ -128,10 +123,8 @@ const noopSummary = noopSelection.extend({
   steps: nullableNumber,
 })
 
-/** One NOOP Workout as the Training Context lists it. */
 export type NoopSummary = z.infer<typeof noopSummary>
 
-/** Bounded Training Context, with separate logged and NOOP Workouts for every calendar day. */
 export const trainingContext = z.object({
   from_day: z.iso.date(),
   to_day: z.iso.date(),
@@ -177,7 +170,6 @@ export const trainingContext = z.object({
     .max(90),
 })
 
-/** Training Context as returned by Axum. */
 export type TrainingContext = z.infer<typeof trainingContext>
 
 const unavailableReason = z.enum([
@@ -191,12 +183,10 @@ const recoveryMark = z
   .object({ hr_bpm: z.number(), drop_bpm: z.number() })
   .nullable()
 
-/** One selected NOOP Workout's bounded strap series, zones and Heart Rate Recovery. */
 export const noopWorkoutDetail = noopSummary.omit({ avg_hr_bpm: true }).extend({
   distance_m: nullableNumber,
   energy_kcal: nullableNumber,
   has_route: z.boolean(),
-  /** `[latitude, longitude]` degrees in order; only present when the read asked for it. */
   route: z
     .tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)])
     .array()
@@ -250,10 +240,8 @@ export const noopWorkoutDetail = noopSummary.omit({ avg_hr_bpm: true }).extend({
   noop: z.object({ ...syncFields, coverage: workoutCoverage }),
 })
 
-/** NOOP Workout Detail as returned by Axum. */
 export type NoopWorkoutDetail = z.infer<typeof noopWorkoutDetail>
 
-/** One trend metric over a bounded day range; a null value is a day with nothing recorded. */
 export const metricTrend = z.object({
   metric: z.string(),
   from_day: z.iso.date(),
@@ -265,13 +253,10 @@ export const metricTrend = z.object({
     .max(90),
 })
 
-/** Metric Trend as returned by Axum. */
 export type MetricTrend = z.infer<typeof metricTrend>
 
-/** A trend metric read beside a Recovery Day, by its Axum name. */
 export type TrendMetric = "hrv" | "resting_heart_rate" | "sleep_duration"
 
-/** Calendar arithmetic on a Training Day, not elapsed local hours across DST. */
 export function shiftDay(day: string, days: number): string {
   const date = new Date(`${day}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + days)
@@ -279,43 +264,33 @@ export function shiftDay(day: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
-/** Recovery Days the day strip loads at a time. */
 export const stripDays = 28
 
-/** Days in a trend read, ending on the selected day. */
 export const trendDays = 30
 
-/** Selected Training Day and atomic NOOP selection, safe for URL search and server-function input. */
 export const trainingSearch = z.object({
   day: z.iso.date().optional().catch(undefined),
   noop: noopSelection.optional().catch(undefined),
 })
 
-/** URL selection for the recovery view. */
 export type TrainingSearch = z.infer<typeof trainingSearch>
 
-/** Exact source/start/sport identity supplied by Axum, including colliding start times. */
 export type NoopSelection = z.infer<typeof noopSelection>
 
-/** Safe failures for a training read; upstream diagnostic text is never serialized. */
 export type TrainingFailure =
   | Exclude<ConnectionState, "connected">
   | "invalid"
   | "not-found"
   | "too-large"
 
-/** Independent reads let recovery stay useful if context or a selected detail is unavailable. */
 export type TrainingRead<T> =
   | { readonly state: "available"; readonly data: T }
   | { readonly state: "unavailable"; readonly reason: TrainingFailure }
 
-/** Selected-day recovery, the six days before it, a seven-day context, trends and optional NOOP detail. */
 export type TrainingState = {
   readonly day: string
-  /** The current Training Day when the read was made; later days cannot be selected. */
   readonly today: string
   readonly recovery: TrainingRead<RecoveryDay>
-  /** Recovery Days around the selected one, oldest first; the day strip starts from these. */
   readonly week: ReadonlyArray<{
     readonly day: string
     readonly recovery: TrainingRead<RecoveryDay>
@@ -325,7 +300,6 @@ export type TrainingState = {
   readonly detail: TrainingRead<NoopWorkoutDetail> | { readonly state: "none" }
 }
 
-/** Actionable, sanitized read failures. */
 export const trainingFailureMessage: Record<TrainingFailure, string> = {
   "missing-configuration":
     "Connect OpenHome in Connection to read training data.",
@@ -341,7 +315,6 @@ export const trainingFailureMessage: Record<TrainingFailure, string> = {
     "This read exceeds OpenHome's data limit. Choose another day; no data was silently truncated.",
 }
 
-/** API reasons for missing detail blocks, without guessing measurements or Profile values. */
 export const detailUnavailableMessage: Record<
   z.infer<typeof unavailableReason>,
   string

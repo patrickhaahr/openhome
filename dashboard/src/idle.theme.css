@@ -1,4 +1,3 @@
-/* The wall screen's short, wide panels (a landscape iPad) squeeze the clock plate. */
 @custom-variant idle-short {
   @media (max-height: 750px) and (min-width: 641px) {
     @slot;

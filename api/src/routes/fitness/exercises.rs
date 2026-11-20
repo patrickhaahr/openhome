@@ -18,7 +18,6 @@ pub struct ListExercises {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateExercise {
-    /// Makes this create safe to retry: see [`replay_exercise`]. Without it, a repeat is a conflict.
     request_id: Option<String>,
     name: String,
     category: String,
@@ -109,7 +108,6 @@ async fn fetch_exercise(state: &crate::AppState, id: i64) -> Result<Exercise> {
     .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))
 }
 
-/// An Exercise create's retry identity: its `request_id` and the arguments a retry must repeat.
 struct ExerciseReceipt {
     request_id: String,
     request: String,
@@ -117,7 +115,6 @@ struct ExerciseReceipt {
 
 impl ExerciseReceipt {
     fn of(request_id: &str, payload: &CreateExercise) -> Result<Self> {
-        // Absent fields stay out, so a field added later cannot mismatch an earlier receipt's retry.
         #[derive(Serialize)]
         struct Normalized<'a> {
             name: &'a str,
@@ -141,9 +138,6 @@ impl ExerciseReceipt {
     }
 }
 
-/// Follows the `request_id` receipt pattern: a retry answers with the Exercise it already created,
-/// the same `request_id` with changed arguments is a conflict, and a deleted Exercise stays deleted.
-/// `None` means this `request_id` has not been accepted.
 async fn replay_exercise(
     state: &crate::AppState,
     receipt: &ExerciseReceipt,
@@ -209,7 +203,6 @@ pub(super) async fn create_exercise(
             tx.rollback().await.map_err(|e| {
                 AppError::Internal(anyhow::anyhow!("Failed to roll back transaction: {e}"))
             })?;
-            // A simultaneous retry that won the write lock holds this name under this request_id.
             if let Some(receipt) = &receipt
                 && let Some(exercise) = replay_exercise(&state, receipt).await?
             {
@@ -220,7 +213,6 @@ pub(super) async fn create_exercise(
     };
 
     if let Some(receipt) = &receipt {
-        // The insert above holds the write lock, so simultaneous retries serialize here.
         let claimed = sqlx::query_scalar!(
             r#"
             INSERT INTO exercise_receipts (request_id, exercise_id, request)
@@ -261,9 +253,6 @@ pub(super) async fn update_exercise(
         validate_category(category)?;
     }
 
-    // Clearable partial update: absent field keeps the current value, explicit
-    // null sets NULL (documented in api/AGENTS.md); rename conflicts surface
-    // as unique violations. Single statement keeps concurrent PATCHes atomic.
     let muscle_group_set = payload.muscle_group.is_some();
     let muscle_group = payload.muscle_group.flatten();
     let equipment_set = payload.equipment.is_some();
@@ -320,10 +309,6 @@ pub(super) async fn delete_exercise(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ---------------------------------------------------------------------------
-// Progress (#8)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Deserialize)]
 pub struct ProgressQuery {
     from: Option<String>,
@@ -365,10 +350,6 @@ pub(super) async fn exercise_progress(
     .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to fetch exercise: {e}")))?
     .ok_or_else(|| AppError::NotFound(format!("Exercise with id {id} not found")))?;
 
-    // One row per workout date. Volume = reps * weight_kg (added weight; null
-    // weight contributes zero), duration_seconds * weight_kg for holds.
-    // Epley 1RM comes from the best set of the day among sets with both
-    // reps and weight; observed data only, no interpolation.
     let data = sqlx::query_as!(
         ProgressPoint,
         r#"
@@ -406,8 +387,6 @@ pub struct CombinedProgressQuery {
     exercise_ids: Option<String>,
 }
 
-/// Several Exercises' Progress Lines, indexed for one chart; the rules live in
-/// `services::exercise_progress`.
 pub(super) async fn combined_progress(
     State(state): State<crate::AppState>,
     Query(params): Query<CombinedProgressQuery>,

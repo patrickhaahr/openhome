@@ -1,5 +1,3 @@
-//! Private Open-Meteo integration and bounded, shared forecast cache.
-
 use std::{sync::Arc, time::Duration};
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -16,7 +14,6 @@ const TTL: chrono::Duration = chrono::Duration::minutes(15);
 const RETRY: chrono::Duration = chrono::Duration::minutes(1);
 const MAX_STALE: chrono::Duration = chrono::Duration::hours(6);
 
-/// Validated private forecast coordinates; never serialized or logged.
 #[derive(Clone)]
 pub struct WeatherLocation {
     latitude: f64,
@@ -24,7 +21,6 @@ pub struct WeatherLocation {
 }
 
 impl WeatherLocation {
-    /// Both coordinates must be supplied together, with finite geographic values.
     pub fn parse(latitude: Option<&str>, longitude: Option<&str>) -> anyhow::Result<Option<Self>> {
         match (latitude, longitude) {
             (None, None) => Ok(None),
@@ -53,7 +49,6 @@ impl WeatherLocation {
     }
 }
 
-/// Sanitized weather read. Stale data retains its original fetch and validity times.
 #[derive(Clone, Serialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum WeatherRead {
@@ -62,7 +57,6 @@ pub enum WeatherRead {
     Stale { forecast: Forecast },
 }
 
-/// Expected failures, without upstream messages or private location details.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WeatherUnavailable {
@@ -70,7 +64,6 @@ pub enum WeatherUnavailable {
     ProviderUnavailable,
 }
 
-/// Client contract: Celsius, metres per second, millimetres and Copenhagen calendar dates.
 #[derive(Clone, Serialize)]
 pub struct Forecast {
     pub fetched_at: DateTime<Utc>,
@@ -81,7 +74,6 @@ pub struct Forecast {
     pub days: Vec<ForecastDay>,
 }
 
-/// Conditions at the start of an hour; precipitation covers that following hour.
 #[derive(Clone, Serialize)]
 pub struct ForecastHour {
     pub starts_at: DateTime<Utc>,
@@ -92,7 +84,6 @@ pub struct ForecastHour {
 }
 
 impl Forecast {
-    // Select on every read so stale cached data never starts with an elapsed hour.
     fn upcoming(&self, now: DateTime<Utc>) -> Self {
         let start = now
             - chrono::Duration::seconds(now.timestamp().rem_euclid(3600))
@@ -124,7 +115,6 @@ impl Forecast {
     }
 }
 
-/// Modelled current conditions. Null is absence, never zero or clear skies.
 #[derive(Clone, Serialize)]
 pub struct CurrentConditions {
     pub observed_at: DateTime<Utc>,
@@ -134,7 +124,6 @@ pub struct CurrentConditions {
     pub wind_ms: Option<f64>,
 }
 
-/// One forecast day, with explicitly named units and independently missing values.
 #[derive(Clone, Serialize)]
 pub struct ForecastDay {
     pub date: NaiveDate,
@@ -151,7 +140,6 @@ struct Cache {
     refresh: RefreshSchedule,
 }
 
-// Admission is independent of forecast freshness; a failed refresh retains the data.
 #[derive(Default)]
 enum RefreshSchedule {
     #[default]
@@ -184,7 +172,6 @@ impl Cache {
                 self.forecast = Some(forecast);
             }
             Err(()) => {
-                // Raw request errors include the coordinate-bearing URL. Do not log them.
                 self.refresh = RefreshSchedule::Backoff { until: now + RETRY };
             }
         }
@@ -205,7 +192,6 @@ impl Cache {
     }
 }
 
-/// A clone shares one cache and serializes refreshes across all clients.
 #[derive(Clone)]
 pub struct WeatherService {
     client: Client,
@@ -215,7 +201,6 @@ pub struct WeatherService {
 }
 
 impl WeatherService {
-    /// The endpoint is supplied by bootstrap, allowing a controlled provider at the HTTP seam.
     pub fn new(location: WeatherLocation, endpoint: Url) -> anyhow::Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
@@ -229,14 +214,11 @@ impl WeatherService {
         })
     }
 
-    /// Read cached weather or perform one bounded refresh; expected failures stay values.
     pub async fn read(&self) -> WeatherRead {
         self.read_at(Utc::now()).await
     }
 
     async fn read_at(&self, now: DateTime<Utc>) -> WeatherRead {
-        // The guard owns the in-flight refresh: queued readers recheck admission after it
-        // completes. Cancellation drops the guard without changing the prior schedule/data.
         let mut cache = self.cache.lock().await;
         if cache.refresh.is_due(now) {
             let result = self.fetch(now).await;

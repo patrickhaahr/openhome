@@ -9,7 +9,6 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-/// One snapshotted per-100 g value with its source.
 #[derive(Serialize)]
 struct PreparedValue {
     key: String,
@@ -18,7 +17,6 @@ struct PreparedValue {
     source: ValueSource,
 }
 
-/// A Portion ready to write: its Food, its Product if any, its NOVA Class and its snapshot.
 pub(super) struct PreparedPortion {
     grams: f64,
     food_id: i64,
@@ -30,9 +28,6 @@ pub(super) struct PreparedPortion {
     values: Vec<PreparedValue>,
 }
 
-/// Snapshots each Portion: a Product's label values, then its Food's values for every key the
-/// label lacks, then the estimates, which may only fill keys neither has. A Product Portion takes
-/// the Product's NOVA Class and a Food Portion the Food's.
 fn product_needs_relink(product: &products::StoredProduct) -> MealLogError {
     MealLogError::ProductNeedsRelink(format!(
         "Product {} is linked to Food {} \"{}\", which the current Food database no longer has under that food_id; search_foods for its closest Food, link_product it again, then log it",
@@ -47,7 +42,6 @@ pub(super) async fn prepare(
     foods: &FoodDatabase,
     portions: &[ValidPortion],
 ) -> Result<Vec<PreparedPortion>> {
-    // Supplement Doses alone need no Food database.
     if portions.is_empty() {
         return Ok(Vec::new());
     }
@@ -91,8 +85,6 @@ pub(super) async fn prepare(
         }
         MealLogError::Food(error)
     })?;
-    // Classifications must match the dataset that actually supplied the snapshots, even if a
-    // background import completed between this request's earlier reads.
     let classes = match snapshots.values().next() {
         Some(food) => nova::food_classes(db, &food.dataset_version, &classified_foods).await?,
         None => HashMap::new(),
@@ -169,7 +161,6 @@ pub(super) async fn prepare(
         .collect()
 }
 
-/// Writes the Meal Log's Portions, each with its snapshot.
 pub(super) async fn insert_portions(
     transaction: &mut sqlx::SqliteConnection,
     meal_log_id: &str,
@@ -198,7 +189,6 @@ pub(super) async fn insert_portions(
     Ok(())
 }
 
-/// Snapshots each dose: its Supplement as named and labelled now.
 pub(super) async fn prepare_doses(
     db: &SqlitePool,
     doses: &[(String, f64)],

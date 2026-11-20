@@ -1,14 +1,3 @@
-//! The ECB's euro reference rates (ADR 0017): the 90-day file and the full history file. One
-//! bounded GET each, with a timeout, a byte cap and no redirects or retries; nothing a file says
-//! is trusted beyond its dates and the USD and DKK rates they must hold. Every failure is
-//! [`Unavailable`], so upstream text never reaches a caller.
-//!
-//! Both files are XML: `<Cube><Cube time="YYYY-MM-DD"><Cube currency="USD" rate="1.1081"/>…`,
-//! rates being units of the currency per euro for that working day, newest day first. The
-//! 90-day file holds about 64 working days. The history file holds one per working day back to
-//! 1999, about 8 MB on a single line, so both are parsed as a stream of events and only the two
-//! kept rates of each day are retained.
-
 use std::time::Duration;
 
 use quick_xml::{Reader, XmlVersion, events::Event};
@@ -36,7 +25,6 @@ const HISTORY: Limits = Limits {
     max_bytes: 16 * 1024 * 1024,
 };
 
-/// Unreachable, slow, refused, oversized or malformed; the cause is only logged.
 #[derive(Debug)]
 pub struct Unavailable;
 
@@ -48,7 +36,6 @@ pub struct Ecb {
 }
 
 impl Ecb {
-    /// Use [`RECENT_URL`] and [`HISTORY_URL`]; explicit URLs also support isolated provider tests.
     pub fn new(recent: Url, history: Url) -> anyhow::Result<Self> {
         let client = Client::builder()
             .user_agent(USER_AGENT)
@@ -61,12 +48,10 @@ impl Ecb {
         })
     }
 
-    /// Every working day of the last 90 days that the 90-day file quotes in both USD and DKK.
     pub async fn recent(&self) -> Result<Vec<DailyRates>, Unavailable> {
         self.days(&self.recent, &RECENT).await
     }
 
-    /// Every working day the history file holds that quotes both USD and DKK.
     pub async fn history(&self) -> Result<Vec<DailyRates>, Unavailable> {
         self.days(&self.history, &HISTORY).await
     }
@@ -115,7 +100,6 @@ fn unavailable(what: &str, detail: &dyn std::fmt::Debug) -> Unavailable {
     Unavailable
 }
 
-/// A dated `Cube` as the file has it; very old days lack some currencies.
 struct Day {
     date: CalendarDay,
     usd: Option<Rate>,
@@ -132,7 +116,6 @@ impl Day {
     }
 }
 
-/// A day without USD or DKK is skipped; a file with no complete day is refused.
 fn parse_days(body: &[u8]) -> Result<Vec<DailyRates>, &'static str> {
     let complete: Vec<_> = days(body)?.into_iter().filter_map(Day::complete).collect();
     if complete.is_empty() {
@@ -141,8 +124,6 @@ fn parse_days(body: &[u8]) -> Result<Vec<DailyRates>, &'static str> {
     Ok(complete)
 }
 
-/// Strict on structure, silent about currencies it does not use: dated `Cube`s under the
-/// envelope's own `Cube`, each holding USD and DKK at most once. A DTD is refused outright.
 fn days(body: &[u8]) -> Result<Vec<Day>, &'static str> {
     let text = std::str::from_utf8(body).map_err(|_| "not UTF-8")?;
     let mut reader = Reader::from_str(text);

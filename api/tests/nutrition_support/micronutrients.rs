@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -28,9 +27,6 @@ pub(super) const MINERALS: (&str, &str) = (
 );
 pub(super) const PUFA: (&str, &str) = ("Flerumættede fedtsyrer", "Polyunsaturated fatty acids");
 
-/// Per 100 g: Orange 50 mg vitamin C and 30 µg folate; Salmon 10 µg vitamin D, 0.5 g EPA and
-/// 1.2 g DHA; Pumpkin seeds 600 mg magnesium and 10 mg NE niacin; Liver pâté 4,000 µg RE
-/// vitamin A, all of it retinol; Wholemeal bread 0.3 mg thiamin and 300 µg folate.
 pub(super) fn dataset() -> Vec<u8> {
     let parameters = [
         parameter(
@@ -104,7 +100,6 @@ pub(super) fn dataset() -> Vec<u8> {
     )
 }
 
-/// The nutrition routes and the Profile route over one `app.db`.
 pub(super) struct Api {
     pub(super) _server: MockServer,
     pub(super) _dir: TempDir,
@@ -178,8 +173,6 @@ impl Api {
         assert_eq!(status, StatusCode::OK, "{body}");
     }
 
-    /// Registers a Supplement taking one capsule per dose from `label` (its `amounts` and
-    /// `compounds`) and returns its ID.
     pub(super) async fn supplement(&self, name: &str, label: Value) -> String {
         let mut body = json!({
             "name": name,
@@ -196,8 +189,6 @@ impl Api {
         body["supplement"]["id"].as_str().unwrap().to_owned()
     }
 
-    /// Logs `portions` (`[food_id, grams]`) and `doses` (`[supplement_id, doses]`) at noon on
-    /// `day`.
     pub(super) async fn eat(&self, day: &str, portions: &[(i64, f64)], doses: &[(&str, f64)]) {
         let portions: Vec<Value> = portions
             .iter()
@@ -234,7 +225,6 @@ impl Api {
         self.day(day).await["micronutrients"].clone()
     }
 
-    /// One nutrient of the day's panel.
     pub(super) async fn nutrient(&self, day: &str, key: &str) -> Value {
         nutrient(&self.panel(day).await, key)
     }
@@ -262,7 +252,6 @@ pub(super) fn nutrient(panel: &Value, key: &str) -> Value {
         .clone()
 }
 
-/// The Recommended Intake and whether it is an adequate intake.
 pub(super) fn reference(nutrient: &Value) -> (Value, Value) {
     (
         nutrient["recommended_intake"].clone(),
@@ -270,13 +259,11 @@ pub(super) fn reference(nutrient: &Value) -> (Value, Value) {
     )
 }
 
-/// A woman of 30 on the days these tests read.
 pub(super) async fn woman(api: &Api) {
     api.profile(json!({"sex": "female", "birth_date": "1996-01-15"}))
         .await;
 }
 
-/// The amount, its food and supplement shares, and the percentage of the Recommended Intake.
 pub(super) fn coverage(nutrient: &Value) -> Value {
     json!([
         nutrient["amount"],
@@ -286,8 +273,6 @@ pub(super) fn coverage(nutrient: &Value) -> Value {
     ])
 }
 
-/// What each Upper Limit applies to, with the day's amount of it, the trailing average, the days
-/// averaged and the status.
 pub(super) fn limits(nutrient: &Value) -> Value {
     nutrient["upper_limits"]
         .as_array()
@@ -306,8 +291,6 @@ pub(super) fn limits(nutrient: &Value) -> Value {
         .collect()
 }
 
-/// One nutrient's coverage: the mean percentage of its Recommended Intake, the days averaged, the
-/// days above an Upper Limit and whether a trailing 7-day average was above one.
 pub(super) fn period_coverage(coverage: &Value, key: &str) -> Value {
     let nutrient = nutrient(coverage, key);
     json!([
@@ -318,7 +301,6 @@ pub(super) fn period_coverage(coverage: &Value, key: &str) -> Value {
     ])
 }
 
-/// One nutrient's days above an Upper Limit and whether a trailing 7-day average was above one.
 pub(super) fn limit_flags(coverage: &Value, key: &str) -> Value {
     let nutrient = nutrient(coverage, key);
     json!([

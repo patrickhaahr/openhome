@@ -1,30 +1,21 @@
 import type { Icon } from "@phosphor-icons/react/dist/lib/types"
 import type { Band } from "@/lib/recovery-score"
 
-/** Which measurement a ring draws; each has its own colour family. */
 export type RingKind = "charge" | "rest" | "effort"
 
-/** Where the ring sits: the Recovery hero, the Home glance, a session's strap or a detail head. */
 export type RingSize = "hero" | "glance" | "strap" | "detail"
 
-/** Which 90 ms step of a row's fill the ring starts on; only the hero staggers. */
 export type RingStagger = 0 | 1 | 2
 
 type ScoreRingProps = {
   readonly kind: RingKind
   readonly size: RingSize
   readonly stagger?: RingStagger
-  /** The filled fraction, 0 through 1. */
   readonly share: number
-  /** Colour band; Effort is never good or bad, so it ignores the band unless missing. */
   readonly band: Band
-  /** The figure inside the ring; null draws a dash. */
   readonly figure: string | null
-  /** The visible one-word name below the ring. */
   readonly label: string
-  /** The full reading for assistive technology. */
   readonly spoken: string
-  /** A glyph above the figure that names the ring without a word. */
   readonly icon?: Icon
 }
 
@@ -82,7 +73,6 @@ const radius = 52
 
 const circumference = 2 * Math.PI * radius
 
-/** A WHOOP-style score: a coloured arc around the figure, filled by how far the value goes. */
 export function ScoreRing({
   kind,
   size,
@@ -169,7 +159,6 @@ type DayRingsProps = {
   readonly effort: { readonly share: number }
 }
 
-/** Three concentric arcs for one day: Charge outside, Rest in the middle, Effort inside. */
 export function DayRings({
   charge,
   rest,

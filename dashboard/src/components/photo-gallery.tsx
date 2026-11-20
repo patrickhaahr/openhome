@@ -36,12 +36,9 @@ import {
 
 type GalleryProps = {
   albums: AlbumRead
-  /** The open album id, all photos, or null for the albums. */
   view: string | null
   wall: WallRead | null
-  /** Today's photos from earlier years, offered with the albums. */
   onThisDay?: OnThisDayResult | null
-  /** The open photo, from the URL. */
   photo: string | undefined
   open: (album: string | undefined) => void
   show: (photo: string | undefined) => void
@@ -49,11 +46,6 @@ type GalleryProps = {
   retry: () => Promise<void>
 }
 
-/**
- * Albums are cover plates; an album, or all of them merged, is a justified wall of photos that
- * keeps loading as it scrolls; a photo opens full screen on black. Names and counts that the
- * pictures already say stay for assistive technology.
- */
 export function PhotoGallery({
   albums,
   view,
@@ -262,7 +254,6 @@ function PhotoWall({
   const [next, setNext] = useState(first.next)
   const [request, setRequest] = useState<PageRequest>({ state: "idle" })
   const [announcement, setAnnouncement] = useState("")
-  // Identifies the one request allowed to settle; cleared on unmount so a late page is ignored.
   const flight = useRef<symbol | null>(null)
   const end = useRef<HTMLDivElement>(null)
   const tiles = useRef(new Map<string, HTMLButtonElement>())
@@ -274,10 +265,8 @@ function PhotoWall({
 
   const current = index === -1 ? undefined : items[index]
 
-  // Someone is looking at a photo; the slideshow waits until it is closed.
   useIdleBlock(current !== undefined)
 
-  // Focus returns to the last photo shown, even after stepping away from the one opened.
   useEffect(() => {
     if (current !== undefined) shown.current = current.asset
   }, [current])
@@ -292,7 +281,6 @@ function PhotoWall({
     []
   )
 
-  // The only transition owner: one read at a time, a retry asks for the failed cursor again.
   async function load(advance: boolean): Promise<void> {
     if (flight.current !== null || next === null) return
     const cursor = request.state === "failed" ? request.cursor : next
@@ -324,7 +312,6 @@ function PhotoWall({
 
   const nearEnd = useEffectEvent(() => void load(false))
 
-  // Observed again after every page, so a wall still short of the screen keeps filling.
   useEffect(() => {
     const target = end.current
 

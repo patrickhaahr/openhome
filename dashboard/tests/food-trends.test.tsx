@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import {
   createMemoryHistory,
@@ -27,7 +26,6 @@ import { startAxumFixture } from "./support/axum-fixture"
 
 const apiKey = "synthetic-dashboard-api-key"
 
-// Its own fixture: the Profile, weigh-ins and weekly target records outlive the test.
 let api: Awaited<ReturnType<typeof startAxumFixture>>
 
 let root: Root
@@ -36,7 +34,6 @@ let container: HTMLDivElement
 
 const today = trainingDayOn(new Date())
 
-/** A synthetic request body for the fixture's Profile, Body Weight and Meal Log routes. */
 type FixtureBody = Readonly<
   Record<
     string,
@@ -61,7 +58,6 @@ async function send(
   expect(response.ok, await response.clone().text()).toBe(true)
 }
 
-/** Logs `grams` of synthetic Skyr (62 kcal and 11 g protein per 100 g) at noon on `day`. */
 async function eatSkyr(day: string, grams: number): Promise<void> {
   await send("POST", "/api/nutrition/meal-logs", {
     eaten_at: `${day}T11:00:00Z`,
@@ -84,7 +80,6 @@ beforeAll(async () => {
       weight_kg: 80 - daysAgo / 10,
     })
 
-  // Three days ago and yesterday are logged; the day between them is not.
   await eatSkyr(shiftDay(today, -3), 300)
   await eatSkyr(shiftDay(today, -1), 500)
 })
@@ -109,7 +104,6 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-/** Renders the Trends view at `location`, so Router's own active links can be seen. */
 async function render(
   data: NutritionSummaryState,
   location = "/food?view=trends"
@@ -139,7 +133,6 @@ function text(selector: string): string[] {
   )
 }
 
-/** A chart's table as rows of cell text, header row first. */
 function table(chart: string): string[][] {
   return [
     ...container.querySelectorAll(`figure[data-chart="${chart}"] table tr`),
@@ -151,7 +144,6 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
   expect(data.state).toBe("available")
   await render(data)
 
-  // The values' Food database version is credited; no Product was eaten.
   expect(text("[data-slot='food-credit']")).toEqual([
     "Nutrient values © The Danish Food Composition Database, version 6.1 (CC BY 4.0)",
   ])
@@ -194,17 +186,14 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
     "Weekly change",
   ])
 
-  // The SVG is decoration; the summary and the table carry the values.
   for (const svg of container.querySelectorAll("[data-slot='trend-chart'] svg"))
     expect(svg.getAttribute("aria-hidden")).toBe("true")
-  // (186 + 310) / 2 kcal over the two logged days, never over all 30.
   expect(
     text('figure[data-chart="calories"] [data-slot="trend-summary"]')[0]
   ).toMatch(
     /^248 kcal a logged day · Calorie Target [\d,]+ kcal · Estimated Expenditure [\d,]+ kcal$/
   )
 
-  // Only the two logged days have bars; the missing day between them stays empty.
   expect(
     container.querySelectorAll(
       'figure[data-chart="calories"] rect[data-mark="eaten"]'
@@ -233,13 +222,11 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
       'figure[data-chart="calories"] [data-mark="target"] path'
     ).length
   ).toBeGreaterThan(0)
-  // Four weigh-ins inside the range, each a dot under the Trend Weight line.
   expect(
     container.querySelectorAll(
       'figure[data-chart="weight"] [data-slot="trend-dot"]'
     )
   ).toHaveLength(4)
-  // Trend Weight from 78 kg: 78.07 after 78.7, 78.20 after 79.4 and 78.37 after 79.9.
   expect(
     text('figure[data-chart="weight"] [data-slot="trend-summary"]')
   ).toEqual(["Trend Weight 78.4 kg · +0.4 kg over the range"])
@@ -250,7 +237,6 @@ test("groups by ISO week and names the partial edge weeks", async () => {
   expect(data.state).toBe("available")
   await render(data, "/food?view=trends&range=90")
 
-  // Only the chosen range and view are current, never the defaults beside them.
   expect(text('nav[aria-label="Food views"] [aria-current="page"]')).toEqual([
     "Trends",
   ])
@@ -270,7 +256,6 @@ test("groups by ISO week and names the partial edge weeks", async () => {
 
   expect(days.reduce((sum, count) => sum + count, 0)).toBe(90)
 
-  // Sunday ends a week, so today's week is partial on any other day.
   if (new Date(`${today}T12:00:00Z`).getUTCDay() !== 0)
     expect(rows.at(-1)?.[0]).toMatch(/in range\)$/)
 })
@@ -304,7 +289,6 @@ type ProductWrite =
     }
 
 test("a range with a Product credits Open Food Facts beside the Food database", async () => {
-  // Its own fixture: a linked Product outlives the test.
   const products = await startAxumFixture()
 
   try {
@@ -323,7 +307,6 @@ test("a range with a Product credits Open Food Facts beside the Food database", 
       expect(response.ok, await response.clone().text()).toBe(true)
     }
 
-    // The fixture's synthetic Open Food Facts product: a restricted-circulation barcode.
     const barcode = "2001234567893"
     await write("/api/nutrition/products", {
       barcode,

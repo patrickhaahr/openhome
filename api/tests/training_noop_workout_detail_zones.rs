@@ -1,9 +1,3 @@
-//! NOOP Workout Detail: heart rate zone split.
-
-//! NOOP Workout Detail (`GET /api/training/noop-workouts/{source}/{start}`): one NOOP Workout,
-//! selected by its listed `source` and `start`, with heart rate from the strap's samples. Workouts
-//! and samples are pushed through the real push endpoint.
-
 mod common;
 mod training_noop_workout_detail_support;
 
@@ -37,7 +31,6 @@ async fn the_reference_run_splits_into_the_apps_heart_rate_zones() {
             )
         })
         .collect();
-    // 50/60/70/80/90 % of 193 is 96.5/115.8/135.1/154.4/173.7 bpm.
     assert_eq!(
         bands,
         [
@@ -48,7 +41,6 @@ async fn the_reference_run_splits_into_the_apps_heart_rate_zones() {
             (5, 174, 193)
         ]
     );
-    // The NOOP app shows 1 / 4 / 6 / 39 / 50 % and 0 / 1 / 2 / 17 / 21 whole minutes.
     let rounded_percent: Vec<i64> = zones["zones"]
         .as_array()
         .unwrap()
@@ -66,7 +58,6 @@ async fn the_reference_run_splits_into_the_apps_heart_rate_zones() {
     assert_eq!(body["unavailable"], json!({}));
 }
 
-/// Each zone's `(minutes, percent)`, Zone 1 first.
 fn zone_split(body: &Value) -> Vec<(f64, f64)> {
     body["hr_zones"]["zones"]
         .as_array()
@@ -95,21 +86,17 @@ fn assert_split_close(actual: &[(f64, f64)], expected: &[(f64, f64)]) {
 async fn zone_lower_edges_are_inclusive_and_unrounded() {
     let second = 1.0 / 60.0;
     for (hr_max, bpm, zone_seconds) in [
-        // Edges at exactly 100 / 120 / 140 / 160 / 180 bpm belong to the zone above them.
         (
             200,
             vec![99, 100, 119, 120, 139, 140, 159, 160, 179, 180, 200, 230],
             [2.0, 2.0, 2.0, 2.0, 3.0],
         ),
-        // Edges at 96.5 / 115.8 / 135.1 / 154.4 / 173.7 bpm: 135 and 154 stay below 135.1 and
-        // 154.4 although they round to them.
         (
             193,
             vec![96, 97, 115, 116, 135, 136, 154, 155, 173, 174],
             [2.0, 2.0, 2.0, 2.0, 1.0],
         ),
     ] {
-        // One sample a second: the first is below Zone 1 and left out of the percentages.
         let samples: Vec<_> = (0..).zip(bpm.iter().copied()).collect();
         let app = app_with_run(bpm.len() as i64, &samples, Some(hr_max)).await;
 
@@ -128,8 +115,6 @@ async fn zone_lower_edges_are_inclusive_and_unrounded() {
 
 #[tokio::test]
 async fn a_sample_is_credited_until_the_next_one_but_at_most_the_median_interval() {
-    // Gaps of 5, 5, 5, 1 and 60 s inside the 80 s workout: the median interval is 5 s. A sample at
-    // the end is outside the workout and neither zoned nor the "next" sample of the last one.
     let samples = [
         (0, 150),
         (5, 150),
@@ -143,7 +128,6 @@ async fn a_sample_is_credited_until_the_next_one_but_at_most_the_median_interval
 
     let body = detail_of(&app, IMPORTED, "2026-09-26T07:00:00+02:00").await;
 
-    // Zone 3: 5 + 5 + 5 + 1 s. Zone 5: the 60 s gap capped at 5 s, and the last sample's 5 s.
     assert_split_close(
         &zone_split(&body),
         &[
@@ -159,7 +143,6 @@ async fn a_sample_is_credited_until_the_next_one_but_at_most_the_median_interval
 
 #[tokio::test]
 async fn zones_need_strap_samples_in_the_workout() {
-    // Samples on either side of the workout, none inside it.
     let app = app_with_run(600, &[(-1, 150), (600, 150)], Some(193)).await;
 
     let body = detail_of(&app, IMPORTED, "2026-09-26T07:00:00+02:00").await;

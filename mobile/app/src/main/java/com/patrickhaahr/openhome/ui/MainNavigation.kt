@@ -102,7 +102,6 @@ private data object ExercisePicker
 @Serializable
 private data object Library
 
-/** [addToWorkout] when opened from the picker: the new Exercise goes straight into the session. */
 @Serializable
 private data class NewExercise(val initialName: String, val addToWorkout: Boolean)
 
@@ -143,18 +142,11 @@ private fun NavDestination?.isIn(tab: Tab): Boolean =
         }
     } == true
 
-/**
- * The app's navigation hierarchy on one back stack, so system back and the back gesture pop nested
- * views. Workout is the start destination: back at a tab root returns there, and back on Workout's
- * root leaves the activity to Android's default behavior. Destinations navigate onward only while
- * resumed, so a second tap during a transition cannot stack a duplicate.
- */
 @Composable
 fun MainNavigation() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
-    // An unsaved correction must not be one tab tap away from being dropped, so its form hides them.
     val correcting =
         destination?.hasRoute<WorkoutCorrection>() == true || destination?.hasRoute<CorrectionExercisePicker>() == true
     val inTab = !correcting && Tab.entries.any { destination.isIn(it) }
@@ -164,7 +156,6 @@ fun MainNavigation() {
         containerColor = Lit.Ground,
         bottomBar = {
             Column {
-                // On every destination; without the tabs beneath, it keeps clear of the system's own bar itself.
                 RestTimerBar(if (inTab) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars))
                 if (inTab) {
                     BottomTabs(destination, onSelect = { tab -> navController.openTab(tab, destination) })
@@ -202,7 +193,6 @@ fun MainNavigation() {
                 composable<ActiveWorkoutDestination> {
                     ActiveWorkoutRoute(
                         onAddExercise = dropUnlessResumed { navController.navigate(ExercisePicker) },
-                        // Finishing and discarding replace this destination; back must not return to it.
                         onFinished = {
                             navController.navigate(History) { popUpTo(WorkoutHome) }
                         },
@@ -244,7 +234,6 @@ fun MainNavigation() {
                         addToWorkout = route.addToWorkout,
                         onSaved = {
                             if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                                // From the picker, past it too: the Exercise is already in the session.
                                 if (route.addToWorkout) {
                                     navController.popBackStack(ActiveWorkoutDestination, inclusive = false)
                                 } else {
@@ -280,7 +269,6 @@ fun MainNavigation() {
                             dropUnlessResumed {
                                 navController.navigate(WorkoutCorrection(entry.toRoute<WorkoutDetail>().id))
                             },
-                        // Back from the session returns to where sessions start, not to this Workout.
                         onOpenActiveWorkout = {
                             if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                                 navController.navigate(ActiveWorkoutDestination) { popUpTo(WorkoutHome) }
@@ -349,7 +337,6 @@ fun MainNavigation() {
     }
 }
 
-/** No labels: the barbell and the house say it. The chosen one is lit, and quiet enough not to outshine the work. */
 @Composable
 private fun BottomTabs(destination: NavDestination?, onSelect: (Tab) -> Unit) {
     Row(
@@ -388,7 +375,6 @@ private fun BottomTabs(destination: NavDestination?, onSelect: (Tab) -> Unit) {
     }
 }
 
-/** Keeps each tab's nested state; choosing the tab already open returns to its root. */
 private fun NavHostController.openTab(tab: Tab, current: NavDestination?) {
     if (current.isIn(tab)) {
         popBackStack(tab.root, inclusive = false)

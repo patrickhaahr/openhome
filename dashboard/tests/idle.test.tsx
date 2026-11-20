@@ -94,7 +94,6 @@ test("deals pages in a random but stable order and reads one page at a time", as
   const again = slideSource(pages, 42, async (page) => pageOf(2, page.page))
   expect([await again.next(), await again.next()]).toEqual(first)
 
-  // A later spell carries on from where the last one stopped.
   const resumed = slideSource(
     pages,
     42,
@@ -158,7 +157,6 @@ test("a declared block holds the slideshow off; releasing it starts a full count
   await advance(1)
   expect(screen()).not.toBeNull()
 
-  // A block that appears while idle (a conversation starting) wakes the room.
   await render(
     <IdleProvider settings={settings} sources={sources}>
       <Page blocked />
@@ -193,7 +191,6 @@ test("the first touch only wakes, and returns to the page exactly as it was", as
 
   expect(document.activeElement).toBe(idle)
 
-  // The whole tap lands on the slideshow; even a stray click retargeted to the key is eaten.
   await act(async () => {
     fire(idle, "pointerdown")
     fire(idle, "pointerup")
@@ -226,11 +223,9 @@ test("a held touch keeps swallowing until its release, and a lost release still 
 
   await act(async () => fire(idle, "pointerdown"))
 
-  // Held past the grace: still waking, so the release has somewhere to land.
   await advance(WAKE_GRACE_MS * 2)
   expect(screen()?.dataset.waking).toBe("true")
 
-  // The release settles after the grace, and its stray click is eaten on the way.
   await act(async () => {
     fire(idle, "pointerup")
     fire(countKey(), "click")
@@ -239,7 +234,6 @@ test("a held touch keeps swallowing until its release, and a lost release still 
   await advance(WAKE_GRACE_MS)
   expect(screen()).toBeNull()
 
-  // A release that never arrives wakes at the limit instead.
   await advance(TIMEOUT)
   await act(async () => fire(screen() ?? window, "pointerdown"))
   await advance(LOST_RELEASE_WAKE_MS - 1)
@@ -290,7 +284,6 @@ test("a block that appears while waking takes the room back and returns focus", 
   expect(screen()).toBeNull()
   expect(document.activeElement).toBe(draft)
 
-  // The cancelled wake settle must not linger and the block still holds idle off.
   await advance(TIMEOUT * 3)
   expect(screen()).toBeNull()
 })
@@ -306,7 +299,6 @@ test("unmounting while the slideshow shows stops swallowing input", async () => 
   await act(async () => fire(screen() ?? window, "pointerdown"))
   await act(async () => root.render(null))
 
-  // A leaked capture listener would cancel every tap in the app from here on.
   expect(fire(window, "pointerdown")).toBe(true)
   expect(fire(window, "keydown")).toBe(true)
 })
@@ -369,7 +361,6 @@ test("a tap over Home's light key wakes the screen without sending a light comma
 
   if (idle === null) throw new Error("Expected the slideshow")
 
-  // The browser hit-tests the slideshow; a late compatibility click may hit the key beneath.
   await act(async () => {
     fire(idle, "pointerdown")
     fire(idle, "pointerup")
@@ -418,7 +409,6 @@ test("crossfades between two image slots, preloading only the next photo", async
   await advance(1)
   expect(slideOf(preloading)?.getAttribute("data-front")).toBe("true")
 
-  // After the fade the old slot takes the next photo: never more than two images.
   await advance(FADE_MS)
   expect(images()).toHaveLength(2)
   expect(pageReads).toHaveLength(1)
@@ -590,7 +580,6 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
   await advance(TIMEOUT)
   expect(slides()).toHaveLength(0)
 
-  // New sources cancel the first run while its page read is still pending.
   await render(
     <IdleProvider settings={settings} sources={fakeSources()}>
       <Page />
@@ -599,7 +588,6 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
   await advance(1)
   expect(slides()).toHaveLength(1)
 
-  // The cancelled read now fails; only the replacement run may touch the screen.
   await act(async () => failOldRead(unavailablePhotos))
   await advance(1)
   expect(slot("idle-stage")?.getAttribute("data-resting")).toBe("false")
@@ -625,7 +613,6 @@ test("waking while the first photo is still loading leaves nothing behind for th
   await act(async () => fire(abandoned ?? window, "load"))
   await advance(1000)
 
-  // The unseen photo was never kept, so the next spell starts with it again and loads normally.
   await advance(TIMEOUT)
   expect(slides()).toHaveLength(1)
   expect(slides()[0]?.src).toBe(abandoned?.src)
@@ -650,7 +637,6 @@ test("waking during the dwell stops the rotation and the next spell carries on w
   await advance(DWELL_MS - FADE_MS - 1000)
 
   await wake()
-  // The cancelled dwell never brings the preloaded photo forward or moves the remembered place.
   await advance(2000)
   expect(screen()).toBeNull()
 

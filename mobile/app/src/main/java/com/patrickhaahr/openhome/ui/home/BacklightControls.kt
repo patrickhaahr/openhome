@@ -70,11 +70,9 @@ private val WHEEL = 176.dp
 private val THUMB_ROOM = 12.dp
 private const val FULL_TURN = 360f
 
-/** A draft of light: hue wheel and dimmer change nothing until their key is pressed. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun BacklightInputs(status: BacklightStatus?, enabled: Boolean, select: (BacklightSelection) -> Unit) {
-    // Drafts are deliberately separate from server intent; editing never sends a command.
     var red by remember { mutableStateOf("255") }
     var green by remember { mutableStateOf("0") }
     var blue by remember { mutableStateOf("0") }
@@ -155,7 +153,6 @@ internal fun BacklightInputs(status: BacklightStatus?, enabled: Boolean, select:
     }
 }
 
-/** An effect is a little disc of its own light, with the name it goes by. */
 @Composable
 private fun EffectDisc(name: String, colors: List<Color>, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.width(66.dp)) {
@@ -174,7 +171,6 @@ private fun EffectDisc(name: String, colors: List<Color>, selected: Boolean, ena
     }
 }
 
-/** Hue around, white at the heart. Choosing paints the draft; it sends nothing. */
 @Composable
 private fun HueWheel(color: Color, onPick: (Color) -> Unit, modifier: Modifier) {
     val hues = remember { (0..6).map { Color.hsv(it * 60f % FULL_TURN, 1f, 1f) } }
@@ -221,7 +217,6 @@ private fun HueWheel(color: Color, onPick: (Color) -> Unit, modifier: Modifier) 
     }
 }
 
-/** A thick bar of light that fills with the finger. */
 @Composable
 internal fun Dimmer(level: Int, onLevel: (Int) -> Unit, modifier: Modifier, fill: Color = Lit.Lamp) {
     Canvas(
@@ -256,7 +251,6 @@ internal fun Dimmer(level: Int, onLevel: (Int) -> Unit, modifier: Modifier, fill
 private const val MAX_CHANNEL = 255
 private const val MAX_LEVEL = 100
 
-/** Colours for each effect's halo, by what its light does. An effect not listed gets a neutral warm drift. */
 private val EFFECT_LIGHT =
     mapOf(
         "rainbow" to listOf(Color(0xFFFF3B30), Color(0xFF34C759), Color(0xFF0A84FF)),
@@ -268,7 +262,6 @@ private val EFFECT_LIGHT =
 private val DEFAULT_EFFECT_LIGHT = listOf(Lit.Lamp, Color(0xFFFF9F0A), Color(0xFFFFF4C2))
 private val TV_SYNC_LIGHT = listOf(Color(0xFFFF7A1A), Color(0xFF3A6EFF), Color(0xFFFF3B6A))
 
-/** The Backlight is the one place colour other than the lamp belongs, because colour is the thing itself. */
 private fun BacklightSelection?.lightColors(): List<Color> =
     when (this) {
         null, BacklightSelection.Off -> emptyList()
@@ -287,10 +280,6 @@ private fun BacklightSelection?.level(): Int? =
         else -> null
     }
 
-/**
- * The Backlight drawn as what it is: a dark TV on a dark wall with the requested light behind it. It
- * shows what was asked for, never what the strip is known to be doing; a stale reading dims the wall's mark.
- */
 @Composable
 internal fun LitTv(intended: BacklightSelection?, sending: Boolean, stale: Boolean) {
     val colors = intended.lightColors()

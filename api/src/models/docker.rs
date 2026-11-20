@@ -153,7 +153,7 @@ mod tests {
         let json = r"{}";
         let request: StopRequest = serde_json::from_str(json).unwrap();
 
-        assert_eq!(request.timeout_seconds, 10); // default_timeout() returns 10
+        assert_eq!(request.timeout_seconds, 10);
     }
 
     #[test]

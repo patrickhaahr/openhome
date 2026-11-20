@@ -24,16 +24,13 @@ import {
 
 const problem = "flex items-center gap-2 text-control font-semibold text-danger"
 
-/** A failed request: Axum's outcome, a rejected target or a lost connection. */
 type Failure = Exclude<LoopRead, { state: "generated" }>
 
-/** The last request: nothing asked yet, in flight, answered, failed or not sendable. */
 export type Status =
   | { readonly state: "idle" | "planning" | "planned" }
   | { readonly state: "failed"; readonly failure: Failure }
   | ({ readonly state: "incomplete" } & Problem)
 
-/** The loops on screen; they stay usable when a later request fails. */
 export type Shown = {
   readonly plan: LoopPlan
   readonly lines: ReadonlyArray<MapLine>
@@ -55,7 +52,6 @@ export function alternativesMap(shown: Shown, index: number): MapRoutes {
   }
 }
 
-/** Saving and checking are mutually exclusive; errors never claim a replacement was saved. */
 export type SelectionStatus =
   | { readonly state: "idle" | "saving" | "saved" | "checking" }
   | Extract<RouteSelectionRead, { state: "failed" }>
@@ -208,7 +204,6 @@ export function StatusMessage({
   }
 }
 
-/** Announces a shortfall with the result; each loop also marks its own fit. */
 function ShortfallAnnouncement({
   plan,
 }: {
@@ -250,7 +245,6 @@ export function LoopAlternatives({
               disabled={disabled}
               onClick={() => onFocus(index)}
             >
-              {/* The loop on the map wears the route's sun; the others a quiet hollow ring. */}
               <span
                 className="size-3 rounded-full opacity-50 inset-ring-2 inset-ring-muted-ink group-aria-pressed/button:bg-sun group-aria-pressed/button:opacity-100 group-aria-pressed/button:inset-ring-0"
                 aria-hidden="true"

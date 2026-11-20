@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils"
 
-/** What a legend swatch can be coloured as; the chart draws only the first five. */
 export type LegendTone =
   | "ink"
   | "sun"
@@ -10,13 +9,10 @@ export type LegendTone =
   | "danger"
   | "caution"
 
-/** How a swatch is drawn: a square, a line, a dashed line or a dot. */
 export type LegendKind = "bars" | "stack" | "line" | "dots" | "dashed"
 
-/** A plate's title. */
 export const trendTitle = "text-large font-semibold tracking-figure"
 
-/** The one line under a plate's title. */
 export const trendSummary = "text-control text-muted-ink tabular-nums"
 
 const fills = {
@@ -47,12 +43,10 @@ const kinds = {
   dashed: "before:h-0 before:w-3 before:border-t-3 before:border-dashed",
 } satisfies Record<LegendKind, string>
 
-/** One swatch and its name; a dashed swatch is a border, so it takes no fill. */
 function swatch(tone: LegendTone, kind: LegendKind): string {
   return cn(kinds[kind], kind === "dashed" ? strokes[tone] : fills[tone])
 }
 
-/** A key to a plate's marks, hidden from assistive technology like the drawing it explains. */
 export function TrendLegend({
   items,
 }: {

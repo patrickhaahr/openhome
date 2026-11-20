@@ -1,5 +1,3 @@
-//! Exercise progress aggregates.
-
 mod common;
 
 use axum::Router;
@@ -8,17 +6,6 @@ use http::Method;
 use http::StatusCode;
 use serde_json::json;
 
-// ---------------------------------------------------------------------------
-// Progress (#8)
-// ---------------------------------------------------------------------------
-
-/// Fixture: a dedicated exercise logged on two dates.
-/// Day A (2026-09-01): reps 10 @ 60 kg (rpe 7), reps 8 @ 65 kg (rpe 8).
-///   `best_reps` 10, `best_weight` 65, volume 600+520=1120, `best_rpe` 8,
-///   epley = max(60*1.333, 65*1.2667) = 82.333.
-/// Day B (2026-09-03): reps 12 bodyweight (rpe 9), timed hold 30 s @ 2.5 kg.
-///   `best_reps` 12, `best_weight` 2.5, volume 0+75=75, `best_rpe` 9, epley null
-///   (no set with both reps and weight).
 async fn create_progress_fixture(app: &Router) -> i64 {
     let (status, exercise) = send_request_with_method(
         (*app).clone(),
@@ -97,11 +84,9 @@ async fn test_progress_returns_per_date_aggregates_with_epley() {
 
     let data = body["data"].as_array().unwrap();
     assert_eq!(data.len(), 2);
-    // chronological order
     assert_eq!(data[0]["date"], "2026-09-01");
     assert_eq!(data[1]["date"], "2026-09-03");
 
-    // Day A: observed aggregates + Epley from the best set
     assert_eq!(data[0]["best_reps"], 10);
     approx(&data[0]["best_weight_kg"], 65.0, "day A best_weight");
     approx(&data[0]["total_volume_kg"], 1120.0, "day A volume");
@@ -112,7 +97,6 @@ async fn test_progress_returns_per_date_aggregates_with_epley() {
         "day A epley",
     );
 
-    // Day B: bodyweight set contributes zero volume; no set has reps AND weight
     assert_eq!(data[1]["best_reps"], 12);
     approx(&data[1]["best_weight_kg"], 2.5, "day B best_weight");
     approx(&data[1]["total_volume_kg"], 75.0, "day B volume");

@@ -22,7 +22,6 @@ import { formatDay } from "@/lib/lists"
 import { cn } from "@/lib/utils"
 import type { HouseholdUser } from "@/lib/wishlist"
 
-/** On a wide stage each column scrolls on its own beside the card. */
 const detailColumn =
   "grid min-w-0 content-start gap-7 binder-stage-wide:row-start-1 binder-stage-wide:overflow-y-auto binder-stage-wide:overscroll-contain"
 
@@ -36,7 +35,6 @@ const languages = [
   label: string
 }>
 
-/** The facts the catalogue gave, in reading order; a fact it left out is not shown. */
 function factsOf(card: BinderEntry["card"]): [string, string][] {
   const facts: [string, string | null][] = [
     ["Set", card.set_name ?? card.set_id],
@@ -56,12 +54,6 @@ function factsOf(card: BinderEntry["card"]): [string, string][] {
   )
 }
 
-/**
- * One Binder Entry's card sheet: the large image and every detail the Binder read carries, then
- * the entry's own quantity, language and note. A sideways swipe steps to the neighbouring card.
- * Removal asks first, and only a saved removal closes the sheet, so a failure leaves it open
- * beside its error.
- */
 export function BinderSheet({
   entry,
   owner,
@@ -103,7 +95,6 @@ export function BinderSheet({
         const start = press.current
         press.current = undefined
 
-        // A mouse drag across the details selects text; that is reading, not a swipe.
         if (
           start?.pointer !== event.pointerId ||
           window.getSelection()?.isCollapsed === false
@@ -241,10 +232,6 @@ export function BinderSheet({
 
 const copiesPattern = /^[1-9]\d{0,9}$/
 
-/**
- * The draft starts from the stored entry, and the parent remounts it whenever the stored
- * entry changes, so a saved edit shows what was read back and a failed one keeps the draft.
- */
 function EntryFields({
   entry,
   owner,

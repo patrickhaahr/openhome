@@ -5,10 +5,6 @@ import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Perspective } from "@/components/shared-map-config"
 
-/**
- * The zoom, perspective and recentre plate floating on the map. The image-tile map has no
- * buildings, so it goes without the perspective toggle.
- */
 export function MapControls({
   perspective,
   zoom,
@@ -23,7 +19,6 @@ export function MapControls({
   readonly recenter: () => void
 }): React.JSX.Element {
   return (
-    // One tall plate on the right edge, centred like Home's deck.
     <div className="absolute top-1/2 right-travel-inset z-2 grid -translate-y-1/2 justify-items-center gap-2 rounded-panel bg-ground p-2 max-tablet:top-travel-inset max-tablet:translate-none">
       {perspective === undefined ? null : (
         <ToggleGroup

@@ -1,15 +1,8 @@
-//! Calendar arithmetic for Important Dates. Every figure is a whole Europe/Copenhagen calendar
-//! day: clock time and daylight saving never enter, so a figure changes only at local midnight.
-//!
-//! 29 February has no anniversary in a common year; it falls back to 28 February there, both
-//! for the next occurrence and for counting whole years and months.
-
 use super::DateKind;
 use chrono::{DateTime, Datelike, Months, NaiveDate, Utc};
 use chrono_tz::Europe::Copenhagen;
 use serde::Serialize;
 
-/// One milestone for the requested day. Anniversaries take precedence over round day counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Milestone {
@@ -18,7 +11,6 @@ pub enum Milestone {
     Yearly { years: u32 },
 }
 
-/// Decide the milestone from figures computed for the same Copenhagen day.
 #[must_use]
 pub fn milestone(kind: DateKind, elapsed: Option<Elapsed>, next: Next) -> Option<Milestone> {
     match kind {
@@ -35,13 +27,11 @@ pub fn milestone(kind: DateKind, elapsed: Option<Elapsed>, next: Next) -> Option
     }
 }
 
-/// The Europe/Copenhagen calendar day at an instant.
 #[must_use]
 pub fn day_at(instant: DateTime<Utc>) -> NaiveDate {
     instant.with_timezone(&Copenhagen).date_naive()
 }
 
-/// Whole years, months and days from a date to a later day, plus the total in days.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Elapsed {
     pub years: u32,
@@ -50,8 +40,6 @@ pub struct Elapsed {
     pub total_days: u32,
 }
 
-/// The next anniversary on or after a day: its date, how many days away it is (0 on the day)
-/// and which anniversary it is (0 when the date itself has not yet happened).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Next {
     pub date: NaiveDate,
@@ -59,10 +47,6 @@ pub struct Next {
     pub years: u32,
 }
 
-/// Time elapsed from `date` to `on`, or `None` while `date` is still ahead.
-///
-/// Months are counted from `date` itself, clamped to the end of shorter months: 31 January
-/// plus one month is 28 (or 29) February, so 31 January to 28 February is one month exactly.
 #[must_use]
 pub fn elapsed(date: NaiveDate, on: NaiveDate) -> Option<Elapsed> {
     if on < date {
@@ -71,7 +55,6 @@ pub fn elapsed(date: NaiveDate, on: NaiveDate) -> Option<Elapsed> {
     let span =
         u32::try_from((on.year() - date.year()) * 12 + on.month() as i32 - date.month() as i32)
             .unwrap_or(0);
-    // One fewer month when the clamped month anniversary falls after `on`.
     let months = if add_months(date, span) > on {
         span - 1
     } else {
@@ -86,7 +69,6 @@ pub fn elapsed(date: NaiveDate, on: NaiveDate) -> Option<Elapsed> {
     })
 }
 
-/// The first anniversary of `date` on or after `on`; the date itself while it is ahead.
 #[must_use]
 pub fn next(date: NaiveDate, on: NaiveDate) -> Next {
     if on <= date {
@@ -109,7 +91,6 @@ pub fn next(date: NaiveDate, on: NaiveDate) -> Next {
     }
 }
 
-/// `date`'s month and day in `year`; 29 February becomes 28 February in a common year.
 fn anniversary(date: NaiveDate, year: i32) -> NaiveDate {
     date.with_year(year)
         .or_else(|| NaiveDate::from_ymd_opt(year, 2, 28))
@@ -157,7 +138,6 @@ mod tests {
 
     #[test]
     fn month_ends_clamp_instead_of_overflowing() {
-        // 31 January plus one month is the last day of February.
         assert_eq!(span("2025-01-31", "2025-02-27"), (0, 0, 27, 27));
         assert_eq!(span("2025-01-31", "2025-02-28"), (0, 1, 0, 28));
         assert_eq!(span("2025-01-31", "2025-03-01"), (0, 1, 1, 29));
@@ -192,7 +172,6 @@ mod tests {
             (day("2027-10-16"), 364, 37)
         );
         assert_eq!(ahead("2019-01-01", "2026-12-31"), (day("2027-01-01"), 1, 8));
-        // A date still ahead is its own next occurrence, the zeroth anniversary.
         assert_eq!(
             ahead("2026-12-24", "2026-10-17"),
             (day("2026-12-24"), 68, 0)
@@ -226,17 +205,14 @@ mod tests {
     #[test]
     fn days_follow_copenhagen_midnight_across_daylight_saving() {
         let at = |y, m, d, h, min| Utc.with_ymd_and_hms(y, m, d, h, min, 0).unwrap();
-        // Spring forward (29 March 2026): local midnight is 23:00 UTC before, 22:00 UTC after.
         assert_eq!(day_at(at(2026, 3, 28, 22, 59)), day("2026-03-28"));
         assert_eq!(day_at(at(2026, 3, 28, 23, 0)), day("2026-03-29"));
         assert_eq!(day_at(at(2026, 3, 29, 21, 59)), day("2026-03-29"));
         assert_eq!(day_at(at(2026, 3, 29, 22, 0)), day("2026-03-30"));
-        // Fall back (25 October 2026): the 25-hour day still counts once.
         assert_eq!(day_at(at(2026, 10, 24, 21, 59)), day("2026-10-24"));
         assert_eq!(day_at(at(2026, 10, 24, 22, 0)), day("2026-10-25"));
         assert_eq!(day_at(at(2026, 10, 25, 22, 59)), day("2026-10-25"));
         assert_eq!(day_at(at(2026, 10, 25, 23, 0)), day("2026-10-26"));
-        // A 23-hour and a 25-hour day are each one day.
         assert_eq!(span("2026-03-28", "2026-03-30"), (0, 0, 2, 2));
         assert_eq!(span("2026-10-24", "2026-10-26"), (0, 0, 2, 2));
         assert_eq!(ahead("2020-03-30", "2026-03-28"), (day("2026-03-30"), 2, 6));

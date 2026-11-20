@@ -1,11 +1,3 @@
-//! Reads DTU's Danish Food Composition Database workbook.
-//!
-//! The workbook's `Parameter` sheet defines every parameter (names, unit, sort key, group), its
-//! `Food` sheet every Food (`FoodID`, names, food group), and `Data_Table` holds one row per Food
-//! with one column per `ParameterID`. Columns are found by their header names, so added or
-//! reordered columns still import. An empty `Data_Table` cell is an unknown value; a recorded
-//! zero stays zero.
-
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -15,8 +7,6 @@ use thiserror::Error;
 const PARAMETER_SHEET: &str = "Parameter";
 const FOOD_SHEET: &str = "Food";
 const DATA_SHEET: &str = "Data_Table";
-/// The `Data_Table` header cell that heads the `FoodID` column and the `ParameterID` row,
-/// written `↓FoodID/→ParameterID` in the workbook.
 const DATA_MARKER: &str = "FoodID/ParameterID";
 
 #[derive(Debug)]
@@ -73,7 +63,6 @@ pub enum WorkbookError {
     },
 }
 
-/// Reads and validates the whole workbook. Blocking: run it off the async runtime.
 pub fn read(path: &Path) -> Result<Workbook, WorkbookError> {
     let mut workbook: Xlsx<_> = open_workbook(path).map_err(|_| WorkbookError::Unreadable)?;
     let mut sheet = |name: &'static str| {
@@ -193,7 +182,6 @@ fn values(
     let defined: HashSet<i64> = parameters.iter().map(|parameter| parameter.id).collect();
     let mut columns = Vec::new();
     let header_cells = range.rows().nth(header).unwrap_or_default();
-    // ParameterIDs run right of the marker until the trailing food group columns begin.
     for (column, cell) in header_cells.iter().enumerate().skip(food_column + 1) {
         let Some(id) = integer(cell) else { break };
         if !defined.contains(&id) {
@@ -241,8 +229,6 @@ fn values(
     Ok(values)
 }
 
-/// Finds the first row holding every named column and returns its index with the columns'
-/// positions, in the order asked for.
 fn header<const N: usize>(
     range: &Range<Data>,
     sheet: &'static str,
@@ -269,7 +255,6 @@ fn header<const N: usize>(
     })
 }
 
-/// The rows below the header, numbered as spreadsheet rows for error messages.
 fn data_rows(range: &Range<Data>, header: usize) -> impl Iterator<Item = (usize, &[Data])> {
     let first_row = range.start().map_or(0, |(row, _)| row as usize);
     range
@@ -294,7 +279,6 @@ fn text(cell: &Data) -> Option<&str> {
     }
 }
 
-/// The workbook writes `NULL` for a missing descriptive value.
 fn optional_text(cells: &[Data], column: usize) -> Option<String> {
     cells
         .get(column)
@@ -346,7 +330,6 @@ fn is_blank(cell: &Data) -> bool {
     }
 }
 
-/// A parameter value: `None` for an empty cell, the number otherwise.
 fn number(cell: &Data) -> Result<Option<f64>, String> {
     let value = match cell {
         _ if is_blank(cell) => return Ok(None),

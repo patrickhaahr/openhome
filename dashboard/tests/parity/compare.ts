@@ -3,17 +3,14 @@ import { PNG } from "pngjs"
 type Size = { readonly width: number; readonly height: number }
 
 export type Comparison = {
-  /** Pixels whose RGBA differs at all; there is no tolerance, so the noise floor is 0. */
   readonly pixels: number
   readonly total: number
   readonly sizeChanged: boolean
   readonly before: Size
   readonly after: Size
-  /** Changed pixels in red over a faded copy of the before image; null when nothing changed. */
   readonly diff: Buffer | null
 }
 
-/** Opaque magenta, so area that only one image covers always counts as changed. */
 const padding = [255, 0, 255, 255]
 
 function size(png: Buffer): Size {
@@ -38,7 +35,6 @@ function padded(image: PNG, width: number, height: number): Uint8Array {
   return out
 }
 
-/** Counts every differing pixel between two PNG screenshots, padding mismatched sizes. */
 export function compare(beforePng: Buffer, afterPng: Buffer): Comparison {
   const before = size(beforePng)
   const after = size(afterPng)

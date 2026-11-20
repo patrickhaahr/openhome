@@ -1,27 +1,12 @@
-//! Which NOOP installation and namespaces a read uses, and how current the receiver's copy is.
-//!
-//! NOOP writes one strap's data under two device namespaces of the same installation: the strap's
-//! imported values and NOOP's on-device computed values. Both are read together and resolved with
-//! NOOP's precedence rules ([`super::noop_merge`]).
-//!
-//! Freshness and coverage come only from the receiver's push bookkeeping (`batch_ledger` and
-//! applied `replacement` windows under the current receiver state), never from the presence of
-//! rows: an empty result is a recorded absence only when an applied window covers it. Each read
-//! names the replace-window [`Rows`] it depends on and gets freshness and coverage for exactly those.
-
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 use sqlx::SqlitePool;
 
 use super::calendar::{self, CalendarDay};
 
-/// NOOP's canonical namespace for the strap's imported values. NOOP names computed values
-/// `"<strap>-noop"`; a strap re-added under another id is not resolved.
 pub const IMPORTED_DEVICE_ID: &str = "my-whoop";
-/// NOOP's on-device computed sibling of [`IMPORTED_DEVICE_ID`]; not a second strap.
 pub const COMPUTED_DEVICE_ID: &str = "my-whoop-noop";
 
-/// A mutable NOOP stream delivered as replacement windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stream {
     DailyMetric,
@@ -41,22 +26,14 @@ impl Stream {
     }
 }
 
-/// The mirrored rows a read of one day depends on.
 #[derive(Debug, Clone, Copy)]
 pub enum Rows {
-    /// `dailyMetric` rows keyed by the day.
     DailyMetrics(CalendarDay),
-    /// `sleepSession` rows of the Sleep Night that wakes on the day. Their starts can fall on the
-    /// previous day; this assumes a sleep session is shorter than a day.
     SleepSessions(CalendarDay),
-    /// `workout` rows starting on the day.
     Workouts(CalendarDay),
-    /// `journal` rows recorded against the day.
     Journal(CalendarDay),
 }
 
-/// The installation whose pushes are current: the sender of the latest strap batch accepted under
-/// the current receiver state. `None` until such a push arrives (including after a rotation).
 #[derive(Debug, Clone)]
 pub struct Installation {
     receiver_state_id: String,
@@ -80,17 +57,12 @@ pub async fn active_installation(pool: &SqlitePool) -> anyhow::Result<Option<Ins
     }))
 }
 
-/// One strap heart rate sample: Unix seconds and beats per minute.
 #[derive(Debug, Clone, Copy, sqlx::FromRow)]
 pub struct HrSample {
     pub ts: i64,
     pub bpm: i64,
 }
 
-/// The strap's heart rate samples with `from <= ts <= to` (Unix seconds), by time, at full
-/// resolution. Only the strap's imported namespace records heart rate samples, so this is the
-/// heart rate of any NOOP Workout, whatever namespace recorded the workout. The caller bounds
-/// the span.
 pub async fn strap_hr_samples(
     pool: &SqlitePool,
     installation: &Installation,
@@ -109,10 +81,6 @@ pub async fn strap_hr_samples(
     .await?)
 }
 
-/// Namespaces that must be accounted for before declaring a stream complete. Workout imports can
-/// have their own device IDs; retained rows and even staged windows establish that such a source
-/// exists, while only applied windows can establish its coverage. Journal Entries come only from
-/// the namespaces discovered that way, so before any journal push there is none.
 async fn stream_devices(
     pool: &SqlitePool,
     installation: &Installation,
@@ -149,9 +117,6 @@ async fn stream_devices(
     }
 }
 
-/// The oldest of the latest completed replacements of `streams` in their namespaces. A replacement
-/// completes when its last part is accepted. Staged parts and other streams cannot advance this
-/// watermark; it is unknown until every stream has completed a window in every relevant namespace.
 pub async fn last_push_at(
     pool: &SqlitePool,
     installation: &Installation,
@@ -191,22 +156,15 @@ pub async fn last_push_at(
     Ok(oldest)
 }
 
-/// How recently completed windows cover the rows a read of one day depends on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Freshness {
-    /// Every stream and namespace has coverage completed after the day ended.
     Confirmed,
-    /// Complete coverage arrived during the day, but not after its end.
     Partial,
-    /// Complete coverage or the read's push watermark predates the day.
     Unconfirmed,
-    /// The receiver cannot establish completed coverage for the day.
     Unknown,
 }
 
-/// `rows` are the rows the read of `day` depends on; `last_push_at` is the watermark of their
-/// streams.
 pub async fn freshness(
     pool: &SqlitePool,
     installation: &Installation,
@@ -233,8 +191,6 @@ pub async fn freshness(
     })
 }
 
-/// Whether applied replacement windows establish the receiver's rows for a stream and day. Only
-/// `covered` makes missing rows a recorded absence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Coverage {
@@ -242,16 +198,12 @@ pub enum Coverage {
     Unknown,
 }
 
-/// Freshness and coverage of one read's rows on one day. `C` names the coverage of each stream the
-/// read uses.
 #[derive(Debug, Serialize)]
 pub struct DaySync<C> {
     pub freshness: Freshness,
     pub coverage: C,
 }
 
-/// How far the receiver's copy of a read's rows can be trusted. `C` names the coverage of each
-/// stream the read uses.
 #[derive(Debug, Serialize)]
 pub struct NoopSync<C> {
     pub installation_id: Option<String>,
@@ -263,7 +215,6 @@ pub struct NoopSync<C> {
 }
 
 impl<C> NoopSync<C> {
-    /// No strap push has arrived under the current receiver state.
     pub const fn unsynced(coverage: C) -> Self {
         Self {
             installation_id: None,
@@ -292,7 +243,6 @@ impl<C> NoopSync<C> {
             coverage,
         }
     }
-    /// The same sync state with `coverage` extended or reshaped by `f`.
     pub fn map_coverage<D>(self, f: impl FnOnce(C) -> D) -> NoopSync<D> {
         NoopSync {
             installation_id: self.installation_id,
@@ -305,8 +255,6 @@ impl<C> NoopSync<C> {
     }
 }
 
-/// Whether applied windows establish `rows` in every relevant namespace. With `since`, only windows
-/// completed at or after that instant count.
 pub async fn coverage(
     pool: &SqlitePool,
     installation: &Installation,
@@ -331,9 +279,6 @@ pub async fn coverage(
     }
 }
 
-/// Day-keyed rows: covered when, in every namespace, some applied window contains the day. A
-/// stream without namespaces is not covered. Day windows use canonical `YYYY-MM-DD` text, so text
-/// comparison orders them.
 async fn day_coverage(
     pool: &SqlitePool,
     installation: &Installation,
@@ -367,8 +312,6 @@ async fn day_coverage(
     })
 }
 
-/// `startTs`-keyed rows starting in `[from, to)` (Unix seconds): covered when, in every namespace,
-/// applied windows jointly span that interval.
 async fn start_coverage(
     pool: &SqlitePool,
     installation: &Installation,
@@ -415,14 +358,11 @@ async fn start_coverage(
 }
 
 fn accepted_since(since: Option<DateTime<Utc>>) -> String {
-    // The ledger writes fixed-width UTC timestamps with milliseconds, so lexical order is time
-    // order. Any accepted part after the cutoff proves an applied window completed after it.
     since
         .map(|at| at.to_rfc3339_opts(SecondsFormat::Millis, true))
         .unwrap_or_default()
 }
 
-/// Whether the union of half-open intervals contains all of `[from, to)`.
 fn spans(intervals: impl Iterator<Item = (i64, i64)>, from: i64, to: i64) -> bool {
     let mut intervals: Vec<(i64, i64)> = intervals.filter(|(start, end)| start < end).collect();
     intervals.sort_unstable();

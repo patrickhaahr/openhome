@@ -24,19 +24,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * The one Active Workout, stored on every change. Each function returns after its change committed.
- * Writes run strictly in call order, so fast typing cannot be saved out of order and finishing always
- * sees every edit made before it.
- *
- * This is the one owner of a row's confirmation: a row is unconfirmed or confirmed, and it can only be
- * confirmed while its values parse ([setCompleted], [completeExercise]); any edit that stops it parsing
- * unconfirms it in the same transaction. Because every change is one serialized transaction on the
- * stored row, an interrupted call (cancellation or process death) leaves the state from before it, never
- * half of [finish]; a restart resumes whatever was committed. Finishing needs no state of its own beyond
- * [FinishOutcome]: the Active Workout exists until the one transaction that records it deletes it. What
- * follows a commit (the sync schedule, the alarm) is derived from storage and redone on the next app start.
- */
 class ActiveWorkoutRepository(
     private val database: OpenHomeDatabase,
     private val outbox: FitnessOutbox,
@@ -49,16 +36,10 @@ class ActiveWorkoutRepository(
 
     fun observe(): Flow<ActiveWorkout?> = dao.observe().map { it?.toDomain() }
 
-    /** Does nothing when an Active Workout already exists, so it can never strand or replace one. */
     suspend fun startEmpty(date: String) = write {
         dao.insertWorkout(ActiveWorkoutEntity(date = date, name = "", notes = ""))
     }
 
-    /**
-     * Starts a Repeated Workout on [date]: the past Workout's name, Exercise order and Set values, with
-     * nothing confirmed. Returns whether an Active Workout now exists; one that already did is left
-     * exactly as it was, so a second tap can never append another copy to it.
-     */
     suspend fun repeat(workoutId: Long, date: String): Boolean = write {
         if (dao.load() != null) return@write true
         val source = fitnessDao.loadWorkout(workoutId) ?: return@write false
@@ -72,7 +53,6 @@ class ActiveWorkoutRepository(
         val entryId = dao.insertEntry(ActiveEntryEntity(exerciseId = row.entry.exerciseId, orderIndex = orderIndex))
         val sets = row.sets.sortedWith(compareBy({ it.setNumber }, { it.id }))
         sets.forEachIndexed { index, set -> dao.insertSet(set.toUnconfirmedRow(entryId, index + 1L)) }
-        // The API allows an entry without Sets; logging needs a row to start from.
         if (sets.isEmpty()) {
             dao.insertSet(ActiveSetEntity(entryId = entryId, setNumber = 1, measure = lastMeasureOf(row.entry.exerciseId)))
         }
@@ -93,7 +73,6 @@ class ActiveWorkoutRepository(
         dao.setCurrentEntry(entryId)
     }
 
-    /** The focus stays where it is, unless it was on this Exercise and moves to its neighbour. */
     suspend fun removeEntry(entryId: Long) = write {
         val active = dao.load() ?: return@write
         val ordered = active.orderedEntries()
@@ -105,19 +84,16 @@ class ActiveWorkoutRepository(
         }
     }
 
-    /** A new row continues the measure of the row before it, and starts unconfirmed. */
     suspend fun addSet(entryId: Long) = write {
         val last = dao.loadSets(entryId).last()
         dao.insertSet(ActiveSetEntity(entryId = entryId, setNumber = last.setNumber + 1, measure = last.measure))
     }
 
-    /** A new row with the preceding row's values exactly as typed, not yet confirmed. */
     suspend fun repeatLastSet(entryId: Long) = write {
         val last = dao.loadSets(entryId).last()
         dao.insertSet(last.copy(id = 0, setNumber = last.setNumber + 1, completed = false))
     }
 
-    /** For doing fewer Sets than planned. An Exercise keeps its one row; removing it is another action. */
     suspend fun removeLastSet(entryId: Long) = write {
         val sets = dao.loadSets(entryId)
         if (sets.size > 1) dao.deleteSet(sets.last().id)
@@ -139,10 +115,6 @@ class ActiveWorkoutRepository(
         )
     }
 
-    /**
-     * Returns false, changing nothing, when a row that does not parse is being confirmed. Only a row
-     * becoming confirmed starts a rest; unchecking one does not.
-     */
     suspend fun setCompleted(setId: Long, completed: Boolean): Boolean {
         val saved =
             write {
@@ -156,12 +128,6 @@ class ActiveWorkoutRepository(
         return saved
     }
 
-    /**
-     * The explicit confirmation of an Exercise: in one transaction, every row of [entryId] that parses
-     * becomes performed and the focus advances to the next Exercise with an unconfirmed row, wrapping
-     * around. With no row to confirm nothing changes, so the user stays to see what is missing. However
-     * many rows it confirmed it starts one rest, and none when a repeated press confirmed nothing.
-     */
     suspend fun completeExercise(entryId: Long): ExerciseCompletion {
         val completion =
             write {
@@ -185,16 +151,11 @@ class ActiveWorkoutRepository(
             ?.id
     }
 
-    /** Ending the Active Workout ends its rest too: storage cascades, and only the alarm is left to drop. */
     suspend fun discard() {
         write { dao.deleteWorkout() }
         restTimers.syncAlarm()
     }
 
-    /**
-     * Records only confirmed rows, in one transaction with queuing the sync and ending the Active
-     * Workout. Unchecked rows are left out only when [omitUnchecked] says the user chose that.
-     */
     suspend fun finish(omitUnchecked: Boolean): FinishOutcome {
         val outcome =
             write {
@@ -208,7 +169,6 @@ class ActiveWorkoutRepository(
                     else -> FinishOutcome.Finished(record(active.workout, performed))
                 }
             }
-        // After the commit: if the process dies first, the next app start schedules it from the outbox.
         if (outcome is FinishOutcome.Finished) {
             scheduler.schedule()
             restTimers.syncAlarm()
@@ -263,13 +223,11 @@ class ActiveWorkoutRepository(
         return workoutId
     }
 
-    /** An edit that makes a confirmed row invalid also unconfirms it, so it can never be recorded. */
     private suspend fun saveKeepingConfirmationHonest(set: ActiveSetEntity) {
         val stillValid = set.draft().check() is SetCheck.Valid
         dao.updateSet(set.copy(completed = set.completed && stillValid))
     }
 
-    /** Taken from what was actually logged, never from the Exercise Category. */
     private suspend fun lastMeasureOf(exerciseId: Long): SetMeasure =
         fitnessDao.latestSetOfExercise(exerciseId)?.measure() ?: SetMeasure.REPS
 
@@ -292,7 +250,6 @@ internal fun WorkoutSetEntity.measure(): SetMeasure =
         else -> SetMeasure.REPS
     }
 
-/** A stored zero means bodyweight in older logs; the domain writes that as a blank Added Weight. */
 internal fun WorkoutSetEntity.toDraft() =
     SetDraft(
         measure = measure(),

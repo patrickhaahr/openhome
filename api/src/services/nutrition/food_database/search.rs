@@ -1,22 +1,10 @@
-//! Food name search over both languages.
-//!
-//! Danish names are written as comma-separated parts ("Kylling, bryst, rå") while people type
-//! compounds ("kyllingebryst"), so a query word matches a name when it occurs in the name's words
-//! or in the name with spaces removed, or, for words of five or more letters, when most of its
-//! letter triples occur in the name. Exact names and comma-separated Food names rank before
-//! derivatives ("Tomato, raw" before "Tomato juice"); a plain raw Food wins a tie. Explicit
-//! processed queries still match their own names first.
-
 use std::collections::HashSet;
 
 use super::FoodGroup;
 
-/// Query words of at least this many letters may match by letter triples.
 const FUZZY_MIN_LETTERS: usize = 5;
-/// The share of a query word's letter triples a name must contain to match by triples.
 const FUZZY_MIN_SHARE: f64 = 0.6;
 
-/// A Food's identity as search results show it.
 #[derive(Clone, Debug)]
 pub struct FoodIdentity {
     pub food_id: i64,
@@ -25,7 +13,6 @@ pub struct FoodIdentity {
     pub food_group: Option<FoodGroup>,
 }
 
-/// Every Food of one complete import, ready to search in memory.
 pub struct SearchIndex {
     entries: Vec<Entry>,
 }
@@ -36,11 +23,9 @@ struct Entry {
 }
 
 struct IndexedName {
-    /// Lower-case words separated by single spaces.
     words: String,
     head: String,
     plain: bool,
-    /// `words` without spaces, so "kylling bryst" also reads "kyllingbryst".
     compact: String,
     triples: HashSet<[char; 3]>,
 }
@@ -66,7 +51,6 @@ impl IndexedName {
         }
     }
 
-    /// Lower is better; `None` when a query word does not match this name.
     fn score(&self, query: &str, words: &[&str]) -> Option<f64> {
         if self.words == query {
             return Some(-1.0);
@@ -83,8 +67,6 @@ impl IndexedName {
                 3.0 + (1.0 - self.fuzzy_share(word)?)
             };
         }
-        // The whole first name component identifies the Food itself, whereas a prefix can
-        // also name a derivative such as juice. Bonuses stay below an exact-name match (-1).
         if self.head == query {
             score -= 0.5;
             if self.plain {
@@ -124,12 +106,9 @@ impl SearchIndex {
         Self { entries }
     }
 
-    /// The best-matching Foods, best first; empty when the query has no letters or digits.
     #[must_use]
     pub fn search(&self, query: &str, limit: usize) -> Vec<&FoodIdentity> {
         let query = normalize(query);
-        // DTU calls oatmeal "Oats, rolled". Keep cooked porridge queries distinct: their water
-        // changes per-100 g values, so they must never be aliased to dry oats.
         let query = match query.as_str() {
             "oatmeal" | "rolled oats" => "oats rolled".to_owned(),
             _ => query,
@@ -166,7 +145,6 @@ impl SearchIndex {
     }
 }
 
-/// Lower-cases and keeps letters and digits, turning everything else into single spaces.
 fn normalize(text: &str) -> String {
     let mapped: String = text
         .chars()

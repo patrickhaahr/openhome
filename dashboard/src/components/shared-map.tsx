@@ -32,15 +32,6 @@ import { MapControls } from "@/components/shared-map-controls"
 import { MapFrame } from "@/components/shared-map-frame"
 import { MapStatus } from "@/components/shared-map-status"
 
-/**
- * Interactive map centered on the private origin, switchable between flat 2D
- * and pitched 3D buildings. Switching keeps the map, its overlays and viewport.
- * Supplied routes are drawn above the buildings, the focused one highlighted,
- * and fitted into view once per set of alternatives.
- * MapLibre loads only after mount and is removed on unmount, releasing its
- * WebGL context when the view closes. Browsers without WebGL2 get the flat
- * image-tile `RasterMap` instead.
- */
 export function SharedMap({
   origin,
   routes,
@@ -50,11 +41,8 @@ export function SharedMap({
 }: {
   origin: MapOrigin
   routes?: MapRoutes | undefined
-  /** Recreates the map in the other palette when the dashboard turns. */
   theme?: MapTheme
-  /** An extra credit merged into the map's one attribution. */
   credit?: string | undefined
-  /** The zoom, perspective and recentre plate; a map that only shows a route can go without. */
   controls?: boolean
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null)
@@ -62,7 +50,6 @@ export function SharedMap({
   const [view, setView] = useState<MapView>({ state: "loading" })
   const [attempt, setAttempt] = useState(0)
   const [visible, setVisible] = useState(true)
-  // Without WebGL2 the image-tile map stands in, and MapLibre is never loaded.
   const [renderer, setRenderer] = useState<"vector" | "raster">("vector")
 
   const [perspective, setPerspective] = useState<Perspective>({
@@ -71,15 +58,12 @@ export function SharedMap({
   })
 
   const [coverage, setCoverage] = useState<BuildingCoverage>("shown")
-  // A retried map starts in the current perspective without recreating on toggles.
   const mode = useRef<Perspective["mode"]>("2d")
 
-  // The viewport a graphics restart resumes from, consumed by the next map.
   const resume = useRef<{ center: [number, number]; zoom: number } | undefined>(
     undefined
   )
 
-  // A recreated map draws the current routes without refitting the viewport to them.
   const shownRoutes = useRef<MapRoutes | undefined>(routes)
   const fittedLines = useRef<ReadonlyArray<MapLine> | undefined>(undefined)
 
@@ -110,12 +94,8 @@ export function SharedMap({
     }
 
     setView({ state: "loading" })
-    // A recreated map measures its own buildings; never show the last map's notice.
     setCoverage("shown")
 
-    // The one owner of this attempt's import, timeout and map. Releasing it also
-    // cancels the pending import: a late import, style or graphics event must not
-    // resurrect a view that already timed out, failed or was replaced.
     const owner = startMapAttempt<MapLibreMap>({
       onTimeout: () => fail("provider-unavailable"),
       onMap: (next) => {
@@ -137,8 +117,6 @@ export function SharedMap({
         let created: MapLibreMap
 
         try {
-          // Vite moves the library into a chunk; its relative worker URL then
-          // points at a missing file. Bundle the worker explicitly for both builds.
           setWorkerUrl(workerUrl)
           created = new Map({
             container: element,
@@ -151,7 +129,6 @@ export function SharedMap({
             minZoom: 10,
             maxZoom: 18,
             pitch: presentation(mode.current).pitch,
-            // Only the perspective toggle tilts the map; pitch gestures stay off.
             maxPitch: BUILDINGS_PITCH,
             dragRotate: false,
             pitchWithRotate: false,
@@ -163,7 +140,6 @@ export function SharedMap({
             fadeDuration: prefersReducedMotion() ? 0 : 300,
           })
         } catch {
-          // MapLibre throws when WebGL2 cannot be created.
           fail("graphics-unavailable")
 
           return
@@ -171,7 +147,6 @@ export function SharedMap({
 
         resume.current = undefined
 
-        // A route framed on its own is fitted again on a map made for the other palette.
         if (shownRoutes.current?.framing === "even")
           fittedLines.current = undefined
 
@@ -182,14 +157,12 @@ export function SharedMap({
         created.on("load", () => {
           if (!owner.settle()) return
 
-          // A style without the building source still serves a usable 2D map.
           const buildings =
             created.getSource(BUILDINGS_SOURCE) === undefined
               ? "unavailable"
               : "available"
 
           if (buildings === "available") {
-            // Below the labels, so street names stay readable over rooftops.
             const firstLabel = created
               .getStyle()
               .layers.find((layer) => layer.type === "symbol")?.id
@@ -203,13 +176,10 @@ export function SharedMap({
             )
           }
 
-          // Below the origin, so the start stays visible where the loop returns.
           created.addSource(ROUTE_SOURCE, {
             type: "geojson",
             data: routeFeatures(shownRoutes.current),
           })
-          // Every casing sits below every line, and the sort key keeps the
-          // highlighted route on top where loops share streets.
           created.addLayer({
             id: "route-casing",
             type: "line",
@@ -256,7 +226,6 @@ export function SharedMap({
                 geometry: { type: "Point", coordinates: [...endpoint] },
               },
             })
-            // A disc under the start's dot, so a loop reads as start and finish in one place.
             created.addLayer({
               id: "endpoint",
               type: "circle",
@@ -311,7 +280,6 @@ export function SharedMap({
           setCoverage(buildingCoverage(created))
         })
         created.on("error", () => {
-          // Before load the style or source failed; afterwards only some tiles did.
           switch (owner.phase()) {
             case "starting":
               fail("provider-unavailable")
@@ -339,7 +307,6 @@ export function SharedMap({
             return
           }
 
-          // Extrusions can exhaust older GPUs; restart flat rather than blank.
           resume.current = {
             center: created.getCenter().toArray(),
             zoom: created.getZoom(),
@@ -368,15 +335,12 @@ export function SharedMap({
 
     const { pitch, buildings } = presentation(perspective.mode)
 
-    // Visibility is a layout change, so MapLibre re-parses the visible tiles on
-    // each switch; a hidden layer keeps 2D from paying for extrusions (ADR 0007).
     if (
       current.getLayer(BUILDINGS_LAYER) !== undefined &&
       current.getLayoutProperty(BUILDINGS_LAYER, "visibility") !== buildings
     )
       current.setLayoutProperty(BUILDINGS_LAYER, "visibility", buildings)
 
-    // A freshly loaded map already has this pitch; easing would cancel a pan.
     if (current.getPitch() !== pitch)
       current.easeTo({
         pitch,
@@ -390,12 +354,10 @@ export function SharedMap({
 
     if (!ready || current === undefined) return
 
-    // MapLibre applies the data on its worker; the fit below does not depend on it.
     void current
       .getSource<GeoJSONSource>(ROUTE_SOURCE)
       ?.setData(routeFeatures(routes))
 
-    // Highlighting another alternative keeps the viewport the household chose.
     if (
       routes === undefined ||
       routes.lines.length === 0 ||
@@ -421,7 +383,6 @@ export function SharedMap({
   function choose(next: Perspective): void {
     mode.current = next.mode
 
-    // Coverage is measured again once the tilted map settles.
     if (next.mode === "3d") setCoverage("shown")
     setPerspective(next)
   }

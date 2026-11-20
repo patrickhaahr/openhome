@@ -9,14 +9,11 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 enum class SetupStatus {
-    /** A download began and has not finished; nothing from it has been saved. */
     DOWNLOADING,
 
-    /** The initial download committed; the app no longer needs the Setup Flow. */
     COMPLETE,
 }
 
-/** Holds the Base URL and the API Key sealed by the Android Keystore; the key is never plain text here. */
 @Entity(tableName = "setup_state")
 class SetupStateEntity(
     @PrimaryKey val id: Int = SINGLE_ROW_ID,

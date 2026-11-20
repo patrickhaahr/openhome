@@ -1,6 +1,3 @@
-//! Food NOVA classes through the nutrition routes and their effect on Meal Log portions, over a real
-//! `app.db` and a real `food.db`.
-
 mod common;
 #[path = "nutrition_support/meal_logs.rs"]
 mod support;
@@ -37,13 +34,9 @@ async fn a_food_nova_class_is_set_changed_read_back_and_kept_only_for_its_datase
         (Value::Null, Value::Null)
     );
 
-    // The class is the user's, kept in app.db: a rebuilt Food database of the same version
-    // keeps it.
     api.rebuild().await;
     assert_eq!(api.read_class("skyr", 1693).await, (json!(1), json!(1)));
 
-    // Another version may give FoodID 1693 to another Food, so the class waits for the agent to
-    // classify the Food again.
     api.reimport("2", second_dataset()).await;
     assert_eq!(
         api.read_class("skyr", 1693).await,
@@ -91,7 +84,6 @@ async fn classifying_a_food_fills_its_unclassified_past_portions_and_later_porti
         (&Value::Null, &Value::Null)
     );
 
-    // First eaten, then classified: the Portion just logged takes the class.
     let (_, classified) = api.classify(1693, json!(1)).await;
     assert_eq!(classified["classified_portions"], 1);
     let filled = &api.day("2026-10-29").await[0];
@@ -103,7 +95,6 @@ async fn classifying_a_food_fills_its_unclassified_past_portions_and_later_porti
         (&json!(1), &Value::Null)
     );
 
-    // A changed class applies from the next Portion; classified Portions keep their snapshot.
     let (_, changed) = api.classify(1693, json!(2)).await;
     assert_eq!(changed["classified_portions"], 0);
     let later = api.logged(at("2026-10-29T20:00:00+01:00", "skyr-2")).await;
@@ -111,7 +102,6 @@ async fn classifying_a_food_fills_its_unclassified_past_portions_and_later_porti
     let meal_logs = api.day("2026-10-29").await;
     assert_eq!(meal_logs[0]["portions"][0]["nova_class"], 1);
 
-    // A FoodID only names the same Food within one dataset version.
     api.reimport("2", second_dataset()).await;
     let (_, chicken) = api.classify(907, json!(1)).await;
     assert_eq!(chicken["classified_portions"], 0);

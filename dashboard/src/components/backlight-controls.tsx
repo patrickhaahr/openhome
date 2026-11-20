@@ -28,7 +28,6 @@ import { BacklightSetup } from "@/components/backlight-setup"
 import { BacklightDock, type DockKey } from "@/components/backlight-dock"
 import { lightFor, signal } from "@/components/backlight-look"
 
-// The halo behind the TV is the light itself, thrown wide: a full-size light layer under a radial mask.
 const halo =
   "pointer-events-none absolute -z-1 halo-mask transition-fade-scale duration-mid ease-app group-data-[mode=off]/stage:scale-70 group-data-[mode=off]/stage:opacity-0 group-data-[mode=off]/stage:duration-slow"
 
@@ -37,15 +36,9 @@ const beam = "absolute -inset-1/2 transition-colors duration-mid ease-app"
 type Props = {
   data: BacklightRead
   change: (action: BacklightAction) => Promise<BacklightResult>
-  /** The display clock, for the sun on the bedtime ring. */
   now?: Date
 }
 
-/**
- * The LED drawn as itself: a TV on a night wall, and behind it the light it is asked to make.
- * The halo is the selection; the dock below picks one, the fader sets how far it reaches, the
- * wheel paints it and the dial schedules the bedtime red. Words live only in the live region.
- */
 export function BacklightControls({
   data,
   change,
@@ -63,10 +56,6 @@ export function BacklightControls({
   const [sent, setSent] = useState<BacklightAction["action"] | null>(null)
   const [bedtimeRound, setBedtimeRound] = useState(0)
 
-  // The delivery owner: `delivery` is the only record of what is waiting or in flight. Every
-  // change to it goes through `commit`, and only `edit`, `perform`, `fire`, `deliver` and the
-  // unmount cleanup below construct a variant, so a timer or response from replaced work can
-  // be recognised by identity and ignored.
   const delivery = useRef<Delivery>({ phase: "idle" })
   const runs = useRef(0)
   const latestData = useRef(data)
@@ -76,8 +65,6 @@ export function BacklightControls({
   const [draft, setDraft] = useState<BacklightSelection | null>(null)
   useIdleBlock(pending)
 
-  // `pending` and `draft` follow the delivery phase: busy while debouncing or sending, released
-  // when nothing is waiting. A closed delivery belongs to an unmounted component; nothing renders.
   function commit(next: Delivery): void {
     delivery.current = next
 
@@ -93,7 +80,6 @@ export function BacklightControls({
 
       if (closing.phase === "debouncing") clearTimeout(closing.debounce.timer)
       else if (closing.phase === "sending") discard(closing.next)
-      // The request in flight cannot be recalled; its response finds a closed delivery and is dropped.
       delivery.current = { phase: "closed" }
     },
     []
@@ -109,7 +95,6 @@ export function BacklightControls({
     return debounce
   }
 
-  /** The trailing 200 ms edit settled: send it now, or queue it behind the request in flight. */
   function fire(debounce: Debounce): void {
     const state = delivery.current
 
@@ -131,27 +116,16 @@ export function BacklightControls({
     setAlert(null)
     setMessage("Sending your latest selection…")
 
-    // Demonstrated bound: on the server, `changeBacklight` always settles. Its request carries
-    // `AbortSignal.timeout(65_000)`, still attached while the body is parsed, and every failure
-    // becomes an `unavailable` value. Not demonstrated: the browser's call to `updateBacklight`
-    // (no abort signal is passed to the server function) and the `router.invalidate` the page
-    // awaits afterwards. If either never settles, `sending` holds the interaction busy and
-    // later actions queue behind it. No timeout or retry is added without a source-backed
-    // requirement; see "Dashboard delivery" in docs/backlight.md.
     let result: BacklightResult | null = null
 
     try {
       result = await change(action)
-    } catch {
-      /* A rejection is reported as an unconfirmed command below. */
-    }
+    } catch {}
 
-    // Replaced or unmounted work: drop the response without touching state.
     const sending = delivery.current
 
     if (sending.phase !== "sending" || sending.run !== run) return
 
-    // An older response must not replace feedback for a newer waiting edit.
     const announce = (text: string, tag: string | null = null): void => {
       if (sending.next === null) {
         setMessage(text)
@@ -170,7 +144,6 @@ export function BacklightControls({
       announce(outcome.text, outcome.tag)
     }
 
-    // A later selection must still drain; a settled edit keeps the interaction busy until sent.
     const next = sending.next
 
     if (next === null) commit({ phase: "idle" })
@@ -203,8 +176,6 @@ export function BacklightControls({
     setDraft(selection)
     setMessage("Waiting for your latest adjustment…")
 
-    // A single trailing target, even while another request is in flight: it replaces any
-    // queued action as well as an earlier edit.
     if (state.phase === "sending") {
       discard(state.next)
       commit({ ...state, next: startDebounce(selection) })
@@ -221,7 +192,6 @@ export function BacklightControls({
   const selection = draft ?? status?.intended
   const ready = status?.setup === "ready"
 
-  // The wheel remembers the last chosen colour while another mode is showing.
   const [lastRgb, setLastRgb] = useState(defaultRgb)
   const rgb = selection?.mode === "color" ? selection.rgb : lastRgb
 

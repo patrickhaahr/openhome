@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// This harness also executes the private server transport; CORS applies to browser RPCs, not Axum calls.
 
 import { spawn, type ChildProcess } from "node:child_process"
 import { once } from "node:events"
@@ -56,7 +55,6 @@ let planning: Promise<unknown>
 const servers: Server[] = []
 
 beforeAll(async () => {
-  // The fixture's loopback provider answers each seed with a synthetic square from the demo origin.
   const child = spawn(
     resolve("../api/target/debug/examples/dashboard_health"),
     [],
@@ -171,7 +169,6 @@ async function type(label: string, value: string): Promise<void> {
     throw new Error(`Missing field: ${label}`)
 
   await act(async () => {
-    // Native setter represents typing rather than replacing React's tracked value.
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value"
@@ -188,7 +185,6 @@ function alternatives(): HTMLButtonElement[] {
   )
 }
 
-/** An upstream standing in for Axum, answering successive loop requests in order. */
 async function upstream(responses: ReadonlyArray<object>): Promise<string> {
   let next = 0
 
@@ -237,7 +233,6 @@ test("compares three measured 5 km walking loops from authenticated Axum on the 
   expect(third?.textContent).toContain("longer than 5.00 km, within ±10%")
   expect(first?.getAttribute("aria-pressed")).toBe("true")
 
-  // Every alternative is drawn from the origin and back; the first is highlighted.
   expect(routes).toHaveLength(1)
   const [drawn] = routes
   expect(drawn?.focused).toBe(0)
@@ -338,7 +333,6 @@ test("keeps earlier loops usable when a later request fails, and never draws an 
     await upstream([
       { state: "generated", plan },
       { state: "unavailable", reason: "provider-unavailable" },
-      // A route outside the contract is rejected, never drawn.
       {
         state: "generated",
         plan: {
@@ -365,7 +359,6 @@ test("keeps earlier loops usable when a later request fails, and never draws an 
   await click("Plan loops")
   expect(container.textContent).toContain("Route planning unavailable")
   expect(container.textContent).toContain("Still showing the earlier")
-  // Only the first, valid answer reached the map.
   expect(routes).toHaveLength(1)
 })
 
@@ -545,7 +538,6 @@ test("showing the saved route synchronizes the choice with the map", async () =>
 
   expect(selected?.disabled).toBe(true)
 
-  // The saved 5 km loop is outside a new 10 km comparison: nothing there is inspected yet.
   await click("10 km")
   await click("Plan loops")
   await click("Show active route on map")

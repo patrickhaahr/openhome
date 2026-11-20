@@ -15,7 +15,6 @@ use openhome_api::services::{
 use serde_json::{Value, json};
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
 
-/// A catalogue whose observations move `days` newer, each day also adding five cents.
 async fn moving_catalogue() -> (MockServer, Arc<AtomicU64>) {
     let days = Arc::new(AtomicU64::new(0));
     let shift = days.clone();

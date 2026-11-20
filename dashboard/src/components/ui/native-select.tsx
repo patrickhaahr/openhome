@@ -3,7 +3,6 @@ import { cn } from "cn"
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown"
 
 type NativeSelectProps = Omit<React.ComponentProps<"select">, "size"> & {
-  /** `field` matches the 3rem form fields beside it. */
   size?: "sm" | "default" | "field"
 }
 

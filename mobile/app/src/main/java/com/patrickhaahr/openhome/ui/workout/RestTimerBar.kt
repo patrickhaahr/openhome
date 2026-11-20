@@ -62,7 +62,6 @@ private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
 private val KEY = 44.dp
 
-/** What the bar shows of the rest at this moment. */
 private sealed interface RestDisplay {
     val exerciseId: Long
     val exerciseName: String
@@ -76,7 +75,6 @@ private sealed interface RestDisplay {
     data class Over(override val exerciseId: Long, override val exerciseName: String) : RestDisplay
 }
 
-/** Every reading comes from the clock and the stored deadline; nothing here counts down. */
 private fun RestTimer.displays(): Flow<RestDisplay> =
     flow {
         while (true) {
@@ -86,7 +84,6 @@ private fun RestTimer.displays(): Flow<RestDisplay> =
                 return@flow
             }
             emit(RestDisplay.Running(exerciseId, exerciseName, ceil(remainingMillis / MILLIS_PER_SECOND.toDouble()).toLong()))
-            // To the next whole second; never longer, so a moved clock shows within that second.
             delay(remainingMillis % MILLIS_PER_SECOND + 1)
         }
     }
@@ -111,7 +108,6 @@ private class RestTimerViewModel(private val timers: RestTimers, private val sav
     }
 }
 
-/** Above the tabs on every destination, so resting never stands in the way of logging or moving around. */
 @Composable
 fun RestTimerBar(modifier: Modifier = Modifier) {
     val viewModel = appViewModel { RestTimerViewModel(it.restTimers, it.saveScope) }
@@ -123,10 +119,8 @@ fun RestTimerBar(modifier: Modifier = Modifier) {
     }
 }
 
-/** A strip of lamp that burns down, over the countdown in type large enough to read from the floor. */
 @Composable
 private fun RunningBar(rest: RestDisplay.Running, viewModel: RestTimerViewModel, modifier: Modifier) {
-    // Only the deadline is stored, so the longest reading so far stands for the whole rest.
     var longest by remember(rest.exerciseId) { mutableLongStateOf(rest.remainingSeconds) }
     longest = max(longest, rest.remainingSeconds)
     val left by animateFloatAsState(
@@ -159,7 +153,6 @@ private fun OffKey(description: String, onClick: () -> Unit) {
     GlyphKey(Glyph.TimerOff, description, onClick, tone = KeyTone.Quiet, size = KEY)
 }
 
-/** Rest is over: the whole bar comes on. */
 @Composable
 private fun OverBar(rest: RestDisplay.Over, viewModel: RestTimerViewModel, modifier: Modifier) {
     Row(

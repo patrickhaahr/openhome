@@ -1,6 +1,3 @@
-//! Meal Log photo lifecycle through the nutrition routes: retries, database refusals, replacement
-//! and removal, over a real `app.db` and a real `food.db`.
-
 mod common;
 #[path = "nutrition_support/meal_logs.rs"]
 mod support;
@@ -39,19 +36,15 @@ async fn a_database_refusal_with_a_photo_writes_nothing_and_a_retry_commits_its_
         &synthetic::png(600, 400),
     );
 
-    // Storing the photo never touches the database, so the log's receipt claim inside its
-    // transaction waits out the busy timeout while the lock is held and refuses.
     let (lock, locker) = lock_app_db(&api.dir).await;
     let (status, response) = api.log(body.clone()).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{response}");
     assert_eq!(response["status"], 500, "{response}");
     release(lock, &locker).await;
 
-    // The failed write removed the new photo's files, and the receipt is unconsumed.
     assert_eq!(api.photo_files(), Vec::<String>::new());
     assert_eq!(api.day("2026-10-29").await, Vec::<Value>::new());
 
-    // A retry then commits the Meal Log and its referenced files, which it serves.
     let meal_log = api.logged(body).await;
     let id = meal_log["photo"]["id"].as_str().unwrap();
     let (status, content_type, _) = api.media(meal_log["photo"]["url"].as_str().unwrap()).await;
@@ -89,8 +82,6 @@ async fn a_database_refusal_during_replacement_removes_its_new_photo_and_keeps_t
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{response}");
     release(lock, &locker).await;
 
-    // The refused replacement removed only its own new files; the committed photo remains
-    // referenced, readable and unchanged after the refusal.
     assert_eq!(
         api.photo_files(),
         [
@@ -105,7 +96,6 @@ async fn a_database_refusal_during_replacement_removes_its_new_photo_and_keeps_t
         (StatusCode::OK, Some("image/avif"))
     );
 
-    // After the lock is released the replacement commits and removes the photo it replaced.
     let (status, replaced) = api.send(Method::PATCH, &uri, Some(replacement)).await;
     assert_eq!(status, StatusCode::OK, "{replaced}");
     let replaced_id = replaced["photo"]["id"].as_str().unwrap();
@@ -137,7 +127,6 @@ async fn a_photo_is_attached_replaced_or_removed_and_leaves_with_its_meal_log() 
     let id = meal_log["id"].as_str().unwrap().to_owned();
     let uri = format!("/api/nutrition/meal-logs/{id}");
 
-    // The app uploads a file as multipart.
     let (status, attached) = api.upload(&id, "photo", &synthetic::png(1000, 800)).await;
     assert_eq!(status, StatusCode::OK, "{attached}");
     assert_eq!(
@@ -150,7 +139,6 @@ async fn a_photo_is_attached_replaced_or_removed_and_leaves_with_its_meal_log() 
         (&json!(1000), &json!(800))
     );
 
-    // The agent replaces it with base64; the replaced files are removed.
     let (status, replaced) = api
         .send(
             Method::PATCH,
@@ -176,7 +164,6 @@ async fn a_photo_is_attached_replaced_or_removed_and_leaves_with_its_meal_log() 
         );
     }
 
-    // Other corrections keep the photo; null removes it.
     let (_, noted) = api
         .send(Method::PATCH, &uri, Some(json!({"note": "late"})))
         .await;
@@ -192,7 +179,6 @@ async fn a_photo_is_attached_replaced_or_removed_and_leaves_with_its_meal_log() 
         StatusCode::NOT_FOUND
     );
 
-    // Deleting the Meal Log deletes its files.
     let (_, attached) = api.upload(&id, "photo", &synthetic::png(50, 50)).await;
     assert_eq!(api.photo_files().len(), 2);
     let (status, _) = api.send(Method::DELETE, &uri, None).await;

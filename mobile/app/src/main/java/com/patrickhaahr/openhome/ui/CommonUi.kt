@@ -54,10 +54,6 @@ val ScreenMargin: Dp = 16.dp
 val SlabShape = RoundedCornerShape(28.dp)
 val FieldShape = RoundedCornerShape(20.dp)
 
-/**
- * Words the screen says with symbols instead still belong to anyone listening: removed from sight,
- * never from the app. A real pixel, because Android leaves out what has no size.
- */
 @Composable
 fun Spoken(text: String, modifier: Modifier = Modifier, isHeading: Boolean = false, live: Boolean = false) {
     Box(
@@ -71,10 +67,6 @@ fun Spoken(text: String, modifier: Modifier = Modifier, isHeading: Boolean = fal
     )
 }
 
-/**
- * [content] with lines for assistive technology laid over its corner, so they take no room and no gap
- * in the layout. They are one pixel wide and sit where nothing is ever pressed.
- */
 @Composable
 fun WithSpoken(
     modifier: Modifier = Modifier,
@@ -87,7 +79,6 @@ fun WithSpoken(
     }
 }
 
-/** One line of what went wrong, with the whole of it a tap away: several at once must not bury the screen. */
 @Composable
 fun ProblemTag(message: String, modifier: Modifier = Modifier) {
     var open by rememberSaveable(message) { mutableStateOf(false) }
@@ -113,10 +104,6 @@ fun ProblemTag(message: String, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * A destination's head: a symbol instead of a title, the figure that belongs to it, and what can be
- * done here at its far side. Back is deliberately absent: system back and the gesture provide it.
- */
 @Composable
 fun ScreenHeader(
     title: String,
@@ -151,7 +138,6 @@ fun ProfileKey(onClick: () -> Unit) {
     GlyphKey(Glyph.Person, "Open Profile", onClick, tone = KeyTone.Raised, size = 48.dp)
 }
 
-/** One raised block of the screen; a tone step away from the black, with no line and no shadow. */
 @Composable
 fun Slab(
     modifier: Modifier = Modifier,
@@ -167,7 +153,6 @@ fun Slab(
     )
 }
 
-/** A large symbol in the empty place. The words go on only when they tell the user what to do. */
 @Composable
 fun EmptyState(
     title: String,
@@ -198,7 +183,6 @@ fun EmptyState(
     }
 }
 
-/** A value, its symbol and its unit. [label] is what it is called for anyone who can't see the symbol. */
 @Composable
 fun FormField(
     value: String,
@@ -273,7 +257,6 @@ fun FormField(
     }
 }
 
-/** Failure stays visible and in words: the one thing a symbol can't say well enough. */
 @Composable
 fun ProblemText(message: String, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

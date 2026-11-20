@@ -1,5 +1,3 @@
-//! Photos On This Day: local capture day matching and bounds.
-
 mod common;
 mod photos_support;
 
@@ -41,11 +39,8 @@ async fn on_this_day_matches_the_local_capture_day_in_earlier_years_only() {
         &server,
         ALBUM,
         json!({"id":ALBUM,"albumName":"Coast","assets":[
-            // 00:30 in Copenhagen on 14 February: Immich did not know the zone, so UTC.
             dated(&id(1), "2024-02-13T23:30:00.000Z"),
-            // 00:30 on 15 February in Copenhagen.
             dated(&id(2), "2024-02-14T23:30:00.000Z"),
-            // Taken abroad late on 14 February; Immich knew the zone, so its wall clock counts.
             zoned(&id(3), "2025-02-14T23:30:00.000Z", "Asia/Tokyo"),
             dated(&id(4), &format!("{this_year}-02-14T12:00:00.000Z")),
             dated(&id(5), "2024-03-14T12:00:00.000Z"),
@@ -104,14 +99,12 @@ async fn on_this_day_matches_the_local_capture_day_in_earlier_years_only() {
             (ALBUM.to_owned(), id(3), 2025, ago(2025)),
             (ALBUM.to_owned(), id(1), 2024, ago(2024)),
             (SECOND.to_owned(), id(9), 2023, ago(2023)),
-            // Shared by both albums, named once by the first that grants access.
             (ALBUM.to_owned(), id(8), 2021, ago(2021)),
         ]
     );
     let (_, next_day, _) = on_this_day(&app, "date=02-15").await;
     assert_eq!(next_day["photos"]["items"][0]["asset"], id(2));
     assert_eq!(next_day["photos"]["photo_count"], 1);
-    // Media still goes through the album that grants access.
     Mock::given(method("GET"))
         .and(path(format!("/api/assets/{}/thumbnail", id(9))))
         .respond_with(

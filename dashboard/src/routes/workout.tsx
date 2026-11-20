@@ -25,11 +25,9 @@ import { loadProgress } from "@/lib/exercise-progress.functions"
 import { historyStep, maxHistory, workoutSearch } from "@/lib/workout"
 import { loadWorkouts } from "@/lib/workout.functions"
 
-/** Workout views: the log first, then exercise progress and body weight. Recovery has its own page. */
 export const Route = createFileRoute("/workout")({
   head: () => ({ meta: [{ title: "Workout · OpenHome" }] }),
   validateSearch: workoutSearch.extend({
-    // "today" is the retired recovery view; it only redirects.
     view: z
       .enum(["log", "progress", "body", "today"])
       .optional()
@@ -38,7 +36,6 @@ export const Route = createFileRoute("/workout")({
     ...progressSearch.shape,
     ...trainingSearch.shape,
   }),
-  // Old links to the recovery view, or to a day on it, keep their day and selection.
   beforeLoad: ({ search }) => {
     if (
       search.view === "today" ||

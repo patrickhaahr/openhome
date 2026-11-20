@@ -24,12 +24,10 @@ import {
 import mapCss from "maplibre-gl/dist/maplibre-gl.css?url"
 import rasterMapCss from "leaflet/dist/leaflet.css?url"
 
-/** Licence-required credit for the loops, merged into the map's own attribution. */
 const ROUTES_CREDIT = "Routes by openrouteservice"
 
 const travel = features[2] satisfies { id: "travel" }
 
-/** Walking and running loops and, later, transit around the private origin. */
 export const Route = createFileRoute("/travel")({
   head: () => ({
     meta: [{ title: `${travel.title} · OpenHome` }],
@@ -151,10 +149,6 @@ function MapSetup({
   )
 }
 
-/**
- * Publishes the planner dock's height as `--dock-height`, so the map's attribution can sit
- * above a full-width dock on narrow screens instead of underneath it.
- */
 function useDockHeight(travel: React.RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const element = travel.current

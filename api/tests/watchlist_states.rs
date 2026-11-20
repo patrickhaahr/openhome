@@ -1,5 +1,3 @@
-//! Watchlist states, dates and migrations.
-
 mod common;
 mod watchlist_support;
 
@@ -217,7 +215,6 @@ async fn migration_backfills_legacy_completed_rows_and_rollback_is_readable_by_t
         .unwrap();
     let member = owner(&app, "Member A").await;
     let owner_id = member["id"].as_str().unwrap();
-    // 0009's schema permits these states even though #101 only created planned entries.
     for status in ["planned", "watching", "completed"] {
         sqlx::query("INSERT INTO watchlist_entries (id, owner_id, kind, title, status, date_added) VALUES (?, ?, 'series', 'A Quiet Orbit', ?, '2024-02-28')")
             .bind(status).bind(owner_id).bind(status).execute(&state.db).await.unwrap();

@@ -3,11 +3,6 @@ import { useRouter } from "@tanstack/react-router"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { Button } from "@/components/ui/button"
 
-/**
- * Re-run the current page's OpenHome checks without reloading the page, or `check` when the
- * page reads again some other way. `compact` draws a round arrow key; its name stays the
- * button's text for assistive technology.
- */
 export function CheckAgainButton({
   compact = false,
   check,

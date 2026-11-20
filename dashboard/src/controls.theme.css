@@ -1,4 +1,3 @@
-/* Controls and LED: the three remotes, and the Backlight drawn as light on a night wall. */
 @theme inline {
   --color-led-wall: #07080a;
   --color-led-ink: #ecece6;

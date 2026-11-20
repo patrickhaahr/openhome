@@ -19,10 +19,6 @@ private val LIBRARY =
     )
 private val LIBRARY_NAMES = LIBRARY.map { it.name }
 
-/**
- * The offline Library and Exercise creation through the real app, its real database, real process
- * restarts and the emulator's real radios. Only Axum is replaced, at its HTTP boundary.
- */
 class OfflineExerciseTest {
     private val app = AppDriver()
     private val api = FakeAxum(exerciseDetails = LIBRARY)
@@ -53,7 +49,6 @@ class OfflineExerciseTest {
         if (equipment.isNotEmpty()) app.enter("Equipment (optional)", equipment)
     }
 
-    /** Logs one confirmed Set of [exercise] from the picker, finishes under [workoutName], ends on History. */
     private fun logWorkout(workoutName: String, exercise: String) {
         app.tap("Start Empty")
         app.assertVisible("Active Workout")
@@ -93,13 +88,11 @@ class OfflineExerciseTest {
         app.setWifi(false)
         openLibrary()
         app.assertExercisesShown(*LIBRARY_NAMES.toTypedArray(), among = LIBRARY_NAMES)
-        // Optional fields show when present and leave no gap when absent.
         app.assertVisible("gym · legs · barbell")
         app.assertVisible("calisthenics")
 
         app.tap("Gym")
         app.assertExercisesShown("Back Squat", "Lat Pulldown", among = LIBRARY_NAMES)
-        // Muscle groups match however their case was typed, and combine with the category.
         app.tap("Back")
         app.assertExercisesShown("Lat Pulldown", among = LIBRARY_NAMES)
         app.tap("Gym")
@@ -135,7 +128,6 @@ class OfflineExerciseTest {
         app.tap("Save Exercise")
         app.assertVisible("Choose a category")
 
-        // Already in the Library, ignoring case: creating it again would make a duplicate.
         app.enter("Name", "  pull-up ")
         app.tap("Gym")
         app.tap("Save Exercise")
@@ -146,16 +138,13 @@ class OfflineExerciseTest {
         app.assertVisible("Pull-Up")
     }
 
-    /** The whole offline journey: create, use, restart, delayed Wi-Fi and the final server records. */
     @Test
     fun exerciseCreatedOfflineIsUsableAtOnceAndSyncsBeforeItsWorkoutOnWifi() {
         app.setWifi(false)
 
-        // From the Library, with its optional metadata, and there immediately.
         createRingRowOffline()
         app.assertVisible("5 Exercises in your Library")
 
-        // A second one, made in the middle of a session from a search that found nothing.
         app.tap("Start Empty")
         app.assertVisible("Active Workout")
         app.tap("Add name or notes")
@@ -165,21 +154,17 @@ class OfflineExerciseTest {
         app.enter("Search Exercises", "Sissy Squat")
         app.assertVisible("No matching Exercises")
         app.tap("Create Exercise")
-        // What was searched for is already the name, so only the category is left to give.
         app.tap("Gym")
         app.tap("Save and add to Workout")
         logOneSet("Sissy Squat")
-        // Saving replaced the form and the picker, so back goes straight to where sessions start.
         app.pressBackButton()
         app.tap("Resume Workout")
 
-        // The Exercise made earlier is in the picker too, and is usable alongside it.
         app.tapBelow("Add Exercise")
         app.enter("Search Exercises", "ring")
         app.tap(RING_ROW)
         logOneSet(RING_ROW)
 
-        // Losing the process loses neither Exercise nor their use in the session.
         app.relaunch()
         app.assertVisible("6 Exercises in your Library")
         app.tap("Resume Workout")
@@ -187,7 +172,6 @@ class OfflineExerciseTest {
         app.goToExercise("Sissy Squat")
         app.assertChecked("Sissy Squat set 1 performed", true)
 
-        // Finishing and another restart keep the Workout, with nothing sent over mobile data.
         app.tapBelow("Finish Workout")
         app.assertVisible(WAITING_FOR_WIFI)
         app.assertTextContaining("Sissy Squat · $RING_ROW · 2 Sets")
@@ -205,7 +189,6 @@ class OfflineExerciseTest {
         app.pressBackButton()
         app.assertEventuallyVisible("Synced with OpenHome")
 
-        // Both Exercises, once each with their metadata, and committed before what depends on them.
         val ringRow = storedNamed(RING_ROW).single()
         assertEquals("calisthenics", ringRow.category)
         assertEquals("back", ringRow.muscleGroup)
@@ -222,7 +205,6 @@ class OfflineExerciseTest {
             workoutNamed("Basement session").entries.map { it.exerciseId },
         )
 
-        // The local entries still read the same under their reconciled ids, and sync no further.
         app.relaunch()
         app.tapBelow("History")
         app.tap("Basement session")
@@ -232,7 +214,6 @@ class OfflineExerciseTest {
         assertEquals(1, api.workoutDeliveries().size)
     }
 
-    /** The commit with a lost answer, then a dependency pass resumed by a restart. */
     @Test
     fun lostExerciseResponseRetriesAsOneExerciseAndItsWorkoutFollowsOnceAfterARestart() {
         api.loseExerciseResponses()
@@ -245,12 +226,10 @@ class OfflineExerciseTest {
         logWorkout("Lossy session", RING_ROW)
         app.pressBackButton()
 
-        // The Exercise committed on Axum, the app never heard, and its Workout must not overtake it.
         app.assertEventuallyVisible("Saved on device · Can't reach OpenHome, will retry")
         assertEquals(1, storedNamed(RING_ROW).size)
         assertEquals("Nothing depends on an unanswered Exercise", emptyList<String>(), api.workoutDeliveries())
 
-        // A restart retries the same create; now answered, the pass moves on and the Workout fails.
         api.healthy()
         api.failWorkoutCreates()
         app.relaunch()
@@ -260,7 +239,6 @@ class OfflineExerciseTest {
         assertTrue("The Exercise should have been retried", api.exerciseDeliveries().size >= 2)
         val exerciseDeliveries = api.exerciseDeliveries().size
 
-        // A second restart resumes after the acknowledged Exercise: only the Workout goes again.
         api.healthy()
         app.relaunch()
         app.assertEventuallyVisible("Synced with OpenHome")
@@ -269,10 +247,8 @@ class OfflineExerciseTest {
         assertEquals(listOf(storedNamed(RING_ROW).single().id), workoutNamed("Lossy session").entries.map { it.exerciseId })
     }
 
-    /** A refused Exercise holds back only its own Workouts, keeps them, and is fixed by renaming. */
     @Test
     fun refusedExerciseKeepsItsWorkoutQueuedLetsOthersSyncAndRenamingDeliversBoth() {
-        // Created elsewhere after this app downloaded the Library, so only Axum can notice.
         api.putExercise(FixtureExercise(50, RING_ROW, "gym", "back"))
         app.setWifi(false)
         createRingRowOffline()
@@ -282,13 +258,11 @@ class OfflineExerciseTest {
         app.setWifi(true)
         app.pressBackButton()
 
-        // The unrelated Workout goes through; the dependent one waits, with no broken reference sent.
         app.assertEventuallyContaining("OpenHome already has an Exercise with this name")
         waitUntilStored("Free session")
         assertEquals(listOf("Free session"), api.storedWorkouts().map { it.name })
         assertEquals(1, api.workoutDeliveries().size)
 
-        // Nothing is lost across a restart, and it does not retry on its own.
         app.relaunch()
         app.assertVisible("2 Workouts on this device")
         app.tapBelow("History")
@@ -301,7 +275,6 @@ class OfflineExerciseTest {
         app.sleepFor(SETTLED_MS)
         assertEquals("A refused change waits for the user", attempts, api.exerciseDeliveries().size)
 
-        // The way out is a rename, which the local Workout simply follows.
         app.tapTextContaining("OpenHome already has an Exercise with this name")
         app.assertVisible("Fix Exercise")
         app.enter("Name", "Pull-Up")
@@ -319,7 +292,6 @@ class OfflineExerciseTest {
         app.assertVisible("Ring Row Wide")
     }
 
-    /** When the user says it is that Exercise, nothing is created and the Workout points at Axum's. */
     @Test
     fun takenNameCanUseOpenHomesExerciseWithoutADuplicate() {
         api.putExercise(FixtureExercise(50, RING_ROW, "gym", "back", "rings"))
@@ -339,15 +311,10 @@ class OfflineExerciseTest {
         assertEquals(listOf(50L), workoutNamed("Linked session").entries.map { it.exerciseId })
         openLibrary()
         app.enter("Search Exercises", "ring")
-        // Its metadata is now Axum's, and it reads as one synced Exercise.
         app.assertVisible("gym · back · rings")
         app.assertAbsent(WAITING_FOR_WIFI)
     }
 
-    /**
-     * Axum's Exercise of that name is one this device already holds under its old name, so the two
-     * local rows are one Exercise: a queued Workout, History and the session all end up on that row.
-     */
     @Test
     fun usingOpenHomesExerciseMergesIntoTheLocalRowThatAlreadyHoldsIt() {
         api.putExercise(FixtureExercise(1, RING_ROW, "calisthenics", "back"))

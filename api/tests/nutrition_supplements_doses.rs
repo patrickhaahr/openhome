@@ -1,6 +1,3 @@
-//! Supplement Doses through the nutrition routes: counted amounts, Nutrition Day shares and
-//! snapshots, over a real `app.db` and a real `food.db`.
-
 mod common;
 #[path = "nutrition_support/supplements.rs"]
 mod support;
@@ -49,7 +46,6 @@ async fn a_supplement_dose_counts_its_per_dose_amounts_times_the_doses_taken() {
             },
         ])
     );
-    // 200 g chicken has 300 kcal and 14 g fat; the label's energy and fat count toward eaten.
     assert_eq!(
         (
             &log["totals"]["energy_kcal"],
@@ -86,7 +82,6 @@ async fn the_day_splits_every_total_into_food_and_supplement_shares_and_lists_co
         ]),
     ))
     .await;
-    // An evening stack without food.
     api.logged(json!({
         "eaten_at": "2026-10-29T21:00:00+01:00",
         "supplement_doses": [
@@ -99,7 +94,6 @@ async fn the_day_splits_every_total_into_food_and_supplement_shares_and_lists_co
 
     let day = api.day("2026-10-29").await;
 
-    // Chicken has 0.01 g EPA per 100 g; three capsules add 0.54 g.
     assert_eq!(
         api.nutrient("2026-10-29", "epa").await,
         json!({
@@ -108,7 +102,6 @@ async fn the_day_splits_every_total_into_food_and_supplement_shares_and_lists_co
             "unit": "g", "value": 0.56, "unknown_portions": 0, "food": 0.02, "supplements": 0.54,
         })
     );
-    // Chicken has no vitamin D value: the supplement share is all that is known.
     let vitamin_d = api.nutrient("2026-10-29", "vitamin_d").await;
     assert_eq!(
         (
@@ -119,7 +112,6 @@ async fn the_day_splits_every_total_into_food_and_supplement_shares_and_lists_co
         (&json!(15.0), &Value::Null, &json!(15.0))
     );
     assert_eq!(vitamin_d["unknown_portions"], 1);
-    // DHA is not in this Food database's parameters, but a Supplement gives it by key.
     let dha = api.nutrient("2026-10-29", "dha").await;
     assert_eq!(
         (
@@ -154,7 +146,6 @@ async fn the_day_splits_every_total_into_food_and_supplement_shares_and_lists_co
             },
         ])
     );
-    // A Supplement's energy is not a classified Food, so the NOVA share leaves it out.
     assert_eq!(day["nova"]["unclassified_portions"], 1);
 }
 
@@ -197,7 +188,6 @@ async fn the_day_gives_the_supplement_share_of_each_upper_limit_form() {
         folate["supplement_forms"],
         json!([{"form": "folic_acid", "value": 400.0}])
     );
-    // Magnesium's supplement-only limit is simply its supplement share.
     let magnesium = api.nutrient("2026-10-29", "magnesium").await;
     assert_eq!(
         (&magnesium["supplements"], magnesium.get("supplement_forms")),
@@ -239,7 +229,6 @@ async fn a_logged_dose_keeps_its_snapshot_after_the_supplement_is_edited_or_dele
         std::slice::from_ref(&log)
     );
     assert_eq!(api.day("2026-10-29").await, before);
-    // The edited label reaches the next dose.
     let next = api
         .logged(json!({
             "eaten_at": "2026-10-29T12:00:00+01:00",
@@ -324,7 +313,6 @@ async fn supplement_doses_are_checked_retried_and_replaced_like_portions() {
         updated["supplement_doses"][0]["compounds"],
         json!([{"name": "Creatine monohydrate", "value": 6.0, "unit": "g"}])
     );
-    // Removing every Portion leaves the doses; removing both leaves nothing to log.
     let (status, updated) = api.update_log(&log["id"], json!({"portions": []})).await;
     assert_eq!(status, StatusCode::OK, "{updated}");
     assert_eq!(updated["portions"], json!([]));

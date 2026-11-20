@@ -1,5 +1,3 @@
-//! Backlight bedtime routine: enabling, edits and rejected values.
-
 mod backlight_support;
 mod common;
 
@@ -82,7 +80,7 @@ async fn routine_runs_without_dashboard_expires_off_at_start_and_restores_saved_
     let device = Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
-    let clock = Arc::new(ControlledClock::at("2026-10-23T20:59:59Z")); // Copenhagen 22:59:59
+    let clock = Arc::new(ControlledClock::at("2026-10-23T20:59:59Z"));
     let service =
         BacklightService::with_clock(state.db.clone(), Some(device.clone()), None, clock.clone())
             .await
@@ -124,7 +122,6 @@ async fn routine_runs_without_dashboard_expires_off_at_start_and_restores_saved_
     assert_eq!(overridden["override_expires_at"], "2026-10-23T22:00:00Z");
     clock.set("2026-10-23T22:00:00Z");
     let restored = wait_for_mode(app.clone(), "tv-sync").await;
-    // Wait for the end transition, rather than the preceding manual TV Sync write.
     tokio::time::timeout(std::time::Duration::from_secs(4), async {
         loop {
             let (_, body) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
@@ -198,7 +195,7 @@ async fn bedtime_edits_apply_now_preserve_manual_expiry_and_persist_while_disabl
     let device = Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
-    let clock = Arc::new(ControlledClock::at("2026-10-23T21:30:00Z")); // 23:30 Copenhagen
+    let clock = Arc::new(ControlledClock::at("2026-10-23T21:30:00Z"));
     let service =
         BacklightService::with_clock(state.db.clone(), Some(device.clone()), None, clock.clone())
             .await

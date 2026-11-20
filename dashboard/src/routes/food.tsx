@@ -12,10 +12,6 @@ import {
 import { trendsChoiceOf, trendsSearch } from "@/lib/nutrition-trends"
 import { useCopenhagenDay } from "@/lib/use-copenhagen-day"
 
-/**
- * Food: one Copenhagen day's targets, Meal Logs and totals, opening on today, or the Trends of
- * the last 30 to 365 days.
- */
 export const Route = createFileRoute("/food")({
   head: () => ({ meta: [{ title: "Food · OpenHome" }] }),
   validateSearch: nutritionSearch.extend(trendsSearch.shape),
@@ -47,8 +43,6 @@ function FoodPage(): React.JSX.Element {
   const today = useCopenhagenDay()
   const shown = useRef(today)
 
-  // Without a chosen day the page follows today, so it re-reads at Copenhagen midnight; Trends
-  // always end today.
   useEffect(() => {
     if (shown.current === today) return
     shown.current = today

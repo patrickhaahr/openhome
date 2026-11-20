@@ -50,7 +50,6 @@ import com.patrickhaahr.openhome.ui.theme.Lit
 import com.patrickhaahr.openhome.ui.theme.Type
 
 object Motion {
-    /** One ease for the whole app: things rise and settle. */
     val Ease = CubicBezierEasing(0.2f, 0.7f, 0.1f, 1f)
     const val QUICK = 180
     const val PANEL = 320
@@ -65,7 +64,6 @@ enum class KeyTone(val fill: Color, val ink: Color) {
     Alarm(Lit.AlarmDeep, Lit.Alarm),
 }
 
-/** Every control gives under the thumb. */
 fun Modifier.pressable(source: MutableInteractionSource, depth: Float = 0.94f): Modifier =
     composed {
         val pressed by source.collectIsPressedAsState()
@@ -76,7 +74,6 @@ fun Modifier.pressable(source: MutableInteractionSource, depth: Float = 0.94f): 
         }
     }
 
-/** The one way to make a tappable shape: pressed depth, haptic tick, and the name for those who can't see it. */
 fun Modifier.key(
     description: String,
     onClick: () -> Unit,
@@ -102,7 +99,6 @@ fun Modifier.key(
             ).semantics { contentDescription = description }
     }
 
-/** A glyph on a disc: the app's button. Dims only when the thing can't be done, never while it is being done. */
 @Composable
 fun GlyphKey(
     glyph: Glyph,
@@ -132,7 +128,6 @@ fun GlyphKey(
     }
 }
 
-/** A key whose symbol is a figure or a couple of letters: 1 to 9, HDMI numbers, −15. */
 @Composable
 fun FigureKey(
     figure: String,
@@ -160,7 +155,6 @@ fun FigureKey(
     }
 }
 
-/** The big one at the foot of a form or a screen: full width, one symbol, always in reach. */
 @Composable
 fun SlabKey(
     glyph: Glyph,
@@ -185,7 +179,6 @@ fun SlabKey(
     }
 }
 
-/** What a sent command is doing, as far as the key can honestly say. Never the device's state. */
 enum class CommandPhase {
     Idle,
     Sending,
@@ -193,11 +186,6 @@ enum class CommandPhase {
     Failed,
 }
 
-/**
- * Draws a sent command on the key itself: a lit arc spinning round it while waiting, one ring rippling
- * out when acknowledged, a shake and a red ring when it failed. "Acknowledged" is the API's word, not
- * the device's: nothing here says on or off.
- */
 @Composable
 fun CommandHalo(phase: CommandPhase, pulse: Int, modifier: Modifier, content: @Composable () -> Unit) {
     val shake = remember { Animatable(0f) }
@@ -265,10 +253,6 @@ fun SendingArc(modifier: Modifier = Modifier, color: Color = Lit.Lamp, stroke: D
     }
 }
 
-/**
- * Follows one section's single in-flight command, so only the key that was pressed reacts to it. The
- * section's view model says busy, acknowledged or failed; this remembers whose press that was about.
- */
 class CommandTracker {
     private var lastKey by mutableIntStateOf(0)
     private var presses by mutableIntStateOf(0)
@@ -291,7 +275,6 @@ class CommandTracker {
         }
 }
 
-/** The small status mark beside a figure or a title. */
 @Composable
 fun MarkDot(color: Color, modifier: Modifier = Modifier, size: Dp = 8.dp) {
     Box(modifier.size(size).background(color, CircleShape))
@@ -302,7 +285,6 @@ fun Monogram(name: String, modifier: Modifier = Modifier, color: Color = Lit.Ink
     Text(monogramOf(name), style = Type.Small, color = color, modifier = modifier)
 }
 
-/** "Pull-Up" is PU, "Planche Hold" is PH: enough to find an Exercise among those of the day. */
 fun monogramOf(name: String): String {
     val parts = name.split(' ', '-', '/').filter { it.isNotBlank() }
     return when {

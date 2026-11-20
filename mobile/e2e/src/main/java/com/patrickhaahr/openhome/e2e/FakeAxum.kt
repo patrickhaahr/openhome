@@ -20,18 +20,6 @@ import mockwebserver3.RecordedRequest
 
 const val API_KEY = "e2e-api-key"
 
-/**
- * The app's external boundary: an HTTP server speaking the Axum fitness contract, including its
- * `Authorization` check and its list paging (`limit` defaults to 100 and clamps to 1..500, Workouts
- * run newest first with an inclusive `to`, Body Weight oldest first with an inclusive `from`) and
- * Workout and Exercise creates with a `request_id`: a repeat answers 200 with the same record, and the
- * same `request_id` with changed arguments is a 409. Exercise names are unique, also a 409. Workout
- * edits replace the entries they state, keep a name or notes they leave out, and apply only when their
- * `client_revision` is newer, otherwise answering the Workout as it is. Body Weight records follow the
- * same `request_id` rule, and a date recorded under any other is a 409. Profile edits keep what they
- * leave out, clear what they send as null and follow the same `client_revision` rule. Its stored records
- * are what a test reads back independently.
- */
 class FakeAxum(
     exercises: Map<Long, String> = emptyMap(),
     workouts: List<FixtureWorkout> = emptyList(),
@@ -55,10 +43,6 @@ class FakeAxum(
 
     @Volatile private var commandGate: CountDownLatch? = null
 
-    /**
-     * Hangs TV, speaker, light and Backlight change (non-GET) responses until the returned latch opens, so a
-     * test can observe the sending state. Backlight reads are never held.
-     */
     fun holdCommands(): CountDownLatch = CountDownLatch(1).also { commandGate = it }
 
     private fun awaitCommandGate() {
@@ -148,7 +132,6 @@ class FakeAxum(
     val baseUrl: String
         get() = "http://127.0.0.1:${server.port}"
 
-    /** Answer later Workout detail reads with an API error, as a server failing mid-download would. */
     fun failWorkoutDetailsAfter(successes: Int) {
         failDetailsAfter = successes
     }
@@ -162,93 +145,71 @@ class FakeAxum(
         losingProfileResponses = false
     }
 
-    /** Commit each Body Weight record, then cut the connection before answering. */
     fun loseBodyWeightResponses() {
         losingBodyWeightResponses = true
     }
 
-    /** Commit each Profile edit, then cut the connection before answering. */
     fun loseProfileResponses() {
         losingProfileResponses = true
     }
 
-    /** Another client records a Body Weight after this app's Setup Flow. */
     fun putBodyWeight(date: String, weightKg: Double) {
         bodyWeight += FixtureBodyWeight((bodyWeight.maxOfOrNull { it.id } ?: 0) + 1, date, weightKg)
     }
 
-    /** The stored Body Weight records, oldest first, read independently of anything the app reports. */
     fun storedBodyWeight(): List<FixtureBodyWeight> = bodyWeight.sortedBy { it.date }
 
-    /** The stored Profile, read independently of anything the app reports. */
     fun storedProfile(): FixtureProfile = profile
 
-    /** The `request_id` of every Body Weight record received, in order, including lost and refused ones. */
     fun bodyWeightDeliveries(): List<String> = bodyWeightDeliveries.toList()
 
-    /** The `client_revision` of every Profile edit received, in order, including lost ones. */
     fun profileDeliveries(): List<Long> = profileDeliveries.toList()
 
-    /** Commit each Workout edit, then cut the connection before answering. */
     fun loseEditResponses() {
         workoutEdits = WorkoutEdits.COMMITTED_RESPONSE_LOST
     }
 
-    /** Another client deletes a Workout this app has downloaded. */
     fun deleteWorkout(id: Long) {
         workouts.removeAll { it.id == id }
     }
 
-    /** The `client_revision` of every Workout edit received, in order, including lost ones. */
     fun editDeliveries(): List<Long> = editDeliveries.toList()
 
-    /** Commit each Exercise create, then cut the connection before answering. */
     fun loseExerciseResponses() {
         exerciseCreates = ExerciseCreates.COMMITTED_RESPONSE_LOST
     }
 
-    /** Another client adds to the Library, or renames in it, after this app's Setup Flow. */
     fun putExercise(exercise: FixtureExercise) {
         exercises.removeAll { it.id == exercise.id }
         exercises += exercise
     }
 
-    /** The stored Exercises, read independently of anything the app reports. */
     fun storedExercises(): List<FixtureExercise> = exercises.toList()
 
-    /** The `request_id` of every Exercise create received, in order, including lost and refused ones. */
     fun exerciseDeliveries(): List<String> = exerciseDeliveries.toList()
 
-    /** What reached Axum and committed, in order: "exercise:<name>", "workout:<name>" or "edit:<name>". */
     fun commitOrder(): List<String> = createOrder.toList()
 
-    /** Commit each Workout create, then cut the connection before answering. */
     fun loseWorkoutResponses() {
         workoutCreates = WorkoutCreates.COMMITTED_RESPONSE_LOST
     }
 
-    /** Cut the connection on each Workout create without committing it, as an unreachable API would. */
     fun dropWorkoutRequests() {
         workoutCreates = WorkoutCreates.DROPPED
     }
 
-    /** Answer each Workout create with a 500 and commit nothing. */
     fun failWorkoutCreates() {
         workoutCreates = WorkoutCreates.SERVER_ERROR
     }
 
-    /** Answer each Workout create with a 422 and commit nothing. */
     fun refuseWorkoutCreates() {
         workoutCreates = WorkoutCreates.REFUSED
     }
 
-    /** The stored Workouts, read independently of anything the app reports. */
     fun storedWorkouts(): List<FixtureWorkout> = workouts.toList()
 
-    /** The `request_id` of every Workout create received, in order, including lost and refused ones. */
     fun workoutDeliveries(): List<String> = deliveries.toList()
 
-    /** Hang Workout detail reads, so the test can act while the app is still downloading. */
     fun holdWorkoutDetails(): CountDownLatch =
         CountDownLatch(1).also { releaseBlockedDetails = it }
 

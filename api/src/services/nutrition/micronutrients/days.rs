@@ -7,7 +7,6 @@ use crate::services::training::calendar::CalendarDay;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-/// The Profile values the references depend on.
 #[derive(Clone, Copy, Debug)]
 pub struct Person {
     pub(super) sex: Sex,
@@ -15,7 +14,6 @@ pub struct Person {
 }
 
 impl Person {
-    /// The Profile's sex and birth date, or which of them it lacks.
     pub async fn read(db: &SqlitePool) -> Result<Result<Self, Vec<Missing>>, sqlx::Error> {
         let row =
             sqlx::query!(r#"SELECT sex, birth_date AS "birth_date?" FROM profile WHERE id = 1"#)
@@ -44,18 +42,14 @@ fn add(left: Option<f64>, right: Option<f64>) -> Option<f64> {
     }
 }
 
-/// One logged day's Portions summed per parameter in SQL, with its Supplement Doses: what the
-/// panel reads, without loading every Portion's values.
 #[derive(Debug, Default)]
 pub(super) struct DayEaten {
-    /// Per parameter key: the amount from the Portions that have a value, and how many do.
     pub(super) food: HashMap<String, (f64, usize)>,
     pub(super) portions: usize,
     pub(super) doses: Vec<StoredDose>,
 }
 
 impl DayEaten {
-    /// `key` from food and supplements; a Portion without a value is unknown and counted.
     fn intake(&self, key: &str) -> Intake {
         let doses: Vec<&StoredDose> = self.doses.iter().collect();
         let food = match self.food.get(key) {
@@ -65,7 +59,6 @@ impl DayEaten {
         food + Intake::of(key, &[], &doses)
     }
 
-    /// The supplement share of `form` over `keys`, zero when none was taken.
     fn supplement_form(&self, keys: &[&str], form: &str) -> f64 {
         keys.iter()
             .filter_map(|key| self.intake(key).supplement_form(form))
@@ -73,14 +66,12 @@ impl DayEaten {
     }
 }
 
-/// One nutrient's intake on one logged day.
 #[derive(Clone, Debug)]
 pub(super) struct DayIntake {
     pub(super) amount: Option<f64>,
     pub(super) food: Option<f64>,
     pub(super) supplements: Option<f64>,
     pub(super) unknown_portions: usize,
-    /// The share each of the reference's Upper Limits applies to, in its order.
     pub(super) limited: Vec<Option<f64>>,
 }
 
@@ -113,7 +104,6 @@ impl DayIntake {
             .map(|limit| match limit.share {
                 Share::Total => amount,
                 Share::Supplements => Some(supplements.unwrap_or(0.0)),
-                // Retinol in food, and retinol taken as vitamin A or listed as retinol itself.
                 Share::PreformedVitaminA => add(
                     eaten.intake(RETINOL).total(),
                     eaten.intake("vitamin_a").supplement_form("retinol"),
@@ -140,34 +130,27 @@ impl DayIntake {
     }
 }
 
-/// One Upper Limit on one day, before rounding.
 #[derive(Debug)]
 pub(super) struct LimitDay {
     pub(super) limit: f64,
-    /// The day's amount of the share the limit applies to.
     pub(super) amount: Option<f64>,
     pub(super) average: Option<f64>,
     pub(super) averaged_days: usize,
     pub(super) status: LimitStatus,
 }
 
-/// One nutrient on one day, before rounding: what the panel shows and a summary adds up.
 #[derive(Debug)]
 pub(in crate::services::nutrition) struct NutrientDay {
     pub(super) amount: Option<f64>,
     pub(super) recommended: f64,
-    /// In the order of the reference's Upper Limits.
     pub(super) limits: Vec<LimitDay>,
 }
 
 impl NutrientDay {
-    /// The percentage of the Recommended Intake; `None` when the amount is unknown.
     pub(in crate::services::nutrition) fn percent_of_recommended(&self) -> Option<f64> {
         self.amount.map(|amount| amount / self.recommended * 100.0)
     }
 
-    /// Whether the day is above any of the nutrient's Upper Limits (the Day view's caution, or
-    /// a day above within a cut down); `None` for a nutrient without one.
     pub(in crate::services::nutrition) fn above_upper_limit(&self) -> Option<bool> {
         (!self.limits.is_empty()).then(|| {
             self.limits
@@ -176,8 +159,6 @@ impl NutrientDay {
         })
     }
 
-    /// Whether the trailing 7-day average is above any of its Upper Limits; `None` for a
-    /// nutrient without one.
     pub(in crate::services::nutrition) fn cut_down(&self) -> Option<bool> {
         (!self.limits.is_empty()).then(|| {
             self.limits
@@ -187,11 +168,8 @@ impl NutrientDay {
     }
 }
 
-/// One day against the references, before rounding.
 #[derive(Debug)]
 pub(in crate::services::nutrition) struct DayAssessment {
-    /// The day has at least one Meal Log.
     pub(in crate::services::nutrition) has_meal_logs: bool,
-    /// In the order of [`REFERENCES`].
     pub(in crate::services::nutrition) nutrients: Vec<NutrientDay>,
 }

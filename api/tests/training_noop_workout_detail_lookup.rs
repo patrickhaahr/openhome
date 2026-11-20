@@ -1,9 +1,3 @@
-//! NOOP Workout Detail: selecting a workout by source, start and sport.
-
-//! NOOP Workout Detail (`GET /api/training/noop-workouts/{source}/{start}`): one NOOP Workout,
-//! selected by its listed `source` and `start`, with heart rate from the strap's samples. Workouts
-//! and samples are pushed through the real push endpoint.
-
 mod common;
 mod training_noop_workout_detail_support;
 
@@ -49,7 +43,6 @@ async fn repeats_the_listed_workout_and_its_training_day_sync() {
         assert_eq!(body[field], listed[field], "{field}");
     }
     assert_eq!(body["noop"], day["noop"]);
-    // The stored text is never echoed.
     assert!(!body.to_string().contains("route-stand-in"), "{body}");
 }
 
@@ -92,7 +85,6 @@ async fn opens_only_workouts_in_the_merged_list() {
             COMPUTED,
             WORKOUT_WINDOW,
             &[
-                // The same row in the computed namespace, and the detector's wider shadow of it.
                 manual.clone(),
                 noop_workout(
                     1_790_437_800,
@@ -113,11 +105,8 @@ async fn opens_only_workouts_in_the_merged_list() {
     detail_of(&app, IMPORTED, "2026-09-26T18:00:00+02:00").await;
 
     for (source, start) in [
-        // NOOP folds the computed copy into the imported row.
         (COMPUTED, "2026-09-26T18:00:00+02:00"),
-        // NOOP drops the detected bout as a shadow of the manual session.
         (COMPUTED, "2026-09-26T17:50:00+02:00"),
-        // Nothing starts a second later, or in another namespace.
         (IMPORTED, "2026-09-26T18:00:01+02:00"),
         ("apple-health", "2026-09-26T18:00:00+02:00"),
     ] {
@@ -132,7 +121,6 @@ async fn opens_only_workouts_in_the_merged_list() {
         );
     }
 
-    // Before any strap push there is no installation to open a workout from.
     let (status, _) = detail(
         &common::test_app_with_noop_db(Mirror::empty().await.db).await,
         IMPORTED,
@@ -205,7 +193,6 @@ async fn rejects_an_empty_or_malformed_source() {
 
 #[tokio::test]
 async fn rejects_oversized_workouts_and_days_instead_of_truncating() {
-    // 08:00 on the 26th until 08:00:01 on the 27th: one second over a day.
     let long = noop_workout(1_790_402_400, 1_790_488_801, "Hiking", "manual", json!({}));
     let exactly_a_day = noop_workout(1_790_406_000, 1_790_492_400, "Walking", "manual", json!({}));
     let long_app = app(&mirror_with(&[long, exactly_a_day]).await).await;
@@ -294,14 +281,12 @@ async fn the_listed_sport_tells_apart_workouts_sharing_a_source_and_start() {
         ]
     );
 
-    // Every listed workout opens with its listed sport.
     for (source, start, sport) in listed {
         let body = detail_of(&app, source, &format!("{start}/{sport}")).await;
         assert_eq!(body["sport"], sport);
         assert_eq!(body["start"], start);
     }
 
-    // Without the sport the choice is ambiguous, so none is picked.
     let (status, body) = detail(&app, IMPORTED, "2026-09-26T07:00:00+02:00", Some(API_KEY)).await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(
@@ -313,7 +298,6 @@ async fn the_listed_sport_tells_apart_workouts_sharing_a_source_and_start() {
         })
     );
 
-    // The sport matches whatever its case; another sport matches nothing.
     for sport in ["running", "RUNNING"] {
         let body = detail_of(
             &app,
@@ -339,7 +323,6 @@ async fn the_listed_sport_tells_apart_workouts_sharing_a_source_and_start() {
 
 #[tokio::test]
 async fn an_exact_sport_wins_over_one_differing_only_in_case() {
-    // Zero-length rows never overlap, so NOOP keeps both although their sports match.
     let app = app(&mirror_with(&[
         noop_workout(1_790_398_800, 1_790_398_800, "Running", "manual", json!({})),
         noop_workout(1_790_398_800, 1_790_398_800, "running", "manual", json!({})),

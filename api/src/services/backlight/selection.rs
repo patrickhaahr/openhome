@@ -15,7 +15,6 @@ impl BacklightService {
         drop(submission);
         self.finish_dispatch(selection, revision).await
     }
-    /// Current policy, rebuilt from the live status.
     async fn policy(&self) -> Policy {
         let state = self.state.lock().await;
         Policy::new(
@@ -26,7 +25,6 @@ impl BacklightService {
         )
     }
     async fn prepare_profile(&self, selection: Selection) -> Result<()> {
-        // Capture before leaving TV Sync. Off still works if setup cannot be completed.
         if self.profile.lock().await.is_none() {
             let _worker = self.worker.lock().await;
             let captured = self.capture().await;
@@ -38,7 +36,6 @@ impl BacklightService {
         }
         Ok(())
     }
-    // Called with the submission lock: target, settings and override commit together.
     pub(super) async fn persist(&self, target: &Target) -> Result<u64> {
         let selection = target.selection();
         let manual_override = target.manual_override();
@@ -67,7 +64,6 @@ impl BacklightService {
         Ok(self.revision.fetch_add(1, Ordering::SeqCst) + 1)
     }
     async fn finish_dispatch(&self, selection: Selection, revision: u64) -> Result<Status> {
-        // Keep accepted durable work alive even if its requesting client disconnects.
         let service = self.clone();
         tokio::spawn(async move { service.dispatch(selection, revision).await })
             .await
@@ -95,8 +91,6 @@ impl BacklightService {
         drop(submission);
         self.finish_dispatch(selection, revision).await
     }
-    /// Reevaluate current wall time without replaying historical transitions.
-    /// Healthy observations do not reassert targets changed by external controllers.
     pub async fn run_routine(self) {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -130,7 +124,6 @@ impl BacklightService {
             .resolve(self.clock.now());
             let selection = target.selection();
             if let Ok(revision) = self.persist(&target).await {
-                // Policy still advances when setup prevents dispatch, including override expiry.
                 if selection != (Selection::Off {}) && self.profile.lock().await.is_none() {
                     self.state.lock().await.profile_required();
                     continue;
@@ -152,8 +145,6 @@ impl BacklightService {
         if self.revision.load(Ordering::SeqCst) != revision {
             return Ok(());
         }
-        // A whole exchange ahead of us may have crossed the window boundary.
-        // Leave the due cursor intact so the routine saves and applies only now's target.
         if self
             .state
             .lock()

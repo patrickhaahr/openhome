@@ -11,7 +11,6 @@ use crate::services::training::calendar;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
-/// A snapshotted value: per 100 g edible part.
 #[derive(Debug)]
 pub(in crate::services::nutrition) struct StoredValue {
     pub value: f64,
@@ -19,7 +18,6 @@ pub(in crate::services::nutrition) struct StoredValue {
     pub source: ValueSource,
 }
 
-/// A stored Portion with its snapshot.
 #[derive(Debug)]
 pub(in crate::services::nutrition) struct StoredPortion {
     pub(super) food_id: i64,
@@ -33,17 +31,14 @@ pub(in crate::services::nutrition) struct StoredPortion {
 }
 
 impl StoredPortion {
-    /// The Food database version its values were copied from.
     pub(in crate::services::nutrition) fn dataset_version(&self) -> &str {
         &self.dataset_version
     }
 
-    /// Whether it was logged as a Product, so its label values are Open Food Facts'.
     pub(in crate::services::nutrition) fn is_product(&self) -> bool {
         self.product.is_some()
     }
 
-    /// The amount eaten of `key`, if known: the per-100 g value scaled to the grams.
     pub(in crate::services::nutrition) fn amount(&self, key: &str) -> Option<f64> {
         self.values
             .get(key)
@@ -51,7 +46,6 @@ impl StoredPortion {
     }
 }
 
-/// A stored photo: its ID names its files.
 #[derive(Debug)]
 pub(super) struct StoredPhoto {
     pub(super) id: String,
@@ -60,7 +54,6 @@ pub(super) struct StoredPhoto {
 }
 
 impl StoredPhoto {
-    /// The photo when every column is set; the columns are written together.
     pub(super) fn from_columns(
         id: Option<String>,
         width: Option<i64>,
@@ -98,7 +91,6 @@ impl StoredPhoto {
     }
 }
 
-/// A stored Meal Log with its Portions and Supplement Doses in order.
 #[derive(Debug)]
 pub(in crate::services::nutrition) struct StoredLog {
     pub(super) id: String,
@@ -111,7 +103,6 @@ pub(in crate::services::nutrition) struct StoredLog {
     pub doses: Vec<StoredDose>,
 }
 
-/// Rounds away floating-point noise from scaled and summed values.
 pub(in crate::services::nutrition) fn round(value: f64) -> f64 {
     (value * 10_000.0).round() / 10_000.0
 }

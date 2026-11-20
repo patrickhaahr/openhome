@@ -47,7 +47,6 @@ export type FindCards = (input: {
   card_code: string
 }) => Promise<CardSearchResult>
 
-/** The flow, stepped through the one transition function and kept in storage before it renders. */
 function useAddFlow(): [AddFlow, (step: AddStep) => void] {
   const [flow, setFlow] = useState<AddFlow>(recover)
   const latest = useRef(flow)
@@ -83,7 +82,6 @@ const draftRow = "grid grid-aside-36 items-start gap-5"
 
 const draftFacts = "grid justify-items-start gap-2"
 
-/** The Binder's "Add card": a button that opens the sheet, and the write behind it. */
 export function AddCard({
   owners,
   person,
@@ -108,7 +106,6 @@ export function AddCard({
 
   const [open, setOpen] = useState(false)
 
-  // A refresh resumes an unconfirmed addition rather than silently dropping it.
   useEffect(() => {
     // eslint-disable-next-line react/set-state-in-effect -- Session storage exists only in the browser; reading it in render would not match the server's render.
     if (recover().state !== "idle") setOpen(true)
@@ -297,7 +294,6 @@ function AddSheet({
   )
 }
 
-/** The official image over the card's code, which stays if the picture cannot load. */
 function CardArt({ card }: { card: CardVariant }): React.JSX.Element {
   return (
     <span className="relative block aspect-binder-card overflow-hidden rounded-code bg-wash-strong">
@@ -419,7 +415,6 @@ function Drafting({
   )
 }
 
-/** What the Binder now holds, read back from the refreshed Binder rather than assumed. */
 function Added({
   draft,
   owner,

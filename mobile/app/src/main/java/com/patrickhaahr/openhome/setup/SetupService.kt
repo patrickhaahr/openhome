@@ -33,7 +33,6 @@ private const val CONCURRENT_DETAIL_REQUESTS = 4
 sealed interface SetupState {
     data object NotStarted : SetupState
 
-    /** A previous attempt stopped mid-download, possibly with the process; nothing from it was saved. */
     data class Interrupted(val baseUrl: String) : SetupState
 
     data object Complete : SetupState
@@ -53,16 +52,6 @@ sealed interface SetupProgress {
 
 data class SavedConnection(val baseUrl: String, val apiKeyAvailable: Boolean)
 
-/**
- * The online Setup Flow. Everything downloaded commits in one transaction together with the COMPLETE
- * status, so an interruption at any point leaves no partial fitness data and no claim of completion.
- *
- * [run] is one linear sequence (check, mark DOWNLOADING, download, seal the key, commit), already clear as
- * straight-line code, so it has no state machine of its own. Progress is reported to the caller, which owns
- * the on-screen outcome. The persisted [SetupStatus] is a separate fact that survives the process: a
- * run that fails the connection check leaves the status as it was; one cancelled or failed after DOWNLOADING is written
- * leaves DOWNLOADING (no key, no data). Either way a retry simply starts the sequence again.
- */
 class SetupService(
     private val database: OpenHomeDatabase,
     private val cipher: ApiKeyCipher,
@@ -85,7 +74,6 @@ class SetupService(
         return SavedConnection(row.baseUrl, apiKeyAvailable = openApiKey(row) != null)
     }
 
-    /** What background work connects with; null when setup is unfinished or the key can't be opened. */
     suspend fun connection(): Connection? {
         val row = completedSetup() ?: return null
         val apiKey = openApiKey(row) ?: return null
@@ -102,7 +90,6 @@ class SetupService(
         return if (ciphertext != null && iv != null) cipher.open(SealedApiKey(ciphertext, iv)) else null
     }
 
-    /** @throws ApiFailure when the Axum API cannot be used; storage and Keystore errors propagate too. */
     suspend fun run(connection: Connection, onProgress: (SetupProgress) -> Unit) {
         val api = OpenHomeApi(connection.baseUrl, connection.apiKey, httpClient)
 
@@ -119,7 +106,6 @@ class SetupService(
             ),
         )
 
-        // Exercises come after Workouts so that every Exercise a downloaded Workout references is listed.
         onProgress(SetupProgress.ListingWorkouts)
         val workouts = downloadWorkouts(api, onProgress)
         onProgress(SetupProgress.DownloadingLibraryAndProfile)
@@ -186,7 +172,6 @@ class SetupService(
                 )
                 .toMap()
 
-        // Oldest first, so that local ids grow with the server's order of same-day Workouts.
         for (workout in workouts.sortedWith(compareBy({ it.date }, { it.id }))) {
             val workoutId =
                 fitnessDao.insertWorkout(

@@ -1,5 +1,3 @@
-//! Request and owner helpers shared by the watchlist test files.
-
 #![allow(dead_code)]
 
 use crate::common::send_request_with_method;

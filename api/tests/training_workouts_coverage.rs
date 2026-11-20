@@ -1,8 +1,3 @@
-//! Workouts on a Training Day: late syncs, coverage, day bounds and caps.
-
-//! Workouts on a Training Day (`GET /api/training/days/{day}/workouts`): Workouts logged through
-//! the fitness API beside NOOP Workouts pushed through the real push endpoint.
-
 mod common;
 mod training_workouts_support;
 
@@ -30,7 +25,6 @@ fn starts(body: &Value) -> Vec<&str> {
 #[tokio::test]
 async fn a_late_noop_sync_adds_workouts_beside_the_logged_ones() {
     let morning_run = noop_workout(1_790_398_800, 1_790_401_500, "Running", "manual", json!({}));
-    // 08:00 local on the 26th: the phone pushed the morning run during the day.
     let mut mirror = mirror_with(
         std::slice::from_ref(&morning_run),
         &[],
@@ -52,7 +46,6 @@ async fn a_late_noop_sync_adds_workouts_beside_the_logged_ones() {
     assert_eq!(starts(&before), ["2026-09-26T07:00:00+02:00"]);
     assert_eq!(before["noop"]["freshness"], "partial");
 
-    // The next day's push replaces only the changed day and brings the evening session.
     let changed_day = Window::WorkoutStarts(1_790_373_600, 1_790_460_000);
     let evening = noop_workout(
         1_790_438_400,
@@ -99,7 +92,6 @@ async fn missing_noop_workouts_are_covered_or_unknown() {
                        "sets": [{"set_number": 1, "reps": 6}]}],
     });
 
-    // Before any push nothing is known about NOOP.
     let unsynced = app(&Mirror::empty().await).await;
     log_workout(&unsynced, logged.clone()).await;
     let body = workouts_on(&unsynced, "2026-09-20").await;
@@ -117,7 +109,6 @@ async fn missing_noop_workouts_are_covered_or_unknown() {
         })
     );
 
-    // Both namespaces pushed the day without a workout: NOOP recorded none.
     let covered = app(&mirror_with(&[], &[], REAL_PUSH_AT).await).await;
     log_workout(&covered, logged.clone()).await;
     let body = workouts_on(&covered, "2026-09-20").await;
@@ -126,7 +117,6 @@ async fn missing_noop_workouts_are_covered_or_unknown() {
     assert_eq!(body["noop"]["coverage"], json!({"workouts": "covered"}));
     assert_eq!(body["noop"]["freshness"], "confirmed");
 
-    // Only one namespace pushed workouts, so the day is not established.
     let mut half = Mirror::empty().await;
     half.push(SOURCE, IMPORTED, REAL_STARTS, &[], REAL_PUSH_AT)
         .await;
@@ -135,7 +125,6 @@ async fn missing_noop_workouts_are_covered_or_unknown() {
     assert_eq!(body["noop"]["last_push_at"], Value::Null);
     assert_eq!(body["noop"]["freshness"], "unknown");
 
-    // A day after the latest workout push is awaiting the phone's next sync.
     let body = workouts_on(&covered, "2026-09-27").await;
     assert_eq!(body["noop"]["coverage"], json!({"workouts": "unknown"}));
     assert_eq!(body["noop"]["freshness"], "unconfirmed");
@@ -145,9 +134,7 @@ async fn missing_noop_workouts_are_covered_or_unknown() {
 async fn workouts_are_grouped_by_copenhagen_start_day() {
     let mirror = mirror_with(
         &[
-            // 23:30 on the 19th to 00:45 on the 20th: a Workout of the 19th.
             noop_workout(1_789_853_400, 1_789_857_900, "Running", "manual", json!({})),
-            // 00:30 local on the 20th is still the 19th in UTC.
             noop_workout(1_789_857_000, 1_789_860_600, "Cycling", "manual", json!({})),
         ],
         &[],
@@ -168,11 +155,9 @@ async fn workouts_are_grouped_by_copenhagen_start_day() {
 
 #[tokio::test]
 async fn day_bounds_and_offsets_follow_daylight_saving() {
-    // Summer time ends at 03:00 CEST on 2026-10-25; that local day lasts 25 hours.
     let october = Window::WorkoutStarts(1_791_756_000, 1_792_969_200);
     let mut mirror = Mirror::empty().await;
     let rows = [
-        // 02:30 after the clocks went back, and 23:30 CET: both still on the 25th.
         noop_workout(1_792_891_800, 1_792_895_400, "Running", "manual", json!({})),
         noop_workout(1_792_967_400, 1_792_971_000, "Walking", "manual", json!({})),
     ];
@@ -229,7 +214,6 @@ async fn includes_imported_workouts_and_requires_their_coverage() {
     assert_eq!(before["noop"]["freshness"], "unconfirmed");
     assert_eq!(before["noop"]["last_push_at"], "2026-09-25T22:00:00+02:00");
 
-    // Complete empty windows remove the imported sessions and establish recorded absence.
     for device in sources {
         mirror
             .push(SOURCE, device, REAL_STARTS, &[], REAL_PUSH_AT)

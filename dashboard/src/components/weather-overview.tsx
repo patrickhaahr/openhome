@@ -42,7 +42,6 @@ const hourOffset = new Intl.DateTimeFormat("en-GB", {
   timeZoneName: "shortOffset",
 })
 
-/** Highs and lows on one shared scale, so the week reads as a shape. */
 function weekScale(days: Days): (celsius: number) => number {
   const values = days.flatMap((day) =>
     [day.low_c, day.high_c].filter((amount) => amount !== null)
@@ -54,7 +53,6 @@ function weekScale(days: Days): (celsius: number) => number {
   return (celsius) => (high === low ? 0.5 : (celsius - low) / (high - low))
 }
 
-/** Every hour's values for assistive technology; the sky beside it draws them. */
 function HourlyForecast({
   hours,
 }: {
@@ -130,8 +128,6 @@ function HourlyForecast({
   )
 }
 
-/** Whether the forecast still holds: nothing to see while fresh, a rewind mark when stale. The
- * page refreshes itself, so there is no manual check. */
 function WeatherFreshness({
   weather,
 }: {
@@ -174,10 +170,6 @@ const measure = "text-lead font-medium tracking-title tabular-nums"
 
 const dayFigure = "[&>dd]:whitespace-nowrap [&>dd]:tabular-nums"
 
-/**
- * The numbers on the left (now, then the week as ranges on one scale), the next day as a
- * horizon filling the right.
- */
 export function WeatherOverview({
   weather,
 }: {

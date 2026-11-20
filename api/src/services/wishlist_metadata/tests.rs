@@ -321,13 +321,10 @@ async fn authentication_and_explicit_ownership_precede_external_fetches() {
     assert!(server.received_requests().await.unwrap().is_empty());
 }
 
-// ---------- Stored product pictures ----------
-
 const PNG: &[u8] = &[
     0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d,
 ];
 
-/// One item whose stored picture address is `image_url`, written straight to the database.
 async fn picture_app(service: MetadataService, image_url: Option<&str>) -> Router {
     let (app, db) = app_with_db(service).await;
     sqlx::query(

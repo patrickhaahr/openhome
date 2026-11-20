@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { DialogClose } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 
-/** One photo on the night ground of a fullscreen dialog; its keys float on it as light plates. */
 export function PhotoViewer({
   className,
   ...props
@@ -25,7 +24,6 @@ export function ViewerStage({
   )
 }
 
-/** Where the photo is, and the close key. `decorative` hides the place from assistive technology. */
 export function ViewerBar({
   decorative = false,
   children,
@@ -52,7 +50,6 @@ export function ViewerBar({
   )
 }
 
-/** A step key beside the photo; on a phone it drops to the bottom, under the thumbs. */
 export function ViewerStep({
   side,
   disabled,

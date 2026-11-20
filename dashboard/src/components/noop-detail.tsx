@@ -13,7 +13,6 @@ import {
 import { clockTime, pace } from "@/lib/session-format"
 import { capsLabel } from "@/components/training-shared"
 
-/** Where a strap reading is drawn: the Recovery detail, or a Log session beside its exercises or alone. */
 export type StrapFit = "detail" | "pane" | "alone"
 
 function basis(data: NoopWorkoutDetail): string {
@@ -27,8 +26,6 @@ function basis(data: NoopWorkoutDetail): string {
   }
 }
 
-/** One strap session: its figures, heart rate over time on its zones, zone time and recovery. */
-/** The figures of one strap session, each as a label, its value and unit; missing ones are null. */
 export function noopStats(
   data: NoopWorkoutDetail
 ): Array<readonly [string, string | null, string]> {
@@ -82,7 +79,6 @@ const statLooks = {
   },
 } as const
 
-/** Labelled figures in one grid; figures that were not recorded are left out. */
 export function StatList({
   stats,
   look,
@@ -214,7 +210,6 @@ export type Series = NonNullable<NoopWorkoutDetail["hr_series"]>
 
 export type Zones = NonNullable<NoopWorkoutDetail["hr_zones"]>
 
-/** Strap heart rate as a line over its zone bands; a missing bucket stays a gap. */
 const traceLooks: Record<StrapFit, { figure: string; plot: string }> = {
   detail: { figure: "relative", plot: "h-hr-chart" },
   pane: {
@@ -319,7 +314,6 @@ export function HeartRateChart({
   )
 }
 
-/** Time in each zone as one bar, widest zone longest; minutes beneath. */
 export function ZoneBar({
   zones,
   fit,
@@ -379,7 +373,6 @@ export function ZoneBar({
   )
 }
 
-/** How fast the heart came down after the effort: the drop at one, two and five minutes. */
 function HeartRateRecovery({
   recovery,
 }: {
@@ -454,7 +447,6 @@ function HeartRateRecovery({
 
 type Route = NonNullable<NoopWorkoutDetail["route"]>
 
-/** The captured route on the shared map: a sun line from its start to its end. */
 export function RouteMap({
   route,
   fit,
@@ -466,7 +458,6 @@ export function RouteMap({
   const first = route[0] ?? [0, 0]
   const last = route.at(-1) ?? first
 
-  // One stable object per route, so the map frames it once instead of on every render.
   const routes = useMemo(
     () => ({
       lines: [

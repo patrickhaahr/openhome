@@ -92,7 +92,6 @@ function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-/** A synthetic RGB PNG of a gradient plate, base64-encoded as the agent sends photos. */
 export function syntheticPng(width: number, height: number): string {
   const chunk = (type: string, data: Uint8Array): Buffer => {
     const body = Buffer.concat([Buffer.from(type, "latin1"), data])
@@ -125,7 +124,6 @@ export function syntheticPng(width: number, height: number): string {
   ]).toString("base64")
 }
 
-/** Logs a synthetic meal through the API, as the agent does, and returns its day. */
 export async function logMeal(meal: {
   api?: string
   eatenAt: Date
@@ -174,7 +172,6 @@ export let refreshWork: Promise<void> = Promise.resolve()
 
 export let goalWork: Promise<unknown> = Promise.resolve()
 
-/** Renders the Day view; after a goal change it reads the same day again, as the page does. */
 export async function render(data: NutritionDayState): Promise<void> {
   const router = createRouter({
     routeTree: createRootRoute(),
@@ -214,14 +211,12 @@ export function text(selector: string): string[] {
   )
 }
 
-/** Each match's child elements' text, joined by spaces: a row as it reads across. */
 export function rows(selector: string): string[] {
   return [...container.querySelectorAll(selector)].map((element) =>
     [...element.children].map((child) => normalize(child.textContent)).join(" ")
   )
 }
 
-/** Sends an authenticated JSON write to an Axum fixture, as the agent's tools do. */
 export async function write(
   api: string,
   method: "POST" | "PUT" | "PATCH",

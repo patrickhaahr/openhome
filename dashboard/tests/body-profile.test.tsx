@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport runs here too; browser CORS does not apply to Axum calls.
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -196,7 +195,6 @@ test("configures the shared Profile, preserves concurrent untouched fields, and 
   expect(container.textContent).toContain("Profile saved to OpenHome.")
 
   await click("Edit profile")
-  // Another client changes a field this draft leaves untouched.
   await api(profile, "/api/profile", { hr_max_bpm: 195 })
   await choose("Sex (optional)", "")
   await click("Save profile")
@@ -398,7 +396,6 @@ test("a confirmed Profile save remains visible if its follow-up read is unavaila
 })
 
 test("shows a sex the targets cannot use instead of replacing it, and keeps it until changed", async () => {
-  // Another client stored free text.
   await api(profile, "/api/profile", { sex: "unspecified", height_cm: 180 })
   await render()
   await click("Edit profile")
@@ -412,7 +409,6 @@ test("shows a sex the targets cannot use instead of replacing it, and keeps it u
     "“unspecified” (not used for targets)",
   ])
 
-  // Saving another field leaves it alone.
   await type("Height (cm)", "181")
   await click("Save profile")
   expect(await api(profile, "/api/profile")).toMatchObject({

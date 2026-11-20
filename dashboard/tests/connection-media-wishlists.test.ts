@@ -116,7 +116,6 @@ test("gallery SSR and media HTTP routes keep private configuration and upstream 
 
   const url = await dashboard({ url: await listen(upstream), key: apiKey })
   const html = await page(url, "/photos")
-  // One selected album opens directly, with its month.
   expect(html).toContain("Demo places")
   expect(html).toContain("Jun 2025")
   expect(html).toContain(`/photo-media/${album}/${asset}/thumbnail`)

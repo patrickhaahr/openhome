@@ -1,7 +1,6 @@
 import { z } from "zod"
 import type { HouseholdUser } from "./wishlist"
 
-/** One movie or whole series planned by an explicit Household User. */
 export const watchlistEntry = z.object({
   id: z.uuid(),
   owner_id: z.uuid(),
@@ -19,10 +18,8 @@ export const watchlistEntry = z.object({
   release_date: z.iso.date().nullable(),
 })
 
-/** Stored entry returned by authenticated Axum. */
 export type WatchlistEntry = z.infer<typeof watchlistEntry>
 
-/** Sanitized transport and API outcomes; private diagnostics never reach the display. */
 export type WatchlistFailure =
   | "missing-configuration"
   | "invalid-configuration"
@@ -34,12 +31,10 @@ export type WatchlistFailure =
   | "not-found"
   | "tmdb-unavailable"
 
-/** An incomplete read never represents an empty watchlist. */
 export type WatchlistState =
   | { state: "available"; owners: HouseholdUser[]; entries: WatchlistEntry[] }
   | { state: "unavailable"; reason: WatchlistFailure }
 
-/** Explicit destination protocol; Axum owns validation and retry identity. */
 export const watchlistCommand = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("add"),
@@ -75,15 +70,12 @@ export const watchlistCommand = z.discriminatedUnion("action", [
   }),
 ])
 
-/** A write always carries its selected owner. */
 export type WatchlistCommand = z.infer<typeof watchlistCommand>
 
-/** Confirmation of persistence, separate from uncertain network outcomes. */
 export type WatchlistMutation =
   | { state: "saved" }
   | { state: "failed"; reason: WatchlistFailure }
 
-/** Actionable copy without household configuration or upstream error bodies. */
 export const watchlistFailureMessage: Record<WatchlistFailure, string> = {
   "missing-configuration":
     "Connect OpenHome in Connection before opening watchlists.",
@@ -103,7 +95,6 @@ export const watchlistFailureMessage: Record<WatchlistFailure, string> = {
     "This member or plan is no longer available. Refresh to see the current watchlists.",
 }
 
-/** Metadata supplied by Axum's TMDB adapter; kind is part of provider identity. */
 export const mediaMetadata = watchlistEntry
   .pick({
     kind: true,
@@ -114,21 +105,17 @@ export const mediaMetadata = watchlistEntry
   })
   .extend({ tmdb_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) })
 
-/** One search result without any inferred personal viewing state. */
 export type MediaMetadata = z.infer<typeof mediaMetadata>
 
-/** Explicit, bounded provider search. */
 export const mediaSearch = z.object({
   kind: watchlistEntry.shape.kind,
   query: z.string().trim().min(1).max(200),
 })
 
-/** Provider outages are distinct from an empty successful search. */
 export type MediaSearchResult =
   | { state: "available"; results: MediaMetadata[] }
   | { state: "unavailable" }
 
-/** Build an image URL only from Axum's validated provider filename. */
 export function posterUrl(path: string): string {
   return `https://image.tmdb.org/t/p/w342${path}`
 }
