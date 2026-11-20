@@ -18,22 +18,25 @@ through all of that.
 - **Complete Exercise.** It confirms the rows that parse, moves focus to the next
   unconfirmed Exercise (wrapping), and starts one rest, or none if nothing was
   confirmed. Unchecking a row never starts a rest.
-- **Double-tap safety.** The finish confirmation sits where the next Exercise's
-  button appears, so the second tap of a double tap must not confirm a dialog the
-  user has not seen.
+- **Double-tap safety.** The next Exercise appears under the same Complete
+  Exercise button, so that button ignores taps for 400 ms after an Exercise comes
+  into view; the second tap of a double tap must not confirm sets the user has not
+  seen.
 - **Saves outlive screens.** Saves launch in the app container's scope, which
   outlives every screen, so leaving after pressing Save cannot cancel the save. The
-  form stays marked saved afterwards to prevent a second save.
+  Profile and correction forms stay marked saved afterwards to prevent a second
+  save.
 - **Wall-clock deadline.** The rest timer stores only a wall-clock deadline, the one
   clock that survives a phone restart; remaining time is computed from it, so
   nothing depends on a live process. Readings round up to the next whole second,
   and the longest reading so far stands as the rest's length.
 - **The row owns the rest.** The stored timer row is running or over, and an over
   rest is never revived. Android's single alarm only mirrors it through `syncAlarm`,
-  which is idempotent and rerun on app open and Wi-Fi gain, because Android drops
+  which is idempotent and rerun on app open, because Android drops
   alarms on force-stop and restart. Exact alarms fall back to inexact when the
-  permission is revoked, since a late alert beats none. An alarm far behind its
-  deadline stays silent, and the wall clock may have moved backwards.
+  permission is revoked, since a late alert beats none. An alarm more than a minute
+  past its deadline stays silent, and one that fires before it, as when the wall
+  clock moved backwards, is set again.
 - **Rest scope.** The rest key is the Active Workout id, so ending the Workout ends
   the rest. A new confirmation replaces a running rest; Exercises with rest turned
   off leave a running rest alone.

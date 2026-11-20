@@ -15,9 +15,9 @@ configuration errors nor logs include the submitted values. Dashboard responses
 are `no-store`; coordinates reach the browser only to draw the local map within
 the existing private household dashboard boundary.
 
-MapLibre GL JS presents a flat, north-up map using OpenFreeMap's Positron style by day and its Dark style by night.
-It loads after the view mounts, bundles its worker explicitly through Vite,
-and releases its map on navigation, hidden tabs and graphics failure. A loading
+MapLibre GL JS presents a flat, north-up map using OpenFreeMap's Positron style
+by day and its Dark style by night. It loads after the view mounts, bundles its
+worker explicitly through Vite, and releases its map on navigation, hidden tabs and graphics failure. A loading
 timeout cannot resurrect a map when a delayed library import completes.
 Zoom/recenter controls respect reduced motion. Tile and WebGL failures expose
 retry states without blocking the rest of the dashboard. The map has no routing
@@ -81,9 +81,9 @@ acceptance.
 
 ## Constraints
 
-- **Day and night styles.** Positron and Dark need no key and carry their own
-  attribution. MapLibre cannot read CSS tokens, so the sun and ink colours are
-  repeated in `dashboard/src/components/shared-map-config.ts`.
+- **Day and night colours.** MapLibre cannot read CSS tokens, so the sun and
+  muted-ink colours are repeated in
+  `dashboard/src/components/shared-map-config.ts`.
 - **Pitch and layer order.** A freshly loaded map starts with its pitch already
   set, because easing into it would cancel a pan. Route casings sit below route
   lines, and a `line-sort-key` draws the highlighted route on top where Loops
@@ -95,8 +95,8 @@ acceptance.
   DOM from the map root.
 - **Vendor CSS is unlayered.** MapLibre and Leaflet sheets are unlayered, so
   they beat every utility. Each declaration that a vendor sheet also sets
-  carries `!important`. Leaflet panes use z-indexes up to 1000, so the map gets
-  z-index 0 to keep them below the plates.
+  carries `!important`. Leaflet panes use z-indexes up to 1000, so the Leaflet
+  map gets z-index 0 to keep them below the plates.
 - **Photo frame viewport.** The frame's Chrome 106 WebView predates `svh` and
   drops that declaration, so a `vh` fallback line comes before the `svh` line to
   keep the map from collapsing. The travel inset exists only inside the frame;

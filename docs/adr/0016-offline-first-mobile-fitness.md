@@ -19,7 +19,8 @@ Persist workout logging, exercise creation, workout-history edits, profile chang
   exception is a refused create, which Axum never accepted: it is replaced in
   place, and a repaired Workout create goes after any Exercises queued since, so it
   cannot overtake them. Refused Exercise and Body Weight retries take a new
-  `request_id`, because the old one may hold a stale receipt.
+  `request_id`, because the old one may hold a stale receipt. Merging two local
+  Exercises rewrites the merged id in queued Workout payloads.
 - **Whole-state edits with revisions.** Profile edits and Workout corrections send
   the whole state with a client revision; Axum applies one only if it is newer than
   the last applied. A newer queued edit supersedes an older one even while the older
@@ -30,8 +31,8 @@ Persist workout logging, exercise creation, workout-history edits, profile chang
   first change that may still succeed, so dependents never overtake. A refused
   change is set aside for the user and only its dependents wait. Each row ends in
   one `Delivery`; acknowledgement and row deletion commit together, otherwise the
-  row is resent unchanged. Corrections for a Workout deleted elsewhere are dropped
-  rather than retried forever.
+  row is resent unchanged. A correction for a Workout deleted elsewhere (404) is
+  refused rather than retried, so it cannot hold up the queue.
 - **Schema durability.** Local fitness data may exist nowhere else, so every Room
   schema change ships with a migration. Queued rows outlive app updates, so a
   payload may only gain optional fields, and each new kind of change gets a new

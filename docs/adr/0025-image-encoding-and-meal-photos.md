@@ -5,10 +5,10 @@ Card images and meal photos pass through one AVIF encoder
 the database rather than BLOBs (ADR 0017 explains why card images differ).
 These rules bound the encoder's cost and keep files and rows consistent.
 
-- **Bounded decode.** The encoder bounds the source size and decode memory
-  against decompression bombs: a 48-megapixel RGBA image plus headroom. A meal
-  photo is rejected before decoding when it cannot decode within the maximum
-  photo size.
+- **Bounded decode.** The decoder caps each side at 12,000 px and allocation at
+  256 MiB against decompression bombs: a 48-megapixel RGBA image plus headroom.
+  A meal photo's base64 text is rejected before decoding when it would exceed
+  the 10 MiB photo limit.
 - **One encode at a time.** A process-wide semaphore allows a single encode,
   because the Pi has no CPU to spare. The permit moves into the blocking
   worker, so a caller that is dropped still holds it until the encode ends.
@@ -27,8 +27,8 @@ These rules bound the encoder's cost and keep files and rows consistent.
   pointer even for read-only RGB input, and the encoded data stays valid until
   it is dropped.
 - **Body limit only where needed.** Only the nutrition routes that carry a
-  photo raise Axum's default body limit, because a base64 photo at the maximum
-  size is about 13.4 MiB.
+  photo raise Axum's default body limit, to 15 MiB, because a base64 photo at
+  the maximum size is about 13.3 MiB.
 - **Photo lifecycle.** A photo is *Encoded* in memory, then *Stored* as two
   files named by a fresh UUID that no row references, then *Referenced* by the
   committed Meal Log row. The caller owns stored files until its row write
@@ -46,7 +46,4 @@ These rules bound the encoder's cost and keep files and rows consistent.
 - **Caching.** Stored images are household data behind the API key, so
   responses are `private` and never shared-cacheable. A meal photo ID always
   names the same bytes, so it is `immutable` for a year. Card images are cached
-  for a day. Proxied wishlist pictures are cached for an hour and sent with
-  `nosniff` and a sandboxing CSP.
-- **Raster only.** The wishlist relay passes only raster formats, because SVG
-  can carry script. The declared content type must match the bytes.
+  for a day. `docs/wishlists.md` gives the wishlist picture relay's headers.

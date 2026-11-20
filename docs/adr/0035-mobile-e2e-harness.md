@@ -12,8 +12,9 @@ Android timing.
   200 and changed arguments 409; Exercise names unique (409); edits apply only for a
   newer `client_revision`. A divergence would let the app pass against a server
   that does not exist.
-- **Paging proof.** The Setup Flow fixture places its oldest weigh-in beyond every
-  default page, so the test proves Setup walks the full list.
+- **Paging proof.** The Setup Flow fixture holds more Workouts and Body Weight
+  records than Axum's largest page, and the test opens the oldest Workout, so it
+  proves Setup walks the full list.
 - **Offline means mobile data.** Turning Wi-Fi off leaves the emulator's metered
   mobile data as the default network. The offline tests rely on that to prove the
   Wi-Fi-only sync policy, not merely an absent network.

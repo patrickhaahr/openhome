@@ -10,23 +10,19 @@ showed.
   frame and the generic RGB scene variant are acknowledged but have no effect.
   An acknowledgement is therefore never proof that a colour applied.
 - **Idle link.** The strip drops an idle Bluetooth link after about twenty
-  seconds. Frequent power queries keep the link alive without reasserting the
-  intended lighting selection.
+  seconds, which is why the two-second probe in `docs/backlight.md` includes a
+  power query.
 - **Disconnect only when Unavailable.** A healthy link persists between
   exchanges. Disconnecting after Off races the controller's advertising
   restart when TV Sync follows immediately.
 - **Discovery after host startup.** BlueZ has no cached device after the host
-  starts, so the first exchange runs discovery.
-- **New links need recovery.** A newly established link triggers
-  current-target recovery even when reads succeed.
+  starts, so every exchange starts discovery and waits for the strip whenever
+  BlueZ does not list it yet.
 - **Writes count when sent.** A characteristic write takes effect the moment it
-  is sent. Bookkeeping records it even if the exchange was superseded, and
-  completed writes stay acknowledged when readback fails or times out.
-  Supersession never rewinds an exchange that already wrote. A receipt or a
-  readback alone never counts as acceptance.
-- **Interrupted uploads.** A multi-frame scene upload checks that its target
-  is still current before every frame, so an obsolete upload sends no later
-  frames. A fresh `A3` header resets an interrupted upload on the device.
+  is sent. An exchange whose writes all completed stays acknowledged when a
+  newer revision arrived meanwhile, or when readback fails. An exchange that
+  stops part-way as superseded records nothing and is never rewound. A readback
+  alone never counts as acceptance.
 - **Brightness is a command value.** It is the controller's command value, not
   a photometric calibration.
 - **Independent test vectors.** Effect tests compare against an independent

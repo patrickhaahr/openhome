@@ -22,7 +22,7 @@ browser.
 - **Pairing a strap session is presentation only.** Axum never matches a logged
   Workout with a NOOP strap session, and a logged Workout has only a date.
   `dashboard/src/lib/session-log.ts` pairs them only within the same Copenhagen
-  Training Day and only for strength-style sports that cover no ground. Pairing
+  Training Day and only for sports that cover no ground. Pairing
   is one-to-one: the longest sessions win, and the earlier start breaks a tie.
   Remaining candidates pair in order of logging and strap start. Strap routes
   are shown only for unpaired sessions.
@@ -38,8 +38,9 @@ browser.
 - **Scrollbars never show on the wall screen.** On the wall screen and the
   iPad, scrolling stays but scrollbars are hidden, so no layout narrows when
   one would appear.
-- **Reduced motion stops the sun.** The slow sun-turn animation never runs under
-  reduced motion; the theme script toggles its class on the `html` element.
+- **Reduced motion stops the theme turn.** When the sun changes the theme, the
+  room's colours cross-fade over 1.2 s, never under reduced motion. The daylight
+  provider toggles the `theme-turning` class on the `html` element.
 - **Tailwind needs the app's tokens.** The `cn` merge config in
   `dashboard/src/lib/utils.ts` lists the custom theme tokens from `styles.css`.
   Without them it cannot tell text colour tokens from text size tokens, and it

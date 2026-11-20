@@ -15,9 +15,9 @@ cannot justify by itself.
   (August 2025), Tables 1 and 3, adult column. EPA+DHA uses EFSA NDA 2010's
   adequate intake of 250 mg/day, because NNR sets none.
 - **Footnoted rows.** Vitamin D is 20 µg over 70 and for little sun exposure
-  (NNR footnote 3). Females aged 51–70 who still menstruate use 15 mg iron
-  (footnote 7). Selected rows cite the alternate NNR or EFSA values recorded
-  beside them in the table.
+  (NNR footnote 3); the table carries only the over-70 value. Females aged
+  51–70 get the postmenopausal 8 mg iron; footnote 7's 15 mg for those still
+  menstruating is not modelled.
 - **Units follow the food database.** Every reference amount is in the unit of
   the database parameter it is compared with: copper in mg, molybdenum and
   fluoride in µg, and EPA+DHA in mg even though it is stored in grams.
@@ -72,9 +72,10 @@ cannot justify by itself.
   of its letter triples occur. Exact and first-component names rank first, so
   "Tomato, raw" comes before "Tomato juice". Cooked porridge never aliases to
   "Oats, rolled", because water changes the per-100 g values.
-- **Barcodes.** Barcodes are canonicalised to EAN-8 or GTIN-13, so one package
-  is one Product: UPC-A gains a leading zero and a zero-led GTIN-14 loses it.
-  The GS1 mod-10 check must pass, except that 8 digits may also be UPC-E.
+- **Barcodes.** Barcodes are canonicalised so one package is one Product:
+  UPC-A gains a leading zero and a zero-led GTIN-14 loses it. Codes of 12 or
+  more digits must pass the GS1 mod-10 check. 8-digit codes skip it, because
+  they may be UPC-E.
 - **Energy bound.** A portion's energy estimate is capped at pure fat, the
   most 100 g can hold. Past eaten-at times are backfills. A slightly future
   time is tolerated for client clock drift, and anything further is refused.

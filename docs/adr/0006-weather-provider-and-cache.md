@@ -54,5 +54,5 @@ flight until the page leaves; no browser timeout or retry was added.
 - **Unknown conditions are never clear.** An unknown or missing WMO weather
   code is never described or drawn as clear sky.
 - **Rollout tolerance.** During a rollout, older Axum instances may serve
-  current and daily weather without the newer fields. The dashboard parser
-  tolerates their absence.
+  current and daily weather without `hourly`. The dashboard parser defaults it
+  to an empty list.
