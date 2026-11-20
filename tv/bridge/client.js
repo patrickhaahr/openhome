@@ -1,6 +1,5 @@
 'use strict';
 
-// Node 8.12 ships on this TV. Keep this client dependency-free and compatible with it.
 var fs = require('fs');
 var http = require('http');
 var https = require('https');
@@ -95,7 +94,6 @@ function loadConfig(path) {
   return config;
 }
 
-// Host/SNI retain the certificate hostname while the TCP connection uses the private Pi address.
 function requestApi(config, path, method, body, timeoutMs) {
   return new Promise(function (resolve, reject) {
     var finished = false;
@@ -142,19 +140,12 @@ function requestApi(config, path, method, body, timeoutMs) {
 function createBridge(options) {
   var now = options.now || Date.now;
   var request = options.request;
-  // Cache: the Copenhagen day owns both observations; each has its own freshness deadline
-  // (weatherAt/recoveryAt) and neither deadline implies the other.
   var cachedDay = dayOn(now());
   var weather = unavailableWeather();
   var recovery = unavailableRecovery();
   var weatherAt = 0;
   var recoveryAt = 0;
-  // Refresh in flight: null, or the one promise every concurrent reader shares. It is cleared only by
-  // finishRefresh, after all bounded upstream tasks have settled (each task absorbs a rejected request; the success handlers are total over parsed JSON).
   var refreshing = null;
-  // Command admission: three independent facts. Existence is checked against COMMANDS; the single
-  // in-flight slot (commandPending) is held from admission until the upstream request settles; the
-  // rate deadline (nextCommand) is set at admission and is never released early.
   var commandPending = false;
   var nextCommand = 0;
 
@@ -174,7 +165,6 @@ function createBridge(options) {
     return day;
   }
 
-  // Each refresh task is bound to the day it started in; a result that lands after midnight is dropped.
   function refreshWeather(day) {
     weatherAt = now() + MINUTE;
     return Promise.resolve().then(function () { return request('/api/weather', 'GET', undefined, 7000); }).then(function (body) {
@@ -200,7 +190,6 @@ function createBridge(options) {
   function finishRefresh() {
     refreshing = null;
     rollDay();
-    // Return only the display contract, never the upstream response objects.
     return JSON.parse(JSON.stringify({day: cachedDay, weather: weather, recovery: recovery}));
   }
 
@@ -214,7 +203,6 @@ function createBridge(options) {
     return refreshing;
   }
 
-  // Returns the rejection for an inadmissible command, or null after taking the slot and deadline.
   function admit(name) {
     if (!has(COMMANDS, name)) return {status: 404, body: {state: 'failed', reason: 'unknown-command'}};
     if (commandPending) return {status: 409, body: {state: 'failed', reason: 'busy'}};
@@ -283,7 +271,6 @@ if (require.main === module) {
     server.on('error', function () { console.error('OpenHome TV bridge could not start'); process.exit(1); });
     server.listen(PORT, '127.0.0.1', function () { console.log('OpenHome TV bridge ready'); });
     process.on('SIGTERM', function () {
-      // A redeploy must not leave an old keep-alive listener holding the port.
       setTimeout(function () { process.exit(0); }, 1500).unref();
       server.close(function () { process.exit(0); });
     });

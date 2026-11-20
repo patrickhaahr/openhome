@@ -1,5 +1,3 @@
-//! NOOP mirror and request fixtures shared by the Training Context test files.
-
 #![allow(dead_code)]
 
 use crate::common;
@@ -25,7 +23,6 @@ pub(super) fn day(text: &str) -> CalendarDay {
     CalendarDay::parse(text).unwrap()
 }
 
-/// Unix seconds `offset` after local midnight starting `text`.
 pub(super) fn at(text: &str, offset: Duration) -> i64 {
     (day(text).start() + offset).timestamp()
 }
@@ -68,8 +65,6 @@ pub(super) fn noop_workout(
     json!({"type": "record", "key": {"startTs": start_ts, "sport": sport}, "data": data})
 }
 
-/// Both strap namespaces pushed all three streams over `[from, to)` at `pushed`. `imported` and
-/// `computed` are their daily rows; `workouts` are the imported strap's workouts.
 pub(super) async fn mirror(
     from: &'static str,
     to: &'static str,
@@ -122,7 +117,6 @@ pub(super) async fn context_ok(app: &Router, from: &str, to: &str) -> Value {
     body
 }
 
-/// A day's `noop` block: each read's freshness, with `coverage` for every stream.
 pub(super) fn sync(recovery: &str, workouts: &str, coverage: &str) -> Value {
     json!({
         "recovery": {

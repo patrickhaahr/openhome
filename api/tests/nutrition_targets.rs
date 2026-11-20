@@ -1,11 +1,3 @@
-//! Nutrition targets through the Nutrition Day: Trend Weight, Estimated Expenditure, the weekly
-//! Calorie Target and the Macro Targets, from a real `app.db` seeded through the Profile, Body
-//! Weight, Nutrition Goal and Meal Log routes, and a real `food.db` imported from a synthetic
-//! DTU-shaped workbook served by `wiremock`.
-//!
-//! Synthetic Chicken breast (Food 907) has 150 kcal, 21 g protein and 7 g fat per 100 g, so a
-//! day's intake is logged as `kcal / 1.5` grams of it.
-
 mod common;
 #[path = "nutrition_support/targets.rs"]
 mod support;
@@ -15,9 +7,6 @@ use chrono::{Datelike, Days};
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use support::{Api, man, today};
-
-// The week of Monday 2026-04-06 is read in most tests. Its Estimated Expenditure comes from the
-// 28 days 2026-03-09 to 2026-04-05, across the change to summer time on 2026-03-29.
 
 #[tokio::test]
 async fn targets_are_unavailable_until_the_profile_and_a_body_weight_allow_them() {
@@ -44,7 +33,6 @@ async fn targets_are_unavailable_until_the_profile_and_a_body_weight_allow_them(
 
     api.profile(json!({"sex": "Male", "birth_date": "1996-01-15"}))
         .await;
-    // A weigh-in after the day does not give it a Trend Weight.
     api.weigh("2026-04-09", 80.0).await;
     let targets = api.targets("2026-04-08").await;
     assert_eq!(targets["missing"], json!(["body_weight"]));
@@ -53,7 +41,6 @@ async fn targets_are_unavailable_until_the_profile_and_a_body_weight_allow_them(
         "Targets need a Body Weight on or before 2026-04-08"
     );
 
-    // The week's first weigh-in sets its targets when nothing was weighed before Monday.
     let targets = api.targets("2026-04-09").await;
     assert_eq!(targets["state"], "available", "{targets}");
     assert_eq!(targets["trend_weight_kg"], 80.0);
@@ -98,7 +85,6 @@ async fn without_logged_days_the_expenditure_is_the_bmr_prior_and_macros_follow_
         })
     );
 
-    // 1,000 g of chicken: 1,500 kcal, 210 g protein and 70 g fat.
     api.eat("2026-04-08", 1500.0).await;
     let targets = api.targets("2026-04-08").await;
     assert_eq!(targets["calorie_target_kcal"], 2120.0);
@@ -119,7 +105,6 @@ async fn fewer_than_fourteen_logged_days_blend_the_data_estimate_with_the_prior(
     let api = Api::start().await;
     man(&api).await;
     api.weigh("2026-03-01", 80.0).await;
-    // Seven logged days in the window; a day before it and a day of the week itself are ignored.
     api.eat_daily("2026-03-23", "2026-03-29", 2000.0).await;
     api.eat("2026-03-08", 5000.0).await;
     api.eat("2026-04-06", 5000.0).await;
@@ -137,7 +122,6 @@ async fn fewer_than_fourteen_logged_days_blend_the_data_estimate_with_the_prior(
             "blend_weight": 0.5,
         })
     );
-    // Half the 2,000 kcal data estimate and half the 2,670 kcal prior.
     assert_eq!(targets["estimated_expenditure_kcal"], 2335.0);
     assert_eq!(targets["calorie_target_kcal"], 1785.0);
 }
@@ -147,13 +131,11 @@ async fn fourteen_logged_days_make_the_expenditure_intake_corrected_by_the_trend
     let api = Api::start().await;
     man(&api).await;
     api.weigh("2026-03-01", 80.0).await;
-    // Daily 79 kg weigh-ins move the Trend Weight from 80 to 79.0523 kg over the 28 days.
     api.weigh_daily("2026-03-09", "2026-04-05", 79.0).await;
     api.eat_daily("2026-03-12", "2026-03-31", 2500.0).await;
 
     let targets = api.targets("2026-04-08").await;
 
-    // 2,500 kcal eaten while losing 0.9477 kg in 28 days: 2,500 + 0.9477 × 7,700 ÷ 28.
     assert_eq!(
         targets["expenditure_basis"],
         json!({
@@ -184,24 +166,19 @@ async fn a_week_keeps_its_target_when_meals_are_backfilled_after_its_first_read(
 
     api.eat_daily("2026-03-10", "2026-03-23", 2000.0).await;
 
-    // Every day of the read week keeps the stored expenditure, training and rest days alike.
     assert_eq!(api.targets("2026-04-08").await, before);
     let sunday = api.targets("2026-04-12").await;
     assert_eq!(sunday["estimated_expenditure_kcal"], 2670.0);
     assert_eq!(sunday["calorie_target_kcal"], 2120.0);
-    // The next week, read for the first time, counts the backfilled days in its window
-    // (2026-03-16 to 2026-04-12): 8 logged days at 2,000 kcal blended with the 2,670 kcal prior.
     let next = api.targets("2026-04-13").await;
     assert_eq!(next["expenditure_basis"]["logged_days"], 8);
     assert_eq!(next["estimated_expenditure_kcal"], 2287.0);
-    // 2,287 - 550 kcal would fall below the 1,780 kcal BMR.
     assert_eq!(next["calorie_target_kcal"], 1780.0);
 }
 
 #[tokio::test]
 async fn the_calorie_target_never_falls_below_bmr_and_carbs_never_below_zero() {
     let api = Api::start().await;
-    // An 80-year-old woman of 152 cm at 120 kg: BMR 1,589 kcal.
     api.profile(json!({"height_cm": 152, "sex": "female", "birth_date": "1946-01-15"}))
         .await;
     api.weigh("2026-03-01", 120.0).await;
@@ -213,7 +190,6 @@ async fn the_calorie_target_never_falls_below_bmr_and_carbs_never_below_zero() {
     assert_eq!(targets["bmr_kcal"], 1589.0);
     assert_eq!(targets["calorie_target_kcal"], 1589.0);
     assert_eq!(targets["bmr_floor_applied"], true);
-    // 264 g protein and an 84 g fat floor already exceed the target's energy.
     assert_eq!(
         targets["macros"],
         json!({
@@ -229,7 +205,6 @@ async fn a_goal_change_applies_from_the_day_it_is_set_and_past_days_keep_their_t
     let api = Api::start().await;
     let today = today();
     let yesterday = today - Days::new(1);
-    // 30 years old on both days' Mondays: the 30th birthday was 120 days ago.
     let birthday = today - Days::new(120);
     let birth_date = birthday.with_year(birthday.year() - 30).unwrap();
     api.profile(json!({"height_cm": 180, "sex": "male", "birth_date": birth_date.to_string()}))
@@ -265,7 +240,6 @@ async fn a_goal_change_applies_from_the_day_it_is_set_and_past_days_keep_their_t
     assert_eq!(now["calorie_target_kcal"], 2670.0);
     assert_eq!(api.targets(&yesterday.to_string()).await, before);
 
-    // A second change on the same day replaces the first.
     let (status, body) = api
         .set_goal(json!({"direction": "lean_bulk", "rate_kg_per_week": 0.25}))
         .await;
@@ -305,7 +279,6 @@ async fn only_the_offered_goals_can_be_set() {
             .await;
         assert_eq!(status, StatusCode::OK, "{direction} {rate}: {body}");
     }
-    // Maintain needs no rate.
     let (status, body) = api.set_goal(json!({"direction": "maintain"})).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 }

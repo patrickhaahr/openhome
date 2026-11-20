@@ -6,18 +6,9 @@ Item {
     readonly property string normalMode: "cinema"
     readonly property string warmMode: "expert2"
     property bool active: false
-    // Last observed picture mode (true = warm), or null when unknown. Independent of operation phase.
     property var value: null
     property bool failed: false
-    // Subscription token (observation channel); independent of the operation below.
     property var subscription: null
-    // The single in-flight operation, or null: {kind, token, target}. Exactly one kind at a time:
-    //   read    background refresh; token only.
-    //   toggle  reading the current mode before a write; token only.
-    //   write   setSystemSettings in flight; target is the mode that must be read back.
-    //   verify  reading back after the write; success requires the observed mode to equal target.
-    // begin() is the only constructor and replaces any previous operation, so a late reply to the
-    // old one no longer matches operation.token. finish/fail/mismatch are the only exits.
     property var operation: null
     readonly property bool pending: operation !== null && operation.kind !== "read"
     onActiveChanged: {
@@ -47,7 +38,6 @@ Item {
     }
     function finish() { timeout.stop(); operation = null; failed = false; }
     function fail() { timeout.stop(); operation = null; value = null; failed = true; }
-    // A completed readback that differs from the requested target: the observation is valid, the toggle failed.
     function mismatch(observed) { timeout.stop(); operation = null; value = observed === warmMode; failed = true; }
     function advance(current, mode) {
         if (current.kind === "write") { beginRead("verify", current.target); return; }

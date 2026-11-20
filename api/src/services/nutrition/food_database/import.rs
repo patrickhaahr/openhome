@@ -1,5 +1,3 @@
-//! Downloads, verifies, caches and imports the pinned workbook (ADR 0013).
-
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -13,11 +11,8 @@ use url::Url;
 use super::workbook::{self, Workbook, WorkbookError};
 use crate::services::nutrition::parameters::{self, Unit};
 
-/// DTU Data serves files through a short redirect to its object store.
 const MAX_REDIRECTS: usize = 5;
-/// The whole download, including the body.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(5);
-/// The 6.1 workbook is about 12.6 MB.
 const MAX_WORKBOOK_BYTES: u64 = 64 * 1024 * 1024;
 const USER_AGENT: &str = concat!(
     "OpenHome/",
@@ -25,21 +20,16 @@ const USER_AGENT: &str = concat!(
     " (food database import)"
 );
 const CACHE_PREFIX: &str = "dtu-fcdb-";
-/// Rows per multi-row insert, within SQLite's bound parameter limit.
 const INSERT_BATCH: usize = 300;
 
-/// The dataset version the API imports, with where to fetch it and its SHA-256.
 #[derive(Clone, Debug)]
 pub struct DatasetPin {
     pub version: String,
     pub url: Url,
-    /// Lower-case hex.
     pub sha256: String,
 }
 
 impl DatasetPin {
-    /// The Danish Food Composition Database 6.1 workbook (doi:10.11583/DTU.32312844, CC BY 4.0),
-    /// `FCDB_6.1_Dataset.xlsx` on DTU Data.
     #[must_use]
     pub fn pinned() -> Self {
         Self {
@@ -66,8 +56,6 @@ impl DatasetPin {
     }
 }
 
-/// Why an import failed. Logged only: responses say the database is unavailable, never why, so
-/// no upstream text reaches a client.
 #[derive(Debug, Error)]
 pub enum ImportError {
     #[error("the download failed: {0}")]
@@ -96,8 +84,6 @@ pub enum ImportError {
     Database(#[from] sqlx::Error),
 }
 
-/// Fetches the pinned workbook into `cache_dir` unless a verified copy is already there, then
-/// replaces `food.db`'s contents with it in one transaction.
 pub async fn import(
     pool: &SqlitePool,
     pin: &DatasetPin,
@@ -139,7 +125,6 @@ async fn cached_workbook(pin: &DatasetPin, cache_dir: &Path) -> Result<PathBuf, 
     let partial = path.with_extension("xlsx.part");
     let downloaded = download(pin, &partial).await;
     if let Err(error) = downloaded {
-        // Best effort: a leftover partial file is overwritten by the next attempt.
         let _ = tokio::fs::remove_file(&partial).await;
         return Err(error);
     }
@@ -147,7 +132,6 @@ async fn cached_workbook(pin: &DatasetPin, cache_dir: &Path) -> Result<PathBuf, 
     Ok(path)
 }
 
-/// Streams the workbook to `partial`, bounded by a timeout and a byte cap, and verifies it.
 async fn download(pin: &DatasetPin, partial: &Path) -> Result<(), ImportError> {
     tracing::info!(version = %pin.version, "Downloading the food database workbook");
     let client = Client::builder()
@@ -196,7 +180,6 @@ async fn download(pin: &DatasetPin, partial: &Path) -> Result<(), ImportError> {
     Ok(())
 }
 
-/// A workbook parameter named by the vocabulary.
 struct ResolvedParameter<'a> {
     key: String,
     unit: Unit,
@@ -220,7 +203,6 @@ fn resolve_parameters(workbook: &Workbook) -> Result<Vec<ResolvedParameter<'_>>,
                     found: source.unit.clone(),
                     expected: known.unit,
                 }),
-                // A parameter added after this vocabulary still imports under a DTU-derived key.
                 None => {
                     let unit = unit.ok_or_else(|| ImportError::UnknownUnit {
                         id: source.id,
@@ -312,7 +294,6 @@ async fn write(
     Ok(())
 }
 
-/// Removes workbooks of earlier pins, so upgrades do not accumulate cached copies.
 async fn remove_stale_cache(pin: &DatasetPin, cache_dir: &Path) {
     let current = pin.cache_file_name();
     let Ok(mut entries) = tokio::fs::read_dir(cache_dir).await else {

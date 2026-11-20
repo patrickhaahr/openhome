@@ -39,7 +39,6 @@ import com.patrickhaahr.openhome.ui.theme.Type
 
 private val RAIL_RING = 52.dp
 
-/** Every Exercise of the session as a little plate that lights as it fills. Going to one only moves the focus. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ExerciseRail(
@@ -93,7 +92,6 @@ internal fun ExerciseRail(
     }
 }
 
-/** Reps or a hold, by their symbols. */
 @Composable
 internal fun MeasureSwitch(selected: SetMeasure?, exerciseName: String, onSelect: (SetMeasure) -> Unit) {
     Row(Modifier.background(Lit.Slab, CircleShape).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {

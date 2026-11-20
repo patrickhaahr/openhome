@@ -48,3 +48,11 @@ or a replaced forecast is discarded. The Axum request is bounded by the
 dashboard server's seven-second timeout, but the browser's call to that server
 function has no timeout and no abort. A call that never settles keeps polling in
 flight until the page leaves; no browser timeout or retry was added.
+
+## Constraints
+
+- **Unknown conditions are never clear.** An unknown or missing WMO weather
+  code is never described or drawn as clear sky.
+- **Rollout tolerance.** During a rollout, older Axum instances may serve
+  current and daily weather without `hourly`. The dashboard parser defaults it
+  to an empty list.

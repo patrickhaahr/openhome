@@ -1,7 +1,3 @@
-//! Logging Meals by name through the nutrition routes: copied portions, overrides, linked Products
-//! and Foods that left the food database, over a real `app.db`, a real `food.db` and Open Food
-//! Facts, both served by `wiremock`.
-
 mod common;
 #[path = "nutrition_support/meals.rs"]
 mod support;
@@ -75,10 +71,8 @@ async fn logging_a_meal_by_name_copies_its_items_as_portions_with_overrides_and_
     let day = api.day("2026-10-29").await;
     assert_eq!(day["meal_logs"], json!([meal_log]));
     assert_eq!(day["nova"]["nova_1_kcal"], 124.0);
-    // The override was one-off: the Meal keeps its grams.
     assert_eq!(api.meals().await, [meal]);
 
-    // Without overrides every item keeps the Meal's grams.
     let mut lunch = by_name("Protein bowl", "log-2");
     lunch["eaten_at"] = json!("2026-10-29T12:00:00+01:00");
     let lunch = api.logged(lunch).await;
@@ -103,7 +97,6 @@ async fn editing_or_deleting_a_meal_leaves_its_meal_logs_unchanged() {
     assert_eq!(status, StatusCode::OK, "{edited}");
 
     assert_eq!(api.day("2026-10-29").await["meal_logs"], json!([breakfast]));
-    // A retried log replays what it logged, whatever became of the Meal.
     let (status, replayed) = api.log(request.clone()).await;
     assert_eq!(status, StatusCode::OK, "{replayed}");
     assert_eq!(replayed["meal_log"], breakfast);
@@ -185,7 +178,6 @@ async fn a_meal_references_a_linked_product_by_barcode_so_a_relink_reaches_its_n
         )
     );
 
-    // Re-linked to the chicken, which has no fibre value: the next log fills its gaps from it.
     api.link(SKYR, 907, "link-2").await;
     let mut later = by_name("Skyr snack", "log-2");
     later["eaten_at"] = json!("2026-10-29T15:00:00+01:00");
@@ -227,7 +219,6 @@ async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_bef
         "request_id": "skyr-snack",
     }))
     .await;
-    // Version 2 drops the Banana the Product is linked to.
     api.reimport("2", second_dataset()).await;
 
     let relink = |body: &Value, food: &str| {
@@ -242,7 +233,6 @@ async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_bef
     let (status, body) = api.log(product_at(SKYR, "08:00:00", "direct-1")).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     relink(&body, "3 \"Banana, raw\"");
-    // A saved Meal reaches the Product through the same snapshot.
     let mut snack = by_name("Skyr snack", "by-name-1");
     snack["eaten_at"] = json!("2026-10-29T09:00:00+01:00");
     let (status, body) = api.log(snack).await;
@@ -250,7 +240,6 @@ async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_bef
     relink(&body, "3 \"Banana, raw\"");
     assert_eq!(api.day("2026-10-29").await["meal_logs"], json!([]));
 
-    // Relinked to the Apple, it logs again.
     api.link(SKYR, 2, "link-apple").await;
     let logged = api.logged(product_at(SKYR, "10:00:00", "direct-2")).await;
     assert_eq!(
@@ -258,7 +247,6 @@ async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_bef
         "Apple, raw, all varieties"
     );
 
-    // Version 3 gives FoodID 2 to another Food: the Product must not take its values.
     api.reimport(
         "3",
         common::food_workbook::workbook(
@@ -288,7 +276,6 @@ async fn a_meal_whose_food_left_the_food_database_must_be_updated_before_it_is_l
             "request_id": "banana-skyr-1",
         }))
         .await;
-    // Version 2 drops the Banana and changes Skyr's protein.
     api.reimport("2", second_dataset()).await;
 
     let (status, body) = api.log(by_name("Banana skyr", "log-1")).await;
@@ -303,7 +290,6 @@ async fn a_meal_whose_food_left_the_food_database_must_be_updated_before_it_is_l
         "{body}"
     );
     assert_eq!(api.day("2026-10-29").await["meal_logs"], json!([]));
-    // The Meal still lists the Food by the names it was saved with.
     assert_eq!(api.meals().await, std::slice::from_ref(&meal));
     let (status, updated) = api
         .update(
@@ -323,7 +309,6 @@ async fn a_meal_whose_food_left_the_food_database_must_be_updated_before_it_is_l
     );
     assert_eq!(meal_log["portions"][1]["dataset_version"], "2");
 
-    // Version 3 gives FoodID 2 to another Food: the Meal must not log it as an apple.
     api.reimport(
         "3",
         common::food_workbook::workbook(

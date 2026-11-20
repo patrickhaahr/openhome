@@ -1,14 +1,3 @@
-//! Intake: how much of each parameter was eaten and taken, split into the food share (Portions)
-//! and the supplement share (Supplement Doses), and the named compounds taken.
-//!
-//! Totals add both shares, so energy and macronutrients a Supplement's label states count toward
-//! what was eaten. The shares stay apart because some EFSA Upper Limits apply only to the
-//! supplement share, and they are kept per chemical form where a Supplement names one
-//! (`supplements::FORMS`).
-//!
-//! [`Intake`] and [`Compounds`] add up, so a range sums each day's values, or all its Portions and
-//! doses at once, and divides afterwards; never average daily shares.
-
 use std::collections::BTreeMap;
 use std::iter::Sum;
 use std::ops::Add;
@@ -18,7 +7,6 @@ use serde::Serialize;
 use super::meal_logs::{StoredPortion, Total, round};
 use super::supplements::{self, Compound, StoredDose};
 
-/// One parameter's intake.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Intake {
     food: Option<f64>,
@@ -27,7 +15,6 @@ pub struct Intake {
     forms: BTreeMap<String, f64>,
 }
 
-/// The supplement share of one chemical form of a parameter.
 #[derive(Debug, Serialize)]
 pub struct FormAmount {
     pub form: String,
@@ -42,8 +29,6 @@ fn add(left: Option<f64>, right: Option<f64>) -> Option<f64> {
 }
 
 impl Intake {
-    /// `key` over `portions` and `doses`. A Portion without a value is unknown and counted; a
-    /// Supplement whose label does not list `key` supplies none of it.
     pub(super) fn of(key: &str, portions: &[&StoredPortion], doses: &[&StoredDose]) -> Self {
         let mut intake = Self::default();
         for portion in portions {
@@ -64,8 +49,6 @@ impl Intake {
         intake
     }
 
-    /// The food share of Portions already summed: `food` over those with a value, and how many
-    /// lack one.
     pub(super) fn from_food(food: Option<f64>, unknown_portions: usize) -> Self {
         Self {
             food,
@@ -74,37 +57,31 @@ impl Intake {
         }
     }
 
-    /// From Portions; `None` when no Portion has a value.
     #[must_use]
     pub fn food(&self) -> Option<f64> {
         self.food
     }
 
-    /// From Supplement Doses; `None` when no dose lists the parameter.
     #[must_use]
     pub fn supplements(&self) -> Option<f64> {
         self.supplements
     }
 
-    /// Portions without a value for the parameter.
     #[must_use]
     pub fn unknown_portions(&self) -> usize {
         self.unknown_portions
     }
 
-    /// Both shares; `None` when neither is known.
     #[must_use]
     pub fn total(&self) -> Option<f64> {
         add(self.food, self.supplements)
     }
 
-    /// The supplement share of `form`, e.g. `folic_acid` of `folate`.
     #[must_use]
     pub fn supplement_form(&self, form: &str) -> Option<f64> {
         self.forms.get(form).copied()
     }
 
-    /// The supplement share of each form taken, by form.
     #[must_use]
     pub fn forms(&self) -> Vec<FormAmount> {
         self.forms
@@ -149,8 +126,6 @@ impl Sum for Intake {
     }
 }
 
-/// Named compounds taken, by name case-insensitively, in the order first taken. A compound taken
-/// in several mass units is summed in the unit it was first taken in.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Compounds(Vec<Compound>);
 
@@ -169,7 +144,6 @@ impl Compounds {
             .sum()
     }
 
-    /// Each compound with its amount taken.
     #[must_use]
     pub fn into_amounts(self) -> Vec<Compound> {
         self.0

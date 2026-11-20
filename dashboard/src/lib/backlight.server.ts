@@ -13,14 +13,11 @@ async function parseStatus(response: Response): Promise<BacklightRead> {
     const parsed = backlightStatus.safeParse(await response.json())
 
     if (parsed.success) return { state: "available", status: parsed.data }
-  } catch {
-    /* Never serialize private transport or parsing details. */
-  }
+  } catch {}
 
   return { state: "unavailable" }
 }
 
-/** Read validated API status, replacing transport and parsing failures with unavailable. */
 export async function readBacklight(): Promise<BacklightRead> {
   const result = await requestOpenHome({
     path: "/api/backlight",
@@ -34,7 +31,6 @@ export async function readBacklight(): Promise<BacklightRead> {
   return parseStatus(result.response)
 }
 
-/** Send an API action and return sanitized status or setup/validation failure values. */
 export async function changeBacklight(
   action: BacklightAction
 ): Promise<BacklightResult> {

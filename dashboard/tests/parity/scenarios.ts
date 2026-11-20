@@ -1,9 +1,3 @@
-/**
- * The parity matrix as data: every row is captured on master and on the working tree at each of
- * its viewports, in the day and the night theme. Targets use roles and visible text only, because
- * the migration this harness guards removes the class names.
- */
-
 export type Viewport = {
   readonly width: number
   readonly height: number
@@ -14,7 +8,6 @@ export const viewports = {
   "1920x1080": { width: 1920, height: 1080, scale: 1 },
   "1536x864": { width: 1536, height: 864, scale: 1 },
   "1280x800": { width: 1280, height: 800, scale: 1 },
-  // Short enough to reach the stylesheets' max-height media queries.
   "1024x640": { width: 1024, height: 640, scale: 1 },
   "1180x820@2": { width: 1180, height: 820, scale: 2 },
   "820x1180@2": { width: 820, height: 1180, scale: 2 },
@@ -44,7 +37,6 @@ export type Target =
 export type Step =
   | { readonly kind: "click"; readonly target: Target }
   | { readonly kind: "press"; readonly key: string }
-  /** Presses inside the target and drags across a share of its width without releasing. */
   | {
       readonly kind: "hold-drag"
       readonly target: Target
@@ -56,10 +48,8 @@ export type Scenario = {
   readonly id: string
   readonly path: string
   readonly viewports: readonly ViewportName[]
-  /** Visible once the page or state is up, so two identically broken sides cannot read as equal. */
   readonly expect: Target
   readonly steps?: readonly Step[]
-  /** Pages capture their whole scroll height; open sheets capture what the screen shows. */
   readonly capture?: "full" | "viewport"
   readonly motion?: "reduce" | "no-preference"
 }

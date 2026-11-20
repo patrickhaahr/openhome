@@ -21,16 +21,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-/** The app's single instances, wired by hand. */
 class AppContainer(context: Context) {
     private val database = OpenHomeDatabase.open(context)
     private val httpClient = newOpenHomeHttpClient()
     private val outbox = FitnessOutbox(database)
 
-    /** Outlives every screen, so leaving one cannot cancel a save it just started. */
     val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    // Household commands have a short total deadline and must never be automatically retried.
     val homeHttpClient = httpClient.newBuilder()
         .callTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)

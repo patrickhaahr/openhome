@@ -1,7 +1,3 @@
-//! Meals through the nutrition routes: named, reusable lists of Food and Product items logged
-//! again by name, over a real `app.db`, a real `food.db` imported from a synthetic DTU-shaped
-//! workbook, and Open Food Facts, both served by `wiremock`.
-
 mod common;
 #[path = "nutrition_support/meals.rs"]
 mod support;
@@ -33,7 +29,6 @@ async fn a_saved_meal_lists_its_ordered_items_by_reference_under_a_case_insensit
             },
         ])
     );
-    // A Meal holds references, never values.
     assert!(meal["portions"][0].get("nutrients").is_none());
     let banana = api
         .saved(json!({
@@ -84,7 +79,6 @@ async fn a_retried_save_replays_conflicts_on_changes_and_never_recreates_a_delet
     );
     assert_eq!(api.meals().await, Vec::<Value>::new());
 
-    // A rejected request consumes no request_id.
     let mut unknown = protein_bowl("rejected-first");
     unknown["portions"][1]["food_id"] = json!(424_242);
     let (status, body) = api.save(unknown).await;
@@ -92,8 +86,6 @@ async fn a_retried_save_replays_conflicts_on_changes_and_never_recreates_a_delet
     api.saved(protein_bowl("rejected-first")).await;
 }
 
-/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
-/// of replaying a fabricated one; the Meal stays, and the client reads it first.
 #[tokio::test]
 async fn a_legacy_receipt_directs_the_client_to_read_the_meal_first() {
     let api = Api::start().await;
@@ -164,7 +156,6 @@ async fn invalid_meals_and_logs_by_name_are_refused_without_writing() {
             json!({"portions": [{"food_id": 1693, "grams": 0}]}),
             StatusCode::BAD_REQUEST,
         ),
-        // A Meal holds references, never values.
         (
             json!({"portions": [{"food_id": 1693, "grams": 10, "estimates": {"vitamin_d": 1}}]}),
             StatusCode::BAD_REQUEST,
@@ -233,7 +224,6 @@ async fn invalid_meals_and_logs_by_name_are_refused_without_writing() {
     let (status, body) = api.log(overrides_without_meal).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
     assert_eq!(api.day("2026-10-29").await["meal_logs"], json!([]));
-    // None of the rejected logs consumed the request_id.
     api.logged(by_name("Protein bowl", "log-1")).await;
 }
 

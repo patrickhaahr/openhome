@@ -31,7 +31,6 @@ private class ExercisePickerViewModel(
 
     private var adding = false
 
-    /** One Exercise per visit, so a second tap before the screen leaves cannot add it twice. */
     fun add(exercise: Exercise, onAdded: () -> Unit) {
         if (adding) return
         adding = true
@@ -42,7 +41,6 @@ private class ExercisePickerViewModel(
     }
 }
 
-/** Everything in the Library, including Exercises not yet synced, so choosing one never needs a connection. */
 @Composable
 fun ExercisePickerRoute(onPicked: () -> Unit, onCreate: (String) -> Unit) {
     val viewModel = appViewModel { ExercisePickerViewModel(it.fitness, it.activeWorkout, it.saveScope) }
@@ -59,7 +57,6 @@ fun ExercisePickerRoute(onPicked: () -> Unit, onCreate: (String) -> Unit) {
     )
 }
 
-/** Chooses an Exercise for the caller to use, without touching the Active Workout. */
 @Composable
 fun CorrectionExercisePickerRoute(onPicked: (Long) -> Unit) {
     val viewModel = appViewModel { ExercisePickerViewModel(it.fitness, it.activeWorkout, it.saveScope) }

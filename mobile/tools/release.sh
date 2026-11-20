@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Run through the mobile-release-* just recipes. Never enable shell tracing here.
 set -euo pipefail
 umask 077
 
@@ -11,7 +10,6 @@ sdk_tools="${ANDROID_HOME:?Run through devenv shell}/build-tools/36.0.0"
 
 case "${1:-}" in
     init)
-        # Refuse existing/partial identities: silently rotating a key breaks upgrades.
         mkdir -p "$(dirname "$identity")"
         if ! mkdir -m 700 "$identity"; then
             echo "Signing identity already exists at $identity; preserve it, do not regenerate." >&2

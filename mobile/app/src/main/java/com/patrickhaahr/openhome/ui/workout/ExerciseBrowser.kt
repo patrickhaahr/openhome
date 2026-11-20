@@ -46,7 +46,6 @@ import com.patrickhaahr.openhome.ui.design.key
 import com.patrickhaahr.openhome.ui.theme.Lit
 import com.patrickhaahr.openhome.ui.theme.Type
 
-/** What storage has answered so far. A failed read says so rather than looking like an empty Library. */
 sealed interface LibraryLookup<out T> {
     data object Loading : LibraryLookup<Nothing>
 
@@ -62,14 +61,12 @@ fun categoryLabel(category: String): String = category.replaceFirstChar { it.upp
 fun exerciseDetails(exercise: Exercise): String =
     listOfNotNull(exercise.category, exercise.muscleGroup, exercise.equipment).joinToString(separator = " · ")
 
-/** What to do about a refused Exercise; nothing logged with it is at risk meanwhile. */
 fun exerciseRefusalMessage(problem: SyncProblem): String =
     when (problem) {
         SyncProblem.NAME_TAKEN -> "OpenHome already has an Exercise with this name. Tap to rename or use it."
         else -> "OpenHome refused this Exercise. Tap to check its details."
     }
 
-/** Search, filters, the list and, given [onCreate], a way to create what is missing: the same for Library and picker. */
 @Composable
 fun <T> ExerciseBrowser(
     title: String,
@@ -215,7 +212,6 @@ private fun <T> ExerciseList(
     }
 }
 
-/** One Exercise, marked by what kind it is. Only rows with something to do are tappable. */
 @Composable
 fun ExerciseRow(
     exercise: Exercise,

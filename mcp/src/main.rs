@@ -17,7 +17,6 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let http_config =
         StreamableHttpServerConfig::default().with_allowed_hosts(config.allowed_hosts.clone());
-    // Cancelling ends open MCP sessions, which would otherwise hold graceful shutdown open.
     let sessions = http_config.cancellation_token.clone();
     let api = OpenHomeApi::new(config.api_url.clone(), config.api_key.clone())?;
     let app = openhome_mcp::router(api, config.api_key.clone(), http_config);

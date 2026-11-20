@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// This harness also executes the private server transport; CORS applies to browser RPCs, not Axum calls.
 
 import { act } from "react"
 import { expect, test, vi } from "vitest"
@@ -139,7 +138,6 @@ test("plates group by person and list, the keys filter them, and the detail plat
   await wish(home.list("Member B", "Ideas"), "A book")
   await render()
 
-  // Everyone: one group per person, high priority first, each plate captioned by its list.
   expect(titles(section("Member A", container))).toEqual([
     "A warm jacket",
     "A scarf",
@@ -190,7 +188,6 @@ test("plates group by person and list, the keys filter them, and the detail plat
 
   await click("Edit", sheet())
   await type(field("Link", sheet()), "javascript:alert(1)")
-  // Dispatch at the form seam so Axum validation runs even where native URL checks would stop it.
   await act(async () => {
     sheet()
       .querySelector("form")
@@ -240,7 +237,6 @@ test("a pasted link fills editable fields for the chosen list, and nothing saves
   const home = await household({ "Member A": ["Ideas"] })
   const list = home.list("Member A", "Ideas")
 
-  // A protocol fixture exercises review in the UI; extraction is owned by the Axum tests.
   harness.metadata = async (request) => {
     const { url, ...destination } = request
 
@@ -298,7 +294,6 @@ test("a pasted link fills editable fields for the chosen list, and nothing saves
     price: "DKK 179.95",
   })
   const [saved] = (await available()).items
-  // The browser never loads the shop: the picture travels through the dashboard's relay.
   expect(
     container.querySelector('[data-slot="wish-plate"] img')?.getAttribute("src")
   ).toMatch(
@@ -340,7 +335,6 @@ test("an unreadable link keeps the manual draft, and the link is only read once 
   expect(sheet().textContent).toContain("Could not read this link")
   expect(field("Paste a link", sheet()).value).toBe("http://127.0.0.1/product")
   expect((await available()).items).toEqual([])
-  // Tests never reach the internet: the next link is read by a stub that cannot answer.
   harness.metadata = () => Promise.reject(new Error("Synthetic outage"))
   await type(field("Paste a link", sheet()), "https://example.com/product")
   await type(field("Title", sheet()), "A manually described coat")
@@ -464,7 +458,6 @@ test("a saved wish stays acknowledged when the view cannot be re-read, and its r
   expect((await available()).items.map((item) => item.title)).toEqual([
     "A book",
   ])
-  // The add is done: the sheet closed, and the failure names the view, not the save.
   expect(document.querySelector('[data-slot="sheet"]')).toBeNull()
   expect(
     container.querySelector('[data-slot="list-failure"]')?.textContent
@@ -495,7 +488,6 @@ test("a rejected addition keeps its request ID and arguments for a retry after r
   vi.stubEnv("API_KEY", "synthetic-dashboard-api-key")
   await render()
   await click("Add a wish", container)
-  // The remounted form resumes the rejected wish rather than starting empty.
   expect(field("Title", sheet()).value).toBe("A book")
   expect(field("Price", sheet()).value).toBe("DKK 99")
   await click("Add wish", sheet())
@@ -540,7 +532,6 @@ test("without session storage a lost addition retried in the same form repeats i
   const [first, retry] = additions()
 
   expect(retry).toEqual(first)
-  // Axum committed the lost request, so one wish proves the retry was recognised as the same.
   expect((await available()).items.map((item) => item.title)).toEqual([
     "A book",
   ])
@@ -560,7 +551,6 @@ test("a closed sheet's late save does not close the sheet opened after it", asyn
     release = resolve
   })
 
-  // Neither click waits for the held write; the sheet may be closed while it is in flight.
   await act(async () => button("Add wish", sheet()).click())
   await act(async () => button("Close", sheet()).click())
   await settle()
@@ -577,8 +567,6 @@ test("a closed sheet's late save does not close the sheet opened after it", asyn
   expect((await available()).items.map((item) => item.title)).toEqual([
     "A book",
   ])
-  // The write was for the first sheet; the household sheet is still the one the user opened.
   expect(sheet().textContent).toContain("Household and lists")
-  // The late write was still saved, so its spent retry intention is gone.
   expect(sessionStorage.getItem(`openhome.pending-wish.${list.id}`)).toBeNull()
 })

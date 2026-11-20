@@ -35,6 +35,5 @@ try:
     keys("OK")
     capture("ember-speaking")
 finally:
-    # Match the exact fixture command; never terminate another Node client.
     remote("for p in /proc/[0-9]*/cmdline; do [ -r \"$p\" ] || continue; command=$(tr '\\000' ' ' < \"$p\" 2>/dev/null) || continue; case \"$command\" in 'node /tmp/openhome-tv-preview.js '*) pid=${p#/proc/}; kill \"${pid%/cmdline}\";; esac; done; rm -f /tmp/openhome-tv-preview.js /tmp/openhome-tv-preview.log /var/lib/openhome-tv/client-disabled; /var/lib/openhome-tv/client-service.sh start; /var/lib/pearwebos/pearwebos on")
 print("Public screenshots use synthetic values; the TV is back on the real API.")

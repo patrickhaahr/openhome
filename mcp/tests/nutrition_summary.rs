@@ -81,7 +81,6 @@ async fn nutrition_goal_tools_read_and_set_the_goal_and_pass_errors_and_targets_
         error
     );
 
-    // Without a Profile the day's targets say what they need.
     let day = wishlist_call(&client, "nutrition_day", json!({"day": "2026-10-29"}))
         .await
         .structured_content
@@ -91,7 +90,6 @@ async fn nutrition_goal_tools_read_and_set_the_goal_and_pass_errors_and_targets_
         day["targets"]["missing"],
         json!(["height", "sex", "birth_date", "body_weight"])
     );
-    // So does the micronutrient panel.
     assert_eq!(day["micronutrients"]["state"], "unavailable", "{day}");
     assert_eq!(
         day["micronutrients"]["missing"],
@@ -146,7 +144,6 @@ async fn nutrition_summary_forwards_each_aggregation_and_range_errors_unchanged(
         ))
         .await;
         assert_eq!(expected["logged_days"], 1, "{expected}");
-        // Without the Profile's sex and birth date the coverage says why.
         assert_eq!(
             expected["micronutrients"]["state"], "unavailable",
             "{expected}"

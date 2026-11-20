@@ -11,26 +11,20 @@ use crate::services::training::calendar::CalendarDay;
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 
-/// What an edit does to the photo.
 enum PhotoChange {
     Keep,
     Remove,
     Replace(Upload),
 }
 
-/// The validated changes of one edit, applied together.
 struct Changes {
     eaten_at: Option<DateTime<Utc>>,
-    /// `Some` when the note is supplied; its value may clear it.
     note: Option<Option<String>>,
     portions: Option<Vec<PreparedPortion>>,
     doses: Option<Vec<StoredDose>>,
     photo: PhotoChange,
 }
 
-/// Applies the supplied fields together. Replacing Portions or doses snapshots their Foods or
-/// Supplements afresh; replacing the photo encodes it before anything is written and removes the
-/// replaced files.
 pub async fn update_meal_log(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -88,7 +82,6 @@ pub async fn update_meal_log(
     .await
 }
 
-/// Attaches `upload` as the Meal Log's photo, replacing and removing any earlier photo.
 pub async fn replace_photo(
     db: &SqlitePool,
     photos: &MealPhotos,
@@ -108,8 +101,6 @@ pub async fn replace_photo(
     apply(db, photos, id, changes).await
 }
 
-/// Stores a replacement photo, writes `changes`, then removes the photo they replaced. A failed
-/// write removes the new photo instead, so a rejected edit leaves no file behind.
 async fn apply(
     db: &SqlitePool,
     photos: &MealPhotos,
@@ -149,7 +140,6 @@ async fn apply(
     find(db, id).await?.ok_or_else(not_found)
 }
 
-/// The prepared changes of one edit; `None` keeps a field.
 struct Written<'a> {
     at: Option<DateTime<Utc>>,
     note: Option<&'a Option<String>>,
@@ -158,7 +148,6 @@ struct Written<'a> {
     photo: Option<PhotoColumns>,
 }
 
-/// Writes one edit in a transaction. Returns the ID of the photo it replaced or removed.
 async fn write_changes(db: &SqlitePool, id: &str, changes: Written<'_>) -> Result<Option<String>> {
     let Written {
         at,
@@ -223,8 +212,6 @@ async fn write_changes(db: &SqlitePool, id: &str, changes: Written<'_>) -> Resul
     Ok(previous.filter(|_| photo_supplied))
 }
 
-/// Deletes a Meal Log, its Portions and its photo files. Its receipt stays, so an old retry
-/// cannot recreate it.
 pub async fn delete_meal_log(db: &SqlitePool, photos: &MealPhotos, id: &str) -> Result<()> {
     let Some(photo_id) =
         sqlx::query_scalar!("DELETE FROM meal_logs WHERE id = ? RETURNING photo_id", id)

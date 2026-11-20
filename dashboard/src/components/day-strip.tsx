@@ -17,7 +17,6 @@ import {
 
 type Entries = TrainingState["week"]
 
-/** How far back the strip will ever reach; older days are not offered. */
 const reach = 364
 
 const weekday = new Intl.DateTimeFormat("en-GB", {
@@ -32,19 +31,16 @@ const dayLabel = new Intl.DateTimeFormat("en-GB", {
   month: "short",
 })
 
-/** Training Days are calendar dates; formatting them at UTC midnight never shifts the day. */
 function calendar(day: string, format: Intl.DateTimeFormat): string {
   return format.format(new Date(`${day}T00:00:00Z`))
 }
 
-/** One day's three readings, ready to draw as rings. */
 type DayReadings = {
   readonly charge: number | null
   readonly rest: number | null
   readonly effort: number | null
 }
 
-/** The readings of a Recovery Day read; a failed read has none. */
 export function readings(read: TrainingRead<RecoveryDay>): DayReadings {
   if (read.state === "unavailable")
     return { charge: null, rest: null, effort: null }
@@ -64,7 +60,6 @@ function spokenReadings(values: DayReadings): string {
   ].join(", ")
 }
 
-/** Whether a read brought any ring at all; a whole run without one is before the history began. */
 function recorded(entries: Entries): boolean {
   return entries.some((entry) => {
     const values = readings(entry.recovery)
@@ -76,25 +71,17 @@ function recorded(entries: Entries): boolean {
 }
 
 type DayStripProps = {
-  /** The days the page read, oldest first, including the selected one. */
   readonly initial: Entries
   readonly selected: string
   readonly today: string
   readonly disabled: boolean
-  /** Select a day, or read the pressed one again. */
   readonly choose: (day: string, current: boolean) => void
-  /** Reads more days into the strip; without it only the days given are offered. */
   readonly loadDays?:
     | ((from: string, to: string) => Promise<Entries>)
     | undefined
   readonly selectedRef: React.Ref<HTMLButtonElement>
 }
 
-/**
- * Days as a horizontal strip of three-ring buttons: native overflow with snap points, no arrows
- * and no scrollbar. It opens on the selected day and reaches back through the history as it is
- * scrolled. Each day stays a button, so Tab and the arrow keys move along it.
- */
 export function DayStrip({
   initial,
   selected,
@@ -113,8 +100,6 @@ export function DayStrip({
   const first = entries[0]?.day
   const last = entries.at(-1)?.day
 
-  // Land on the selected day, and again whenever the strip changes size or its fonts settle;
-  // for today the strip rests against its right end.
   useLayoutEffect(() => {
     const list = strip.current
 
@@ -139,7 +124,6 @@ export function DayStrip({
     return () => observer.disconnect()
   }, [selected, today])
 
-  // Days older than the page read keep the view where it was.
   useLayoutEffect(() => {
     const list = strip.current
 
@@ -165,7 +149,6 @@ export function DayStrip({
     [loadDays]
   )
 
-  // A selected day in the past leaves days up to today unread.
   useEffect(() => {
     if (last === undefined || last >= today) return
 

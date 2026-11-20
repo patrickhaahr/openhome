@@ -200,7 +200,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .and(header("Authorization", "Basic dGVzdDp0ZXN0"))
@@ -239,7 +238,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .and(header("Authorization", "Basic dGVzdDp0ZXN0"))
@@ -278,7 +276,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .and(header("Authorization", "Basic dGVzdDp0ZXN0"))
@@ -330,7 +327,6 @@ mod tests {
 
         let response = get_status(State(state)).await.unwrap();
 
-        // Verify all fields are populated
         assert!(response.running);
         assert_eq!(response.version, "v2.0.0");
         assert_eq!(response.protection_disabled_duration, 0);
@@ -354,7 +350,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .and(header("Authorization", "Basic dGVzdDp0ZXN0"))
@@ -374,7 +369,6 @@ mod tests {
 
         let response = disable_protection(State(state)).await.unwrap();
 
-        // Verify disabled status fields
         assert!(!response.protection_enabled);
         assert_eq!(response.protection_disabled_duration, 600);
         assert_eq!(

@@ -6,7 +6,6 @@ import {
   type WishlistState,
 } from "./wishlist"
 
-/** Non-persistent URL assistance through the same authenticated Axum operation as MCP. */
 export const getWishlistUrlMetadata = createServerFn({ method: "POST" })
   .validator(wishlistMetadataRequest)
   .handler(async ({ data }) => {
@@ -16,7 +15,6 @@ export const getWishlistUrlMetadata = createServerFn({ method: "POST" })
     return previewWishlistUrl(data)
   })
 
-/** Read shared Wishlists through the server-held Axum credential. */
 export const getWishlists = createServerFn({ method: "GET" }).handler(
   async () => {
     setResponseHeader("Cache-Control", "no-store")
@@ -26,7 +24,6 @@ export const getWishlists = createServerFn({ method: "GET" }).handler(
   }
 )
 
-/** Persist a destination-explicit change through Axum, keeping credentials server-side. */
 export const mutateWishlist = createServerFn({ method: "POST" })
   .validator(wishlistCommand)
   .handler(async ({ data }) => {
@@ -36,7 +33,6 @@ export const mutateWishlist = createServerFn({ method: "POST" })
     return writeWishlist(data)
   })
 
-/** A dropped read RPC renders recovery controls instead of a route error. */
 export async function loadWishlists(): Promise<WishlistState> {
   try {
     return await getWishlists()

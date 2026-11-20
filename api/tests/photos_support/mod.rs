@@ -1,5 +1,3 @@
-//! App and provider mock builders shared by the photos test files.
-
 #![allow(dead_code)]
 
 use crate::common;

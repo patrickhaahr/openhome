@@ -43,7 +43,6 @@ import com.patrickhaahr.openhome.ui.pluralize
 import com.patrickhaahr.openhome.ui.theme.Lit
 import com.patrickhaahr.openhome.ui.theme.Type
 
-/** The session's head: its day, its name and notes, and the two ways out. Saving is only ever a mark. */
 @Composable
 internal fun SessionBar(
     workout: ActiveWorkout,
@@ -144,7 +143,6 @@ private fun SaveMark(state: SaveState) {
     }
 }
 
-/** Finishing never silently records or drops a row: this shows what is kept, what is left out, and asks. */
 @Composable
 internal fun FinishReview(workout: ActiveWorkout, onReturn: () -> Unit, onOmitAndFinish: () -> Unit) {
     val confirmed = workout.entries.sumOf { entry -> entry.sets.count { it.completed } }

@@ -8,7 +8,6 @@ const tag =
 const pocket =
   "relative aspect-binder-card rounded-code bg-wash-strong data-empty:bg-wash"
 
-/** One 3×3 page, filled to nine pockets so the rest show empty; `under` lies beneath a lifted leaf. */
 export function Page({
   sheet,
   openEntry,
@@ -50,7 +49,6 @@ export function Page({
   )
 }
 
-/** The card's own picture over its code and name, which stay if the picture cannot load. Tapping opens its sheet. */
 function Pocket({
   entry,
   open,

@@ -1,9 +1,3 @@
-//! Nutrition (`CONTEXT.md`, Nutrition): the Food database, the parameter vocabulary shared by
-//! everything that carries nutrient values, Products read from Open Food Facts, NOVA Classes, named
-//! Meals, Supplements, Meal Logs with their photos, the Nutrition Goal and the targets derived
-//! from it, the micronutrient evaluation against NNR 2023 and EFSA references, and the Nutrition
-//! Day and Nutrition Summary built from them.
-
 pub mod coverage;
 pub mod day;
 pub mod food_database;

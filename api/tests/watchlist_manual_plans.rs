@@ -1,5 +1,3 @@
-//! Watchlist manual plans: owners, retries and request validation.
-
 mod common;
 mod watchlist_support;
 
@@ -96,7 +94,6 @@ async fn manual_plans_persist_and_owner_targeted_removal_cannot_change_another_l
         .0,
         StatusCode::NOT_FOUND
     );
-    // Existing training records retain their shared schema and endpoint.
     assert_eq!(
         request(&app, Method::GET, "/api/workouts", Value::Null)
             .await
@@ -123,7 +120,6 @@ async fn missing_owner_requires_clarification_without_consuming_the_request_id()
     let (app, _) = test_app_with_db().await;
     let payload = json!({"title":"A Quiet Orbit","kind":"movie","request_id":"clarify"});
     let first = owner(&app, "Member A").await;
-    // Even a single household member is not inferred ownership.
     let (status, clarification) = request(
         &app,
         Method::POST,

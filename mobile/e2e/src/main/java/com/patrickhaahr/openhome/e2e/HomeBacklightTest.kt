@@ -9,7 +9,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** Observable Home UI over authenticated HTTP with independent status facts and actual Room. */
 class HomeBacklightTest {
     private val app = AppDriver()
     private val api = FakeAxum(exercises = mapOf(1L to "Pull-Up"))
@@ -35,7 +34,6 @@ class HomeBacklightTest {
         app.assertVisibleBelow("Sending Backlight selection…")
         app.assertButtonEnabled("Backlight TV Sync", false)
         app.assertButtonEnabled("Refresh Backlight status", false)
-        // A second press of the same control while it is held must not reach Axum.
         app.tapDescription("Backlight Off")
         release.countDown()
         app.awaitGone("Sending Backlight selection…")
@@ -49,8 +47,6 @@ class HomeBacklightTest {
         app.assertVisible("Advanced Backlight")
         app.assertField("Start (HH:MM)", "22:30")
         app.assertField("End (HH:MM)", "06:00")
-        // Changing brightness alone must not send enabled: Axum treats its presence as
-        // an explicit request to clear the manual override, even when the value is unchanged.
         app.enter("Bedtime red brightness (0–100)", "9")
         app.tapScrolledText("Save bedtime routine")
         app.assertVisibleBelow("Bedtime routine saved by OpenHome.")
@@ -106,7 +102,6 @@ class HomeBacklightTest {
         app.tap("Home")
         app.tapScrolledText("Advanced Backlight")
         app.assertVisibleBelow("Profile: Setup required")
-        // The server is the validation authority, including rejected equal window endpoints.
         app.assertVisibleBelow("Start (HH:MM)")
         app.enter("Start (HH:MM)", "06:00")
         api.backlightCode = 400
@@ -144,7 +139,6 @@ class HomeBacklightTest {
         app.enter("Backlight brightness (0–100)", "42")
         app.tapBelow("Apply RGB")
         app.tapBelow("Apply brightness to intended mode")
-        // The brightness field keeps focus, and a swipe that starts on its keyboard never scrolls the list.
         app.dismissKeyboardIfShown()
         app.tapScrolledTo("Backlight Aurora")
         app.assertNotDescribed("Backlight Forest")
@@ -205,7 +199,6 @@ class HomeBacklightTest {
         app.tap("Home")
         api.loseBacklightResponse = true
         api.backlightDelayMillis = 2000
-        // Wait for the initial read before locating a control below the server facts.
         app.assertVisibleBelow("Intended: RGB 20, 40, 60 at 35%")
         app.tapScrolledTo("Backlight Off")
         app.assertVisibleBelow("Sending Backlight selection…")

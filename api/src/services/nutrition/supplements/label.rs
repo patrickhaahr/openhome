@@ -7,12 +7,10 @@ use crate::services::nutrition::open_food_facts::significant;
 use crate::services::nutrition::parameters::{self, Unit};
 use std::collections::HashSet;
 
-/// A mass unit's symbol and how many of it one gram is.
 fn mass_unit(text: &str) -> Option<(&'static str, f64)> {
     match text {
         "g" => Some(("g", 1.0)),
         "mg" => Some(("mg", 1_000.0)),
-        // The micro sign, the Greek mu and ASCII spellings.
         "µg" | "μg" | "ug" | "mcg" => Some(("µg", 1_000_000.0)),
         _ => None,
     }
@@ -77,7 +75,6 @@ pub(super) fn amount(request: &AmountRequest) -> std::result::Result<Amount, Str
     })
 }
 
-/// The parameter key a compound name would be written as, e.g. `Vitamin D` as `vitamin_d`.
 fn as_key(name: &str) -> String {
     name.split(|character: char| !character.is_alphanumeric())
         .filter(|word| !word.is_empty())
@@ -110,7 +107,6 @@ pub(super) fn compound(request: &CompoundRequest) -> std::result::Result<Compoun
     })
 }
 
-/// Completes energy in kcal and kJ from each other, as Product labels are.
 fn complete_energy(mut amounts: Vec<Amount>) -> Vec<Amount> {
     let find = |amounts: &[Amount], key: &str| {
         amounts
@@ -177,7 +173,6 @@ pub(super) fn compounds(requests: &[CompoundRequest]) -> Result<Vec<Compound>> {
     Ok(compounds)
 }
 
-/// A Supplement lists 1-[`MAX_LABEL_ITEMS`] amounts and compounds together.
 pub(super) fn check_label(amounts: &[Amount], compounds: &[Compound]) -> Result<()> {
     let items = amounts.len() + compounds.len();
     if items == 0 || items > MAX_LABEL_ITEMS {
@@ -188,7 +183,6 @@ pub(super) fn check_label(amounts: &[Amount], compounds: &[Compound]) -> Result<
     Ok(())
 }
 
-/// Converts `value` of a compound from one mass unit to another; `None` for other units.
 pub(in crate::services::nutrition) fn convert_mass(
     value: f64,
     from: &str,

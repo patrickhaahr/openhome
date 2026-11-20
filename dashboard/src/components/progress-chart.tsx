@@ -7,7 +7,6 @@ import {
   type ChartedLine,
 } from "@/lib/exercise-progress"
 
-/** Twelve hues at similar lightness so no line dominates on dark; later lines reuse them with square markers. */
 const hues = [
   "text-progress-1",
   "text-progress-2",
@@ -25,13 +24,11 @@ const hues = [
 
 export const paletteSize = hues.length
 
-/** A line's colour slot (1-based) and marker shape, fixed by its place in the request. */
 export type Marker = {
   readonly colour: number
   readonly dot: "round" | "square"
 }
 
-/** The text colour that a line's marks, swatch and strokes draw in through `currentColor`. */
 export function hue(marker: Marker | undefined): string {
   return marker === undefined ? "" : (hues[marker.colour - 1] ?? "")
 }
@@ -47,7 +44,6 @@ type ProgressChartProps = {
   readonly markers: ReadonlyMap<number, Marker>
 }
 
-/** Observed days as dots joined in order; long gaps are dashed and nothing is interpolated. */
 export function ProgressChart({
   from,
   to,
@@ -73,7 +69,6 @@ export function ProgressChart({
     return () => observer.disconnect()
   }, [])
 
-  // Drawn at its own pixel width so type stays readable on a phone.
   const size = { width: measured, height: measured < 520 ? 260 : plot.height }
   const scale = chartScale({ from, to, lines, size })
 

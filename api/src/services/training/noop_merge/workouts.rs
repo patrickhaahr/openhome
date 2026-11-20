@@ -1,28 +1,19 @@
 use serde::Serialize;
 
-/// Where NOOP says a workout row came from, classified from its stored `source` like NOOP's
-/// `WorkoutEditing.classify`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkoutOrigin {
-    /// Logged in NOOP by the user, live or afterwards.
     Manual,
-    /// A bout NOOP's detector derived from strap heart rate.
     Detected,
-    /// Imported from a WHOOP export.
     Whoop,
-    /// Imported from Apple Health or Health Connect; NOOP's fallback for unrecognised sources.
     HealthImport,
-    /// Imported strength session (Hevy, Liftosaur).
     Lifting,
-    /// Imported GPX, TCX or FIT file.
     ActivityFile,
 }
 
 impl WorkoutOrigin {
     pub fn classify(source: &str) -> Self {
         let source = source.to_lowercase();
-        // The detector writes the computed device id, which also contains "whoop".
         if source.ends_with("-noop") {
             Self::Detected
         } else if source == "manual" {
@@ -39,8 +30,6 @@ impl WorkoutOrigin {
     }
 }
 
-/// The `workout` fields a Training Day reads; zones are only checked for presence and routes are
-/// never selected.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkoutRow {
     pub device_id: String,
@@ -60,7 +49,6 @@ pub struct WorkoutRow {
 }
 
 impl WorkoutRow {
-    /// Captured signals, NOOP's tiebreak between two rows of one activity.
     fn richness(&self) -> u8 {
         [
             self.avg_hr.is_some(),
@@ -75,8 +63,6 @@ impl WorkoutRow {
         .count() as u8
     }
 
-    /// Case- and space-insensitive sport, so `TraditionalStrengthTraining` matches `Traditional
-    /// Strength Training` and `detected` matches `Activity`.
     fn sport_key(&self) -> String {
         let sport = if self.sport == "detected" {
             "Activity"
@@ -90,7 +76,6 @@ impl WorkoutRow {
             .collect()
     }
 
-    /// The windows overlap by more than half of the shorter session.
     fn mostly_overlaps(&self, other: &Self) -> bool {
         let overlap = self.end_ts.min(other.end_ts) - self.start_ts.max(other.start_ts);
         let shorter = (self.end_ts - self.start_ts)
@@ -100,10 +85,7 @@ impl WorkoutRow {
     }
 }
 
-/// Selects the distinct NOOP Workouts among all namespaces' rows. The caller passes the imported
-/// strap first, then computed strap, then other namespaces, each by start. Returns by start.
 pub fn merge_workouts(rows: Vec<WorkoutRow>) -> Vec<WorkoutRow> {
-    // A detected bout that mostly overlaps a real session is its shadow, whatever the sport.
     let is_detected = |row: &WorkoutRow| row.origin == WorkoutOrigin::Detected;
     let shadows: Vec<bool> = rows
         .iter()
@@ -115,8 +97,6 @@ pub fn merge_workouts(rows: Vec<WorkoutRow>) -> Vec<WorkoutRow> {
         })
         .collect();
 
-    // The same activity recorded twice keeps the richer row; on a tie a strap-native row beats a
-    // health import, then the longer session, then the earlier row.
     let mut kept: Vec<WorkoutRow> = Vec::new();
     'rows: for (row, shadow) in rows.into_iter().zip(shadows) {
         if shadow {
@@ -136,7 +116,6 @@ pub fn merge_workouts(rows: Vec<WorkoutRow>) -> Vec<WorkoutRow> {
     kept
 }
 
-/// Whether `candidate` replaces `kept`, NOOP's `preferred(kept, candidate)`.
 fn preferred(candidate: &WorkoutRow, kept: &WorkoutRow) -> bool {
     let (candidate_richness, kept_richness) = (candidate.richness(), kept.richness());
     if candidate_richness != kept_richness {

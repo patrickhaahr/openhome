@@ -209,7 +209,6 @@ async fn watchlist_corrections_and_filters_forward_to_real_axum_with_omission_an
             .structured_content,
         Some(json!([]))
     );
-    // Owner IDs with query punctuation must remain one encoded value, never additional filters.
     assert_eq!(
         wishlist_call(
             &client,

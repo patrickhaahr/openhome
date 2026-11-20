@@ -114,7 +114,6 @@ fun HomeScreen(onOpenProfile: () -> Unit, onOpenRemote: () -> Unit, onOpenBackli
     }
 }
 
-/** A wall switch, because that is what it is. Both halves always look the same: a command is not a state. */
 @Composable
 private fun WallSwitch(state: CommandFeedback, send: (LightCommand) -> Unit, modifier: Modifier) {
     val tracker = remember { CommandTracker() }
@@ -225,7 +224,6 @@ private fun TvDeck(state: TvState, model: TvViewModel, onOpenRemote: () -> Unit,
     }
 }
 
-/** Words only for trouble; what went well and what stays unknown are for assistive technology. */
 @Composable
 private fun TvNotes(state: TvState) {
     Spoken("TV power: unobserved")
@@ -298,7 +296,6 @@ private fun SpeakerDeck(state: SpeakerState, model: SpeakerLightsViewModel) {
     feedback.problem?.let { ProblemTag(it) }
 }
 
-/** The whole remote, as a remote: the wheel in the middle, the rockers either side, the digits below. */
 @Composable
 fun TvRemoteScreen() {
     val model: TvViewModel = appViewModel { TvViewModel(it.setup, it.homeHttpClient) }
@@ -364,7 +361,6 @@ fun TvRemoteScreen() {
     }
 }
 
-/** Two keys in one capsule, + on top. */
 @Composable
 private fun Rocker(content: @Composable () -> Unit) {
     Column(

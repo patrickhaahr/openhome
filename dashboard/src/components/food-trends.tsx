@@ -32,13 +32,6 @@ const aggregationNames: Record<Aggregation, string> = {
   month: "Months",
 }
 
-/**
- * The Food page's Trends view: the range and aggregation choices, then each series as its own
- * chart (calories against the Calorie Target and Estimated Expenditure, protein against its
- * target, energy by macronutrient, the NOVA 1 share, Trend Weight against scale weight, and the
- * weekly change against the Nutrition Goal), then the vitamins and minerals against their
- * Recommended Intakes and Upper Limits, with the Food database's credit.
- */
 export function FoodTrends({
   data,
 }: {
@@ -64,10 +57,6 @@ export function FoodTrends({
   )
 }
 
-/**
- * The summary's sources, as the Day view credits them: each Food database version its values
- * came from, and Open Food Facts when a Product is in the range.
- */
 function Credits({
   data,
 }: {
@@ -95,14 +84,12 @@ function Credits({
   )
 }
 
-/** The Food page's Trends search; a choice's defaults stay out of the URL. */
 type TrendsLink = {
   view: "trends"
   range?: TrendRange
   by?: Aggregation
 }
 
-/** Search parameters for a choice; defaults stay out of the URL. */
 function searchFor(choice: TrendsChoice): TrendsLink {
   const search: TrendsLink = { view: "trends" }
 
@@ -153,7 +140,6 @@ function TrendControls({
   )
 }
 
-/** The two counts in the coverage line stand out from its muted words. */
 const coverageFigure =
   "text-lead font-medium tracking-food-heading tabular-nums text-ink"
 
@@ -169,7 +155,6 @@ function kilograms(value: number): string {
   return `${formatDecimal(value)} kg`
 }
 
-/** The last known value of a series, with the first, for a change over the range. */
 function ends(
   periods: readonly SummaryPeriod[],
   value: (period: SummaryPeriod) => number | null
@@ -200,7 +185,6 @@ function Trends({
     partial: periods.map((period) => period.partial),
   }
 
-  // Intake means cover the logged days whose energy is known.
   const intakeDays = (period: SummaryPeriod) => period.intake_days
   const all = (period: SummaryPeriod) => period.days
   const notLogged = "Not logged"

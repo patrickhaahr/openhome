@@ -3,20 +3,15 @@ import { SunDimIcon } from "@phosphor-icons/react/dist/csr/SunDim"
 
 type FaderProps = {
   label: string
-  /** 0 to 100. */
   value: number
   orientation: "vertical" | "horizontal"
-  /** The background class of the light the fill is painted in. */
   tone: string
   disabled?: boolean
-  /** The controller's readable level, drawn as a quiet notch; null when nothing was read. */
   readback?: number | null
   onChange: (value: number) => void
-  /** The hand lifted: a good moment to send. */
   onRelease?: () => void
 }
 
-// A vertical dimmer is a tall capsule on the wall; a horizontal one a slim pill on paper.
 const looks = {
   vertical: {
     track: "rounded-sheet bg-led-wash-strong",
@@ -43,10 +38,6 @@ const keySteps = new Map([
   ["End", () => 100],
 ])
 
-/**
- * A capsule filled with the light it sets, like a dimmer under a thumb: touch anywhere and the
- * fill follows the finger. The figure only shows while the hand is on it.
- */
 export function LightFader({
   label,
   value,

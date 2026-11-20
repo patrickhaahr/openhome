@@ -86,7 +86,7 @@ void handleNotFound() {
   server.send(404, "application/json", "{\"error\":\"Not found\"}");
 }
 
-}  // namespace
+}
 
 void setupWifiControl() {
   connectToWifi();

@@ -1,7 +1,3 @@
-//! NOOP self-hosted push endpoint. The route is fixed at [`PUSH_PATH`] and authenticated with
-//! `NOOP_PUSH_TOKEN`, not `API_KEY`, so this router is merged outside the API-key middleware.
-//! `GET` serves capabilities; `POST` accepts one NDJSON batch.
-
 use axum::{
     Json, Router,
     body::Body,
@@ -17,7 +13,6 @@ use sqlx::SqlitePool;
 use crate::services::noop_push::ingest::{self, ContentCoding, IngestError, MAX_WIRE_BYTES};
 use crate::services::noop_push::{self, CURRENT_VERSION, PushToken, V1_STREAMS, negotiate_version};
 
-/// The fixed push route the NOOP client is configured with (`https://<host>/api/noop/push`).
 pub const PUSH_PATH: &str = "/api/noop/push";
 
 const ACCEPT_VERSION_HEADER: &str = "noop-push-accept-version";
@@ -113,7 +108,6 @@ async fn capabilities(State(state): State<PushState>, headers: HeaderMap) -> Res
 }
 
 async fn push_batch(State(state): State<PushState>, headers: HeaderMap, body: Body) -> Response {
-    // Authenticate before reading any of the entity.
     if !is_authorized(&headers, &state.token) {
         tracing::warn!(
             route = PUSH_PATH,
@@ -137,7 +131,6 @@ async fn push_batch(State(state): State<PushState>, headers: HeaderMap, body: Bo
         Ok(wire) => wire,
         Err(error) => return rejected(status_for(&error), error.code()),
     };
-    // Decoding, parsing and hashing up to 4 MiB is CPU-bound: keep it off the async workers.
     let prepared = match tokio::task::spawn_blocking(move || ingest::prepare(coding, wire)).await {
         Ok(prepared) => prepared,
         Err(error) => {
@@ -208,7 +201,6 @@ const fn status_for(error: &IngestError) -> StatusCode {
     }
 }
 
-/// Accepts `application/x-ndjson`, optionally with a UTF-8 charset parameter.
 fn is_ndjson(headers: &HeaderMap) -> bool {
     let Some(value) = headers
         .get(header::CONTENT_TYPE)
@@ -230,7 +222,6 @@ fn is_ndjson(headers: &HeaderMap) -> bool {
         })
 }
 
-/// Identity or gzip; any other or repeated `Content-Encoding` is unsupported.
 fn content_coding(headers: &HeaderMap) -> Option<ContentCoding> {
     let mut values = headers.get_all(header::CONTENT_ENCODING).iter();
     let value = match (values.next(), values.next()) {
@@ -241,7 +232,6 @@ fn content_coding(headers: &HeaderMap) -> Option<ContentCoding> {
     ContentCoding::parse(value)
 }
 
-/// Buffers the wire entity, failing as soon as it exceeds `limit`.
 async fn read_bounded(body: Body, limit: usize) -> Result<Vec<u8>, IngestError> {
     let mut stream = body.into_data_stream();
     let mut wire = Vec::new();

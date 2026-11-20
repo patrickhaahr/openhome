@@ -1,5 +1,3 @@
-//! NOOP push handshake: capabilities, authentication, routing and receiver state id.
-
 mod common;
 mod noop_push_support;
 
@@ -203,7 +201,6 @@ async fn receiver_state_id_is_stable_and_follows_rotation() {
         second.json["receiverStateId"]
     );
 
-    // Re-running initialization (as on restart) must not replace the persisted ID.
     noop_push::initialize(&db).await.unwrap();
     let after_restart = capabilities(app_with_push_db(db.clone()).await, "1.0", PUSH_TOKEN).await;
     assert_eq!(
@@ -273,7 +270,6 @@ async fn baseline_retry_converges_after_restart_and_database_backup() {
     assert_eq!(count(&db, "SELECT COUNT(*) FROM daily_metric").await, 0);
     db.close().await;
 
-    // Startup runs migrations again against the same file. The sender lost both acks.
     let db = noop_push::connect(&url).await.unwrap();
     assert_eq!(noop_push::receiver_state_id(&db).await.unwrap(), state_id);
     assert_eq!(post(&db, &append, false).await.raw, append_ack.raw);
@@ -315,7 +311,6 @@ async fn baseline_retry_converges_after_restart_and_database_backup() {
     );
     db.close().await;
 
-    // A closed SQLite file is a consistent backup containing both data and protocol state.
     std::fs::copy(&path, &backup).unwrap();
     let backup_db = noop_push::connect(&format!("sqlite:{}", backup.display()))
         .await

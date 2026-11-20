@@ -1,5 +1,3 @@
-//! Backlight authorization, captured profile and manual colour selection.
-
 mod backlight_support;
 mod common;
 
@@ -77,7 +75,6 @@ async fn captured_profile_is_private_durable_and_cannot_be_replaced_from_static_
                     return Err(openhome_api::services::backlight::TransportError::Superseded);
                 }
                 self.writes.lock().unwrap().extend_from_slice(writes);
-                // Synthetic protocol responses, unrelated to any household's settings.
                 let replies = queries
                     .iter()
                     .map(|query| {
@@ -241,7 +238,6 @@ async fn manual_rgb_is_durable_and_tv_sync_restores_its_separate_brightness() {
     assert_eq!(result["intended"], target);
     assert_eq!(result["acknowledged"], target);
     assert!(result["observed"].get("rgb").is_none());
-    // H605C's validated whole-strip RGBIC encoding; generic 33 05 02 is ineffective.
     assert_eq!(
         device.packets.lock().unwrap()[1][1],
         [

@@ -5,7 +5,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 
-/** System back through the real activity, with Android delivering the back event. */
 class BackNavigationTest {
     private val app = AppDriver()
     private val api =

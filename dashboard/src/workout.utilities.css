@@ -1,5 +1,3 @@
-/* Workout and Recovery: what utilities cannot say. Inline 0..1 fractions drive these lengths
-   (tests read them), and calc() in an arbitrary value fails the lint. */
 @utility lane-span {
   left: calc(var(--from) * 100%);
   width: calc(var(--length) * 100%);
@@ -17,7 +15,6 @@
   width: calc(var(--rpe) * 100%);
 }
 
-/* A quiet fade at both ends of the day strip, so a day is never cut hard mid-ring. */
 @utility edge-fade-x {
   mask-image: linear-gradient(
     to right,
@@ -28,13 +25,10 @@
   );
 }
 
-/* A logged session alone reads top to bottom over two columns; no utility sets count and width together. */
 @utility exercise-columns {
   columns: 2 28rem;
 }
 
-/* Traces the weight trend's stroke; the dash pattern exists only while it can animate. Its own
-   name: the Home sparkline's draw reveals by clipping. */
 @utility trend-draw {
   @media (prefers-reduced-motion: no-preference) {
     stroke-dasharray: 4000;

@@ -28,65 +28,46 @@ import type {
 import { cn } from "@/lib/utils"
 import { type SingleCommand, useSingleCommand } from "@/lib/use-single-command"
 
-/** A labelled set of Remote Buttons. */
 export type CommandGroup<C extends string> = {
   label: string
   commands: C[]
 }
 
-/** A group on the full remote, with where it sits and how its keys are arranged. */
 export type FullGroup<C extends string> = CommandGroup<C> & {
-  /** Classes for the group's place among the others. */
   place: string
-  /** Classes for the touch layout of its keys. */
   keys: string
 }
 
-/** What distinguishes one Dashboard Remote from another. */
 export type IrRemoteConfig<C extends string> = {
-  /** Prefixes element ids, so several remotes can share a page. */
   id: string
   device: Extract<Device, "TV" | "speaker">
   title: string
-  /** Names the remote on the focused Controls view. */
   remoteName: string
   icon: Icon
-  /** The Command given the filled button style. */
   primary: C
   labels: Record<C, string>
   commandIcons: Partial<Record<C, Icon>>
-  /** Home's glyph for a Command when its own icon would not say which device it drives. */
   plateIcons: Partial<Record<C, Icon>>
-  /** Whether Home's plate shows the device glyph; keys that name the device need none. */
   plateIdentity: boolean
-  /** Commands whose glyph keeps its word on the full remote, where the glyph alone is unclear. */
   worded: readonly C[]
   quickGroups: CommandGroup<C>[]
   fullGroups: FullGroup<C>[]
-  /** Extra classes for Home's plate. */
   plate: string
-  /** The full panel's shape: radius and padding. */
   panel: string
-  /** The full remote's arrangement of its groups. */
   groups: string
-  /** Extra classes for the device glyph on the full panel. */
   identity: string
-  /** The device state OpenHome never reports, shown as "Not reported". */
   unobserved: string
   explanation: string
 }
 
-/** Props every Dashboard Remote takes from its page. */
 export type IrRemoteProps<C extends string> = {
   connectionState: ConnectionState
-  /** Deferred discovery, so a slow IR remote never delays the rest of the page. */
   remote: Promise<IrRemoteState<C>>
   sendCommand: (options: {
     data: C
     signal: AbortSignal
   }) => Promise<IrCommandResult>
   layout: ControlLayout
-  /** Where the full panel sits on its page. */
   className?: string | undefined
 }
 
@@ -98,14 +79,12 @@ const recheckFailures = new Set<IrFailure>([
   "unsupported-command",
 ])
 
-/** Copy for one remote's discovery, connection and command outcomes. */
 type RemoteMessages = {
   discovery: Record<DiscoveryFailure, string>
   failure: Record<IrFailure, string>
   connection: ReturnType<typeof connectionPausedMessages>
 }
 
-/** Copy for one remote; no message suggests the device changed. */
 function remoteMessages(
   device: IrRemoteConfig<string>["device"]
 ): RemoteMessages {
@@ -115,7 +94,6 @@ function remoteMessages(
 
   return {
     connection,
-    // No command has been sent, so the device cannot have changed.
     discovery: {
       ...connection,
       "missing-device": missingDevice,
@@ -133,14 +111,12 @@ function remoteMessages(
   }
 }
 
-/** A Dashboard Remote whose buttons come from the Commands OpenHome reports. */
 export function IrRemote<C extends string>({
   config,
   remote,
   sendCommand,
   ...props
 }: IrRemoteProps<C> & { config: IrRemoteConfig<C> }): React.JSX.Element {
-  // Held above Await so a re-check that suspends discovery cannot reset the pending-command guard.
   const command = useSingleCommand({
     sendCommand,
     ready: props.connectionState === "connected",
@@ -199,7 +175,6 @@ function RemoteControls<C extends string>({
 }): React.JSX.Element {
   const [discovery, setDiscovery] = useState(remote)
 
-  // Each check resolves a new discovery; an earlier outcome no longer describes these buttons.
   if (discovery !== remote) {
     setDiscovery(remote)
     clear()
@@ -359,7 +334,6 @@ function RemoteCard<C extends string>({
       labelledBy={headingId}
     >
       <PanelHead layout={layout}>
-        {/* The device's glyph names the remote; the word stays for assistive technology. */}
         {!quick || config.plateIdentity ? (
           <config.icon
             className={
@@ -413,13 +387,11 @@ function RemoteButton<C extends string>({
 }: {
   config: IrRemoteConfig<C>
   command: C
-  /** Home shows icon keys; the label stays the button's text for assistive technology. */
   compact: boolean
   outcome: ReturnType<typeof keyOutcome>
   disabled: boolean
   onPress: (command: C) => void
 }): React.JSX.Element {
-  // Indexing a generic record does not resolve to a JSX component type without this annotation.
   const CommandIcon: Icon | undefined =
     (compact ? config.plateIcons[command] : undefined) ??
     config.commandIcons[command]

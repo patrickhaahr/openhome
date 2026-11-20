@@ -1,6 +1,3 @@
-//! The Food database through the nutrition routes: a synthetic workbook shaped like DTU's Danish
-//! Food Composition Database is served by `wiremock` and imported into a real `food.db`.
-
 mod common;
 
 use std::path::PathBuf;
@@ -27,7 +24,6 @@ use wiremock::{
 
 const API_KEY: &str = "test-api-key";
 
-/// Serves `bytes` at `/files/{version}.xlsx`, expecting `calls` downloads.
 async fn serve(server: &MockServer, version: &str, bytes: &[u8], calls: u64) {
     Mock::given(method("GET"))
         .and(path(format!("/files/{version}.xlsx")))
@@ -51,14 +47,12 @@ fn cache_dir(dir: &TempDir) -> PathBuf {
     dir.path().join("food-dataset")
 }
 
-/// Opens `food.db` in `dir` with the shared settings, as the API does on startup.
 async fn open(dir: &TempDir, file: &str, pin: DatasetPin) -> (Router, Option<FoodImport>) {
     let url = format!("sqlite:{}", dir.path().join(file).display());
     let pool = db::connect_sqlite(&url).await.unwrap();
     let (foods, import) = FoodDatabase::open(pool, pin, cache_dir(dir)).await.unwrap();
     let (_, state) = test_app_with_db().await;
     let photos = MealPhotos::new(dir.path().join("meal-photos"));
-    // Products are covered in nutrition_products; nothing here reads a barcode.
     let labels = OpenFoodFacts::new("http://127.0.0.1:9/".parse().unwrap()).unwrap();
     let app = routes::nutrition::router(foods, photos, labels)
         .with_state(state)
@@ -68,7 +62,6 @@ async fn open(dir: &TempDir, file: &str, pin: DatasetPin) -> (Router, Option<Foo
     (app, import)
 }
 
-/// Opens `food.db` and runs the import it asks for.
 async fn imported(dir: &TempDir, pin: DatasetPin) -> Router {
     let (app, import) = open(dir, "food.db", pin).await;
     import.expect("the pin is not recorded yet").run().await;
@@ -109,7 +102,6 @@ fn assert_unavailable(body: &Value, state: &str) {
 async fn first_import_reports_unavailable_until_it_completes_then_keeps_every_value() {
     let server = MockServer::start().await;
     let bytes = first_dataset();
-    // DTU Data answers its download URL with a redirect to its object store.
     Mock::given(method("GET"))
         .and(path("/dtu/6.1"))
         .respond_with(
@@ -181,7 +173,6 @@ async fn first_import_reports_unavailable_until_it_completes_then_keeps_every_va
             "unit": "g", "per_100g": true, "value": 11.0
         })
     );
-    // A recorded zero stays zero; an empty cell, or a parameter without a column, is unknown.
     assert_eq!(parameter_value(&food, "vitamin_d")["value"], 0.0);
     assert_eq!(parameter_value(&food, "vitamin_d")["unit"], "µg");
     assert_eq!(parameter_value(&food, "epa")["value"], Value::Null);
@@ -314,7 +305,6 @@ async fn a_recorded_pin_skips_the_import_and_a_rebuilt_database_reuses_the_cache
     let (status, body) = get(&app, "/api/nutrition/foods?query=skyr").await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
-    // A fresh food.db re-imports from the verified cached workbook without downloading again.
     let (app, import) = open(&dir, "rebuilt-food.db", pin).await;
     import.expect("an empty food.db records no pin").run().await;
     let (status, body) = get(&app, "/api/nutrition/foods/1693").await;
@@ -359,7 +349,6 @@ async fn without_a_previous_import_a_failed_import_reports_failed_without_upstre
                 "{text}"
             );
         }
-        // Only a verified workbook is cached.
         let expected: &[&str] = if version == "unit" {
             &["dtu-fcdb-unit.xlsx"]
         } else {

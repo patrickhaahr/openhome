@@ -61,7 +61,6 @@ def changed_areas(root):
 
 
 def with_dependents(areas):
-    # The MCP image compiles the API crate and locks its version.
     areas = set(areas) | ({"mcp"} if "api" in areas else set())
     return [area for area in AREAS if area in areas]
 
@@ -91,7 +90,6 @@ def bump_versions(root, areas=AREAS):
                 raise ValueError(f"Version mismatch for openhome-{dependency} in {path}")
             content = content.replace(old, f'name = "openhome-{dependency}"\nversion = "{after[dependency]}"')
         edits[path] = content
-    # Validate every manifest and lockfile before writing any of them.
     for path, content in edits.items():
         path.write_text(content)
     return after
@@ -168,7 +166,6 @@ def main(mode, requested=()):
             areas = with_dependents(requested) if requested else changed_areas(ROOT)
             if not areas:
                 raise ValueError("Nothing changed since the last release; name the areas to force one")
-        # A failed release keeps its bumped versions; `deploy-current` resumes them.
         run("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "pi", "true")
         run("just", "docker-builder")
         if mode == "deploy":
@@ -196,7 +193,6 @@ if __name__ == "__main__":
     lock_dir.mkdir(exist_ok=True)
     with (lock_dir / "deploy.lock").open("w") as lock:
         try:
-            # Builder setup is also called by recipes inside the locked release.
             if mode != "builder":
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             main(mode, arguments.areas)

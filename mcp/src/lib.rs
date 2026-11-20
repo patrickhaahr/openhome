@@ -1,11 +1,3 @@
-//! Hermes MCP adapter for OpenHome.
-//!
-//! A Streamable HTTP MCP server for read-only training, Food database and card catalogue reads, and writable
-//! Wishlists, Watchlists, Important Dates, Meals, Supplements and Meal Logs. Each tool
-//! makes one authenticated API request and passes its JSON unchanged. The adapter has no
-//! database access or domain rules; Axum owns training interpretation, destination resolution
-//! and mutation deduplication (ADRs 0002 and 0005).
-
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,14 +37,11 @@ pub use training::{
     SleepRecentRequest, TrainingContextRequest, TrendMetric, WorkoutsOnDayRequest,
 };
 
-/// Where the MCP endpoint is mounted.
 pub const MCP_PATH: &str = "/mcp";
 
 const BEARER_PREFIX: &str = "Bearer ";
 const API_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// The OpenHome `API_KEY`: it authorizes MCP clients and the adapter's own API requests. Never
-/// printed.
 #[derive(Clone)]
 pub struct ApiKey(Arc<str>);
 
@@ -71,19 +60,14 @@ impl ApiKey {
     }
 }
 
-/// Runtime settings, read from the environment.
 pub struct Config {
-    /// Base URL of the OpenHome API, e.g. `http://openhome-api:8000`.
     pub api_url: Url,
     pub api_key: ApiKey,
     pub bind_addr: SocketAddr,
-    /// `Host` values the MCP endpoint answers to (DNS-rebinding protection).
     pub allowed_hosts: Vec<String>,
 }
 
 impl Config {
-    /// Reads `OPENHOME_API_URL` and `API_KEY` (required), `MCP_BIND_ADDR` (default
-    /// `0.0.0.0:8001`) and `MCP_ALLOWED_HOSTS` (comma-separated, default loopback only).
     pub fn from_env() -> anyhow::Result<Self> {
         let required = |name: &str| {
             std::env::var(name)
@@ -118,8 +102,6 @@ pub fn parse_api_url(text: &str) -> anyhow::Result<Url> {
     Ok(url)
 }
 
-/// Parses a comma-separated `MCP_ALLOWED_HOSTS` list of hosts or `host:port` authorities. An empty
-/// list is refused: rmcp would read it as "allow every host" and drop DNS-rebinding protection.
 pub fn parse_allowed_hosts(text: &str) -> anyhow::Result<Vec<String>> {
     let hosts: Vec<String> = text
         .split(',')
@@ -134,7 +116,6 @@ pub fn parse_allowed_hosts(text: &str) -> anyhow::Result<Vec<String>> {
     Ok(hosts)
 }
 
-/// Authenticated requests against the OpenHome API.
 #[derive(Clone)]
 pub struct OpenHomeApi {
     http: reqwest::Client,
@@ -155,9 +136,6 @@ impl OpenHomeApi {
         })
     }
 
-    /// GETs the API path made of `segments` and turns the reply into a tool result: the JSON body
-    /// on success, the API's error body as a tool error otherwise. Every segment is
-    /// percent-encoded; literal dot segments are rejected before URL construction.
     async fn get(&self, segments: &[&str]) -> CallToolResult {
         self.request(reqwest::Method::GET, segments, None, &[])
             .await
@@ -175,8 +153,6 @@ impl OpenHomeApi {
         body: Option<Value>,
         query: &[(String, String)],
     ) -> CallToolResult {
-        // URL path construction discards literal dot segments. Reject them before they can
-        // change the endpoint; calendar validation remains the API's responsibility.
         if segments
             .iter()
             .any(|segment| matches!(*segment, "." | ".."))
@@ -222,7 +198,6 @@ impl OpenHomeApi {
             }
         };
         let status = response.status();
-        // DELETE is the only API operation whose success deliberately has no JSON body.
         if deleting && status == reqwest::StatusCode::NO_CONTENT {
             return CallToolResult::structured(json!({"deleted":true}));
         }
@@ -232,7 +207,6 @@ impl OpenHomeApi {
         };
         match body {
             Some(body) if status.is_success() => CallToolResult::structured(body),
-            // The API's own `{"error", "status"}` body carries its meaning; pass it through.
             Some(body) if body.get("error").is_some() => CallToolResult::structured_error(body),
             _ => CallToolResult::structured_error(json!({
                 "error": format!(
@@ -245,7 +219,6 @@ impl OpenHomeApi {
     }
 }
 
-/// Read-only training and Food tools, and household list and date tools.
 #[derive(Clone)]
 pub struct OpenHomeTools {
     api: OpenHomeApi,
@@ -299,13 +272,8 @@ impl ServerHandler for OpenHomeTools {
     }
 }
 
-/// The largest MCP request body: a `log_meal` or `update_meal_log` call carrying a base64 meal
-/// photo of up to 10 MB (about 13.4 MiB encoded) with its JSON-RPC envelope. rmcp's own default
-/// is 4 MiB.
 pub const MAX_REQUEST_BODY_BYTES: usize = 16 * 1024 * 1024;
 
-/// The MCP endpoint at [`MCP_PATH`], answering only clients that present `client_key` as a
-/// bearer token, with bodies up to [`MAX_REQUEST_BODY_BYTES`].
 pub fn router(api: OpenHomeApi, client_key: ApiKey, config: StreamableHttpServerConfig) -> Router {
     let service: StreamableHttpService<OpenHomeTools, LocalSessionManager> =
         StreamableHttpService::new(

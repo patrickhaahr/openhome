@@ -1,5 +1,4 @@
 'use strict';
-// Read-only checks on the TV's own Node 8 runtime. No light or IR commands.
 var assert = require('assert');
 var fs = require('fs');
 var http = require('http');

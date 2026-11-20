@@ -12,7 +12,6 @@ data class ActiveWorkout(
     val entries: List<ActiveEntry>,
     private val currentEntryId: Long?,
 ) {
-    /** The Exercise in focus. Null only while the Workout has no Exercises. */
     val currentEntry: ActiveEntry?
         get() = entries.firstOrNull { it.id == currentEntryId } ?: entries.firstOrNull()
 }
@@ -35,7 +34,6 @@ enum class SetField {
     RPE,
 }
 
-/** A row's values exactly as typed. The field its [measure] does not use is not part of the Set. */
 @Serializable
 data class SetDraft(
     val measure: SetMeasure,
@@ -87,7 +85,6 @@ data class SetDraft(
     }
 }
 
-/** Only a [Valid] row can be a performed Set. Null keeps its domain meaning; it is never zero. */
 sealed interface SetCheck {
     data class Valid(
         val reps: Long?,
@@ -96,23 +93,16 @@ sealed interface SetCheck {
         val rpe: Long?,
     ) : SetCheck
 
-    /** [isMissingValue] marks a row not yet filled in, which is only worth mentioning on confirming. */
     data class Problem(val message: String, val isMissingValue: Boolean = false) : SetCheck
 }
 
-/**
- * What one Complete Exercise did: [confirmed] rows became performed Sets and [refused] rows, which do
- * not parse, stayed unconfirmed. However many rows it covers, it is one explicit confirmation.
- */
 data class ExerciseCompletion(val confirmed: Int, val refused: Set<Long>)
 
 sealed interface FinishOutcome {
     data class Finished(val workoutId: Long) : FinishOutcome
 
-    /** Nothing was recorded: the caller has not chosen to omit the unchecked rows. */
     data object HasUncheckedSets : FinishOutcome
 
-    /** Nothing was recorded: a Workout needs at least one confirmed Set. */
     data object NothingConfirmed : FinishOutcome
 
     data object NoActiveWorkout : FinishOutcome

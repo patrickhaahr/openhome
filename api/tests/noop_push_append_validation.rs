@@ -1,5 +1,3 @@
-//! NOOP push append streams: malformed, corrupt and contract-violating batches.
-
 mod common;
 mod noop_push_support;
 
@@ -322,16 +320,12 @@ async fn empty_append_batch_is_rejected() {
 
 #[tokio::test]
 async fn cursors_must_satisfy_the_contract_inequality() {
-    // (startCursor, endCursor, records, accepted?)
     let two = [hr(1, 61), hr(2, 62)];
     let cases: Vec<(Value, Value, &[Value], bool)> = vec![
-        // Tightest valid range: positions 101, 102.
         (cursor(100, START_SHA), cursor(102, END_SHA), &two, true),
         (Value::Null, cursor(2, END_SHA), &two, true),
-        // Too few insertion positions for the records.
         (cursor(100, START_SHA), cursor(101, END_SHA), &two, false),
         (Value::Null, cursor(1, END_SHA), &two, false),
-        // endCursor not after startCursor.
         (
             cursor(100, START_SHA),
             cursor(100, END_SHA),
@@ -344,12 +338,9 @@ async fn cursors_must_satisfy_the_contract_inequality() {
             &two[..1],
             false,
         ),
-        // Append batches always carry an endCursor.
         (cursor(100, START_SHA), Value::Null, &two[..1], false),
-        // Row IDs are positive integers.
         (cursor(0, START_SHA), cursor(5, END_SHA), &two[..1], false),
         (cursor(-5, START_SHA), cursor(5, END_SHA), &two[..1], false),
-        // keySha256 must be lowercase SHA-256 hex.
         (
             cursor(100, START_SHA),
             cursor(101, &END_SHA.to_uppercase()),

@@ -5,10 +5,6 @@ import { TrendChart } from "@/components/trend-chart"
 import { formatMoney } from "@/lib/currency"
 import { priceLine, priceSummary, type PricesState } from "@/lib/card-prices"
 
-/**
- * One Card's Price History as a line in the chosen currency, on the Trends chart: a day with no
- * observation is a gap in the line, never a flat stretch. The history is read when the sheet opens.
- */
 export function PriceHistory({
   card,
   load,

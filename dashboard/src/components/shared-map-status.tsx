@@ -78,7 +78,6 @@ export function MapLoading(): React.JSX.Element {
   )
 }
 
-/** Notices stack below the top edge, clear of the controls; only the notices take the pointer. */
 export function MapNotices({
   children,
 }: {

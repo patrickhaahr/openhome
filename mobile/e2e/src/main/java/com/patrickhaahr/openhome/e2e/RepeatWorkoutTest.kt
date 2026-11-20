@@ -15,10 +15,6 @@ private const val DIP = 5L
 private const val CALF_RAISE = 6L
 private val SHOWN_DAY = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
 
-/**
- * The usual session through the real app and database: repeat a past Workout, change only what
- * differs and confirm each Exercise. Only Axum is replaced, at its HTTP boundary.
- */
 class RepeatWorkoutTest {
     private val app = AppDriver()
     private val squats =
@@ -55,7 +51,6 @@ class RepeatWorkoutTest {
             entries = listOf(squats, pullUps, holds),
         )
 
-    /** Past data the API allows but today's logging would not produce. */
     private val earlier =
         FixtureWorkout(
             id = 40,
@@ -111,7 +106,6 @@ class RepeatWorkoutTest {
         app.tapBelow("Complete Exercise")
     }
 
-    /** The row's values as typed, and that it is not performed yet. */
     private fun assertUnconfirmedRow(row: String, reps: String? = null, seconds: String? = null, kg: String = "", rpe: String = "") {
         reps?.let { app.assertDescribedValue("$row reps", it) }
         seconds?.let { app.assertDescribedValue("$row seconds", it) }
@@ -137,28 +131,23 @@ class RepeatWorkoutTest {
         app.assertNotDescribed("Planche Hold set 3 seconds")
     }
 
-    /** The whole typical session, unchanged: the server gets the same performance on today's date. */
     @Test
     fun repeatingTheLastWorkoutAndCompletingEachExerciseRecordsTheSamePerformanceToday() {
         app.assertVisible("Start Empty")
 
-        // A hurried double tap still starts exactly one copy.
         app.doubleTap("Repeat Last Workout")
         app.assertVisible("Active Workout")
-        // The second tap lands on the new screen, in a field there, and raises the keyboard over the rows.
         app.dismissKeyboardIfShown()
         app.assertVisible(LocalDate.now().format(SHOWN_DAY))
         app.assertVisible("Pull day")
         assertLastWorkoutCopiedUnconfirmed()
 
-        // Nothing here is performance until it is confirmed, across a restart too.
         app.relaunch()
         app.assertAbsent("Repeat Last Workout")
         app.assertAbsent("Start Empty")
         app.tap("Resume Workout")
         assertLastWorkoutCopiedUnconfirmed()
 
-        // Each Complete Exercise moves on by itself.
         app.goToExercise("Squat")
         app.tapBelow("Complete Exercise")
         app.described("Pull-Up set 1 performed")
@@ -169,7 +158,6 @@ class RepeatWorkoutTest {
         app.assertExerciseProgress("Pull-Up", "2/2")
         app.assertExerciseProgress("Planche Hold", "2/2")
 
-        // With every Set confirmed there is nothing to review.
         finish()
         app.assertAbsent("Finish with unchecked Sets?")
         app.pressBackButton()
@@ -182,7 +170,6 @@ class RepeatWorkoutTest {
         assertEquals(1, api.workoutDeliveries().size)
     }
 
-    /** Any past Workout can be repeated, and an unfinished one is never replaced by doing so. */
     @Test
     fun repeatingFromHistoryCopiesThatWorkoutAndNeverCreatesASecondActiveWorkout() {
         app.tap("History")
@@ -193,13 +180,11 @@ class RepeatWorkoutTest {
         assertUnconfirmedRow("Planche Hold set 1", seconds = "40", kg = "5", rpe = "9")
         app.goToExercise("Leg Raise")
         assertUnconfirmedRow("Leg Raise set 1", reps = "10", seconds = "30")
-        // An entry stored without Sets is still something to log; a stored zero means bodyweight.
         app.goToExercise("Dip")
         assertUnconfirmedRow("Dip set 1", reps = "")
         app.goToExercise("Pull-Up")
         assertUnconfirmedRow("Pull-Up set 1", reps = "5")
 
-        // Back returns to where sessions start, which now only offers this one.
         app.pressBackButton()
         app.assertOnWorkoutTab()
         app.assertAbsent("Repeat Last Workout")
@@ -225,7 +210,6 @@ class RepeatWorkoutTest {
         assertEquals(earlier.entries.take(2), stored.entries)
     }
 
-    /** Moving around changes nothing about what counts as performed, and neither does a restart. */
     @Test
     fun navigatingNeverConfirmsAndCompleteExerciseConfirmsOnlyItsOwnRows() {
         repeatLast()
@@ -240,7 +224,6 @@ class RepeatWorkoutTest {
         app.assertVisible("No confirmed Sets")
         app.tap("Return to logging")
 
-        // Today's deviation: one heavier Set, confirmed by the same explicit action.
         app.goToExercise("Squat")
         app.enterDescribed("Squat set 1 added kg", "105")
         app.tapBelow("Complete Exercise")
@@ -248,7 +231,6 @@ class RepeatWorkoutTest {
         app.assertExerciseProgress("Squat", "3/3")
         app.assertExerciseProgress("Pull-Up", "0/2")
 
-        // Confirmed rows stay editable, and can be taken back one at a time.
         app.goToExercise("Squat")
         app.assertChecked("Squat set 1 performed", true)
         app.tapScrolledTo("Squat set 3 performed")
@@ -257,7 +239,6 @@ class RepeatWorkoutTest {
         app.assertChecked("Squat set 2 performed", true)
         app.assertExerciseProgress("Squat", "2/3")
 
-        // The focus, edits and confirmations are all still there after losing the process.
         app.goToExercise("Pull-Up")
         app.relaunch()
         app.tap("Resume Workout")
@@ -269,7 +250,6 @@ class RepeatWorkoutTest {
         app.assertDescribedValue("Squat set 2 reps", "6")
         app.assertChecked("Squat set 3 performed", false)
 
-        // Planned stays distinct from performed: unchecked rows are named, then left out.
         finish()
         app.assertVisible("Finish with unchecked Sets?")
         app.assertVisible("Squat: 1 unchecked Set")
@@ -297,7 +277,6 @@ class RepeatWorkoutTest {
     fun completeExerciseConfirmsOnlyValidRowsAndAdvancesToTheNextUnconfirmedExercise() {
         repeatLast()
 
-        // A row that does not parse stays out, and says why on returning to it.
         app.goToExercise("Pull-Up")
         app.enterDescribed("Pull-Up set 1 reps", "")
         app.tapBelow("Complete Exercise")
@@ -308,7 +287,6 @@ class RepeatWorkoutTest {
         app.assertChecked("Pull-Up set 2 performed", true)
         app.assertVisible("Enter reps to confirm")
 
-        // Advancing goes past what is already confirmed, and wraps around to what is left.
         app.enterDescribed("Pull-Up set 1 reps", "8")
         app.tapBelow("Complete Exercise")
         app.described("Planche Hold set 1 performed")
@@ -316,13 +294,11 @@ class RepeatWorkoutTest {
         app.described("Squat set 1 performed")
         app.tapBelow("Complete Exercise")
 
-        // Everything confirmed: no Exercise left to advance to, and it stays put.
         app.described("Squat set 1 performed")
         app.assertExerciseProgress("Squat", "3/3")
         app.assertExerciseProgress("Pull-Up", "2/2")
         app.assertExerciseProgress("Planche Hold", "2/2")
 
-        // The second half of a double tap must not silently confirm the Exercise that just appeared.
         app.goToExercise("Squat")
         app.tapScrolledTo("Squat set 1 performed")
         app.goToExercise("Pull-Up")
@@ -359,12 +335,10 @@ class RepeatWorkoutTest {
         app.tapBelow("Add Exercise")
         app.tap("Pull-Up")
 
-        // The most recent Workout's actual Sets, not a target.
         app.assertVisible("Last time · ${LocalDate.parse(last.date).format(SHOWN_DAY)}")
         app.assertVisible("Set 1: 8 reps · Bodyweight · RPE 8")
         app.assertVisible("Set 2: 6 reps · +12.5 kg")
 
-        // Repeating copies the row as typed, unconfirmed even when the row it copied is confirmed.
         app.enterDescribed("Pull-Up set 1 reps", "7")
         app.enterDescribed("Pull-Up set 1 added kg", "10")
         app.enterDescribed("Pull-Up set 1 RPE", "9")
@@ -374,26 +348,22 @@ class RepeatWorkoutTest {
         assertUnconfirmedRow("Pull-Up set 2", reps = "7", kg = "10", rpe = "9")
         app.assertChecked("Pull-Up set 1 performed", true)
 
-        // Adding a blank row and removing an unneeded one are both a tap.
         app.tapScrolledTo("Add set to Pull-Up")
         assertUnconfirmedRow("Pull-Up set 3", reps = "")
         app.tapScrolledTo("Remove last set of Pull-Up")
         app.assertNotDescribed("Pull-Up set 3 reps")
 
-        // An Exercise never logged has no previous performance to show.
         app.tapBelow("Add Exercise")
         app.tap("Calf Raise")
         app.described("Calf Raise set 1 performed")
         app.assertAbsent("Set 1: 8 reps · Bodyweight · RPE 8")
         app.assertTextAbsent("Last time")
 
-        // Exercise changes while logging: the focus moves off a removed Exercise, keeping the rest.
         app.tapScrolledTo("Remove Calf Raise")
         app.assertExerciseOrder("Pull-Up")
         app.assertDescribedValue("Pull-Up set 2 reps", "7")
     }
 
-    /** A Workout finished on the device is the last Workout, before Axum has ever heard of it. */
     @Test
     fun aWorkoutFinishedOfflineAndPendingSyncIsWhatRepeatAndPreviousPerformanceUse() {
         app.setWifi(false)
@@ -407,7 +377,6 @@ class RepeatWorkoutTest {
         app.pressBackButton()
         assertEquals("Mobile data must not send anything", emptyList<String>(), api.workoutDeliveries())
 
-        // Only what was performed in that session is repeated, and none of it counts yet.
         app.relaunch()
         repeatLast()
         app.assertExerciseOrder("Squat")

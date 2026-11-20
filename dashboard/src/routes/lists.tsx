@@ -24,7 +24,6 @@ import {
   mutateWishlist,
 } from "@/lib/wishlist.functions"
 
-/** Wishes, watching and dates on one page: a Wish | Watch | Dates switch and one shared person filter. */
 export const Route = createFileRoute("/lists")({
   head: () => ({ meta: [{ title: "Lists · OpenHome" }] }),
   validateSearch: listsSearch,

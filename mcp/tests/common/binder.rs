@@ -10,8 +10,6 @@ use sqlx::SqlitePool;
 
 use super::serve;
 
-/// The day before today in Copenhagen: the catalogue observed its prices then, and the ECB
-/// published rates for it.
 pub fn yesterday() -> CalendarDay {
     CalendarDay::today().previous()
 }

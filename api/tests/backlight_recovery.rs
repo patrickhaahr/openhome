@@ -1,5 +1,3 @@
-//! Backlight recovery after restart, outage and reconnect.
-
 mod backlight_support;
 mod common;
 
@@ -40,11 +38,9 @@ async fn restart_recovers_current_custom_window_and_only_unexpired_overrides() {
     for (now, expected, source) in [
         ("2026-10-23T20:10:00Z", "off", "manual"),
         ("2026-10-23T20:45:00Z", "color", "automatic"),
-        // Both boundaries were missed; only the current TV Sync target is applied.
         ("2026-10-24T10:00:00Z", "tv-sync", "automatic"),
     ] {
         clock.set(now);
-        // Reopen the file-backed main database, not the original connection pool.
         state.db.close().await;
         state.db = sqlx::SqlitePool::connect(&database_url).await.unwrap();
         device.packets.lock().unwrap().clear();
@@ -115,7 +111,6 @@ async fn outage_retains_stale_observation_and_recovers_only_latest_target_during
     select(app.clone(), target(0, 255, 0)).await;
     device.device.packets.lock().unwrap().clear();
     device.block.store(true, SeqCst);
-    // The retry owns the full operation; newer commands still durably supersede its target.
     tokio::time::timeout(std::time::Duration::from_secs(4), device.entered.notified())
         .await
         .unwrap();
@@ -134,7 +129,6 @@ async fn outage_retains_stale_observation_and_recovers_only_latest_target_during
     })
     .await
     .unwrap();
-    // The blocked attempt fails; only the newest blue target reaches the restored device.
     device.release.add_permits(1);
     command.await.unwrap();
     device.online.store(true, SeqCst);
@@ -149,7 +143,6 @@ async fn outage_retains_stale_observation_and_recovers_only_latest_target_during
             .all(|p| p[1][4..7] == [0, 0, 255])
     );
     let writes = packets.iter().filter(|p| !p.is_empty()).count();
-    // Read-only healthy refreshes must preserve external changes, not repeat target writes.
     for _ in 0..3 {
         send_request_with_method(
             app.clone(),
@@ -185,8 +178,6 @@ async fn silent_reconnect_reapplies_current_target_but_healthy_refresh_does_not(
     let app = authenticated(service.clone(), state);
     select(app.clone(), serde_json::json!({"mode":"tv-sync"})).await;
     device.device.packets.lock().unwrap().clear();
-    // Adapter establishes a new link while the API was not polling. An external
-    // controller may have changed the mode; this successful read is still recovery.
     device
         .reconnected
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -248,7 +239,6 @@ async fn failed_transition_persistence_is_retried_with_current_clock_before_any_
         device.packets.lock().unwrap().is_empty(),
         "unsaved target must never reach hardware"
     );
-    // Storage returns after the entire red window has passed.
     clock.set("2026-10-24T10:00:00Z");
     sqlx::query("DROP TRIGGER unavailable_backlight_storage")
         .execute(&state.db)

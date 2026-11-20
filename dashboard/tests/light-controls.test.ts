@@ -40,7 +40,6 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-/** Render Home's light card in a router whose health check returns each state in turn. */
 async function renderLights(
   ...connectionStates: [ConnectionState, ...ConnectionState[]]
 ): Promise<Harness> {
@@ -70,7 +69,6 @@ async function renderLights(
   let connectionState = connectionStates[0]
 
   const rootRoute = createRootRoute({
-    // Each load is one health check; a new state re-renders Home like the real route loader.
     loader: () => {
       connectionState = connectionStates[healthChecks] ?? connectionState
       healthChecks += 1
@@ -78,7 +76,6 @@ async function renderLights(
       return { connectionState }
     },
     component: function Home() {
-      // Re-render after each check, as Home does when its loader data changes.
       useRouterState({ select: (state) => state.matches[0]?.updatedAt })
 
       return createElement(LightControls, {

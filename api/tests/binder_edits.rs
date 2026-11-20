@@ -1,4 +1,3 @@
-//! Binder Entry corrections: partial updates, the language collision, deletion and the owner cascade.
 mod common;
 
 use axum::http::{Method, StatusCode};

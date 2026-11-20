@@ -1,5 +1,4 @@
 #!/bin/sh
-# Read-only live assertions; run before and after applying the relevant changes.
 set -eu
 case "$1" in
     privacy)

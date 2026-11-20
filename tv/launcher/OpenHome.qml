@@ -35,12 +35,8 @@ FocusScope {
     property int controlIndex: 0
     property var now: new Date()
     property var live: ({day: "", weather: {state: "unavailable", temperature: null, code: null, high: null, low: null, rain: null, wind: null}, recovery: {state: "unavailable", charge: null, rest: null, effort: null, freshness: "unknown"}})
-    // Read lifecycle: null when idle, else {request}. The one in-flight read; settleRead is its only exit.
     property var readFlight: null
     readonly property bool reading: readFlight !== null
-    // Command lifecycle, independent of the displayed observations above. commandFlight is null or
-    // {request, command}; commandOutcome is null or {command, accepted} and is acknowledgement only,
-    // never device state. "Uncertain" (accepted === false) means the command may have been sent.
     property var commandFlight: null
     property var commandOutcome: null
     readonly property string pending: commandFlight ? commandFlight.command : ""
@@ -117,7 +113,6 @@ FocusScope {
         live = copy;
     }
     function settleRead(flight, data) {
-        // Only the current flight may settle; completion, timeout and late callbacks all pass through here.
         if (readFlight !== flight) return;
         readTimeout.stop(); readFlight = null;
         if (data) live = data; else markOffline();
@@ -210,14 +205,7 @@ FocusScope {
             flight.request.abort();
         }
     }
-    // Only an accepted acknowledgement expires; an uncertain outcome stays marked until the next send.
     Timer { id: feedbackTimer; interval: 4500; onTriggered: { if (home.commandOutcome && home.commandOutcome.accepted) home.commandOutcome = null; } }
-    // Remote OK key hold lifecycle. Exactly one phase at a time, changed only by holdEvent:
-    //   idle      no key down.
-    //   pressed   OK down, holdTimer (700 ms) pending.
-    //   held      holdTimer elapsed while editing was not eligible; waits for release.
-    //   releasing OK released, releaseTimer (150 ms) pending; key repeat returns to releasingFrom.
-    // Drawer, region and agent state are independent policy read only when the hold elapses.
     property string holdPhase: "idle"
     property string releasingFrom: ""
     function holdReset() { holdTimer.stop(); releaseTimer.stop(); holdPhase = "idle"; releasingFrom = ""; }
@@ -230,7 +218,6 @@ FocusScope {
             if (phase === "pressed" || phase === "held") { releasingFrom = phase; holdPhase = "releasing"; releaseTimer.restart(); }
             else if (phase === "releasing") releaseTimer.restart();
         } else if (name === "holdElapsed") {
-            // Late events are ignored unless holdTimer was genuinely pending for this phase.
             if (phase === "pressed" || (phase === "releasing" && releasingFrom === "pressed")) {
                 if (!agentOpen && region === "apps") { holdReset(); uiController.startEdit("app"); }
                 else if (phase === "pressed") holdPhase = "held";
@@ -260,7 +247,6 @@ FocusScope {
     }
     OH.PictureProfile { id: pictureProfile; active: home.visible && uiController.homeShown }
     Rectangle { anchors.fill: parent; color: "#000000" }
-    // Absorb pointer/wheel input so LG's hidden shelves cannot steal focus.
     MouseArea {
         anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.AllButtons
         onWheel: { home.navigate(wheel.angleDelta.y < 0 ? Qt.Key_Down : Qt.Key_Up); wheel.accepted = true; }

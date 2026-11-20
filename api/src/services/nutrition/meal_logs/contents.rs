@@ -6,19 +6,12 @@ use crate::services::nutrition::meals::UniqueName;
 use crate::services::nutrition::supplements::{self, DoseRequest};
 use serde::Serialize;
 
-/// The arguments a receipt compares on retry. `photo` is the upload's SHA-256, left out when
-/// there is none so receipts written before photos existed still match their retries. A log by
-/// Meal name has `meal` (its lowercased name) and `overrides` instead of `portions`, so a retry
-/// replays even after the Meal was edited.
 #[derive(Serialize)]
 pub(super) struct Normalized<'a> {
     pub(super) eaten_at: &'a str,
     pub(super) note: Option<&'a str>,
-    /// `[food_id, grams]` for a Food without estimates, as receipts were first written;
-    /// otherwise an object.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) portions: Option<Vec<serde_json::Value>>,
-    /// Left out without doses, so receipts written before Supplements existed still match.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) supplement_doses: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -29,8 +22,6 @@ pub(super) struct Normalized<'a> {
     pub(super) photo: Option<String>,
 }
 
-/// What a log holds: its own Portions and Supplement Doses, or a saved Meal's items with one-off
-/// grams and doses.
 pub(super) enum Contents {
     Items {
         portions: Vec<ValidPortion>,
@@ -76,7 +67,6 @@ impl Contents {
                             .map(|(id, doses)| supplements::normalized(id, *doses)),
                     )
                     .collect();
-                // Overrides name distinct items, so their order carries no meaning.
                 overrides.sort_by_key(ToString::to_string);
                 (None, None, Some(name.key.as_str()), Some(overrides))
             }
@@ -93,7 +83,6 @@ impl Contents {
     }
 }
 
-/// One override: grams for a Food or Product item, or doses for a Supplement.
 enum Override {
     Item(Item, f64),
     Dose(String, f64),
@@ -129,8 +118,6 @@ fn parse_override(request: OverrideRequest) -> std::result::Result<Override, Str
     }
 }
 
-/// Parses either `portions` and `supplement_doses`, or a Meal name with optional overrides that
-/// each name a different item.
 pub(super) fn contents(
     requests: Option<Vec<PortionRequest>>,
     dose_requests: Option<Vec<DoseRequest>>,

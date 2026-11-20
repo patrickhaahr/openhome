@@ -66,7 +66,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-
 sealed interface ActiveLookup {
     data object Loading : ActiveLookup
 
@@ -94,7 +93,6 @@ internal class ActiveWorkoutViewModel(
             .map<ActiveWorkout?, ActiveLookup> { ActiveLookup.Loaded(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActiveLookup.Loading)
 
-    /** May briefly be the previous Exercise's after moving on, so check whose it is before showing it. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val previousPerformance: StateFlow<PreviousPerformance?> =
         workout
@@ -104,7 +102,6 @@ internal class ActiveWorkoutViewModel(
                 if (exerciseId == null) flowOf(null) else fitness.observePreviousPerformance(exerciseId)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Says saved only when every change made so far has committed. */
     val saveState: StateFlow<SaveState> =
         combine(writesInProgress, lastWriteFailed) { writing, failed ->
             when {
@@ -114,7 +111,6 @@ internal class ActiveWorkoutViewModel(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SaveState.SAVED)
 
-    /** Rows whose confirmation was refused, so only they explain what is missing. */
     val refusedSets: StateFlow<Set<Long>> = refusedConfirmations.asStateFlow()
 
     fun setDate(date: LocalDate) = save { repository.setDate(date.toString()) }
@@ -162,7 +158,6 @@ internal class ActiveWorkoutViewModel(
         onDiscarded()
     }
 
-    /** In the app's scope, so leaving the screen right after a change cannot cancel its save. */
     private fun save(change: suspend () -> Unit) {
         writesInProgress.update { it + 1 }
         saveScope.launch {
@@ -178,7 +173,6 @@ internal class ActiveWorkoutViewModel(
     }
 }
 
-/** Leaving this destination, by back or by tab, keeps the Active Workout; it is all in storage. */
 @Composable
 fun ActiveWorkoutRoute(onAddExercise: () -> Unit, onFinished: () -> Unit, onDiscarded: () -> Unit) {
     val viewModel = appViewModel { ActiveWorkoutViewModel(it.activeWorkout, it.fitness, it.restTimers, it.saveScope) }
@@ -224,7 +218,6 @@ private fun ActiveWorkoutContent(
     val current = workout.currentEntry
     val listState = rememberLazyListState()
 
-    // A new Exercise starts from its top, wherever the last one had been scrolled to.
     var shownEntryId by rememberSaveable { mutableStateOf(current?.id) }
     LaunchedEffect(current?.id) {
         if (current?.id != shownEntryId) {
@@ -234,7 +227,6 @@ private fun ActiveWorkoutContent(
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        // Pinned: however far logging has scrolled, the way out of the session stays in sight.
         SessionBar(
             workout = workout,
             saveState = saveState,
@@ -256,7 +248,6 @@ private fun ActiveWorkoutContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (current == null) {
-                // Nothing to log yet, so adding the first Exercise is all this screen is for.
                 item {
                     Box(Modifier.fillParentMaxHeight(0.8f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         GlyphKey(Glyph.Plus, "Add Exercise", onAddExercise, tone = KeyTone.Lamp, size = 220.dp, glyphSize = 72.dp)
@@ -274,13 +265,11 @@ private fun ActiveWorkoutContent(
                 }
             }
             if (current != null) {
-                // Keyed, so each Exercise's rows and their typed text belong to it.
                 item(key = current.id) {
                     ExerciseFocus(current, previousPerformance, refusedSets, viewModel)
                 }
             }
         }
-        // Pinned, so it stays within reach and the next Exercise cannot put another action under the finger.
         current?.let {
             CompleteExerciseButton(it, viewModel, Modifier.padding(horizontal = ScreenMargin, vertical = 8.dp))
         }
@@ -328,7 +317,6 @@ private fun ActiveWorkoutContent(
 internal fun ActiveWorkout.hasOnlyConfirmedSets(): Boolean =
     entries.isNotEmpty() && entries.all { entry -> entry.sets.all { it.completed } }
 
-/** A dialog that shows what is at stake and offers two symbols; the words stay with assistive technology. */
 @Composable
 internal fun KeyDialog(
     onDismiss: () -> Unit,
@@ -357,10 +345,6 @@ internal fun KeyDialog(
 
 private const val COMPLETE_GUARD_MILLIS = 400L
 
-/**
- * The explicit confirmation of everything shown. The next Exercise appears under the same button, so
- * the second half of a double tap must not confirm it unseen.
- */
 @Composable
 private fun CompleteExerciseButton(entry: ActiveEntry, viewModel: ActiveWorkoutViewModel, modifier: Modifier) {
     val focusManager = LocalFocusManager.current
@@ -379,7 +363,6 @@ private fun CompleteExerciseButton(entry: ActiveEntry, viewModel: ActiveWorkoutV
             modifier = Modifier.fillMaxWidth(),
             tone = if (entry.sets.all { it.completed }) KeyTone.Raised else KeyTone.Lamp,
         )
-        // Centred, so a tap on these words lands on the key beneath them.
         Spoken("Complete Exercise", Modifier.align(Alignment.Center))
     }
 }

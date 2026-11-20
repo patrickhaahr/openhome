@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { TrendLegend, trendSummary, trendTitle } from "@/components/trend-parts"
 
-/** A series' colour, from the design tokens. */
 export type Tone = "ink" | "sun" | "fat" | "muted" | "faint"
 
 const fills = {
@@ -23,19 +22,15 @@ const strokes = {
 
 type Values = ReadonlyArray<number | null>
 
-/** One named series of values, one per period; null is a gap. */
 export type Series = {
   readonly key: string
   readonly name: string
   readonly tone: Tone
   readonly values: Values
-  /** What the table says for a period without a value; "No value" by default. */
   readonly gap?: string
-  /** What the table says per period, where a gap differs by period; wins over `gap`. */
   readonly gaps?: readonly string[]
 }
 
-/** How a chart draws its series. */
 export type Mark =
   | ({ readonly kind: "bars" } & Series)
   | { readonly kind: "stack"; readonly parts: readonly Series[] }
@@ -43,34 +38,23 @@ export type Mark =
   | ({ readonly kind: "dots" } & Series)
 
 type TrendChartProps = {
-  /** Names the chart for tests. */
   readonly chart: string
   readonly title: string
-  /** One line over the whole range, shown and read before the chart. */
   readonly summary: string
-  /** Short axis label per period. */
   readonly labels: readonly string[]
-  /** Full name per period, for the table. */
   readonly names: readonly string[]
-  /** Periods that cover only part of their week or month, drawn lighter. */
   readonly partial: readonly boolean[]
   readonly marks: readonly Mark[]
-  /** Formats a value for the table, with its unit. */
   readonly format: (value: number) => string
-  /** Formats an axis value; `format` by default. */
   readonly tick?: (value: number) => string
-  /** Keep zero on the value axis, as bars need. */
   readonly zero?: boolean
-  /** A fixed value axis, such as 0 to 100 for a share. */
   readonly domain?: readonly [number, number]
 }
 
-/** The width drawn before the figure is measured. */
 const defaultWidth = 640
 
 const pad = { top: 14, right: 60, bottom: 30, left: 8 }
 
-/** Axis labels across the bottom at most. */
 const maxLabels = 6
 
 function heightFor(width: number): number {
@@ -85,7 +69,6 @@ function finite(values: Values): number[] {
   return values.filter((value): value is number => value !== null)
 }
 
-/** Each period's stacked total; null when no part has a value. */
 function stackTotals(parts: readonly Series[], count: number): Values {
   return Array.from({ length: count }, (_, index) => {
     const known = finite(parts.map((part) => part.values[index] ?? null))
@@ -94,7 +77,6 @@ function stackTotals(parts: readonly Series[], count: number): Values {
   })
 }
 
-/** A round step giving about four bands between `low` and `high`. */
 function niceStep(low: number, high: number): number {
   const raw = (high - low) / 4
   const magnitude = 10 ** Math.floor(Math.log10(raw))
@@ -144,7 +126,6 @@ function scaleFor(props: TrendChartProps): Scale {
   }
 }
 
-/** Unbroken runs of known values, so a line stops at a gap and resumes after it. */
 function runs(values: Values): Array<Array<{ index: number; value: number }>> {
   const all: Array<Array<{ index: number; value: number }>> = []
   let current: Array<{ index: number; value: number }> = []
@@ -187,11 +168,6 @@ function useWidth(): [React.RefObject<HTMLElement | null>, number] {
   return [element, width]
 }
 
-/**
- * One Trends series as hand-drawn SVG on bands of alternating tone instead of gridlines: bars
- * rise from zero, lines break where a period has no value, and a gap stays empty. The drawing is
- * hidden from assistive technology, which reads the summary and a table of every period instead.
- */
 export function TrendChart(props: TrendChartProps): React.JSX.Element {
   const [figure, width] = useWidth()
   const { labels, marks, format } = props
@@ -213,7 +189,6 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
   const ticks: number[] = []
 
   for (let value = scale.low; value <= scale.high + 1e-9; value += scale.step)
-    // Adding zero turns a rounded -0 into 0, so the axis never reads "−0".
     ticks.push(Number(value.toFixed(6)) + 0)
 
   const labelEvery = Math.max(1, Math.ceil(count / maxLabels))

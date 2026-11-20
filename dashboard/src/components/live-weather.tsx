@@ -1,24 +1,6 @@
 import { useEffect, useState } from "react"
 import { unavailableWeather, type WeatherRead } from "@/lib/weather"
 
-/**
- * The effect's single polling owner. Exactly one variant holds at a time, and only `enter`
- * replaces it, clearing a scheduled timer and never leaving `disposed`:
- *
- * - `scheduled`: a timer will refresh at validity or the retry interval.
- * - `reading`: one read is in flight. Hiding leaves it running (no abort signal exists), showing
- *   never starts a second read, and its settlement picks the next variant.
- * - `hidden`: off-screen with no timer and no read; showing refreshes.
- * - `disposed`: the effect ended; a late settlement is ignored.
- *
- * Fresh/stale/unavailable (`latest`) is the forecast's own fact and expires independently.
- * Axum owns cache policy; the browser only follows its `valid_until` and retries once a minute.
- *
- * The server hop to Axum is bounded (7s), but the browser's call to the dashboard server
- * function has no timeout, so a never-settling read keeps `reading` until disposal or the
- * effect re-running. A replaced effect cannot cancel its read, so one stale read may briefly
- * overlap the new effect's first read; its result is discarded.
- */
 type Polling =
   | { state: "scheduled"; timer: ReturnType<typeof setTimeout> }
   | { state: "reading" }
@@ -27,7 +9,6 @@ type Polling =
 
 const retryMs = 60_000
 
-/** Refresh only weather, following Axum validity and pausing off-screen. */
 export function LiveWeather({
   initial,
   readWeather,
@@ -81,7 +62,6 @@ export function LiveWeather({
       setSnapshot({ initial, weather: latest })
     }
 
-    // Leaves a settled or idle state: pause off-screen, else wait for validity or the retry.
     function park(): void {
       if (isHidden()) {
         enter({ state: "hidden" })
@@ -121,7 +101,6 @@ export function LiveWeather({
 
     function visibilityChanged(): void {
       if (isHidden()) {
-        // A read in flight must stay `reading` so showing again cannot overlap it.
         if (!isReading()) enter({ state: "hidden" })
 
         return
@@ -130,7 +109,6 @@ export function LiveWeather({
       void refresh()
     }
 
-    // An already-expired initial forecast gets a zero delay and refreshes at once.
     park()
     document.addEventListener("visibilitychange", visibilityChanged)
 

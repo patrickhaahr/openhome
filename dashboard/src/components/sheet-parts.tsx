@@ -3,7 +3,6 @@ import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus"
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus"
 import { Button } from "@/components/ui/button"
 
-/** The ground-coloured veil behind a sheet that rises over the page. */
 export const sheetScrim =
   "fixed inset-0 z-50 bg-scrim transition-opacity duration-fast ease-app data-ending-style:opacity-0 data-starting-style:opacity-0"
 
@@ -12,7 +11,6 @@ export const sheetBody = cva("grid content-start", {
   defaultVariants: { gap: "roomy" },
 })
 
-/** A row of keys; `submit` pins it above the sheet's bottom edge with full-width keys. */
 export const sheetActions = cva("flex flex-wrap gap-2", {
   variants: {
     placement: {
@@ -45,10 +43,6 @@ export const sheetLink =
 
 export const sheetConfirm = "grid gap-3 rounded-plate bg-wash-strong px-5 py-4"
 
-/**
- * A label above its control. The caption is the first child (a `span`, or the `legend` of a
- * fieldset); `title` makes the field's input large.
- */
 export const field = cva(
   "grid min-w-0 gap-1.5 *:first:mb-0.5 *:first:text-label *:first:font-semibold *:first:text-muted-ink",
   {
@@ -64,7 +58,6 @@ export const field = cva(
 
 export const fieldHint = "text-small text-muted-ink"
 
-/** A pill that holds a leading icon and a borderless input. */
 export const linkInput =
   "flex min-h-14 items-center gap-3 rounded-full bg-wash-strong px-4.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink **:data-[slot=input]:h-14 **:data-[slot=input]:flex-1 **:data-[slot=input]:border-transparent! **:data-[slot=input]:bg-transparent **:data-[slot=input]:px-0 **:data-[slot=input]:text-large"
 
@@ -75,7 +68,6 @@ export const mediaMeta = "flex items-center gap-2 text-small text-muted-ink"
 export const mediaTitle =
   "line-clamp-2 text-control leading-compact font-medium"
 
-/** The dl of a sheet's dated facts: a quiet term over its value. */
 export const facts = cva("flex items-center", {
   variants: {
     flow: {
@@ -90,7 +82,6 @@ export const factTerm = "text-label font-semibold text-muted-ink"
 
 export const factValue = "text-xlarge font-medium"
 
-/** Quantity as a minus key, the figure and a plus key; `max` stops the plus key. */
 export function Stepper({
   labelId,
   value,

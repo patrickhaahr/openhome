@@ -1,16 +1,3 @@
-//! Combined Progress Lines: a bounded batch read that indexes several Exercises' observed progress
-//! to a shared scale, so one chart can compare movements logged in different units.
-//!
-//! Each Exercise gets one type-appropriate metric chosen from its Sets in the period:
-//! - bodyweight repetitions: the best reps of any unweighted reps Set on a day;
-//! - Timed Hold seconds: the longest unweighted hold on a day.
-//! - weighted repetitions: the best Epley added-load estimate from 1–10 reps on a day.
-//!
-//! The line is indexed to 100 at its first positive sample in the period. Only observed days have
-//! samples, so gaps, plateaus and declines stay visible; nothing is interpolated or clamped.
-//! Mixed reps/holds and weighted holds are unsupported. See docs/exercise-progress.md for the
-//! selection policy and estimation limits. The per-exercise Progress Series endpoint is unchanged.
-
 use std::collections::HashMap;
 
 use serde::Serialize;
@@ -19,13 +6,10 @@ use sqlx::SqlitePool;
 use crate::error::{AppError, Result};
 use crate::services::training::CalendarDay;
 
-/// Most Exercises one read returns; also the default selection's size.
 pub const MAX_EXERCISES: usize = 24;
 
-/// Longest period, inclusive, so a year of training fits with its first day.
 pub const MAX_DAYS: i64 = 366;
 
-/// An inclusive period of 1 through [`MAX_DAYS`] calendar days.
 #[derive(Debug, Clone, Copy)]
 pub struct Period {
     from: CalendarDay,
@@ -33,7 +17,6 @@ pub struct Period {
 }
 
 impl Period {
-    /// Parses canonical `YYYY-MM-DD` bounds, rejecting reversed and overlong periods.
     pub fn parse(from: &str, to: &str) -> Result<Self> {
         let day = |text: &str| {
             CalendarDay::parse(text).ok_or_else(|| {
@@ -50,7 +33,6 @@ impl Period {
     }
 }
 
-/// Which Exercises to read: explicitly chosen ones, or the most recently logged in the period.
 #[derive(Debug)]
 pub enum Selection {
     Recent,
@@ -58,8 +40,6 @@ pub enum Selection {
 }
 
 impl Selection {
-    /// Parses a comma-separated list of 1 through [`MAX_EXERCISES`] distinct Exercise ids;
-    /// `None` selects the most recently logged Exercises.
     pub fn parse(ids: Option<&str>) -> Result<Self> {
         let Some(ids) = ids else {
             return Ok(Self::Recent);
@@ -88,7 +68,6 @@ impl Selection {
 pub struct CombinedProgress {
     pub from: String,
     pub to: String,
-    /// Distinct Exercises with Sets in the period, including any beyond the default selection.
     pub logged_exercise_count: usize,
     pub exercises: Vec<ProgressLine>,
 }
@@ -115,13 +94,11 @@ pub enum LineProgress {
         unit: &'static str,
         baseline: Sample,
         samples: Vec<IndexedSample>,
-        /// Logged dates without a valid value for the selected metric; never plotted as zero.
         omitted_dates: Vec<String>,
     },
     Unsupported {
         reason: Unsupported,
     },
-    /// Logged before or after the period, but not in it.
     NotLoggedInRange,
     NeverLogged,
 }
@@ -148,17 +125,12 @@ impl Metric {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Unsupported {
-    /// Timed Holds with Added Weight have no supported strength estimate.
     WeightedHolds,
-    /// No finite positive added-load estimate from a Set of 1–10 reps.
     NoValidEstimate,
-    /// Bodyweight reps and Timed Holds were both logged, so no single metric fits.
     MixedSetKinds,
-    /// Every observed value is zero, leaving no baseline to index against.
     NoPositiveValue,
 }
 
-/// Keep repetition/second counts as JSON integers while allowing fractional load estimates.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum RawValue {
@@ -167,7 +139,7 @@ pub enum RawValue {
 }
 
 impl RawValue {
-    #[allow(clippy::cast_precision_loss)] // Counts are exact at realistic training sizes.
+    #[allow(clippy::cast_precision_loss)]
     fn number(self) -> f64 {
         match self {
             Self::Count(value) => value as f64,
@@ -186,11 +158,9 @@ pub struct Sample {
 pub struct IndexedSample {
     pub date: String,
     pub value: RawValue,
-    /// `value` relative to the baseline, where the baseline is 100.
     pub index: f64,
 }
 
-/// One Exercise's Sets on one Workout date, reduced to what metric selection needs.
 #[derive(Debug, Clone)]
 struct LoggedDay {
     exercise_id: i64,
@@ -203,7 +173,6 @@ struct LoggedDay {
     best_estimated_1rm: Option<f64>,
 }
 
-/// Reads the selected Exercises' Progress Lines for the period.
 pub async fn combined_progress(
     db: &SqlitePool,
     period: Period,
@@ -212,7 +181,6 @@ pub async fn combined_progress(
     let from = period.from.to_string();
     let to = period.to.to_string();
 
-    // Every Exercise logged in the period, most recent first: the count and default selection.
     let logged = sqlx::query_as!(
         ExerciseRef,
         r#"
@@ -307,7 +275,6 @@ pub async fn combined_progress(
     })
 }
 
-/// The chosen Exercises in request order, plus the ids with any logged Set at all.
 async fn chosen_exercises(db: &SqlitePool, ids: &[i64]) -> Result<(Vec<ExerciseRef>, Vec<i64>)> {
     let json_ids = serde_json::to_string(ids).map_err(anyhow::Error::from)?;
     let rows = sqlx::query!(
@@ -344,7 +311,6 @@ async fn chosen_exercises(db: &SqlitePool, ids: &[i64]) -> Result<(Vec<ExerciseR
     Ok((exercises, ever_logged))
 }
 
-/// Chooses the metric from the period's Set kinds and indexes each observed day to the baseline.
 fn line(days: &[LoggedDay]) -> LineProgress {
     let total = |count: fn(&LoggedDay) -> i64| days.iter().map(count).sum::<i64>();
     let metric = match (

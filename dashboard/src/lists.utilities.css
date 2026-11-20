@@ -1,4 +1,3 @@
-/* Grids whose tracks are sized in spacing steps, which no core utility can repeat or fill. */
 @utility grid-fill-* {
   grid-template-columns: repeat(
     auto-fill,

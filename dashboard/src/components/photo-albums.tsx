@@ -16,7 +16,6 @@ import {
   type WallItem,
 } from "@/lib/photos"
 
-/** The count glyph and figure, and the months, under an album's name. */
 export function AlbumMeta({
   count,
   span,
@@ -51,7 +50,6 @@ type Plate = "all" | "on-this-day" | "album"
 
 const blank = "grid place-items-center text-muted-ink"
 
-/** The cover mosaic: two or four photos in two columns, three as one tall photo beside two. */
 function mosaic(plate: Plate, count: number): string {
   if (plate === "album") return ""
 
@@ -71,7 +69,6 @@ function AlbumPlate({
 }: {
   plate: Plate
   name: string
-  /** How many covers the plate shows, which decides its mosaic. */
   covers?: number
   disabled?: boolean
   onClick: () => void
@@ -81,7 +78,6 @@ function AlbumPlate({
   const all = plate === "all"
 
   return (
-    // All photos leads at two columns and two rows; its cover is a mosaic of the albums' covers.
     <li
       className={all ? "col-span-2 row-span-2 max-phone:row-auto" : undefined}
     >
@@ -232,7 +228,6 @@ export function AlbumIndex({
   )
 }
 
-/** A decorative cover: the album's name already names the plate. */
 function Cover({
   album,
   asset,

@@ -1,7 +1,6 @@
 import { z } from "zod"
 import { binderEntry, cardId, type BinderFailure } from "./binder"
 
-/** One variant of a Card Code as search lists it: what is shown and what an addition names. */
 export const cardVariant = z.object({
   id: cardId,
   card_code: z.string(),
@@ -15,12 +14,10 @@ export const cardSearchResponse = z.object({
   cards: cardVariant.array(),
 })
 
-/** One deliberate catalogue lookup; Axum owns the Card Code format. */
 export const cardSearchInput = z.object({
   card_code: z.string().trim().min(1).max(32),
 })
 
-/** An unlisted code is a successful, empty search; an outage is not an empty one. */
 export type CardSearchResult =
   | { state: "found"; cards: CardVariant[] }
   | { state: "unlisted" }
@@ -30,7 +27,6 @@ export type CardSearchResult =
 
 const quantity = z.number().int().min(1)
 
-/** What the household is about to add; its `request_id` is minted once and never reused. */
 export const draft = z.object({
   owner_id: z.uuid(),
   card: cardVariant,
@@ -41,7 +37,6 @@ export const draft = z.object({
 
 export type Draft = z.infer<typeof draft>
 
-/** The wire command, with Axum looking up the Card itself. */
 export const binderAddition = draft
   .omit({ card: true })
   .extend({ card_id: cardId })
@@ -87,12 +82,6 @@ export const binderAddFailureMessage: Record<AddFailure, string> = {
     "The card catalogue is not answering. Retry add in a moment; nothing was added.",
 }
 
-/**
- * The add sheet's whole lifecycle. Only `drafting` and `unconfirmed` outlive a refresh: a draft
- * keeps its owner, Card, quantity, language and `request_id` until a receipt or "Discard draft".
- * Once an addition has been sent its fields are locked, because a lost response may have been
- * saved and the same `request_id` must replay exactly the same addition.
- */
 export type AddFlow =
   | { state: "idle" }
   | { state: "searching"; code: string }
@@ -117,7 +106,6 @@ export type AddStep =
   | { type: "saved" }
   | { type: "discard" }
 
-/** The only place an AddFlow is constructed; a step that does not follow the state is ignored. */
 export function advance(flow: AddFlow, step: AddStep): AddFlow {
   switch (step.type) {
     case "search":
@@ -187,7 +175,6 @@ const pending = z.object({
 
 const key = "openhome.pending-binder-addition"
 
-/** The flow a refresh resumes: the stored draft, or a fresh sheet. */
 export function recover(): AddFlow {
   try {
     const parsed = pending.safeParse(
@@ -195,14 +182,11 @@ export function recover(): AddFlow {
     )
 
     if (parsed.success) return parsed.data
-  } catch {
-    /* Private browsing may disable storage. */
-  }
+  } catch {}
 
   return { state: "idle" }
 }
 
-/** Keep the draft before any dispatch, and remove it only once the flow has left it. */
 export function persist(flow: AddFlow): void {
   try {
     if (flow.state === "drafting" || flow.state === "unconfirmed")
@@ -211,7 +195,5 @@ export function persist(flow: AddFlow): void {
         JSON.stringify({ state: flow.state, draft: flow.draft })
       )
     else sessionStorage.removeItem(key)
-  } catch {
-    /* The mounted flow keeps its in-memory retry identity. */
-  }
+  } catch {}
 }

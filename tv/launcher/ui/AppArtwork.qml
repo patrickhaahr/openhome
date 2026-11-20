@@ -9,7 +9,6 @@ Item {
     property bool opaque: false
     property color ground: "#111213"
     onSourceChanged: { opaque = false; ground = "#111213"; if (source) probe.loadImage(source); }
-    // Probe only the image edges; transparent logos retain their original sizing.
     Canvas {
         id: probe; width: 16; height: 16; opacity: 0
         onAvailableChanged: if (available && artwork.source) loadImage(artwork.source)

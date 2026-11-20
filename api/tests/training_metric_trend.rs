@@ -1,5 +1,3 @@
-//! Authenticated trend reads across daily Body Weight and NOOP recovery measurements.
-
 mod common;
 
 use axum::http::StatusCode;

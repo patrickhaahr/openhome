@@ -1,5 +1,3 @@
-//! Route loop selection: durable choices and candidate retention.
-
 mod common;
 mod route_loop_support;
 
@@ -128,7 +126,6 @@ async fn selection_authenticates_rejects_forged_routes_and_preserves_previous_on
     }
     let (status, _) = select(app.clone(), &json!(uuid::Uuid::new_v4())).await;
     assert_eq!(status, StatusCode::CONFLICT);
-    // A real database failure during replacement must roll back the active selection.
     let (_, generated) = generate(app.clone(), json!({ "activity": "walking", "target": { "kind": "steps", "steps": 5000 }, "step_length_cm": 100 })).await;
     sqlx::query("CREATE TRIGGER refuse_selection BEFORE UPDATE ON active_route BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END")
         .execute(&db).await.unwrap();
@@ -160,8 +157,6 @@ async fn a_replaced_selection_loses_its_protection_and_may_be_pruned() {
     let (_, second) = generate(app.clone(), request(74)).await;
     let (_, replacement) = select(app.clone(), &second["plan"]["loops"][0]["id"]).await;
     assert_eq!(replacement["route"]["version"], 2);
-    // Offering 96 newer candidates prunes the replaced selection: their rows are the
-    // newest 96 and it is no longer referenced by active_route.
     for stride in (40..=73).chain(76..=137) {
         let (status, _) = generate(app.clone(), request(stride)).await;
         assert_eq!(status, StatusCode::OK);
@@ -170,7 +165,6 @@ async fn a_replaced_selection_loses_its_protection_and_may_be_pruned() {
     assert_eq!(status, StatusCode::CONFLICT);
     let (_, restored) =
         common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
-    // The current selection is intact and stays eligible despite the pruning.
     assert_eq!(restored, replacement);
     let (status, repeat) = select(app, &second["plan"]["loops"][0]["id"]).await;
     assert_eq!(status, StatusCode::OK);
@@ -194,7 +188,6 @@ async fn candidate_retention_keeps_reoffered_and_selected_routes_and_prunes_old_
         let (status, _) = generate(app.clone(), request(stride)).await;
         assert_eq!(status, StatusCode::OK);
     }
-    // Refresh a cached candidate on the eviction boundary before adding more choices.
     let (_, refreshed) = generate(app.clone(), request(41)).await;
     assert_eq!(refreshed, reoffered);
     for stride in 136..=150 {

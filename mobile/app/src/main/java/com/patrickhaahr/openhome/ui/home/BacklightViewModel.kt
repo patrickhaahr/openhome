@@ -14,23 +14,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
-/** The one request Android has made, or what it last settled as; never a pending request with an old result. */
 sealed interface BacklightOperation {
-    /** No request in flight and nothing to report. */
     data object Idle : BacklightOperation
 
     data class Pending(val label: String) : BacklightOperation
 
-    /** OpenHome answered a save; says nothing about what the TV or controller then did. */
     data class Saved(val message: String) : BacklightOperation
 
     data class Failed(val problem: String) : BacklightOperation
 }
 
-/**
- * [status] is the last server observation and [outdated] says a later request left its outcome unknown; both
- * stay independent of the [operation] that is in flight or last settled.
- */
 data class BacklightState(
     val status: BacklightStatus? = null,
     val outdated: Boolean = false,
@@ -41,14 +34,6 @@ data class BacklightState(
     val problem: String? get() = (operation as? BacklightOperation.Failed)?.problem
 }
 
-/**
- * Ephemeral, explicit requests only: no scheduler, Room writes or retry path. [request] is the sole transition
- * owner and the pending guard admits one request at a time, so a response can never be overtaken by another.
- * Exits: a response replaces the status; an [ApiFailure] keeps the old status, marks it outdated and asks for an
- * explicit refresh; ViewModel cancellation cancels the call; the Home client's 5 s call timeout
- * (AppContainer.homeHttpClient, no connection retry) surfaces as [ApiFailure.Unreachable].
- * Only [ApiFailure] is handled: any other exception escapes uncaught (no handler is installed), ends the process, and the relaunch starts Home idle, since nothing here is persisted.
- */
 class BacklightViewModel(private val setup: SetupService, private val client: OkHttpClient) : ViewModel() {
     private val mutableState = MutableStateFlow(BacklightState())
     val state = mutableState.asStateFlow()

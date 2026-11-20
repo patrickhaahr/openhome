@@ -44,7 +44,6 @@ interface FitnessDao {
     @Query("SELECT * FROM workouts WHERE id = :id")
     suspend fun loadWorkout(id: Long): WorkoutWithEntries?
 
-    /** The Exercise's most recent logged entry that has Sets, whichever Workout it is in. */
     @Transaction
     @Query(
         """
@@ -79,7 +78,6 @@ interface FitnessDao {
     @Query("SELECT * FROM exercises ORDER BY name COLLATE NOCASE, id")
     fun observeExercises(): Flow<List<ExerciseEntity>>
 
-    /** The most recently logged Set of an Exercise, whichever Workout it is in. */
     @Query(
         """
         SELECT s.* FROM workout_sets s
@@ -157,7 +155,6 @@ interface FitnessDao {
     )
     suspend fun updateWorkoutDetails(workoutId: Long, date: String, name: String?, notes: String?, clientRevision: Long)
 
-    /** Their Sets go with them. */
     @Query("DELETE FROM workout_entries WHERE workout_id = :workoutId")
     suspend fun deleteEntriesOf(workoutId: Long)
 

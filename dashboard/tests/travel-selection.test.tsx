@@ -27,7 +27,6 @@ test("a refreshed Travel selection resets the displayed map alongside its summar
   const originalLoader = TravelRoute.options.loader
   const root = createRoot(document)
 
-  // The fixture supplies the real authenticated transport behind Start's RPC boundary.
   TravelRoute.options.loader = async () => ({
     map: await readMapOrigin(),
     active: await readActiveRoute(),

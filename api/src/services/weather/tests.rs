@@ -22,7 +22,6 @@ async fn serves_upcoming_hours_across_dst_with_gaps_and_end_timestamped_precipit
         body["hourly"]["temperature_2m"][1] = Value::Null;
         body["hourly"]["wind_speed_10m"][1] = json!(-1);
         body["hourly"]["precipitation_probability"][2] = json!(101);
-        // Drop a timestamp and every corresponding value, preserving a true gap.
         for field in [
             "time",
             "temperature_2m",
@@ -209,8 +208,6 @@ async fn stops_serving_old_forecasts_after_six_hours() {
             .await,
         WeatherRead::Stale { .. }
     ));
-    // The stale cutoff falls inside the renewed backoff, so exactly one attempt
-    // precedes both boundary reads and the cutoff itself is projected, not fetch.
     let response = serde_json::to_value(service.read_at(now + MAX_STALE).await).unwrap();
     assert_eq!(
         response,
@@ -239,8 +236,6 @@ async fn serves_unavailable_after_empty_cache_failures_and_recovers_at_the_retry
             json!({ "state": "unavailable", "reason": "provider-unavailable" })
         );
     }
-    // The first minute has one attempt; the next attempt happens exactly at the
-    // deadline and fails again, so the cache stays empty instead of serving data.
     assert_eq!(
         serde_json::to_value(service.read_at(now + RETRY).await).unwrap(),
         json!({ "state": "unavailable", "reason": "provider-unavailable" })
@@ -275,8 +270,6 @@ async fn coalesces_reads_queued_behind_a_delayed_failure_into_one_shared_backoff
     );
     assert!(matches!(a, WeatherRead::Unavailable { .. }));
     assert!(matches!(b, WeatherRead::Unavailable { .. }));
-    // The queued reader rechecks admission after the failed refresh, so reads still
-    // inside the shared backoff never re-attempt despite their later sampled time.
     assert!(matches!(
         service
             .read_at(now + RETRY - chrono::Duration::seconds(1))
@@ -319,8 +312,6 @@ async fn serves_queued_reads_from_one_delayed_success_until_ttl_admits_a_refresh
     assert!(matches!(b, WeatherRead::Fresh { .. }));
     server.verify().await;
     server.reset().await;
-    // The queued reader rechecks admission against its own later time and reuses
-    // the completed result; the refresh is re-admitted exactly at the new TTL.
     Mock::given(method("GET"))
         .respond_with(ResponseTemplate::new(200).set_body_json(fixture(now)))
         .expect(1)
@@ -348,9 +339,6 @@ async fn dropping_a_timed_out_read_leaves_refresh_admission_and_data_unchanged()
     let attempt =
         tokio::time::timeout(std::time::Duration::from_millis(50), service.read_at(now)).await;
     assert!(attempt.is_err(), "the read must be waiting on the provider");
-    // Cancellation drops the guard without completing a refresh, so the still
-    // unattempted cache retries immediately; a stranded refresh or a backoff
-    // invented by a cancelled attempt would leave the cache empty and skip it.
     let fresh = serde_json::to_value(service.read_at(now).await).unwrap();
     assert_eq!(fresh["state"], "fresh");
     assert_eq!(fresh["forecast"]["fetched_at"], "2026-10-11T10:00:00Z");
@@ -383,7 +371,6 @@ async fn abandons_a_silent_provider_after_five_seconds_into_shared_backoff() {
         response,
         json!({ "state": "unavailable", "reason": "provider-unavailable" })
     );
-    // The timed-out attempt returns to the same backoff as any other failure.
     assert!(matches!(
         service.read_at(now + chrono::Duration::seconds(30)).await,
         WeatherRead::Unavailable { .. }

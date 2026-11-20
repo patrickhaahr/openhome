@@ -14,7 +14,6 @@ import {
   type WishlistState,
 } from "./wishlist"
 
-/** Fetch suggestions from Axum; credentials and fetching policy stay on the server. */
 export async function previewWishlistUrl(
   request: z.infer<typeof wishlistMetadataRequest>
 ): Promise<WishlistMetadataResult> {
@@ -35,9 +34,7 @@ export async function previewWishlistUrl(
     const parsed = wishlistMetadata.safeParse(await result.response.json())
 
     if (parsed.success) return { state: "preview", data: parsed.data }
-  } catch {
-    /* Only sanitized outcomes reach the browser. */
-  }
+  } catch {}
 
   return { state: "failed", reason: "unavailable" }
 }
@@ -77,7 +74,6 @@ async function read<T>(
   }
 }
 
-/** Read all owners and lists from authenticated Axum; incomplete reads never become empty lists. */
 export async function readWishlists(): Promise<WishlistState> {
   const [owners, lists] = await Promise.all([
     read("/api/household-users", householdUser.array()),
@@ -186,7 +182,6 @@ function operation(command: WishlistCommand): WishlistOperation {
   }
 }
 
-/** Forward one typed write; only a parsed API receipt confirms persistence. */
 export async function writeWishlist(
   command: WishlistCommand
 ): Promise<WishlistMutation> {
@@ -210,9 +205,7 @@ export async function writeWishlist(
       schema.safeParse(await result.response.json()).success
     )
       return { state: "saved" }
-  } catch {
-    /* Never expose upstream error bodies or private URLs. */
-  }
+  } catch {}
 
   return { state: "failed", reason: "unavailable" }
 }
@@ -223,7 +216,6 @@ const wishImageInput = z.object({
   item: z.uuid(),
 })
 
-// SVG only ever comes from the synthetic preview; Axum relays raster pictures alone.
 const wishImageTypes = [
   "image/jpeg",
   "image/png",
@@ -235,7 +227,6 @@ const wishImageTypes = [
 
 const wishImageLimit = 5 * 1024 * 1024
 
-/** Relay one stored wish picture as bounded bytes, never provider headers or error bodies. */
 export async function readWishImage(input: {
   owner: string
   list: string

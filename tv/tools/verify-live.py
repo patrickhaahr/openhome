@@ -27,8 +27,6 @@ for app in ("amazon.alexa.view", "amazon.alexapr"):
     print("PASS: launch rejected:", app, reply.get("errorText"))
 for service in ("amazon.alexa.adapter.plugin", "amazon.alexa.adapter.vsk"):
     method = "isRegistered" if service.endswith("plugin") else "getState"
-    # Try activation, not just a passive status check. The bounded LS helper
-    # returns no reply when the blocked dynamic service cannot register.
     remote("/var/lib/pearwebos/luna-send-n -n 1 " + shlex.quote("luna://" + service + "/" + method) + " '{}'")
     reply = luna("luna://com.webos.service.bus/signal/registerServerStatus", {"serviceName": service})
     assert reply.get("connected") is False, reply

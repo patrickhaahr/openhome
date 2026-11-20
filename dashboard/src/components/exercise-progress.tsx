@@ -34,16 +34,12 @@ import {
 type ExerciseProgressProps = {
   readonly data: ProgressState
   readonly choosePeriod: (period: ProgressPeriod) => Promise<void>
-  /** Compare exactly these Exercises; an empty list returns to the most recently logged. */
   readonly compare: (ids: ReadonlyArray<number>) => Promise<void>
-  /** The view switcher, which sits at the start of the toolbar. */
   readonly lead?: React.ReactNode
 }
 
-/** Lines shown before the household toggles any, keeping a first glance readable. */
 const initiallyShown = 6
 
-/** Whether each toggled line is shown, by Exercise id; untouched lines use the default. */
 type Toggles = ReadonlyMap<number, boolean>
 
 const tallButton = "min-h-12 touch-manipulation"
@@ -60,7 +56,6 @@ function isCharted(line: ProgressLine): line is ChartedLine {
   return line.status === "charted"
 }
 
-/** Combined, normalized exercise progress with per-line toggles and raw values. */
 export function ExerciseProgress({
   data,
   choosePeriod,
@@ -71,7 +66,6 @@ export function ExerciseProgress({
   const locked = useRef(false)
   const [failure, setFailure] = useState<string>()
 
-  // Choices outlive reads (period changes, added exercises), so they live above the view.
   const [toggled, setToggled] = useState<Toggles>(() => new Map())
 
   async function run(work: () => Promise<void>): Promise<void> {
@@ -165,7 +159,6 @@ type ProgressViewProps = {
   readonly busy: boolean
   readonly toggled: Toggles
   readonly toggle: (id: number, shown: boolean) => void
-  /** Stop comparing an Exercise; the rest become an explicit comparison. */
   readonly remove: (id: number) => void
 }
 
@@ -196,8 +189,6 @@ function ProgressView({
 
   const [inspected, setInspected] = useState<number>()
 
-  // Slots follow the order, newest session first, so toggling, periods and absences never recolour a
-  // compared line.
   const markers = new Map(
     ordered.map((line, position): [number, Marker] => [
       line.exercise.id,
@@ -208,7 +199,6 @@ function ProgressView({
     ])
   )
 
-  // Removing the only line of the default selection would change nothing.
   const removable = explicit || progress.exercises.length > 1
 
   const visible = charted.filter((line) => shown.has(line.exercise.id))

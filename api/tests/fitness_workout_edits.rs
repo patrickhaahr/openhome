@@ -1,5 +1,3 @@
-//! Replay-safe Workout edits (`client_revision`): the contract the Android outbox delivers against.
-
 mod common;
 
 use axum::Router;
@@ -33,7 +31,6 @@ async fn create(app: &Router) -> i64 {
     body["id"].as_i64().unwrap()
 }
 
-/// A whole correction, as the client queues one.
 fn edit(revision: i64, reps: i64) -> Value {
     json!({
         "client_revision": revision,
@@ -119,7 +116,6 @@ async fn retrying_an_edit_after_a_lost_response_is_acknowledged_with_nothing_rew
     let id = create(&app).await;
     let (_, first) = patch(&app, id, edit(1, 6)).await;
 
-    // A different body under the same revision shows the retry applies nothing, whatever ids SQLite reuses.
     let (status, retried) = patch(&app, id, edit(1, 7)).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -204,7 +200,6 @@ async fn edits_without_a_revision_apply_as_before_and_keep_partial_semantics() {
         "existing clients see the same response: {body}"
     );
 
-    // They neither need a revision nor disturb the one a queued edit relies on.
     patch(&app, id, edit(2, 6)).await;
     let (_, body) = patch(&app, id, json!({ "name": "Dashboard" })).await;
     assert_eq!(body["name"], "Dashboard");

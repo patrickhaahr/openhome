@@ -2,17 +2,12 @@ import { z } from "zod"
 
 const source = z.enum(["food", "label", "estimate"])
 
-/** A Portion's amount of one nutrient; a null value is unknown, never zero. */
 const amount = z.object({
   value: z.number().nullable(),
   unit: z.string().nullable(),
   source: source.nullable(),
 })
 
-/**
- * A sum over Portions and Supplement Doses: the known values added, the Portions without one
- * counted, and the food and supplement shares of the sum.
- */
 const total = z.object({
   value: z.number().nullable(),
   unit: z.string().nullable(),
@@ -21,7 +16,6 @@ const total = z.object({
   supplements: z.number().nullable(),
 })
 
-/** One nutrient's total over Portions and Supplement Doses, as Axum adds them. */
 export type NutrientTotal = z.infer<typeof total>
 
 function keyNutrients<T extends z.ZodType>(schema: T) {
@@ -35,14 +29,12 @@ function keyNutrients<T extends z.ZodType>(schema: T) {
   })
 }
 
-/** The Product a Portion was logged as, named as its label named it then. */
 const portionProduct = z.object({
   barcode: z.string(),
   name: z.string().nullable(),
   brand: z.string().nullable(),
 })
 
-/** A NOVA processing class: 1 unprocessed or minimally processed through 4 ultra-processed. */
 const novaClass = z.union([
   z.literal(1),
   z.literal(2),
@@ -50,10 +42,8 @@ const novaClass = z.union([
   z.literal(4),
 ])
 
-/** A NOVA Class as Axum reports it for a Food, Product or Portion. */
 export type NovaClass = z.infer<typeof novaClass>
 
-/** What each NOVA Class means, as the Day view explains a Portion's class. */
 export const novaClassMeaning: Record<NovaClass, string> = {
   1: "unprocessed or minimally processed",
   2: "processed culinary ingredient",
@@ -72,7 +62,6 @@ const portion = z.object({
   nutrients: keyNutrients(amount),
 })
 
-/** One Portion of a Meal Log with its key nutrients scaled to the grams eaten. */
 export type Portion = z.infer<typeof portion>
 
 const mealPhoto = z.object({
@@ -85,27 +74,16 @@ const mealPhoto = z.object({
   }),
 })
 
-/** A Meal Log's stored AVIF photo and its thumbnail, with their pixel sizes. */
 export type MealPhoto = z.infer<typeof mealPhoto>
 
-/** Which stored file of a meal photo to show. */
 export type MealPhotoSize = "photo" | "thumbnail"
 
-/**
- * A meal photo relayed through the dashboard, so the API key stays on the server. A photo ID
- * always names the same image, so the address never needs a version.
- *
- * @param photo - The Meal Log's photo.
- * @param size - The full photo or its thumbnail.
- * @returns The dashboard path of the image.
- */
 export function mealPhotoUrl(photo: MealPhoto, size: MealPhotoSize): string {
   return `/meal-photo/${photo.id}/${size}`
 }
 
 const doseUnit = z.enum(["tablet", "capsule", "scoop", "ml"])
 
-/** What one dose of a Supplement is. */
 export type DoseUnit = z.infer<typeof doseUnit>
 
 const compound = z.object({
@@ -114,7 +92,6 @@ const compound = z.object({
   unit: z.string(),
 })
 
-/** A named compound without a database parameter, such as creatine, with the amount taken. */
 export type Compound = z.infer<typeof compound>
 
 const supplementDose = z.object({
@@ -133,7 +110,6 @@ const supplementDose = z.object({
   compounds: z.array(compound),
 })
 
-/** A Supplement Dose of a Meal Log: the Supplement as logged, with its amounts taken. */
 export type SupplementDose = z.infer<typeof supplementDose>
 
 const mealLog = z.object({
@@ -148,10 +124,6 @@ const mealLog = z.object({
   totals: keyNutrients(total),
 })
 
-/**
- * One eating occasion at its Copenhagen time, holding its own copy of its Portions and Supplement
- * Doses.
- */
 export type MealLog = z.infer<typeof mealLog>
 
 const group = z.object({ name_da: z.string(), name_en: z.string() })
@@ -166,24 +138,20 @@ const nutrient = total.extend({
     .optional(),
 })
 
-/** One parameter's total for the day, named as the Food database names it. */
 export type Nutrient = z.infer<typeof nutrient>
 
 const goalDirection = z.enum(["lose", "maintain", "lean_bulk"])
 
-/** A Nutrition Goal from the day it took effect; `effective_from` is null for the default. */
 const datedGoal = z.object({
   direction: goalDirection,
   rate_kg_per_week: z.number().nonnegative(),
   effective_from: z.iso.date().nullable(),
 })
 
-/** A Nutrition Goal as Axum reports it with the day it took effect. */
 export type DatedGoal = z.infer<typeof datedGoal>
 
 const macroStatus = z.enum(["met", "below"])
 
-/** A day's Calorie Target and Macro Targets beside what was eaten, or what they need. */
 const targets = z.discriminatedUnion("state", [
   z.object({
     state: z.literal("available"),
@@ -226,15 +194,10 @@ const targets = z.discriminatedUnion("state", [
   }),
 ])
 
-/** A day's targets as Axum computes them; the dashboard only formats them. */
 export type DayTargets = z.infer<typeof targets>
 
 const limitStatus = z.enum(["none", "caution", "cut_down"])
 
-/**
- * Where a nutrient stands against an EFSA Upper Limit: clear, above it that day, or above it on
- * the trailing 7-day average.
- */
 export type LimitStatus = z.infer<typeof limitStatus>
 
 const limitShare = z.enum([
@@ -246,7 +209,6 @@ const limitShare = z.enum([
   "nicotinamide",
 ])
 
-/** The share of intake an Upper Limit applies to. */
 export type LimitShare = z.infer<typeof limitShare>
 
 const upperLimit = z.object({
@@ -259,7 +221,6 @@ const upperLimit = z.object({
   source: z.string(),
 })
 
-/** One Upper Limit with the day's amount of its share and the share's trailing average. */
 export type UpperLimit = z.infer<typeof upperLimit>
 
 const micronutrient = z.object({
@@ -279,10 +240,8 @@ const micronutrient = z.object({
   upper_limit_status: limitStatus.nullable(),
 })
 
-/** One vitamin, mineral or EPA+DHA against its Recommended Intake and Upper Limits. */
 export type Micronutrient = z.infer<typeof micronutrient>
 
-/** The day's micronutrient panel as Axum evaluates it, or why there is none. */
 const micronutrients = z.discriminatedUnion("state", [
   z.object({
     state: z.literal("available"),
@@ -305,10 +264,8 @@ const micronutrients = z.discriminatedUnion("state", [
   }),
 ])
 
-/** A day's micronutrient panel; the dashboard only formats it. */
 export type Micronutrients = z.infer<typeof micronutrients>
 
-/** Axum's Nutrition Day: the day's Meal Logs and totals; the dashboard only formats them. */
 export const nutritionDay = z.object({
   day: z.iso.date(),
   time_zone: z.literal("Europe/Copenhagen"),
@@ -348,19 +305,15 @@ export const nutritionDay = z.object({
   }),
 })
 
-/** One Copenhagen day of nutrition as Axum serves it. */
 export type NutritionDay = z.infer<typeof nutritionDay>
 
-/** The goal in effect today and every change, as Axum serves them. */
 export const nutritionGoal = z.object({
   goal: datedGoal,
   history: z.array(datedGoal),
 })
 
-/** The Nutrition Goal today and its history. */
 export type NutritionGoal = z.infer<typeof nutritionGoal>
 
-/** The goals the user can choose, in the order the goal control offers them. */
 export const goalChoices = [
   { key: "lose-0.75", direction: "lose", rate_kg_per_week: 0.75 },
   { key: "lose-0.5", direction: "lose", rate_kg_per_week: 0.5 },
@@ -370,29 +323,19 @@ export const goalChoices = [
   { key: "lean_bulk-0.25", direction: "lean_bulk", rate_kg_per_week: 0.25 },
 ] as const
 
-/** One goal the user can choose. */
 export type GoalChoice = (typeof goalChoices)[number]
 
-/** A goal to set from today, as the goal control sends it. */
 export const setGoalInput = z.object({
   direction: goalDirection,
   rate_kg_per_week: z.number().nonnegative(),
 })
 
-/** A goal to set from today. */
 export type SetGoalInput = z.infer<typeof setGoalInput>
 
-/** A goal write is confirmed only by Axum's parsed answer. */
 export type GoalMutation =
   | { readonly state: "saved"; readonly goal: NutritionGoal }
   | { readonly state: "failed"; readonly reason: NutritionFailure }
 
-/**
- * The choice matching a goal, so the control can show the goal in effect.
- *
- * @param goal - A goal's direction and rate.
- * @returns The matching choice, or undefined for a rate the control does not offer.
- */
 export function goalChoice(
   goal: Pick<DatedGoal, "direction" | "rate_kg_per_week">
 ): GoalChoice | undefined {
@@ -403,12 +346,6 @@ export function goalChoice(
   )
 }
 
-/**
- * A goal in words: "Lose 0.5 kg a week", "Maintain" or "Lean bulk 0.25 kg a week".
- *
- * @param goal - A goal's direction and rate.
- * @returns The goal's name.
- */
 export function goalName(
   goal: Pick<DatedGoal, "direction" | "rate_kg_per_week">
 ): string {
@@ -422,21 +359,17 @@ export function goalName(
   }
 }
 
-/** Axum's answer while the Food database is importing or after a failed import. */
 export const foodDatabaseUnavailable = z.object({
   code: z.literal("food_database_unavailable"),
   state: z.enum(["importing", "failed"]),
 })
 
-/** Search parameters of the Food page: the day shown, today when absent. */
 export const nutritionSearch = z.object({
   day: z.iso.date().optional().catch(undefined),
 })
 
-/** The Food page's search parameters. */
 export type NutritionSearch = z.infer<typeof nutritionSearch>
 
-/** Sanitized transport and API outcomes; private diagnostics never reach the display. */
 export type NutritionFailure =
   | "missing-configuration"
   | "invalid-configuration"
@@ -445,7 +378,6 @@ export type NutritionFailure =
   | "unavailable"
   | "invalid"
 
-/** The Day view's read: a day, the Food database's own unavailability, or another failure. */
 export type NutritionDayState = {
   readonly day: string
   readonly today: string
@@ -453,7 +385,6 @@ export type NutritionDayState = {
   | {
       readonly state: "available"
       readonly data: NutritionDay
-      /** Today's goal for the goal control; null when it could not be read. */
       readonly goal: NutritionGoal | null
     }
   | {
@@ -463,7 +394,6 @@ export type NutritionDayState = {
   | { readonly state: "unavailable"; readonly reason: NutritionFailure }
 )
 
-/** Actionable copy without household configuration or upstream error bodies. */
 export const nutritionFailureMessage: Record<NutritionFailure, string> = {
   "missing-configuration":
     "Connect OpenHome in Connection before opening Food.",
@@ -475,7 +405,6 @@ export const nutritionFailureMessage: Record<NutritionFailure, string> = {
   invalid: "This day cannot be shown. Go back to today.",
 }
 
-/** Credit for the Food database wherever nutrient values are shown, before Axum names a version. */
 export const foodDatabaseCredit = "© The Danish Food Composition Database"
 
 export * from "@/lib/nutrition-display"

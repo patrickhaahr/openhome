@@ -8,12 +8,10 @@ import com.patrickhaahr.openhome.sync.FitnessOutbox
 import com.patrickhaahr.openhome.sync.FitnessSyncScheduler
 import com.patrickhaahr.openhome.sync.QueuedExercise
 
-/** The Exercise Categories: descriptive tags that never limit where an Exercise may be used. */
 val EXERCISE_CATEGORIES = listOf("calisthenics", "gym")
 
 private const val MAX_NAME_LENGTH = 100
 
-/** An Exercise as typed. Muscle group and equipment are optional, and blank means absent. */
 data class ExerciseDraft(
     val name: String,
     val category: String?,
@@ -52,14 +50,11 @@ sealed interface ExerciseSave {
 
     data class Invalid(val problem: ExerciseCheck) : ExerciseSave
 
-    /** The Exercise left the refused state meanwhile, so there is nothing to correct any more. */
     data object NoLongerRefused : ExerciseSave
 }
 
-/** An Exercise waiting for the user, with what Axum said about it. */
 data class RefusedExercise(val exercise: Exercise, val problem: SyncProblem)
 
-/** What the Library shows: all of [query], and the chosen tags. Null means that tag is not filtering. */
 data class ExerciseFilter(
     val query: String = "",
     val category: String? = null,
@@ -79,18 +74,11 @@ data class ExerciseFilter(
     }
 }
 
-/** The muscle groups the Library actually uses, however their case was typed. */
 fun List<Exercise>.muscleGroups(): List<String> =
     mapNotNull { it.muscleGroup?.trim()?.takeIf(String::isNotEmpty) }
         .distinctBy { it.lowercase() }
         .sortedBy { it.lowercase() }
 
-/**
- * Exercises created on this device. Each commits together with its queued sync, and is in the Library
- * and the workout picker from that moment, whatever the network does. Each save is one transaction that
- * returns a sealed [ExerciseSave], so a refusal or a rolled-back failure changes nothing; scheduling follows
- * the commit and is repeated at app start if skipped.
- */
 class ExerciseLibrary(
     private val database: OpenHomeDatabase,
     private val outbox: FitnessOutbox,
@@ -117,7 +105,6 @@ class ExerciseLibrary(
                 outbox.enqueueExercise(id, exercise)
                 ExerciseSave.Saved(id)
             }
-        // After the commit: if the process dies first, the next app start schedules it from the outbox.
         if (saved is ExerciseSave.Saved) scheduler.schedule()
         return saved
     }
@@ -128,7 +115,6 @@ class ExerciseLibrary(
         return RefusedExercise(Exercise(row.id, row.name, row.category, row.muscleGroup, row.equipment), problem)
     }
 
-    /** Corrects a refused Exercise everywhere it is used, and sends it again ahead of its Workouts. */
     suspend fun correctRefused(exerciseId: Long, draft: ExerciseDraft): ExerciseSave {
         val saved =
             database.withTransaction {
@@ -145,7 +131,6 @@ class ExerciseLibrary(
         return saved
     }
 
-    /** The user's answer to a taken name: this is that Exercise, so link to it rather than create one. */
     suspend fun useExistingOnServer(exerciseId: Long): ExerciseSave {
         val saved =
             database.withTransaction {
@@ -162,7 +147,6 @@ class ExerciseLibrary(
         return saved
     }
 
-    /** Two names differing only in case would read as one Exercise here, so they are refused. */
     private suspend fun checkAgainstLibrary(draft: ExerciseDraft, exceptId: Long): ExerciseCheck {
         val check = draft.check()
         if (check !is ExerciseCheck.Valid) return check

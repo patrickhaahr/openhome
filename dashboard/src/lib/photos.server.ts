@@ -35,16 +35,13 @@ async function readJson<T>(
   }
 }
 
-/** Selected album metadata through the existing server-held OpenHome credential. */
 export async function readAlbums(): Promise<AlbumRead> {
-  // Each selected album's metadata is read in turn on a cold cache.
   return readJson(
     { path: "/api/photos/albums", method: "GET", timeoutMs: 45000 },
     albumRead
   )
 }
 
-/** Photos taken on `date` (`MM-DD`, else today in Copenhagen) in earlier years. */
 export async function readOnThisDay(
   date: string | undefined,
   page: number
@@ -65,7 +62,6 @@ export async function readOnThisDay(
   return onThisDayResult(read)
 }
 
-/** One page of one album, of every album merged or of today's photos; Axum checks scope and bounds. */
 export async function readWall(album: string, page: number): Promise<WallRead> {
   if (album === ON_THIS_DAY)
     return onThisDayWall(await readOnThisDay(undefined, page))
@@ -103,7 +99,6 @@ const mediaInput = z.object({
   size: z.enum(["thumbnail", "preview"]),
 })
 
-/** Forward only bounded resized bytes, never provider headers, redirects or error bodies. */
 export async function readPhotoMedia(input: {
   album: string
   asset: string
@@ -142,7 +137,6 @@ export async function readPhotoMedia(input: {
     })
   }
 
-  // Defend against a misconfigured/older Axum too; hold a single bounded body.
   const reader = response.body?.getReader()
 
   if (reader === undefined) return new Response(null, { status: 503, headers })

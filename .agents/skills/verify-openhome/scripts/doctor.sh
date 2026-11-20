@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Read-only: is the current verify run worth driving? Exits non-zero naming the first failing surface.
 . "$(dirname "$0")/common.sh"
 load_run
 fail() { echo "FAIL: $*"; exit 1; }

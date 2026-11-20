@@ -1,8 +1,3 @@
-//! The preview's pictures and its TMDB fallback. Wish images are drawn here and answered through
-//! the authenticated wish picture route, so they work offline. Posters are
-//! real TMDB images: the seeded Watchlist names well-known titles with their static TMDB ids and
-//! poster paths from `seed/household.json`, never fetched at startup.
-
 use axum::{
     Json, Router,
     extract::{Path, Query},
@@ -15,7 +10,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
-/// One catalogue title, as TMDB would describe it.
 #[derive(Deserialize, Clone)]
 pub struct Title {
     pub id: i64,
@@ -61,8 +55,6 @@ struct Search {
     query: String,
 }
 
-/// The real TMDB when `TMDB_READ_ACCESS_TOKEN` is set (built as `api/src/main.rs` does), else a
-/// loopback stand-in that searches the seed catalogue. Only the chosen mode is logged.
 pub async fn tmdb() -> anyhow::Result<TmdbService> {
     if let Some(token) = std::env::var("TMDB_READ_ACCESS_TOKEN")
         .ok()
@@ -82,8 +74,6 @@ pub async fn tmdb() -> anyhow::Result<TmdbService> {
     loopback_tmdb().await
 }
 
-/// TMDB search and details over the seed catalogue. A query containing "offline" answers 503,
-/// so the add flow's provider failure can be previewed too.
 async fn loopback_tmdb() -> anyhow::Result<TmdbService> {
     let provider = Router::new()
         .route(
@@ -120,9 +110,6 @@ async fn loopback_tmdb() -> anyhow::Result<TmdbService> {
     TmdbService::new("synthetic-provider-token", url.parse()?)
 }
 
-/// The preview's stand-in for the wish picture route. The production fetcher refuses loopback
-/// addresses, so a seeded `/preview-art` picture is answered here from the drawing itself; every
-/// other request continues to the real route. Mount it inside the API key layer.
 pub async fn wish_picture(
     db: sqlx::SqlitePool,
     request: axum::extract::Request,
@@ -177,7 +164,6 @@ fn hsl(hue: f64, saturation: f64, lightness: f64) -> String {
     )
 }
 
-/// A still life of one product on a coloured ground. Every drawing is invented.
 fn wish(name: &str) -> Option<String> {
     let (hue, object) = match name {
         "socks" => (

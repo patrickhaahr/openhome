@@ -30,7 +30,6 @@ SCRATCH=$BACKING.new.$$
 BEGIN='# OpenHome LG privacy block BEGIN'
 END='# OpenHome LG privacy block END'
 
-# Categories retained from the pinned upstream policy: telemetry, ads and AI.
 DOMAINS='
 nextlgsdp.com
 ibs.nextlgsdp.com
@@ -62,8 +61,6 @@ kic-qt2-ngfts.lge.com
 log() { printf '%s\n' "openhome-privacy: $*" >&2; }
 die() { log "$*"; exit 1; }
 identity() { stat -c '%d:%i' "$1"; }
-# fdinfo identifies the mount actually reached by opening the path, even when
-# several bind mounts are stacked. awk inherits descriptor 9 in this subshell.
 mount_id() { (exec 9< "$1"; awk '/^mnt_id:/ {print $2}' /proc/self/fdinfo/9); }
 marker() { grep -Fqx "$BEGIN" "$TARGET"; }
 
@@ -98,8 +95,6 @@ restore() {
 }
 
 build() {
-    # Only remove our delimited section. Preserve all preceding AND following
-    # base entries, including Homebrew OTA entries and unrelated local entries.
     awk -v begin="$BEGIN" -v end="$END" '
         $0 == begin {if (inside || seen++) exit 2; inside=1; next}
         $0 == end {if (!inside) exit 2; inside=0; next}
@@ -122,8 +117,6 @@ trap 'exit 1' HUP INT TERM
 load_state
 [ -n "$(mount_id "$TARGET")" ] || die 'kernel does not expose mount identity'
 
-# Recover ownership if interrupted immediately after binding but before saving
-# state. Require the exact known backing inode and a distinct mount ID.
 if [ -z "$OWN_ID" ] && marker && [ -f "$BACKING" ] &&
     [ "$(identity "$TARGET")" = "$(identity "$BACKING")" ] &&
     [ "$(mount_id "$TARGET")" != "$(mount_id "$BACKING")" ]; then
@@ -143,8 +136,6 @@ if owned; then
         log 'privacy entries refreshed in existing bind mount'
         exit 0
     fi
-    # A deleted/replaced backing pathname cannot refresh the mounted inode.
-    # Unmount only our verified mount, then rebuild from the underlying hosts.
     restore
 elif [ -n "$OWN_ID" ]; then
     restore

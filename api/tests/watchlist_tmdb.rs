@@ -137,7 +137,6 @@ async fn selected_movie_and_series_ids_are_distinct_and_retries_work_without_the
                 .0,
             StatusCode::CONFLICT
         );
-        // Different intentions for the same owner/provider identity cannot create duplicates.
         Mock::given(method("GET"))
             .and(path(format!("/3/{provider_kind}/42")))
             .respond_with(ResponseTemplate::new(200).set_body_json(metadata(kind)))

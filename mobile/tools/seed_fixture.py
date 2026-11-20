@@ -16,7 +16,6 @@ import urllib.request
 WORKOUT_COUNT = 620
 BODY_WEIGHT_DAYS = 540
 
-# Added alongside the Library the API's migrations already seed.
 ADDED_EXERCISES = [
     ("Fixture Pull-Up", "calisthenics", "back", None),
     ("Fixture Hold", "calisthenics", "shoulders", None),
@@ -69,7 +68,6 @@ def main() -> int:
         date = (start + datetime.timedelta(days=day)).isoformat()
         send("POST", "/api/body_weight", {"date": date, "weight_kg": round(80 + (day % 40) / 10, 1)})
 
-    # Every tenth Workout shares its date with the previous one, so page boundaries fall inside a day.
     day = 0
     for number in range(1, WORKOUT_COUNT + 1):
         if number % 10 != 0:

@@ -1,5 +1,3 @@
-//! Wishlist additions: destinations, retries and validation.
-
 mod common;
 mod wishlist_support;
 

@@ -1,5 +1,3 @@
-//! Bounded recent Sleep Nights, including explicit gaps on Copenhagen wake days.
-
 use chrono::Utc;
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -25,8 +23,6 @@ pub struct SleepNight {
     pub noop: NoopSync<NoopCoverage>,
 }
 
-/// Returns today and the preceding `count - 1` Copenhagen wake days, newest first. The route
-/// validates the bound of 1 through 14 before calling this function.
 pub async fn recent_sleep_nights(pool: &SqlitePool, count: u8) -> Result<RecentSleepNights> {
     let mut day = CalendarDay::of(Utc::now());
     let mut nights = Vec::with_capacity(count as usize);

@@ -14,7 +14,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
-
 internal const val APP_PACKAGE = "com.patrickhaahr.openhome.debug"
 internal const val TIMEOUT_MS = 15_000L
 internal const val ABSENCE_WAIT_MS = 1_500L
@@ -33,7 +32,6 @@ private const val VIBRATION_RECORD_TIMEOUT_MS = 10_000L
 private const val VIBRATION_SETTLE_MS = 2_000L
 private val ANY_TEXT = Pattern.compile(".+", Pattern.DOTALL)
 
-/** Drives the installed app from outside its process, the way the user and Android do. */
 class AppDriver {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     internal val device = UiDevice.getInstance(instrumentation)
@@ -41,11 +39,6 @@ class AppDriver {
     private var clockMovedMillis = 0L
     private var vibrationsBefore = emptySet<String>()
 
-    /**
-     * The app says most things with symbols, keeping the words as their accessibility names, so what
-     * "reads as" something is its text or its description: the way a screen reader would find it.
-     */
-    /** A text field showing what was typed reads as the same words as the row it found, and is not what is meant. */
     private fun findReading(text: String): UiObject2? =
         runCatching { device.findObjects(By.text(text)).firstOrNull { it.className != "android.widget.EditText" } }.getOrNull()
             ?: device.findObject(By.text(text))
@@ -69,22 +62,18 @@ class AppDriver {
     fun assertTextContaining(text: String): UiObject2 =
         checkNotNull(awaitObject(TIMEOUT_MS) { findContaining(text) }) { "Expected text containing \"$text\"" }
 
-    /** Synchronization runs in the background, whenever Android lets its job start. */
     fun assertEventuallyVisible(text: String) {
         checkNotNull(awaitObject(SYNC_TIMEOUT_MS) { findReading(text) }) { "Expected to see \"$text\" eventually" }
     }
 
-    /** Waits for a line that reads as this, however long the text around it. */
     fun assertEventuallyContaining(text: String) {
         checkNotNull(awaitObject(SYNC_TIMEOUT_MS) { findContaining(text) }) {
             "Expected text containing \"$text\" eventually"
         }
     }
 
-    /** The field or control with this description, scrolled into view. */
     fun described(description: String): UiObject2 = findInScroll(By.desc(description))
 
-    /** Text controls can move above the viewport when a preceding result changes height. */
     fun tapScrolledText(text: String) {
         findInScroll(text) { findReading(text) }
         tap(text)
@@ -93,20 +82,17 @@ class AppDriver {
     private fun findInScroll(selector: BySelector): UiObject2 = findInScroll(selector.toString()) { device.findObject(selector) }
 
     private fun findInScroll(name: String, find: () -> UiObject2?): UiObject2 {
-        // In the screen margin: nothing draggable (a hue wheel, a dimmer) lives there to swallow the swipe.
         val x = (SWIPE_MARGIN_DP * instrumentation.targetContext.resources.displayMetrics.density).toInt()
         val high = device.displayHeight * 2 / 3
         val low = device.displayHeight / 3
         repeat(SCROLL_ATTEMPTS + SCROLL_ATTEMPTS / 2) { attempt ->
             device.waitForIdle()
             find()?.let { return it }
-            // Downward first, then back up past where it started.
             if (attempt < SCROLL_ATTEMPTS / 2) device.swipe(x, high, x, low, SWIPE_STEPS) else device.swipe(x, low, x, high, SWIPE_STEPS)
         }
         error("Nothing matching $name; IME shown: ${keyboardShown()}; on screen: ${onScreenNow()}")
     }
 
-    /** A text field whose description labels it, scrolled into view. */
     private fun describedField(description: String): UiObject2 {
         described(description)
         return checkNotNull(
@@ -131,13 +117,11 @@ class AppDriver {
         tapDescription(description)
     }
 
-    /** Compose can expose the label below the control's enabled/disabled accessibility node, or on it. */
     fun assertButtonEnabled(description: String, expected: Boolean) {
         val label = described(description)
         assertEquals("$description enabled", expected, label.isEnabled && label.parent?.isEnabled != false)
     }
 
-    /** The described node must itself be the toggle: any other node reads as unchecked whatever the screen shows. */
     fun assertChecked(description: String, expected: Boolean) {
         described(description)
         assertTrue(
@@ -146,7 +130,6 @@ class AppDriver {
         )
     }
 
-    /** A Compose Switch has children, so it carries its label on a child node and its state on itself. */
     fun assertSwitchedOn(description: String, expected: Boolean) {
         described(description)
         assertTrue(
@@ -155,21 +138,15 @@ class AppDriver {
         )
     }
 
-    /** Scrolls the current list, either way, until a button or line reading this can be tapped. */
     fun tapBelow(text: String) {
         findInScroll(text) { findReading(text) }
         tap(text)
     }
 
-    /** Scrolls the current list until this line is on screen. */
     fun assertVisibleBelow(text: String) {
         findInScroll(text) { findReading(text) }
     }
 
-    /**
-     * Exactly [expected] of the names in [among] end up on screen; the rest have been filtered away.
-     * A filter's result arrives from storage in its own time, so nothing about idleness says it has yet.
-     */
     fun assertExercisesShown(vararg expected: String, among: List<String>) {
         device.waitForIdle()
         SystemClock.sleep(SETTLE_MS)
@@ -183,23 +160,15 @@ class AppDriver {
         assertEquals(wanted, shown)
     }
 
-    /** Moves the logging focus; the Exercise's rows are then what the screen shows. */
     fun goToExercise(name: String) {
         tapScrolledTo("Go to $name")
     }
 
-    /** What the Exercise's chip says, wherever logging has left the list scrolled. */
     fun assertExerciseProgress(name: String, progress: String) {
         described("Go to $name")
         assertVisible("$name $progress")
     }
 
-    /**
-     * Exactly the Exercises the Active Workout holds, in the order the screen offers them. Adding or removing
-     * an Exercise animates the chip row, so the old chips can still be there, or nodes replaced under a read,
-     * for a while. It waits until two reads in a row show the expected order, which is the settled screen, and
-     * otherwise fails with the last order read.
-     */
     fun assertExerciseOrder(vararg expected: String) {
         described("Go to ${expected.first()}")
         val wanted = expected.toList()
@@ -212,7 +181,6 @@ class AppDriver {
         assertEquals(wanted, shown)
     }
 
-    /** One read of the chips; null when the screen re-laid out under it, which a later read replaces. */
     private fun exerciseOrderOnScreen(): List<String>? {
         device.waitForIdle()
         return try {
@@ -225,7 +193,6 @@ class AppDriver {
         }
     }
 
-    /** Two taps as a hurried thumb gives them: long enough apart for the screen to have changed under it. */
     fun doubleTapDescription(description: String) {
         doubleTap(described(description))
     }
@@ -243,11 +210,6 @@ class AppDriver {
         device.click(center.x, center.y)
     }
 
-    /**
-     * Closes the soft keyboard if one is up, and does nothing else: Back with no keyboard would leave the
-     * screen. A tap that focuses a field raises it a moment later, so it is given the absence wait to appear.
-     * While it is up, a list's fixed swipes can start on the keyboard and never scroll.
-     */
     fun dismissKeyboardIfShown() {
         device.waitForIdle()
         val deadline = SystemClock.uptimeMillis() + ABSENCE_WAIT_MS
@@ -272,7 +234,6 @@ class AppDriver {
         assertNull("Did not expect text containing \"$fragment\"", awaitObject(ABSENCE_WAIT_MS) { findContaining(fragment) })
     }
 
-    /** Waits for a screen element to leave, so what is asserted next is the screen that replaced it. */
     fun awaitGone(text: String) {
         check(awaitUntil(TIMEOUT_MS) { findReading(text) == null }) { "Still showing \"$text\"" }
     }
@@ -299,7 +260,6 @@ class AppDriver {
         tapWhenSettled(text) { findContaining(text) }
     }
 
-    /** For asserting that something does not happen, given time it would need if it did. */
     fun sleepFor(millis: Long) {
         SystemClock.sleep(millis)
     }
@@ -308,7 +268,6 @@ class AppDriver {
         tapWhenSettled(description) { device.findObject(By.desc(description)) }
     }
 
-    /** The app ignores taps until a destination's transition ends; recomposition can replace the node. */
     private fun tapWhenSettled(name: String, find: () -> UiObject2?) {
         repeat(TAP_ATTEMPTS) {
             device.waitForIdle()
@@ -318,16 +277,11 @@ class AppDriver {
                 target.click()
                 return
             } catch (_: StaleObjectException) {
-                // Find it again.
             }
         }
         error("$name kept changing and could not be tapped")
     }
 
-    /**
-     * Flings the screen's list downward until [text] appears; lists can be hundreds of rows long.
-     * A busy device can drop one quick swipe, so only repeated stillness means the list has ended.
-     */
     fun scrollDownUntilVisible(text: String) {
         val x = device.displayWidth / 2
         var visible: List<String>? = null
@@ -340,7 +294,6 @@ class AppDriver {
             device.swipe(x, device.displayHeight * 3 / 4, x, device.displayHeight / 4, FLING_STEPS)
             device.waitForIdle()
         }
-        // A tap during a fling only stops it, so let the list come to rest.
         while (true) {
             val before = visibleTexts()
             SystemClock.sleep(SETTLE_MS)
@@ -348,13 +301,11 @@ class AppDriver {
         }
     }
 
-    /** Every description and text the app shows right now, for a failure to explain itself. */
     private fun onScreenNow(): String =
         runCatching {
             device.findObjects(By.pkg(APP_PACKAGE)).mapNotNull { it.contentDescription?.takeIf(String::isNotEmpty) ?: it.text?.takeIf(String::isNotEmpty) }
         }.getOrElse { listOf("unreadable: $it") }.toString()
 
-    /** Null while the list is still moving and its nodes are being replaced. */
     private fun visibleTexts(): List<String>? =
         try {
             device.findObjects(By.pkg(APP_PACKAGE).text(ANY_TEXT)).map { it.text }
@@ -374,7 +325,6 @@ class AppDriver {
 
     internal fun hasObject(text: String) = findReading(text) != null
 
-    /** Moves the device's real clock, the one the stored deadline and Android's alarms both go by. */
     fun moveClockForward(seconds: Long) {
         if (automaticTimeSetting == null) {
             automaticTimeSetting = device.executeShellCommand("settings get global auto_time").trim()
@@ -385,7 +335,6 @@ class AppDriver {
         clockMovedMillis += millis
     }
 
-    /** Gives the device back the time it would have had; time that really passed still counts. */
     fun restoreClock() {
         val setting = automaticTimeSetting ?: return
         device.executeShellCommand("cmd alarm set-time ${System.currentTimeMillis() - clockMovedMillis}")
@@ -394,15 +343,10 @@ class AppDriver {
         automaticTimeSetting = null
     }
 
-    /** From here on, [assertVibrationsPlayed] counts. Android's record outlives tests and clearing the app. */
     fun startCountingVibrations() {
         vibrationsBefore = vibrationsOnRecord()
     }
 
-    /**
-     * Exactly [expected] vibrations by Android's own record: played to the end, not refused by its
-     * background rules. A vibration is recorded when it ends, so more time is given for one to appear.
-     */
     fun assertVibrationsPlayed(expected: Int) {
         val deadline = SystemClock.uptimeMillis() + VIBRATION_RECORD_TIMEOUT_MS
         while ((vibrationsOnRecord() - vibrationsBefore).size < expected && SystemClock.uptimeMillis() < deadline) {

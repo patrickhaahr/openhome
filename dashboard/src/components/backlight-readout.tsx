@@ -8,7 +8,6 @@ import {
 
 type Status = Extract<BacklightRead, { state: "available" }>["status"]
 
-/** The screen-reader record of the Backlight: live message, state list and the readback caveats. */
 export function BacklightReadout({
   status,
   observed,

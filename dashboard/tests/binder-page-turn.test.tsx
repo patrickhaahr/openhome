@@ -189,7 +189,6 @@ async function holdAndLift(target: Element, at: number): Promise<void> {
   await pointer(target, "pointerup", at)
 }
 
-// A browser follows pointerup on a button with click in the same task; dispatched pointer events do not, so the test clicks.
 async function lift(target: HTMLElement, at: number): Promise<void> {
   await act(async () => {
     dispatchPointer(target, "pointerup", at)

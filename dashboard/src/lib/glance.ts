@@ -3,20 +3,13 @@ import { getProgress } from "./exercise-progress.functions"
 import type { RecoveryDay } from "./training"
 import { getRecoveryToday } from "./training.functions"
 
-/** Quiet lines Home draws behind the featured ones; Axum orders them most recent first. */
 const quietLines = 2
 
-/**
- * Exercises Home names in colour, matched by name. Unmatched slots go to the biggest gains,
- * so a renamed or skipped exercise never leaves the chart without colour.
- */
 const featuredNames = ["back row", "pull-up", "chest press", "dip"] as const
 
-/** The last four weeks of exercise progress, only lines with a trend to draw. */
 export type ProgressGlance = {
   readonly from: string
   readonly to: string
-  /** Up to four lines drawn in colour and named in the legend. */
   readonly featured: readonly ChartedLine[]
   readonly others: readonly ChartedLine[]
 }
@@ -41,10 +34,6 @@ function feature(lines: readonly ChartedLine[]): ChartedLine[] {
   return [...named, ...rest].slice(0, featuredNames.length)
 }
 
-/**
- * Home's live values, each deferred and independent, so no read delays the clock or the
- * controls. `null` means the value could not be read, never "empty".
- */
 export type Glance = {
   readonly progress: Promise<ProgressGlance | null>
   readonly recovery: Promise<RecoveryDay | null>

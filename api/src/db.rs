@@ -4,7 +4,6 @@ use std::time::Duration;
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
-/// Opens a SQLite pool with the settings shared by `app.db`, `noop.db` and `food.db`.
 pub async fn connect_sqlite(url: &str) -> anyhow::Result<SqlitePool> {
     let options = SqliteConnectOptions::from_str(url)?
         .create_if_missing(true)
@@ -17,9 +16,6 @@ pub async fn connect_sqlite(url: &str) -> anyhow::Result<SqlitePool> {
     Ok(pool)
 }
 
-/// The URL of a database kept beside the main one: `override_url` when set, otherwise
-/// `database_url` with its file name swapped to `file_name` (query parameters are kept). `None`
-/// when `database_url` is not a SQLite file URL or already names `file_name`.
 #[must_use]
 pub fn sibling_db_url(
     database_url: &str,

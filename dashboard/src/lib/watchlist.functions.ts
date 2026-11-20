@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start"
 import { setResponseHeader } from "@tanstack/react-start/server"
 import { mediaSearch, watchlistCommand, type WatchlistState } from "./watchlist"
 
-/** Household-visible read through authenticated Axum, with credentials held by Start. */
 export const getWatchlists = createServerFn({ method: "GET" }).handler(
   async () => {
     setResponseHeader("Cache-Control", "no-store")
@@ -12,7 +11,6 @@ export const getWatchlists = createServerFn({ method: "GET" }).handler(
   }
 )
 
-/** Explicit-owner writes use the same Axum rules and receipts as MCP. */
 export const mutateWatchlist = createServerFn({ method: "POST" })
   .validator(watchlistCommand)
   .handler(async ({ data }) => {
@@ -22,7 +20,6 @@ export const mutateWatchlist = createServerFn({ method: "POST" })
     return writeWatchlist(data)
   })
 
-/** A dropped RPC keeps recovery reachable within the focused view. */
 export async function loadWatchlists(): Promise<WatchlistState> {
   try {
     return await getWatchlists()
@@ -31,7 +28,6 @@ export async function loadWatchlists(): Promise<WatchlistState> {
   }
 }
 
-/** Deliberate provider lookup behind Start's server boundary. */
 export const searchWatchlist = createServerFn({ method: "GET" })
   .validator(mediaSearch)
   .handler(async ({ data }) => {

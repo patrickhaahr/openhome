@@ -1,4 +1,3 @@
-/* Home: the clock and the sky on the left, the body in the middle, keys on the right. */
 @theme inline {
   --color-glance-4: light-dark(oklch(0.56 0.11 190), oklch(0.8 0.11 190));
   --text-clock-time: clamp(6rem, 1rem + 15.5vw, 15rem);

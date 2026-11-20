@@ -1,11 +1,9 @@
 import { paginate } from "./binder"
 
-/** Forward lifts the right page over the spine to the next spread; back lifts the left page to the previous one. */
 export type TurnDirection = "forward" | "back"
 
 export type TurnOutcome = "complete" | "cancel"
 
-/** The spread a turn lands on, relative to the one it starts from. */
 export const turnStep = { forward: 1, back: -1 } as const satisfies Record<
   TurnDirection,
   number
@@ -13,22 +11,11 @@ export const turnStep = { forward: 1, back: -1 } as const satisfies Record<
 
 type Sample = { readonly x: number; readonly time: number }
 
-/**
- * What a press can do: a tap on an outer pocket column turns toward that `edge`, and a drag turns
- * whichever way it moves, its `reach` being how far the pointer travels to lay the page over.
- */
 export type Grip = {
   readonly edge: TurnDirection | undefined
   readonly reach: Readonly<Record<TurnDirection, number | undefined>>
 }
 
-/**
- * One gesture on the spread. A press may still be a tap; moving sideways past the slop makes it a
- * drag that follows the pointer toward a spread that exists, and any other move a refused drag that
- * turns nothing. Releasing settles a drag, and a tap on an edge away from a pocket turns the page. A settled
- * completion leaves the page turned until the next spread replaces this one; every other phase ends
- * back at idle.
- */
 export type Turn =
   | { readonly phase: "idle" }
   | {
@@ -87,19 +74,14 @@ export type TurnEvent =
 
 export const idle: Turn = { phase: "idle" }
 
-/** How far a press may wander, in CSS pixels, and still be a tap. */
 export const tapSlop = 10
 
-/** A release this fast toward completion, in CSS pixels per millisecond, finishes the turn wherever it is. */
 export const flickSpeed = 0.5
 
-/** A pointer held still this long, in milliseconds, before release has no speed left. */
 export const restAfter = 100
 
-/** How long a released page takes to land or spring back, in milliseconds. */
 export const settleDuration = 300
 
-/** Past the midpoint the page falls forward; a flick either way overrides it. */
 export function outcomeOf(progress: number, velocity: number): TurnOutcome {
   if (velocity >= flickSpeed) return "complete"
 
@@ -108,10 +90,6 @@ export function outcomeOf(progress: number, velocity: number): TurnOutcome {
   return progress >= 0.5 ? "complete" : "cancel"
 }
 
-/**
- * What a press at `x` can do. Only a spread that exists can be turned to. A drag lays the page over
- * at least half the spread, so one pressed near the spine still turns gradually.
- */
 export function grip(
   box: { readonly left: number; readonly right: number },
   x: number,
@@ -134,10 +112,8 @@ export function grip(
   }
 }
 
-/** A swipe needs this much sideways travel, in CSS pixels, and more sideways than up or down. */
 export const swipeDistance = 48
 
-/** Which neighbour a released swipe steps to: right to left is the next, left to right the previous. */
 export function swipeStep(dx: number, dy: number): -1 | 0 | 1 {
   if (Math.abs(dx) < swipeDistance || Math.abs(dx) <= Math.abs(dy)) return 0
 
@@ -282,10 +258,8 @@ export function nextTurn(turn: Turn, event: TurnEvent): Turn {
   }
 }
 
-/** One page as numbered in the whole Binder, from 1. */
 export type Sheet<T> = { readonly number: number; readonly entries: T[] }
 
-/** The two pages lying open, and while one turns, the page on its back and the page it uncovers. */
 export type Opening<T> = {
   readonly left: Sheet<T>
   readonly right: Sheet<T>
@@ -296,10 +270,6 @@ export type Opening<T> = {
   }
 }
 
-/**
- * What lies open on spread `index`. Turning forward lifts the right page, which lands as the next
- * spread's left page and uncovers its right; turning back mirrors that.
- */
 export function opening<T>(
   entries: readonly T[],
   index: number,

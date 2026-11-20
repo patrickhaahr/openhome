@@ -1,6 +1,3 @@
-//! Household-shared Important Dates. Nobody owns a date; it tags the Household Users it
-//! concerns (none, one or several). Axum computes every figure for a Europe/Copenhagen day.
-
 pub mod figures;
 
 use chrono::NaiveDate;
@@ -25,7 +22,6 @@ pub enum ImportantDateError {
 
 type Result<T> = std::result::Result<T, ImportantDateError>;
 
-/// `since` counts up from the date; `yearly` counts down to its next anniversary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, sqlx::Type)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(rename_all = "lowercase")]
@@ -34,26 +30,19 @@ pub enum DateKind {
     Yearly,
 }
 
-/// A stored date with its figures for one day. Both figures are given for either kind, so a
-/// view can lead with the one its kind names: `elapsed` for since, `next` for yearly.
 #[derive(Debug, Serialize)]
 pub struct ImportantDate {
     pub id: String,
     pub title: String,
     pub date: NaiveDate,
     pub kind: DateKind,
-    /// Tagged Household User IDs, ordered by name; empty when the date concerns no member.
     pub person_ids: Vec<String>,
     pub show_when_idle: bool,
-    /// Null while the date is still ahead of the day.
     pub elapsed: Option<Elapsed>,
     pub next: Next,
-    /// Today's celebration, independent of idle visibility; idle reads filter `show_when_idle`.
     pub milestone: Option<Milestone>,
 }
 
-/// Every date's figures for one Europe/Copenhagen day: since dates first (oldest first), then
-/// yearly dates by their next occurrence.
 #[derive(Debug, Serialize)]
 pub struct ImportantDates {
     pub on: NaiveDate,
@@ -91,7 +80,6 @@ impl Row {
     }
 }
 
-/// Optional filters and the day the figures are for (today in Europe/Copenhagen when absent).
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DatesQuery {
@@ -99,7 +87,6 @@ pub struct DatesQuery {
     pub show_when_idle: Option<bool>,
 }
 
-/// The day the figures are for.
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OnQuery {
@@ -112,7 +99,6 @@ pub struct AddDate {
     pub title: String,
     pub date: String,
     pub kind: DateKind,
-    /// Required, even when empty: tags are never inferred.
     pub person_ids: Vec<String>,
     #[serde(default)]
     pub show_when_idle: bool,
@@ -125,7 +111,6 @@ pub struct Addition {
     pub replayed: bool,
 }
 
-/// Omitted fields keep their value; none of them can be cleared with null.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditDate {
@@ -177,7 +162,6 @@ fn parse_day(value: &str, field: &str) -> Result<NaiveDate> {
     }
 }
 
-/// The requested day, or today in Europe/Copenhagen.
 pub fn resolve_on(on: Option<&str>) -> Result<NaiveDate> {
     on.map_or_else(
         || Ok(figures::day_at(chrono::Utc::now())),
@@ -185,7 +169,6 @@ pub fn resolve_on(on: Option<&str>) -> Result<NaiveDate> {
     )
 }
 
-/// Validate explicit tags: each must be a configured Household User, listed once.
 async fn people(db: &SqlitePool, ids: &[String]) -> Result<Vec<String>> {
     let mut sorted: Vec<String> = ids.iter().map(|id| id.trim().to_owned()).collect();
     sorted.sort();
@@ -222,7 +205,6 @@ async fn rows(db: &SqlitePool, id: Option<&str>) -> Result<Vec<Row>> {
     .await?)
 }
 
-/// All dates with their figures for `query.on`, optionally only those shown when idle.
 pub async fn dates(db: &SqlitePool, query: &DatesQuery) -> Result<ImportantDates> {
     let on = resolve_on(query.on.as_deref())?;
     let mut dates = rows(db, None)
@@ -248,7 +230,6 @@ pub async fn dates(db: &SqlitePool, query: &DatesQuery) -> Result<ImportantDates
     Ok(ImportantDates { on, dates })
 }
 
-/// One date with its figures for `on`.
 pub async fn date(db: &SqlitePool, id: &str, on: NaiveDate) -> Result<ImportantDate> {
     rows(db, Some(id))
         .await?
@@ -296,7 +277,6 @@ async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<AdditionRe
     .await?)
 }
 
-/// Store a date, its tags and an immutable receipt together. Rejected additions consume no ID.
 pub async fn add_date(db: &SqlitePool, mut request: AddDate) -> Result<Addition> {
     request.title = text(&request.title, "title", 200)?;
     request.request_id = text(&request.request_id, "request_id", 128)?;
@@ -308,14 +288,12 @@ pub async fn add_date(db: &SqlitePool, mut request: AddDate) -> Result<Addition>
         .collect();
     tagged.sort();
     let receipt_people = tagged.join(",");
-    // Replay first, so a since-removed Household User cannot fail an accepted retry.
     if let Some(receipt) = previous(db, &request.request_id).await? {
         return receipt.replay(db, &request, &receipt_people).await;
     }
     let tagged = people(db, &request.person_ids).await?;
     let id = Uuid::new_v4().to_string();
     let mut transaction = db.begin().await?;
-    // Claim first to serialize simultaneous retries. The receipt has no cascading foreign key.
     let claimed = sqlx::query!(
         "INSERT INTO important_date_addition_receipts (request_id, date_id, title, date, kind, person_ids, show_when_idle) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
         request.request_id, id, request.title, request.date, request.kind, receipt_people, request.show_when_idle)
@@ -368,7 +346,6 @@ fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
     }
 }
 
-/// Apply the supplied fields together; replacing `person_ids` replaces every tag.
 pub async fn edit_date(db: &SqlitePool, id: &str, request: EditDate) -> Result<ImportantDate> {
     let title = required(request.title, "title")?
         .map(|value| text(&value, "title", 200))
@@ -412,7 +389,6 @@ pub async fn edit_date(db: &SqlitePool, id: &str, request: EditDate) -> Result<I
     date(db, id, resolve_on(None)?).await
 }
 
-/// Remove a date and its tags. Its accepted addition receipt stays retired.
 pub async fn remove_date(db: &SqlitePool, id: &str) -> Result<()> {
     let removed = sqlx::query!("DELETE FROM important_dates WHERE id = ?", id)
         .execute(db)

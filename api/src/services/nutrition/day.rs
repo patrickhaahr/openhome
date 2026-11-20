@@ -1,8 +1,3 @@
-//! Nutrition Day: one Europe/Copenhagen calendar day's Meal Logs and the totals of every
-//! nutrient eaten and taken, summed from the Portions' and Supplement Doses' snapshots and split
-//! into food and supplement shares, with the compounds and Supplement Doses taken, the NOVA 1
-//! share and the micronutrient panel.
-
 use std::collections::BTreeMap;
 
 use serde::Serialize;
@@ -21,20 +16,15 @@ use super::supplements::{self, Compound, DoseSummary, StoredDose};
 use super::targets::{self, Targets};
 use crate::services::training::calendar::{self, CalendarDay};
 
-/// The total of one nutrient over the day's Portions and Supplement Doses.
 #[derive(Debug, Serialize)]
 pub struct NutrientTotal {
     pub key: String,
-    /// Null for a value whose parameter the current dataset lacks: one past Portions or a
-    /// Supplement's label carry.
     pub name_da: Option<String>,
     pub name_en: Option<String>,
     pub group: Option<ParameterGroup>,
     pub unit: Option<String>,
     #[serde(flatten)]
     pub total: Total,
-    /// The supplement share by chemical form, for parameters whose Upper Limits differ by form;
-    /// left out when no dose names a form.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub supplement_forms: Vec<FormAmount>,
 }
@@ -43,34 +33,20 @@ pub struct NutrientTotal {
 pub struct NutritionDay {
     pub day: String,
     pub time_zone: &'static str,
-    /// Local midnight at the start of the day and the next one; a day can last 23 or 25 hours.
     pub day_start: String,
     pub day_end: String,
-    /// Energy and macronutrients.
     pub totals: KeyNutrients<Total>,
-    /// Calorie Target, Macro Targets and what was eaten against them, or why there are none.
     pub targets: Targets,
-    /// Vitamins and minerals against their Recommended Intakes and Upper Limits, or why the
-    /// panel is unavailable.
     pub micronutrients: Micronutrients,
-    /// Every per-100 g parameter in database order.
     pub nutrients: Vec<NutrientTotal>,
-    /// Compounds without a database parameter, with the amounts taken, in the order first taken.
     pub compounds: Vec<Compound>,
-    /// Each Supplement's doses added together, in the order first taken.
     pub supplement_doses: Vec<DoseSummary>,
-    /// The share of classified energy from NOVA Class 1 Portions.
     pub nova: NovaShare,
-    /// In time order.
     pub meal_logs: Vec<MealLog>,
     pub source: Source,
-    /// Open Food Facts, to credit beside Product Portions' label values.
     pub label_source: LabelSource,
 }
 
-/// The day's Meal Logs and the totals of every parameter, with units (unknown is null), and its
-/// targets; reading a day may fix its week's target record (`targets`), with `today` deciding
-/// whether the week has started.
 pub async fn nutrition_day(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -101,8 +77,6 @@ pub async fn nutrition_day(
             }
         })
         .collect();
-    // Keep values whose parameter the current dataset does not define, by key: from past
-    // Portions of a retired parameter, or from Supplement labels.
     let mut unlisted: BTreeMap<&str, &str> = BTreeMap::new();
     let portion_values = portions.iter().flat_map(|portion| {
         portion

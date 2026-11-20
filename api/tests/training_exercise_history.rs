@@ -1,5 +1,3 @@
-//! Exact Set history for one Exercise through the authenticated training API.
-
 mod common;
 
 use axum::Router;

@@ -1,13 +1,11 @@
 import { cookieValue, rememberedCookie } from "./nav-layout"
 
-/** The three currencies a Card Value and a Binder Value are shown in. */
 export const currencies = ["DKK", "EUR", "USD"] as const
 
 export type Currency = (typeof currencies)[number]
 
 export const currencyCookieName = "openhome-currency"
 
-/** Anything but an explicit "EUR" or "USD" is DKK, the household's currency. */
 export function parseCurrency(value: string | undefined): Currency {
   return value === "EUR" || value === "USD" ? value : "DKK"
 }
@@ -16,7 +14,6 @@ export function currencyFromCookies(cookies: string): Currency {
   return parseCurrency(cookieValue(cookies, currencyCookieName))
 }
 
-/** The `document.cookie` assignment that remembers a currency for a year. */
 export function currencyCookie(currency: Currency): string {
   return rememberedCookie(currencyCookieName, currency)
 }

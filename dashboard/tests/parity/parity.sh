@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Serves master's and the working tree's Dashboard as production builds against one synthetic API,
-# then captures and diffs every scenario. Usage: parity.sh [scenario-id-substring ...]
 set -euo pipefail
 repo="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/openhome-parity"
@@ -17,7 +15,6 @@ mkdir -p "$cache" "$run_dir/logs"
 exec 9>"$branch.lock"
 flock -n 9 || { echo "Another parity run is using this checkout" >&2; exit 1; }
 
-# The production image builds from exactly these paths (dashboard/.dockerignore).
 sources=(package.json bun.lock vite.config.ts tsconfig.json src public)
 
 build() {
@@ -50,7 +47,6 @@ stop() {
 trap stop EXIT
 trap 'exit 130' INT TERM
 
-# An empty token keeps the preview on its loopback TMDB catalogue, never the live service.
 api_port="$(free_port)"
 OPENHOME_PREVIEW_API_PORT="$api_port" TMDB_READ_ACCESS_TOKEN='' \
   setsid "$repo/api/target/debug/examples/dashboard_preview" >"$run_dir/logs/api.log" 2>&1 </dev/null &
@@ -63,7 +59,6 @@ serve() {
   pgids+=($!)
 }
 
-# The preview prints its URL only after seeding the household through its own routes.
 for _ in $(seq 1 300); do
   grep -q "^http://" "$run_dir/logs/api.log" && break
   kill -0 "${pgids[0]}" 2>/dev/null || { echo "Synthetic API exited; see $run_dir/logs/api.log" >&2; exit 1; }
@@ -82,7 +77,6 @@ done
 
 branch_sha="$(git -C "$repo" rev-parse --short HEAD)"
 [ -z "$(git -C "$repo" status --porcelain -- dashboard)" ] || branch_sha="$branch_sha + uncommitted changes"
-# Keep the five newest runs; find lists real directories only, never the `latest` link.
 find "$repo/dashboard/.parity" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5 | xargs -r rm -rf
 ln -sfn "$run" "$repo/dashboard/.parity/latest"
 

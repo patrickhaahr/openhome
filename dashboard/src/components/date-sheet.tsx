@@ -34,7 +34,6 @@ import type { HouseholdUser } from "@/lib/wishlist"
 
 type Save = (command: ImportantDateCommand, saved: string) => Promise<boolean>
 
-/** A quiet mark for how a date counts; the word is kept for assistive technology. */
 export function DateKindGlyph({
   kind,
   size = 18,
@@ -69,7 +68,6 @@ const figure = cva(
   }
 )
 
-/** Milestones lead the Dates view; ordinary figures wrap only between their elapsed parts. */
 export function DateFigure({
   date,
   large = false,
@@ -110,7 +108,6 @@ export function DateFigure({
   )
 }
 
-/** One switch row; the whole row is the key. */
 export function IdleSwitch({
   checked,
   disabled,
@@ -162,7 +159,6 @@ const kinds = [
   icon: React.ReactNode
 }>
 
-/** The editable part of a date; tags are always an explicit set. */
 export type DateFields = {
   title: string
   date: string
@@ -171,7 +167,6 @@ export type DateFields = {
   show_when_idle: boolean
 }
 
-/** Title, date, how it counts, who it is about and whether the idle screen shows it. */
 function DateForm({
   owners,
   initial,
@@ -317,9 +312,7 @@ function readPending(): Addition | undefined {
     )
 
     if (parsed.success && parsed.data.action === "add") return parsed.data
-  } catch {
-    /* Private browsing may disable storage. */
-  }
+  } catch {}
 
   return undefined
 }
@@ -328,9 +321,7 @@ function storePending(addition: Addition | undefined): void {
   try {
     if (addition) sessionStorage.setItem(pendingKey, JSON.stringify(addition))
     else sessionStorage.removeItem(pendingKey)
-  } catch {
-    /* The mounted flow keeps its in-memory retry identity. */
-  }
+  } catch {}
 }
 
 function sameFields(a: DateFields, b: DateFields): boolean {
@@ -344,7 +335,6 @@ function sameFields(a: DateFields, b: DateFields): boolean {
   )
 }
 
-/** Add a date; a lost response retried with the same fields keeps its request ID. */
 export function DateAdd({
   owners,
   person,
@@ -396,10 +386,6 @@ export function DateAdd({
   )
 }
 
-/**
- * One date: its live figure large, then when it was and who it is about. The idle switch saves at
- * once; Edit opens the same fields as adding, and Delete asks first.
- */
 export function DateDetail({
   date,
   owners,
@@ -483,7 +469,6 @@ export function DateDetail({
           ))
         )}
       </p>
-      {/* The sheet's title already names the date for assistive technology. */}
       <p className={sheetName} aria-hidden="true">
         {date.title}
       </p>

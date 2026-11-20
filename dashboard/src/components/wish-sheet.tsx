@@ -54,7 +54,6 @@ const artType = cva(
   }
 )
 
-/** The product image with the title as its fallback poster; a failed image reveals the title. */
 export function WishArt({
   title,
   image,
@@ -97,7 +96,6 @@ function host(url: string): string {
   }
 }
 
-/** Everything about one wish, its edit form, and its delete with an inline confirmation. */
 export function WishDetail({
   item,
   list,
@@ -129,7 +127,6 @@ export function WishDetail({
         onSubmit={(event) => {
           event.preventDefault()
 
-          // Only changed fields travel; omitted fields stay as stored.
           void save(
             {
               kind: "edit-item",
@@ -197,7 +194,6 @@ export function WishDetail({
           <span aria-hidden="true">·</span>
           {list.name}
         </p>
-        {/* The sheet's title already names the wish for assistive technology. */}
         <p className={sheetName} aria-hidden="true">
           {item.title}
         </p>

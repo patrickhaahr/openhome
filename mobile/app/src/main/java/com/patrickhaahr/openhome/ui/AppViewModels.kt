@@ -9,7 +9,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.patrickhaahr.openhome.AppContainer
 import com.patrickhaahr.openhome.OpenHomeApplication
 
-/** A ViewModel scoped to the current destination, built from the app's single instances. */
 @Composable
 inline fun <reified VM : ViewModel> appViewModel(crossinline create: (AppContainer) -> VM): VM =
     viewModel(

@@ -56,7 +56,6 @@ async fn classify_food_forwards_classes_and_api_errors_unchanged() {
         (&json!(1693), &json!(1)),
         "{classified}"
     );
-    // Setting the same class again is idempotent and reads the same.
     assert_eq!(classify(1693, 1).await, classified);
     let food = direct(
         reqwest::Method::GET,

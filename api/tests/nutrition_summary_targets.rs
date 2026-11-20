@@ -1,6 +1,3 @@
-//! The Nutrition Summary targets and range rules, from a real `app.db` and a real `food.db`
-//! imported from a synthetic DTU-shaped workbook served by `wiremock`.
-
 mod common;
 #[path = "nutrition_support/summary.rs"]
 mod support;
@@ -13,7 +10,6 @@ use support::{Api, CHICKEN, day_from_today};
 #[tokio::test]
 async fn targets_are_the_mean_of_each_days_target_and_reading_fixes_past_weeks() {
     let api = Api::start().await;
-    // A 30-year-old man of 180 cm at 80 kg: BMR 1,780 kcal and a 2,670 kcal prior.
     api.fitness(
         Method::PATCH,
         "/api/profile",
@@ -21,7 +17,6 @@ async fn targets_are_the_mean_of_each_days_target_and_reading_fixes_past_weeks()
     )
     .await;
     api.weigh("2026-03-01", 80.0).await;
-    // 2,000 kcal a day in the week of 6 April: 1,333.3 g of chicken with 280 g protein.
     for day in 6..=12 {
         api.eat(&format!("2026-04-{day:02}"), &[(CHICKEN, 2000.0 / 1.5)])
             .await;
@@ -36,7 +31,6 @@ async fn targets_are_the_mean_of_each_days_target_and_reading_fixes_past_weeks()
     assert_eq!(
         series,
         vec![
-            // The prior less 550 kcal a day for losing 0.5 kg a week.
             json!({
                 "energy": {
                     "eaten_kcal": 2000.0,
@@ -45,7 +39,6 @@ async fn targets_are_the_mean_of_each_days_target_and_reading_fixes_past_weeks()
                 },
                 "protein": {"eaten_g": 280.0, "target_g": 176.0},
             }),
-            // Seven logged days blend a 2,000 kcal data estimate half and half with the prior.
             json!({
                 "energy": {
                     "eaten_kcal": null,
@@ -57,8 +50,6 @@ async fn targets_are_the_mean_of_each_days_target_and_reading_fixes_past_weeks()
         ]
     );
 
-    // The summary fixed both weeks' records, so a later backfill into the first week's window
-    // changes neither the Day view nor a second summary.
     api.eat("2026-03-20", &[(CHICKEN, 3000.0)]).await;
     let (status, day) = api
         .send(Method::GET, "/api/nutrition/days/2026-04-08", None)

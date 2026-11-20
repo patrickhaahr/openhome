@@ -1,5 +1,3 @@
-//! Duplicate-safe Workout creation (`request_id`): the contract the Android outbox retries against.
-
 mod common;
 
 use axum::Router;
@@ -81,7 +79,6 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_workout
     let (app, _) = common::test_app_with_pool(db.clone(), None);
     let (status, first) = post(&app, workout(KEY)).await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
-    // The client never saw that answer, and the API goes away with its in-memory state.
     db.close().await;
 
     let db = open_file_database(&path).await;
@@ -177,7 +174,6 @@ async fn an_old_retry_cannot_recreate_a_deleted_workout_or_claim_its_reused_id()
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
-    // SQLite hands the highest id out again, so this Workout takes the deleted one's id.
     let (status, other) = post(&app, workout("phone-workout-2")).await;
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(other["id"], first["id"]);
@@ -188,8 +184,6 @@ async fn an_old_retry_cannot_recreate_a_deleted_workout_or_claim_its_reused_id()
     assert_eq!(list(&app).await.len(), 1);
 }
 
-/// Changed arguments are judged before the cleared target, so a retried Workout whose arguments
-/// no longer match reports that, not its deletion.
 #[tokio::test]
 async fn changed_arguments_are_refused_before_a_deleted_workouts_target() {
     let app = common::test_app().await;

@@ -1,6 +1,3 @@
-//! Products through the nutrition routes: Open Food Facts mocked with `wiremock`, over a real
-//! `app.db` and a real `food.db` imported from a synthetic DTU-shaped workbook.
-
 mod common;
 #[path = "nutrition_support/products.rs"]
 mod support;
@@ -27,7 +24,6 @@ async fn a_lookup_previews_normalised_label_values_with_suggested_foods_and_stor
             "name": "Vanilla Skyr",
             "brand": "Synthetic Dairy",
             "nova_class": 3,
-            // Vocabulary order and units: kJ completed from kcal, micronutrients from grams.
             "label_per_100g": [
                 label("energy_kj", 334.72, "kJ"),
                 label("energy_kcal", 80.0, "kcal"),
@@ -54,7 +50,6 @@ async fn a_lookup_previews_normalised_label_values_with_suggested_foods_and_stor
             "licence": "ODbL",
         })
     );
-    // Nothing was stored: the next lookup asks Open Food Facts again.
     let (_, again) = api.lookup(SKYR).await;
     assert_eq!(again["linked"], false);
 }
@@ -62,7 +57,6 @@ async fn a_lookup_previews_normalised_label_values_with_suggested_foods_and_stor
 #[tokio::test]
 async fn linking_stores_the_product_once_and_a_linked_barcode_skips_open_food_facts() {
     let api = Api::start().await;
-    // One read previews the barcode and one links it; nothing after that.
     api.provider(SKYR, found(&skyr_label()), 2).await;
     let (_, preview) = api.lookup(SKYR).await;
 
@@ -85,7 +79,6 @@ async fn linking_stores_the_product_once_and_a_linked_barcode_skips_open_food_fa
         (&json!(true), &product, &json!([]))
     );
 
-    // A retry replays; the same request_id for another Food conflicts.
     let (status, replay) = api.link(SKYR, 1693, "link-skyr").await;
     assert_eq!(
         (status, &replay["replayed"]),
@@ -95,7 +88,6 @@ async fn linking_stores_the_product_once_and_a_linked_barcode_skips_open_food_fa
     let (status, _) = api.link(SKYR, 907, "link-skyr").await;
     assert_eq!(status, StatusCode::CONFLICT);
 
-    // Re-linking keeps the label values and needs no read.
     let (status, relinked) = api.link(SKYR, 907, "relink-skyr").await;
     assert_eq!(status, StatusCode::OK, "{relinked}");
     assert_eq!(relinked["replayed"], false);
@@ -112,8 +104,6 @@ async fn linking_stores_the_product_once_and_a_linked_barcode_skips_open_food_fa
     assert_eq!(api.provider_reads().await, 2);
 }
 
-/// A receipt that predates the stored original result (migration 0025) refuses its retry instead
-/// of replaying a fabricated one; the Product stays stored, and the client looks it up first.
 #[tokio::test]
 async fn a_legacy_receipt_directs_the_client_to_look_the_product_up_first() {
     let api = Api::start().await;
@@ -146,10 +136,8 @@ async fn energy_salt_and_alcohol_are_normalised_from_whatever_the_label_gives() 
         "product_name": "Sparkling Apple",
         "nova_group": "4",
         "nutriments": {
-            // kJ only, under the generic key; sodium only; alcohol in % vol.
             "energy_100g": 1000, "sodium_100g": 0.2, "alcohol_100g": 5,
             "fiber_100g": "1.2", "iron_100g": 0.0021, "vitamin-a_100g": 0.00006,
-            // Implausible or unusable values are unknown, never guessed.
             "sugars_100g": 140, "fat_100g": -1, "proteins_100g": "n/a",
         },
     });
@@ -191,7 +179,6 @@ async fn unknown_barcodes_are_not_found_and_malformed_barcodes_never_reach_open_
         2,
     )
     .await;
-    // A 12-digit UPC-A is read as its 13-digit GTIN.
     api.provider(
         "0012345678905",
         ResponseTemplate::new(200).set_body_json(json!({"code": "0012345678905", "status": 0})),
@@ -241,7 +228,6 @@ async fn rate_limits_and_failures_are_unavailable_once_without_upstream_text() {
         ResponseTemplate::new(200).set_body_string("upstream detail: <html>"),
         found(&json!({"code": barcodes[3], "product_name": "x".repeat(300 * 1024)})),
     ];
-    // Each failure is read once per request and never retried; the first is also linked.
     for (index, (barcode, template)) in barcodes.into_iter().zip(templates).enumerate() {
         api.provider(barcode, template, if index == 0 { 2 } else { 1 })
             .await;

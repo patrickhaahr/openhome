@@ -52,7 +52,6 @@ async function open(): Promise<void> {
   })
 }
 
-/** Each link's accessible name: its text, with every glyph hidden from assistive technology. */
 function names(selector: string): Array<string | null> {
   const links = [...document.querySelectorAll<HTMLAnchorElement>(selector)]
 
@@ -85,7 +84,6 @@ test("icon tabs keep every word as the accessible name, in the top bar and the s
   expect(shell().dataset.labels).toBe("icons")
   expect(names('[data-slot="topnav"] a')).toEqual(labels)
 
-  // A fresh page load: the shell reads its choices once, as the server does.
   act(() => root.unmount())
   root = createRoot(document)
   document.cookie = "openhome-nav=side; Path=/"

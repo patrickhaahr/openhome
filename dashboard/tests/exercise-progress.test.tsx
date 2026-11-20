@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport runs here too; browser CORS does not apply to Axum calls.
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -47,7 +46,6 @@ afterEach(async () => {
   await fixture.stop()
 })
 
-/** A Training Day `days` before today. */
 function daysAgo(days: number): string {
   const today = Date.parse(`${trainingDayOn(new Date())}T00:00:00Z`)
 
@@ -158,7 +156,6 @@ function legendName(entry: HTMLButtonElement): string {
   )
 }
 
-/** Each legend line's name and whether its line is shown. */
 function legend(): ReadonlyMap<string, boolean> {
   return new Map(
     legendEntries().map((entry) => [
@@ -243,7 +240,6 @@ test("indexes bodyweight reps and holds to their baselines, keeps declines, and 
   expect(container.textContent).toContain("Best set reps · baseline 8 reps on")
   expect(container.textContent).toContain("Latest 6 reps · 75")
   expect(container.textContent).toContain("Latest 1:15 min · 375")
-  // The most recently logged charted line is inspected first.
   expect(observed()).toEqual([
     [`${shortDay(daysAgo(2))} · baseline`, "53.3 kg", "100"],
   ])
@@ -329,7 +325,6 @@ test("compared never-logged and out-of-period exercises get no line until logged
   expect(legend()).toEqual(lines({ Dip: true }))
   await toggleLine("Dip")
 
-  // The comparison comes from the link: the logged exercise, one out of period, one never logged.
   search = {
     compare: [
       await libraryId("Dip"),
@@ -339,7 +334,6 @@ test("compared never-logged and out-of-period exercises get no line until logged
   }
   await render()
 
-  // A line turned off stays off while the compared exercises change.
   expect(legend()).toEqual(lines({ Dip: false }))
   expect(notCharted()).toEqual([
     "Ring DipNot logged in this period",
@@ -392,7 +386,6 @@ test("a compared exercise beyond the first six lines starts off, and a charted l
   }
   await render()
   expect(notCharted()).toEqual(["Ring DipNot logged in this period"])
-  // Charted once the period covers it, as the eighth line; later lines start off until touched.
   await click("12 months")
   expect(legend().get("Ring Dip")).toBe(false)
   await toggleLine("Ring Dip")

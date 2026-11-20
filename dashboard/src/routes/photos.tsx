@@ -4,10 +4,8 @@ import { PhotoGallery } from "@/components/photo-gallery"
 import { getGallery, getWallPage } from "@/lib/photos.functions"
 import { photoSearch, unavailablePhotos } from "@/lib/photos"
 
-/** Albums as cover plates; an album (or all of them) as a wall of photos; one photo full screen. */
 export const Route = createFileRoute("/photos")({
   validateSearch: photoSearch,
-  // The open photo is not a dependency: opening and stepping through photos never reloads.
   loaderDeps: ({ search }) => ({ album: search.album }),
   loader: ({ deps }) =>
     getGallery({ data: deps }).catch(() => ({
@@ -16,7 +14,6 @@ export const Route = createFileRoute("/photos")({
       wall: null,
       onThisDay: null,
     })),
-  // Entering the page or choosing an album always reads again (gcTime 0); staying never does.
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: 0,
   headers: () => ({ "Cache-Control": "no-store" }),

@@ -14,7 +14,6 @@ import { percent } from "@/components/weather-figures"
 import { daylight, type Daylight } from "@/lib/daylight"
 import { useMinute } from "@/lib/use-minute"
 
-/** "sun" follows the sky; "day" and "night" are a household's explicit choice. */
 export type ThemeMode = "sun" | "day" | "night"
 
 const storageKey = "openhome-theme"
@@ -36,10 +35,6 @@ export function useDaylight(): DaylightState {
   return state
 }
 
-/**
- * Applies the theme before first paint: the stored choice, otherwise the phase the server
- * saw. The provider takes over after hydration.
- */
 export function ThemeScript({
   phase,
 }: {
@@ -50,7 +45,6 @@ export function ThemeScript({
   return <script dangerouslySetInnerHTML={{ __html: script }} />
 }
 
-/** One minute clock for the shell: the time, the sun over Copenhagen and the theme it calls for. */
 export function DaylightProvider({
   initialTime,
   children,
@@ -71,13 +65,11 @@ export function DaylightProvider({
 
   useEffect(() => {
     const root = document.documentElement
-    // Hydration renders the server's "sun" first; the stored choice already painted wins.
     const stored = readStoredMode()
 
     const night =
       stored === "night" || (stored === "sun" && sky.phase === "night")
 
-    // The room turns slowly at dusk and dawn; a first render only syncs.
     if (applied.current !== undefined && applied.current !== night) {
       root.classList.add("theme-turning")
       setTimeout(() => root.classList.remove("theme-turning"), 1400)
@@ -95,10 +87,6 @@ export function DaylightProvider({
   return <DaylightContext value={state}>{children}</DaylightContext>
 }
 
-/**
- * The palette for canvases that cannot read CSS tokens. It reads the applied class after
- * hydration, so a stored choice made before this render is respected.
- */
 export function useMapTheme(): "day" | "night" {
   const { mode, sky } = useDaylight()
 
@@ -145,9 +133,7 @@ function storeMode(next: ThemeMode): void {
   try {
     if (next === "sun") localStorage.removeItem(storageKey)
     else localStorage.setItem(storageKey, next)
-  } catch {
-    // Private browsing: the choice cannot be kept, so the theme keeps following the sun.
-  }
+  } catch {}
 
   window.dispatchEvent(new Event(modeChange))
 }
@@ -155,7 +141,6 @@ function storeMode(next: ThemeMode): void {
 const sunPosition = (progress: number): number =>
   Math.min(1, Math.max(0, progress))
 
-/** Where the horizon lies: the top bar's baseline, the tab bar's top edge, or the sidebar's inner edge. */
 type Placement = "bar" | "tabbar" | "rail"
 
 const horizons = {
@@ -169,7 +154,6 @@ const horizons = {
     sun: "top-0 left-(--sun-at) transition-left data-[below=true]:translate-y-2",
     trail: "-top-hair left-0 h-0.5 w-(--sun-at)",
   },
-  // Stood on end: sunrise at the top, sunset at the foot.
   rail: {
     line: "inset-y-6 right-0 w-px",
     sun: "top-(--sun-at) left-0 transition-top data-[below=true]:-translate-x-2",
@@ -180,10 +164,6 @@ const horizons = {
   { line: string; sun: string; trail: string }
 >
 
-/**
- * The shell's baseline, with the sun at its place between sunrise and sunset. At night the
- * sun waits below the line as a hollow ring.
- */
 export function Horizon({
   placement,
 }: {
@@ -225,7 +205,6 @@ const modes: Record<
   night: { next: "sun", label: "Night theme", Icon: MoonIcon },
 }
 
-/** Cycles follow-the-sun, day and night. */
 export function ThemeToggle(): React.JSX.Element {
   const { mode, setMode } = useDaylight()
   const { next, label, Icon } = modes[mode]
@@ -260,15 +239,10 @@ const trace = {
   vectorEffect: "non-scaling-stroke",
 } as const
 
-/**
- * Today's arc: sunrise to sunset as a curve, the sun on it now. At night the sun waits below
- * the line as a hollow ring at the side it will rise from or has set on.
- */
 export function SunDay(): React.JSX.Element {
   const { sky } = useDaylight()
   const below = sky.progress < 0 || sky.progress > 1
   const x = below ? (sky.progress > 1 ? 1 : 0) : sky.progress
-  // A half-sine arc reads as a sky path; the dot follows the same curve.
   const y = below ? 1.18 : 1 - Math.sin(x * Math.PI) * 0.86
 
   const points = Array.from({ length: 49 }, (_, index) => {

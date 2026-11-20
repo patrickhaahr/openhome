@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { once } from "node:events"
 import {
   createServer,
@@ -38,7 +37,6 @@ import type { WatchlistMutation, MediaSearchResult } from "@/lib/watchlist"
 import { startAxumFixture } from "./support/axum-fixture"
 import { button, field, settle, sheet, type } from "./support/lists-dom"
 
-// TMDB is the fixture's loopback stub: it knows "A Quiet Orbit" and "The Lighthouse Journey".
 let fixture: Awaited<ReturnType<typeof startAxumFixture>>
 
 let root: Root
@@ -159,7 +157,6 @@ async function click(
   await press(button(name, scope))
 }
 
-/** Open the add plate and search; the lookup waits for typing to pause. */
 async function find(query: string, expected: string | RegExp): Promise<void> {
   await click("Add a title", container)
   await type(field("Find a movie or series", sheet()), query)
@@ -167,7 +164,6 @@ async function find(query: string, expected: string | RegExp): Promise<void> {
   expect(sheet().textContent).toMatch(expected)
 }
 
-/** Wait out the search debounce, then the lookup it started. */
 async function debounced(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 450))

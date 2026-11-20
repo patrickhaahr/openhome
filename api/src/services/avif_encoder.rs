@@ -1,14 +1,3 @@
-//! A shared AVIF encoder: JPEG or PNG bytes in, AVIF bytes and dimensions out, for features that
-//! store images (`meal_photos` today). It owns the decoding, colour handling and encoding, never
-//! the storage, sizes, quality or error wording of its callers.
-//!
-//! A source is decoded within [`MAX_SIDE`] and [`MAX_DECODE_BYTES`], turned upright from its EXIF
-//! orientation and, when it carries an RGB or gray ICC profile, converted to sRGB (untagged
-//! sources are treated as sRGB). Re-encoding from pixels drops every piece of metadata and the
-//! alpha channel. Encoding uses libavif's aom encoder on one thread, on a blocking worker outside
-//! the async runtime, and one encode at a time across the whole process, so the other services
-//! on the host keep their CPU.
-
 use std::io::Cursor;
 use std::sync::{Arc, LazyLock};
 
@@ -26,12 +15,9 @@ use tokio::sync::Semaphore;
 )]
 mod native;
 
-/// The longest side a source may have before it is decoded, against decompression bombs.
 pub const MAX_SIDE: u32 = 12_000;
-/// The most memory one decode may allocate: a 48-megapixel image as RGBA, with headroom.
 const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
-/// One permit for the whole process: a Raspberry Pi has no CPU to spare for parallel encodes.
 static ENCODES: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(1)));
 
 #[derive(Debug, thiserror::Error)]
@@ -44,7 +30,6 @@ pub enum EncodeError {
     Encode,
 }
 
-/// JPEG or PNG bytes, recognised by their signature rather than a declared type, not yet decoded.
 pub struct Source {
     bytes: Vec<u8>,
     format: ImageFormat,
@@ -68,32 +53,23 @@ impl Source {
     }
 }
 
-/// Pixel dimensions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Size {
     pub width: u32,
     pub height: u32,
 }
 
-/// The caller's choice of encoder effort and fidelity.
 #[derive(Clone, Copy, Debug)]
 pub struct Settings {
-    /// aom speed, 0 (slowest) to 10.
     pub speed: u8,
-    /// libavif quality, 0 to 100.
     pub quality: u8,
 }
 
-/// An AVIF image and its dimensions.
 pub struct Encoded {
     pub bytes: Vec<u8>,
     pub size: Size,
 }
 
-/// Decodes `source` once, then encodes it at each of `long_sides` in turn, each at most that many
-/// pixels on its long side and never scaled up. Every size is resized from the one before it,
-/// so list them from largest to smallest. Waits for any encode already running. The permit moves
-/// into the blocking worker, so an abandoned caller still holds it until its encode ends.
 pub async fn encode<const N: usize>(
     source: Source,
     settings: Settings,
@@ -150,7 +126,6 @@ fn decode(source: &Source) -> Result<RgbImage, EncodeError> {
     limits.max_alloc = Some(MAX_DECODE_BYTES);
     reader.limits(limits);
     let mut decoder = reader.into_decoder().map_err(classify)?;
-    // Metadata is about to be dropped, so turn the pixels the way the camera meant them first.
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
     let profile = decoder.icc_profile().map_err(classify)?;
     let mut image = DynamicImage::from_decoder(decoder).map_err(classify)?;
@@ -163,8 +138,6 @@ fn decode(source: &Source) -> Result<RgbImage, EncodeError> {
     let (pixels, layout) = match profile.color_space {
         DataColorSpace::Rgb => (image.into_rgb8().into_raw(), Layout::Rgb),
         DataColorSpace::Gray => (image.into_luma8().into_raw(), Layout::Gray),
-        // The JPEG decoder has already converted CMYK pixels to RGB; applying the original
-        // CMYK profile to them would be wrong. Refuse it rather than mislabel its colours.
         _ => return Err(EncodeError::Undecodable),
     };
     let transform = profile
@@ -182,13 +155,11 @@ fn decode(source: &Source) -> Result<RgbImage, EncodeError> {
     RgbImage::from_raw(width, height, converted).ok_or(EncodeError::Undecodable)
 }
 
-/// `size` scaled down so its long side is at most `long_side`, never up.
 fn fit(size: Size, long_side: u32) -> Size {
     let longest = size.width.max(size.height);
     if longest <= long_side {
         return size;
     }
-    // Rounded integer scaling; the result is at most `long_side`, so it fits a u32.
     let scale = |side: u32| {
         let scaled =
             (u64::from(side) * u64::from(long_side) + u64::from(longest) / 2) / u64::from(longest);

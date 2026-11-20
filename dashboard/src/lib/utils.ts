@@ -1,7 +1,5 @@
 import { createCn } from "cn/config"
 
-/* Mirrors the app tokens registered in `@theme inline` (styles.css). Without them the merge
-   cannot tell `text-ink` (colour) from `text-mega` (size) and drops one of two sibling classes. */
 export const cn = createCn({
   extend: {
     theme: {
@@ -22,7 +20,6 @@ export const cn = createCn({
         "connected",
         "tile",
         "rain",
-        // Workout and Recovery
         "band",
         "stage",
         "zone",
@@ -35,7 +32,6 @@ export const cn = createCn({
         "binder-mark",
         "binder-stage",
         "binder-hairline",
-        // Food
         "macro",
         "food-caution",
         "food-caution-ink",
@@ -49,11 +45,9 @@ export const cn = createCn({
         "led-edge",
         "led-horizon",
         "bedtime-red",
-        // Photos
         "photo-night",
         "photo-ink",
         "photo-plate",
-        // Home
         "glance-4",
       ],
       text: [
@@ -87,7 +81,6 @@ export const cn = createCn({
         "figure-xl",
         "figure-xs",
         "unit",
-        // Workout and Recovery
         "mark",
         "body",
         "value",
@@ -98,10 +91,8 @@ export const cn = createCn({
         "weight",
         "binder-card-title",
         "binder-value",
-        // Food
         "food-unit",
         "led-figure",
-        // Idle slideshow
         "idle-clock",
         "idle-clock-short",
         "idle-date",
@@ -114,7 +105,6 @@ export const cn = createCn({
         "idle-milestone",
         "idle-milestone-short",
         "idle-milestone-title",
-        // Home
         "clock-time",
         "clock-date",
         "forecast-now",
@@ -129,18 +119,13 @@ export const cn = createCn({
         "compact",
         "prose",
         "figure-xl",
-        // Workout and Recovery
         "workout-figure",
         "workout-heading",
-        // Food
         "food-energy",
-        // Idle slideshow
         "idle-clock",
         "idle-snug",
         "idle-tight",
-        // Photos
         "photo-name",
-        // Home
         "forecast-now",
       ],
       tracking: [
@@ -158,11 +143,8 @@ export const cn = createCn({
         "title",
         "figure-tight",
         "figure-xl",
-        // Workout and Recovery
         "workout-figure",
-        // Food
         "food-heading",
-        // Home
         "clock",
         "forecast-now",
       ],
@@ -175,14 +157,10 @@ export const cn = createCn({
         "tile",
         "panel",
         "sheet",
-        // Binder
         "binder-art",
-        // Food
         "food-swatch",
         "food-row",
-        // Controls and Backlight
         "key-pill",
-        // Travel
         "travel-bar",
       ],
       spacing: [
@@ -231,7 +209,6 @@ export const cn = createCn({
         "condition-glyph",
         "fit-screen",
         "rain-lane",
-        // Workout and Recovery
         "detail-top",
         "workout-gutter",
         "plate",
@@ -252,7 +229,6 @@ export const cn = createCn({
         "binder-detail-wide-gap",
         "binder-art",
         "binder-art-portrait",
-        // Food
         "food-flow",
         "food-plate",
         "food-meal",
@@ -274,21 +250,17 @@ export const cn = createCn({
         "led-dial-gap",
         "led-notch-half",
         "remote-gap",
-        // Travel
         "travel-inset",
         "travel-above-dock",
         "travel-dock",
         "travel-plate",
-        // Idle slideshow
         "idle-plate-x",
         "idle-plate-y",
         "idle-dates",
         "idle-separator",
-        // Photos
         "photo-head",
         "photo-empty",
         "photo-row",
-        // Home
         "clock-hang",
         "home-gap",
         "home-stack",

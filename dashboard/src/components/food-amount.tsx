@@ -5,14 +5,11 @@ import {
   type NutrientTotal,
 } from "@/lib/nutrition"
 
-/** The heading over a group of nutrients. */
 export const groupHeading = "mb-2 text-small font-semibold text-muted-ink"
 
-/** The capsule that marks an adequate intake, a less certain reference. */
 export const adequateIntake =
   "rounded-full bg-wash-strong px-2 py-px text-caption font-semibold text-muted-ink"
 
-/** A unit after its figure: smaller, muted, and outside the figure's tracking. */
 export function Unit({
   children,
 }: {
@@ -25,7 +22,6 @@ export function Unit({
   )
 }
 
-/** A source line under a page. */
 export function Credit({
   children,
 }: {
@@ -38,7 +34,6 @@ export function Credit({
   )
 }
 
-/** A total's figure: a dash when unknown, "≥" when some Portions have no value. */
 export function Amount({
   total,
   unit = true,
@@ -82,7 +77,6 @@ export function Amount({
   )
 }
 
-/** The supplement share beneath a total's figure; nothing when no dose adds to it. */
 export function SupplementShare({
   total,
   as: Element,

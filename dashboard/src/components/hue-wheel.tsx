@@ -5,13 +5,11 @@ type Rgb = { red: number; green: number; blue: number }
 
 type HueWheelProps = {
   rgb: Rgb
-  /** Whether the LED is showing this colour; otherwise the wheel rests, ready to be touched. */
   active: boolean
   disabled: boolean
   onChange: (rgb: Rgb) => void
 }
 
-/** Arrows step the hue by 5° (pages by 30°); up and down step the saturation. */
 const hueKeys = new Map([
   ["ArrowRight", { hue: 5, saturation: 0 }],
   ["ArrowLeft", { hue: -5, saturation: 0 }],
@@ -21,10 +19,6 @@ const hueKeys = new Map([
   ["ArrowDown", { hue: 0, saturation: -0.05 }],
 ])
 
-/**
- * Every colour the strip can make on one disc: hue around, white at the heart. Touching it
- * picks that colour; the knob wears it.
- */
 export function HueWheel({
   rgb,
   active,
@@ -93,7 +87,6 @@ export function HueWheel({
         event.preventDefault()
 
         const { hue: hueStep, saturation: saturationStep } = step
-        // Keys walk a grid, so repeated presses land on exact colours.
         const grid = Math.abs(hueStep) || 5
 
         onChange(

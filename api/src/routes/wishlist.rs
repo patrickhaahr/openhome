@@ -63,8 +63,6 @@ async fn url_metadata(
     Ok(Json(metadata.preview(&request.url).await?))
 }
 
-/// The stored picture of one item, fetched by Axum so the browser never contacts the shop.
-/// Only the item's own `image_url` is fetched; the address is never logged or echoed.
 async fn item_image(
     State(state): State<AppState>,
     Extension(metadata): Extension<MetadataService>,
@@ -94,7 +92,6 @@ async fn item_image(
     Ok((
         [
             (header::CONTENT_TYPE, image.content_type),
-            // Private: the picture belongs to a household list behind the API key.
             (header::CACHE_CONTROL, "private, max-age=3600"),
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
             (

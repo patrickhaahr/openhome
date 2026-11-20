@@ -1,8 +1,3 @@
-//! Recovery Day: freshness and coverage from the pushed namespaces.
-
-//! Recovery Day reads (`GET /api/training/days/{day}/recovery`) against a NOOP mirror filled
-//! through the real push endpoint, next to the in-memory training log the test app always has.
-
 mod common;
 mod training_recovery_support;
 
@@ -35,7 +30,6 @@ async fn freshness_follows_the_older_namespace_push() {
     assert_eq!(freshness(&missing), "unconfirmed");
     assert_eq!(missing["derived_scores"]["strain"], absent("score_0_100"));
 
-    // A late sync: the imported namespace arrives first, the computed one an hour later.
     mirror
         .push(
             SOURCE,
@@ -85,7 +79,6 @@ async fn freshness_follows_the_older_namespace_push() {
         json!({"daily_metrics": "covered", "sleep_sessions": "unknown", "journal": "unknown"})
     );
 
-    // Daily rows alone do not confirm the Sleep Night. Both sleep namespaces must finish too.
     for device in [IMPORTED, COMPUTED] {
         mirror
             .push(
@@ -207,14 +200,12 @@ async fn only_applied_windows_in_both_namespaces_establish_coverage() {
     let real = real_mirror().await;
     let coverage = |body: &Value| body["noop"]["coverage"].clone();
 
-    // A covered night without sessions is a recorded absence.
     let no_night = real.recovery_day("2026-09-14").await;
     assert_eq!(no_night["sleep"]["sessions"], json!([]));
     assert_eq!(
         coverage(&no_night),
         json!({"daily_metrics": "covered", "sleep_sessions": "covered", "journal": "unknown"})
     );
-    // The night waking 09-13 may have started before the windows' first day.
     assert_eq!(
         coverage(&real.recovery_day("2026-09-13").await),
         json!({"daily_metrics": "covered", "sleep_sessions": "unknown", "journal": "unknown"})
@@ -240,7 +231,6 @@ async fn only_applied_windows_in_both_namespaces_establish_coverage() {
     mirror
         .push(SOURCE, IMPORTED, REAL_STARTS, &[], REAL_PUSH_AT)
         .await;
-    // Adjacent computed windows jointly cover 2026-09-20's night...
     mirror
         .push(
             SOURCE,
@@ -263,13 +253,11 @@ async fn only_applied_windows_in_both_namespaces_establish_coverage() {
         coverage(&mirror.recovery_day("2026-09-20").await),
         json!({"daily_metrics": "covered", "sleep_sessions": "covered", "journal": "unknown"})
     );
-    // ...while a day only the imported namespace replaced stays unknown.
     assert_eq!(
         coverage(&mirror.recovery_day("2026-09-15").await)["daily_metrics"],
         "unknown"
     );
 
-    // A staged, incomplete replacement establishes nothing.
     let mut staged = Mirror::empty().await;
     staged
         .push(SOURCE, IMPORTED, REAL_STARTS, &[], REAL_PUSH_AT)
@@ -293,7 +281,6 @@ async fn only_applied_windows_in_both_namespaces_establish_coverage() {
 #[tokio::test]
 async fn reads_only_the_active_installation_and_strap_namespaces() {
     let mut mirror = Mirror::empty().await;
-    // An older installation of NOOP reported the same strap before the current one took over.
     for device in [IMPORTED, COMPUTED] {
         mirror
             .push(
@@ -310,7 +297,6 @@ async fn reads_only_the_active_installation_and_strap_namespaces() {
             .push(SOURCE, device, REAL_DAYS, &[], REAL_PUSH_AT)
             .await;
     }
-    // A namespace that is not the strap's is never read, however recent.
     mirror
         .push(
             SOURCE,

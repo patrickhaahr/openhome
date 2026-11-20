@@ -39,16 +39,10 @@ import {
 
 type WorkoutsProps = {
   readonly data: WorkoutState
-  /** List another page of older Workouts. */
   readonly showOlder: () => Promise<void>
-  /** The view switcher, which sits at the start of the toolbar. */
   readonly lead?: React.ReactNode
 }
 
-/**
- * The training Log: one plate per session, newest first. A logged Workout and the strap's
- * recording of the same session share a plate; the rest stand alone.
- */
 export function Workouts({
   data,
   showOlder,
@@ -161,13 +155,8 @@ function SessionGlyph({
   }
 }
 
-/** The widest set row the grid draws; longer entries continue in the same columns beneath. */
 const maxSetColumns = 4
 
-/**
- * One session on one plate. The header names it with its counts; beneath, the logged exercises
- * and the strap's recording sit side by side, or the strap's map when it is a route.
- */
 function Session({
   session,
 }: {
@@ -262,7 +251,6 @@ const bodyColumns = {
   logged: "grid-cols-1",
 } as const
 
-/** How much was logged, as two figures where the header's keys once sat. */
 function Counts({
   workout,
 }: {
@@ -304,16 +292,11 @@ const countFigure = "text-figure-sm leading-none font-bold tracking-figure"
 
 const countUnit = "text-control font-semibold tracking-normal text-muted-ink"
 
-/**
- * The logged half: one row per exercise on one shared grid, its name first and its sets in
- * columns of equal width, so a set lines up with the same set of every other exercise.
- */
 function Exercises({
   workout,
   spread,
 }: {
   readonly workout: WorkoutDetail
-  /** Alone on its plate, the rows spread over two columns that read top to bottom. */
   readonly spread: boolean
 }): React.JSX.Element {
   const columns = Math.min(
@@ -420,7 +403,6 @@ function Exercises({
 
 type Route = NonNullable<NonNullable<Strap["detail"]>["route"]>
 
-/** The strap's half: effort and figures, the heart-rate trace on its zones, and the route if there is one. */
 function StrapPane({
   strap,
   route,

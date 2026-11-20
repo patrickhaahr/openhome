@@ -12,18 +12,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeParseException
 
-/** The sexes the API's nutrition references are defined for, as stored. */
 val PROFILE_SEXES = listOf("male", "female")
 
 private val MAX_HEART_RATE_RANGE = 100L..240L
 private val HOME_TIME_ZONE: ZoneId = ZoneId.of("Europe/Copenhagen")
 
-/** The range Axum accepts a birth date in: the last day is today in Copenhagen, wherever the phone is. */
 val EARLIEST_BIRTH_DATE: LocalDate = LocalDate.of(1900, 1, 1)
 
 fun latestBirthDate(): LocalDate = LocalDate.now(HOME_TIME_ZONE)
 
-/** A Profile as typed. Everything is optional, and blank means absent. */
 data class ProfileDraft(
     val heightCm: String,
     val sex: String?,
@@ -55,7 +52,6 @@ private fun isValidBirthDate(text: String): Boolean =
         false
     }
 
-/** A comma is what many phones' decimal keys type. Null when blank or not a number. */
 private fun String.toOptionalDecimal(): Double? = trim().replace(',', '.').toDoubleOrNull()
 
 sealed interface ProfileCheck {
@@ -65,7 +61,6 @@ sealed interface ProfileCheck {
 }
 
 sealed interface ProfileSave {
-    /** Stored on this device, and queued unless nothing had changed. */
     data object Saved : ProfileSave
 
     data class Invalid(val problems: ProfileCheck.Problems) : ProfileSave
@@ -76,18 +71,9 @@ sealed interface BodyWeightSave {
 
     data object InvalidWeight : BodyWeightSave
 
-    /** One Body Weight per date, and a recorded one stays as it is: nothing was saved or queued. */
     data class AlreadyRecorded(val existing: BodyWeight) : BodyWeightSave
 }
 
-/**
- * The fitness Profile and Body Weight records changed on this device. Each change commits together
- * with its queued sync, so it is what the app shows from that moment, whatever the network does. Each
- * change is a single transaction, so a refusal or a rolled-back failure changes nothing. [saveProfile] and
- * [recordBodyWeight] return a sealed outcome ([saveProfile] reports Saved even when nothing differed and
- * nothing was queued); [useBodyWeightOnServer] returns nothing. Scheduling follows the commit and is repeated at
- * app start if skipped.
- */
 class ProfileRecords(
     private val database: OpenHomeDatabase,
     private val outbox: FitnessOutbox,
@@ -120,7 +106,6 @@ class ProfileRecords(
                 )
                 true
             }
-        // After the commit: if the process dies first, the next app start schedules it from the outbox.
         if (queued) scheduler.schedule()
         return ProfileSave.Saved
     }
@@ -140,7 +125,6 @@ class ProfileRecords(
         return saved
     }
 
-    /** The user's answer to a date Axum already holds: this device takes that value when it next syncs. */
     suspend fun useBodyWeightOnServer(date: String) {
         val requeued =
             database.withTransaction {

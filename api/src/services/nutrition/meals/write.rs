@@ -49,7 +49,6 @@ fn name_taken(name: &str) -> MealError {
     ))
 }
 
-/// Maps the unique name index to a conflict.
 fn unique_name(error: sqlx::Error, name: &str) -> MealError {
     match &error {
         sqlx::Error::Database(database) if database.is_unique_violation() => name_taken(name),
@@ -57,7 +56,6 @@ fn unique_name(error: sqlx::Error, name: &str) -> MealError {
     }
 }
 
-/// Writes a Meal's items, replacing none: the caller removes the previous items first.
 async fn insert_items(
     transaction: &mut sqlx::SqliteConnection,
     meal_id: &str,
@@ -92,8 +90,6 @@ async fn insert_items(
     Ok(())
 }
 
-/// Saves a named Meal of Food and Product items, with an immutable receipt for its
-/// `request_id`. Rejected requests consume no `request_id` and write nothing.
 pub async fn save_meal(db: &SqlitePool, foods: &FoodDatabase, request: SaveMeal) -> Result<Saved> {
     let request_id = request_id(&request.request_id)?;
     let name = UniqueName::parse(&request.name, "name", "Meal").map_err(validation)?;
@@ -109,7 +105,6 @@ pub async fn save_meal(db: &SqlitePool, foods: &FoodDatabase, request: SaveMeal)
 
     let id = Uuid::new_v4().to_string();
     let mut transaction = db.begin().await?;
-    // Claim first so simultaneous retries serialize on the receipt.
     let claimed = sqlx::query_scalar!(
         "INSERT INTO meal_receipts (request_id, meal_id, request) VALUES (?, ?, ?) ON CONFLICT (request_id) DO NOTHING RETURNING request_id",
         request_id, id, normalized)
@@ -161,8 +156,6 @@ fn required<T>(patch: Patch<T>, field: &str) -> Result<Option<T>> {
     }
 }
 
-/// Renames a Meal or replaces its items or doses, together. Meal Logs made from it keep their Portions
-/// and the name they were logged with.
 pub async fn update_meal(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -227,8 +220,6 @@ pub async fn update_meal(
     find(db, id).await?.ok_or_else(not_found)
 }
 
-/// Deletes a Meal. Meal Logs made from it are unchanged, and its receipt stays, so an old retry
-/// cannot recreate it.
 pub async fn delete_meal(db: &SqlitePool, id: &str) -> Result<()> {
     let deleted = sqlx::query!("DELETE FROM meals WHERE id = ?", id)
         .execute(db)

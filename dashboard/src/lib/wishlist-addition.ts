@@ -11,10 +11,8 @@ const pendingAddition = z.object({
   requestId: z.uuid(),
 })
 
-/** A browser-held retry intention, never a second copy of the stored Wishlist. */
 export type PendingAddition = z.infer<typeof pendingAddition>
 
-/** Recover a pending wish after refresh or list navigation; ignore unavailable browser storage. */
 export function readPendingAddition(
   listId: string
 ): PendingAddition | undefined {
@@ -33,7 +31,6 @@ export function readPendingAddition(
   }
 }
 
-/** Keep the retry ID before dispatch, and remove it only after a confirmed result. */
 export function storePendingAddition(
   listId: string,
   pending: PendingAddition | undefined
@@ -43,12 +40,9 @@ export function storePendingAddition(
 
     if (pending === undefined) sessionStorage.removeItem(key)
     else sessionStorage.setItem(key, JSON.stringify(pending))
-  } catch {
-    /* In-memory retries still work when private browsing disables storage. */
-  }
+  } catch {}
 }
 
-/** Field by field, since stored details may come back in another key order. */
 function sameDetails(a: WishlistDetails, b: WishlistDetails): boolean {
   return (
     a.title === b.title &&
@@ -61,11 +55,6 @@ function sameDetails(a: WishlistDetails, b: WishlistDetails): boolean {
   )
 }
 
-/**
- * The retry intention for one submit: the known pending addition when it is the same wish for
- * the same list (an older record without details matches on its trimmed title), otherwise a new
- * intention with a new request ID. The ID is never reused for changed input.
- */
 export function intendAddition(
   known: PendingAddition | undefined,
   ownerId: string,

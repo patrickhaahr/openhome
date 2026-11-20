@@ -1,5 +1,3 @@
-//! Duplicate-safe Body Weight recording (`request_id`): the contract the Android outbox retries against.
-
 mod common;
 
 use axum::Router;
@@ -26,7 +24,6 @@ async fn post(app: &Router, body: Value) -> (StatusCode, Value) {
     .await
 }
 
-/// The stored records, read back through the public list.
 async fn stored(app: &Router) -> Vec<Value> {
     let (status, body) = send_request_with_method(
         app.clone(),
@@ -82,7 +79,6 @@ async fn one_request_id_with_changed_arguments_is_a_conflict_and_changes_nothing
     assert_eq!(stored(&app).await, vec![first]);
 }
 
-/// A genuine second entry for a date, whatever its value, keeps the existing rule.
 #[tokio::test]
 async fn a_new_request_id_for_a_recorded_date_is_still_a_duplicate_date() {
     let app = common::test_app().await;
@@ -116,7 +112,6 @@ async fn a_record_from_a_client_without_request_ids_still_conflicts_both_ways() 
 async fn a_refused_record_uses_up_no_request_id() {
     let app = common::test_app().await;
 
-    // Refused twice over: an invalid weight, then a date another record holds.
     let (status, _) = post(&app, record("phone-weight-1", DATE, 0.0)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     post(&app, record("phone-weight-other", "2026-09-06", 75.5)).await;
@@ -138,8 +133,6 @@ async fn an_unusable_request_id_is_refused_without_recording() {
     assert!(stored(&app).await.is_empty());
 }
 
-/// Changed arguments are judged before the cleared target, so a retry whose arguments no longer
-/// match reports that, not the missing record.
 #[tokio::test]
 async fn changed_arguments_are_refused_before_a_removed_records_target() {
     let (app, state) = common::test_app_with_db().await;
@@ -190,7 +183,6 @@ async fn open_file_database(path: &std::path::Path) -> SqlitePool {
     db
 }
 
-/// The claim serializes simultaneous deliveries: one record is stored and the losers replay it.
 #[tokio::test]
 async fn simultaneous_deliveries_record_one_weight() {
     let dir = tempfile::tempdir().unwrap();
@@ -229,7 +221,6 @@ async fn a_retry_of_a_removed_record_does_not_recreate_it() {
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(stored(&app).await.is_empty());
 
-    // The date itself is free for a new request_id.
     let (status, _) = post(&app, record("phone-weight-2", DATE, 75.5)).await;
     assert_eq!(status, StatusCode::CREATED);
 }

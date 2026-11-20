@@ -15,7 +15,6 @@ type CurrencyState = {
 
 const CurrencyContext = createContext<CurrencyState | null>(null)
 
-/** Holds the currency the server read from the cookie; a choice rewrites the cookie and re-renders. */
 export function CurrencyProvider({
   initial,
   children,
@@ -26,7 +25,6 @@ export function CurrencyProvider({
   const [currency, setCurrency] = useState(initial)
 
   const choose = useCallback((next: Currency) => {
-    // The server reads this cookie before first paint; Cookie Store API is missing on older iPad Safari.
     // oxlint-disable-next-line unicorn/no-document-cookie -- see the comment above.
     document.cookie = currencyCookie(next)
     setCurrency(next)
@@ -45,7 +43,6 @@ export function useCurrency(): CurrencyState {
   return state
 }
 
-/** One key showing the chosen currency; it opens a short list of the others. */
 export function CurrencySwitch(): React.JSX.Element {
   const { currency, choose } = useCurrency()
 

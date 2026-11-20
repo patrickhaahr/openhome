@@ -5,7 +5,6 @@ import { formatDay } from "./lists"
 
 const amount = z.number().nonnegative()
 
-/** One observed Card Price in USD, converted at its own date's ECB rates; null when none exist yet. */
 export const pricePoint = z.object({
   observed_on: z.iso.date(),
   usd: amount,
@@ -16,7 +15,6 @@ export const pricePoint = z.object({
 
 export type PricePoint = z.infer<typeof pricePoint>
 
-/** A Card's Price History, oldest first. */
 export const cardPrices = z.object({
   card_id: cardId,
   prices: pricePoint.array(),
@@ -24,7 +22,6 @@ export const cardPrices = z.object({
 
 export type CardPrices = z.infer<typeof cardPrices>
 
-/** A history is read once per open card sheet; a failed read never means "no history". */
 export type PricesState =
   | { readonly state: "loading" }
   | { readonly state: "read"; readonly points: readonly PricePoint[] }
@@ -40,22 +37,16 @@ function dateOf(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10)
 }
 
-/** What the chart draws: one slot per calendar day from the first to the last observation. */
 export type PriceLine = {
   readonly labels: string[]
   readonly names: string[]
   readonly values: Array<number | null>
-  /** What a null slot means: no Price Point that day, or one with no rate in the currency. */
   readonly gaps: string[]
   readonly observations: number
   readonly missing: number
   readonly latest: { readonly day: string; readonly value: number } | undefined
 }
 
-/**
- * The points as a daily series in `currency`. A day with no observation, or with no rate yet,
- * is a null slot, so the line breaks there: nothing is interpolated. `gaps` says which.
- */
 export function priceLine(
   points: readonly PricePoint[],
   currency: Currency
@@ -114,7 +105,6 @@ export function priceLine(
   }
 }
 
-/** The one line read before the chart. */
 export function priceSummary(line: PriceLine, currency: Currency): string {
   const { latest } = line
 

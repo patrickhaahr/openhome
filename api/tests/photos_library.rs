@@ -1,5 +1,3 @@
-//! Photos library: albums, media access and provider failures.
-
 mod common;
 mod photos_support;
 
@@ -103,7 +101,6 @@ async fn albums_carry_their_cover_and_months_and_merge_newest_first() {
         ]}),
     )
     .await;
-    // The third selected album was removed from Immich; it drops out of the merged view.
     let (_, _, body) = request(&app, "/api/photos/albums", true).await;
     let data: Value = serde_json::from_slice(&body).unwrap();
     let coast = &data["albums"][0];

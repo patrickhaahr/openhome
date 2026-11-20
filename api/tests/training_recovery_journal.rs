@@ -1,8 +1,3 @@
-//! Recovery Day: journal entries and the row caps.
-
-//! Recovery Day reads (`GET /api/training/days/{day}/recovery`) against a NOOP mirror filled
-//! through the real push endpoint, next to the in-memory training log the test app always has.
-
 mod common;
 mod training_recovery_support;
 
@@ -16,7 +11,6 @@ use training_recovery_support::{
     measured, real_mirror, sleep,
 };
 
-/// NOOP's 14-day journal window ending with 2026-09-26.
 const JOURNAL_DAYS: Window = Window::JournalDays("2026-09-13", "2026-09-27");
 
 #[tokio::test]
@@ -68,7 +62,6 @@ async fn lists_the_journal_entries_logged_against_the_day() {
 #[tokio::test]
 async fn keeps_one_journal_entry_per_question_by_namespace_preference() {
     let mut mirror = covered_mirror(&[], &[], &[], &[]).await;
-    // Each namespace answers the questions it lists; the answer carries its namespace's name.
     let namespaces: [(&str, &[&str]); 5] = [
         ("noop-app", &["Alcohol", "Caffeine", "Illness", "Stress"]),
         ("my-whoop-noop", &["Alcohol", "Caffeine", "Illness"]),
@@ -116,7 +109,6 @@ async fn journal_coverage_needs_an_applied_window_in_every_journal_namespace() {
     mirror
         .push(SOURCE, "noop-journal", JOURNAL_DAYS, &[], REAL_PUSH_AT)
         .await;
-    // An applied empty window makes an empty journal a recorded absence.
     let covered = mirror.recovery_day("2026-09-20").await;
     assert_eq!(covered["journal"], json!([]));
     assert_eq!(coverage(&covered), "covered");
@@ -125,7 +117,6 @@ async fn journal_coverage_needs_an_applied_window_in_every_journal_namespace() {
         "unknown"
     );
 
-    // A namespace known only from a staged replacement still has to cover the day.
     mirror
         .push_first_part(
             SOURCE,
@@ -161,7 +152,6 @@ async fn journal_coverage_needs_an_applied_window_in_every_journal_namespace() {
 #[tokio::test]
 async fn journal_pushes_do_not_change_recovery_freshness() {
     let mut mirror = real_mirror().await;
-    // Later journal windows from the journal and both strap namespaces, covering 2026-09-26.
     for namespace in ["noop-journal", IMPORTED, COMPUTED] {
         mirror
             .push(
@@ -184,7 +174,6 @@ async fn journal_pushes_do_not_change_recovery_freshness() {
 
 #[tokio::test]
 async fn rejects_a_day_over_the_journal_row_cap_instead_of_truncating() {
-    // Questions `Q00` onwards answered on 2026-09-20 by `noop-journal` and `noop-app`.
     let journal_mirror = |journal_rows: usize, app_rows: usize| async move {
         let answers = |count: usize| -> Vec<Value> {
             (0..count)
@@ -213,7 +202,6 @@ async fn rejects_a_day_over_the_journal_row_cap_instead_of_truncating() {
         mirror
     };
 
-    // 64 rows answer 32 questions twice.
     let full = journal_mirror(32, 32).await;
     let body = full.recovery_day("2026-09-20").await;
     assert_eq!(body["journal"].as_array().unwrap().len(), 32);
@@ -229,13 +217,11 @@ async fn rejects_a_day_over_the_journal_row_cap_instead_of_truncating() {
             "status": 422,
         })
     );
-    // Other days are unaffected.
     assert_eq!(over.recovery_day("2026-09-19").await["journal"], json!([]));
 }
 
 #[tokio::test]
 async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
-    // Short sessions every ten minutes from 00:00 on 2026-09-20.
     let naps = |count: i64| -> Vec<Value> {
         (0..count)
             .map(|index| {
@@ -272,11 +258,9 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
             "status": 422,
         })
     );
-    // The previous night is unaffected.
     let previous = over.recovery_day("2026-09-19").await;
     assert_eq!(previous["sleep"]["sessions"], json!([]));
 
-    // Summary reads still resolve the edited night without loading its over-cap sessions.
     let app = common::test_app_with_noop_db(over.db).await;
     let (status, context) = common::send_request(
         app.clone(),

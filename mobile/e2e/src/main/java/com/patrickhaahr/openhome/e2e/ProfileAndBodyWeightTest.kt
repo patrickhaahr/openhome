@@ -23,10 +23,6 @@ private const val MONTHS_PER_YEAR = 12
 private val SHOWN_DAY = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
 private val PICKER_DAY = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
 
-/**
- * The avatar's Profile and Body Weight through the real app, its real database, real process restarts
- * and the emulator's real radios. Only Axum is replaced, at its HTTP boundary.
- */
 class ProfileAndBodyWeightTest {
     private val app = AppDriver()
     private val today = LocalDate.now()
@@ -75,7 +71,6 @@ class ProfileAndBodyWeightTest {
         app.assertVisible("Save Body Weight")
     }
 
-    /** From the form's own current date, today unless this form has already moved it. */
     private fun chooseDay(day: LocalDate, from: LocalDate = today) {
         if (day == from) return
         app.tap(from.format(SHOWN_DAY))
@@ -99,7 +94,6 @@ class ProfileAndBodyWeightTest {
         error(what)
     }
 
-    /** Every Profile field, a new weigh-in, a restart on mobile data; then one delivery of each and the final records. */
     @Test
     fun offlineProfileEditAndWeighInSurviveARestartThenReachAxumOnceOnWifi() {
         app.setWifi(false)
@@ -113,7 +107,6 @@ class ProfileAndBodyWeightTest {
         app.tap("Edit Profile")
         app.assertField("Height in cm (optional)", "178.5")
         app.enter("Height in cm (optional)", "180,5")
-        // Tapping the chosen sex clears it, as optional as it is on the API.
         app.tap("Male")
         app.tap("Thu, 17 Mar 1994")
         app.tapTextContaining("Saturday, March 19, 1994")
@@ -122,7 +115,6 @@ class ProfileAndBodyWeightTest {
         app.enter("Max Heart Rate in bpm (optional)", "190")
         app.tap("Save Profile")
 
-        // Saved on the device, and already what the app shows.
         app.assertVisible("180.5 cm")
         app.assertVisible("Not set")
         app.assertVisible("Sat, 19 Mar 1994")
@@ -163,7 +155,6 @@ class ProfileAndBodyWeightTest {
         assertEquals(1, api.bodyWeightDeliveries().size)
     }
 
-    /** The weight commits, its answer is lost, and the retry is the same operation rather than a second entry. */
     @Test
     fun aLostBodyWeightAnswerRetriesTheSameRequestAndLeavesOneRecord() {
         api.loseBodyWeightResponses()
@@ -193,7 +184,6 @@ class ProfileAndBodyWeightTest {
         )
     }
 
-    /** The edit commits, its answer is lost, and neither retries nor restarts can bring an older one back. */
     @Test
     fun aLostProfileAnswerRetriesItsRevisionAndANewerEditStaysOnTop() {
         api.loseProfileResponses()
@@ -224,7 +214,6 @@ class ProfileAndBodyWeightTest {
         app.assertVisible("181 bpm")
     }
 
-    /** Queued edits are whole records, so a newer one replaces what has not been sent yet. */
     @Test
     fun onlyTheNewestOfSeveralOfflineProfileEditsIsDelivered() {
         app.setWifi(false)
@@ -242,7 +231,6 @@ class ProfileAndBodyWeightTest {
         assertEquals("What it did not change stays", 178.5, api.storedProfile().heightCm)
     }
 
-    /** One Body Weight per date, whether downloaded or recorded here: the record stays and nothing is queued. */
     @Test
     fun anAlreadyRecordedDateIsRefusedOnTheDeviceAndItsRecordStays() {
         app.setWifi(false)
@@ -251,7 +239,6 @@ class ProfileAndBodyWeightTest {
         app.assertTextContaining(ALREADY_RECORDED)
         app.assertVisible("Save Body Weight")
 
-        // A date free here saves, and is then just as taken, even before it has synced.
         chooseDay(today, from = lastMonth)
         waitUntil("The problem belonged to the other date") { !app.showsTextContaining(ALREADY_RECORDED) }
         app.tap("Save Body Weight")
@@ -274,10 +261,6 @@ class ProfileAndBodyWeightTest {
         )
     }
 
-    /**
-     * A new entry for a date another client has recorded is no retry: Axum keeps its record, this one
-     * waits for the user, and nothing else in the queue waits with it.
-     */
     @Test
     fun aDateAxumAlreadyHoldsStaysItsOwnAndWaitsForTheUserWithoutHoldingUpTheQueue() {
         app.setWifi(false)
@@ -296,7 +279,6 @@ class ProfileAndBodyWeightTest {
         }
         val refusedDeliveries = api.bodyWeightDeliveries().size
 
-        // Trying again is the same refusal, and neither side's value moves.
         app.tapBelow("Sync now")
         waitUntil("Sync now should try again") { api.bodyWeightDeliveries().size > refusedDeliveries }
         app.assertEventuallyContaining("OpenHome refused a change")
@@ -326,14 +308,12 @@ class ProfileAndBodyWeightTest {
         app.assertVisibleBelow(SYNCED)
     }
 
-    /** The API's rules hold before anything is saved, and each nested view gives way to the one before it. */
     @Test
     fun onlyValidValuesSaveAndBackReturnsThroughEachNestedView() {
         app.tap("Home")
         openProfile()
         app.assertNoBottomTabs()
 
-        // Nothing changed, so nothing is queued.
         app.tap("Edit Profile")
         app.tap("Save Profile")
         app.assertVisible("Edit Profile")
@@ -347,11 +327,9 @@ class ProfileAndBodyWeightTest {
         app.enter("Height in cm (optional)", "180")
         app.enter("Max Heart Rate in bpm (optional)", "241")
         app.tap("Save Profile")
-        // The fixed height's problem clears as this save's answer reaches the screen.
         waitUntil("The fixed height should stop being marked") { !app.showsTextContaining("Enter height in cm") }
         app.assertVisible("Enter a whole number from 100 to 240, or leave it blank")
 
-        // Back drops what was never saved.
         app.pressBackButton()
         app.assertVisible("Edit Profile")
         app.assertVisible("178.5 cm")

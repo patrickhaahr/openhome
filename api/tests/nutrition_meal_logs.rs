@@ -1,6 +1,3 @@
-//! Meal Logs and the Nutrition Day through the nutrition routes, over a real `app.db` and a real
-//! `food.db` imported from a synthetic DTU-shaped workbook served by `wiremock`.
-
 mod common;
 #[path = "nutrition_support/meal_logs.rs"]
 mod support;
@@ -46,7 +43,6 @@ async fn a_logged_meal_keeps_scaled_snapshots_with_sources_and_totals() {
             "alcohol": {"value": 0.0, "unit": "g", "source": "food"},
         })
     );
-    // The chicken has no carbohydrate, fibre or alcohol value: unknown, never zero.
     assert_eq!(
         meal_log["portions"][1]["nutrients"]["available_carbohydrate"],
         json!({"value": null, "unit": "g", "source": null})
@@ -102,7 +98,6 @@ async fn nutrition_day_totals_every_parameter_with_units_and_credits_the_dataset
         day["totals"]["available_carbohydrate"],
         json!({"value": 26.0, "unit": "g", "unknown_portions": 1, "food": 26.0, "supplements": null})
     );
-    // Every per-100 g parameter, in database order; waste, density and pH describe the Food.
     let keys: Vec<&str> = day["nutrients"]
         .as_array()
         .unwrap()
@@ -170,7 +165,6 @@ async fn a_reimported_food_database_never_changes_past_meal_logs() {
         .await;
     let (_, day_before) = api.get("/api/nutrition/days/2026-10-29").await;
 
-    // Version 2 changes Skyr's protein and drops the Banana.
     api.reimport("2", second_dataset()).await;
 
     assert_eq!(api.day("2026-10-29").await, [breakfast, banana]);
@@ -192,9 +186,7 @@ async fn a_reimported_food_database_never_changes_past_meal_logs() {
 async fn meal_logs_belong_to_the_copenhagen_day_of_their_time_across_midnight_and_daylight_saving()
 {
     let api = Nutrition::start().await;
-    // (eaten_at, Copenhagen time it is shown in, Copenhagen day)
     let cases = [
-        // Midnight in winter time (UTC+1).
         (
             "2026-10-29T23:59:59+01:00",
             "2026-10-29T23:59:59+01:00",
@@ -205,7 +197,6 @@ async fn meal_logs_belong_to_the_copenhagen_day_of_their_time_across_midnight_an
             "2026-10-30T00:30:00+01:00",
             "2026-10-30",
         ),
-        // Summer time ends on 2026-10-25: that day lasts 25 hours.
         (
             "2026-10-24T22:00:00Z",
             "2026-10-25T00:00:00+02:00",
@@ -226,7 +217,6 @@ async fn meal_logs_belong_to_the_copenhagen_day_of_their_time_across_midnight_an
             "2026-10-25T23:59:59+01:00",
             "2026-10-25",
         ),
-        // Summer time starts on 2026-03-29: that day lasts 23 hours.
         (
             "2026-03-28T23:00:00Z",
             "2026-03-29T00:00:00+01:00",

@@ -22,10 +22,8 @@ import {
 
 const basis = "text-small text-muted-ink"
 
-/** The amount and its supplement split sit under the bar across both columns. */
 const reference = "col-span-full text-label text-muted-ink"
 
-/** The bar's fill by what the row shows: an Upper Limit first, then a reached intake. */
 function barFill(status: string | undefined, met: boolean): string {
   if (status === "cut_down") return "before:bg-danger"
 
@@ -34,11 +32,6 @@ function barFill(status: string | undefined, met: boolean): string {
   return met ? "before:bg-ink" : "before:bg-muted-ink"
 }
 
-/**
- * The vitamins and minerals as percentages of their NNR 2023 Recommended Intakes, with adequate
- * intakes marked, the supplement share noted and EFSA Upper Limits as a caution (the day above
- * one) or a red "cut down" (the 7-day average above one); or why there is no panel.
- */
 export function MicronutrientPanel({
   panel,
 }: {
@@ -110,7 +103,6 @@ export function MicronutrientPanel({
   )
 }
 
-/** A nutrient's percentage over a bar, its amount and reference, and any Upper Limit line. */
 function MicronutrientRow({
   nutrient,
 }: {
@@ -206,7 +198,6 @@ function MicronutrientRow({
   )
 }
 
-/** Every parameter's total, grouped as the Food database groups them, behind one key. */
 export function AllNutrients({
   day,
 }: {

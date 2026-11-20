@@ -19,10 +19,6 @@ private const val CANT_REACH = "Saved on device · Can't reach OpenHome, will re
 private const val REFUSED = "Saved on device · OpenHome refused this change"
 private const val TAKEN_NAME = "OpenHome already has an Exercise with this name"
 
-/**
- * Correcting finished Workouts from History through the real app, its real database, real process
- * restarts and the emulator's real radios. Only Axum is replaced, at its HTTP boundary.
- */
 class WorkoutCorrectionTest {
     private val app = AppDriver()
     private val pullDay =
@@ -44,7 +40,6 @@ class WorkoutCorrectionTest {
                     ),
                     FixtureEntry(PLANCHE_HOLD, listOf(FixtureSet(setNumber = 1, durationSeconds = 20))),
                 ),
-            // An earlier install's corrections: this one has to outrank them, even after a fresh download.
             clientRevision = 4,
         )
     private val laterSession =
@@ -83,13 +78,11 @@ class WorkoutCorrectionTest {
         app.tap("Edit Workout")
         app.enter("Name (optional)", to)
         app.tap("Save Changes")
-        // Until the editor is gone, its own field reads as `to`, and the Workout under it is not yet what is shown.
         app.awaitGone("Save Changes")
         app.assertVisible(to)
         app.assertTextAbsent(from)
     }
 
-    /** One confirmed Set of [exercise] from an empty session, finished under [name], ending on History. */
     private fun logWorkout(name: String, exercise: String = "Pull-Up") {
         app.tap("Start Empty")
         app.assertVisible("Active Workout")
@@ -113,7 +106,6 @@ class WorkoutCorrectionTest {
     private fun newlyStored(): List<FixtureWorkout> =
         api.storedWorkouts().filter { it.id != PULL_DAY_ID && it.id != laterSession.id }
 
-    /** Every kind of correction, offline, through a restart; then one delivery and the final record. */
     @Test
     fun correctionOnMobileDataSurvivesARestartThenReachesAxumOnceOnWifi() {
         app.setWifi(false)
@@ -121,7 +113,6 @@ class WorkoutCorrectionTest {
         app.assertVisible("Felt heavy")
         app.tap("Edit Workout")
 
-        // Date and optional metadata, with a blank clearing the notes rather than keeping them.
         app.tap("Mon, 2 Mar 2026")
         app.tapTextContaining("Saturday, March 7, 2026")
         app.tap("Set date")
@@ -129,7 +120,6 @@ class WorkoutCorrectionTest {
         app.enter("Name (optional)", "Pull day corrected")
         app.enter("Notes (optional)", "")
 
-        // Performance: values, one Set removed and one added, a Timed Hold, the order, a new Exercise.
         app.enterDescribed("Pull-Up set 1 reps", "9")
         app.enterDescribed("Pull-Up set 1 added kg", "12,5")
         app.enterDescribed("Pull-Up set 1 RPE", "8")
@@ -144,7 +134,6 @@ class WorkoutCorrectionTest {
         app.enterDescribed("Squat set 1 reps", "5")
         app.tap("Save Changes")
 
-        // Saved on the device, and already what the app shows everywhere.
         app.assertVisible("Pull day corrected")
         app.assertVisible(WAITING_FOR_WIFI)
         app.assertAbsent("Felt heavy")
@@ -156,7 +145,6 @@ class WorkoutCorrectionTest {
         app.pressBackButton()
         app.assertOnWorkoutTab()
 
-        // The new date makes it the last Workout, which losing the process does not change.
         app.relaunch()
         app.assertVisible("Pull day corrected")
         openFromHistory("Pull day corrected")
@@ -173,7 +161,6 @@ class WorkoutCorrectionTest {
         app.setWifi(true)
 
         app.assertEventuallyVisible(SYNCED)
-        // The same record in its new order, including the notes this form has no field for.
         assertEquals(
             FixtureWorkout(
                 id = PULL_DAY_ID,
@@ -203,7 +190,6 @@ class WorkoutCorrectionTest {
         assertEquals(emptyList<String>(), api.workoutDeliveries())
     }
 
-    /** The newest correction wins, however many there were, and arrives after the create it depends on. */
     @Test
     fun correctionsBeforeTheCreateSyncedNeverBecomeASecondWorkout() {
         app.setWifi(false)
@@ -228,7 +214,6 @@ class WorkoutCorrectionTest {
         assertEquals(1, api.workoutDeliveries().size)
     }
 
-    /** The create committed without an answer, so its retry and the correction must land on that Workout. */
     @Test
     fun aCorrectionBehindACommittedCreateWithALostResponseEndsAsOneWorkout() {
         api.loseWorkoutResponses()
@@ -249,7 +234,6 @@ class WorkoutCorrectionTest {
         assertEquals("Every delivery is the same logical Workout", 1, api.workoutDeliveries().toSet().size)
     }
 
-    /** The edit commits, its answer is lost, and neither retries nor restarts can bring an older one back. */
     @Test
     fun aLostEditResponseRetriesItsRevisionAndANewerCorrectionStaysOnTop() {
         api.loseEditResponses()
@@ -278,7 +262,6 @@ class WorkoutCorrectionTest {
         assertEquals(2, api.storedWorkouts().size)
     }
 
-    /** A corrected refused create must follow an Exercise created later, without another sync trigger. */
     @Test
     fun correctingARefusedCreateDeliversOneCorrectedWorkout() {
         api.refuseWorkoutCreates()
@@ -316,7 +299,6 @@ class WorkoutCorrectionTest {
         assertEquals(emptyList<Long>(), api.editDeliveries())
     }
 
-    /** It can never succeed, so it waits for the user with the correction intact and everything else moves on. */
     @Test
     fun anEditOfAWorkoutDeletedElsewhereIsRefusedWithoutHoldingUpTheQueue() {
         api.deleteWorkout(PULL_DAY_ID)
@@ -340,7 +322,6 @@ class WorkoutCorrectionTest {
         assertEquals(1, newlyStored().size)
     }
 
-    /** A queued correction names local Exercises too, and has to follow when two of them turn out to be one. */
     @Test
     fun aQueuedCorrectionFollowsItsExerciseWhenItMergesIntoTheRowHoldingOpenHomesId() {
         api.putExercise(FixtureExercise(PULL_UP, "Ring Row", "calisthenics", "back"))
@@ -379,7 +360,6 @@ class WorkoutCorrectionTest {
         val detail = "8 reps · Bodyweight"
         app.assertVisible(detail)
 
-        // Nothing changed, so back asks nothing and saving queues nothing.
         app.tap("Edit Workout")
         app.pressBackButton()
         app.assertVisible(detail)
@@ -387,7 +367,6 @@ class WorkoutCorrectionTest {
         app.tap("Save Changes")
         app.assertVisible(detail)
 
-        // Under the same rules as logging.
         app.tap("Edit Workout")
         app.enterDescribed("Pull-Up set 1 RPE", "11")
         app.assertVisible("RPE must be 1 to 10")
@@ -399,7 +378,6 @@ class WorkoutCorrectionTest {
         app.assertVisible("Enter reps to confirm")
         app.enterDescribed("Pull-Up set 1 reps", "9")
 
-        // A Workout keeps at least one Set.
         app.tapScrolledTo("Remove Pull-Up")
         app.tapScrolledTo("Remove Planche Hold")
         app.tap("Save Changes")

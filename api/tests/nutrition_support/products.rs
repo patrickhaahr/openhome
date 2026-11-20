@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -18,13 +17,10 @@ use tempfile::TempDir;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method, matchers::path};
 
 pub(super) const API_KEY: &str = "test-api-key";
-/// Synthetic restricted-circulation GS1 numbers: never a real package.
 pub(super) const SKYR: &str = "2001234567893";
 pub(super) const JUICE: &str = "2009876543213";
 pub(super) const UNKNOWN: &str = "2005550001116";
 
-/// The nutrition routes over one `app.db`, a `food.db` imported from `wiremock`, and Open Food
-/// Facts on the same `wiremock` server.
 pub(super) struct Api {
     pub(super) server: MockServer,
     pub(super) _dir: TempDir,
@@ -104,7 +100,6 @@ impl Api {
         .await
     }
 
-    /// Answers reads of `barcode` with `template`, expecting exactly `reads` of them.
     pub(super) async fn provider(&self, barcode: &str, template: ResponseTemplate, reads: u64) {
         Mock::given(method("GET"))
             .and(path(format!("/api/v2/product/{barcode}")))
@@ -115,7 +110,6 @@ impl Api {
             .await;
     }
 
-    /// How many product reads reached Open Food Facts.
     pub(super) async fn provider_reads(&self) -> usize {
         self.server
             .received_requests()
@@ -127,8 +121,6 @@ impl Api {
     }
 }
 
-/// A read that names the app in its User-Agent without any contact detail and asks only for
-/// the fields a Product needs.
 pub(super) fn identified_and_limited(request: &Request) -> bool {
     let agent = request
         .headers
@@ -153,7 +145,6 @@ pub(super) fn identified_and_limited(request: &Request) -> bool {
         && !fields.contains('*')
 }
 
-/// A found product as Open Food Facts version 2 answers it.
 pub(super) fn found(product: &Value) -> ResponseTemplate {
     ResponseTemplate::new(200).set_body_json(json!({
         "code": product["code"],
@@ -163,8 +154,6 @@ pub(super) fn found(product: &Value) -> ResponseTemplate {
     }))
 }
 
-/// A synthetic skyr label: kcal only, salt and sodium, vitamin D and calcium in grams per 100 g,
-/// per-serving values that must be ignored, and no fibre or alcohol.
 pub(super) fn skyr_label() -> Value {
     json!({
         "code": SKYR,
@@ -194,7 +183,6 @@ impl Api {
             .await
     }
 
-    /// Logs `portions` at a fixed time, expecting a new Meal Log, and returns it.
     pub(super) async fn logged(&self, portions: Value, request_id: &str) -> Value {
         let (status, logged) = self.log(meal(&portions, request_id)).await;
         assert_eq!(status, StatusCode::CREATED, "{logged}");
@@ -209,7 +197,6 @@ impl Api {
         day
     }
 
-    /// Links the synthetic skyr to `food_id`, reading Open Food Facts once.
     pub(super) async fn linked_skyr(&self, food_id: i64) {
         self.provider(SKYR, found(&skyr_label()), 1).await;
         let (status, linked) = self.link(SKYR, food_id, "link-skyr").await;

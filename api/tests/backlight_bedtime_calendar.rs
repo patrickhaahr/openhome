@@ -1,5 +1,3 @@
-//! Backlight bedtime windows on the Copenhagen calendar.
-
 mod backlight_support;
 mod common;
 
@@ -32,7 +30,6 @@ fn bedtime_default_calendar_includes_start_excludes_end_and_tracks_copenhagen_da
 #[test]
 fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_repeat() {
     use openhome_api::services::backlight::routine::{BedtimeSettings, evaluate};
-    // Expected UTC instants are calendar examples, independent of the evaluator.
     for (start, end, instant, mode, next) in [
         (
             "22:00",
@@ -48,7 +45,6 @@ fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_rep
             "tv-sync",
             "2026-01-16T21:00:00Z",
         ),
-        // 29 March jumps from 01:59 CET to 03:00 CEST.
         (
             "02:30",
             "03:30",
@@ -70,7 +66,6 @@ fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_rep
             "color",
             "2026-03-29T01:00:00Z",
         ),
-        // A wholly skipped red interval does not invent an action that day.
         (
             "02:10",
             "02:20",
@@ -78,7 +73,6 @@ fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_rep
             "tv-sync",
             "2026-03-30T00:10:00Z",
         ),
-        // 25 October repeats 02:00–02:59, so a contained window runs twice.
         (
             "02:15",
             "02:45",
@@ -107,7 +101,6 @@ fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_rep
             "color",
             "2026-10-25T01:45:00Z",
         ),
-        // Crossing the rollback can leave/reenter even without a named boundary.
         (
             "02:30",
             "03:30",
@@ -122,7 +115,6 @@ fn edited_windows_follow_actual_copenhagen_minutes_through_midnight_skip_and_rep
             "tv-sync",
             "2026-10-25T01:30:00Z",
         ),
-        // A window containing the whole repeated hour stays active through it.
         (
             "01:30",
             "03:30",

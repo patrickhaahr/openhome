@@ -1,5 +1,3 @@
-//! Backlight native and uploaded effects and the inactivity hold.
-
 mod backlight_support;
 mod common;
 
@@ -110,7 +108,6 @@ async fn rapid_effect_clients_cancel_partial_uploads_and_keep_only_the_latest_ta
     )
     .await;
     assert_eq!(persisted["intended"], latest_target);
-    // Refreshes must use the same whole-operation serialization as selections.
     let refresh = tokio::spawn(send_request_with_method(
         app.clone(),
         "/api/backlight/refresh",
@@ -130,7 +127,6 @@ async fn rapid_effect_clients_cancel_partial_uploads_and_keep_only_the_latest_ta
     let (_, final_status) = send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
     assert_eq!(final_status["acknowledged"], latest_target);
     let operations = device.device.packets.lock().unwrap().len();
-    // Reading or waiting must not fight a physical button / other controller.
     for _ in 0..3 {
         send_request(app.clone(), "/api/backlight", Some("test-api-key")).await;
     }
@@ -181,7 +177,6 @@ async fn native_effect_is_validated_durable_and_tv_sync_keeps_its_profile() {
     {
         let batches = device.packets.lock().unwrap();
         let upload = batches.last().unwrap();
-        // Independent H605C catalog/ptReal reference: Aurora 215, five data frames.
         assert_eq!(&upload[0][..5], &[0xa3, 0, 1, 5, 2]);
         assert_eq!(&upload[4][..2], &[0xa3, 0xff]);
         assert_eq!(&upload[5][..5], &[0x33, 5, 4, 215, 0]);
@@ -345,7 +340,6 @@ async fn inactivity_hold_is_verified_on_device_without_changing_lighting_intent(
         StatusCode::SERVICE_UNAVAILABLE,
         "a write receipt alone cannot confirm the hold"
     );
-    // A malformed native response must prevent even attempting a settings write.
     device.settings.lock().unwrap()[19] ^= 1;
     let count = device.writes.lock().unwrap().len();
     let (status, _) = send_request_with_method(

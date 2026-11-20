@@ -12,7 +12,6 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-/** How one Exercise is rested; an Exercise without a row has the defaults. Stays on this device. */
 @Entity(
     tableName = "exercise_rest",
     foreignKeys =
@@ -31,10 +30,6 @@ data class ExerciseRestEntity(
     val enabled: Boolean,
 )
 
-/**
- * The one rest being timed. Its key is the Active Workout's, so there can never be two and ending the
- * Workout ends it. Only the deadline is stored: what remains is always worked out from the clock.
- */
 @Entity(
     tableName = "rest_timer",
     foreignKeys =
@@ -57,9 +52,7 @@ data class ExerciseRestEntity(
 data class RestTimerEntity(
     @PrimaryKey val id: Int = SINGLE_ROW_ID,
     @ColumnInfo(name = "exercise_id") val exerciseId: Long,
-    /** Wall-clock milliseconds, the one clock that keeps counting across a restart of the phone. */
     @ColumnInfo(name = "deadline_at") val deadlineAt: Long,
-    /** Whether this rest's end has been dealt with, so it can never vibrate twice. */
     val alerted: Boolean = false,
 )
 
@@ -81,7 +74,6 @@ interface RestDao {
     @Query("SELECT * FROM rest_timer")
     suspend fun loadTimer(): RestTimerEntity?
 
-    /** Replaces any earlier rest: there is only ever one being timed. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveTimer(timer: RestTimerEntity)
 
@@ -94,7 +86,6 @@ interface RestDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun savePreference(preference: ExerciseRestEntity)
 
-    /** What was set on the row being merged away wins: it is the one the user has been logging with. */
     @Query("UPDATE OR REPLACE exercise_rest SET exercise_id = :to WHERE exercise_id = :from")
     suspend fun movePreference(from: Long, to: Long)
 

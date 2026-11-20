@@ -1,6 +1,3 @@
-//! One-command synthetic preview of the whole dashboard for UI design work.
-//!
-// A design fixture, not production code: lossy numeric casts and short names are deliberate.
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -11,16 +8,6 @@
     clippy::too_many_lines,
     clippy::trivially_copy_pass_by_ref
 )]
-
-//! Serves the production routes, migrations and authentication over isolated in-memory databases,
-//! with loopback stand-ins for every upstream (openrouteservice, `Open-Meteo`, Immich, the IR
-//! bridge, the `SwitchBot` bridge, the OPTCG card catalogue and the ECB reference rates). TMDB is the real service when
-//! `TMDB_READ_ACCESS_TOKEN` is set, otherwise a loopback catalogue. All data is invented and readable in `seed/*.json`; it is
-//! generated relative to today so the current day is always populated. The household API,
-//! credentials and coordinates are never touched: the map and weather use the public Copenhagen
-//! demo origin.
-//!
-//! Run through `just dashboard-synthetic`. Edit `seed/` and restart to change what the preview shows.
 
 use std::sync::Arc;
 
@@ -40,8 +27,6 @@ use openhome_api::{
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::net::TcpListener;
 
-// Shared with `dashboard_health`; this preview uses the route and Open Food Facts providers (TMDB
-// is `media`).
 #[path = "../support/providers.rs"]
 #[allow(dead_code)]
 mod providers;
@@ -58,13 +43,11 @@ mod prices;
 mod seed;
 mod stubs;
 
-/// Not secret: it only authorizes this loopback fixture.
 const API_KEY: &str = "synthetic-dashboard-api-key";
 const DEFAULT_PORT: &str = "3101";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Each in-memory connection is its own database, so the pool must never retire its only one.
     let db = SqlitePoolOptions::new()
         .max_connections(1)
         .idle_timeout(None)
@@ -98,15 +81,12 @@ async fn main() -> anyhow::Result<()> {
     let tmdb = media::tmdb().await?;
     let catalogue = binder::stand_in().await?;
     let optcg = catalogue.client.clone();
-    // `OPENHOME_PREVIEW_ECB=outage` makes the stand-in answer 503, so no rates arrive;
-    // `missed-day` leaves a day out of the history file and refills it on a second pass.
     let mode = ecb::mode();
     let ecb = ecb::ecb(mode).await?;
     if mode == ecb::Mode::MissedDay {
         tokio::spawn(ecb::next_pass(db.clone(), ecb.clone()));
     }
     tokio::spawn(exchange_rates::run_scheduler(db.clone(), ecb));
-    // `--food-database=importing` previews the Food page's unavailable state.
     let food_state = foods::FoodState::from_args();
     let foods = foods::synthetic_foods(food_state).await?;
     let (meal_photos, _meal_photo_dir) = foods::photo_store()?;
@@ -143,7 +123,6 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::training::router())
         .merge(routes::nutrition::router(foods, meal_photos, labels))
         .with_state(state)
-        // Inside the key layer, so the stand-in is authenticated like the route it answers for.
         .layer(axum::middleware::from_fn(move |request, next| {
             media::wish_picture(picture_db.clone(), request, next)
         }))
@@ -155,7 +134,6 @@ async fn main() -> anyhow::Result<()> {
     let url = format!("http://{}", listener.local_addr()?);
     tokio::spawn(async move { axum::serve(listener, app).await });
 
-    // Household records are seeded through the public routes, so they always match the contract.
     seed::household(&url, API_KEY, &seed_db).await?;
     if binder::history_mode() {
         prices::replay(&seed_db, &catalogue).await?;

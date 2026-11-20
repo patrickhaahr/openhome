@@ -74,7 +74,7 @@ bool runCommand(const IrCommand *command, Stream &out) {
   return true;
 }
 
-}  // namespace
+}
 
 void initIrCommands() {
   irsend.begin();

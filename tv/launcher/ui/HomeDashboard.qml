@@ -10,7 +10,6 @@ Item {
     readonly property Component appTile: tiles
     function r(v) { return home.r(v); }
     anchors.fill: parent; visible: !home.drawer
-    // Dashboard proportions: one large clock, today's weather, three rings.
     OH.TVText {
         x: r(84); y: r(32); text: Qt.formatDateTime(home.now, "HH:mm")
         color: "#ecece6"; font.family: home.family; font.pixelSize: r(270); font.letterSpacing: -r(11)

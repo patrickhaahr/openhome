@@ -202,7 +202,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .and(header("Authorization", "Basic dGVzdDp0ZXN0"))
@@ -239,7 +238,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .respond_with(ResponseTemplate::new(200).set_body_json(status_response.clone()))
@@ -275,7 +273,6 @@ mod tests {
             "running": true
         });
 
-        // Mock both the POST and the subsequent GET
         Mock::given(method("POST"))
             .and(path("/control/protection"))
             .respond_with(ResponseTemplate::new(200).set_body_json(status_response.clone()))

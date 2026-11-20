@@ -3,7 +3,6 @@ import { FilmStripIcon } from "@phosphor-icons/react/dist/csr/FilmStrip"
 import { TelevisionSimpleIcon } from "@phosphor-icons/react/dist/csr/TelevisionSimple"
 import { posterUrl, type WatchlistEntry } from "@/lib/watchlist"
 
-/** Movie or series as a quiet glyph; the word stays for assistive technology. */
 export function KindGlyph({
   kind,
   size = 16,
@@ -34,10 +33,6 @@ const posterType = cva(
   }
 )
 
-/**
- * TMDB artwork over a typographic poster: without artwork, or when it fails to load, the title
- * set large is the poster. A `chip` sits over its bottom-left corner and moves the title up.
- */
 export function WatchlistPoster({
   title,
   path,
@@ -82,7 +77,6 @@ export function WatchlistPoster({
   )
 }
 
-/** TMDB's required notice and approved logo, kept beside its metadata. */
 export function TmdbCredits(): React.JSX.Element {
   return (
     <aside

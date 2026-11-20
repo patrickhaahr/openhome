@@ -12,7 +12,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Runs in its own process, so a test can force-stop the app and observe the real relaunch.
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.self-instrumenting"] = true
 

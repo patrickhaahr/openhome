@@ -47,11 +47,6 @@ const groups = [
   label: string
 }>
 
-/**
- * The household's Important Dates as plates: what it counts from first, then the yearly dates in
- * the order they come round. Axum computes every figure; the view re-reads when the Copenhagen
- * day turns, so the figures stay live on an always-on display.
- */
 export function DateBoard({
   data,
   search,
@@ -252,7 +247,6 @@ const plate = cva(
   }
 )
 
-/** A date's plate: its title, the live figure large, then the date and its people. */
 function DatePlate({
   date,
   people,

@@ -28,19 +28,15 @@ class AppGateViewModel(
     syncScheduler: FitnessSyncScheduler,
     restTimers: RestTimers,
 ) : ViewModel() {
-    /** Null until storage answers, so a set-up app never flashes the Setup Flow. */
     val state: StateFlow<SetupState?> =
         setup.observeState().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
-        // Opening the app or gaining Wi-Fi in front of the user skips any waiting retry.
         viewModelScope.launch { wifi.observeOnWifi().collect { syncScheduler.scheduleIfPending() } }
-        // Android drops alarms on a force-stop or a restart of the phone; the deadline is still stored.
         viewModelScope.launch { restTimers.syncAlarm() }
     }
 }
 
-/** The Setup Flow gates the app; once complete, the navigation hierarchy never includes it. */
 @Composable
 fun OpenHomeApp() {
     OpenHomeTheme {

@@ -1,15 +1,9 @@
-//! Fitness profile fields.
-
 mod common;
 
 use common::send_request_with_method;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
-
-// ---------------------------------------------------------------------------
-// Profile (#8)
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn test_profile_get_not_configured_then_patch_sets_fields() {
@@ -89,7 +83,6 @@ async fn test_profile_patch_null_clears_fields() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    // explicit null clears sex; absent height_cm keeps its value
     let (status, body) = send_request_with_method(
         app,
         "/api/profile",

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// This harness also executes the private server transport; CORS applies to browser RPCs, not Axum calls.
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -59,7 +58,6 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
 
-  // Clean through the public API; seeded library exercises remain.
   const workouts = await api(workoutRows, "/api/workouts?limit=500")
 
   for (const workout of workouts)
@@ -104,7 +102,6 @@ type StoredSet = {
   readonly rpe: number | null
 }
 
-/** The web client never writes a Workout, so each one is stored through the API first. */
 async function store(
   date: string,
   name: string,
@@ -145,7 +142,6 @@ async function render(): Promise<void> {
   })
 }
 
-/** The names of the sessions that have a logged workout, in the order the Log lists them. */
 function titles(): Array<string | null> {
   return Array.from(
     container.querySelectorAll(
@@ -154,7 +150,6 @@ function titles(): Array<string | null> {
   ).map((title) => title.textContent)
 }
 
-/** Every session's name, strap-only ones included. */
 function allTitles(): Array<string | null> {
   return Array.from(
     container.querySelectorAll('[data-slot="session-title"] h3')
@@ -181,12 +176,9 @@ test("reviews reps, added weight, RPE and a bodyweight hold from history", async
   expect(titles()).toEqual(["Pull day"])
   expect(container.textContent).toContain("8 reps · +20 kg · RPE 8")
   expect(container.textContent).toContain("6 reps · +20 kg")
-  // A duration stored on a reps set is shown, and a weight is never rounded away.
   expect(container.textContent).toContain("7 reps in 40 s · +12.35 kg")
-  // Bodyweight reads as bodyweight, never as zero added weight.
   expect(container.textContent).toContain("Hold 1:05 · bodyweight · RPE 6")
 
-  // RPE draws as an underline on the sets that have one, as long as the effort was hard.
   const underlines = Array.from(
     container.querySelectorAll<HTMLElement>('[data-slot="set-pill-rpe"]')
   ).map((line) => line.style.getPropertyValue("--rpe"))
@@ -198,7 +190,6 @@ test("reviews reps, added weight, RPE and a bodyweight hold from history", async
     )
   ).toEqual(["8", null, null, "6"])
 
-  // Every exercise row shares one grid as wide as the longest exercise.
   expect(
     container
       .querySelector<HTMLElement>('[data-slot="session-exercises"]')
@@ -232,7 +223,6 @@ test("a logged workout and the strap's session on its day share one plate; the s
   await store("2026-09-12", "Quiet day")
 
   await render()
-  // Only the strap's Mobility session is not movement, so it is the one that pairs.
   expect(allTitles()).toHaveLength(4)
   expect(allTitles()[0]).toBe("Mobility day")
   expect(
@@ -249,9 +239,7 @@ test("a logged workout and the strap's session on its day share one plate; the s
   expect(plates).toContainEqual(["paired", "Mobility day"])
   expect(plates).toContainEqual(["strap", "Cycling"])
   expect(plates).toContainEqual(["logged", "Quiet day"])
-  // None of these sessions has a GPS route, so none draws a map or an empty frame for one.
   expect(container.querySelector('[data-slot="session-map"]')).toBeNull()
-  // The paired plate carries both halves, and nothing on it leads away to Recovery.
 
   const paired = container.querySelector(
     '[data-slot="session"][data-kind="paired"]'

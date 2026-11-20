@@ -1,9 +1,5 @@
 import type { MapOrigin } from "@/lib/map"
 
-/**
- * The map's ground and the canvas the vector or image-tile library draws into, with the
- * plates and notices layered above it. The canvas stays hidden until the map is ready.
- */
 export function MapFrame({
   state,
   renderer,

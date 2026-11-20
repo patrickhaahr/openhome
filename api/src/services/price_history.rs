@@ -1,8 +1,3 @@
-//! Price History (`CONTEXT.md`): the Card Prices the household observed for a Card, one Price Point per
-//! observation date in USD cents. The first point is written when the Card is first stored and
-//! each later one only when the catalogue's observation date is newer than the Card's latest, so
-//! nothing is backfilled or interpolated. A read converts every point at its own date's rates.
-
 use serde::Serialize;
 use sqlx::{SqliteConnection, SqlitePool};
 
@@ -19,8 +14,6 @@ fn cents_of(usd: f64) -> Result<i64, sqlx::Error> {
         .ok_or_else(|| sqlx::Error::Decode("price is not an amount".into()))
 }
 
-/// The point recorded with a Card the moment it is stored. A concurrent store of the same Card
-/// loses the Card insert and so never reaches this.
 pub(super) async fn record_first(
     tx: &mut SqliteConnection,
     card_id: &str,
@@ -40,9 +33,6 @@ pub(super) async fn record_first(
     Ok(())
 }
 
-/// Updates an owned Card's latest price and appends its point when `observed_on` is newer than
-/// the Card's latest. The guarded update is one statement, so a retry or a concurrent run sees
-/// the first one's date and adds nothing. `false` when the Card is unowned or already as new.
 pub async fn record_newer(
     db: &SqlitePool,
     card_id: &str,
@@ -71,8 +61,6 @@ pub async fn record_newer(
     Ok(true)
 }
 
-/// One Price Point. The converted amounts and the rate day are null when no ECB rates exist at
-/// or before the point's date.
 #[derive(Debug, Serialize)]
 pub struct PricePoint {
     pub observed_on: CalendarDay,
@@ -97,8 +85,6 @@ fn bound(name: &str, text: Option<&str>) -> Result<Option<String>> {
     .transpose()
 }
 
-/// A Card's Price Points observed from `from` to `to` (both inclusive, either optional), oldest
-/// first. A Card with no point in the range has an empty list.
 pub async fn history(
     db: &SqlitePool,
     id: &CardId,

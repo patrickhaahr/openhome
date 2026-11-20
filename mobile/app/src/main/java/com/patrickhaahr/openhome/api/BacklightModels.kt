@@ -16,7 +16,6 @@ sealed class BacklightSelection {
 @Serializable data class BacklightObservation(val power: Boolean, val brightness: Int, val mode: String, val observed_at: String)
 @Serializable data class BacklightBedtime(val enabled: Boolean, val start: String, val end: String, val brightness: Int)
 
-/** Independent server facts; an acknowledgement never substitutes for readback. */
 @Serializable
 data class BacklightStatus(
     val effects: List<BacklightEffect>,
@@ -42,7 +41,6 @@ enum class BacklightProfileSource {
 
 @Serializable data class BacklightProfileRequest(val source: BacklightProfileSource)
 
-/** Omitting enabled preserves Axum's manual override on a time/brightness edit. */
 @Serializable
 data class BacklightBedtimeUpdate(
     val enabled: Boolean? = null,

@@ -26,12 +26,6 @@ function reason(status: number): NutritionFailure {
   return "unavailable"
 }
 
-/**
- * Read one Copenhagen day's Meal Logs and totals through the server-held Axum credential.
- *
- * @param search - The day to read; today when absent.
- * @returns The day, the Food database's unavailability, or a sanitized failure.
- */
 export async function readNutritionDay(
   search: NutritionSearch
 ): Promise<NutritionDayState> {
@@ -73,13 +67,6 @@ export async function readNutritionDay(
     : { day, today, state: "unavailable", reason: "unavailable" }
 }
 
-/**
- * Read the Nutrition Summary of the chosen range, ending today in Copenhagen, through the
- * server-held Axum credential.
- *
- * @param choice - The range in days and the aggregation.
- * @returns The summary, or a sanitized failure.
- */
 export async function readNutritionSummary(
   choice: TrendsChoice
 ): Promise<NutritionSummaryState> {
@@ -115,7 +102,6 @@ export async function readNutritionSummary(
     : { ...choice, today, state: "unavailable", reason: "unavailable" }
 }
 
-/** Today's Nutrition Goal, or null when it cannot be read; the day still shows without it. */
 async function readNutritionGoal(): Promise<NutritionGoal | null> {
   const result = await requestOpenHome({
     path: "/api/nutrition/goal",
@@ -130,13 +116,6 @@ async function readNutritionGoal(): Promise<NutritionGoal | null> {
   return parsed.success ? parsed.data : null
 }
 
-/**
- * Set the Nutrition Goal from today through the server-held Axum credential; Axum owns the
- * offered rates and the day it takes effect.
- *
- * @param input - The goal's direction and weekly rate.
- * @returns The saved goal and history, or a sanitized failure.
- */
 export async function writeNutritionGoal(
   input: SetGoalInput
 ): Promise<GoalMutation> {
@@ -165,22 +144,13 @@ const mealPhotoInput = z.object({
   size: z.enum(["photo", "thumbnail"]),
 })
 
-// A 1,600 px AVIF is a few hundred kilobytes; anything far larger is not one of Axum's photos.
 const mealPhotoLimit = 5 * 1024 * 1024
 
-/**
- * Relay one stored meal photo or thumbnail as bounded AVIF bytes, never upstream headers or
- * error bodies, the way wish pictures are relayed.
- *
- * @param input - The photo ID and size from the dashboard path.
- * @returns The image, or an empty 404 or 503.
- */
 export async function readMealPhoto(input: {
   photo: string
   size: string
 }): Promise<Response> {
   const headers = {
-    // A photo ID always names the same image; a replaced photo gets a new ID.
     "Cache-Control": "private, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy":

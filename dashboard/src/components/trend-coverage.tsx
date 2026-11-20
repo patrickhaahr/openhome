@@ -31,26 +31,16 @@ const panel = "grid col-span-full min-w-0 gap-4 rounded-xl bg-wash p-food-plate"
 
 const basis = "text-label text-muted-ink"
 
-/** Periods wider than this get no gap between their cells, so a year of days still fits. */
 const gappedPeriods = 60
 
 type CoverageTrendsProps = {
   readonly coverage: MicronutrientCoverage
   readonly periods: readonly SummaryPeriod[]
   readonly by: Aggregation
-  /** Full name per period, for the table and the cut down note. */
   readonly names: readonly string[]
-  /** Short axis label per period. */
   readonly labels: readonly string[]
 }
 
-/**
- * The Trends view's vitamins and minerals: each nutrient's mean share of its Recommended Intake
- * a logged day as a strip of period columns (ink once reached, red in a cut down period, an amber
- * dot under a period with a day above an Upper Limit) and its range mean, with Axum's lasting
- * shortfalls and cut downs named in the summary and marked on their rows. The strips are hidden
- * from assistive technology, which reads the summary and a table of every nutrient instead.
- */
 export function CoverageTrends({
   coverage,
   periods,
@@ -212,7 +202,6 @@ export function CoverageTrends({
   )
 }
 
-/** The note under a row: its cut down periods in red, or its days above an Upper Limit. */
 function limitNote(row: CoverageRow, by: Aggregation): string | null {
   const above = row.days_above_upper_limit ?? 0
   const cut = row.cells.filter((cell) => cell.limit === "cut_down").length
@@ -230,7 +219,6 @@ function limitNote(row: CoverageRow, by: Aggregation): string | null {
   return days
 }
 
-/** A period's column: its share of the Recommended Intake, red when cut down, none when not logged. */
 function cellClass(
   cell: CoverageRow["cells"][number],
   partial: boolean

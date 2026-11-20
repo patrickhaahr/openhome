@@ -58,16 +58,9 @@ async function read<T>(
   }
 }
 
-/**
- * The Axum path of one NOOP Workout Detail, or undefined when the identity could not be a path.
- *
- * @param selection - The exact source, start and sport Axum listed.
- * @returns The path, or undefined for dot segments and control characters.
- */
 export function noopDetailPath(
   selection: NoopSelection
 ): `/api/${string}` | undefined {
-  // Literal dot segments are normalized even when URL-encoded; never let them change the API path.
   const safeSegment = (value: string) =>
     // oxlint-disable-next-line no-control-regex -- Axum rejects control characters in path identities.
     value !== "." && value !== ".." && !/[\u0000-\u001f\u007f]/.test(value)
@@ -78,12 +71,10 @@ export function noopDetailPath(
   return `/api/training/noop-workouts/${encodeURIComponent(selection.source)}/${encodeURIComponent(selection.start)}/${encodeURIComponent(selection.sport)}`
 }
 
-/** The earlier of two Training Days. */
 function minDay(a: string, b: string): string {
   return a < b ? a : b
 }
 
-/** Recovery Days from `from` through `to`, oldest first, leaving out `skip` (read by the caller). */
 export async function readRecoveryDays(
   from: string,
   to: string,
@@ -106,14 +97,12 @@ export async function readRecoveryDays(
   )
 }
 
-/** Read existing Axum training models in parallel; selection and wearable interpretation remain in Axum. */
 export async function readTraining(
   search: TrainingSearch
 ): Promise<TrainingState> {
   const today = trainingDayOn(new Date())
   const day = search.day ?? today
   const from = shiftDay(day, -6)
-  // The day strip opens on a month around the selected day and fills toward today and the past.
   const weekEnd = day >= today ? day : minDay(today, shiftDay(day, 13))
   const weekStart = shiftDay(weekEnd, 1 - stripDays)
   const selected = search.noop
@@ -136,7 +125,6 @@ export async function readTraining(
   const trend = (metric: TrendMetric) =>
     read(`/api/training/trends/${metric}/${trendFrom}/${day}`, metricTrend)
 
-  // Axum scores one Recovery Day per read; the strip reads the days around the selected one.
   const [others, recovery, hrv, restingHr, sleep, context, selectedDetail] =
     await Promise.all([
       readRecoveryDays(weekStart, weekEnd, day),
@@ -161,7 +149,6 @@ export async function readTraining(
   }
 }
 
-/** Today's Recovery Day alone, for Home's glance. */
 export async function readRecoveryToday(): Promise<TrainingRead<RecoveryDay>> {
   return read(
     `/api/training/days/${trainingDayOn(new Date())}/recovery`,

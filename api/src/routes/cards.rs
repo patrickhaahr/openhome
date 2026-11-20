@@ -72,7 +72,6 @@ async fn image(
     Ok((
         [
             (header::CONTENT_TYPE, "image/avif"),
-            // The stored image never changes, but it is household data: no shared caches.
             (header::CACHE_CONTROL, "private, max-age=86400"),
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
         ],

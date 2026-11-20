@@ -1,5 +1,3 @@
-//! Combined Progress Lines through the authenticated fitness routes over a migrated database.
-
 mod common;
 
 use axum::Router;
@@ -22,7 +20,6 @@ async fn create_exercise(app: &Router, name: &str) -> i64 {
     exercise["id"].as_i64().unwrap()
 }
 
-/// Logs one Workout on `date` with one entry per `(exercise, sets)` pair.
 async fn log(app: &Router, date: &str, entries: &[(i64, Value)]) {
     let exercises: Vec<Value> = entries
         .iter()
@@ -74,7 +71,6 @@ fn line<'a>(body: &'a Value, name: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("no line for {name}: {body}"))
 }
 
-/// `(date, raw value, index)` for every sample of a charted line.
 fn samples(line: &Value) -> Vec<(String, i64, f64)> {
     line["samples"]
         .as_array()
@@ -94,7 +90,6 @@ fn samples(line: &Value) -> Vec<(String, i64, f64)> {
 async fn bodyweight_reps_index_best_set_to_first_day_keeping_gaps_and_declines() {
     let app = common::test_app().await;
     let pull_up = create_exercise(&app, "Synthetic Pull-up").await;
-    // Best set per day: 8 (baseline), 10, then a decline to 6 after an unlogged week.
     log(&app, "2026-09-01", &[(pull_up, reps(&[8, 6, 5]))]).await;
     log(&app, "2026-09-03", &[(pull_up, reps(&[10, 7]))]).await;
     log(&app, "2026-09-12", &[(pull_up, reps(&[6]))]).await;
@@ -266,7 +261,6 @@ async fn weighted_mixed_missing_and_never_logged_exercises_have_explicit_outcome
         status_of("Synthetic Dragon Flag"),
         (json!("never_logged"), Value::Null)
     );
-    // A zero Added Weight adds nothing, so the Set is bodyweight work.
     assert_eq!(
         line(&body, "Synthetic Chin-up")["metric"],
         json!("repetitions")
@@ -330,7 +324,6 @@ async fn weighted_estimates_select_valid_sets_preserve_declines_and_leave_old_pr
         assert!((sample["index"].as_f64().unwrap() - index).abs() < 1e-8);
     }
 
-    // The older endpoint still estimates all positive-rep weighted sets using its original Epley rule.
     let (_, old) = send_request(app, &format!("/api/exercises/{lift}/progress"), KEY).await;
     let old = old["data"].as_array().unwrap();
     assert!((old[1]["estimated_1rm_kg"].as_f64().unwrap() - 200.0).abs() < 1e-8);
@@ -425,7 +418,6 @@ async fn default_selection_is_the_most_recently_logged_exercises_up_to_the_bound
     let older: Vec<(i64, Value)> = ids[..24].iter().map(|id| (*id, reps(&[5]))).collect();
     log(&app, "2026-09-01", &older).await;
     log(&app, "2026-09-03", &[(ids[24], reps(&[5]))]).await;
-    // Outside the period: not part of the default selection or its count.
     let outside = create_exercise(&app, "Synthetic Outside").await;
     log(&app, "2026-10-02", &[(outside, reps(&[5]))]).await;
 

@@ -17,15 +17,12 @@ const monthName = new Intl.DateTimeFormat("en-GB", {
   month: "short",
 })
 
-/** The width drawn before the figure is measured, and the narrowest drawn at all. */
 const defaultWidth = 840
 
-/** Room for the kilogram labels at the right edge. */
 const pad = { top: 28, right: 64, bottom: 36, left: 24 }
 
 const day = 86_400_000
 
-/** Days either side of a weigh-in averaged into the trend line. */
 const smoothingDays = 3
 
 type Point = {
@@ -39,7 +36,6 @@ function time(date: string): number {
   return Date.parse(`${date}T00:00:00Z`)
 }
 
-/** A smooth path through points (Catmull-Rom as cubic Béziers), so the trend reads as a trend. */
 function smooth(points: ReadonlyArray<{ x: number; y: number }>): string {
   if (points.length === 0) return ""
 
@@ -73,15 +69,10 @@ function tickStep(range: number): number {
   return range > 3 ? 1 : 0.5
 }
 
-/** A drawing as tall as the figure is wide allows: lower on a phone, taller on the wall. */
 function heightFor(width: number): number {
   return width < 520 ? 250 : 340
 }
 
-/**
- * Body weight as weigh-in dots under a smoothed trend, on bands of alternating tone instead of
- * gridlines; touch a day to read its value.
- */
 export function WeightChart({
   history,
 }: {
@@ -144,7 +135,6 @@ export function WeightChart({
   for (let kg = Math.ceil(low / step) * step; kg <= high; kg += step)
     ticks.push(kg)
 
-  // A band is the stretch between two ticks; every second one is a darker tone.
   const bands = ticks.map((kg, index) => ({
     kg,
     top: y(Math.min(high, kg + step)),

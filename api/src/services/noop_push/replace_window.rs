@@ -1,21 +1,3 @@
-//! Replace-window delivery for the mutable streams (`docs/noop/PUSH_PROTOCOL_DELIVERY.md`,
-//! "Authoritative rolling-window delivery").
-//!
-//! Every part belongs to one replacement (`replacementId`) whose stream, window and part count
-//! are fixed by the first part observed. Parts are staged durably (`replacement_part`); the part
-//! that completes the set triggers, in the same transaction, the atomic apply: upsert every
-//! record by scoped primary key, then delete the rows in `(source, device)` and the window whose
-//! keys are absent from the complete replacement. Its ack is only returned once that commits.
-//!
-//! Generations: `replacement_scope` remembers the latest replacement observed per
-//! `(source, device, stream)`. A part of any other replacement starts a new generation and
-//! supersedes the current one if it is still staging; superseded replacements are fences whose
-//! parts (late or retried) are rejected with 409.
-//!
-//! Retries: a byte-identical accepted part replays its ack without touching rows or changing
-//! the current generation, unless its incomplete replacement was superseded. This also keeps
-//! late retries of completed replacements from overwriting newer data.
-
 use std::collections::HashSet;
 
 use sqlx::{Row, SqliteConnection};
@@ -30,11 +12,8 @@ const REPLACEMENT_SUPERSEDED: IngestError = IngestError::Conflict("replacement_s
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PartOutcome {
-    /// Byte-identical retry of an accepted part; nothing changed.
     Retry,
-    /// Staged; the replacement is still waiting for other parts.
     Staged,
-    /// This part completed the replacement and it was applied.
     Applied,
 }
 
@@ -44,16 +23,12 @@ enum State {
     Applied,
 }
 
-/// Row identity shared by every replacement table.
 struct Scope<'a> {
     receiver_state_id: &'a str,
     source_id: &'a str,
     device_id: &'a str,
 }
 
-/// Accepts one validated replace-window part inside the caller's write transaction.
-/// `history` is the ledger's verdict on this `batchId`; an identical retry replays after the
-/// replacement fences are checked.
 pub(super) async fn accept(
     conn: &mut SqliteConnection,
     receiver_state_id: &str,
@@ -121,8 +96,6 @@ pub(super) async fn accept(
     if stored_part.is_some_and(|stored_batch_id| stored_batch_id != batch.batch_id) {
         return Err(REPLACEMENT_CONFLICT);
     }
-    // Superseded replacements were rejected above, even for a previously accepted part.
-    // Every other known batch replays before it can change the scope's current generation.
     if matches!(history, BatchHistory::Identical { .. }) {
         return Ok(PartOutcome::Retry);
     }
@@ -187,8 +160,6 @@ pub(super) async fn accept(
     Ok(PartOutcome::Applied)
 }
 
-/// Makes `window.replacement_id` the scope's current generation, superseding the previous one
-/// if it is still staging, and opens the new replacement for staging.
 async fn begin_generation(
     conn: &mut SqliteConnection,
     scope: &Scope<'_>,
@@ -244,8 +215,6 @@ async fn begin_generation(
     Ok(())
 }
 
-/// The atomic apply of a complete replacement: upsert every part's records, delete absent keys
-/// in the window, mark the replacement applied and drop its staged entities.
 async fn apply_replacement(
     conn: &mut SqliteConnection,
     scope: &Scope<'_>,
@@ -276,7 +245,6 @@ async fn apply_replacement(
                 parse_batch(&entity).map_err(|_| IngestError::Internal("corrupt_staged_part"))?;
             &staged.records
         };
-        // Keys are unique within a part (checked at parse); the complete window must be too.
         for record in records {
             if !keys.insert(record.key.clone()) {
                 return Err(DUPLICATE_KEY);

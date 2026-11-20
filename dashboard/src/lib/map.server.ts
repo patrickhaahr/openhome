@@ -2,7 +2,6 @@ import "@tanstack/react-start/server-only"
 import { requestOpenHome } from "./openhome.server"
 import { mapOriginRead, unavailableMapOrigin, type MapOriginRead } from "./map"
 
-/** Read the private map origin from Axum using server-held credentials. */
 export async function readMapOrigin(): Promise<MapOriginRead> {
   const result = await requestOpenHome({
     path: "/api/map",

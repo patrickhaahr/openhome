@@ -1,9 +1,3 @@
-//! NOOP Workout Detail: heart rate series, pace and captured route.
-
-//! NOOP Workout Detail (`GET /api/training/noop-workouts/{source}/{start}`): one NOOP Workout,
-//! selected by its listed `source` and `start`, with heart rate from the strap's samples. Workouts
-//! and samples are pushed through the real push endpoint.
-
 mod common;
 mod training_noop_workout_detail_support;
 
@@ -29,16 +23,13 @@ async fn the_reference_run_reports_heart_rate_from_the_strap_samples() {
 
     let mut body = detail_of(&app, IMPORTED, reference_run::START).await;
 
-    // The strap's 2,740 samples in [start, end): the app's 166 / 185, not the row's 160 / 183.
     assert_eq!(body["hr"]["basis"], "strap_samples");
     assert_close(&body["hr"]["avg_bpm"], 166.075912408759);
     assert_eq!(body["hr"]["min_bpm"], 84.0);
     assert_eq!(body["hr"]["max_bpm"], 185.0);
-    // 2739.582 s over 7.169 km: 6:22 per km.
     assert_close(&body["avg_pace_s_per_km"], 382.12053039235946);
     body["hr"]["avg_bpm"] = Value::Null;
     body["avg_pace_s_per_km"] = Value::Null;
-    // Bucket behavior is covered by the short/gapped and long-session HTTP cases.
     body["hr_series"] = Value::Null;
     assert_eq!(
         body,
@@ -53,12 +44,10 @@ async fn the_reference_run_reports_heart_rate_from_the_strap_samples() {
             "energy_kcal": 817.170682229156,
             "strain_score": 58.45,
             "steps": null,
-            // The stored stand-in is not a polyline, so no route exists.
             "has_route": false,
             "avg_pace_s_per_km": null,
             "hr": {"basis": "strap_samples", "avg_bpm": null, "min_bpm": 84.0, "max_bpm": 185.0},
             "hr_series": null,
-            // Without a Profile Max Heart Rate the zones and recovery are never guessed.
             "hr_zones": null,
             "hr_recovery": null,
             "unavailable": {"hr_zones": "hr_max_not_configured", "hr_recovery": "hr_max_not_configured"},
@@ -76,7 +65,6 @@ async fn the_reference_run_reports_heart_rate_from_the_strap_samples() {
 
 #[tokio::test]
 async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout() {
-    // 07:00:01-07:01:01 on the 26th, off Unix bucket boundaries, imported from Apple Health.
     let mut mirror = mirror_with(&[]).await;
     mirror
         .push(
@@ -94,7 +82,6 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
         )
         .await;
     let strap = [
-        // Just before the start, inside [start, end), then at the end.
         (1_790_398_800, 200),
         (1_790_398_801, 120),
         (1_790_398_815, 123),
@@ -105,7 +92,6 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
     mirror
         .push_hr_samples(SOURCE, IMPORTED, &strap, PUSHED_AT)
         .await;
-    // Neither the computed namespace, another namespace nor another installation is the strap.
     mirror
         .push_hr_samples(SOURCE, COMPUTED, &[(1_790_398_810, 30)], PUSHED_AT)
         .await;
@@ -129,8 +115,6 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
     .await;
     assert_eq!(body["origin"], "health_import");
     assert_eq!(body["source"], "apple-health");
-    // Buckets start at the workout, not at Unix-aligned multiples of 15. The empty
-    // [15, 30) bucket is omitted; boundary and post-workout samples never leak in.
     assert_eq!(
         body["hr_series"],
         json!({"bucket_s": 15, "points": [
@@ -148,7 +132,6 @@ async fn heart_rate_comes_from_the_strap_whatever_namespace_recorded_the_workout
 
 #[tokio::test]
 async fn heart_rate_series_widens_only_as_needed_to_keep_at_most_300_buckets() {
-    // Exact thresholds, one second beyond them, and the longest accepted workout.
     for (duration_s, bucket_s, count, last_t_s) in [
         (4_500, 15, 300, 4_485),
         (4_501, 30, 151, 4_500),
@@ -162,7 +145,6 @@ async fn heart_rate_series_widens_only_as_needed_to_keep_at_most_300_buckets() {
             start + duration_s,
             "Running",
             "manual",
-            // The recorded duration must not determine the series' time window.
             json!({"durationS": 60.0}),
         )])
         .await;
@@ -210,7 +192,6 @@ async fn heart_rate_falls_back_to_the_row_only_without_strap_samples() {
         ),
     ])
     .await;
-    // Strap samples on either side of the run, none inside it.
     mirror
         .push_hr_samples(
             SOURCE,
@@ -275,13 +256,11 @@ async fn pace_needs_a_positive_distance() {
     ] {
         paces.push(detail_of(&app, IMPORTED, start).await["avg_pace_s_per_km"].clone());
     }
-    // 25 minutes over 5 km is 5:00 per km.
     assert_eq!(paces, [json!(300.0), json!(null), json!(null), json!(null)]);
 }
 
 #[tokio::test]
 async fn a_captured_route_is_decoded_to_latitude_longitude_pairs_with_the_steps() {
-    // The Google documentation's example polyline: (38.5, -120.2), (40.7, -120.95).
     let run = noop_workout(
         1_790_438_400,
         1_790_442_000,
@@ -316,7 +295,6 @@ async fn a_captured_route_is_decoded_to_latitude_longitude_pairs_with_the_steps(
 
     assert_eq!(body["steps"], 5812);
     assert_eq!(body["has_route"], true);
-    // The route is private: it is only returned when asked for.
     assert!(body.get("route").is_none(), "{body}");
     let (status, with_route) = common::send_request(
         app.clone(),
@@ -333,7 +311,6 @@ async fn a_captured_route_is_decoded_to_latitude_longitude_pairs_with_the_steps(
         with_route["route"],
         json!([[38.5, -120.2], [40.7, -120.95]])
     );
-    // Without a key neither the detail nor its route is served.
     let (status, body) = common::send_request(
         app.clone(),
         &format!(

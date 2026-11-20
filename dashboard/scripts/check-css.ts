@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { audit } from "./css-classes.ts"
 
-/** Stylesheets allowed plain class selectors. Empty since #305: styles are utilities and tokens. */
 const allowlist: string[] = []
 
 const root = new URL("..", import.meta.url).pathname

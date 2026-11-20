@@ -1,6 +1,4 @@
 'use strict';
-// Developer screenshot fixture, run only temporarily on the TV. Never installed
-// by tv-deploy; no key, provider requests, microphone or working command routes.
 var client = require('/var/lib/openhome-tv/client.js');
 var now = Date.now();
 var day = client.dayOn(now);

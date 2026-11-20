@@ -1,6 +1,3 @@
-//! Food database, NOVA Class, Product, Meal, Supplement, Meal Log and Nutrition Goal tool
-//! arguments, forwarded unchanged to Axum's nutrition routes.
-
 use std::collections::BTreeMap;
 
 use rmcp::schemars;

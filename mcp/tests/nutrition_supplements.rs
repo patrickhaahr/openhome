@@ -211,7 +211,6 @@ async fn supplement_tools_forward_labels_doses_meals_and_the_day_split_unchanged
             .is_error,
         Some(true)
     );
-    // Past days keep the doses they logged.
     assert_eq!(
         wishlist_call(&client, "nutrition_day", json!({"day": "2026-10-29"}))
             .await

@@ -8,11 +8,6 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-/*
- * Primary keys are local and references use them. `server_id` is the Axum id when the record has one,
- * so records created on the device can later exist before the server has assigned an id.
- */
-
 @Entity(tableName = "exercises", indices = [Index(value = ["server_id"], unique = true)])
 data class ExerciseEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -33,7 +28,6 @@ data class WorkoutEntity(
     val date: String,
     val name: String?,
     val notes: String?,
-    /** The newest correction's revision, continuing from Axum's on download so a later one still outranks it. */
     @ColumnInfo(name = "client_revision", defaultValue = "0") val clientRevision: Long = 0,
 )
 
@@ -87,14 +81,12 @@ data class WorkoutSetEntity(
     val notes: String?,
 )
 
-/** One Body Weight per date, as on the server. */
 @Entity(tableName = "body_weight")
 data class BodyWeightEntity(
     @PrimaryKey val date: String,
     @ColumnInfo(name = "weight_kg") val weightKg: Double,
 )
 
-/** The single fitness Profile row. */
 @Entity(tableName = "profile")
 data class ProfileEntity(
     @PrimaryKey val id: Int = SINGLE_ROW_ID,
@@ -102,7 +94,6 @@ data class ProfileEntity(
     val sex: String?,
     @ColumnInfo(name = "hr_max_bpm") val hrMaxBpm: Long?,
     @ColumnInfo(name = "birth_date") val birthDate: String?,
-    /** The newest edit's revision, continuing from Axum's on download so a later one still outranks it. */
     @ColumnInfo(name = "client_revision", defaultValue = "0") val clientRevision: Long = 0,
 )
 
@@ -130,7 +121,6 @@ data class EntryWithDetails(
     val sets: List<WorkoutSetEntity>,
 )
 
-/** One Exercise's sets within a logged Workout, with the day they were performed. */
 data class LoggedEntryWithSets(
     @Embedded val entry: WorkoutEntryEntity,
     @ColumnInfo(name = "workout_date") val workoutDate: String,

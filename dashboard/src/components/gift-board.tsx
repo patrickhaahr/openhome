@@ -40,7 +40,6 @@ import {
 
 const rank = { high: 0, normal: 1, low: 2 } as const
 
-/** What to buy first: high priority, then normal, then low, each in the order they were wished. */
 function byPriority(items: readonly WishlistItem[]): WishlistItem[] {
   return items
     .map((item, index) => ({ item, index }))
@@ -56,10 +55,6 @@ type Open =
   | { kind: "add"; person: string | undefined; list: string | undefined }
   | { kind: "household" }
 
-/**
- * The gift board: every wish as an image-led plate, by person and by named list, so the board
- * answers "what can I buy for them?". Tapping a plate opens its detail plate.
- */
 export function GiftBoard({
   data,
   search,
@@ -137,7 +132,6 @@ export function GiftBoard({
   const ownerOf = (target: Wishlist): HouseholdUser | undefined =>
     owners.find((candidate) => candidate.id === target.owner_id)
 
-  // Groups shown: per person for everyone, per list for one person, one list alone.
   const groups: Array<{
     key: string
     heading: React.ReactNode
@@ -392,7 +386,6 @@ const wishPlate = cva(
   }
 )
 
-/** One wish: the image fills the plate; title, price and quantity sit beneath it. */
 function WishPlate({
   item,
   image,

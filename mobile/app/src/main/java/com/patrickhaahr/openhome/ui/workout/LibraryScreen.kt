@@ -58,7 +58,6 @@ fun LibraryRoute(onCreate: (String) -> Unit, onFix: (Long) -> Unit) {
                             style = Type.Body,
                             color = Lit.Alarm,
                         )
-                    // Quiet by default: a downloaded or synced Exercise says nothing here.
                     row.sync != SyncStatus.Synced -> SyncStatusLine(row.sync)
                 }
             }

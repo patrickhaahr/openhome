@@ -1,5 +1,3 @@
-//! Fixed H605C native scenes; no runtime catalog download or arbitrary packet import.
-//! Provenance and verification limits: docs/backlight-effects.md.
 use super::{Packet, protocol::frame};
 use serde::{Deserialize, Serialize};
 

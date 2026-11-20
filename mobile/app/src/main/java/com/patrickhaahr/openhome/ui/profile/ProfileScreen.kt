@@ -150,7 +150,6 @@ fun ProfileRoute(onEdit: () -> Unit, onRecordBodyWeight: () -> Unit) {
     }
 }
 
-/** The figure a Profile is opened for: what you weigh, and which way it has been going. */
 @Composable
 private fun WeightHero(entries: List<BodyWeight>, onRecord: () -> Unit) {
     val latest = entries.maxByOrNull { it.date }
@@ -174,7 +173,6 @@ private fun WeightHero(entries: List<BodyWeight>, onRecord: () -> Unit) {
     }
 }
 
-/** One lit line and nothing else. A point for each record, in order; no smoothing between them. */
 @Composable
 private fun WeightLine(entries: List<BodyWeight>) {
     val points = entries.sortedBy { it.date }.takeLast(CHART_POINTS).map { it.weightKg.toFloat() }
@@ -212,7 +210,6 @@ private fun ConnectionPlate(connection: SavedConnection?) {
     Spoken(connection?.let { if (it.apiKeyAvailable) "Saved on this device" else "Needs to be entered again" } ?: "Not set")
 }
 
-/** Quiet once it is synced, like the record it describes: only what is still on its way gets a mark. */
 @Composable
 private fun BodyWeightSync(status: SyncStatus, refusal: SyncProblem?, onSyncNow: () -> Unit, onUseOpenHomes: () -> Unit) {
     when {
@@ -230,7 +227,6 @@ private fun BodyWeightSync(status: SyncStatus, refusal: SyncProblem?, onSyncNow:
     }
 }
 
-/** A symbol over its value. A value not given is a dash, never a guess. */
 @Composable
 private fun ProfileValue(glyph: Glyph, label: String, value: String?, modifier: Modifier) {
     Slab(modifier.heightIn(min = 104.dp), arrangement = Arrangement.SpaceBetween) {

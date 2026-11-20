@@ -44,14 +44,11 @@ async function read<T>(
     const parsed = schema.safeParse(await result.response.json())
 
     if (parsed.success) return { state: "read", data: parsed.data }
-  } catch {
-    /* Parse only safe protocol values. */
-  }
+  } catch {}
 
   return { state: "unavailable", reason: "unavailable" }
 }
 
-/** Read owners and all plans in parallel through the server-held credential. */
 export async function readWatchlists(): Promise<WatchlistState> {
   const [owners, entries] = await Promise.all([
     read("/api/household-users", householdUser.array()),
@@ -65,7 +62,6 @@ export async function readWatchlists(): Promise<WatchlistState> {
   return { state: "available", owners: owners.data, entries: entries.data }
 }
 
-/** Forward one owner-targeted operation; only an API receipt confirms persistence. */
 export async function writeWatchlist(
   command: WatchlistCommand
 ): Promise<WatchlistMutation> {
@@ -133,14 +129,11 @@ export async function writeWatchlist(
         : watchlistEntry
 
     if (schema.safeParse(body).success) return { state: "saved" }
-  } catch {
-    /* An invalid acknowledgement cannot confirm a saved plan. */
-  }
+  } catch {}
 
   return { state: "failed", reason: "unavailable" }
 }
 
-/** Search through the private Axum transport; no provider credential reaches Start or the browser. */
 export async function searchWatchlistMedia(
   input: z.infer<typeof mediaSearch>
 ): Promise<MediaSearchResult> {
@@ -158,9 +151,7 @@ export async function searchWatchlistMedia(
     const parsed = mediaMetadata.array().safeParse(await result.response.json())
 
     if (parsed.success) return { state: "available", results: parsed.data }
-  } catch {
-    /* Never expose private provider diagnostics. */
-  }
+  } catch {}
 
   return { state: "unavailable" }
 }

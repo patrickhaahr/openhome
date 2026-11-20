@@ -25,7 +25,6 @@ private const val CLOUD = "M7 18.5a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9a4.8 4.8 0 0
 private const val RAYS =
     "M12 2.5v2 M12 19.5v2 M2.5 12h2 M19.5 12h2 M5.3 5.3l1.4 1.4 M17.3 17.3l1.4 1.4 M5.3 18.7l1.4-1.4 M17.3 6.7l1.4-1.4"
 
-/** The app's own symbols: one 24-unit grid, one stroke, round ends. They are its only labels. */
 enum class Glyph(val path: String, val filled: Boolean = false) {
     Barbell("M3 9.5v5 M21 9.5v5 M6.5 6v12 M17.5 6v12 M6.5 12h11"),
     Rings("M8 3v7 M16 3v7 M8 10a3.4 3.4 0 1 0 0 6.8a3.4 3.4 0 1 0 0-6.8z M16 10a3.4 3.4 0 1 0 0 6.8a3.4 3.4 0 1 0 0-6.8z"),
@@ -98,11 +97,9 @@ enum class Glyph(val path: String, val filled: Boolean = false) {
     Download("M12 3v12.5 M6.5 10.5l5.5 5.5 5.5-5.5 M4 20.5h16"),
     ;
 
-    /** Parsed once: glyphs are drawn on every frame of a pressed key. */
     val shape: Path by lazy { PathParser().parsePathString(path).toPath() }
 }
 
-/** Decorative by itself: the control it sits on carries the name. */
 @Composable
 fun GlyphIcon(glyph: Glyph, modifier: Modifier = Modifier, tint: Color = Lit.Ink, size: Dp = 24.dp) {
     Canvas(modifier.size(size)) {

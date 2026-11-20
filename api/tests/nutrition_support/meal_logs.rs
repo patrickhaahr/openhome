@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -21,18 +20,15 @@ use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method, matchers::p
 
 pub(super) const API_KEY: &str = "test-api-key";
 
-/// The nutrition routes over one `app.db` and a `food.db` in a temporary directory.
 pub(super) struct Nutrition {
     pub(super) server: MockServer,
     pub(super) dir: TempDir,
     pub(super) state: AppState,
     pub(super) app: Router,
-    /// The first dataset's bytes; a workbook's bytes differ each time it is written.
     pub(super) first: Vec<u8>,
 }
 
 impl Nutrition {
-    /// Imports the first synthetic dataset as version "1".
     pub(super) async fn start() -> Self {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
@@ -48,9 +44,6 @@ impl Nutrition {
         }
     }
 
-    /// Imports the first synthetic dataset as version "1" against a real `app.db` file beside
-    /// `food.db`. The shared fixture keeps `app.db` in memory, which a second writer cannot lock;
-    /// a database refusal with a photo needs the file.
     pub(super) async fn start_file() -> Self {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
@@ -78,7 +71,6 @@ impl Nutrition {
         }
     }
 
-    /// Imports `bytes` as `version` into the same `food.db`, as a pin change on restart does.
     pub(super) async fn import(
         server: &MockServer,
         dir: &TempDir,
@@ -107,8 +99,6 @@ impl Nutrition {
         self.app = Self::import(&self.server, &self.dir, &self.state, version, bytes).await;
     }
 
-    /// Imports the first synthetic dataset again as version "1", as a lost or rebuilt `food.db`
-    /// does: forgetting the recorded dataset makes the next start import its pin afresh.
     pub(super) async fn rebuild(&mut self) {
         let url = format!("sqlite:{}", self.dir.path().join("food.db").display());
         let pool = db::connect_sqlite(&url).await.unwrap();
@@ -138,7 +128,6 @@ impl Nutrition {
             .await
     }
 
-    /// Logs `body`, expecting a new Meal Log, and returns it.
     pub(super) async fn logged(&self, body: Value) -> Value {
         let (status, logged) = self.log(body).await;
         assert_eq!(status, StatusCode::CREATED, "{logged}");
@@ -154,7 +143,6 @@ impl Nutrition {
         body["meal_logs"].as_array().unwrap().clone()
     }
 
-    /// GETs a media route: its status, content type and bytes.
     pub(super) async fn media(&self, uri: &str) -> (StatusCode, Option<String>, Vec<u8>) {
         let request = Request::get(uri)
             .header(header::AUTHORIZATION, format!("Bearer {API_KEY}"))
@@ -172,7 +160,6 @@ impl Nutrition {
         (status, content_type, bytes.to_vec())
     }
 
-    /// PUTs `bytes` as the multipart file field `field` of a Meal Log's photo.
     pub(super) async fn upload(&self, id: &str, field: &str, bytes: &[u8]) -> (StatusCode, Value) {
         let mut body = format!(
             "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nignored\r\n\
@@ -198,7 +185,6 @@ impl Nutrition {
         (status, serde_json::from_slice(&bytes).unwrap())
     }
 
-    /// Every file in the photo directory, sorted.
     pub(super) fn photo_files(&self) -> Vec<String> {
         let Ok(entries) = std::fs::read_dir(self.dir.path().join("meal-photos")) else {
             return Vec::new();
@@ -213,15 +199,12 @@ impl Nutrition {
 
 pub(super) const BOUNDARY: &str = "openhome-test-boundary";
 
-/// Synthetic photos: no real photo is ever committed.
 pub(super) mod synthetic {
     use base64::Engine;
     use image::{ImageEncoder, Rgb, RgbImage, codecs::jpeg::JpegEncoder, codecs::png::PngEncoder};
 
-    /// The camera make written into the EXIF block, to look for in stored files.
     pub const CAMERA: &[u8] = b"OpenHomeTestCam";
 
-    /// A frame whose left half is red and right half blue, as the sensor recorded it.
     fn frame(width: u32, height: u32) -> RgbImage {
         RgbImage::from_fn(width, height, |x, y| {
             let shade = (y * 255 / height) as u8;
@@ -233,7 +216,6 @@ pub(super) mod synthetic {
         })
     }
 
-    /// A JPEG of `frame` carrying EXIF with `orientation`, a camera make and a GPS latitude.
     pub fn jpeg_with_gps(width: u32, height: u32, orientation: u16) -> Vec<u8> {
         let mut jpeg = Vec::new();
         JpegEncoder::new_with_quality(&mut jpeg, 85)
@@ -244,8 +226,6 @@ pub(super) mod synthetic {
                 image::ExtendedColorType::Rgb8,
             )
             .unwrap();
-        // A little-endian TIFF: IFD0 (Make, Orientation, GPS pointer), its Make string, then a
-        // GPS IFD with GPSLatitudeRef "N" and GPSLatitude 55 deg 40' 30".
         let mut tiff = b"II\x2a\x00\x08\x00\x00\x00".to_vec();
         let entry = |tiff: &mut Vec<u8>, tag: u16, kind: u16, count: u32, value: u32| {
             tiff.extend_from_slice(&tag.to_le_bytes());
@@ -302,7 +282,6 @@ pub(super) mod synthetic {
             .any(|window| window == needle)
     }
 
-    /// Decodes a stored AVIF: its size and the RGBA pixel at (`x`, `y`).
     pub fn avif_pixel(avif: &[u8], x: u32, y: u32) -> ((u32, u32), (u8, u8, u8)) {
         assert!(libavif::is_avif(avif), "not an AVIF file");
         let pixels = libavif::decode_rgb(avif).unwrap();
@@ -330,7 +309,6 @@ pub(super) fn photos(dir: &TempDir) -> MealPhotos {
 }
 
 pub(super) fn app(foods: FoodDatabase, photos: MealPhotos, state: AppState) -> Router {
-    // Product Portions are covered in nutrition_products; nothing here reads a barcode.
     let labels = OpenFoodFacts::new("http://127.0.0.1:9/".parse().unwrap()).unwrap();
     routes::nutrition::router(foods, photos, labels)
         .with_state(state)
@@ -343,8 +321,6 @@ pub(super) fn app_db_url(dir: &TempDir) -> String {
     format!("sqlite:{}", dir.path().join("app.db").display())
 }
 
-/// Holds the write lock of `app.db` from a second connection until `release` frees it, so the
-/// next API statement that writes waits out its busy timeout and refuses.
 pub(super) async fn lock_app_db(dir: &TempDir) -> (PoolConnection<Sqlite>, sqlx::SqlitePool) {
     let pool = db::connect_sqlite(&app_db_url(dir)).await.unwrap();
     let mut lock = pool.acquire().await.unwrap();
@@ -403,7 +379,6 @@ impl Nutrition {
         .await
     }
 
-    /// The NOVA Class search and the Food read report for `food_id`, found by `query`.
     pub(super) async fn read_class(&self, query: &str, food_id: i64) -> (Value, Value) {
         let (status, search) = self
             .get(&format!("/api/nutrition/foods?query={query}"))

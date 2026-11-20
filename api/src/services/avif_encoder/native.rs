@@ -1,7 +1,3 @@
-//! Encode normalized sRGB pixels with matching CICP, set before RGB-to-YUV conversion.
-//! libavif's safe wrapper does not expose these colour fields. Native resources remain local
-//! and are released on every error path; no pointers escape this module.
-
 use super::EncodeError;
 use image::RgbImage;
 use libavif_sys as avif;
@@ -60,7 +56,6 @@ pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8
         avif::avifRGBImageSetDefaults(&raw mut rgb, raw);
         rgb.format = avif::AVIF_RGB_FORMAT_RGB;
         rgb.rowBytes = pixels.width().checked_mul(3).ok_or(EncodeError::Encode)?;
-        // The C API takes a mutable pointer even for the read-only RGB-to-YUV input.
         rgb.pixels = pixels.as_raw().as_ptr().cast_mut();
         if avif::avifImageRGBToYUV(raw, &raw const rgb) != avif::AVIF_RESULT_OK {
             return Err(EncodeError::Encode);
@@ -78,7 +73,6 @@ pub(super) fn encode(pixels: &RgbImage, speed: u8, quality: u8) -> Result<Vec<u8
         {
             return Err(EncodeError::Encode);
         }
-        // The encoder owns a valid allocation of size bytes until Data is dropped.
         Ok(std::slice::from_raw_parts(data.0.data, data.0.size).to_vec())
     }
 }

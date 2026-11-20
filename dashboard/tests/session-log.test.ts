@@ -3,7 +3,6 @@ import { canPair, pairSessions } from "@/lib/session-log"
 
 const workout = (id: number, date: string) => ({ id, date })
 
-// Times are written in Copenhagen summer time (UTC+2).
 const strap = (start: string, sport: string, minutes: number | null) => ({
   start: `${start}+02:00`,
   sport,
@@ -43,7 +42,6 @@ test("a strap session on another day is a near miss, even a minute across midnig
 })
 
 test("the Copenhagen day decides, not the UTC date", () => {
-  // 00:30 local on the 13th is still the 12th in UTC.
   const sessions = pairSessions(
     [workout(1, "2026-10-13")],
     [strap("2026-10-13T00:30:00", "Calisthenics", 30)]

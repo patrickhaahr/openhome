@@ -3,13 +3,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-/// The most doses of one Supplement in one Meal Log or Meal, e.g. 100 ml.
 pub const MAX_DOSES: f64 = 100.0;
-/// The most Supplement Doses one Meal Log or Meal lists.
 pub const MAX_SUPPLEMENT_DOSES: usize = 50;
 
-/// One Supplement Dose: a number of doses of a Supplement, in a Meal Log or a Meal. In a
-/// `log_meal` override it names the Meal's dose whose count changes.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DoseRequest {
@@ -17,7 +13,6 @@ pub struct DoseRequest {
     pub doses: f64,
 }
 
-/// Checks a dose count: above 0 and at most [`MAX_DOSES`]; halves and millilitres are fine.
 pub(in crate::services::nutrition) fn check_doses(doses: f64) -> std::result::Result<(), String> {
     if !doses.is_finite() || doses <= 0.0 || doses > MAX_DOSES {
         return Err(format!(
@@ -27,7 +22,6 @@ pub(in crate::services::nutrition) fn check_doses(doses: f64) -> std::result::Re
     Ok(())
 }
 
-/// Parses up to [`MAX_SUPPLEMENT_DOSES`] doses, each Supplement listed once.
 pub(in crate::services::nutrition) fn parse_doses(
     requests: Vec<DoseRequest>,
 ) -> std::result::Result<Vec<(String, f64)>, String> {
@@ -51,7 +45,6 @@ pub(in crate::services::nutrition) fn parse_doses(
     Ok(doses)
 }
 
-/// The receipt form of a dose.
 pub(in crate::services::nutrition) fn normalized(
     supplement_id: &str,
     doses: f64,
@@ -66,7 +59,6 @@ fn unknown(id: &str) -> SupplementError {
     ))
 }
 
-/// The Supplements `doses` name, in order; any unknown Supplement is [`SupplementError::NotFound`].
 pub(in crate::services::nutrition) async fn resolve(
     db: &SqlitePool,
     doses: &[(String, f64)],
@@ -84,17 +76,14 @@ pub(in crate::services::nutrition) async fn resolve(
         .collect()
 }
 
-/// A dose as a Meal lists it, and a day's doses of one Supplement added together.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DoseSummary {
     pub supplement_id: String,
-    /// The Supplement as it is named now in a Meal, or as it was logged in a day.
     pub name: String,
     pub dose_unit: DoseUnit,
     pub doses: f64,
 }
 
-/// Writes a Meal's doses, replacing none: the caller removes the previous doses first.
 pub(in crate::services::nutrition) async fn insert_meal_doses(
     transaction: &mut sqlx::SqliteConnection,
     meal_id: &str,
@@ -111,7 +100,6 @@ pub(in crate::services::nutrition) async fn insert_meal_doses(
     Ok(())
 }
 
-/// Every Meal's doses, or one Meal's, in order and by Meal ID, named as the Supplements are now.
 pub(in crate::services::nutrition) async fn meal_doses(
     db: &mut sqlx::SqliteConnection,
     meal_id: Option<&str>,
@@ -136,7 +124,6 @@ pub(in crate::services::nutrition) async fn meal_doses(
     Ok(doses)
 }
 
-/// A logged Supplement Dose: the Supplement as named and labelled when logged, per dose.
 #[derive(Debug)]
 pub(in crate::services::nutrition) struct StoredDose {
     supplement_id: String,
@@ -148,7 +135,6 @@ pub(in crate::services::nutrition) struct StoredDose {
 }
 
 impl StoredDose {
-    /// A dose to write: `supplement` as it is labelled now.
     pub(in crate::services::nutrition) fn snapshot(supplement: Supplement, doses: f64) -> Self {
         Self {
             supplement_id: supplement.id,
@@ -160,7 +146,6 @@ impl StoredDose {
         }
     }
 
-    /// The dose as shown: its amounts taken, the per-dose amounts times the doses.
     pub(in crate::services::nutrition) fn to_dose(&self) -> SupplementDose {
         let taken = |value: f64| crate::services::nutrition::meal_logs::round(value * self.doses);
         SupplementDose {
@@ -197,20 +182,16 @@ impl StoredDose {
     }
 }
 
-/// A Supplement Dose of a Meal Log: the Supplement as named when logged, and the amounts taken.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SupplementDose {
-    /// The Supplement, which may since have been edited or deleted.
     pub supplement_id: String,
     pub name: String,
     pub dose_unit: DoseUnit,
     pub doses: f64,
-    /// The label's per-dose amounts as logged, times the doses.
     pub amounts: Vec<Amount>,
     pub compounds: Vec<Compound>,
 }
 
-/// The day's doses of each Supplement added together, in the order first taken.
 pub(in crate::services::nutrition) fn dose_totals(doses: &[&StoredDose]) -> Vec<DoseSummary> {
     let mut totals: Vec<DoseSummary> = Vec::new();
     for dose in doses {
@@ -228,7 +209,6 @@ pub(in crate::services::nutrition) fn dose_totals(doses: &[&StoredDose]) -> Vec<
     totals
 }
 
-/// Writes a Meal Log's doses with their snapshots; the caller removes the previous doses first.
 pub(in crate::services::nutrition) async fn insert_log_doses(
     transaction: &mut sqlx::SqliteConnection,
     meal_log_id: &str,
@@ -262,8 +242,6 @@ pub(in crate::services::nutrition) async fn insert_log_doses(
     Ok(())
 }
 
-/// The doses of one Meal Log (`id`) or of the Meal Logs on days `from` to `to`, in order and by
-/// Meal Log ID.
 pub(in crate::services::nutrition) async fn log_doses(
     db: &SqlitePool,
     id: Option<&str>,

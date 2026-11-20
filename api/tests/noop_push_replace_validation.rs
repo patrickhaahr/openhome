@@ -1,5 +1,3 @@
-//! NOOP push replace streams: invalid windows and duplicate keys.
-
 mod common;
 mod noop_push_support;
 

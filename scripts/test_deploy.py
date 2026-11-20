@@ -73,7 +73,6 @@ class ReleaseVersions(unittest.TestCase):
         outer = Path(outer.name)
         git_in = lambda repository, *args: subprocess.run(
             ["git", *args], cwd=repository, check=True, capture_output=True,
-            # The developer's global git hooks must not judge these fixture commits.
             env=os.environ | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
         )
         with metadata_inside_the_fixture_repository():
@@ -119,7 +118,6 @@ class ReleaseVersions(unittest.TestCase):
         shutil.copy2(Path(__file__).with_name("deploy.py"), scripts / "deploy.py")
         binaries = self.root / "bin"
         binaries.mkdir()
-        # SSH preflight and builder setup succeed; the quality gate is unavailable.
         for name, body in {
             "ssh": "exit 0",
             "just": 'case "$1" in docker-builder) exit 0 ;; *) exit 7 ;; esac',

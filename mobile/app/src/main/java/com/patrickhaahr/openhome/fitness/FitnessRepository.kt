@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
-/** The UI's source of fitness data: local storage only, so every read works offline. */
 class FitnessRepository(private val dao: FitnessDao) {
     fun observeOverview(): Flow<FitnessOverview> =
         combine(dao.observeWorkoutCount(), dao.observeExerciseCount(), dao.observeLatestWorkout()) {
@@ -42,7 +41,6 @@ class FitnessRepository(private val dao: FitnessDao) {
             }
         }
 
-    /** Includes Workouts finished on this device that are still waiting to synchronize. */
     fun observePreviousPerformance(exerciseId: Long): Flow<PreviousPerformance?> =
         dao.observeLatestLoggedEntry(exerciseId).map { it?.toPreviousPerformance() }
 
@@ -51,7 +49,6 @@ class FitnessRepository(private val dao: FitnessDao) {
 
     fun observeProfile(): Flow<Profile?> = dao.observeProfile().map { it?.toDomain() }
 
-    /** Newest first, because the most recent weigh-in is what the Profile needs at a glance. */
     fun observeBodyWeight(): Flow<List<BodyWeight>> =
         dao.observeBodyWeight().map { rows -> rows.map(BodyWeightEntity::toDomain) }
 }

@@ -1,5 +1,3 @@
-//! Exercise catalog and workout weight migration.
-
 mod common;
 
 use common::send_request_with_method;
@@ -47,7 +45,6 @@ async fn test_workout_weight_migration_preserves_logged_workouts() {
             .unwrap();
     assert!(!columns.iter().any(|column| column.1 == "body_weight_kg"));
 
-    // The Workout read below is today's, which also needs this later column.
     sqlx::raw_sql(include_str!(
         "../migrations/0028_workout_client_revision.up.sql"
     ))
@@ -92,7 +89,6 @@ async fn test_list_exercises_returns_seeded_catalog() {
         .filter_map(|e| e["name"].as_str())
         .collect();
     let expected: &[&str] = &[
-        // Calisthenics
         "Planche Hold",
         "Planche Push-up",
         "Planche Press",
@@ -105,7 +101,6 @@ async fn test_list_exercises_returns_seeded_catalog() {
         "Ring Dip",
         "Pull-up",
         "Dip",
-        // Gym
         "Converging Chest Press",
         "Seal Row",
         "T-bar Row",
@@ -409,7 +404,6 @@ async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
     .await;
     let id = created["id"].as_i64().unwrap();
 
-    // explicit null clears; absent equipment keeps its value
     let (status, response) = send_request_with_method(
         app.clone(),
         &format!("/api/exercises/{id}"),
@@ -422,7 +416,6 @@ async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
     assert_eq!(response["muscle_group"], serde_json::Value::Null);
     assert_eq!(response["equipment"], "machine");
 
-    // absent muscle_group keeps the cleared value
     let (status, response) = send_request_with_method(
         app,
         &format!("/api/exercises/{id}"),

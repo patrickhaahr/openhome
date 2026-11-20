@@ -4,7 +4,6 @@ import { TrainingSummaries } from "@/components/training-summaries"
 import { trainingSearch } from "@/lib/training"
 import { getRecoveryDays, loadTraining } from "@/lib/training.functions"
 
-/** Recovery: the selected day's rings over its week, its night, its body and its strap sessions. */
 export const Route = createFileRoute("/recovery")({
   head: () => ({ meta: [{ title: "Recovery · OpenHome" }] }),
   validateSearch: trainingSearch,

@@ -54,20 +54,9 @@ import {
 } from "@/lib/binder-edit"
 import type { BinderAddReceipt, BinderAddition } from "@/lib/binder-add"
 
-/**
- * On a wide screen the bar's keys and value stand in the gutters beside the spread, which takes
- * the full height; elsewhere the credit shares the folio's line in the corner the turn keys leave.
- */
 const frame =
   "tablet:relative binder-wide:grid-cols-binder-wide binder-wide:grid-rows-hug-fill-hug binder-wide:gap-x-8 binder-wide:*:data-[slot=lists-bar]:contents binder-wide:*:data-[slot=lists-empty]:col-start-2 binder-wide:*:data-[slot=lists-empty]:row-span-full binder-wide:[&>[role=status]]:col-start-3 binder-wide:[&>[role=status]]:row-start-2 binder-wide:[&>[role=status]]:text-right"
 
-/**
- * One Household User's Binder, a spread of two facing 3×3 pages at a time in Card Code order.
- * The person keys choose whose Binder; dragging or tapping a page's edge, the arrows and the arrow
- * keys turn the spread, and a pocket opens its card sheet, whose arrows step to the neighbouring
- * cards and turn the spread with them. A read that failed offers a way to check again and never
- * shows an empty Binder.
- */
 export function BinderBook({
   data,
   search,
@@ -362,7 +351,6 @@ function Spread({
 
     if (isGesture(after) && !isGesture(before)) dragged.current = true
 
-    // The click a drag's release produces arrives in the same task; one that never comes must not swallow a later one.
     if (isGesture(before) && !isGesture(after))
       requestAnimationFrame(() => {
         dragged.current = false

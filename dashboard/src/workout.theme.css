@@ -1,5 +1,4 @@
 @theme inline {
-  /* Workout and Recovery. A band, stage or zone colour resolves on the element that names it. */
   --color-band: var(--band);
   --color-stage: var(--stage);
   --color-zone: var(--zone);
@@ -8,7 +7,6 @@
   --color-effort: var(--effort);
   --color-stage-deep: var(--stage-deep);
   --color-stage-light: var(--stage-light);
-  /* Twelve progress hues at similar lightness so no line dominates on dark; the first is the accent. */
   --color-progress-1: var(--sun);
   --color-progress-2: light-dark(oklch(0.5 0.15 250), oklch(0.8 0.12 230));
   --color-progress-3: light-dark(oklch(0.52 0.18 330), oklch(0.78 0.15 330));
@@ -61,7 +59,6 @@
     auto-fill,
     minmax(min(100%, 15rem), 1fr)
   );
-  /* Set n of every exercise shares a column; --set-columns is the session's widest row. */
   --grid-template-columns-sets: repeat(
     var(--set-columns),
     minmax(5.75rem, 7.5rem)

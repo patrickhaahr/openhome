@@ -1,8 +1,3 @@
-//! Synthetic NOOP strap data, pushed through the real ingestion protocol so the training reads see
-//! exactly what a synced installation produces. Nights, workouts and journal answers come from
-//! `seed/training.json`; sleep stages are generated as ordered 90-minute cycles and the daily
-//! totals are computed from them, so the two always agree.
-
 use chrono::{Days, NaiveDate, NaiveTime, TimeZone, Utc};
 use chrono_tz::Europe::Copenhagen;
 use openhome_api::services::noop_push::ingest::{self, ContentCoding};
@@ -71,13 +66,11 @@ struct Workout {
     strain: f64,
     distance_m: Option<f64>,
     steps: Option<i64>,
-    /// Whether the session carries a GPS route: a loop from the public demo origin.
     route: bool,
     shape: String,
     notes: Option<String>,
 }
 
-/// Small deterministic generator, so a restart shows the same nights.
 struct Lcg(u64);
 
 impl Lcg {
@@ -120,9 +113,6 @@ struct Segment {
     stage: &'static str,
 }
 
-/// Ordered stages over `[start, end)`: a brief wake to fall asleep, then 90-minute cycles of
-/// light, deep, light and REM sleep. Deep sleep dominates early cycles, REM late ones, and each
-/// cycle closes with a brief wake.
 fn stages(start: i64, end: i64, seed: u64, wakes: bool) -> Vec<Segment> {
     let mut rng = Lcg(seed.wrapping_mul(0x9e37_79b9).wrapping_add(7));
     let mut segments: Vec<Segment> = Vec::new();
@@ -196,7 +186,6 @@ impl Totals {
                 "rem" => self.rem += minutes,
                 _ => {
                     self.wake += minutes;
-                    // The first wake is falling asleep; later ones are disturbances.
                     if night && index > 0 {
                         self.wakes += 1;
                     }
@@ -214,8 +203,6 @@ fn round1(value: f64) -> f64 {
     (value * 10.0).round() / 10.0
 }
 
-/// Heart rate every ten seconds from the start to five minutes after the end, following the
-/// workout's shape and then recovering towards a resting rate.
 fn heart_rate(workout: &Workout, start: i64, end: i64, seed: u64) -> Vec<(i64, i64)> {
     let mut rng = Lcg(seed.wrapping_mul(0x2545_f491).wrapping_add(11));
     let resting = 66.0;
@@ -228,7 +215,6 @@ fn heart_rate(workout: &Workout, start: i64, end: i64, seed: u64) -> Vec<(i64, i
             let ramp = (elapsed / 240.0).min(1.0);
             let remaining = (end - at) as f64;
             let target = match workout.shape.as_str() {
-                // Sets of about a minute with rests between, finishing on a hard effort.
                 "sets" => {
                     let phase = elapsed % 150.0;
                     let work = if phase < 65.0 { 22.0 } else { -18.0 };
@@ -274,7 +260,6 @@ async fn push(
     push_rows(db, device, stream, window, records, 0).await
 }
 
-/// One batch of at most 5000 records; an append batch continues the stream after `before` rows.
 async fn push_rows(
     db: &SqlitePool,
     device: &str,
@@ -346,7 +331,6 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
     for night in &training.nights {
         let wake_day = back(night.days_ago);
         let bed_minutes = NaiveTime::parse_from_str(&night.bed, "%H:%M")?;
-        // Bedtimes after noon belong to the evening before the wake day.
         let bed_day = if bed_minutes >= NaiveTime::from_hms_opt(12, 0, 0).expect("noon") {
             wake_day
                 .checked_sub_days(Days::new(1))
@@ -355,7 +339,6 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
             wake_day
         };
         let start = day_at(bed_day, &night.bed)?;
-        // Keep today's night in the past even when the preview runs before the usual wake time.
         let end = day_at(wake_day, &night.wake)?.min(now - 300);
         let mut totals = Totals::default();
         let night_stages = stages(start, end, night.days_ago + 1, true);
@@ -380,7 +363,6 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
             .filter(|w| w.days_ago == night.days_ago)
             .count();
         let in_bed = totals.asleep() + totals.wake;
-        // A steady 95 to 98 percent, and a day of walking that varies with the date.
         let mut vitals = Lcg(night.days_ago.wrapping_mul(7919).wrapping_add(11));
         let spo2 = (vitals.between(95.0, 98.4) * 10.0).round() / 10.0;
         let steps = vitals.between(5200.0, 12400.0).round() as i64;
@@ -411,7 +393,6 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
     for (index, workout) in training.workouts.iter().enumerate() {
         let duration = workout.minutes * 60;
         let mut start = day_at(back(workout.days_ago), &workout.start)?;
-        // Today's workout finishes, with its recovery minutes, before the present moment.
         start = start.min(now - duration - 340);
         let end = start + duration;
         hr.extend(heart_rate(workout, start, end, index as u64 + 1));
@@ -427,7 +408,6 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
 
     let days = |lower: &str, upper: &str| Some((json!(lower), json!(upper), "day"));
     let starts = || Some((json!(from_ts), json!(to_ts), "startTs"));
-    // The strap carries the data; NOOP's computed namespace reports applied, empty windows.
     push(db, STRAP, "dailyMetric", days(&from_day, &to_day), daily).await?;
     push(db, STRAP, "sleepSession", starts(), sessions).await?;
     push(db, STRAP, "workout", starts(), workouts).await?;
@@ -449,7 +429,6 @@ pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
         .into_iter()
         .map(|(ts, bpm)| json!({ "type": "record", "key": { "ts": ts }, "data": { "bpm": bpm } }))
         .collect();
-    // A batch holds at most 5000 samples, so a long history arrives as a continued stream.
     let mut before = 0;
     for chunk in hr.chunks(4000) {
         push_rows(db, STRAP, "hrSample", None, chunk.to_vec(), before).await?;
@@ -475,12 +454,8 @@ fn session(start: i64, end: i64, night: &Night, segments: &[Segment], totals: To
     })
 }
 
-/// The public demonstration origin the loop starts and ends at: central Copenhagen.
 const ORIGIN: (f64, f64) = (55.6869, 12.5692);
 
-/// A smooth loop of about `length_m` that starts and ends at the demo origin, as a precision-5
-/// encoded polyline like NOOP stores. The shape is an ellipse with a slow wobble, so it reads as a
-/// run round a few blocks and a park rather than a perfect circle.
 fn loop_route(length_m: f64, seed: u64) -> String {
     const POINTS: usize = 240;
     let mut rng = Lcg(seed.wrapping_mul(0x51_7c_c1_b7).wrapping_add(3));
@@ -489,8 +464,6 @@ fn loop_route(length_m: f64, seed: u64) -> String {
         rng.between(0.0, std::f64::consts::TAU),
         rng.between(0.0, std::f64::consts::TAU),
     ];
-    // Local metres east and north of the ellipse centre, which sits one radius from the origin so
-    // that angle zero is the origin itself.
     let shape = |angle: f64| {
         let wobble =
             1.0 + 0.07 * (2.0 * angle + phase[0]).sin() + 0.04 * (3.0 * angle + phase[1]).sin();
@@ -524,7 +497,6 @@ fn loop_route(length_m: f64, seed: u64) -> String {
     encoded
 }
 
-/// One zigzag varint of the Google Encoded Polyline format.
 fn encode_signed(value: i64, out: &mut String) {
     let mut value = if value < 0 { !(value << 1) } else { value << 1 };
     while value >= 0x20 {

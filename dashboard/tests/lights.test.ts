@@ -17,7 +17,6 @@ async function listen(server: Server): Promise<string> {
   return `http://127.0.0.1:${port}`
 }
 
-/** Configure the dashboard server to reach OpenHome at this server. */
 async function listenAsOpenHome(server: Server): Promise<void> {
   const url = await listen(server)
   vi.stubEnv("OPENHOME_API_URL", `${url}/deployment/`)

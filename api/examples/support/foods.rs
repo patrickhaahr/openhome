@@ -1,24 +1,16 @@
-//! A synthetic Food database for the dashboard fixtures: a handful of invented Foods with
-//! plausible values, recorded as a complete import of the pinned dataset so lookups answer
-//! without downloading anything. Not real DTU values.
-
 use openhome_api::services::nutrition::{
     food_database::{DatasetPin, FoodDatabase},
     meal_photos::MealPhotos,
 };
 use sqlx::sqlite::SqlitePoolOptions;
 
-/// The Food database's state in a fixture.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FoodState {
-    /// A complete import of the synthetic Foods.
     Ready,
-    /// An empty `food.db` whose import never runs, so lookups report importing.
     Importing,
 }
 
 impl FoodState {
-    /// `--food-database=importing` keeps the fixture's Food database importing.
     pub fn from_args() -> Self {
         if std::env::args().any(|argument| argument == "--food-database=importing") {
             Self::Importing
@@ -52,7 +44,6 @@ const FOODS: &str = "INSERT INTO food (food_id, name_da, name_en, food_group_id,
     (907, 'Kylling, bryst, kød, rå', 'Chicken, breast, flesh, raw', 80, 'Fjerkræ', 'Poultry'), \
     (300, 'Ris, hvide, kogte', 'Rice, white, boiled', 21, 'Ris', 'Rice')";
 
-// (food_id, parameter_id, value per 100 g); a missing pair is unknown.
 const VALUES: &str = "INSERT INTO food_value (food_id, parameter_id, value) VALUES \
     (1693, 137, 260), (1693, 356, 62), (1693, 218, 11), (1693, 172, 4), (1693, 168, 0), \
     (1693, 141, 0.2), (1693, 19, 0), (1693, 126, 0), (1693, 55, 120), (1693, 363, 1.03), \
@@ -63,7 +54,6 @@ const VALUES: &str = "INSERT INTO food_value (food_id, parameter_id, value) VALU
     (907, 356, 110), (907, 218, 23), (907, 141, 1.5), (907, 126, 0.1), (907, 58, 0.5), \
     (300, 356, 130), (300, 218, 2.7), (300, 172, 28), (300, 168, 0.4), (300, 141, 0.3)";
 
-/// A Food database in memory, as `state` describes it.
 pub async fn synthetic_foods(state: FoodState) -> anyhow::Result<FoodDatabase> {
     let db = SqlitePoolOptions::new()
         .max_connections(1)
@@ -89,7 +79,6 @@ pub async fn synthetic_foods(state: FoodState) -> anyhow::Result<FoodDatabase> {
     Ok(foods)
 }
 
-/// Meal photos in a temporary directory that lives as long as the returned guard.
 pub fn photo_store() -> anyhow::Result<(MealPhotos, tempfile::TempDir)> {
     let dir = tempfile::Builder::new()
         .prefix("openhome-fixture-meal-photos")
@@ -97,7 +86,6 @@ pub fn photo_store() -> anyhow::Result<(MealPhotos, tempfile::TempDir)> {
     Ok((MealPhotos::new(dir.path().to_path_buf()), dir))
 }
 
-/// A drawn plate of `(red, green, blue)` food on a wooden table, as a base64 PNG: no real photo.
 pub fn synthetic_plate(food: [u8; 3]) -> String {
     use base64::Engine;
     use image::ImageEncoder;
@@ -111,7 +99,6 @@ pub fn synthetic_plate(food: [u8; 3]) -> String {
         } else if distance < 380.0 {
             image::Rgb([236, 232, 224])
         } else {
-            // Wood grain: bands of six shades running across the table.
             let grain = ((x / 90 + y / 14) % 6) as u8 * 4;
             image::Rgb([138 + grain, 92 + grain, 60 + grain / 2])
         }
@@ -128,14 +115,12 @@ pub fn synthetic_plate(food: [u8; 3]) -> String {
     base64::engine::general_purpose::STANDARD.encode(png)
 }
 
-/// A Portion's item: a Food by ID, or the synthetic Open Food Facts product.
 #[derive(Clone, Copy)]
 enum Item {
     Food(i64),
     Product,
 }
 
-/// Hours before now, an optional note, `(item, grams)` Portions and an optional plate colour.
 type SyntheticMeal = (
     i64,
     Option<&'static str>,
@@ -143,9 +128,6 @@ type SyntheticMeal = (
     Option<[u8; 3]>,
 );
 
-/// Invented Meal Logs over the last two days, logged through the production service so they
-/// carry real snapshots and photos, for previews that should open on a populated day. The
-/// synthetic product is linked to Skyr first, so one meal holds a Product Portion.
 pub async fn seed_meals(
     db: &sqlx::SqlitePool,
     foods: &FoodDatabase,
@@ -175,9 +157,6 @@ pub async fn seed_meals(
     )
     .await
     .map_err(|error| anyhow::anyhow!("linking the synthetic product failed: {error}"))?;
-    // Two Supplements, taken with the meal after the run: a vitamin by parameter key and a
-    // compound without one. A third, far above vitamin D's Upper Limit, is taken on a few
-    // backfilled days so the Trends view shows a cut down.
     let mut supplement_ids = Vec::new();
     for (name, dose_unit, amounts, compounds) in [
         (
@@ -286,8 +265,6 @@ pub async fn seed_meals(
         .await
         .map_err(|error| anyhow::anyhow!("seeding a synthetic meal failed: {error}"))?;
     }
-    // Eight weeks of backfilled meals for the Trends view, with some days left
-    // unlogged so its gaps show.
     for days_ago in 2..=56_i64 {
         if days_ago % 5 == 0 || days_ago % 11 == 0 {
             continue;
@@ -295,7 +272,6 @@ pub async fn seed_meals(
         let day = (now - chrono::TimeDelta::days(days_ago)).date_naive();
         let midnight = day.and_time(chrono::NaiveTime::MIN).and_utc();
         let vary = |step: i64, spread: i64| ((days_ago * step) % spread) as f64;
-        // About 2,000 kcal and 160 g protein a day across breakfast, lunch and dinner.
         let history: [(i64, Vec<(i64, f64)>); 3] = [
             (
                 7,
@@ -349,7 +325,6 @@ pub async fn seed_meals(
             .map_err(|error| anyhow::anyhow!("seeding a synthetic past meal failed: {error}"))?;
         }
     }
-    // A named Meal, logged again by name with a one-off amount, as the agent logs known meals.
     meals::save_meal(
         db,
         foods,
@@ -396,8 +371,6 @@ pub async fn seed_meals(
     )
     .await
     .map_err(|error| anyhow::anyhow!("logging the synthetic Meal failed: {error}"))?;
-    // Classified after logging, as the agent does the first time a Food is eaten; the rice stays
-    // unclassified so the preview shows a Portion left out of the NOVA 1 share.
     for food_id in [3, 60, 907, 1693] {
         nova::classify_food(db, foods, food_id, nova::ClassifyFood { nova_class: 1 })
             .await

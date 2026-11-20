@@ -1,5 +1,3 @@
-//! Private TMDB reads. Provider metadata never supplies personal viewing state.
-
 use std::time::Duration;
 
 use reqwest::{Client, header};
@@ -8,14 +6,12 @@ use url::Url;
 
 use super::watchlist::{MediaKind, WatchlistError};
 
-/// A bounded, redirect-free client holding a private provider credential.
 #[derive(Clone)]
 pub struct TmdbService {
     client: Client,
     base_url: Url,
 }
 
-/// Recognizable metadata for a movie or whole series, keyed by kind plus TMDB ID.
 #[derive(Debug, Serialize)]
 pub struct MediaMetadata {
     pub kind: MediaKind,
@@ -43,7 +39,6 @@ struct SearchResponse {
 }
 
 impl TmdbService {
-    /// Use a fixed production origin; an explicit origin also supports isolated provider tests.
     pub fn new(token: &str, base_url: Url) -> anyhow::Result<Self> {
         let mut authorization = header::HeaderValue::from_str(&format!("Bearer {}", token.trim()))?;
         authorization.set_sensitive(true);
@@ -76,7 +71,6 @@ impl TmdbService {
         if !response.status().is_success() {
             return Err(WatchlistError::ProviderUnavailable);
         }
-        // Bound untrusted bodies even when a provider omits Content-Length.
         let mut response = response;
         let mut bytes = Vec::new();
         while let Some(chunk) = response
@@ -92,7 +86,6 @@ impl TmdbService {
         serde_json::from_slice(&bytes).map_err(|_| WatchlistError::ProviderUnavailable)
     }
 
-    /// Fetch the first page for an explicitly selected media kind; never search people or episodes.
     pub async fn search(
         &self,
         kind: MediaKind,
@@ -116,7 +109,6 @@ impl TmdbService {
             .collect()
     }
 
-    /// Resolve selected identity again in Axum rather than accepting client-supplied metadata.
     pub async fn details(&self, kind: MediaKind, id: i64) -> Result<MediaMetadata, WatchlistError> {
         if id <= 0 || id > 9_007_199_254_740_991 {
             return Err(WatchlistError::Validation(
@@ -165,7 +157,6 @@ impl ProviderTitle {
         .filter(|date| {
             date.len() == 10 && chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok()
         });
-        // Only a single provider image filename can reach the browser's fixed image.tmdb.org origin.
         let poster_path = self.poster_path.filter(|path| {
             path.starts_with('/')
                 && path

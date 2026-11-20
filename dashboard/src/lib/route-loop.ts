@@ -8,7 +8,6 @@ const distanceTarget = z.object({
   meters: z.number().int().positive(),
 })
 
-/** A request for loops from the shared map origin; Axum owns the supported ranges. */
 export const loopRequest = z.object({
   activity,
   target: z.discriminatedUnion("kind", [
@@ -18,10 +17,8 @@ export const loopRequest = z.object({
   step_length_cm: z.number().int().positive(),
 })
 
-/** A request for walking or running loops by distance or steps. */
 export type LoopRequest = z.infer<typeof loopRequest>
 
-/** Walking or running. */
 export type Activity = z.infer<typeof activity>
 
 const coordinate = z.tuple([
@@ -59,7 +56,6 @@ const loopPlan = z.object({
   loops: z.array(generatedLoop).min(1),
 })
 
-/** Axum's loop generation contract, stripping unknown fields. */
 export const loopRead = z.discriminatedUnion("state", [
   z.object({ state: z.literal("generated"), plan: loopPlan }),
   z.object({
@@ -74,31 +70,22 @@ export const loopRead = z.discriminatedUnion("state", [
   }),
 ])
 
-/** Axum's explanation for a request outside the supported ranges. */
 export const loopRejection = z.object({ error: z.string().min(1).max(200) })
 
-/** Distinct measured loops for one request, matching loops first. */
 export type LoopPlan = z.infer<typeof loopPlan>
 
-/** A measured loop whose distance describes its drawn geometry. */
 export type GeneratedLoop = LoopPlan["loops"][number]
 
-/**
- * Generated loops, a provider outcome, a target Axum rejected, or a
- * dashboard-side connection failure.
- */
 export type LoopRead =
   | z.infer<typeof loopRead>
   | { state: "rejected"; message: string }
   | { state: "unavailable"; reason: "connection-unavailable" }
 
-/** Why no loop is shown. */
 export type LoopUnavailable = Extract<
   LoopRead,
   { state: "unavailable" }
 >["reason"]
 
-/** A failed transport or RPC never becomes a fabricated route. */
 export const unavailableLoop: LoopRead = {
   state: "unavailable",
   reason: "connection-unavailable",
@@ -108,17 +95,14 @@ const wholeNumber = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 })
 
-/** Kilometres with two decimals, the precision a walker can act on. */
 export function formatKilometers(meters: number): string {
   return `${(meters / 1000).toFixed(2)} km`
 }
 
-/** A step count with thousands separators. */
 export function formatSteps(steps: number): string {
   return `${wholeNumber.format(steps)} steps`
 }
 
-/** The requested effort as the household asked for it. */
 export function describeTarget(target: LoopPlan["target"]): string {
   switch (target.kind) {
     case "distance":
@@ -128,12 +112,10 @@ export function describeTarget(target: LoopPlan["target"]): string {
   }
 }
 
-/** The plan's heading, such as "5.00 km walking loops". */
 export function describePlan(plan: LoopPlan): string {
   return `${describeTarget(plan.target)} ${plan.activity} loops`
 }
 
-/** How a measured loop compares with its target, without calling a deviation a match. */
 export function describeDeviation({
   route,
   plan,
@@ -154,7 +136,6 @@ export function describeDeviation({
     : `${amount}, outside ±${plan.tolerance_percent}%`
 }
 
-/** The stride-based step estimate, labelled as one. */
 export function describeEstimatedSteps({
   route,
   plan,
@@ -165,10 +146,6 @@ export function describeEstimatedSteps({
   return `About ${formatSteps(route.estimated_steps)}, estimated from a ${plan.step_length_cm} cm step`
 }
 
-/**
- * Why fewer matching loops are shown than the search looked for, or
- * `undefined` when enough matched.
- */
 export function describeShortfall(plan: LoopPlan): string | undefined {
   const matching = plan.loops.filter((route) => route.within_tolerance).length
 
@@ -186,24 +163,20 @@ export function describeShortfall(plan: LoopPlan): string | undefined {
       ? " The closest others are shown with their deviation."
       : ""
 
-  // A complete search found enough matches, so only these two can fall short.
   return plan.search === "interrupted"
     ? `The route planner stopped before the search finished. ${found}.${rest}`
     : `The search used all its attempts. ${found}.${rest}`
 }
 
-/** A count with its noun, such as "1 loop" or "3 loops". */
 export function describeCount(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
 
-/** A short heading and the next step for a missing loop. */
 export type LoopFailureCopy = {
   readonly title: string
   readonly detail: string
 }
 
-/** What the household can do about a failed request. */
 export function describeFailure(
   read: Exclude<LoopRead, { state: "generated" }>
 ): LoopFailureCopy {
@@ -249,7 +222,6 @@ export function describeFailure(
   }
 }
 
-/** A persisted route and its selection revision, ready for a phone to pin independently. */
 export const activeRoute = generatedLoop.extend({
   version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   activity,
@@ -258,24 +230,19 @@ export const activeRoute = generatedLoop.extend({
   tolerance_percent: z.number().positive(),
 })
 
-/** Axum's persisted selection, including a truthful absence. */
 export const activeRouteRead = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("selected"), route: activeRoute }),
 ])
 
-/** The requested selection references only a previously generated loop. */
 export const routeSelection = z.object({ route_id: z.uuid() })
 
-/** A selected route; the phone owns any started Route Session separately. */
 export type ActiveRoute = z.infer<typeof activeRoute>
 
-/** Failed reads cannot be mistaken for an empty selection. */
 export type ActiveRouteRead =
   | z.infer<typeof activeRouteRead>
   | { state: "unavailable" }
 
-/** Selection succeeds only after Axum confirms persistence. */
 export type RouteSelectionRead =
   | Extract<ActiveRouteRead, { state: "selected" }>
   | {
@@ -283,10 +250,8 @@ export type RouteSelectionRead =
       reason: "candidate-unavailable" | "connection-unavailable"
     }
 
-/** Safe recovery state for failed reads or RPCs. */
 export const unavailableActiveRoute: ActiveRouteRead = { state: "unavailable" }
 
-/** Draw and name the confirmed selection independently of the compared alternatives. */
 export function activeRouteMap(route: ActiveRoute): MapRoutes {
   return {
     lines: [route.geometry],

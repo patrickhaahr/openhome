@@ -48,7 +48,6 @@ pub(super) async fn food(
     Ok(Json(nova::food(&state.db, &foods, food_id(&id)?).await?))
 }
 
-/// Sets or changes a Food's NOVA Class.
 pub(super) async fn classify_food(
     State(state): State<AppState>,
     Extension(foods): Extension<FoodDatabase>,

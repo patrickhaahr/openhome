@@ -59,7 +59,6 @@ private class HistoryViewModel(fitness: FitnessRepository, syncStatus: FitnessSy
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
-/** A training log, as it would be kept on paper: the day large in the margin, the year where it turns. */
 @Composable
 fun HistoryRoute(onOpenWorkout: (Long) -> Unit) {
     val viewModel = appViewModel { HistoryViewModel(it.fitness, it.syncStatus) }
@@ -122,7 +121,6 @@ private fun HistoryRow(row: HistoryRowModel, onClick: () -> Unit) {
             workout.exerciseNames?.let {
                 Text(it, style = Type.Body, color = Lit.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            // Quiet by default: a downloaded or synced Workout says nothing here.
             if (row.sync != SyncStatus.Synced) SyncStatusLine(row.sync)
         }
         Spoken(listOfNotNull(workout.exerciseNames, pluralize(workout.setCount, "Set")).joinToString(separator = " · "))

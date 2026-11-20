@@ -1,5 +1,3 @@
-//! NOOP push append streams: body size bounds, request headers and concurrent posts.
-
 mod common;
 mod noop_push_support;
 
@@ -15,7 +13,6 @@ use serde_json::json;
 
 const MAX_DECODED: usize = 4 * 1024 * 1024;
 
-/// An event batch padded to exactly `size` decoded bytes.
 fn event_batch_of_size(size: usize) -> Vec<u8> {
     let entity = |payload: &str| {
         ndjson(
@@ -52,7 +49,6 @@ async fn decoded_body_over_4_mib_is_413() {
         assert_error(&reply, StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large");
     }
 
-    // A tiny gzip entity that expands past the bound is refused while decoding.
     let bomb = vec![b' '; 64 * 1024 * 1024];
     let auth = bearer(PUSH_TOKEN);
     let reply = send(
@@ -147,8 +143,6 @@ async fn full_5000_record_batch_is_accepted() {
 
 #[tokio::test]
 async fn skin_temp_aux_readings_accept_any_finite_number() {
-    // The protocol does not type aux1Raw/aux2Raw as integers, and the sender emits a REAL
-    // storage value as e.g. `12.0`, so fractional and `.0` values must not stall the stream.
     let db = memory_push_db().await;
     let entity = ndjson(
         &header("skinTempSample", BATCH_1, 3),
@@ -185,7 +179,6 @@ async fn skin_temp_aux_readings_accept_any_finite_number() {
         ]
     );
 
-    // `raw` stays an integer.
     let db = memory_push_db().await;
     let entity = ndjson(
         &header("skinTempSample", BATCH_1, 1),
@@ -238,10 +231,6 @@ async fn concurrent_identical_posts_apply_once_and_return_the_same_ack() {
     }
 }
 
-/// Concurrent deliveries of one `batchId` with differing bytes: `BEGIN IMMEDIATE` serializes on
-/// the ledger, so exactly one applies and the other settles as a `batch_conflict`. The winning
-/// bytes and their encodings depend on scheduling, so the test asserts the state, then replays
-/// both deliveries against the settled ledger.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_differing_bytes_for_one_batch_id_apply_exactly_once() {
     let path = std::env::temp_dir().join(format!("noop-push-conflict-{}.db", uuid::Uuid::new_v4()));

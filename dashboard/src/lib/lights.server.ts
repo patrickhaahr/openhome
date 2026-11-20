@@ -6,14 +6,12 @@ import {
 } from "./openhome.server"
 import type { LightCommand, LightCommandResult } from "./lights"
 
-/** Dispatch once through Axum. Provider messages never become observed state or public copy. */
 export async function dispatchLightCommand(
   command: LightCommand
 ): Promise<LightCommandResult> {
   const result = await requestOpenHome({
     path: `/api/lights/${command}`,
     method: "POST",
-    // Axum's SwitchBot request has a 10-second timeout. Allow it to return its outcome.
     timeoutMs: 12000,
   })
 

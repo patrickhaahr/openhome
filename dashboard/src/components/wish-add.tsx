@@ -70,11 +70,6 @@ function draftFromDetails(details: WishlistDetails): WishDraft {
   }
 }
 
-/**
- * Paste a link and the product is read into editable fields; anything missing is typed. Who it
- * is for and which list come last, but the link is only read once a list is chosen, because
- * Axum checks the destination. Nothing is saved until "Add wish".
- */
 export function WishAdd({
   owners,
   lists,
@@ -103,7 +98,6 @@ export function WishAdd({
         ? list
         : undefined
 
-    // Opened on a list whose last wish lost its response: resume that wish.
     const recovered =
       target === undefined ? undefined : readPendingAddition(target)
 
@@ -131,11 +125,9 @@ export function WishAdd({
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pending = useRef<PendingAddition | undefined>(initial.recovered)
 
-  // A closed plate reads nothing more.
   useEffect(() => () => clearTimeout(timer.current), [])
   const ownerLists = lists.filter((item) => item.owner_id === ownerId)
 
-  // A list created here appears after the re-read; choose it as soon as it does.
   const created =
     awaitedList === undefined
       ? undefined
@@ -204,7 +196,6 @@ export function WishAdd({
   function chooseList(target: string) {
     setListId(target)
 
-    // A wish whose response was lost earlier resumes with its request ID.
     const recovered = readPendingAddition(target)
 
     if (recovered?.details !== undefined && trimText(draft.title) === "") {
@@ -225,7 +216,6 @@ export function WishAdd({
   async function submit(owner: string, target: string) {
     const details = detailsOf({ ...draft, url })
 
-    // The same wish to the same list keeps its request ID, even after a reload.
     pending.current = intendAddition(
       pending.current ?? readPendingAddition(target),
       owner,
@@ -285,7 +275,6 @@ export function WishAdd({
               setUrl(link)
 
               if (readableUrl(link) !== readableUrl(url)) {
-                // A new link replaces what the last one suggested, never what was typed.
                 setDraft((current) => {
                   const next = { ...current }
 
@@ -321,7 +310,6 @@ export function WishAdd({
               : ""}
       </p>
       <div className="grid grid-aside-34 items-start gap-5 max-sm:grid-cols-1">
-        {/* An unsaved picture is never fetched from the shop; it shows once the wish is saved. */}
         <WishArt
           title={draft.title || "New wish"}
           image={null}

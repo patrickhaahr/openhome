@@ -63,7 +63,6 @@ fn a_scored_computed_night_replaces_a_bare_imported_total() {
     };
     let merged = merge_daily(Some(&imported), Some(&computed), false);
     assert_eq!(merged.total_sleep_min.value, Some(380.0));
-    // The whole block moves, so the imported disturbance count gives way to a computed null.
     assert_eq!(
         merged.disturbances,
         Sourced {
@@ -72,7 +71,6 @@ fn a_scored_computed_night_replaces_a_bare_imported_total() {
         }
     );
 
-    // A bare computed total is no better than a bare import.
     let bare_computed = row(Some(380.0), None, None);
     let merged = merge_daily(Some(&imported), Some(&bare_computed), false);
     assert_eq!(merged.total_sleep_min.source, Some(Namespace::Imported));
@@ -136,7 +134,6 @@ fn richer_computed_sessions_replace_imported_ones() {
         ]),
         [Computed]
     );
-    // Ties keep every imported session.
     assert_eq!(
         pick(vec![
             session(Imported, 0, Some(full)),
@@ -156,7 +153,6 @@ fn richness_follows_noop_staging_coverage() {
     assert_eq!(rank(Some("[]")), 0);
     assert_eq!(rank(Some(r#"[{"start":0,"end":94,"stage":"deep"}]"#)), 1);
     assert_eq!(rank(Some(r#"[{"start":0,"end":95,"stage":"deep"}]"#)), 2);
-    // Unmeasurable coverage (minutes object, stray values) still counts as full staging.
     assert_eq!(rank(Some(r#"{"deep":30}"#)), 2);
     assert_eq!(rank(Some(r#"[{"start":0,"end":50,"stage":"deep"},1]"#)), 2);
 }
@@ -264,10 +260,8 @@ fn workout_origin_follows_noop_classification() {
 fn distinct_workouts_stay_distinct() {
     let rows = vec![
         workout(Namespace::Imported, 1_000, 2_000, "Calisthenics", "manual"),
-        // Back to back, and a different sport over the same window.
         workout(Namespace::Imported, 2_000, 3_000, "Calisthenics", "manual"),
         workout(Namespace::Imported, 1_000, 2_000, "Running", "manual"),
-        // Overlapping by exactly half of the shorter session.
         workout(Namespace::Imported, 2_500, 3_500, "Calisthenics", "manual"),
     ];
     assert_eq!(merge_workouts(rows).len(), 4);
@@ -299,7 +293,6 @@ fn one_activity_recorded_twice_keeps_the_richer_row() {
     );
     assert_eq!(merge_workouts(vec![rich.clone(), thin.clone()]), [rich]);
 
-    // On a richness tie the strap-native row beats the import, then the longer session wins.
     let manual = workout(
         Namespace::Imported,
         1_100,
@@ -322,7 +315,6 @@ fn one_activity_recorded_twice_keeps_the_richer_row() {
         merge_workouts(vec![manual.clone(), longer.clone()]),
         [longer]
     );
-    // An identical copy in the other namespace collapses to the first row.
     let copy = WorkoutRow {
         device_id: COMPUTED_DEVICE_ID.to_owned(),
         ..manual.clone()
@@ -349,7 +341,6 @@ fn a_detected_bout_shadowing_a_real_session_is_dropped() {
         merge_workouts(vec![real.clone(), shadow.clone(), separate.clone()]),
         [real, separate]
     );
-    // Without a real session a detected bout is kept.
     assert_eq!(merge_workouts(vec![shadow.clone()]), [shadow]);
 }
 

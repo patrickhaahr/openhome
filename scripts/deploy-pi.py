@@ -34,15 +34,12 @@ def back_up_data(data, backup):
             (backup / name).chmod(0o600)
             print(f"{name}: backup verified", flush=True)
         with sqlite3.connect(f'file:{backup / "app.db"}?mode=ro', uri=True) as database:
-            # The first release with nutrition backs up a schema without Meal Logs or photos.
             columns = {row[1] for row in database.execute("PRAGMA table_info(meal_logs)")}
             named = [] if "photo_id" not in columns else [row[0] for row in database.execute(
                 "SELECT photo_id FROM meal_logs WHERE photo_id IS NOT NULL")]
         photos = backup / "meal-photos"
         photos.mkdir(mode=0o700)
         for photo in named:
-            # UUIDs name the stored files. Reject malformed database references instead of
-            # allowing backup paths outside the photo directory.
             if str(UUID(photo)) != photo:
                 raise RuntimeError("Invalid meal photo reference in app.db")
             for suffix in (".avif", ".thumbnail.avif"):
@@ -51,7 +48,6 @@ def back_up_data(data, backup):
                 target.chmod(0o600)
         print(f"meal-photos: {len(named)} photos backed up", flush=True)
     finally:
-        # Resume the previous API even when a missing photo or failed disk aborts the release.
         run("docker", "start", "openhome-api", stdout=subprocess.DEVNULL)
 
 
@@ -64,7 +60,6 @@ def main():
         raise SystemExit("Usage: deploy-pi.py API MCP DASHBOARD --areas=a,b [--verify-only]")
 
 
-    # Resolve every release before downtime; a missing tag leaves production running.
     expected_images = {}
     for area, version in versions.items():
         image = f"patrickhaahr/openhome-{area}:{version}"
@@ -84,16 +79,12 @@ def main():
         images = {area: inspect("container", f"openhome-{area}")["Image"] for area in areas}
         (backup / "previous-images.json").write_text(json.dumps(images, indent=2) + "\n")
         print(f"Backup: {backup}", flush=True)
-        # COMPOSE_FILE in the private .env opts into the Bluetooth overlay. Install
-        # release-owned configuration only after preserving the previous stack.
         for name in ("compose.yml", "compose.bluetooth.yml"):
             shutil.copy2(Path("/tmp") / ("openhome-" + name), root / name)
         configuration = json.loads(run("docker", "compose", "config", "--format", "json",
                                        capture_output=True).stdout)
         api_environment = configuration["services"]["openhome-api"].get("environment", {})
         if api_environment.get("BACKLIGHT_BLUETOOTH_ADDRESS") and api_environment.get("DBUS_SYSTEM_BUS_ADDRESS"):
-            # System D-Bus authenticates the container's numeric UID against the host
-            # user database before its existing BlueZ policy can apply.
             try:
                 pwd.getpwuid(10001)
             except KeyError:
@@ -101,11 +92,8 @@ def main():
                     "--no-user-group", "--gid", "nogroup", "--shell", "/usr/sbin/nologin", "openhome-api")
                 run("sudo", "-n", "busctl", "--system", "call", "org.freedesktop.DBus",
                     "/org/freedesktop/DBus", "org.freedesktop.DBus", "ReloadConfig")
-        # Only released services are pulled; `up` recreates just the containers whose image or
-        # configuration changed and leaves the rest running.
         run("docker", "compose", "pull", *[f"openhome-{area}" for area in released])
 
-    # Verify the immutable release tags against the latest images Compose will use.
     for area, version in versions.items():
         image = f"patrickhaahr/openhome-{area}"
         if expected_images[area] != inspect("image", f"{image}:latest")["Id"]:
@@ -117,7 +105,6 @@ def main():
     for area, version in versions.items():
         container = inspect("container", f"openhome-{area}")
         expected = expected_images[area]
-        # Containers left running keep their history; only a fresh one must have no restarts.
         if (container["Image"] != expected or not container["State"]["Running"]
                 or container["State"].get("Health", {}).get("Status") != "healthy"
                 or (area in released and container["RestartCount"] != 0)):

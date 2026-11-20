@@ -2,7 +2,6 @@ import { cva } from "class-variance-authority"
 import type { Icon } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 
-/** The page's column of bars, boards and notices. */
 export function ListsFrame({
   className,
   ...props
@@ -10,7 +9,6 @@ export function ListsFrame({
   return <div className={cn("grid gap-flow", className)} {...props} />
 }
 
-/** Switch, person keys, then the one add key. */
 export function ListBar(props: React.ComponentProps<"div">): React.JSX.Element {
   return (
     <div
@@ -33,7 +31,6 @@ export function ListBarEnd({
   )
 }
 
-/** A tone-step notice with a large light icon, a title and what to do next. */
 export function ListEmpty({
   icon: Glyph,
   title,
@@ -55,11 +52,9 @@ export function ListEmpty({
   )
 }
 
-/** A link styled as a tone-step key. */
 export const keyLink =
   "inline-flex min-h-11 items-center rounded-full bg-wash-strong px-5 font-medium text-ink no-underline"
 
-/** A group's name or status with its count beside it; `hidden` keeps the name for assistive technology only. */
 export function BoardHeading({
   count,
   noun,
@@ -90,7 +85,6 @@ export function BoardHeading({
 
 export const listKeys = "flex flex-wrap gap-2"
 
-/** A list's name as a key; `new` is the open key that starts one. */
 export const listKey = cva(
   "inline-flex min-h-11 items-center gap-2 rounded-full px-4.5 text-control font-medium text-muted-ink transition-colors duration-fast ease-app hover:bg-wash-strong hover:text-ink disabled:opacity-40 aria-pressed:bg-wash-strong aria-pressed:font-semibold aria-pressed:text-ink",
   {
@@ -99,7 +93,6 @@ export const listKey = cva(
   }
 )
 
-/** High priority: one sun disc on the picture. */
 export function WishMark(): React.JSX.Element {
   return (
     <i

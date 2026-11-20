@@ -22,7 +22,6 @@ import { sheetScrim } from "@/components/sheet-parts"
 import { Button } from "@/components/ui/button"
 import { features, type Feature } from "@/lib/features"
 
-/** The phone's bar keeps four destinations; the rest wait behind "More". */
 const barIds = [
   "weather",
   "controls",
@@ -32,10 +31,6 @@ const barIds = [
 const isBarFeature = (feature: Feature): boolean =>
   barIds.some((id) => id === feature.id)
 
-/**
- * The sidebar of tabs from 641 px up: a narrow rail of glyphs (their words stay for
- * assistive technology) whose inner edge is the horizon stood on end.
- */
 export function Rail(): React.JSX.Element {
   const onLogoClick = useLogoTaps()
 
@@ -106,7 +101,6 @@ function RailClock(): React.JSX.Element {
   )
 }
 
-/** The phone's navigation in either layout: four destinations and "More" along the bottom. */
 export function TabBar(): React.JSX.Element {
   const [open, setOpen] = useState(false)
   useIdleBlock(open)
@@ -154,7 +148,6 @@ export function TabBar(): React.JSX.Element {
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Backdrop className={sheetScrim} />
-              {/* Navigation moves focus to the page heading, so closing must not reclaim it. */}
               <Dialog.Popup
                 className="fixed inset-x-0 bottom-0 z-51 grid gap-4 rounded-t-sheet bg-plate px-5 pt-4 pb-sheet-bottom text-ink transition-transform duration-mid ease-app outline-none data-ending-style:translate-y-full data-starting-style:translate-y-full"
                 finalFocus={false}

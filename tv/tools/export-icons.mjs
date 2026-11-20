@@ -1,4 +1,3 @@
-// Export the dashboard's actual Phosphor glyphs for the TV's PNG-only Qt build.
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -34,7 +33,6 @@ for (const [kind, [name, weight]] of Object.entries(glyphs)) {
 }
 console.log("Dashboard Phosphor icons exported for the TV.");
 
-// The agent's authored vector layers stay cached while Qt rotates the rotor.
 function arc(radius, width, colour, start, end) {
   const point = (angle) => [150 + radius * Math.cos(angle * Math.PI / 180), 150 + radius * Math.sin(angle * Math.PI / 180)];
   const [x1, y1] = point(start), [x2, y2] = point(end);

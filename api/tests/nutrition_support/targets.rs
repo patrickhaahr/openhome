@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -22,7 +21,6 @@ use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method, matchers::p
 
 pub(super) const API_KEY: &str = "test-api-key";
 
-/// The nutrition routes and the Profile and Body Weight routes over one `app.db`.
 pub(super) struct Api {
     pub(super) _server: MockServer,
     pub(super) _dir: TempDir,
@@ -40,8 +38,6 @@ impl Api {
         Self::finish(server, dir, state.db.clone(), fitness, state).await
     }
 
-    /// As `start`, over a real temporary file `app.db`, so concurrent reads share one database
-    /// instead of a `:memory:` pool handing each its own empty connection.
     pub(super) async fn start_file() -> Self {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
@@ -128,14 +124,12 @@ impl Api {
         assert_eq!(status, StatusCode::CREATED, "{body}");
     }
 
-    /// Weighs in at `weight_kg` on every day from `from` through `to`.
     pub(super) async fn weigh_daily(&self, from: &str, to: &str, weight_kg: f64) {
         for day in days(from, to) {
             self.weigh(&day, weight_kg).await;
         }
     }
 
-    /// Logs `kcal` of Chicken breast at noon on `day`.
     pub(super) async fn eat(&self, day: &str, kcal: f64) {
         let request_id = format!("meal-{}", self.logs.fetch_add(1, Ordering::Relaxed));
         let (status, body) = self
@@ -152,7 +146,6 @@ impl Api {
         assert_eq!(status, StatusCode::CREATED, "{body}");
     }
 
-    /// Logs `kcal` on every day from `from` through `to`.
     pub(super) async fn eat_daily(&self, from: &str, to: &str, kcal: f64) {
         for day in days(from, to) {
             self.eat(&day, kcal).await;
@@ -167,7 +160,6 @@ impl Api {
         body["targets"].clone()
     }
 
-    /// Day-aggregated Nutrition Summary periods over a range.
     pub(super) async fn summary(&self, from: &str, to: &str) -> Value {
         let (status, body) = self
             .send(
@@ -191,7 +183,6 @@ impl Api {
         body
     }
 
-    /// The Mondays stored in `nutrition_weeks`, in date order.
     pub(super) async fn frozen_weeks(&self) -> Vec<String> {
         sqlx::query("SELECT monday FROM nutrition_weeks ORDER BY monday")
             .fetch_all(&self.db)
@@ -202,8 +193,6 @@ impl Api {
             .collect()
     }
 
-    /// Writes a weekly record directly, as a first read that committed ahead of this API's would
-    /// have, with values the live data no longer reproduces.
     pub(super) async fn seed_week(&self, monday: &str, trend_weight_day: &str) {
         sqlx::query(
             "INSERT INTO nutrition_weeks (monday, expenditure_kcal, bmr_kcal, prior_kcal,
@@ -230,21 +219,17 @@ pub(super) fn days(from: &str, to: &str) -> Vec<String> {
         .collect()
 }
 
-/// A 30-year-old man of 180 cm on 2026-04-06; at 80 kg his BMR is 1,780 kcal.
 pub(super) async fn man(api: &Api) {
     api.profile(json!({"height_cm": 180, "sex": "male", "birth_date": "1996-01-15"}))
         .await;
 }
 
-/// Today in Copenhagen.
 pub(super) fn today() -> NaiveDate {
     Utc::now()
         .with_timezone(&chrono_tz::Europe::Copenhagen)
         .date_naive()
 }
 
-/// A 30-year-old man of 180 cm whose 30th birthday was 120 days ago, so every day of the
-/// read weeks is within the 30s: at 80 kg his BMR stays 1,780 kcal.
 pub(super) async fn man_of_today(api: &Api) {
     let birthday = (today() - Days::new(120))
         .with_year(today().year() - 30)
@@ -253,7 +238,6 @@ pub(super) async fn man_of_today(api: &Api) {
         .await;
 }
 
-/// Wraps a `day` offset from today in Copenhagen.
 pub(super) fn day_from_today(offset: i64) -> String {
     let day = if offset >= 0 {
         today().checked_add_days(Days::new(offset.unsigned_abs()))
@@ -263,7 +247,6 @@ pub(super) fn day_from_today(offset: i64) -> String {
     day.unwrap().to_string()
 }
 
-/// The Monday of `day`'s ISO week.
 pub(super) fn monday_of(day: NaiveDate) -> NaiveDate {
     day - chrono::Duration::days(i64::from(day.weekday().num_days_from_monday()))
 }

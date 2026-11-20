@@ -1,7 +1,3 @@
-//! Seeds the main database through the production HTTP routes: profile, body weight, logged
-//! workouts, Household Users, Wishlists, the Watchlist, Important Dates and Binder Entries. Wish images point at the preview's own
-//! artwork routes (`media.rs`); Watchlist posters are static TMDB paths from the catalogue.
-
 use std::collections::HashMap;
 
 use chrono::{Days, NaiveDate, Utc};
@@ -134,7 +130,6 @@ struct LoggedExercise {
 
 async fn workouts(api: &Api) -> anyhow::Result<()> {
     let seed: Workouts = serde_json::from_str(include_str!("seed/workouts.json"))?;
-    // Migrations already seed a catalogue; only exercises it lacks are created.
     let mut ids: HashMap<String, i64> = api
         .get("/api/exercises")
         .await?
@@ -241,7 +236,6 @@ async fn household_lists(api: &Api, db: &sqlx::SqlitePool) -> anyhow::Result<()>
             for item in &list.items {
                 request += 1;
                 let mut item = item.clone();
-                // `art` names a drawing served by the preview itself; it is not an API field.
                 if let Some(art) = item
                     .as_object_mut()
                     .and_then(|fields| fields.remove("art"))
@@ -269,8 +263,6 @@ async fn household_lists(api: &Api, db: &sqlx::SqlitePool) -> anyhow::Result<()>
         });
         let created = api.post("/api/watchlist/entries", entry).await?;
         let entry_id = id_of(&created["entry"])?.to_string();
-        // Static catalogue metadata goes straight into the row: adding with a TMDB id would
-        // make the API call TMDB for every seeded entry at startup.
         if let Some(title) = watch
             .tmdb_id
             .and_then(|id| catalogue.iter().find(|title| title.id == id))
@@ -303,7 +295,6 @@ struct Dates {
     dates: Vec<SeedDate>,
 }
 
-/// A fixed date, or `days_ago` for one that must stay close to a round milestone.
 #[derive(Deserialize)]
 struct SeedDate {
     title: String,

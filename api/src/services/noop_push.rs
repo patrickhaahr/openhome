@@ -1,12 +1,3 @@
-//! Receiver side of NOOP's self-hosted push protocol (`docs/noop/PUSH_PROTOCOL.md`).
-//!
-//! Push data lives in its own SQLite file (`noop.db`) with its own pool and migrations
-//! (`noop_migrations/`), separate from `app.db`:
-//! - writer-lock isolation: large push batches never hold the main database's write lock;
-//! - backup asymmetry: received health data is the only copy outside the phone, so it can be
-//!   backed up on its own schedule;
-//! - independent lifecycle: the push store can be rotated or reset without touching `app.db`.
-
 pub mod ingest;
 pub mod registry;
 mod replace_window;
@@ -18,13 +9,10 @@ use subtle::ConstantTimeEq;
 use thiserror::Error;
 use uuid::Uuid;
 
-/// Protocol versions this receiver can speak, in the receiver's preference order.
 pub const SUPPORTED_VERSIONS: &[&str] = &["1.0"];
 
-/// Version reported in error bodies when no version could be negotiated.
 pub const CURRENT_VERSION: &str = "1.0";
 
-/// The complete v1 stream registry. The receiver advertises every stream.
 pub const V1_STREAMS: [&str; 12] = [
     "hrSample",
     "rrInterval",
@@ -40,7 +28,6 @@ pub const V1_STREAMS: [&str; 12] = [
     "journal",
 ];
 
-/// File name of the push database, placed next to the main database by default.
 pub const NOOP_DB_FILE_NAME: &str = "noop.db";
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -55,7 +42,6 @@ pub enum PushConfigError {
     UnderivableDbUrl,
 }
 
-/// Bearer token that authorizes the NOOP push client. Never printed.
 #[derive(Clone)]
 pub struct PushToken(std::sync::Arc<str>);
 
@@ -64,15 +50,12 @@ impl PushToken {
         if token.trim().is_empty() {
             return Err(PushConfigError::BlankToken);
         }
-        // A padded token (e.g. from a quoted .env entry) could never match a presented bearer
-        // token, so fail at startup instead of answering 401 forever.
         if token.trim() != token {
             return Err(PushConfigError::TokenWhitespace);
         }
         Ok(Self(token.into()))
     }
 
-    /// Constant-time comparison against a presented token.
     #[must_use]
     pub fn matches(&self, presented: &str) -> bool {
         presented.as_bytes().ct_eq(self.0.as_bytes()).into()
@@ -85,11 +68,6 @@ impl fmt::Debug for PushToken {
     }
 }
 
-/// Selects the first sender-offered version the receiver supports.
-///
-/// Each item is one `NOOP-Push-Accept-Version` header value: a comma-separated,
-/// sender-preferred list of exact versions. Multiple header lines are treated as one
-/// concatenated list, in order.
 pub fn negotiate_version<'a>(offers: impl IntoIterator<Item = &'a str>) -> Option<&'static str> {
     offers
         .into_iter()
@@ -98,8 +76,6 @@ pub fn negotiate_version<'a>(offers: impl IntoIterator<Item = &'a str>) -> Optio
         .find_map(|offer| SUPPORTED_VERSIONS.iter().copied().find(|v| *v == offer))
 }
 
-/// Resolves the push database URL: `NOOP_DB_URL` when set, otherwise `DATABASE_URL` with the
-/// file name swapped to `noop.db` (query parameters are kept).
 pub fn resolve_db_url(
     database_url: &str,
     noop_db_url: Option<&str>,
@@ -108,17 +84,12 @@ pub fn resolve_db_url(
         .ok_or(PushConfigError::UnderivableDbUrl)
 }
 
-/// Opens the push database, applies its migrations, and seeds the receiver state.
 pub async fn connect(url: &str) -> anyhow::Result<SqlitePool> {
     let pool = crate::db::connect_sqlite(url).await?;
     initialize(&pool).await?;
     Ok(pool)
 }
 
-// Push-DB queries below use runtime-checked `sqlx::query` instead of `query!`: the compile-time
-// macros verify against `DATABASE_URL` (`app.db`), which does not contain the push schema.
-
-/// Applies push migrations and ensures a `receiverStateId` exists.
 pub async fn initialize(pool: &SqlitePool) -> anyhow::Result<()> {
     sqlx::migrate!("./noop_migrations").run(pool).await?;
     sqlx::query(
@@ -131,8 +102,6 @@ pub async fn initialize(pool: &SqlitePool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Reads the persisted `receiverStateId`. Read per request so an operator rotation takes effect
-/// without a restart.
 pub async fn receiver_state_id(pool: &SqlitePool) -> anyhow::Result<Uuid> {
     let stored: String =
         sqlx::query_scalar("SELECT receiver_state_id FROM receiver_state WHERE id = 1")

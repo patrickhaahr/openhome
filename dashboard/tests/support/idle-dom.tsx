@@ -16,7 +16,6 @@ import type { Album, AlbumRead, WallRead } from "@/lib/photos"
 
 export const TIMEOUT = 10_000
 
-/** The documented contract: a held touch that never reports its release wakes after 3 seconds. */
 export const LOST_RELEASE_WAKE_MS = 3000
 
 export const settings: IdleSettings = { timeoutMs: TIMEOUT, preview: false }
@@ -85,7 +84,6 @@ export let root: Root
 
 let reduced = false
 
-/** Whether the next matchMedia asks for reduced motion answers yes. */
 export function setReduced(value: boolean): void {
   reduced = value
 }
@@ -141,7 +139,6 @@ export function fire(target: EventTarget, type: string): boolean {
   return target.dispatchEvent(event)
 }
 
-/** A page with a draft, a counter and a key, to prove waking returns to exactly this. */
 export function Page({
   blocked = false,
 }: {
@@ -194,7 +191,6 @@ export function slideOf(
   return image?.closest('[data-slot="idle-slide"]')
 }
 
-/** Renders `node` inside a router, for components that link. */
 export async function renderRouted(node: React.ReactNode): Promise<void> {
   const router = createRouter({
     routeTree: createRootRoute({ component: () => node }),

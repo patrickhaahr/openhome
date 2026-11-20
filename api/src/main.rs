@@ -32,7 +32,6 @@ async fn main() -> anyhow::Result<()> {
         noop_push::resolve_db_url(&database_url, std::env::var("NOOP_DB_URL").ok().as_deref())?;
     let noop_db = noop_push::connect(&noop_db_url).await?;
 
-    // Lookups answer once the pinned dataset is imported; the import runs in the background.
     let food_db_url =
         food_database::resolve_db_url(&database_url, non_empty_env("FOOD_DB_URL").as_deref())?;
     let (foods, food_import) = food_database::FoodDatabase::open(
@@ -77,7 +76,6 @@ async fn main() -> anyhow::Result<()> {
         non_empty_env("MAP_ORIGIN_LONGITUDE").as_deref(),
         non_empty_env("MAP_DEMO_ORIGIN").as_deref(),
     )?;
-    // Loops start at the shared map origin, so routes draw where the map opens.
     let loop_planner = route_loop::LoopPlanner::new(
         map_origin,
         route_loop::ProviderEndpoint::parse(non_empty_env("OPENROUTESERVICE_URL").as_deref())?,
@@ -224,7 +222,6 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(move |req, next| {
             openhome_api::auth::auth_middleware(req, next, api_key_clone.clone())
         }))
-        // Merged after the API-key layer: the push route authenticates with NOOP_PUSH_TOKEN.
         .merge(routes::noop_push::router(push_state))
         .layer(TraceLayer::new_for_http());
 

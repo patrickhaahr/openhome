@@ -1,17 +1,3 @@
-//! Delivery and recovery transitions for the current Backlight target.
-//!
-//! Policy (`routine::Policy`) decides *what* is intended; this module decides how the
-//! independent delivery facts change when work is accepted, observed, written or
-//! fails. The facts stay separate and are never collapsed into one stage:
-//!
-//! - `command`: outcome of the latest intended-target dispatch.
-//! - `recovery`: whether the current target still needs (re)applying.
-//! - `reachability` / `observed`: what readback last reported.
-//! - `acknowledged`: the last selection whose writes completed, even if readback failed.
-//!
-//! Every transition is a method on `Status` with no I/O, so the async service only
-//! sequences effects (persist, exchange, record) and holds locks; it never
-//! open-codes a state change.
 use super::{
     Command, Observation, Packet, Reachability, Recovery, Selection, Setup, Status,
     protocol::{TvSyncProfile, frame},
@@ -21,14 +7,10 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 impl Status {
-    /// New intent was durably accepted: delivery of the latest target is pending and
-    /// supersedes any queued recovery.
     pub(super) fn target_accepted(&mut self) {
         self.command = Command::Pending;
         self.recovery = Recovery::Pending;
     }
-    /// A readback (or its absence) was recorded. A missing readback means retrying;
-    /// a newly established link needs current-target recovery even if reads succeed.
     pub(super) fn observation_recorded(
         &mut self,
         observation: Option<Observation>,
@@ -48,8 +30,6 @@ impl Status {
             self.observed = Some(observation);
         }
     }
-    /// The transport could not complete an exchange. The last observation is kept
-    /// (and reads as stale); reachability is independent of any command outcome.
     pub(super) fn exchange_failed(&mut self, configured: bool) {
         self.reachability = if configured {
             Reachability::Unreachable
@@ -57,14 +37,10 @@ impl Status {
             Reachability::Unconfigured
         };
     }
-    /// A refresh could not reach the device: no command outcome changes, recovery retries.
     pub(super) fn refresh_failed(&mut self, configured: bool) {
         self.recovery = Recovery::Retrying;
         self.exchange_failed(configured);
     }
-    /// Dispatch of `selection` finished its exchange. Accepted writes are acknowledged
-    /// even when optional readback failed or the revision has since moved on; only the
-    /// still-current revision may change `command` and `recovery`.
     pub(super) fn dispatched(
         &mut self,
         selection: Selection,
@@ -90,39 +66,31 @@ impl Status {
             self.recovery = Recovery::Retrying;
         }
     }
-    /// The still-current dispatch could not complete an exchange.
     pub(super) fn dispatch_failed(&mut self, current: bool) {
         if current {
             self.command = Command::Failed;
             self.recovery = Recovery::Retrying;
         }
     }
-    /// A non-Off target cannot be delivered without a valid TV Sync profile. Policy has
-    /// already advanced; delivery waits for setup.
     pub(super) fn profile_required(&mut self) {
         self.recovery = Recovery::ProfileRequired;
         self.command = Command::Failed;
     }
-    /// A valid profile now exists; blocked recovery may proceed.
     pub(super) fn profile_stored(&mut self) {
         self.setup = Setup::Ready;
         if self.recovery == Recovery::ProfileRequired {
             self.recovery = Recovery::Pending;
         }
     }
-    /// The routine could not save its target; the due transition is retained and retried.
     pub(super) fn persistence_failed(&mut self) {
         self.recovery = Recovery::Retrying;
         self.command = Command::Failed;
     }
-    /// Whether the routine must still deliver the current target.
     pub(super) fn recovering(&self) -> bool {
         matches!(self.recovery, Recovery::Pending | Recovery::Retrying)
     }
 }
 
-/// Exponential retry clock for the routine: one second doubling to a thirty-second cap
-/// while recovery keeps retrying, reset as soon as it does not.
 pub(super) struct RetryClock {
     retry_at: Instant,
     delay: Duration,
@@ -140,7 +108,6 @@ impl RetryClock {
     pub(super) fn ready(&self) -> bool {
         Instant::now() >= self.retry_at
     }
-    /// Record the result of an attempt.
     pub(super) fn attempted(&mut self, retrying: bool) {
         if retrying {
             self.retry_at = Instant::now() + self.delay;
@@ -152,7 +119,6 @@ impl RetryClock {
     }
 }
 
-/// The ordered packets that realise `selection`. A TV Sync target needs its saved profile.
 pub(super) fn writes(selection: Selection, profile: Option<&TvSyncProfile>) -> Result<Vec<Packet>> {
     Ok(match selection {
         Selection::Effect { effect, brightness } => effect.writes(brightness.into()),
@@ -162,7 +128,6 @@ pub(super) fn writes(selection: Selection, profile: Option<&TvSyncProfile>) -> R
             .writes(brightness.map(u8::from)),
         Selection::Color { rgb, brightness } => vec![
             frame(&[0x33, 1, 1]),
-            // H605C requires the RGBIC whole-strip variant; generic RGB can ACK without applying.
             frame(&[
                 0x33, 5, 0x15, 1, rgb.red, rgb.green, rgb.blue, 0, 0, 0, 0, 0, 0xff, 0x7f,
             ]),

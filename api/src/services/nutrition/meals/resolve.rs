@@ -5,9 +5,6 @@ use crate::services::nutrition::products::Barcode;
 use crate::services::nutrition::supplements;
 use sqlx::SqlitePool;
 
-/// The Meal named `name` (case-insensitively) with its items and doses to log, each override
-/// replacing the grams of the item or the doses of the Supplement it names. A Food the current
-/// dataset no longer has, or now names differently, must be replaced with `update_meal` first.
 pub(in crate::services::nutrition) async fn resolve(
     db: &SqlitePool,
     foods: &FoodDatabase,

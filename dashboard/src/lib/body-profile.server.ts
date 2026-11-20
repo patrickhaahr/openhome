@@ -40,7 +40,6 @@ async function parse<T>(
   }
 }
 
-/** Read existing shared fitness data through server-held credentials, bounded to 500 history rows. */
 export async function readBodyProfile(range: BodyRange): Promise<BodyState> {
   const query: BodyHistoryQuery = { limit: "500" }
 
@@ -82,7 +81,6 @@ export async function readBodyProfile(range: BodyRange): Promise<BodyState> {
   }
 }
 
-/** Forward only supported writes; Axum owns validation, null clearing and duplicate-date conflicts. */
 export async function writeBodyProfile(
   command: BodyCommand
 ): Promise<BodyMutation> {

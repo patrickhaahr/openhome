@@ -1,7 +1,3 @@
-/**
- * A view's progress and failure line. Progress and success are acknowledged by the controls
- * themselves, so those words stay for assistive technology; a failure stays visible.
- */
 export function WorkoutFeedback({
   failed,
   role = "status",
@@ -25,7 +21,6 @@ export function WorkoutFeedback({
   )
 }
 
-/** A read that failed, in place of what it would have drawn: its name and why. */
 export function FailurePlate({
   title,
   className = "",
@@ -43,10 +38,8 @@ export function FailurePlate({
   )
 }
 
-/** A muted line under an exercise or set: why nothing is drawn, or the lifter's note. */
 export const workoutMuted = "text-small leading-relaxed text-muted-ink"
 
-/** A view's toolbar: the view switch first, the view's own tools at the other end. */
 export function ViewBar({
   lead,
   children,

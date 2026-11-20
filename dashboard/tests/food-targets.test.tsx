@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// The private server transport calls Axum; browser CORS applies only to Start RPCs.
 import { act } from "react"
 import { expect, test, vi } from "vitest"
 import { z } from "zod"
@@ -69,7 +68,6 @@ test("the goal control starts from the goal once it can be read", async () => {
 })
 
 test("the day shows its Calorie Target, eaten and remaining with macro progress, and saves the goal from today", async () => {
-  // The Profile, Body Weight and goal outlive Meal Logs, so this day gets a fixture of its own.
   const targets = await startAxumFixture()
 
   try {
@@ -83,8 +81,6 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
       `Targets need the Profile's height, sex (male or female) and birth date, and a Body Weight on or before ${today}.`
     )
 
-    // A man of 180 cm and 80 kg who turned 30 120 days ago: BMR 1,780 kcal, so with no logged
-    // days the Estimated Expenditure is 1.5 × BMR and losing 0.5 kg a week takes 550 kcal off.
     const birthday = shiftDay(today, -120)
 
     const birthDate =
@@ -106,7 +102,6 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
         weight_kg: 80,
       })
     ).toBe(201)
-    // 1,000 g of chicken breast: 1,100 kcal, 230 g protein and 15 g fat.
 
     const meal = await logMeal({
       api: targets.url,
@@ -162,7 +157,6 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
       save?.click()
       await goalWork
     })
-    // The control reads the day again once Axum confirms the goal.
     await act(async () => {
       await vi.waitFor(() => expect(refreshWork).not.toBe(settled))
       await refreshWork
@@ -197,7 +191,6 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
   }
 })
 
-/** A JSON value as a test request body holds it. */
 type Json =
   | string
   | number
@@ -206,13 +199,11 @@ type Json =
   | readonly Json[]
   | { readonly [key: string]: Json }
 
-/** A Supplement or Meal Log write as the agent sends it, with its request ID. */
 type AgentWrite = {
   readonly request_id: string
   readonly [field: string]: Json
 }
 
-/** Posts `body` to the fixture as the agent does and returns the answer `schema` parses. */
 async function post<T>(
   api: string,
   path: string,
@@ -233,7 +224,6 @@ async function post<T>(
   return schema.parse(await response.json())
 }
 
-/** One panel row's part, by the row's nutrient key. */
 function micro(key: string, part: string): string {
   return normalize(
     container.querySelector(
@@ -243,7 +233,6 @@ function micro(key: string, part: string): string {
 }
 
 test("the day shows vitamins and minerals against their Recommended Intakes, adequate intakes, the supplement split, a caution and a red cut down", async () => {
-  // The Profile outlives Meal Logs, so this day gets a fixture of its own.
   const micros = await startAxumFixture()
 
   try {
@@ -258,7 +247,6 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       "Sex and birth date are set on the Workout page's Body view.",
     ])
 
-    // A woman who turned 30 120 days ago.
     const birthday = shiftDay(today, -120)
 
     const birthDate =
@@ -304,10 +292,6 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       )
     ).supplement.id
 
-    // Two days ago and yesterday a 150 µg vitamin D capsule alone; today another, a magnesium
-    // tablet and 200 g of banana. Vitamin D averages 150 µg over the 3 logged days, above its
-    // 100 µg Upper Limit: cut down. Magnesium's supplement-only limit of 250 mg is passed today
-    // only.
     const mealLog = z.object({ meal_log: z.object({ day: z.string() }) })
 
     for (const daysAgo of [2, 1]) {
@@ -356,7 +340,6 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       "Omega-3",
     ])
 
-    // Banana's 18 mg vitamin C of 95 mg: a recommended intake, no Upper Limit.
     expect(micro("vitamin_c", "[data-slot='food-micro-name']")).toBe(
       "Vitamin C"
     )
@@ -370,7 +353,6 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
         ?.hasAttribute("data-limit")
     ).toBe(false)
 
-    // Vitamin D: far past its Recommended Intake, which is fine, but habitually above its limit.
     expect(micro("vitamin_d", "[data-slot='food-micro-percent']")).toBe(
       "1,500 %"
     )
@@ -384,7 +366,6 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       "Cut down: 7-day average 150 of 100 µg"
     )
 
-    // Magnesium: an adequate intake, above its supplement-only limit today only.
     expect(micro("magnesium", "[data-slot='food-micro-name']")).toBe(
       "Magnesium, adequate intake AI"
     )
@@ -407,7 +388,6 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       ["magnesium", "caution"],
     ])
 
-    // Nothing logged has a vitamin K value: a dash, never zero.
     expect(micro("vitamin_k", "[data-slot='food-micro-percent']")).toBe(
       "Unknown"
     )

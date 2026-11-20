@@ -18,23 +18,18 @@ sealed interface SyncStatus {
 
     data object WaitingForWifi : SyncStatus
 
-    /** On Wi-Fi with nothing wrong yet; a pass is due. */
     data object Queued : SyncStatus
 
-    /** The last attempt failed; retries continue on their own. */
     data class Retrying(val problem: SyncProblem) : SyncStatus
 
-    /** Axum refused it; only the user's retry sends it again. */
     data object Refused : SyncStatus
 }
 
-/** Everything not yet acknowledged, read once per change in the outbox, connectivity or sending. */
 class SyncSnapshot(
     private val rows: List<OutboxStatusRow>,
     private val onWifi: Boolean,
     private val sendingId: Long?,
 ) {
-    /** The whole queue in one status: what most needs the user's attention, then what happens next. */
     val overall: SyncStatus
         get() = if (rows.isEmpty()) SyncStatus.Synced else statusOf(rows)
 
@@ -43,7 +38,6 @@ class SyncSnapshot(
 
     fun exercise(exerciseId: Long): SyncStatus = statusOfRecord(setOf(OutboxKind.CREATE_EXERCISE), exerciseId)
 
-    /** Why Axum refused this Exercise, while it waits for the user to act on that. */
     fun exerciseRefusal(exerciseId: Long): SyncProblem? =
         rows.firstOrNull {
             it.kind == OutboxKind.CREATE_EXERCISE && it.recordId == exerciseId && it.state == OutboxState.REFUSED
@@ -54,11 +48,9 @@ class SyncSnapshot(
 
     fun bodyWeight(date: String): SyncStatus = bodyWeightRows[date]?.let(::statusOf) ?: SyncStatus.Synced
 
-    /** Why Axum refused this Body Weight, while it waits for the user to act on that. */
     fun bodyWeightRefusal(date: String): SyncProblem? =
         bodyWeightRows[date]?.firstOrNull { it.state == OutboxState.REFUSED }?.problem
 
-    /** A refused change the Profile screen is where to settle. */
     val profileNeedsTheUser: Boolean
         get() =
             rows.any {
@@ -98,7 +90,6 @@ class FitnessSyncStatus(
     fun observe(): Flow<SyncSnapshot> =
         combine(dao.observeStatus(), wifi.observeOnWifi(), sending, ::SyncSnapshot)
 
-    /** The user's "try again": refused changes rejoin the queue and any waiting retry is skipped. */
     suspend fun syncNow() {
         outbox.requeueRefused()
         scheduler.scheduleIfPending()

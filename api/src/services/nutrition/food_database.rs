@@ -1,15 +1,3 @@
-//! The Food database (`food.db`): the Danish Food Composition Database, owned by the API.
-//!
-//! `food.db` is a third SQLite database beside `app.db` and `noop.db`, opened with the shared
-//! settings and migrated by its own embedded migrations (`food_migrations/`). When it does not
-//! record the pinned dataset version, [`FoodDatabase::open`] hands back a [`FoodImport`] to run in
-//! the background; lookups report unavailable until it completes, and a failed import leaves any
-//! previous complete import in place (ADR 0013). It is rebuildable reference data: nothing the
-//! user decides is stored here.
-//!
-//! `food.db` queries use runtime-checked `sqlx::query`: the compile-time macros verify against
-//! `DATABASE_URL` (`app.db`), which does not contain this schema.
-
 use crate::services::nutrition::parameters;
 use search::{FoodIdentity, SearchIndex};
 use sqlx::sqlite::SqliteConnectOptions;
@@ -34,9 +22,7 @@ mod import;
 mod search;
 mod workbook;
 
-/// File name of the Food database, placed next to the main database by default.
 pub const FOOD_DB_FILE_NAME: &str = "food.db";
-/// Subdirectory of the data directory holding the verified workbook.
 const CACHE_DIR_NAME: &str = "food-dataset";
 pub const DEFAULT_SEARCH_LIMIT: usize = 20;
 pub const MAX_SEARCH_LIMIT: usize = 50;
@@ -45,7 +31,6 @@ const MAX_QUERY_CHARS: usize = 100;
 const SOURCE_NAME: &str = "The Danish Food Composition Database";
 const SOURCE_LICENCE: &str = "CC BY 4.0";
 
-/// The per-100 g values search results carry.
 const KEY_VALUES: [&str; 8] = [
     parameters::ENERGY_KCAL,
     parameters::ENERGY_KJ,
@@ -57,7 +42,6 @@ const KEY_VALUES: [&str; 8] = [
     parameters::ALCOHOL,
 ];
 
-/// Lookups over `food.db`, available once a complete import of the pinned dataset exists.
 #[derive(Clone)]
 pub struct FoodDatabase {
     pool: SqlitePool,
@@ -75,15 +59,12 @@ struct Ready {
     index: SearchIndex,
 }
 
-/// The pending import of the pinned dataset; run it in the background.
 pub struct FoodImport {
     database: FoodDatabase,
     pin: DatasetPin,
     cache_dir: PathBuf,
 }
 
-/// Resolves the Food database URL: `FOOD_DB_URL` when set, otherwise `DATABASE_URL` with the file
-/// name swapped to `food.db` (query parameters are kept).
 pub fn resolve_db_url(database_url: &str, food_db_url: Option<&str>) -> anyhow::Result<String> {
     crate::db::sibling_db_url(database_url, food_db_url, FOOD_DB_FILE_NAME).ok_or_else(|| {
         anyhow::anyhow!(
@@ -92,7 +73,6 @@ pub fn resolve_db_url(database_url: &str, food_db_url: Option<&str>) -> anyhow::
     })
 }
 
-/// Where the verified workbook is cached: a `food-dataset` directory beside `food.db`.
 pub fn cache_dir(food_db_url: &str) -> anyhow::Result<PathBuf> {
     let options = SqliteConnectOptions::from_str(food_db_url)?;
     let file = options.get_filename();
@@ -107,8 +87,6 @@ pub fn cache_dir(food_db_url: &str) -> anyhow::Result<PathBuf> {
 }
 
 impl FoodDatabase {
-    /// Migrates `food.db` and checks its recorded dataset against `pin`. Returns the import to run
-    /// when the pinned version is not recorded; lookups report importing until it finishes.
     pub async fn open(
         pool: SqlitePool,
         pin: DatasetPin,
@@ -158,17 +136,14 @@ impl FoodDatabase {
         }
     }
 
-    /// Whether lookups can answer now: [`FoodError::Unavailable`] while importing or failed.
     pub fn check_ready(&self) -> Result<(), FoodError> {
         self.ready().map(|_| ())
     }
 
-    /// The version of the dataset Foods are read from; `FoodIDs` change between versions.
     pub(super) fn version(&self) -> Result<String, FoodError> {
         Ok(self.ready()?.version.clone())
     }
 
-    /// Foods whose Danish or English name matches `query`, best first, with key values.
     pub async fn search(&self, query: &str, limit: Option<usize>) -> Result<FoodSearch, FoodError> {
         let query = query.trim();
         if query.is_empty() || !query.chars().any(char::is_alphanumeric) {
@@ -223,7 +198,6 @@ impl FoodDatabase {
         })
     }
 
-    /// The key, density and waste values of the found Foods, by `FoodID` and key.
     async fn summary_values(
         &self,
         foods: &[&FoodIdentity],
@@ -258,7 +232,6 @@ impl FoodDatabase {
         Ok(values)
     }
 
-    /// One Food with every parameter.
     pub async fn food(&self, food_id: i64) -> Result<Food, FoodError> {
         let ready = self.ready()?;
         let row = sqlx::query(
@@ -319,8 +292,6 @@ impl FoodDatabase {
 }
 
 impl FoodImport {
-    /// Downloads and imports the pinned dataset. On failure the error is logged and any previous
-    /// complete import stays in use; without one, lookups report the import failed.
     pub async fn run(self) {
         let Self {
             database,
@@ -331,8 +302,6 @@ impl FoodImport {
         if let Err(error) = &result {
             tracing::error!(%error, version = %pin.version, "The food database import failed");
         }
-        // Read back what `food.db` holds now: the new import, or the previous one after a
-        // rolled-back failure.
         let state = match load(&database.pool).await {
             Ok(Some(ready)) => State::Ready(ready),
             Ok(None) => State::Failed,
@@ -345,7 +314,6 @@ impl FoodImport {
     }
 }
 
-/// The complete import `food.db` holds, if any, with its search index.
 async fn load(pool: &SqlitePool) -> Result<Option<Arc<Ready>>, sqlx::Error> {
     let Some(version) = sqlx::query_scalar::<_, String>("SELECT version FROM dataset WHERE id = 1")
         .fetch_optional(pool)

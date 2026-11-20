@@ -1,5 +1,3 @@
-//! Receiver app, request and batch builders shared by the NOOP push test files.
-
 #![allow(dead_code)]
 
 use crate::common;
@@ -34,8 +32,6 @@ pub(super) async fn memory_push_db() -> SqlitePool {
     pool
 }
 
-/// Composes the app the way `main` does: API routes behind the API-key layer (applied by
-/// `common`), the push router merged afterwards with its own token.
 pub(super) async fn app_with_push_db(push_db: SqlitePool) -> Router {
     let (api, _) = common::test_app_with_db().await;
     let push_state = PushState {
@@ -60,10 +56,6 @@ pub(super) struct Reply {
 pub(super) fn bearer(token: &str) -> String {
     format!("Bearer {token}")
 }
-
-// ---------------------------------------------------------------------------------------------
-// POST: append batch ingest
-// ---------------------------------------------------------------------------------------------
 
 pub(super) const SOURCE_A: &str = "3a3486dd-5030-4e17-a00d-a781399890f9";
 
@@ -103,7 +95,6 @@ pub(super) fn hr(ts: i64, bpm: i64) -> Value {
     record(json!({"ts": ts}), json!({"bpm": bpm}))
 }
 
-/// A valid append header for `count` records at insertion positions 101..=100+count.
 pub(super) fn header(stream: &str, batch_id: &str, count: usize) -> Value {
     json!({
         "type": "batch",
@@ -163,7 +154,6 @@ pub(super) async fn send(app: Router, headers: &[(&str, &str)], body: Vec<u8>) -
     }
 }
 
-/// POSTs a decoded entity, gzip-encoded when `gzipped`, the way the Android client does.
 pub(super) async fn post(db: &SqlitePool, entity: &[u8], gzipped: bool) -> Reply {
     let auth = bearer(PUSH_TOKEN);
     let mut headers = vec![
@@ -222,11 +212,6 @@ pub(super) async fn rows(db: &SqlitePool, sql: &str) -> Vec<Value> {
         .collect()
 }
 
-// ---------------------------------------------------------------------------------------------
-// POST: replace-window delivery for the mutable streams
-// ---------------------------------------------------------------------------------------------
-
-/// A distinct canonical UUID per `n` (batch and replacement IDs).
 pub(super) fn id(n: u64) -> String {
     format!("00000000-0000-4000-8000-{n:012x}")
 }
@@ -235,7 +220,6 @@ pub(super) fn day(index: i64) -> String {
     format!("2026-08-{index:02}")
 }
 
-/// Local-midnight-like Unix seconds for day `index` (UTC here; the receiver never interprets it).
 pub(super) const fn ts(index: i64) -> i64 {
     1_754_006_400 + index * 86_400
 }
@@ -368,7 +352,6 @@ pub(super) fn recovery_rows(expected: &[(i64, f64)]) -> Vec<Value> {
         .collect()
 }
 
-/// Row counts of every replace-window table, to prove a rejected part changed nothing.
 pub(super) async fn replace_state(db: &SqlitePool) -> Vec<i64> {
     let mut counts = Vec::new();
     for table in [

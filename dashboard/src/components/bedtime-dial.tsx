@@ -21,9 +21,7 @@ type Bedtime = BacklightStatus["bedtime"]
 
 type BedtimeDialProps = {
   saved: Bedtime
-  /** The display clock; the sun sits on the ring at this minute. */
   now: Date | undefined
-  /** The switch needs a saved TV Sync profile; the window can be edited regardless. */
   canSwitch: boolean
   pending: boolean
   save: (action: BacklightAction) => void
@@ -37,7 +35,6 @@ const ring = 94
 
 const hours = Array.from({ length: 24 }, (_, hour) => hour)
 
-/** Keys move an end of the window by a quarter or a whole hour. */
 const clockKeys = new Map([
   ["ArrowUp", 15],
   ["ArrowRight", 15],
@@ -49,11 +46,6 @@ const clockKeys = new Map([
 
 type End = "start" | "end"
 
-/**
- * The night drawn as a day: a 24-hour ring with midnight at the top, the bedtime window as a
- * red arc between a moon and a sun, and the sun dot at this minute. Drag either end; the moon
- * in the middle turns the routine's red on and off. Edits send themselves when the hand lifts.
- */
 export function BedtimeDial({
   saved,
   now,

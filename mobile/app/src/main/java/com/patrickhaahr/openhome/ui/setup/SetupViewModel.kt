@@ -17,31 +17,14 @@ import kotlinx.coroutines.launch
 
 private const val API_KEY_PROTECTION_ERROR = "Couldn't protect your API Key on this device. Nothing was saved. Try again."
 
-/**
- * What the Setup screen shows for the current submission. Each variant carries the data it needs, so the
- * screen can't show progress together with a failure, or a failure without its message.
- */
 sealed interface SetupSubmission {
-    /** Nothing in flight and nothing to report: the form is ready for input. */
     data object Idle : SetupSubmission
 
-    /** One [SetupService.run] is in flight and has last reported [progress]. */
     data class Working(val progress: SetupProgress) : SetupSubmission
 
-    /** The last submission was refused or stopped; nothing from it was saved. The form accepts another try. */
     data class Failed(val message: String) : SetupSubmission
 }
 
-/**
- * Owns the one in-flight submission. [submission] changes only in [submit], [advance] and [fail]:
- * - Idle or Failed -> Working when a valid submission starts; any submit while Working is ignored, so at
- *   most one run exists at a time and a finished run can't be overtaken by a stale one.
- * - Working -> Working on progress, and only while Working.
- * - Working -> Failed on a handled API, storage or key-protection error.
- * - Working stays on success: the observed setup gate replaces this screen once COMPLETE commits.
- * - Clearing the ViewModel cancels the run; the persisted setup status then says whether to retry.
- * Anything else escapes the handlers and ends the process, which relaunches into the persisted status.
- */
 class SetupViewModel(private val setup: SetupService, initialBaseUrl: String?) : ViewModel() {
     var baseUrl by mutableStateOf(initialBaseUrl.orEmpty())
     var apiKey by mutableStateOf("")
@@ -82,7 +65,6 @@ class SetupViewModel(private val setup: SetupService, initialBaseUrl: String?) :
         submission = SetupSubmission.Failed(message)
     }
 
-    /** True once the run got past checking the connection, when a failure means a download stopped. */
     private fun reachedDownload(): Boolean {
         val current = submission
         return current is SetupSubmission.Working && current.progress !is SetupProgress.CheckingConnection

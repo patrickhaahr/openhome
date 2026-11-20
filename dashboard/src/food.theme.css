@@ -1,6 +1,5 @@
 @theme inline {
   --color-macro: var(--macro);
-  /* An amber caution that stays the same by day and night, and the ink that reads on it. */
   --color-food-caution: #d99a00;
   --color-food-caution-ink: #121418;
   --spacing-food-flow: clamp(1.25rem, 3vw, 2.25rem);
@@ -20,7 +19,6 @@
   --transition-property-food-key: background-color, color, scale;
 }
 
-/* A macronutrient names its colour once for its subtree, as a band does for Workout. */
 @layer base {
   [data-macro="protein"] {
     --macro: var(--sun);

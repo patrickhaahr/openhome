@@ -1,4 +1,3 @@
-//! Binder test fixtures: a synthetic OPTCG catalogue and Binder request helpers.
 #![allow(dead_code)]
 
 use axum::{
@@ -36,8 +35,6 @@ pub const LISTED: [(&str, &[&str]); 7] = [
 ];
 pub const OUTAGE: &str = "OP77-503";
 
-/// The catalogue's price for a code and how many days ago it observed it. Most cards are priced
-/// at 2.25 yesterday; the rest probe rate fallback, the stale boundary and unpriced cards.
 pub fn market_price(code: &str) -> (Option<f64>, u64) {
     match code {
         "OP01-002" => (None, 1),
@@ -55,7 +52,6 @@ pub fn days_ago(days: u64) -> CalendarDay {
         .unwrap()
 }
 
-/// One stored ECB day, `days` ago.
 pub async fn store_rate_day(state: &AppState, days: u64, usd: &str, dkk: &str) {
     exchange_rates::store(
         &state.db,
@@ -69,7 +65,6 @@ pub async fn store_rate_day(state: &AppState, days: u64, usd: &str, dkk: &str) {
     .unwrap();
 }
 
-/// Three ECB days: yesterday's, twenty days ago and forty-five days ago.
 pub async fn store_rates(state: &AppState) {
     for (days, usd, dkk) in [
         (1, "1.1081", "7.4754"),
@@ -93,7 +88,6 @@ pub async fn catalogue() -> MockServer {
     catalogue_priced(market_price).await
 }
 
-/// The synthetic catalogue with its prices decided per request, so a test can move them.
 pub async fn catalogue_priced(
     price_of: impl Fn(&str) -> (Option<f64>, u64) + Send + Sync + 'static,
 ) -> MockServer {
@@ -182,7 +176,6 @@ pub async fn add(app: &Router, body: Value) -> (StatusCode, Value) {
     send(app, Method::POST, "/api/binder/entries", Some(body)).await
 }
 
-/// The whole list response: `entries` and each owner's `binder_values`.
 pub async fn list_response(app: &Router, query: &str) -> Value {
     let (status, body) = send(
         app,

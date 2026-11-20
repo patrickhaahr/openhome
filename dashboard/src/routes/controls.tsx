@@ -10,10 +10,6 @@ import { sendSpeakerCommand, sendTvCommand } from "@/lib/ir.functions"
 
 const controls = features[1] satisfies { id: "controls" }
 
-/**
- * The focused Controls view: three plates filling the screen. The lights as a wall switch,
- * the TV remote in the middle, the speaker's narrow remote on the right.
- */
 export const Route = createFileRoute("/controls")({
   head: () => ({ meta: [{ title: `${controls.title} · OpenHome` }] }),
   loader: loadControls,

@@ -5,55 +5,41 @@ use crate::services::nutrition::targets::Missing;
 use crate::services::training::calendar::CalendarDay;
 use serde::Serialize;
 
-/// Where a nutrient stands against an Upper Limit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LimitStatus {
-    /// Neither the day nor the trailing average is above the limit.
     #[serde(rename = "none")]
     Clear,
-    /// The day is above the limit.
     Caution,
-    /// The trailing 7-day average over at least [`MIN_CUT_DOWN_DAYS`] logged days is above the
-    /// limit.
     CutDown,
 }
 
-/// One Upper Limit with the day's share it applies to and the trailing average of that share.
 #[derive(Debug, Serialize)]
 pub struct UpperLimitStatus {
     pub applies_to: Share,
     pub limit: f64,
-    /// The day's amount of the share; null when the day has no Meal Logs or its value is unknown.
     pub amount: Option<f64>,
-    /// The mean over the logged days of the trailing window with a known amount.
     pub seven_day_average: Option<f64>,
     pub averaged_days: usize,
     pub status: LimitStatus,
     pub source: &'static str,
 }
 
-/// One nutrient of the panel.
 #[derive(Debug, Serialize)]
 pub struct NutrientStatus {
     pub key: &'static str,
     pub name: &'static str,
     pub group: Group,
     pub unit: &'static str,
-    /// Food and supplements together; null when nothing logged that day has a value.
     pub amount: Option<f64>,
     pub food: Option<f64>,
     pub supplements: Option<f64>,
-    /// Portions without a value, so the amount is at least what is shown.
     pub unknown_portions: usize,
     pub recommended_intake: f64,
-    /// An NNR adequate intake (AI), less certain than a recommended intake (RI).
     pub adequate_intake: bool,
     pub percent_of_recommended: Option<f64>,
     pub source: &'static str,
-    /// Empty for a nutrient without an Upper Limit.
     pub upper_limits: Vec<UpperLimitStatus>,
-    /// The most serious status of its Upper Limits; null without any.
     pub upper_limit_status: Option<LimitStatus>,
 }
 
@@ -98,23 +84,19 @@ impl NutrientStatus {
     }
 }
 
-/// The trailing window the averages span.
 #[derive(Debug, Serialize)]
 pub struct TrailingWindow {
     pub from: CalendarDay,
     pub to: CalendarDay,
-    /// Days with at least one Meal Log in it.
     pub logged_days: usize,
 }
 
-/// A source the panel's references come from.
 #[derive(Debug, Serialize)]
 pub struct Citation {
     pub name: &'static str,
     pub citation: &'static str,
 }
 
-/// The sources of [`REFERENCES`], to credit beside the panel.
 pub const SOURCES: &[Citation] = &[
     Citation {
         name: "NNR 2023",
@@ -135,25 +117,20 @@ pub const SOURCES: &[Citation] = &[
 #[derive(Debug, Serialize)]
 pub struct Panel {
     pub sex: &'static str,
-    /// Whole years on the day evaluated.
     pub age: u32,
     pub age_band: &'static str,
-    /// The band's reference energy intake that per-MJ references are converted with.
     pub reference_energy_mj: f64,
     pub trailing_window: TrailingWindow,
     pub nutrients: Vec<NutrientStatus>,
     pub sources: &'static [Citation],
 }
 
-/// Why there is no panel.
 #[derive(Debug, Serialize)]
 pub struct Unavailable {
-    /// Profile values to add; empty when the age is outside the adult references.
     pub missing: Vec<Missing>,
     pub reason: String,
 }
 
-/// A day's micronutrient panel, or why there is none.
 #[derive(Debug, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Micronutrients {

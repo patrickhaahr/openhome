@@ -1,4 +1,3 @@
-//! Binder addition receipts: replays, conflicts, deletion and simultaneous retries.
 mod common;
 
 use axum::http::{Method, StatusCode};

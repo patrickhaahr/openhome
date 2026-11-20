@@ -5,7 +5,6 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-/** Setup Flow outcomes through the real app, its real database and a real process relaunch. */
 class SetupFlowTest {
     private val app = AppDriver()
     private var api: FakeAxum? = null
@@ -58,7 +57,6 @@ class SetupFlowTest {
         app.assertVisible("620 Workouts on this device")
         app.assertVisible("2 Exercises in your Library")
 
-        // The API is gone from here on, and the process restarted, so all of this comes from storage.
         api.close()
         app.relaunch()
         app.assertOnWorkoutTab()
@@ -73,7 +71,6 @@ class SetupFlowTest {
         app.assertVisible("8 reps · Bodyweight")
         app.assertVisible("6 reps · +12.5 kg")
         app.assertVisible("RPE 9")
-        // A Timed Hold shows its duration and no reps.
         app.assertVisible("20 s · Bodyweight")
 
         app.pressBackButton()
@@ -84,7 +81,6 @@ class SetupFlowTest {
         app.assertVisible("Male")
         app.assertVisible("192 bpm")
         app.assertVisible("Saved on this device")
-        // The oldest weigh-in is beyond every default page of the list endpoint.
         app.scrollDownUntilVisible("Mon, 1 Jan 2024")
     }
 
@@ -98,12 +94,10 @@ class SetupFlowTest {
         app.assertTextContaining("Download stopped, so nothing was saved.")
         app.assertAbsent("Last Workout")
 
-        // Trying again while the API still fails ends in the same failure, not in a stuck download.
         app.submitSetup(api.baseUrl, API_KEY)
         app.assertTextContaining("Download stopped, so nothing was saved.")
         app.assertAbsent("Last Workout")
 
-        // The failure survives a restart as an unfinished Setup Flow, not as a finished one.
         app.relaunch()
         app.assertOnSetup()
         app.assertTextContaining("The last download didn't finish")
@@ -149,10 +143,6 @@ class SetupFlowTest {
     }
 }
 
-/**
- * Workouts newest-numbered last; every tenth shares its date with the previous one, so that the
- * server's page boundaries can fall inside a day.
- */
 private fun manyWorkouts(count: Int): List<FixtureWorkout> {
     var date = LocalDate.of(2024, 1, 1)
     return (1..count).map { number ->

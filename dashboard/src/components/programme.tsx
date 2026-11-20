@@ -49,10 +49,6 @@ const rows = [
   label: string
 }>
 
-/**
- * The cinema programme: what is on now, what is planned and what has been seen, posters first.
- * The person keys narrow it to one Household User; tapping a poster opens its detail plate.
- */
 export function Programme({
   data,
   search,
@@ -243,7 +239,6 @@ export function Programme({
 const titles = cva("grid gap-titles", {
   variants: {
     status: {
-      // Two across at most: a third of the row is always too narrow for a column.
       watching: "grid-cols-now",
       planned: "grid-fill-35 max-sm:grid-fill-26",
       completed: "grid-fill-27 max-sm:grid-fill-21",
@@ -275,10 +270,6 @@ const programmeName = cva("line-clamp-2 font-medium", {
   },
 })
 
-/**
- * A poster and its line: on "Watching now" a wide plate with the story, elsewhere the poster
- * with its title beneath; completed titles carry their completion date.
- */
 function ProgrammeTitle({
   entry,
   owner,

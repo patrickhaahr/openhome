@@ -1,5 +1,3 @@
-//! Household-visible movie and whole-series plans, with explicit owners and durable retry identity.
-
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -24,7 +22,6 @@ pub enum WatchlistError {
 
 type Result<T> = std::result::Result<T, WatchlistError>;
 
-/// A whole media title, never an episode or season.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, sqlx::Type)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(rename_all = "lowercase")]
@@ -33,7 +30,6 @@ pub enum MediaKind {
     Series,
 }
 
-/// Personal viewing state for a movie or whole series.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, sqlx::Type)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(rename_all = "lowercase")]
@@ -120,14 +116,12 @@ fn text(value: &str, field: &str, max: usize) -> Result<String> {
     Ok(value.to_owned())
 }
 
-/// Shared read across all configured Household Users, including independent same-title plans.
 pub async fn entries(db: &SqlitePool, filter: EntriesFilter) -> Result<Vec<WatchlistEntry>> {
     Ok(sqlx::query_as!(WatchlistEntry,
         "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date FROM watchlist_entries WHERE (? IS NULL OR owner_id = ?) AND (? IS NULL OR status = ?) ORDER BY date_added DESC, id", filter.owner_id, filter.owner_id, filter.status, filter.status)
         .fetch_all(db).await?)
 }
 
-/// Read only the complete owner/entry destination.
 pub async fn entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<WatchlistEntry> {
     sqlx::query_as!(WatchlistEntry,
         "SELECT id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date FROM watchlist_entries WHERE id = ? AND owner_id = ?", id, owner_id)
@@ -141,7 +135,6 @@ async fn previous(db: &SqlitePool, request_id: &str) -> Result<Option<AdditionRe
         .fetch_optional(db).await?)
 }
 
-/// Persist a plan and immutable receipt together. Rejected additions consume no retry ID.
 pub async fn add_entry(
     db: &SqlitePool,
     mut request: AddEntry,
@@ -149,7 +142,6 @@ pub async fn add_entry(
 ) -> Result<Addition> {
     request.title = text(&request.title, "title", 500)?;
     request.request_id = text(&request.request_id, "request_id", 128)?;
-    // Resolve accepted retries before discovery, so removed owners cannot revive an intention.
     if let Some(receipt) = previous(db, &request.request_id).await? {
         return receipt.replay(db, &request).await;
     }
@@ -195,7 +187,6 @@ pub async fn add_entry(
     let id = Uuid::new_v4().to_string();
     let date_added = today();
     let mut transaction = db.begin().await?;
-    // Claim first to serialize simultaneous retries. The receipt has no cascading foreign key.
     let claimed = sqlx::query!(
         "INSERT INTO watchlist_addition_receipts (request_id, entry_id, owner_id, kind, title, tmdb_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id",
         request.request_id, id, owner_id, request.kind, request.title, request.tmdb_id)
@@ -223,7 +214,6 @@ pub async fn add_entry(
         .await
 }
 
-/// Remove one plan within its explicit owner. Keep its accepted receipt retired.
 pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<()> {
     let removed = sqlx::query!(
         "DELETE FROM watchlist_entries WHERE id = ? AND owner_id = ?",
@@ -240,7 +230,6 @@ pub async fn remove_entry(db: &SqlitePool, owner_id: &str, id: &str) -> Result<(
     Ok(())
 }
 
-/// Optional owner and status filters; omission retains household-wide visibility.
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EntriesFilter {
@@ -248,7 +237,6 @@ pub struct EntriesFilter {
     pub status: Option<WatchStatus>,
 }
 
-/// Omitted fields preserve values; null only clears a non-completed entry's completion date.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditEntry {
@@ -286,7 +274,6 @@ fn calendar_date(value: String, field: &str) -> Result<String> {
     Ok(value)
 }
 
-/// Apply one validated correction to an explicit destination, rejecting concurrent changes.
 pub async fn edit_entry(
     db: &SqlitePool,
     owner_id: &str,
@@ -337,7 +324,6 @@ pub async fn edit_entry(
             "completion_date cannot precede date_added; correct the dates together".into(),
         ));
     }
-    // Compare the snapshot in the same statement as the write, avoiding lost corrections.
     sqlx::query_as!(WatchlistEntry,
         "UPDATE watchlist_entries SET status = ?, date_added = ?, completion_date = ? WHERE id = ? AND owner_id = ? AND status = ? AND date_added = ? AND completion_date IS ? RETURNING id, owner_id, kind AS \"kind: MediaKind\", title, status AS \"status: WatchStatus\", date_added, completion_date, tmdb_id, overview, poster_path, release_date",
         status, date_added, completion_date, id, owner_id, current.status, current.date_added, current.completion_date)
@@ -345,7 +331,6 @@ pub async fn edit_entry(
         .ok_or_else(|| WatchlistError::Conflict("Entry changed during this correction; refresh before retrying".into()))
 }
 
-/// Enrich only metadata at an explicit destination; preserve all personal status/date fields.
 pub async fn enrich_entry(
     db: &SqlitePool,
     owner_id: &str,

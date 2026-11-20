@@ -6,8 +6,6 @@ use sqlx::{QueryBuilder, Row};
 use std::collections::HashMap;
 
 impl FoodDatabase {
-    /// The Danish and English names of the Foods in `food_ids` the current dataset has, by
-    /// `FoodID`; a missing Food is left out.
     pub async fn names(
         &self,
         food_ids: &[i64],
@@ -30,8 +28,6 @@ impl FoodDatabase {
         Ok(names)
     }
 
-    /// The known per-100 g values of each Food in `food_ids`, by `FoodID`. A missing Food is
-    /// [`FoodError::NotFound`].
     pub async fn snapshots(
         &self,
         food_ids: &[i64],
@@ -89,8 +85,6 @@ impl FoodDatabase {
         Ok(snapshots)
     }
 
-    /// Every per-100 g parameter of the imported dataset in database order, with the dataset to
-    /// credit.
     pub async fn nutrient_parameters(&self) -> Result<(Vec<NutrientParameter>, Source), FoodError> {
         let ready = self.ready()?;
         let parameters = sqlx::query(

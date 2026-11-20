@@ -2,7 +2,6 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
-/** A key answers on itself: it presses, flashes the sun when OpenHome acknowledges, shakes when it does not. None of this is device state. */
 const answers = [
   "data-[outcome=pending]:disabled:opacity-100 data-outcome:after:pointer-events-none data-outcome:after:absolute data-outcome:after:-inset-1.25 data-outcome:after:rounded-[inherit]",
   "data-[outcome=pending]:after:border-2 data-[outcome=pending]:after:border-transparent data-[outcome=pending]:after:border-t-sun data-[outcome=pending]:after:border-r-sun",
@@ -22,7 +21,6 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary),var(--sun)_22%)]",
-        // A tone step from the ground, never a drawn outline; it floods with ink under the hand.
         outline:
           "bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground aria-expanded:bg-primary aria-expanded:text-primary-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground",
         secondary:
@@ -32,14 +30,10 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/12 bg-clip-border text-destructive hover:bg-destructive hover:text-background",
         link: "rounded-none px-0 text-primary underline decoration-1 underline-offset-[0.3em] hover:decoration-2",
-        /** A loop alternative on the Travel plate: hollow mark, name, distance and fit in a row. */
         loop: "grid w-full grid-cols-[0.75rem_auto_minmax(0,1fr)_auto] items-center justify-start rounded-full border-0 bg-transparent text-left text-base font-normal whitespace-normal text-ink hover:bg-wash aria-pressed:bg-wash-strong",
-        /** Ink that stays ink under the hand: on the map the sun is reserved for the route. */
         ink: "bg-primary text-primary-foreground",
-        /** A control floating on the photo viewer's night ground: a light plate, inverted under the hand. */
         viewer:
           "bg-photo-plate/80 bg-clip-border text-photo-ink hover:bg-photo-ink hover:text-photo-night",
-        /** A map control: one tone step on its plate, two under the hand. */
         tone: "border-0 bg-wash bg-clip-border text-ink hover:bg-wash-strong focus-visible:outline-offset-2",
       },
       size: {

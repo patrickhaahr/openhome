@@ -9,8 +9,6 @@ import type {
   BacklightStatus,
 } from "@/lib/backlight"
 
-// Delivery exits: every call to `change` stays open until the test settles it, so each
-// response, rejection and unmount lands at a chosen moment.
 type OpenCall = {
   action: BacklightAction
   resolve: (result: BacklightResult) => void

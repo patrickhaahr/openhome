@@ -1,25 +1,15 @@
-//! Persisted, household-wide route selection. A Route Session belongs to the phone and
-//! keeps its own snapshot; selecting here never starts or changes a session.
-//!
-//! Candidate row presence is selection eligibility, with no wall-clock expiry. `remember`
-//! prunes by offer order and protects the row referenced by `active_route`. A replaced
-//! selection becomes an ordinary candidate until a later `remember` prunes it. These SQL
-//! transitions are authoritative; no separate retained/selected/expired state is stored.
-
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use super::route_loop::{Activity, GeneratedLoop, LoopPlan, LoopTarget};
 
-/// A selection names an Axum-generated candidate; client geometry is never accepted.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Selection {
     pub route_id: Uuid,
 }
 
-/// A measured candidate and the requested effort that produced it.
 #[derive(Serialize, Deserialize)]
 pub struct RouteSnapshot {
     pub activity: Activity,
@@ -30,7 +20,6 @@ pub struct RouteSnapshot {
     pub route: GeneratedLoop,
 }
 
-/// An immutable selection snapshot. Version increases only when the selected identity changes.
 #[derive(Serialize)]
 pub struct ActiveRoute {
     pub version: i64,
@@ -38,7 +27,6 @@ pub struct ActiveRoute {
     pub snapshot: RouteSnapshot,
 }
 
-/// A selected route, or an explicit absence before the household first selects one.
 #[derive(Serialize)]
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum ActiveRouteRead {
@@ -46,7 +34,6 @@ pub enum ActiveRouteRead {
     Selected { route: ActiveRoute },
 }
 
-/// Selection or persistence failed without replacing the previous Active Route.
 #[derive(Debug, thiserror::Error)]
 pub enum ActiveRouteError {
     #[error("This loop is no longer available. Plan loops again.")]
@@ -57,8 +44,6 @@ pub enum ActiveRouteError {
     Snapshot(#[from] serde_json::Error),
 }
 
-/// Remember the generated geometry before returning choices. Keep at most 96 recent
-/// candidates plus the selected one, which remains available indefinitely.
 pub async fn remember(db: &SqlitePool, plan: &LoopPlan) -> Result<(), ActiveRouteError> {
     let mut transaction = db.begin().await?;
     for route in &plan.loops {
@@ -70,7 +55,6 @@ pub async fn remember(db: &SqlitePool, plan: &LoopPlan) -> Result<(), ActiveRout
             tolerance_percent: plan.tolerance_percent,
             route: route.clone(),
         })?;
-        // Reoffering a cached candidate refreshes retention without rewriting its snapshot.
         sqlx::query!(
             "INSERT INTO route_candidates (id, snapshot) VALUES (?, ?)
              ON CONFLICT(id) DO UPDATE SET rowid = (SELECT COALESCE(MAX(rowid), 0) + 1 FROM route_candidates)",
@@ -91,7 +75,6 @@ pub async fn remember(db: &SqlitePool, plan: &LoopPlan) -> Result<(), ActiveRout
     Ok(())
 }
 
-/// Read the selected snapshot without consulting the provider or the configured origin.
 pub async fn read(db: &SqlitePool) -> Result<ActiveRouteRead, ActiveRouteError> {
     let row = sqlx::query!(
         "SELECT a.version, c.snapshot FROM active_route a
@@ -110,17 +93,12 @@ pub async fn read(db: &SqlitePool) -> Result<ActiveRouteRead, ActiveRouteError> 
     }
 }
 
-/// Atomically select only a stored candidate. Retrying the current identity is idempotent;
-/// concurrent replacements serialize in SQLite and receive distinct, increasing versions.
 pub async fn select(
     db: &SqlitePool,
     selection: Selection,
 ) -> Result<ActiveRouteRead, ActiveRouteError> {
     let id = selection.route_id.to_string();
     let mut transaction = db.begin().await?;
-    // This first statement is a write: eligibility, identity comparison and revision update
-    // serialize together, before reading the snapshot in the same transaction. Missing rows
-    // produce no selection write; repeated identities preserve the current version.
     let row = sqlx::query!(
         "INSERT INTO active_route (slot, route_id, version)
          SELECT 1, id, 1 FROM route_candidates WHERE id = ?

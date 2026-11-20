@@ -1,5 +1,3 @@
-//! App, request and fixture helpers shared by the NOOP Workout Detail test files.
-
 #![allow(dead_code)]
 
 use crate::common;
@@ -18,7 +16,6 @@ use serde_json::json;
 
 pub(super) const API_KEY: &str = "test-api-key";
 
-/// The API over `mirror` with an empty training log.
 pub(super) async fn app(mirror: &Mirror) -> Router {
     common::test_app_with_noop_db(mirror.db.clone()).await
 }
@@ -43,7 +40,6 @@ pub(super) async fn detail_of(app: &Router, source: &str, start: &str) -> Value 
     body
 }
 
-/// Sets the Profile's Max Heart Rate, or clears it with `None`.
 pub(super) async fn set_hr_max(app: &Router, hr_max_bpm: Option<i64>) {
     let (status, body) = common::send_request_with_method(
         app.clone(),
@@ -56,7 +52,6 @@ pub(super) async fn set_hr_max(app: &Router, hr_max_bpm: Option<i64>) {
     assert_eq!(status, StatusCode::OK, "{body}");
 }
 
-/// Workouts on the Training Day `day`.
 pub(super) async fn workouts_on(app: &Router, day: &str) -> Value {
     let (status, body) = common::send_request(
         app.clone(),
@@ -68,7 +63,6 @@ pub(super) async fn workouts_on(app: &Router, day: &str) -> Value {
     body
 }
 
-/// Asserts `actual` is a number within 1e-9 of `expected`.
 pub(super) fn assert_close(actual: &Value, expected: f64) {
     let actual = actual
         .as_f64()
@@ -76,7 +70,6 @@ pub(super) fn assert_close(actual: &Value, expected: f64) {
     assert!((actual - expected).abs() < 1e-9, "{actual} != {expected}");
 }
 
-/// A mirror where only the strap's imported namespace pushed `rows` in the workout window.
 pub(super) async fn mirror_with(rows: &[Value]) -> Mirror {
     let mut mirror = Mirror::empty().await;
     mirror
@@ -85,9 +78,6 @@ pub(super) async fn mirror_with(rows: &[Value]) -> Mirror {
     mirror
 }
 
-/// The API over a mirror holding one strap-recorded Running workout from 07:00 on 2026-09-26
-/// lasting `duration_s`, with strap samples at `(offset_s, bpm)` from its start, and the Profile's
-/// Max Heart Rate set to `hr_max_bpm`.
 pub(super) async fn app_with_run(
     duration_s: i64,
     samples: &[(i64, i64)],

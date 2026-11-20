@@ -9,15 +9,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-/**
- * The fitness sync policy: the app's default network must run over Wi-Fi. It looks only at the
- * transport, so mobile data and any other connection stay out however unmetered or reachable they
- * are. A VPN over Wi-Fi reports the Wi-Fi transport too and passes; a VPN over mobile data does not.
- */
 class WifiNetworks(context: Context) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
 
-    /** The network to send fitness changes over, or null when policy forbids sending now. */
     fun activeWifiNetwork(): Network? =
         connectivity.activeNetwork?.takeIf { network ->
             connectivity.getNetworkCapabilities(network)?.isWifi() == true

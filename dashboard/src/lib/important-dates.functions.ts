@@ -5,7 +5,6 @@ import {
   type ImportantDatesState,
 } from "./important-dates"
 
-/** Household-shared read through authenticated Axum, with credentials held by Start. */
 export const getImportantDates = createServerFn({ method: "GET" }).handler(
   async () => {
     setResponseHeader("Cache-Control", "no-store")
@@ -15,7 +14,6 @@ export const getImportantDates = createServerFn({ method: "GET" }).handler(
   }
 )
 
-/** Writes use the same Axum rules and receipts as MCP. */
 export const mutateImportantDate = createServerFn({ method: "POST" })
   .validator(importantDateCommand)
   .handler(async ({ data }) => {
@@ -25,7 +23,6 @@ export const mutateImportantDate = createServerFn({ method: "POST" })
     return writeImportantDate(data)
   })
 
-/** A dropped RPC keeps recovery reachable within the focused view. */
 export async function loadImportantDates(): Promise<ImportantDatesState> {
   try {
     return await getImportantDates()
@@ -34,7 +31,6 @@ export async function loadImportantDates(): Promise<ImportantDatesState> {
   }
 }
 
-/** A privacy-filtered read for the shared idle display; credentials stay on the server. */
 export const getIdleDates = createServerFn({ method: "GET" }).handler(
   async () => {
     setResponseHeader("Cache-Control", "no-store")

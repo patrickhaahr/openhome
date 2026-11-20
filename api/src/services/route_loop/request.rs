@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{STEP_LENGTH_CM, TARGET_METERS, TARGET_STEPS};
 
-/// Activities the planner can route. Both use the pedestrian `foot-walking` graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Activity {
@@ -13,7 +12,6 @@ pub enum Activity {
 }
 
 impl Activity {
-    /// Ways the loop avoids. Runners also avoid steps, which break a running pace.
     pub(super) fn avoided_features(self) -> &'static [&'static str] {
         match self {
             Self::Walking => &["ferries"],
@@ -22,7 +20,6 @@ impl Activity {
     }
 }
 
-/// Untrusted loop request body; parse it into a [`LoopRequest`].
 #[derive(Deserialize)]
 pub struct LoopRequestBody {
     pub(super) activity: String,
@@ -37,7 +34,6 @@ pub(super) enum TargetBody {
     Steps { steps: f64 },
 }
 
-/// The requested effort: a distance, or steps converted with the request's step length.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum LoopTarget {
@@ -46,7 +42,6 @@ pub enum LoopTarget {
 }
 
 impl LoopTarget {
-    /// The distance the planner aims for.
     #[must_use]
     pub fn meters(self) -> u32 {
         match self {
@@ -55,7 +50,6 @@ impl LoopTarget {
     }
 }
 
-/// A validated loop request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LoopRequest {
     pub(super) activity: Activity,
@@ -63,7 +57,6 @@ pub struct LoopRequest {
     pub(super) step_length_cm: u32,
 }
 
-/// Why a loop request was rejected before contacting the provider.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum LoopRequestError {
     #[error("Unsupported activity; choose walking or running")]
@@ -77,7 +70,6 @@ pub enum LoopRequestError {
 }
 
 impl LoopRequest {
-    /// Parse the activity, step length and a distance or step target within supported ranges.
     pub fn parse(body: &LoopRequestBody) -> Result<Self, LoopRequestError> {
         let activity = match body.activity.as_str() {
             "walking" => Activity::Walking,
@@ -108,7 +100,6 @@ impl LoopRequest {
     }
 }
 
-/// A whole number within `range`, or `None`.
 fn whole(value: f64, range: &RangeInclusive<u32>) -> Option<u32> {
     let within = value.is_finite()
         && value.fract() == 0.0

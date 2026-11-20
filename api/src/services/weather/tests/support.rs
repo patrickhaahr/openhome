@@ -6,7 +6,6 @@ pub(super) fn fixture(now: DateTime<Utc>) -> Value {
     ))
     .unwrap();
     let first = now.with_timezone(&Copenhagen).date_naive();
-    // Open-Meteo daily Unix timestamps use one fixed request offset, even across DST.
     let offset = now
         .with_timezone(&Copenhagen)
         .offset()

@@ -10,7 +10,6 @@ import { ViewTabs, viewTab } from "@/components/view-tabs"
 import { initial, type ListFeedback } from "@/lib/lists"
 import type { HouseholdUser } from "@/lib/wishlist"
 
-/** A person's disc; `ground` is for a disc on a tone step, and a wash disc turns ground inside a chosen key. */
 const disc = cva(
   "inline-grid flex-none place-items-center rounded-full leading-none font-semibold text-ink",
   {
@@ -38,7 +37,6 @@ const sheet = cva(
       variant: {
         plate:
           "inset-y-0 right-0 w-sheet content-start gap-5 overflow-y-auto bg-plate px-gutter pt-4 pb-8 transition-transform data-ending-style:translate-x-full data-starting-style:translate-x-full max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:data-ending-style:translate-x-0 max-sm:data-ending-style:translate-y-full max-sm:data-starting-style:translate-x-0 max-sm:data-starting-style:translate-y-full",
-        /** The Binder's card stage: the whole screen, fading in rather than rising. */
         stage:
           "inset-0 grid-rows-binder-stage content-stretch overflow-hidden bg-binder-stage transition-binder-stage data-ending-style:scale-98 data-ending-style:opacity-0 data-starting-style:scale-98 data-starting-style:opacity-0",
       },
@@ -62,7 +60,6 @@ const sheetTitle = cva("mr-auto font-medium", {
   defaultVariants: { variant: "plate" },
 })
 
-/** `rail` stands the keys in the Binder's left gutter on a wide screen. */
 const personKeys = cva("", {
   variants: {
     variant: {
@@ -73,10 +70,6 @@ const personKeys = cva("", {
   defaultVariants: { variant: "row" },
 })
 
-/**
- * Everyone, then one key per Household User, on one wash track. The chosen key is the ink
- * pill; counts are figures with their words kept for assistive technology.
- */
 export function PersonKeys({
   owners,
   selected,
@@ -146,7 +139,6 @@ export function PersonKeys({
   )
 }
 
-/** A person's initial in a disc; decorative, since the name is always said beside it. */
 export function PersonDisc({
   name,
   size,
@@ -159,10 +151,6 @@ export function PersonDisc({
   )
 }
 
-/**
- * A detail plate that rises from the right edge (from the bottom on a phone): one tone step
- * above the page, over a ground-coloured scrim. No border, shadow or blur.
- */
 export function ListSheet({
   open,
   close,
@@ -182,7 +170,6 @@ export function ListSheet({
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   children: React.ReactNode
 }): React.JSX.Element {
-  // An open sheet holds a detail, an edit or an add flow: never hide it behind the slideshow.
   useIdleBlock(open)
 
   return (
@@ -219,7 +206,6 @@ export function ListSheet({
   )
 }
 
-/** A segmented choice on a wash track; the chosen segment is the ink pill. */
 export function Segments<T extends string>({
   label,
   value,
@@ -262,7 +248,6 @@ export function Segments<T extends string>({
   )
 }
 
-/** Visible only when something failed; success is said to assistive technology alone. */
 export function FeedbackLine({
   feedback,
   busy,
@@ -287,12 +272,6 @@ export function FeedbackLine({
   )
 }
 
-/**
- * Whether the calling sheet content is still mounted. A write outlives the sheet that sent it,
- * and the board's `done` closes whichever sheet is open, so only a completion that finds its
- * own sheet still mounted may call `done`. Durable work, such as clearing a spent retry
- * intention, runs either way, because the write really was saved.
- */
 export function useSheetLifetime(): () => boolean {
   const mounted = useRef(false)
 
@@ -311,16 +290,11 @@ type Receipt<Reason extends string> =
   | { readonly state: "saved" }
   | { readonly state: "failed"; readonly reason: Reason }
 
-/** What a finished save said; each outcome carries exactly the data its feedback needs. */
 type Outcome<Reason extends string> =
   | { readonly result: "rejected"; readonly reason: Reason }
   | { readonly result: "saved"; readonly text: string }
   | { readonly result: "saved-unread" }
 
-/**
- * One save, from request to outcome. `sending` and `refreshing` keep the acknowledgement text
- * until the outcome needs it; `settled` is the only phase that carries feedback.
- */
 type Operation<Reason extends string> =
   | { readonly phase: "idle" }
   | { readonly phase: "sending"; readonly saved: string }
@@ -334,10 +308,6 @@ type Step<Reason extends string> =
   | { readonly type: "refreshed" }
   | { readonly type: "unread" }
 
-/**
- * The only place an Operation is constructed. A step that does not follow the current phase
- * leaves it alone, so a late or repeated step can neither revive nor overwrite a settled save.
- */
 function advance<Reason extends string>(
   operation: Operation<Reason>,
   step: Step<Reason>
@@ -391,25 +361,12 @@ function feedbackOf<Reason extends string>(
   }
 }
 
-/** The save in progress, what it last said, and the save itself. */
 export type ListSave<Command> = {
   busy: boolean
   feedback: ListFeedback | undefined
   save: (command: Command, saved: string) => Promise<boolean>
 }
 
-/**
- * One write at a time: send, then re-read the view. A lost response is reported as uncertain,
- * never as saved; a saved change that could not re-read says so, and still resolves `true`.
- *
- * The board that calls this hook outlives its sheets, so a save may settle after the sheet that
- * sent it has closed; that sheet's completion is guarded by `useSheetLifetime`, not here.
- *
- * `save` resolves once the operation has settled. `change` and `refresh` each settle by
- * resolving or rejecting, which always releases the lock. Their time limits belong to the
- * transport: a call that never settles keeps the form busy until the page is reloaded, and no
- * timeout is added here because none is required by a source.
- */
 export function useListSave<Command, Reason extends string>(
   change: (command: Command) => Promise<Receipt<Reason>>,
   refresh: () => Promise<void>,
@@ -421,7 +378,6 @@ export function useListSave<Command, Reason extends string>(
     { phase: "idle" }
   )
 
-  // The reducer's state lags a render; this closes the gap for a second call in the same tick.
   const locked = useRef(false)
 
   async function save(command: Command, saved: string): Promise<boolean> {

@@ -1,4 +1,3 @@
-//! Authenticated gallery metadata and resized media, scoped by the integration service.
 use crate::services::photos::{MonthDay, PhotoError, PhotoService, PhotoSize, copenhagen_today};
 use axum::{
     Json, Router,
@@ -11,7 +10,6 @@ use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
-/// Merge inside the API-key layer, as with every private `OpenHome` read.
 pub fn router(service: Option<PhotoService>) -> Router<crate::AppState> {
     Router::new()
         .route("/api/photos/albums", get(list))
@@ -72,7 +70,6 @@ async fn merged(
 }
 #[derive(Deserialize, Default)]
 struct OnThisDayQuery {
-    /// `MM-DD`; today in Europe/Copenhagen when omitted.
     date: Option<String>,
     #[serde(default)]
     page: usize,

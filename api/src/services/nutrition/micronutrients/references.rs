@@ -1,38 +1,5 @@
-//! The reference values the micronutrient panel compares intake with, transcribed by hand
-//! because neither source publishes machine-readable tables. Each value names its table so it can
-//! be audited against the source.
-//!
-//! - **NNR 2023**: Blomhoff R, Andersen R, Arnesen EK, et al. *Nordic Nutrition Recommendations
-//!   2023*. Nordic Council of Ministers, Nord 2023:003, doi:10.6027/nord2023-003, with the
-//!   corrections of 25 September 2023 applied (selenium for females 18–24 years is 75 µg, not
-//!   80). Recommended intakes (RI) come from Table 12 (vitamins, p. 68) and Table 14 (minerals,
-//!   p. 70); adequate intakes (AI) from Table 13 (vitamins, p. 69) and Table 15 (minerals, p. 71).
-//!   Pages are those of the PDF report. The adult age bands are the report's own: 18–24, 25–50,
-//!   51–70 and over 70 years.
-//! - **Per-MJ references**: thiamin (0.1 mg/MJ) and niacin (1.6 mg NE/MJ) are converted with the
-//!   band's reference energy intake at PAL 1.6 from Table 8 (p. 57), the activity level the
-//!   report itself uses when it states these RIs per day (thiamin p. 136: 0.9 mg females, 1.1 mg
-//!   males; niacin p. 140: 14 and 18 mg NE, both for 25–50 years).
-//! - **EFSA Upper Limits**: EFSA, *Overview on Tolerable Upper Intake Levels as derived by the
-//!   Scientific Committee on Food (SCF) and the EFSA NDA Panel*, Version 11 (August 2025),
-//!   Table 1 (minerals, p. 2) and Table 3 (vitamins, p. 4), adult column. Iron, manganese and
-//!   fluoride have only "safe levels of intake" (Table 2), which EFSA says cannot be used to
-//!   judge risk, so they carry no Upper Limit here.
-//! - **EPA+DHA**: the adequate intake of 250 mg/day for adults from EFSA NDA Panel (2010),
-//!   *Scientific Opinion on Dietary Reference Values for fats*, EFSA Journal 8(3):1461. NNR 2023
-//!   sets no EPA+DHA intake, and EFSA's overview (Table 4) sets no Upper Limit for it.
-//!
-//! Every amount is in the unit of the Food database parameter it is compared with, so copper is
-//! in mg and molybdenum and fluoride in µg although NNR writes them in µg and mg; EPA+DHA, which
-//! the database holds in grams, is in mg.
-//!
-//! Left out: sodium (NNR 2023 gives an AI of 1.5 g, p. 161, but recommends limiting intake to
-//! 2.3 g, Table 16, and EFSA sets no Upper Limit, so "reaching it is good" would mislead), boron
-//! (an EFSA Upper Limit of 10 mg but no NNR reference), and chromium, which neither sets.
-
 use crate::services::nutrition::targets::Sex;
 
-/// An NNR 2023 adult age band, by whole years of age on the day evaluated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AgeBand {
     From18To24,
@@ -42,7 +9,6 @@ pub enum AgeBand {
 }
 
 impl AgeBand {
-    /// The band of `age`; `None` below 18, which the adult references do not cover.
     #[must_use]
     pub const fn of(age: u32) -> Option<Self> {
         match age {
@@ -74,7 +40,6 @@ impl AgeBand {
     }
 }
 
-/// One value per sex for each band, in the order 18–24, 25–50, 51–70, 71+.
 #[derive(Clone, Copy, Debug)]
 pub struct ByBand {
     female: [f64; 4],
@@ -102,19 +67,15 @@ const fn all(value: f64) -> ByBand {
     }
 }
 
-/// NNR 2023 Table 8 (p. 57): reference energy intake at PAL 1.6 in MJ/day.
 pub const REFERENCE_ENERGY_MJ: ByBand = by_band([9.4, 9.0, 8.3, 8.2], [11.8, 11.3, 10.3, 10.1]);
 
-/// How a Recommended Intake is stated.
 #[derive(Clone, Copy, Debug)]
 pub enum Recommended {
     PerDay(ByBand),
-    /// Per MJ of the band's reference energy intake.
     PerMegajoule(f64),
 }
 
 impl Recommended {
-    /// The daily amount for `sex` in `band`.
     #[must_use]
     pub fn daily(self, sex: Sex, band: AgeBand) -> f64 {
         match self {
@@ -124,35 +85,23 @@ impl Recommended {
     }
 }
 
-/// What a nutrient's amount is read from.
 #[derive(Clone, Copy, Debug)]
 pub enum Measure {
-    /// One Food database parameter, in its own unit.
     Parameter(&'static str),
-    /// EPA plus DHA, converted from grams to mg.
     EpaDha,
 }
 
-/// The share of intake an Upper Limit applies to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Share {
-    /// Food and supplements together.
     Total,
-    /// Supplements only: EFSA's magnesium limit covers readily dissociable salts and oxide in
-    /// supplements, water and fortified foods, not magnesium naturally in food.
     Supplements,
-    /// Retinol and retinyl esters from food and supplements, not provitamin A carotenoids.
     PreformedVitaminA,
-    /// Folic acid and L-methylfolate salts in supplements, not folate naturally in food.
     SupplementalFolate,
-    /// Nicotinic acid in supplements.
     NicotinicAcid,
-    /// Nicotinamide in supplements.
     Nicotinamide,
 }
 
-/// An EFSA Tolerable Upper Intake Level for adults, in the nutrient's unit.
 #[derive(Clone, Copy, Debug)]
 pub struct UpperLimit {
     pub share: Share,
@@ -160,7 +109,6 @@ pub struct UpperLimit {
     pub source: &'static str,
 }
 
-/// Which list the panel shows a nutrient in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Group {
@@ -169,17 +117,14 @@ pub enum Group {
     FattyAcids,
 }
 
-/// One nutrient of the panel with its references.
 #[derive(Debug)]
 pub struct Reference {
-    /// The Food database parameter key, or `epa_dha`.
     pub key: &'static str,
     pub name: &'static str,
     pub group: Group,
     pub measure: Measure,
     pub unit: &'static str,
     pub recommended: Recommended,
-    /// An adequate intake (AI) rather than a recommended intake (RI).
     pub adequate: bool,
     pub source: &'static str,
     pub upper_limits: &'static [UpperLimit],
@@ -253,8 +198,6 @@ const fn mineral(
 
 use Recommended::{PerDay, PerMegajoule};
 
-/// The panel's nutrients in the order NNR 2023 lists them. Columns are females then males,
-/// 18–24, 25–50, 51–70 and 71+ years.
 pub const REFERENCES: &[Reference] = &[
     vitamin(
         "vitamin_a",
@@ -275,7 +218,6 @@ pub const REFERENCES: &[Reference] = &[
         "vitamin_d",
         "Vitamin D",
         "µg",
-        // 20 µg over 70, and for anyone with little or no sun exposure (footnote 3).
         PerDay(by_band([10.0, 10.0, 10.0, 20.0], [10.0, 10.0, 10.0, 20.0])),
         false,
         &[total(100.0, EFSA_VITAMINS)],
@@ -399,7 +341,6 @@ pub const REFERENCES: &[Reference] = &[
         }],
     ),
     mineral("potassium", "Potassium", "mg", all(3500.0), true, &[]),
-    // Females 51–70 who still menstruate should use 15 mg (footnote 7).
     mineral(
         "iron",
         "Iron",
@@ -416,7 +357,6 @@ pub const REFERENCES: &[Reference] = &[
         false,
         &[total(25.0, EFSA_MINERALS)],
     ),
-    // NNR: 900 µg.
     mineral(
         "copper",
         "Copper",
@@ -442,7 +382,6 @@ pub const REFERENCES: &[Reference] = &[
         &[total(255.0, EFSA_MINERALS)],
     ),
     mineral("manganese", "Manganese", "mg", all(3.0), true, &[]),
-    // EFSA: 0.6 mg.
     mineral(
         "molybdenum",
         "Molybdenum",
@@ -451,7 +390,6 @@ pub const REFERENCES: &[Reference] = &[
         true,
         &[total(600.0, EFSA_MINERALS)],
     ),
-    // NNR: 3.2, 3.2, 3.1, 3.0 mg (females) and 3.8, 3.7, 3.7, 3.5 mg (males).
     mineral(
         "fluoride",
         "Fluoride",

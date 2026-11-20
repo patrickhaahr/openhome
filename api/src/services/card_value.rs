@@ -1,40 +1,28 @@
-//! Card Value and Binder Value (`CONTEXT.md`): a Card Price in USD shown in USD, EUR and DKK at
-//! the ECB reference rate for the price's own day, or the latest earlier day's when that day has
-//! none. Money is kept in integer cents and rates as integers with six decimals, so a conversion
-//! never meets a float: every amount is rounded to cents once, half away from zero, from the exact
-//! quotient. A Card Price with no rate at or before its day has no Card Value, and says why.
-
 use serde::{Serialize, Serializer};
 
 use super::training::CalendarDay;
 
-/// A price observed more than this many Copenhagen days before today is stale.
 const STALE_AFTER_DAYS: i64 = 30;
 
-/// A sum of Binder Entries can reach `u32::MAX` copies of a six-figure price, past `i64`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cents(i128);
 
 impl Cents {
-    /// A catalogue price in dollars, rounded to the cent; `None` when it is not a plain amount.
     #[must_use]
     pub fn from_dollars(dollars: f64) -> Option<Self> {
         (dollars.is_finite() && dollars >= 0.0).then(|| Self((dollars * 100.0).round() as i128))
     }
 
-    /// A stored amount of whole cents.
     #[must_use]
     pub fn from_whole_cents(cents: i64) -> Self {
         Self(i128::from(cents))
     }
 
-    /// The amount as whole cents, when it fits the database's integer.
     #[must_use]
     pub fn whole_cents(self) -> Option<i64> {
         i64::try_from(self.0).ok()
     }
 
-    /// `self * numerator / denominator`, rounded half away from zero.
     fn scaled(self, numerator: i128, denominator: i128) -> Self {
         let product = self.0 * numerator;
         let rounded = (product.abs() * 2 + denominator) / (denominator * 2);
@@ -42,21 +30,18 @@ impl Cents {
     }
 }
 
-/// Amounts go out as plain numbers in the major unit, such as `15.18`.
 impl Serialize for Cents {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_f64(self.0 as f64 / 100.0)
     }
 }
 
-/// Units of a currency per one euro, a positive decimal with at most six fractional digits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rate(i64);
 
 impl Rate {
     const SCALE: i128 = 1_000_000;
 
-    /// Plain decimal text such as `1.1081`: digits, an optional fraction, no sign or exponent.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let (whole, fraction) = text.split_once('.').unwrap_or((text, "0"));
@@ -81,7 +66,6 @@ impl Rate {
     }
 }
 
-/// One ECB working day's reference rates against the euro.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DailyRates {
     pub date: CalendarDay,
@@ -89,7 +73,6 @@ pub struct DailyRates {
     pub dkk: Rate,
 }
 
-/// Every stored day, oldest first.
 #[derive(Debug, Default)]
 pub struct Rates(Vec<DailyRates>);
 
@@ -100,7 +83,6 @@ impl Rates {
         Self(days)
     }
 
-    /// The rates of `day`, else of the latest day before it; never a later day's.
     #[must_use]
     pub fn at_or_before(&self, day: CalendarDay) -> Option<&DailyRates> {
         let after = self.0.partition_point(|rates| rates.date <= day);
@@ -116,13 +98,9 @@ pub struct Converted {
     pub rate_date: CalendarDay,
 }
 
-/// No rates exist at or before the price's day.
 #[derive(Debug, PartialEq, Eq)]
 pub struct NoRates;
 
-/// The pure conversion: a USD price observed on `observed_on` in all three currencies, with the
-/// day of the rates that were used. EUR is the price over the USD rate, DKK the price times the
-/// DKK rate over the USD rate, each rounded once from the exact quotient.
 pub fn convert(usd: Cents, observed_on: CalendarDay, rates: &Rates) -> Result<Converted, NoRates> {
     let day = rates.at_or_before(observed_on).ok_or(NoRates)?;
     let per_eur = i128::from(day.usd.0);
@@ -144,9 +122,7 @@ pub struct CardValue {
     pub usd: Cents,
     pub eur: Cents,
     pub dkk: Cents,
-    /// The day the catalogue observed the USD price.
     pub observed_on: CalendarDay,
-    /// The day of the ECB rates the conversion used.
     pub rate_date: CalendarDay,
     pub stale: bool,
 }
@@ -154,14 +130,11 @@ pub struct CardValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Unpriced {
-    /// The catalogue prices English printings only.
     JapanesePrinting,
     NoCataloguePrice,
     NoExchangeRates,
 }
 
-/// A Card Value, or the reason there is none. Reads carry it as `card_value` (null when
-/// unpriced) beside `value_unavailable` (the reason, null when priced).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Valuation {
     Priced(CardValue),
@@ -190,7 +163,6 @@ impl Serialize for Valuation {
     }
 }
 
-/// Values Card Prices against the stored rates, as of one Copenhagen day.
 #[derive(Debug)]
 pub struct Valuer {
     rates: Rates,
@@ -203,7 +175,6 @@ impl Valuer {
         Self { rates, today }
     }
 
-    /// A catalogue price (USD and the `YYYY-MM-DD` day it was observed), if the Card has one.
     #[must_use]
     pub fn card(&self, price: Option<(f64, &str)>) -> Valuation {
         let Some((usd, observed_on)) = price
@@ -230,8 +201,6 @@ impl Valuer {
     }
 }
 
-/// Quantity times Card Value over a Binder's priced entries, with how many entries had no price
-/// and the oldest observation date among the priced ones. Stale prices count.
 #[derive(Debug, Default, PartialEq, Eq, Serialize)]
 pub struct BinderValue {
     pub usd: Cents,
@@ -242,7 +211,6 @@ pub struct BinderValue {
 }
 
 impl BinderValue {
-    /// Each item is an entry's copy count and its valuation.
     pub fn total<'a>(entries: impl IntoIterator<Item = (i64, &'a Valuation)>) -> Self {
         entries
             .into_iter()

@@ -41,7 +41,6 @@ export function WeatherFailure({
   )
 }
 
-/** Home weather: the temperature as a figure, then the week as a shape. */
 export function WeatherNow({
   weather,
 }: {
@@ -133,7 +132,6 @@ function OpenWeather(): React.JSX.Element {
   )
 }
 
-/** Today and the days ahead: name, glyph and the day's high. Lows live on Weather. */
 function ForecastDays({ days }: { days: Days }): React.JSX.Element {
   return (
     <ol className="grid grid-cols-7" aria-label="Seven days">

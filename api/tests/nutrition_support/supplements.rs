@@ -1,4 +1,3 @@
-// Each test binary uses a subset of the shared helpers.
 #![allow(dead_code)]
 
 use crate::{
@@ -20,7 +19,6 @@ use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method, matchers::p
 
 pub(super) const API_KEY: &str = "test-api-key";
 
-/// The nutrition routes over one `app.db` and a `food.db` imported from `wiremock`.
 pub(super) struct Api {
     pub(super) server: MockServer,
     pub(super) dir: TempDir,
@@ -55,7 +53,6 @@ impl Api {
         }
     }
 
-    /// The same data while a new pin is still being imported.
     pub(super) async fn importing(self) -> Self {
         let pin = DatasetPin {
             version: "never".into(),
@@ -84,7 +81,6 @@ impl Api {
             .await
     }
 
-    /// Adds `body`, expecting a new Supplement, and returns it.
     pub(super) async fn added(&self, body: Value) -> Value {
         let (status, added) = self.add(body).await;
         assert_eq!(status, StatusCode::CREATED, "{added}");
@@ -115,7 +111,6 @@ impl Api {
             .await
     }
 
-    /// Logs `body`, expecting a new Meal Log, and returns it.
     pub(super) async fn logged(&self, body: Value) -> Value {
         let (status, logged) = self.log(body).await;
         assert_eq!(status, StatusCode::CREATED, "{logged}");
@@ -152,7 +147,6 @@ impl Api {
         body
     }
 
-    /// The day's total of the nutrient `key`.
     pub(super) async fn nutrient(&self, day: &str, key: &str) -> Value {
         let day = self.day(day).await;
         day["nutrients"]
@@ -217,7 +211,6 @@ pub(super) fn app(dir: &TempDir, foods: FoodDatabase, state: AppState) -> Router
     }))
 }
 
-/// A fish oil capsule as its label states it: omega-3 in mg, vitamin D in µg and its energy.
 pub(super) fn fish_oil(request_id: &str) -> Value {
     json!({
         "name": "  Omega-3   fish oil ",
@@ -233,7 +226,6 @@ pub(super) fn fish_oil(request_id: &str) -> Value {
     })
 }
 
-/// One scoop of creatine: a compound without a database parameter.
 pub(super) fn creatine(request_id: &str) -> Value {
     json!({
         "name": "Creatine",
@@ -243,7 +235,6 @@ pub(super) fn creatine(request_id: &str) -> Value {
     })
 }
 
-/// Breakfast on 2026-10-29: chicken with the doses given.
 pub(super) fn breakfast(request_id: &str, doses: &Value) -> Value {
     json!({
         "eaten_at": "2026-10-29T08:15:00+01:00",

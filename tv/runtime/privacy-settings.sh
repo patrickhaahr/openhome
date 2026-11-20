@@ -1,5 +1,4 @@
 #!/bin/sh
-# Supported settings on 55NANO806PA/webOS 6.5.3; no broad EULA withdrawal.
 set -eu
 DIR=/var/lib/openhome-tv
 LS=/var/lib/pearwebos/luna-send-n
@@ -29,7 +28,6 @@ acr_off() {
     fi
     [ -f "$DIR/acr.xml.orig" ] || cp /tmp/acr.xml "$DIR/acr.xml.orig"
     sed 's/ACR_On="true"/ACR_On="false"/g; s/capture="true"/capture="false"/g; s/send_data="true"/send_data="false"/g' /tmp/acr.xml > /tmp/openhome-acr.xml
-    # Only write before mounting, so readers never see partial backing content.
     cat /tmp/openhome-acr.xml > "$ACR"
     rm /tmp/openhome-acr.xml
     mount --bind "$ACR" /tmp/acr.xml
@@ -76,7 +74,6 @@ for payload in \
     printf '%s\n' "$reply" | grep -q '"returnValue":true' || { printf '%s\n' "$reply" >&2; exit 1; }
 done
 acr_off
-# Bounded checks after services settle; no permanent polling daemon.
 if [ -f "$DIR/privacy-settings.sh" ] && [ ! -f /tmp/openhome-privacy-recheck.pid ]; then
     setsid "$DIR/privacy-settings.sh" recheck </dev/null > /tmp/openhome-privacy-recheck.log 2>&1 &
     echo $! > /tmp/openhome-privacy-recheck.pid

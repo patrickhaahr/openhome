@@ -26,7 +26,6 @@ const stageNames: Record<(typeof stageOrder)[number], string> = {
   awake: "Awake",
 }
 
-/** The night: when it happened and what it was made of in time order, and the month behind it. */
 export function Night({
   data,
   trend,
@@ -38,7 +37,6 @@ export function Night({
 }): React.JSX.Element {
   const sessions = data.sleep.sessions
 
-  // The longest night with ordered stages is drawn as a hypnogram; without one the totals stand in.
   const staged = sessions
     .filter((session) => session.stages !== null && session.stages.length > 0)
     .reduce<(typeof sessions)[number] | undefined>(
@@ -170,7 +168,6 @@ export function Night({
   )
 }
 
-/** Every sleep session's times for AT, as the hypnogram draws only the longest staged one. */
 function SleepSessionList({
   sessions,
 }: {
@@ -191,7 +188,6 @@ function SleepSessionList({
   )
 }
 
-/** Each sleep session on a shared clock axis: bedtime, wake and naps where they really fell. */
 function SleepClock({
   sessions,
   asleep,
@@ -266,7 +262,6 @@ function SleepClock({
   )
 }
 
-/** Thirty nights as columns against the eight-hour reference; the selected night is solid. */
 function NightHistory({
   trend,
   day,

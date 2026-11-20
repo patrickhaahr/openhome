@@ -16,10 +16,6 @@ private const val SETTLED_MS = 4_000L
 private val SHOWN_DAY = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
 private val PICKER_DAY = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US)
 
-/**
- * Logging, finishing and synchronizing an Active Workout through the real app, its real database,
- * real process restarts and the emulator's real radios. Only Axum is replaced, at its HTTP boundary.
- */
 class ActiveWorkoutTest {
     private val app = AppDriver()
     private val past =
@@ -80,7 +76,6 @@ class ActiveWorkoutTest {
         return added.single()
     }
 
-    /** Offline logging on mobile data, restarts, local finish and History, then Wi-Fi recovery. */
     @Test
     fun workoutLoggedAndFinishedOnMobileDataStaysQueuedThenSyncsOnceOnWifi() {
         app.setWifi(false)
@@ -99,12 +94,10 @@ class ActiveWorkoutTest {
         app.enter("Notes (optional)", "No signal in the basement")
         app.tap("Done")
 
-        // A mixed-category session, in the order chosen.
         addExercise("Pull-Up")
         addExercise("Planche Hold")
         addExercise("Squat")
 
-        // Reps with Added Weight and RPE, and bodyweight with no RPE.
         app.goToExercise("Pull-Up")
         app.enterDescribed("Pull-Up set 1 reps", "8")
         app.enterDescribed("Pull-Up set 1 added kg", "12,5")
@@ -115,17 +108,14 @@ class ActiveWorkoutTest {
         app.enterDescribed("Pull-Up set 2 reps", "6")
         app.tapScrolledTo("Pull-Up set 2 performed")
         app.assertChecked("Pull-Up set 2 performed", true)
-        // Unchecking takes the Set back out, and a row left unchecked keeps its values but is not performed.
         app.tapScrolledTo("Pull-Up set 2 performed")
         app.assertChecked("Pull-Up set 2 performed", false)
 
-        // Planche Hold was last logged as a Timed Hold, so it opens on seconds without any reps field.
         app.goToExercise("Planche Hold")
         app.enterDescribed("Planche Hold set 1 seconds", "20")
         app.tapScrolledTo("Planche Hold set 1 performed")
         app.assertChecked("Planche Hold set 1 performed", true)
 
-        // Squat has no past Sets to go by, and the user can choose either measure.
         app.goToExercise("Squat")
         app.enterDescribed("Squat set 1 reps", "5")
         app.tapScrolledTo("Log Squat as Hold")
@@ -133,7 +123,6 @@ class ActiveWorkoutTest {
         app.tapScrolledTo("Log Squat as Reps")
         app.assertDescribedValue("Squat set 1 reps", "5")
 
-        // Leaving by tab and by back keeps everything.
         app.tap("Home")
         app.assertVisible("Full TV remote")
         app.tap("Workout")
@@ -143,7 +132,6 @@ class ActiveWorkoutTest {
         app.assertOnWorkoutTab()
         app.assertAbsent("Start Empty")
 
-        // As does losing the process, including the half-finished rows and their confirmations.
         app.relaunch()
         app.tap("Resume Workout")
         app.assertVisible(backdated.format(SHOWN_DAY))
@@ -157,7 +145,6 @@ class ActiveWorkoutTest {
         app.goToExercise("Squat")
         app.assertChecked("Squat set 1 performed", false)
 
-        // Finishing names what is left out; returning records nothing.
         finish()
         app.assertVisible("Finish with unchecked Sets?")
         app.assertVisible("Pull-Up: 1 unchecked Set")
@@ -168,13 +155,11 @@ class ActiveWorkoutTest {
         finish()
         app.tap("Omit and finish")
 
-        // A local Workout in History, with no network involved.
         app.assertVisible("Gym offline")
         app.assertVisible("Saved on device · Waiting for Wi-Fi")
         app.assertTextContaining("Pull-Up · Planche Hold · 2 Sets")
         assertEquals("Mobile data must not send anything", emptyList<String>(), api.workoutDeliveries())
 
-        // Queued work survives a restart, and only confirmed Sets became performance.
         app.relaunch()
         app.tap("History")
         app.assertVisible("Saved on device · Waiting for Wi-Fi")
@@ -204,19 +189,16 @@ class ActiveWorkoutTest {
         )
         assertEquals(1, api.workoutDeliveries().size)
 
-        // Same local Workout, still one row, after another restart.
         app.relaunch()
         app.assertVisible("2 Workouts on this device")
         app.assertVisible("Synced with OpenHome")
     }
 
-    /** The server commits, the response never arrives, and both the client and the retry restart. */
     @Test
     fun committedCreateWithALostResponseRetriesAsTheSameWorkoutAcrossAClientRestart() {
         api.loseWorkoutResponses()
         logOneConfirmedPullUp()
 
-        // An Active Workout stays on the device, even with Wi-Fi and Axum available.
         app.sleepFor(SETTLED_MS)
         assertEquals(emptyList<String>(), api.workoutDeliveries())
 
@@ -295,7 +277,6 @@ class ActiveWorkoutTest {
         app.tapScrolledTo("Pull-Up set 1 performed")
         app.assertChecked("Pull-Up set 1 performed", false)
 
-        // With nothing confirmed there is no Workout to finish.
         finish()
         app.assertVisible("No confirmed Sets")
         app.assertAbsent("Omit and finish")
@@ -305,11 +286,9 @@ class ActiveWorkoutTest {
         app.tapScrolledTo("Pull-Up set 1 performed")
         app.assertChecked("Pull-Up set 1 performed", true)
 
-        // Editing a confirmed Set into something invalid takes its confirmation away.
         app.enterDescribed("Pull-Up set 1 reps", "")
         app.assertChecked("Pull-Up set 1 performed", false)
 
-        // Discarding is explicit, and the app is then ready to start again with nothing recorded.
         app.tapBelow("Discard Workout")
         app.assertVisible("Discard this Workout?")
         app.tap("Keep logging")

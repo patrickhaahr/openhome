@@ -19,14 +19,12 @@ const weekday = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
 })
 
-/** A reading with its unit as words for assistive technology, or "Unavailable". */
 export function value(amount: number | null | undefined, unit: string): string {
   return amount === null || amount === undefined
     ? "Unavailable"
     : `${number.format(amount)} ${unit}`
 }
 
-/** A figure with its unit set smaller; the text still reads "12.4 °C". */
 export function Measure({
   amount,
   unit,
@@ -49,7 +47,6 @@ export function Measure({
   )
 }
 
-/** WMO code ranges and their glyphs; unknown codes never draw a clear sky. */
 const glyphs: readonly (readonly [from: number, to: number, glyph: Icon])[] = [
   [0, 1, SunIcon],
   [2, 2, CloudSunIcon],
@@ -63,7 +60,6 @@ const glyphs: readonly (readonly [from: number, to: number, glyph: Icon])[] = [
   [95, 99, CloudLightningIcon],
 ]
 
-/** A WMO code as a glyph. */
 export function WeatherGlyph({
   code,
   size,
@@ -84,7 +80,6 @@ export function WeatherGlyph({
   })
 }
 
-/** A whole-degree reading, or a dash when the forecast has none. */
 export function degrees(celsius: number | null | undefined): string {
   return celsius === null || celsius === undefined
     ? "–"
@@ -95,7 +90,6 @@ export function weekdayName(date: string): string {
   return weekday.format(new Date(`${date}T12:00:00Z`)).replace(".", "")
 }
 
-/** A 0..1 share as a percentage, for the custom properties `marks` sets. */
 export function percent(share: number): string {
   return `${share * 100}%`
 }

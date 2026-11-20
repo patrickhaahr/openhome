@@ -1,6 +1,3 @@
-//! Read-only training context for API clients such as the Hermes MCP adapter. The rules live in
-//! `services::training`; handlers only validate input.
-
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
@@ -104,7 +101,6 @@ async fn workouts_on_day(
     ))
 }
 
-/// Query of the NOOP Workout detail: the route is private, so it is only returned when asked for.
 #[derive(Deserialize)]
 struct DetailQuery {
     #[serde(default)]
@@ -127,7 +123,6 @@ async fn noop_workout_detail_of_sport(
     read_noop_workout_detail(&state, &source, &start, Some(&sport), query.route).await
 }
 
-/// Validates the NOOP Workout's listed `source`, `start` and optional `sport`, then reads it.
 async fn read_noop_workout_detail(
     state: &crate::AppState,
     source: &str,
@@ -185,7 +180,6 @@ fn parse_day(day: &str) -> Result<CalendarDay> {
     })
 }
 
-/// An inclusive range of 1 through 90 calendar days, `read` naming the read in the error.
 fn parse_range(read: &str, from_day: &str, to_day: &str) -> Result<(CalendarDay, CalendarDay)> {
     let from_day = parse_day(from_day)?;
     let to_day = parse_day(to_day)?;

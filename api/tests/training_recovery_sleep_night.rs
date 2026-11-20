@@ -1,8 +1,3 @@
-//! Recovery Day: authentication, input checks and the real edited sleep night.
-
-//! Recovery Day reads (`GET /api/training/days/{day}/recovery`) against a NOOP mirror filled
-//! through the real push endpoint, next to the in-memory training log the test app always has.
-
 mod common;
 mod training_recovery_support;
 
@@ -15,8 +10,6 @@ use training_recovery_support::{
     API_KEY, COMPUTED, DERIVED, IMPORTED, SOURCE, absent, measured, real_mirror,
 };
 
-/// `expected` after the JSON text round trip the response body takes: `serde_json`'s default float
-/// parser may land one ulp away from the exact quotient the test computes.
 fn as_parsed(expected: &Value) -> Value {
     serde_json::from_str(&expected.to_string()).unwrap()
 }
@@ -126,8 +119,6 @@ async fn returns_the_real_edited_sleep_night() {
                         "end": "2026-09-15T01:34:46+02:00",
                         "detected_start": "2026-09-14T23:58:00+02:00",
                         "duration_min": 5806.0 / 60.0,
-                        // Segments: deep 900 s + 360 s + 556 s, light 450 s + 1200 s + 1320 s,
-                        // rem 1020 s.
                         "stage_min": {
                             "awake": 0.0,
                             "light": 49.5,
@@ -185,8 +176,6 @@ async fn returns_the_real_edited_sleep_night() {
             "derived_scores": {
                 "recovery": absent("score_0_100"),
                 "strain": measured(json!(25.92), "score_0_100", COMPUTED),
-                // 102.25 min asleep of an 8 h need (10.65), efficiency 0.2237 (4.47), full
-                // restorative and deep shares (20), neutral consistency without history (5).
                 "rest": measured(json!(40.13), "score_0_100", DERIVED),
             },
             "journal": [],
@@ -196,7 +185,6 @@ async fn returns_the_real_edited_sleep_night() {
                 "computed_device_id": COMPUTED,
                 "last_push_at": "2026-09-26T03:51:38+02:00",
                 "freshness": "confirmed",
-                // No journal namespace has pushed, so an empty journal is not a recorded absence.
                 "coverage": {
                     "daily_metrics": "covered",
                     "sleep_sessions": "covered",

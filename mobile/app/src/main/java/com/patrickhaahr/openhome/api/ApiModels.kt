@@ -28,7 +28,6 @@ data class ApiWorkoutDetail(
     val date: String,
     val name: String? = null,
     val notes: String? = null,
-    /** Where this client's corrections of this Workout continue from. Absent until one has reached Axum. */
     @SerialName("client_revision") val clientRevision: Long = 0,
     val exercises: List<ApiWorkoutEntry>,
 )
@@ -44,7 +43,6 @@ data class ApiWorkoutEntry(
 @Serializable
 data class ApiEntryExercise(val id: Long)
 
-/** [weightKg] is Added Weight: null means bodyweight, never zero. */
 @Serializable
 data class ApiSet(
     @SerialName("set_number") val setNumber: Long,
@@ -61,14 +59,9 @@ data class ApiProfile(
     val sex: String? = null,
     @SerialName("hr_max_bpm") val hrMaxBpm: Long? = null,
     @SerialName("birth_date") val birthDate: String? = null,
-    /** Where this client's Profile edits continue from. Absent until one has reached Axum. */
     @SerialName("client_revision") val clientRevision: Long = 0,
 )
 
-/**
- * A whole Profile edit: Axum applies it only if [clientRevision] is newer than the last it applied. No
- * defaults, so a null value is sent and clears it rather than leaving it as it was.
- */
 @Serializable
 data class ApiProfileEdit(
     @SerialName("client_revision") val clientRevision: Long,
@@ -85,7 +78,6 @@ data class ApiBodyWeight(
     @SerialName("weight_kg") val weightKg: Double,
 )
 
-/** A new Body Weight; [requestId] makes it safe to retry, and a new one for a recorded date is a conflict. */
 @Serializable
 data class ApiBodyWeightCreate(
     @SerialName("request_id") val requestId: String,
@@ -93,7 +85,6 @@ data class ApiBodyWeightCreate(
     @SerialName("weight_kg") val weightKg: Double,
 )
 
-/** A Workout create; [requestId] makes it safe to retry after an uncertain outcome. */
 @Serializable
 data class ApiWorkoutCreate(
     @SerialName("request_id") val requestId: String,
@@ -114,10 +105,6 @@ data class ApiWorkoutCreateEntry(
 @Serializable
 data class ApiWorkoutCreated(val id: Long)
 
-/**
- * A whole correction: Axum applies it only if [clientRevision] is newer than the last it applied. No
- * defaults, so a null [name] or [notes] is sent and clears the value rather than leaving it as it was.
- */
 @Serializable
 data class ApiWorkoutEdit(
     @SerialName("client_revision") val clientRevision: Long,
@@ -127,7 +114,6 @@ data class ApiWorkoutEdit(
     val exercises: List<ApiWorkoutCreateEntry>,
 )
 
-/** An Exercise create; [requestId] makes it safe to retry after an uncertain outcome. */
 @Serializable
 data class ApiExerciseCreate(
     @SerialName("request_id") val requestId: String,
@@ -149,7 +135,6 @@ data class ApiIrCommand(val command: String)
 @Serializable
 data class ApiIrAcknowledgement(val message: String)
 
-/** Axum exposes explicit Light Commands, with no power-state or capability read. */
 enum class LightCommand(val path: String, val label: String) {
     On("on", "On"),
     Off("off", "Off"),

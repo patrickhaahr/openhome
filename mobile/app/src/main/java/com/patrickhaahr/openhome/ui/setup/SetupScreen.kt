@@ -51,7 +51,6 @@ fun SetupRoute(interruptedBaseUrl: String?) {
     SetupScreen(viewModel, showInterruptedNotice = interruptedBaseUrl != null)
 }
 
-/** The mark, an address, a key and an arrow. Everything said here is said because something is wrong. */
 @Composable
 private fun SetupScreen(viewModel: SetupViewModel, showInterruptedNotice: Boolean) {
     val submission = viewModel.submission

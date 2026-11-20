@@ -1,5 +1,3 @@
-//! NOOP push append streams: columnar storage, acknowledgements and retry replay.
-
 mod common;
 mod noop_push_support;
 
@@ -119,7 +117,6 @@ async fn stores_every_append_stream_columnar_and_acks_exactly() {
 #[tokio::test]
 async fn multi_record_batch_acks_record_count_and_echoes_key_sha_verbatim() {
     let db = memory_push_db().await;
-    // keySha256 is opaque: it need not match the records and is echoed as sent.
     let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     let mut batch_header = header("hrSample", BATCH_1, 3);
     batch_header["startCursor"] = Value::Null;
@@ -144,7 +141,6 @@ async fn byte_identical_retry_replays_the_ack_across_encodings_without_reapplyin
     let first = post(&db, &entity, true).await;
     assert_eq!(first.status, StatusCode::OK);
 
-    // Tamper with a stored row: a replay must not re-apply the batch.
     sqlx::query("UPDATE hr_sample SET bpm = 0 WHERE ts = 1")
         .execute(&db)
         .await
@@ -191,7 +187,6 @@ async fn reused_batch_id_with_different_bytes_is_409_without_data_change() {
     let conflicting = [
         hr_batch(BATCH_1, &[hr(1, 99)]),
         hr_batch(BATCH_1, &[hr(2, 61)]),
-        // Same JSON values, different bytes (member order): still a different entity.
         format!(
             "{}\n{}\n",
             header("hrSample", BATCH_1, 1),

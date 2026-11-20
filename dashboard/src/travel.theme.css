@@ -1,6 +1,4 @@
 @theme inline {
-  /* Travel: the frame publishes --travel-inset, how far every plate floats in from the map's edge,
-     and --dock-height, the planner dock's measured height. */
   --spacing-travel-inset: var(--travel-inset);
   --spacing-travel-above-dock: calc(
     var(--travel-inset) + var(--dock-height) + 0.5rem

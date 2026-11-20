@@ -1,5 +1,4 @@
 @theme inline {
-  /* The viewer is always night: the photo on near-black, controls as light tone plates floating on it. */
   --color-photo-night: #0b0c0e;
   --color-photo-ink: #ecece6;
   --color-photo-plate: #2c2e34;

@@ -1,20 +1,3 @@
-//! NOVA Classes (`CONTEXT.md`, NOVA Class) and the NOVA 1 share.
-//!
-//! The agent classifies a Food once, the first time it is eaten, and the class is kept: it is the
-//! user's decision, so it lives in `app.db` by `FoodID` with the dataset version it was given in,
-//! and a rebuilt Food database of that version keeps it. Another version may give the `FoodID` to
-//! another Food, so its classes are not read until the Food is classified again. Products take
-//! Open Food Facts' class and are never classified from their linked Food.
-//!
-//! A Portion copies its class when it is logged, like its nutrient values (ADR 0012). Because the
-//! agent logs a new Food before classifying it, classifying a Food also fills that Food's
-//! still-unclassified Food Portions logged from the same dataset version; a `FoodID` from another
-//! version may name another Food. A changed class applies to Portions logged afterwards, and
-//! replacing a past Portion copies the class it has then.
-//!
-//! The NOVA 1 share is kcal from Class 1 Portions over kcal from classified Portions; unclassified
-//! Portions are left out rather than guessed.
-
 use std::collections::HashMap;
 use std::iter::Sum;
 use std::ops::Add;
@@ -26,8 +9,6 @@ use super::food_database::{Food, FoodDatabase, FoodError, FoodSearch, FoodSummar
 use super::meal_logs::{StoredPortion, round};
 use super::parameters;
 
-/// A NOVA processing class: 1 unprocessed or minimally processed, 2 processed culinary
-/// ingredients, 3 processed, 4 ultra-processed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct NovaClass(u8);
@@ -40,7 +21,6 @@ impl<'de> Deserialize<'de> for NovaClass {
 }
 
 impl NovaClass {
-    /// The class `value` names, if it is 1-4.
     #[must_use]
     pub fn new(value: i64) -> Option<Self> {
         u8::try_from(value)
@@ -62,7 +42,6 @@ impl NovaClass {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClassifyFood {
-    /// 1-4.
     pub nova_class: i64,
 }
 
@@ -72,12 +51,9 @@ pub struct ClassifiedFood {
     pub name_da: String,
     pub name_en: String,
     pub nova_class: NovaClass,
-    /// Past Portions of the Food that were unclassified and now carry the class.
     pub classified_portions: u64,
 }
 
-/// Sets or changes a Food's NOVA Class and fills its unclassified past Food Portions from the
-/// current dataset version.
 pub async fn classify_food(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -128,7 +104,6 @@ pub async fn classify_food(
     })
 }
 
-/// The stored classes of the Foods in `food_ids` that have one given in `dataset_version`.
 pub(super) async fn food_classes(
     db: &SqlitePool,
     dataset_version: &str,
@@ -153,7 +128,6 @@ pub(super) async fn food_classes(
         .collect())
 }
 
-/// Gives each summary, read from `dataset_version`, its Food's stored class.
 pub(super) async fn classify_summaries(
     db: &SqlitePool,
     dataset_version: &str,
@@ -167,7 +141,6 @@ pub(super) async fn classify_summaries(
     Ok(())
 }
 
-/// Foods matching `query`, best first, each with its NOVA Class when it has one.
 pub async fn search_foods(
     db: &SqlitePool,
     foods: &FoodDatabase,
@@ -179,7 +152,6 @@ pub async fn search_foods(
     Ok(search)
 }
 
-/// One Food with every parameter and its NOVA Class when it has one.
 pub async fn food(db: &SqlitePool, foods: &FoodDatabase, food_id: i64) -> Result<Food, FoodError> {
     let mut food = foods.food(food_id).await?;
     food.nova_class = food_classes(db, &food.source.version, &[food_id])
@@ -188,8 +160,6 @@ pub async fn food(db: &SqlitePool, foods: &FoodDatabase, food_id: i64) -> Result
     Ok(food)
 }
 
-/// The energy behind the NOVA 1 share, summed over Portions. Sums add, so a day, week or month
-/// is the sum of its Portions or days and its share follows from the sum.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct NovaEnergy {
     nova_1_kcal: f64,
@@ -198,7 +168,6 @@ pub struct NovaEnergy {
 }
 
 impl NovaEnergy {
-    /// The energy of `portions`; a classified Portion without an energy value adds nothing.
     pub(super) fn of(portions: &[&StoredPortion]) -> Self {
         portions
             .iter()
@@ -219,8 +188,6 @@ impl NovaEnergy {
             .sum()
     }
 
-    /// kcal from Class 1 Portions over kcal from classified Portions, 0-1; `None` when no
-    /// classified Portion has energy.
     #[must_use]
     pub fn share(self) -> Option<f64> {
         (self.classified_kcal > 0.0).then(|| round(self.nova_1_kcal / self.classified_kcal))
@@ -255,14 +222,10 @@ impl Sum for NovaEnergy {
     }
 }
 
-/// The NOVA 1 share of a span with the energy it is computed from.
 #[derive(Debug, Serialize)]
 pub struct NovaShare {
-    /// kcal from NOVA Class 1 Portions ÷ kcal from classified Portions, 0-1; null when nothing
-    /// classified has energy.
     pub nova_1_share: Option<f64>,
     pub nova_1_kcal: f64,
     pub classified_kcal: f64,
-    /// Portions left out because neither their Food nor their Product has a class.
     pub unclassified_portions: usize,
 }

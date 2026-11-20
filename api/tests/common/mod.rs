@@ -87,8 +87,6 @@ pub fn create_mock_state_with_switchbot(service: SwitchbotService) -> AppState {
     }
 }
 
-/// An in-memory NOOP push mirror. One connection, because every in-memory connection is its own
-/// database.
 #[allow(dead_code)]
 pub async fn memory_noop_db() -> SqlitePool {
     let pool = SqlitePoolOptions::new()
@@ -106,7 +104,6 @@ pub async fn test_app_with_db_and_adguard(adguard_enabled: Option<bool>) -> (Rou
     test_app_with_pools(db, memory_noop_db().await, adguard_enabled)
 }
 
-/// The authenticated API over the given NOOP push mirror, for training reads.
 #[allow(dead_code)]
 pub async fn test_app_with_noop_db(noop_db: SqlitePool) -> Router {
     let db = SqlitePool::connect(":memory:").await.unwrap();
@@ -184,7 +181,6 @@ pub async fn test_app_with_docker_and_adguard(adguard_enabled: Option<bool>) -> 
         None
     };
 
-    // Try to create Docker service, but allow it to be None if Docker socket is not available
     let docker_service = DockerService::new().ok();
 
     let state = AppState {

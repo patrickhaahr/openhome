@@ -1,4 +1,3 @@
-/* A capsule sits an em-fraction above its line's baseline, which no scale value expresses. */
 @utility align-capsule {
   vertical-align: 0.125em;
 }

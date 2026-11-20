@@ -3,7 +3,6 @@ use crate::services::training::calendar::CalendarDay;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
 
-/// A week's Estimated Expenditure and BMR, and how they were found.
 #[derive(Clone, Debug)]
 pub struct Week {
     pub monday: CalendarDay,
@@ -15,19 +14,14 @@ pub struct Week {
     pub blend_weight: f64,
     pub trend_weight_kg: f64,
     pub trend_weight_day: CalendarDay,
-    /// True only for a value read from `nutrition_weeks`; computed values start provisional.
     pub fixed: bool,
 }
 
 impl Week {
-    /// The 28 days before Monday.
     pub(super) fn window(monday: CalendarDay) -> Option<(CalendarDay, CalendarDay)> {
         Some((monday.checked_sub_days(WINDOW_DAYS)?, monday.previous()))
     }
 
-    /// A provisional week, without storing it. Uses data before `monday`, with the first
-    /// in-week weigh-in as fallback up to `last_read`, the latest day of this week being read.
-    /// Returns `None` when the inputs cannot produce positive BMR and expenditure.
     pub(super) fn compute(
         monday: CalendarDay,
         last_read: CalendarDay,
@@ -70,8 +64,6 @@ impl Week {
         })
     }
 
-    /// Mean logged energy minus the energy of the Trend Weight change over the window: from the
-    /// day before it, or from the first weigh-in when that falls inside it.
     fn data_estimate(
         window_start: CalendarDay,
         window_end: CalendarDay,
@@ -96,7 +88,6 @@ impl Week {
     }
 }
 
-/// The stored weekly records for Mondays from `first` through `last`.
 pub(super) async fn stored_weeks(
     db: &SqlitePool,
     first: CalendarDay,
@@ -138,9 +129,6 @@ pub(super) async fn stored_weeks(
         .collect()
 }
 
-/// Freeze computable, eligible weeks supplied by `plan` in Monday order, in one transaction.
-/// A conflicting first read wins unchanged. After commit, reread the database and return only
-/// the requested weeks, never the caller's provisional values or unrelated rows in the range.
 pub(super) async fn freeze_weeks(
     db: &SqlitePool,
     weeks: &[Week],

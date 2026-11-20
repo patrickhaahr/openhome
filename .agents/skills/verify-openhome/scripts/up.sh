@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Start an isolated synthetic OpenHome stack (Axum preview API + Dashboard + MCP adapter) for this checkout.
-# Usage: up.sh            prints the run directory and URLs once every surface answers.
 . "$(dirname "$0")/common.sh"
 if [ -n "$RUN_DIR" ] && [ -f "$RUN_DIR/run.env" ]; then
   . "$RUN_DIR/run.env"
@@ -17,7 +15,6 @@ cd "$REPO_ROOT"
 echo "Building the synthetic API and MCP adapter (first build in a fresh worktree takes minutes)..."
 devenv shell -- just dashboard-synthetic-build mcp-build >"$RUN_DIR/logs/build.log" 2>&1 || { echo "Build failed; see $RUN_DIR/logs/build.log" >&2; exit 1; }
 [ -d dashboard/node_modules ] || devenv shell -- just dashboard-install >>"$RUN_DIR/logs/build.log" 2>&1
-# setsid gives the stack its own process group, so down.sh stops exactly what this run started.
 OPENHOME_PREVIEW_API_PORT="$API_PORT" OPENHOME_PREVIEW_DASHBOARD_PORT="$DASHBOARD_PORT" \
   setsid devenv shell -- just dashboard-synthetic >"$RUN_DIR/logs/stack.log" 2>&1 < /dev/null &
 STACK_PGID=$!

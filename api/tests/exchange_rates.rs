@@ -109,7 +109,6 @@ async fn a_failed_read_keeps_the_previous_rates_and_writes_nothing() {
         "nothing is stored for twenty days ago yet"
     );
 
-    // Each failing answer carries a file for twenty days ago: if it were stored, that card would convert at it.
     let other_day = ecb::file(&days_ago(20).to_string(), "1.2000", "7.5000");
     let no_dkk = other_day.replace(r#"<Cube currency="DKK" rate="7.5000"/>"#, "");
     let failures = [

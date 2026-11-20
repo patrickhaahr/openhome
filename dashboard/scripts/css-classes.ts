@@ -1,11 +1,9 @@
 export type PlainClass = { readonly line: number; readonly selector: string }
 
-/** Theme switch toggled on <html> by lib/daylight.ts; the tokens themselves live under it. */
 const themeClasses = new Set(["dark", "theme-turning"])
 
 type Block = "utility" | "opaque" | "group" | "rule"
 
-/** Replaces comments and string contents with spaces, keeping newlines so line numbers survive. */
 function blank(css: string): string {
   let out = ""
   let index = 0
@@ -56,7 +54,6 @@ function kindOf(prelude: string): Block {
   return "group"
 }
 
-/** Class selectors written as rules outside any `@utility` block, with the line each rule starts on. */
 export function plainClasses(css: string): PlainClass[] {
   const text = blank(css)
   const found: PlainClass[] = []
@@ -102,10 +99,6 @@ export function plainClasses(css: string): PlainClass[] {
   return found
 }
 
-/**
- * Problems across stylesheets, keyed by path: plain classes in files off the allowlist, and
- * allowlist entries whose file is gone, so area agents must remove an entry when they delete a sheet.
- */
 export function audit(
   sources: ReadonlyMap<string, string>,
   allowlist: readonly string[]

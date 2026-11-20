@@ -13,7 +13,6 @@ import {
   type TrendsChoice,
 } from "./nutrition-trends"
 
-/** Read one Nutrition Day using the server-held Axum credential. */
 export const getNutritionDay = createServerFn({ method: "GET" })
   .validator(nutritionSearch)
   .handler(async ({ data }) => {
@@ -23,7 +22,6 @@ export const getNutritionDay = createServerFn({ method: "GET" })
     return readNutritionDay(data)
   })
 
-/** Set the Nutrition Goal from today, with the credential kept on the server. */
 export const saveNutritionGoal = createServerFn({ method: "POST" })
   .validator(setGoalInput)
   .handler(async ({ data }) => {
@@ -33,12 +31,6 @@ export const saveNutritionGoal = createServerFn({ method: "POST" })
     return writeNutritionGoal(data)
   })
 
-/**
- * Read the Day view; a dropped read RPC renders an unavailable day instead of a route error.
- *
- * @param search - The day to show; today when absent.
- * @returns The day's read, or an unreachable outcome.
- */
 export async function loadNutritionDay(
   search: NutritionSearch
 ): Promise<NutritionDayState> {
@@ -56,7 +48,6 @@ export async function loadNutritionDay(
   }
 }
 
-/** Read the Nutrition Summary of a Trends range using the server-held Axum credential. */
 export const getNutritionSummary = createServerFn({ method: "GET" })
   .validator(trendsChoice)
   .handler(async ({ data }) => {
@@ -66,12 +57,6 @@ export const getNutritionSummary = createServerFn({ method: "GET" })
     return readNutritionSummary(data)
   })
 
-/**
- * Read the Trends view; a dropped read RPC renders unavailable trends instead of a route error.
- *
- * @param choice - The range and aggregation shown.
- * @returns The summary's read, or an unreachable outcome.
- */
 export async function loadNutritionSummary(
   choice: TrendsChoice
 ): Promise<NutritionSummaryState> {

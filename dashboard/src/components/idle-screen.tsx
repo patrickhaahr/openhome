@@ -27,19 +27,14 @@ import { cn } from "@/lib/utils"
 import type { WeatherRead } from "@/lib/weather"
 import { getWeather } from "@/lib/weather.functions"
 
-/** How long each photo stays before the next fades in. */
 export const DWELL_MS = 12_000
 
-/** The slow crossfade; the drift spans the dwell and both fades. */
 export const FADE_MS = 2400
 
-/** An unavailable library or network is tried again this much later, quietly. */
 export const REST_MS = 60_000
 
-/** Photos that fail in a row before the slideshow rests on the plain ground. */
 const MISSES = 4
 
-/** Where the slideshow reads from: Axum through the dashboard server, or a test's fakes. */
 export type IdleSources = {
   readonly albums: () => Promise<AlbumRead>
   readonly page: (page: DeckPage) => Promise<WallRead>
@@ -63,7 +58,6 @@ function subscribeToMotion(onChange: () => void): () => void {
   return () => query.removeEventListener("change", onChange)
 }
 
-/** The household's motion choice; the server assumes stillness. */
 export function useReducedMotion(): boolean {
   return useSyncExternalStore(
     subscribeToMotion,
@@ -72,10 +66,6 @@ export function useReducedMotion(): boolean {
   )
 }
 
-/**
- * The Idle Slideshow: photos from the selected albums crossfading on the night ground, and the
- * overlay plate in the corner. It covers the dashboard; the provider owns waking.
- */
 export function IdleScreen({
   ref,
   waking,
@@ -114,10 +104,6 @@ export function IdleScreen({
   )
 }
 
-/**
- * One of the two image slots. A layer is loading beneath, fully in front, or behind the front
- * photo while it fades out (it has been on screen, so it keeps drifting).
- */
 type Layer = {
   readonly item: WallItem
   readonly key: number
@@ -126,15 +112,12 @@ type Layer = {
 
 type Layers = readonly [Layer | null, Layer | null]
 
-/** What the screen shows: the two slots, and whether the plain ground is resting. */
 type Stage = { readonly layers: Layers; readonly resting: boolean }
 
 const blankStage: Stage = { layers: [null, null], resting: false }
 
-/** How a photo load ended; a cancelled load is neither a hit nor a miss. */
 type Loaded = "loaded" | "failed" | "cancelled"
 
-/** `slot` comes to the front; a photo that was in front fades out behind it. */
 function raise(layers: Layers, slot: 0 | 1): Layers {
   const lift = (layer: Layer | null, own: boolean): Layer | null =>
     layer === null
@@ -148,7 +131,6 @@ function raise(layers: Layers, slot: 0 | 1): Layers {
   return [lift(layers[0], slot === 0), lift(layers[1], slot === 1)]
 }
 
-/** Resolves when the time is up or the signal aborts, at once if it already has. */
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -168,37 +150,6 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/**
- * Two image slots and nothing more: the photo on screen and the next one preloading under it.
- * When the next has loaded and the dwell is over, it crossfades in and the old slot reloads.
- * An unavailable library or a run of broken photos rests on the plain ground and quietly tries
- * again later.
- *
- * Each effect run is the one owner of its own playback, and its `AbortSignal` is its
- * generation: once aborted, the run neither writes the screen nor the remembered position. The
- * local waits (an image load, the dwell, fade and rest timers) settle on the abort. A page read
- * does not: the browser's server-function call is neither cancelled nor bounded here, so an
- * old run can stay pending until that call settles, and its late result or failure is then
- * ignored. That matters because an old run's page read, image event or timer can still
- * complete after a newer run has taken the slots. (In production `memory` and `sources` are
- * stable and `day` remounts the slideshow, so a replacement run only follows waking; the
- * dependency list still allows one.) The sequential protocol stays one loop:
- * - dealing: `prepare` never rejects; it resolves with the albums, or with null for the ground,
- *   once its browser server-function calls settle. Those calls take no signal and are not
- *   bounded here, and an abort does not settle them. After `prepare()` settles, the run may
- *   await `source.next()` and may issue a page request (not when `prepare` gave null, nor
- *   when the next photo is an on-this-day one); it returns without drawing once it reaches
- *   the abort check or the cancellation-aware catch. Cancellation neither prevents that
- *   request nor settles the old run;
- * - page read (`source.next`): resolves, or rejects when the library is unreachable, and the
- *   loop rests. Upstream, Axum requests carry 7s/45s timeouts (source-supported, not an
- *   end-to-end guarantee: the browser's call to the dashboard server has no timeout or abort
- *   here). A cancelled run notices the abort only when the read settles;
- * - preload (`load`): ends on the image's load or error, or the abort. The 12s media timeout
- *   makes the server answer a 503 and so an error event, but the browser's own hop to the
- *   dashboard has no timeout here: a connection that never answers waits for the abort;
- * - dwell and fade (`wait`) end on the timer or the abort; rest likewise.
- */
 function Slideshow({
   day,
   memory,
@@ -213,7 +164,6 @@ function Slideshow({
   const still = useReducedMotion()
   const [stage, setStage] = useState<Stage>(blankStage)
   const { layers, resting } = stage
-  // Loads waiting on an image event; keys never repeat, so an old image cannot settle a new load.
   const settlers = useRef(new Map<number, (loaded: boolean) => void>())
   const keys = useRef(0)
 
@@ -221,7 +171,6 @@ function Slideshow({
     const stop = new AbortController()
     const { signal } = stop
 
-    /** The only way a run changes the screen; a cancelled run changes nothing. */
     function show(change: (previous: Stage) => Stage): void {
       if (!signal.aborted) setStage(change)
     }
@@ -233,7 +182,6 @@ function Slideshow({
       }))
     }
 
-    /** Puts a photo in a slot, unseen, and ends when it has loaded, failed or the run is cancelled. */
     function load(slot: 0 | 1, item: WallItem): Promise<Loaded> {
       if (signal.aborted) return Promise.resolve("cancelled")
       keys.current += 1
@@ -348,11 +296,9 @@ function Slideshow({
             day: copenhagenDay(new Date()),
             position: source.position(),
           })
-          // The old photo stays beneath until the crossfade is over.
           await wait(FADE_MS, signal)
           slot = slot === 0 ? 1 : 0
         } catch {
-          // A page read that fails after cancellation belongs to no one.
           if (signal.aborted) return
           source = null
           shownAt = null
@@ -365,7 +311,6 @@ function Slideshow({
 
     return () => {
       stop.abort()
-      // A replacement run does not inherit this run's photos: its slots start empty.
       setStage(blankStage)
     }
   }, [memory, sources, day])
@@ -401,7 +346,6 @@ function Slideshow({
   )
 }
 
-/** A slow drift once a photo has been on screen, kept through the dwell and both fades; motion-safe only. */
 const drifts = [
   "motion-safe:animate-idle-drift",
   "motion-safe:animate-idle-drift-back",
@@ -409,7 +353,6 @@ const drifts = [
   "motion-safe:animate-idle-drift-across-back",
 ] as const
 
-/** One slot; a new photo replaces only the image inside it. */
 function Slide({
   layer,
   settle,
@@ -436,7 +379,6 @@ function Slide({
   )
 }
 
-/** A photo shaped close to the screen fills it; any other is shown whole on the ground. */
 function fitOf(image: HTMLImageElement): "cover" | "contain" {
   const photo = image.naturalWidth / Math.max(1, image.naturalHeight)
   const screen = window.innerWidth / Math.max(1, window.innerHeight)

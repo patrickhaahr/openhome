@@ -3,7 +3,6 @@ import { join } from "node:path"
 import type { Comparison } from "./compare.ts"
 import type { Theme, ViewportName } from "./scenarios.ts"
 
-/** A scenario is worth a look at this many differing pixels, or at any change of size. */
 export const flagPixels = 50
 
 export type Outcome =
@@ -11,7 +10,6 @@ export type Outcome =
       readonly state: "compared"
       readonly comparison: Omit<Comparison, "diff">
       readonly flagged: boolean
-      /** Compared a second time after a first non-zero result; the second result stands. */
       readonly retried: boolean
     }
   | { readonly state: "failed"; readonly reason: string }
@@ -38,7 +36,6 @@ export type Header = {
 const percent = (comparison: Omit<Comparison, "diff">) =>
   comparison.total === 0 ? 0 : (comparison.pixels / comparison.total) * 100
 
-/** Failures first, then the most differing pixels. */
 function severity(row: Row): number {
   return row.outcome.state === "failed"
     ? Number.POSITIVE_INFINITY
@@ -97,7 +94,6 @@ function card(row: Row): string {
   return `<section class="${row.outcome.state === "compared" && row.outcome.flagged ? "flag" : row.outcome.state}"><h2>${escape(line(row))}</h2>${problems === "" ? "" : `<ul>${problems}</ul>`}<div>${images}</div></section>`
 }
 
-/** One capture in `summary.json`, the same keys whatever its state so readers need no branching. */
 function entry(row: Row) {
   const compared = row.outcome.state === "compared" ? row.outcome : null
 
@@ -119,7 +115,6 @@ function entry(row: Row) {
   }
 }
 
-/** Writes `summary.json` for agents and `index.html` for people, both worst first. */
 export function writeReport(
   dir: string,
   header: Header,

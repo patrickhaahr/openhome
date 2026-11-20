@@ -8,7 +8,6 @@ const servers: Server[] = []
 
 const key = "synthetic-ir-api-key"
 
-/** Configure the dashboard server to reach OpenHome at this server. */
 async function listenAsOpenHome(server: Server): Promise<void> {
   servers.push(server)
   server.listen(0, "127.0.0.1")

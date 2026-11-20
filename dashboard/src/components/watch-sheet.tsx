@@ -59,10 +59,6 @@ const statuses = [
   icon: React.ReactNode
 }>
 
-/**
- * One title: poster, story, whose it is and when; the status is three keys that save at once
- * (Axum records today on completion). Dates, details and delete follow.
- */
 export function WatchDetail({
   entry,
   owner,
@@ -97,7 +93,6 @@ export function WatchDetail({
             <PersonDisc name={owner.name} />
             {owner.name}
           </p>
-          {/* The sheet's title already names the entry for assistive technology. */}
           <p className={sheetName} aria-hidden="true">
             {entry.title}
           </p>

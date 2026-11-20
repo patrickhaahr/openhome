@@ -5,19 +5,12 @@ import { createRoot } from "react-dom/client"
 import { expect, test, vi } from "vitest"
 import { SharedMap } from "@/components/shared-map"
 
-/**
- * Grant WebGL2 to the renderer probe's detached canvas only, so MapLibre is
- * chosen and then finds no context on its own attached canvas, as happy-dom has none.
- *
- * @returns Restores happy-dom's own `getContext`.
- */
 function stubWebGL2Probe(): () => void {
   const original = Object.getOwnPropertyDescriptor(
     HTMLCanvasElement.prototype,
     "getContext"
   )
 
-  // The probe only reads `getExtension` from the context it creates.
   Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
     configurable: true,
     value(this: HTMLCanvasElement, kind: string) {
@@ -150,7 +143,6 @@ test("a stalled image-tile map times out, releases its map and retries as a new 
     await vi.waitFor(() => expect(tile()).not.toBeNull())
     expect(container.textContent).toContain("Loading map…")
 
-    // No tile ever loads: the provider is declared unreachable and the map goes.
     act(() => {
       vi.advanceTimersByTime(20_000)
     })

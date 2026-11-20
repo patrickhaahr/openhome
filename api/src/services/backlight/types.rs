@@ -8,7 +8,6 @@ use super::routine::{BedtimeSettings, ControlSource};
 
 pub type Packet = [u8; 20];
 pub struct Exchange {
-    /// A newly established link requires current-target recovery, even if reads succeed.
     pub reconnected: bool,
     pub writes_accepted: bool,
     pub replies: Vec<Packet>,
@@ -18,16 +17,11 @@ pub enum TransportError {
     Unavailable,
     Superseded,
 }
-/// Checked after connecting and before each write, including every scene-upload frame.
 pub type CurrentOperation = dyn Fn() -> bool + Send + Sync;
 pub type TransportFuture<'a> =
     Pin<Box<dyn Future<Output = std::result::Result<Exchange, TransportError>> + Send + 'a>>;
-/// One complete GATT operation: ordered writes followed by correlated status queries.
 pub trait GattTransport: Send + Sync {
-    /// Verify a private backup belongs to the configured controller.
     fn matches_device(&self, identity: &str) -> bool;
-    /// Check `current` after connection setup and before every write.
-    /// Keep the operation lock until completion/cancellation; never interleave scene uploads.
     fn exchange<'a>(
         &'a self,
         writes: &'a [Packet],
@@ -52,7 +46,6 @@ pub enum Selection {
         brightness: Brightness,
     },
 }
-/// Controller brightness command value (0–100); not photometric calibration.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(try_from = "u8", into = "u8")]
 pub struct Brightness(u8);
@@ -94,14 +87,12 @@ pub struct Status {
     pub override_expires_at: Option<DateTime<Utc>>,
     pub next_transition: Option<DateTime<Utc>>,
 }
-/// Whether a validated private TV Sync profile is available.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Setup {
     Incomplete,
     Ready,
 }
-/// Device reachability, independent of a command acknowledgment.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Reachability {
@@ -110,7 +101,6 @@ pub enum Reachability {
     Reachable,
     Unreachable,
 }
-/// Outcome of the most recent intended-target dispatch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Command {
@@ -119,7 +109,6 @@ pub enum Command {
     Acknowledged,
     Failed,
 }
-/// Only the mode categories supported by controller readback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ObservedMode {

@@ -3,7 +3,6 @@ package com.patrickhaahr.openhome.setup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-/** Setup input accepted for use against the Axum API. */
 data class Connection(val baseUrl: HttpUrl, val apiKey: String)
 
 sealed interface ConnectionInput {
@@ -12,7 +11,6 @@ sealed interface ConnectionInput {
     data class Invalid(val message: String) : ConnectionInput
 }
 
-/** Same rules as the Expo client's Setup Flow, so a Base URL that works there works here. */
 fun parseConnection(baseUrlInput: String, apiKeyInput: String): ConnectionInput {
     val baseUrlText = normalizeInput(baseUrlInput).trimEnd('/')
     val apiKey = normalizeInput(apiKeyInput)

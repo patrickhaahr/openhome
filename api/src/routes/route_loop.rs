@@ -13,7 +13,6 @@ use crate::{
     },
 };
 
-/// Generate and select loops through the authenticated Axum boundary.
 pub fn router(planner: LoopPlanner) -> Router<crate::AppState> {
     Router::new()
         .route("/api/routes/loops", post(generate))

@@ -1,14 +1,11 @@
 import type { Feature } from "@/lib/features"
 
-/** A round key in the bars; also the theme switch. */
 export const iconLink =
   "inline-grid size-11 place-items-center rounded-full text-muted-ink transition-colors duration-fast ease-app hover:bg-wash-strong hover:text-ink aria-[current=page]:bg-wash-strong aria-[current=page]:text-ink aria-pressed:bg-wash-strong aria-pressed:text-ink active:scale-94"
 
-/** The bars' clock; Home already shows the time at full size. */
 export const barClock =
   "px-2 text-body-lg font-medium tracking-figure tabular-nums group-has-[[data-slot=home]]/shell:hidden"
 
-// The logo takes a double tap: no zoom, no selection flash.
 const logo =
   "group/logo touch-manipulation touch-callout-none font-semibold select-none"
 
@@ -16,7 +13,6 @@ export const wordmark = `${logo} inline-flex min-h-11 items-center gap-wordmark-
 
 export const railMark = `${logo} inline-flex min-h-11 min-w-11 flex-none items-center justify-center text-xl leading-normal tracking-headline`
 
-/** The sun dot after the logo's name; it lifts when the logo is hovered. */
 export function LogoDot(): React.JSX.Element {
   return (
     <i
@@ -26,7 +22,6 @@ export function LogoDot(): React.JSX.Element {
   )
 }
 
-/** A top bar tab: words, glyphs, or a glyph beside each word, by the shell's data-labels. */
 export const topTab =
   "group/tab relative inline-flex min-h-11 items-center px-2 text-control font-medium tracking-nav text-muted-ink transition-colors duration-fast ease-app after:absolute after:inset-x-2 after:bottom-tab-line-offset after:h-tab-line after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-mid after:ease-app hover:text-ink hover:after:scale-x-100 aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:after:scale-x-100 data-soon:not-aria-[current=page]:font-normal group-data-[labels=both]/shell:gap-1.5 group-data-[labels=icons]/shell:min-w-11 group-data-[labels=icons]/shell:justify-center max-tablet:group-data-[labels=both]/shell:gap-1 max-tablet:group-data-[labels=both]/shell:px-1.25 max-tablet:group-data-[labels=both]/shell:after:inset-x-1.25"
 
@@ -35,7 +30,6 @@ export const topTabLabel = "group-data-[labels=icons]/shell:sr-only"
 const tab =
   "group/tab flex flex-col items-center justify-center text-caption font-medium tracking-tab text-muted-ink transition-colors duration-fast ease-app hover:text-ink aria-[current=page]:font-semibold aria-[current=page]:text-ink data-[active=true]:font-semibold data-[active=true]:text-ink data-soon:font-normal"
 
-/** Where a tab sits: the sidebar, the phone's bottom bar, or the More sheet's grid. */
 export type Face = "rail" | "bar" | "tile"
 
 const links = {
@@ -49,7 +43,6 @@ export const tabLink = (face: Face): string => links[face]
 const plateStates =
   "group-hover/tab:bg-wash group-aria-[current=page]/tab:bg-wash-strong group-data-[active=true]/tab:bg-wash-strong group-active/tab:scale-94"
 
-/** The capsule behind a glyph: one tone step on the page, two when its tab is current. */
 const plates = {
   rail: `h-10 w-12 ${plateStates}`,
   bar: `h-8 w-14 ${plateStates}`,
@@ -73,7 +66,6 @@ const glyphs = {
   },
 } as const satisfies Record<Glyph, { outline: string; filled: string }>
 
-/** The outline glyph, and the filled one the current tab swaps in. */
 export function TabGlyphs({
   Icon,
   size = 22,
@@ -96,7 +88,6 @@ export function TabGlyphs({
   )
 }
 
-/** The glyph on its capsule, the word beneath; the sidebar keeps the word for assistive technology only. */
 export function TabFace({
   Icon,
   label,

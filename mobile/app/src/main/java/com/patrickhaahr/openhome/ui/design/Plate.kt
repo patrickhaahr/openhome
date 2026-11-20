@@ -34,7 +34,6 @@ private const val FULL_TURN = 360f
 private const val TOP_DEGREES = -90f
 private const val SEGMENT_GAP_DEGREES = 3f
 
-/** The mark: a weight plate seen end on, whose centre hole is the door of a house. */
 @Composable
 fun OpenHomeMark(modifier: Modifier = Modifier, disc: Color = Lit.Lamp, door: Color = Lit.Ground) {
     Canvas(modifier) {
@@ -59,10 +58,6 @@ private fun DrawScope.drawDoor(color: Color, side: Float) {
     drawPath(door, color)
 }
 
-/**
- * The Workout screen's start key, and the thing the whole app is named after: a bumper plate, with the
- * last Workout's Exercises cast into its rim. It rolls a little when it arrives, as a plate on a bar does.
- */
 @Composable
 fun LitPlate(glyph: Glyph, engraved: String?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -85,7 +80,6 @@ fun LitPlate(glyph: Glyph, engraved: String?, modifier: Modifier = Modifier) {
     }
 }
 
-/** Words as a texture: repeated round the whole rim so the casting has no start and no end. */
 private fun DrawScope.engrave(text: String, radius: Float, height: Float, typeface: android.graphics.Typeface?) {
     val paint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -97,7 +91,6 @@ private fun DrawScope.engrave(text: String, radius: Float, height: Float, typefa
     val circumference = (2 * PI * radius).toFloat()
     val unit = paint.measureText(text)
     val copies = max(1, (circumference / max(unit, 1f)).toInt())
-    // Spreading the copies evenly closes the ring exactly, whatever the length of the names.
     paint.letterSpacing += (circumference - unit * copies) / copies / max(text.length, 1) / height
     val arc =
         android.graphics.Path().apply {
@@ -107,7 +100,6 @@ private fun DrawScope.engrave(text: String, radius: Float, height: Float, typefa
     drawContext.canvas.nativeCanvas.drawTextOnPath(line, arc, 0f, 0f, paint)
 }
 
-/** An Active Workout as a plate: dark, and lit one segment for each Set confirmed. */
 @Composable
 fun SegmentRing(
     done: Int,

@@ -1,5 +1,3 @@
-//! The first pass on a store whose rates do not reach back to the oldest stored Card Price reads
-//! the ECB's full history, so old prices are valued at their own day's rate.
 mod common;
 
 use common::{binder::*, ecb};
@@ -11,7 +9,6 @@ fn day(days: u64) -> String {
     days_ago(days).to_string()
 }
 
-/// A Card the catalogue priced 120 days ago, held by Ada.
 async fn ada_with_an_old_card(app: &axum::Router) -> Value {
     let ada = owner(app, "Ada").await;
     let (status, body) = add(

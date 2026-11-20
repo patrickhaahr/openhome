@@ -34,7 +34,6 @@ class DatabasePhotoBackup(unittest.TestCase):
         elif args == ("docker", "start", "openhome-api"):
             self.assertTrue(self.stopped)
             self.stopped = False
-            # A resumed API may replace/delete originals: the backup must already own its copy.
             shutil.rmtree(self.data / "meal-photos", ignore_errors=True)
         else:
             self.fail(f"Unexpected command {args}")
@@ -50,7 +49,6 @@ class DatabasePhotoBackup(unittest.TestCase):
 
     def test_database_and_every_referenced_photo_restore_after_originals_are_replaced(self):
         self.log_photo()
-        # The data copies must take place inside the stopped window, including sqlite's backup.
         copy = shutil.copy2
         def copy_while_stopped(source, destination):
             self.assertTrue(self.stopped)

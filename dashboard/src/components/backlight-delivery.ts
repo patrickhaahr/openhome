@@ -37,30 +37,16 @@ export const connectionLabel = {
 export const unconfirmed =
   "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
 
-/** A trailing 200 ms edit that has not been sent; `timer` is its pending timeout. */
 export type Debounce = {
   readonly kind: "debounce"
   readonly selection: BacklightSelection
   readonly timer: ReturnType<typeof setTimeout>
 }
 
-/** The one action waiting behind the request in flight; a newer one replaces it. */
 export type Waiting =
   | Debounce
   | { readonly kind: "queued"; readonly action: BacklightAction }
 
-/**
- * Where delivery of Backlight actions stands. Each variant carries exactly the data its phase
- * needs: the debounce timer, or the action in flight (identified by `run`) and the one thing
- * waiting behind it. This is only what the dashboard has asked for; the API's command,
- * recovery and observation facts arrive in `data` and stay separate.
- *
- * The exits of every non-terminal phase:
- * - debouncing: the timer sends it, an immediate action replaces it, or unmount clears it.
- * - sending: the response or the rejection of `change` ends it, then whatever is waiting is
- *   delivered; unmount drops the response. A request that never settles holds `sending`, see
- *   `deliver`.
- */
 export type Delivery =
   | { readonly phase: "idle" }
   | { readonly phase: "debouncing"; readonly debounce: Debounce }
@@ -72,18 +58,15 @@ export type Delivery =
     }
   | { readonly phase: "closed" }
 
-/** Cancel obsolete waiting work; a queued action holds nothing to release. */
 export function discard(waiting: Waiting | null): void {
   if (waiting?.kind === "debounce") clearTimeout(waiting.timer)
 }
 
-/** What the live region says about an outcome, and the tag shown beside the controls. */
 type Announcement = {
   readonly text: string
   readonly tag: string | null
 }
 
-/** The announcement for an action's outcome; independent of how it is delivered. */
 export function describe(
   action: BacklightAction,
   result: BacklightResult
