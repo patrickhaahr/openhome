@@ -139,7 +139,6 @@ pub enum RawValue {
 }
 
 impl RawValue {
-    #[allow(clippy::cast_precision_loss)]
     fn number(self) -> f64 {
         match self {
             Self::Count(value) => value as f64,
