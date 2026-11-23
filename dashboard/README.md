@@ -43,10 +43,10 @@ Set these environment variables **on the dashboard server at runtime**:
 
 Optional, same place:
 
-| Variable               | Value                                                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `IDLE_TIMEOUT_SECONDS` | Seconds without a touch or key before the idle photo slideshow (10–86400; `0` turns it off). Default `300`. |
-| `IDLE_PREVIEW`         | `true` only in synthetic previews: lets `?idle=now` open the slideshow at once. Leave unset in production.  |
+| Variable               | Value                                                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IDLE_TIMEOUT_SECONDS` | Seconds without a touch or key before the idle photo slideshow, or the black Night Screen from 23:00 to 08:30 (10–86400; `0` turns the slideshow off). Default `300`. |
+| `IDLE_PREVIEW`         | `true` only in synthetic previews: lets `?idle=now` open the slideshow at once. Leave unset in production.                                                            |
 
 See [the idle slideshow](../docs/photos.md#idle-slideshow) for what holds it off and how waking works.
 

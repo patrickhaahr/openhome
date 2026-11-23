@@ -23,17 +23,26 @@ _Avoid_: Unavailable Remote Button, device state panel
 
 **Idle Slideshow**:
 A full-screen show of photos from the selected Immich albums that covers the
-Dashboard after a configured spell of inactivity, with the time, date and
+Dashboard after a configured spell of daytime inactivity, with the time, date and
 today's weather and Show When Idle dates on one plate. Since dates count elapsed
-time, yearly dates rotate nearest first, and the figures re-read at Copenhagen
-midnight. Photos from earlier years on this day lead the slideshow and show their
+time, yearly dates rotate nearest first, and the figures re-read for each Copenhagen
+day. Photos from earlier years on this day lead the slideshow and show their
 age quietly on the same plate. The first touch or key only wakes it and returns
 to the page and state that were showing; it never reaches a control beneath.
 _Avoid_: Screensaver, photo gallery, Photos page
 
+**Night Screen**:
+A completely black screen that takes the Idle Slideshow's place from 23:00 to
+08:30 Copenhagen time, with no photo, clock, weather or other visible content.
+At 23:00 an idle Dashboard goes black at once and one in use after the usual
+inactivity. At 08:30 a black screen becomes the Idle Slideshow and a Dashboard in
+use carries on. Waking works as it does for the Idle Slideshow. Turning the
+slideshow off does not turn the Night Screen off.
+_Avoid_: Display off, dark theme, dimmed slideshow
+
 **Idle Block**:
-A declared reason the Dashboard must not enter the Idle Slideshow: an open
-sheet or dialog, an unsaved draft, a save in flight or a conversation.
+A declared reason the Dashboard must not enter the Idle Slideshow or the Night
+Screen: an open sheet or dialog, an unsaved draft, a save in flight or a conversation.
 _Avoid_: Wake lock, busy flag
 
 **Household User**:

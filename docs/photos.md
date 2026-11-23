@@ -64,12 +64,18 @@ on the **dashboard** server at
 runtime: whole seconds from 10 to 86400, or `0` to turn the slideshow off; any other value
 keeps the default.
 
+From 23:00 to 08:30 Copenhagen time the Night Screen replaces the slideshow: a bare black
+screen that reads no photos and shows nothing. At 23:00 a showing slideshow, or a page left
+alone for longer than the timeout, goes black at once; a page in use goes black after the
+timeout. At 08:30 a black screen becomes the slideshow. With the slideshow turned off, the
+night uses the default five-minute timeout and 08:30 returns to the page.
+
 - Photos crossfade slowly every 12 seconds with a gentle drift; with reduced motion they
   only crossfade. Photos close to the screen's shape fill it; others show whole.
 - Photos from the first bounded on-this-day page lead each idle spell, with a quiet
   "3 years ago today" line on the plate only while such a photo is showing. No matches
-  or a failed on-this-day read continues with the normal rotation. Both the day and
-  photo choices refresh at Copenhagen midnight.
+  or a failed on-this-day read continues with the normal rotation. Each
+  morning's first spell reads the new Copenhagen day.
 - The normal order is random but stable for the Copenhagen day: every page of every
   album is dealt in a seeded order and each page's photos shuffled the same way. Pages of 60
   identities are read only when reached, and only two preview images are held: the one
@@ -78,7 +84,7 @@ keeps the default.
 - An unavailable library, network or a run of broken photos rests on the plain ground with
   the clock and tries again a minute later. There is no error screen.
 - Open sheets and dialogs (Lists, the photo viewer, More), unsaved drafts, saves in flight
-  and declared conversation activity hold the slideshow off; a block that appears while it
+  and declared conversation activity hold both screens off; a block that appears while it
   shows wakes the dashboard.
 - The page underneath stays mounted and inert, so waking returns to exactly the page,
   scroll and drafts that were showing. The first touch or key only wakes: the whole
@@ -86,7 +92,7 @@ keeps the default.
   top for a moment after it, so no hidden control or device command is triggered.
 
 For screenshots, `just dashboard-synthetic` sets `IDLE_PREVIEW=true`, which lets
-`?idle=now` (for example `http://localhost:3001/?idle=now`) start the slideshow at once.
+`?idle=now` (for example `http://localhost:3001/?idle=now`) start the slideshow at once, or the Night Screen during the night.
 Without that server setting the parameter does nothing, so production ignores it.
 
 For approved public screenshots only, set `IMMICH_PUBLIC_DEMO=true` and point the
