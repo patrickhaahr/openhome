@@ -37,20 +37,21 @@ export function mapPalette(theme: MapTheme): MapPalette {
   probe.setAttribute(name, value)
   document.documentElement.append(probe)
 
-  const style = getComputedStyle(probe)
+  try {
+    const style = getComputedStyle(probe)
 
-  const colour = (token: string): string => style.getPropertyValue(token).trim()
+    const colour = (token: string): string =>
+      style.getPropertyValue(token).trim()
 
-  const palette = {
-    origin: colour(paletteTokens.origin),
-    casing: colour(paletteTokens.casing),
-    alternative: colour(paletteTokens.alternative),
-    buildings: colour(paletteTokens.buildings),
+    return {
+      origin: colour(paletteTokens.origin),
+      casing: colour(paletteTokens.casing),
+      alternative: colour(paletteTokens.alternative),
+      buildings: colour(paletteTokens.buildings),
+    }
+  } finally {
+    probe.remove()
   }
-
-  probe.remove()
-
-  return palette
 }
 
 export const LOCAL_ZOOM = 14
