@@ -26,12 +26,21 @@ impl FeedFailure {
     }
 }
 
-fn unavailable(what: &str, detail: &dyn std::fmt::Debug) -> FeedFailure {
-    tracing::warn!(?detail, "RSS feed: {what}");
+fn unavailable(feed_id: i64, what: &str) -> FeedFailure {
+    tracing::warn!(feed_id, "RSS feed: {what}");
     FeedFailure::Unavailable
 }
 
-async fn read_body(mut response: Response) -> Result<Vec<u8>, FeedFailure> {
+fn describe_without_url(error: reqwest::Error) -> String {
+    format!("{:?}", error.without_url())
+}
+
+fn unavailable_after(feed_id: i64, what: &str, error: reqwest::Error) -> FeedFailure {
+    tracing::warn!(error = %describe_without_url(error), feed_id, "RSS feed: {what}");
+    FeedFailure::Unavailable
+}
+
+async fn read_body(feed_id: i64, mut response: Response) -> Result<Vec<u8>, FeedFailure> {
     if response
         .headers()
         .get(header::CONTENT_LENGTH)
@@ -44,7 +53,7 @@ async fn read_body(mut response: Response) -> Result<Vec<u8>, FeedFailure> {
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|error| unavailable("reading the body failed", &error))?
+        .map_err(|error| unavailable_after(feed_id, "reading the body failed", error))?
     {
         if body.len() + chunk.len() > MAX_FEED_BYTES {
             return Err(FeedFailure::TooLarge);
@@ -121,30 +130,32 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     let parsed_url = match Url::parse(url) {
         Ok(parsed) => parsed,
         Err(e) => {
-            result.error = Some(unavailable("invalid URL", &e));
+            tracing::warn!(error = ?e, feed_id, "RSS feed: invalid URL");
+            result.error = Some(FeedFailure::Unavailable);
             return result;
         }
     };
 
     if parsed_url.scheme() != "https" {
-        result.error = Some(unavailable("URL must use HTTPS", &feed_id));
+        result.error = Some(unavailable(feed_id, "URL must use HTTPS"));
         return result;
     }
 
     if !parsed_url.username().is_empty() || parsed_url.password().is_some() {
-        result.error = Some(unavailable("URL must not contain userinfo", &feed_id));
+        result.error = Some(unavailable(feed_id, "URL must not contain userinfo"));
         return result;
     }
 
     let Some(host) = parsed_url.host_str() else {
-        result.error = Some(unavailable("URL missing host", &feed_id));
+        result.error = Some(unavailable(feed_id, "URL missing host"));
         return result;
     };
 
     let port = parsed_url.port_or_known_default().unwrap_or(443);
 
     if let Err(e) = check_dns_is_global(host, port).await {
-        result.error = Some(unavailable("refusing to fetch", &e));
+        tracing::warn!(error = ?e, feed_id, "RSS feed: refusing to fetch");
+        result.error = Some(FeedFailure::Unavailable);
         return result;
     }
 
@@ -156,7 +167,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         .ok();
 
     let Some(client) = client else {
-        result.error = Some(unavailable("building the HTTP client failed", &feed_id));
+        result.error = Some(unavailable(feed_id, "building the HTTP client failed"));
         return result;
     };
 
@@ -192,11 +203,31 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
     let response = match response {
         Ok(r) => r,
         Err(e) => {
-            result.error = Some(unavailable("request failed", &e));
+            result.error = Some(unavailable_after(feed_id, "request failed", e));
             return result;
         }
     };
 
+    ingest_response(pool, response, &mut result).await;
+    result
+}
+
+async fn ingest_response(pool: &SqlitePool, response: Response, result: &mut FeedResult) {
+    match ingest(pool, response, result).await {
+        Ok(()) => {}
+        Err(failure) => {
+            result.error = Some(failure);
+            record_failure(pool, result.feed_id, failure).await;
+        }
+    }
+}
+
+async fn ingest(
+    pool: &SqlitePool,
+    response: Response,
+    result: &mut FeedResult,
+) -> Result<(), FeedFailure> {
+    let feed_id = result.feed_id;
     let status = response.status();
 
     if status == reqwest::StatusCode::NOT_MODIFIED {
@@ -211,14 +242,12 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         {
             tracing::warn!(error = ?e, feed_id, "Failed to update feed metadata");
         }
-        return result;
+        return Ok(());
     }
 
     if !status.is_success() {
         tracing::warn!(%status, feed_id, "RSS feed: refused");
-        result.error = Some(FeedFailure::Unavailable);
-        record_failure(pool, feed_id, FeedFailure::Unavailable).await;
-        return result;
+        return Err(FeedFailure::Unavailable);
     }
 
     let etag = response
@@ -232,25 +261,14 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         .and_then(|v| v.to_str().ok())
         .map(std::string::ToString::to_string);
 
-    let bytes = match read_body(response).await {
-        Ok(bytes) => bytes,
-        Err(failure) => {
-            result.error = Some(failure);
-            return result;
-        }
-    };
+    let bytes = read_body(feed_id, response).await?;
 
     let body = String::from_utf8_lossy(&bytes);
 
-    let feed = match feed_rs::parser::parse(body.as_bytes()) {
-        Ok(feed) => feed,
-        Err(e) => {
-            tracing::warn!(error = ?e, feed_id, "RSS feed: parse failed");
-            result.error = Some(FeedFailure::NotAFeed);
-            record_failure(pool, feed_id, FeedFailure::NotAFeed).await;
-            return result;
-        }
-    };
+    let feed = feed_rs::parser::parse(body.as_bytes()).map_err(|e| {
+        tracing::warn!(error = ?e, feed_id, "RSS feed: parse failed");
+        FeedFailure::NotAFeed
+    })?;
 
     let feed_title = feed.title.map(|t| t.content);
 
@@ -297,7 +315,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
             Ok(_) => inserted += 1,
             Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => skipped += 1,
             Err(e) => {
-                tracing::warn!(error = ?e, "Failed to insert feed item");
+                tracing::warn!(error = ?e, feed_id, "Failed to insert feed item");
             }
         }
     }
@@ -326,7 +344,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         tracing::warn!(error = ?e, feed_id, "Failed to update feed metadata");
     }
 
-    result
+    Ok(())
 }
 
 pub async fn refresh_all_feeds(pool: &SqlitePool) -> anyhow::Result<Vec<FeedResult>> {
