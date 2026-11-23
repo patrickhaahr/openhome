@@ -18,10 +18,10 @@ Dispositions: **refactored**, **already explicit**, **retained simple**, **defer
 
 | Candidate | Slice | Disposition | Owner and phases |
 | --- | --- | --- | --- |
-| Launcher OK-key hold | [#255](https://github.com/patrickhaahr/openhome/issues/255) | Refactored | `OpenHome.qml` `holdEvent` is the only transition owner of `holdPhase`: `idle`, `pressed`, `held` (hold elapsed while editing was ineligible), `releasing` (carries `releasingFrom`). Replaces the `holding` flag plus two independently stopped timers. Drawer, region and agent state stay independent policy, read only when the 700 ms hold elapses. Timing (700 ms hold, 150 ms release debounce) and key-repeat handling are unchanged |
+| Launcher OK-key hold | [#255](https://github.com/patrickhaahr/openhome/issues/255), [#324](https://github.com/patrickhaahr/openhome/issues/324) | Refactored | `ui/LauncherLifecycles.js` `hold` is the only transition owner of `press`: `idle`, `pressed`, `held` (hold elapsed while editing was ineligible), `releasing` (carries `from`). It returns the next state and the effects `OpenHome.qml` runs (timers, edit, activate). Drawer, region and agent state stay independent policy, read only when the 700 ms hold elapses. Timing (700 ms hold, 150 ms release debounce) and key-repeat handling are unchanged |
 | Launcher navigation (dock, drawer, controls, agent, Back) | #255 | Retained simple | `navigate`/`activate` are pure branches over `drawer`, `region`, `agentOpen` and indices, with no asynchronous exit. Merging them into a state enum would conflate independent policy |
-| Launcher state read | [#256](https://github.com/patrickhaahr/openhome/issues/256) | Refactored | `readFlight` is null or `{request}`; `settleRead` is its only exit (valid data, invalid/offline marked stale, or 10 s timeout then abort). Late callbacks do not match the current flight and are ignored |
-| Launcher command feedback | #256 | Refactored | `commandFlight` (`{request, command}`) is separate from `commandOutcome` (`{command, accepted}`); `pending`, `acknowledged` and `failed` are derived, so a command identity exists only while in flight and an outcome only after it. `settleCommand` is the only exit (accepted, uncertain, or 14 s timeout then abort); no retry. The 4.5 s timer clears only an accepted marker; an uncertain marker stays until the next send, as before |
+| Launcher state read | [#256](https://github.com/patrickhaahr/openhome/issues/256), #324 | Refactored | `read` owns `reader`: `idle` or `reading` (carries `flight`), both with the last `live` data. Exits are valid data, invalid/offline marked stale, or 10 s timeout then abort. A callback from any other flight is ignored |
+| Launcher command feedback | #256, #324 | Refactored | `send` owns `sender`: `idle`, `sending` (carries `flight`), `accepted` and `uncertain`, the last three with their `command`. `pending`, `acknowledged` and `failed` are derived. Exits are accepted, uncertain, or 14 s timeout then abort; no retry. The 4.5 s timer clears only `accepted`; `uncertain` stays until the next send, as before |
 | Picture profile read/toggle/write/readback | [#257](https://github.com/patrickhaahr/openhome/issues/257) | Refactored, with a narrow fix | `PictureProfile.qml` `operation` is null or `{kind, token, target}` with kinds `read`, `toggle`, `write`, `verify`; `begin` constructs it and `advance`/`finish`/`fail`/`mismatch` leave it. `pending` is derived. The observed `value` and subscription stay separate from the operation. **Fix:** readback now must equal the requested target; before, any readable mode counted as success. A mismatch fails the toggle but keeps the observed value |
 | Picture shortcut script | #257 | Already explicit | `picture-toggle.py` is one sequential read, write, read-back and already fails with exit 1 if the readback differs from the target; unchanged. It also validates the default-input 2D SDR dimension, which the launcher's read does not (observed, not changed) |
 | Bridge refresh and cache | [#258](https://github.com/patrickhaahr/openhome/issues/258) | Refactored (extraction only) | `createBridge`: `refreshing` is the one shared in-flight promise, cleared in `finishRefresh`; weather and recovery tasks are separate functions bound to their start day, with independent freshness deadlines. Behavior unchanged |
@@ -36,11 +36,11 @@ else is stated from reading the source and is **assumed** until the physical che
 
 | Lifecycle | Exit | Evidence |
 | --- | --- | --- |
-| Hold `pressed`/`held`/`releasing` | Release then 150 ms activation; eligible 700 ms hold then edit; key repeat; Home hidden (`holdEvent("cancel")`); stale `holdElapsed`/`releaseElapsed` ignored by phase | Assumed (source). No QML runtime seam exists |
-| Hold while controls or agent selected | Waits in `held` for release, then activates | Assumed |
+| Hold `pressed`/`held`/`releasing` | Release then 150 ms activation; eligible 700 ms hold then edit; key repeat; Home hidden (`holdEvent("cancel")`); stale `holdElapsed`/`releaseElapsed` ignored by state | Demonstrated (transitions): `tv/launcher/test-launcher.js`. Assumed: key and timer wiring |
+| Hold while controls or agent selected | Waits in `held` for release, then activates | Demonstrated (transitions) |
 | Hold with lost release while Home stays visible | Stays `pressed`/`held`; a liveness hypothesis, not demonstrated. Left unchanged and without a new timeout | Assumed |
-| Read in flight | Valid data; non-200/malformed marks stale; 10 s abort; late completion ignored | Assumed (QML). The bridge half (valid, stale, invalid bodies) is demonstrated in `tv/bridge/test.js` |
-| Command in flight | Accepted; non-accepted or malformed uncertain; 14 s abort; late completion ignored; feedback expiry | Assumed (QML). The bridge half is demonstrated in `tv/bridge/test.js` (accepted, 502, busy, rate, no retry) |
+| Read in flight | Valid data; non-200/malformed marks stale; 10 s abort; late completion ignored | Demonstrated (transitions): `tv/launcher/test-launcher.js`. Assumed: request and timer wiring. The bridge half (valid, stale, invalid bodies) is demonstrated in `tv/bridge/test.js` |
+| Command in flight | Accepted; non-accepted or malformed uncertain; 14 s abort; late completion ignored; feedback expiry | Demonstrated (transitions): `tv/launcher/test-launcher.js`. Assumed: request and timer wiring. The bridge half is demonstrated in `tv/bridge/test.js` (accepted, 502, busy, rate, no retry) |
 | Picture operation | Matching reply advances; malformed, rejected, mismatched readback or 5 s timer fails; deactivation cancels only the subscription; 60 s refresh resubscribes; restart clears it | Assumed (source). No test seam without a production hook |
 | Bridge refresh | All bounded tasks settle; rejection or invalid body keeps same-day data stale; midnight drops stale-day results; restart clears memory | Demonstrated: `cache()` in `tv/bridge/test.js`, including invalid bodies and slot release |
 | Bridge command slot | Released on success, rejection and invalid body; 1 s deadline survives failure | Demonstrated: `commands()` in `tv/bridge/test.js` (success, rejection and invalid body each followed by an admitted command) |
@@ -105,8 +105,9 @@ never establishes it.
 
 ## Evidence limits
 
-- **No QML runtime coverage.** `qmlformat` in `tv-check` only parses the launcher; the
-  hold, read/command and picture lifecycles are unproven by automation and need the
+- **No QML runtime coverage in the gates.** `tv-check` unit-tests the extracted launcher
+  transitions with Node, but `qmlformat` only parses the QML. How it wires keys, timers,
+  requests and Luna calls to those transitions is unproven by automation and needs the
   physical remote.
 - **Pending physical-TV acceptance:** remote OK short press, 700 ms hold and release,
   key repeat, Home hide while held; picture toggle in both directions, a forced
