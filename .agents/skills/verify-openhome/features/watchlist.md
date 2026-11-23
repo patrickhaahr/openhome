@@ -28,7 +28,7 @@ Preconditions:
 - **Retry.** Run the identical call again. The result has `replayed: true` and the same entry `id`.
 - **Read back.** Run `curl -fsS -H "Authorization: Bearer $API_KEY" "$API_URL/api/watchlist/entries?owner_id=<alex>"`. The list holds exactly one `Verify Harbour Lights`.
 - **Enriched add.** Run `mcp.sh call search_watchlist_titles '{"kind":"movie","query":"Orbit"}'` (loopback catalogue), take `structuredContent.items[0].tmdb_id`, then run `mcp.sh call add_watchlist_entry` with it as `tmdb_id` plus a fresh `request_id`. The entry has the catalogue's `title`, `overview`, `poster_path` and `release_date`; `watchlist_entry` and the Axum read-back show the same values.
-- **Dashboard.** `preview_open` on the Dashboard port with path `/lists?tab=watch`, then `preview_wait_for` text `Verify Harbour Lights`. The `Planned` region's list shows the title, and the `Whose list` button reads `Alex 6 titles to watch` (5 seeded + 1).
+- **Dashboard.** `preview_open` on the Dashboard port with path `/lists?tab=watch`, then `preview_wait_for` text `Verify Harbour Lights`. The `Planned` region's list shows the title, and the `Whose list` button reads `Alex 7 titles to watch` (5 seeded planned or watching + the 2 added).
 - **Proof.** Save the tool JSON as `01-…`–`04-…` and a `preview_snapshot` with `save: true` copied to `05-dashboard-watch.png` under `$EVIDENCE_DIR/watchlist/`.
 
 ## Gotchas
