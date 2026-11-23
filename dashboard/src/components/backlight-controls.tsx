@@ -59,6 +59,7 @@ export function BacklightControls({
 
   const delivery = useRef<Delivery>(initialDelivery)
   const runs = useRef(0)
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
   const latestData = useRef(data)
   useEffect(() => {
     latestData.current = data
@@ -76,9 +77,25 @@ export function BacklightControls({
     } else if (following.phase !== "closed") setPending(true)
 
     for (const effect of effects) {
-      if (effect.kind === "cancel") clearTimeout(effect.timer)
+      if (effect.kind === "cancel") cancelTimer(effect.id)
+      else if (effect.kind === "schedule") scheduleTimer(effect.id)
       else void deliver(effect.action, effect.run)
     }
+  }
+
+  function cancelTimer(id: number): void {
+    clearTimeout(timers.current.get(id))
+    timers.current.delete(id)
+  }
+
+  function scheduleTimer(id: number): void {
+    timers.current.set(
+      id,
+      setTimeout(() => {
+        timers.current.delete(id)
+        dispatch({ type: "fire", id, run: ++runs.current })
+      }, 200)
+    )
   }
 
   useEffect(
@@ -87,7 +104,7 @@ export function BacklightControls({
       delivery.current = closing.delivery
 
       for (const effect of closing.effects)
-        if (effect.kind === "cancel") clearTimeout(effect.timer)
+        if (effect.kind === "cancel") cancelTimer(effect.id)
     },
     []
   )
@@ -139,13 +156,7 @@ export function BacklightControls({
     if (delivery.current.phase === "closed") return
     setDraft(selection)
     setMessage("Waiting for your latest adjustment…")
-
-    const timer = setTimeout(
-      () => dispatch({ type: "fire", timer, run: ++runs.current }),
-      200
-    )
-
-    dispatch({ type: "edit", selection, timer })
+    dispatch({ type: "edit", selection, id: ++runs.current })
   }
 
   const status = current.state === "available" ? current.status : undefined

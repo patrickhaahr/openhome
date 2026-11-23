@@ -37,19 +37,19 @@ export const connectionLabel = {
 export const unconfirmed =
   "OpenHome couldn’t confirm the command. The LED may have changed; refresh before trying again."
 
-type Timer = ReturnType<typeof setTimeout>
-
 export type Debounce = {
   readonly kind: "debounce"
   readonly selection: BacklightSelection
-  readonly timer: Timer
+  readonly id: number
 }
 
 export type Waiting =
   | Debounce
   | { readonly kind: "queued"; readonly action: BacklightAction }
 
-export type Delivery =
+declare const deliveryBrand: unique symbol
+
+type DeliveryState =
   | { readonly phase: "idle" }
   | { readonly phase: "debouncing"; readonly debounce: Debounce }
   | {
@@ -60,23 +60,26 @@ export type Delivery =
     }
   | { readonly phase: "closed" }
 
+export type Delivery = DeliveryState & { readonly [deliveryBrand]: true }
+
 export type DeliveryEvent =
   | {
       readonly type: "edit"
       readonly selection: BacklightSelection
-      readonly timer: Timer
+      readonly id: number
     }
   | {
       readonly type: "perform"
       readonly action: BacklightAction
       readonly run: number
     }
-  | { readonly type: "fire"; readonly timer: Timer; readonly run: number }
+  | { readonly type: "fire"; readonly id: number; readonly run: number }
   | { readonly type: "settle"; readonly run: number }
   | { readonly type: "close" }
 
 export type DeliveryEffect =
-  | { readonly kind: "cancel"; readonly timer: Timer }
+  | { readonly kind: "cancel"; readonly id: number }
+  | { readonly kind: "schedule"; readonly id: number }
   | {
       readonly kind: "send"
       readonly action: BacklightAction
@@ -88,25 +91,27 @@ export type DeliveryStep = {
   readonly effects: ReadonlyArray<DeliveryEffect>
 }
 
-export const initialDelivery: Delivery = { phase: "idle" }
+const own = (state: DeliveryState): Delivery =>
+  // SAFETY: the brand is type-only; this module's constructors are the sole producers of a Delivery.
+  state as Delivery
 
-const closed: Delivery = { phase: "closed" }
+export const initialDelivery = own({ phase: "idle" })
 
-const debouncing = (debounce: Debounce): Delivery => ({
-  phase: "debouncing",
-  debounce,
-})
+const closed = own({ phase: "closed" })
+
+const debouncing = (debounce: Debounce): Delivery =>
+  own({ phase: "debouncing", debounce })
 
 const sending = (
   run: number,
   action: BacklightAction,
   next: Waiting | null
-): Delivery => ({ phase: "sending", run, action, next })
+): Delivery => own({ phase: "sending", run, action, next })
 
-const debounceOf = (selection: BacklightSelection, timer: Timer): Debounce => ({
+const debounceOf = (selection: BacklightSelection, id: number): Debounce => ({
   kind: "debounce",
   selection,
-  timer,
+  id,
 })
 
 const queued = (action: BacklightAction): Waiting => ({
@@ -114,7 +119,9 @@ const queued = (action: BacklightAction): Waiting => ({
   action,
 })
 
-const cancel = (timer: Timer): DeliveryEffect => ({ kind: "cancel", timer })
+const cancel = (id: number): DeliveryEffect => ({ kind: "cancel", id })
+
+const schedule = (id: number): DeliveryEffect => ({ kind: "schedule", id })
 
 const send = (action: BacklightAction, run: number): DeliveryEffect => ({
   kind: "send",
@@ -123,7 +130,7 @@ const send = (action: BacklightAction, run: number): DeliveryEffect => ({
 })
 
 const cancelWaiting = (waiting: Waiting | null): DeliveryEffect[] =>
-  waiting?.kind === "debounce" ? [cancel(waiting.timer)] : []
+  waiting?.kind === "debounce" ? [cancel(waiting.id)] : []
 
 const step = (
   delivery: Delivery,
@@ -133,22 +140,25 @@ const step = (
 function edit(
   delivery: Delivery,
   selection: BacklightSelection,
-  timer: Timer
+  id: number
 ): DeliveryStep {
-  const debounce = debounceOf(selection, timer)
+  const debounce = debounceOf(selection, id)
 
   switch (delivery.phase) {
     case "closed":
-      return step(delivery, [cancel(timer)])
+      return step(delivery)
     case "sending":
-      return step(
-        sending(delivery.run, delivery.action, debounce),
-        cancelWaiting(delivery.next)
-      )
+      return step(sending(delivery.run, delivery.action, debounce), [
+        ...cancelWaiting(delivery.next),
+        schedule(id),
+      ])
     case "debouncing":
-      return step(debouncing(debounce), [cancel(delivery.debounce.timer)])
+      return step(debouncing(debounce), [
+        cancel(delivery.debounce.id),
+        schedule(id),
+      ])
     case "idle":
-      return step(debouncing(debounce))
+      return step(debouncing(debounce), [schedule(id)])
   }
 }
 
@@ -167,7 +177,7 @@ function perform(
       )
     case "debouncing":
       return step(sending(run, action, null), [
-        cancel(delivery.debounce.timer),
+        cancel(delivery.debounce.id),
         send(action, run),
       ])
     case "idle":
@@ -175,8 +185,8 @@ function perform(
   }
 }
 
-function fire(delivery: Delivery, timer: Timer, run: number): DeliveryStep {
-  if (delivery.phase === "debouncing" && delivery.debounce.timer === timer) {
+function fire(delivery: Delivery, id: number, run: number): DeliveryStep {
+  if (delivery.phase === "debouncing" && delivery.debounce.id === id) {
     const action: BacklightAction = {
       action: "select",
       selection: delivery.debounce.selection,
@@ -188,7 +198,7 @@ function fire(delivery: Delivery, timer: Timer, run: number): DeliveryStep {
   if (
     delivery.phase === "sending" &&
     delivery.next?.kind === "debounce" &&
-    delivery.next.timer === timer
+    delivery.next.id === id
   ) {
     const action: BacklightAction = {
       action: "select",
@@ -217,7 +227,7 @@ function settle(delivery: Delivery, run: number): DeliveryStep {
 function close(delivery: Delivery): DeliveryStep {
   switch (delivery.phase) {
     case "debouncing":
-      return step(closed, [cancel(delivery.debounce.timer)])
+      return step(closed, [cancel(delivery.debounce.id)])
     case "sending":
       return step(closed, cancelWaiting(delivery.next))
     case "idle":
@@ -229,11 +239,11 @@ function close(delivery: Delivery): DeliveryStep {
 export function next(delivery: Delivery, event: DeliveryEvent): DeliveryStep {
   switch (event.type) {
     case "edit":
-      return edit(delivery, event.selection, event.timer)
+      return edit(delivery, event.selection, event.id)
     case "perform":
       return perform(delivery, event.action, event.run)
     case "fire":
-      return fire(delivery, event.timer, event.run)
+      return fire(delivery, event.id, event.run)
     case "settle":
       return settle(delivery, event.run)
     case "close":

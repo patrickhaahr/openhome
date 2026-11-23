@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, expectTypeOf, test } from "vitest"
 import {
   initialDelivery,
   next,
@@ -7,9 +7,9 @@ import {
 } from "@/components/backlight-delivery"
 import type { BacklightAction, BacklightSelection } from "@/lib/backlight"
 
-const timerA = setTimeout(() => {}, 0)
+const idA = 1
 
-const timerB = setTimeout(() => {}, 0)
+const idB = 2
 
 const off: BacklightSelection = { mode: "off" }
 
@@ -33,60 +33,66 @@ describe("edit", () => {
     const step = next(initialDelivery, {
       type: "edit",
       selection: off,
-      timer: timerA,
+      id: idA,
     })
 
     expect(step.delivery).toEqual({
       phase: "debouncing",
-      debounce: { kind: "debounce", selection: off, timer: timerA },
+      debounce: { kind: "debounce", selection: off, id: idA },
     })
-    expect(step.effects).toEqual([])
+    expect(step.effects).toEqual([{ kind: "schedule", id: idA }])
   })
 
-  test("replaces a pending debounce and cancels its timer", () => {
-    const step = next(run([{ type: "edit", selection: off, timer: timerA }]), {
+  test("replaces a pending debounce, cancelling the old timer before scheduling the new", () => {
+    const step = next(run([{ type: "edit", selection: off, id: idA }]), {
       type: "edit",
       selection: tvSync,
-      timer: timerB,
+      id: idB,
     })
 
     expect(step.delivery).toEqual({
       phase: "debouncing",
-      debounce: { kind: "debounce", selection: tvSync, timer: timerB },
+      debounce: { kind: "debounce", selection: tvSync, id: idB },
     })
-    expect(step.effects).toEqual([{ kind: "cancel", timer: timerA }])
+    expect(step.effects).toEqual([
+      { kind: "cancel", id: idA },
+      { kind: "schedule", id: idB },
+    ])
   })
 
   test("waits behind the send in flight and replaces an earlier waiting debounce", () => {
     const sending = run([
       { type: "perform", action: refresh, run: 1 },
-      { type: "edit", selection: off, timer: timerA },
+      { type: "edit", selection: off, id: idA },
     ])
 
     const step = next(sending, {
       type: "edit",
       selection: tvSync,
-      timer: timerB,
+      id: idB,
     })
 
     expect(step.delivery).toEqual({
       phase: "sending",
       run: 1,
       action: refresh,
-      next: { kind: "debounce", selection: tvSync, timer: timerB },
+      next: { kind: "debounce", selection: tvSync, id: idB },
     })
-    expect(step.effects).toEqual([{ kind: "cancel", timer: timerA }])
+    expect(step.effects).toEqual([
+      { kind: "cancel", id: idA },
+      { kind: "schedule", id: idB },
+    ])
   })
 
-  test("cancels the new timer once closed", () => {
+  test("schedules nothing once closed", () => {
     const step = next(run([{ type: "close" }]), {
       type: "edit",
       selection: off,
-      timer: timerA,
+      id: idA,
     })
 
     expect(step.delivery).toEqual({ phase: "closed" })
-    expect(step.effects).toEqual([{ kind: "cancel", timer: timerA }])
+    expect(step.effects).toEqual([])
   })
 })
 
@@ -108,7 +114,7 @@ describe("perform", () => {
   })
 
   test("cancels a pending debounce and sends", () => {
-    const step = next(run([{ type: "edit", selection: off, timer: timerA }]), {
+    const step = next(run([{ type: "edit", selection: off, id: idA }]), {
       type: "perform",
       action: refresh,
       run: 2,
@@ -116,7 +122,7 @@ describe("perform", () => {
 
     expect(step.delivery).toMatchObject({ phase: "sending", run: 2 })
     expect(step.effects).toEqual([
-      { kind: "cancel", timer: timerA },
+      { kind: "cancel", id: idA },
       { kind: "send", action: refresh, run: 2 },
     ])
   })
@@ -124,7 +130,7 @@ describe("perform", () => {
   test("queues behind the send in flight, replacing the waiting debounce", () => {
     const sending = run([
       { type: "perform", action: refresh, run: 1 },
-      { type: "edit", selection: off, timer: timerA },
+      { type: "edit", selection: off, id: idA },
     ])
 
     const step = next(sending, {
@@ -139,7 +145,7 @@ describe("perform", () => {
       action: refresh,
       next: { kind: "queued", action: selectTvSync },
     })
-    expect(step.effects).toEqual([{ kind: "cancel", timer: timerA }])
+    expect(step.effects).toEqual([{ kind: "cancel", id: idA }])
   })
 
   test("is ignored once closed", () => {
@@ -155,9 +161,9 @@ describe("perform", () => {
 
 describe("fire", () => {
   test("sends the debounced selection", () => {
-    const step = next(run([{ type: "edit", selection: off, timer: timerA }]), {
+    const step = next(run([{ type: "edit", selection: off, id: idA }]), {
       type: "fire",
-      timer: timerA,
+      id: idA,
       run: 1,
     })
 
@@ -173,10 +179,10 @@ describe("fire", () => {
   test("queues the debounced selection behind the send in flight", () => {
     const sending = run([
       { type: "perform", action: refresh, run: 1 },
-      { type: "edit", selection: off, timer: timerA },
+      { type: "edit", selection: off, id: idA },
     ])
 
-    const step = next(sending, { type: "fire", timer: timerA, run: 2 })
+    const step = next(sending, { type: "fire", id: idA, run: 2 })
 
     expect(step.delivery).toEqual({
       phase: "sending",
@@ -188,9 +194,9 @@ describe("fire", () => {
   })
 
   test("ignores a timer that is no longer current", () => {
-    const debouncing = run([{ type: "edit", selection: off, timer: timerB }])
+    const debouncing = run([{ type: "edit", selection: off, id: idB }])
 
-    expect(next(debouncing, { type: "fire", timer: timerA, run: 1 })).toEqual({
+    expect(next(debouncing, { type: "fire", id: idA, run: 1 })).toEqual({
       delivery: debouncing,
       effects: [],
     })
@@ -229,14 +235,14 @@ describe("settle", () => {
   test("resumes debouncing when a debounce was waiting", () => {
     const sending = run([
       { type: "perform", action: refresh, run: 1 },
-      { type: "edit", selection: off, timer: timerA },
+      { type: "edit", selection: off, id: idA },
     ])
 
     const step = next(sending, { type: "settle", run: 2 })
 
     expect(step.delivery).toEqual({
       phase: "debouncing",
-      debounce: { kind: "debounce", selection: off, timer: timerA },
+      debounce: { kind: "debounce", selection: off, id: idA },
     })
     expect(step.effects).toEqual([])
   })
@@ -251,25 +257,25 @@ describe("settle", () => {
 
 describe("close", () => {
   test("cancels a pending debounce", () => {
-    const step = next(run([{ type: "edit", selection: off, timer: timerA }]), {
+    const step = next(run([{ type: "edit", selection: off, id: idA }]), {
       type: "close",
     })
 
     expect(step).toEqual({
       delivery: { phase: "closed" },
-      effects: [{ kind: "cancel", timer: timerA }],
+      effects: [{ kind: "cancel", id: idA }],
     })
   })
 
   test("cancels the debounce waiting behind a send", () => {
     const sending = run([
       { type: "perform", action: refresh, run: 1 },
-      { type: "edit", selection: off, timer: timerA },
+      { type: "edit", selection: off, id: idA },
     ])
 
     expect(next(sending, { type: "close" })).toEqual({
       delivery: { phase: "closed" },
-      effects: [{ kind: "cancel", timer: timerA }],
+      effects: [{ kind: "cancel", id: idA }],
     })
   })
 
@@ -278,5 +284,17 @@ describe("close", () => {
       delivery: { phase: "closed" },
       effects: [],
     })
+  })
+})
+
+describe("Delivery", () => {
+  test("cannot be built from a literal outside the module", () => {
+    expectTypeOf<{ readonly phase: "idle" }>().not.toExtend<Delivery>()
+    expectTypeOf<{
+      readonly phase: "sending"
+      readonly run: number
+      readonly action: BacklightAction
+      readonly next: null
+    }>().not.toExtend<Delivery>()
   })
 })
