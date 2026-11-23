@@ -3,6 +3,7 @@ mod common;
 use common::{
     API_KEY, connect, food_database, start_api, start_api_with_foods, start_mcp, wishlist_call,
 };
+use openhome_api::services::nutrition::meal_photos::MAX_PHOTO_BYTES;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
 
@@ -265,7 +266,13 @@ async fn meal_log_photos_forward_unchanged_including_a_full_size_payload() {
     assert_eq!(removed["photo"], Value::Null);
     assert_eq!(day().await, json!([removed]));
 
-    for (repeats, status) in [(3_495_252, 400), (3_495_253, 413)] {
+    let signature_bytes = 3;
+    let bytes_per_repeat = 3;
+    let largest_fitting_repeats = (MAX_PHOTO_BYTES - signature_bytes) / bytes_per_repeat;
+    for (repeats, status) in [
+        (largest_fitting_repeats, 400),
+        (largest_fitting_repeats + 1, 413),
+    ] {
         let photo = format!("/9j/{}", "QUFB".repeat(repeats));
         let rejected = wishlist_call(&client, "log_meal", meal("mcp-photo-2", &photo)).await;
         assert_eq!(rejected.is_error, Some(true));
