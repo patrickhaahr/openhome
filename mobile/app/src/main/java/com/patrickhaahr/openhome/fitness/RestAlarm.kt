@@ -8,6 +8,7 @@ import android.content.Intent
 import android.database.SQLException
 import android.media.AudioAttributes
 import android.os.Build
+import android.os.CombinedVibration
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -67,51 +68,44 @@ class RestAlarmReceiver : BroadcastReceiver() {
 
 object RestVibration {
     sealed interface Outcome {
-        data object Played : Outcome
+        data object Requested : Outcome
 
         data class Failed(val reason: String) : Outcome
     }
 
-    fun play(context: Context): Outcome {
-        val vibrator = vibratorOf(context) ?: return Outcome.Failed("Device has no vibrator service")
-        if (!vibrator.hasVibrator()) return Outcome.Failed("Device has no vibrator")
-        return try {
-            vibrate(vibrator)
-            Outcome.Played
+    fun play(context: Context): Outcome =
+        try {
+            request(context)
         } catch (failure: SecurityException) {
             Outcome.Failed("Vibration refused: ${failure.message}")
         }
-    }
 
-    private fun vibratorOf(context: Context): Vibrator? =
+    private fun request(context: Context): Outcome =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+            context.getSystemService(VibratorManager::class.java)
+                ?.let { vibrateAlarm(it) }
+                ?: Outcome.Failed("Device has no vibrator manager service")
         } else {
             context.getSystemService(Vibrator::class.java)
+                ?.let { vibrateLegacy(it) }
+                ?: Outcome.Failed("Device has no vibrator service")
         }
 
-    private fun vibrate(vibrator: Vibrator) {
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> vibrateWithAttributes(vibrator)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> vibrateWithAudioAttributes(vibrator)
-            else -> vibrateWithPattern(vibrator)
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun vibrateAlarm(manager: VibratorManager): Outcome {
+        val effect = VibrationEffect.createWaveform(VIBRATION_PATTERN, NO_REPEAT)
+        val attributes = VibrationAttributes.Builder().setUsage(VibrationAttributes.USAGE_ALARM).build()
+        manager.vibrate(CombinedVibration.createParallel(effect), attributes)
+        return Outcome.Requested
+    }
+
+    private fun vibrateLegacy(vibrator: Vibrator): Outcome {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createWaveform(VIBRATION_PATTERN, NO_REPEAT), alarmAudioAttributes())
+        } else {
+            vibrator.vibrate(VIBRATION_PATTERN, NO_REPEAT, alarmAudioAttributes())
         }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private fun vibrateWithAttributes(vibrator: Vibrator) {
-        val effect = VibrationEffect.createWaveform(VIBRATION_PATTERN, NO_REPEAT)
-        vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
-    }
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun vibrateWithAudioAttributes(vibrator: Vibrator) {
-        val effect = VibrationEffect.createWaveform(VIBRATION_PATTERN, NO_REPEAT)
-        vibrator.vibrate(effect, alarmAudioAttributes())
-    }
-
-    private fun vibrateWithPattern(vibrator: Vibrator) {
-        vibrator.vibrate(VIBRATION_PATTERN, NO_REPEAT, alarmAudioAttributes())
+        return Outcome.Requested
     }
 
     private fun alarmAudioAttributes(): AudioAttributes =
