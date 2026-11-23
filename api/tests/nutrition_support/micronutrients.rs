@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::{
     common::food_workbook::MACRO, common::food_workbook::SyntheticFood,
     common::food_workbook::parameter, common::food_workbook::sha256,

@@ -1,10 +1,6 @@
-mod common;
-#[path = "nutrition_support/targets.rs"]
-mod support;
-
+use crate::support::{Api, day_from_today, man_of_today, monday_of, today};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, day_from_today, man_of_today, monday_of, today};
 
 #[tokio::test]
 async fn the_current_week_freezes_on_first_read_and_future_weeks_stay_provisional() {

@@ -1,10 +1,6 @@
-mod common;
-#[path = "nutrition_support/micronutrients.rs"]
-mod support;
-
+use crate::support::{Api, limit_flags, nutrient, period_coverage, woman};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, limit_flags, nutrient, period_coverage, woman};
 
 #[tokio::test]
 async fn summary_coverage_averages_the_recommended_intake_over_logged_days_only() {

@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/products.rs"]
-mod support;
-
+use crate::support::{Api, JUICE, SKYR, UNKNOWN, found, label, skyr_label};
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, JUICE, SKYR, UNKNOWN, found, label, skyr_label};
 use wiremock::ResponseTemplate;
 
 #[tokio::test]

@@ -1,10 +1,6 @@
-mod common;
-#[path = "nutrition_support/micronutrients.rs"]
-mod support;
-
+use crate::support::{Api, coverage, limits, nutrient, reference, woman};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, coverage, limits, nutrient, reference, woman};
 
 #[tokio::test]
 async fn the_panel_is_unavailable_without_the_profile_sex_and_birth_date_or_below_adult_age() {

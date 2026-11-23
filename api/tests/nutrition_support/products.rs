@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::{
     common::food_workbook::first_dataset, common::food_workbook::sha256,
     common::send_request_with_method, common::test_app_with_db,

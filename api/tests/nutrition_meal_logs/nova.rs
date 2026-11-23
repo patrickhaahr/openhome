@@ -1,12 +1,8 @@
-mod common;
-#[path = "nutrition_support/meal_logs.rs"]
-mod support;
-
+use crate::common::food_workbook::second_dataset;
+use crate::support::{Nutrition, at, breakfast};
 use axum::http::StatusCode;
-use common::food_workbook::second_dataset;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Nutrition, at, breakfast};
 
 #[tokio::test]
 async fn a_food_nova_class_is_set_changed_read_back_and_kept_only_for_its_dataset_version() {

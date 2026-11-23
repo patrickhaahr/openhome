@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/supplements.rs"]
-mod support;
-
+use crate::support::{Api, breakfast, creatine, fish_oil};
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, breakfast, creatine, fish_oil};
 
 #[tokio::test]
 async fn a_supplement_dose_counts_its_per_dose_amounts_times_the_doses_taken() {

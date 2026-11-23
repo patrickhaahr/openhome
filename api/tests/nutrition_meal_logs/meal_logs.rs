@@ -1,12 +1,8 @@
-mod common;
-#[path = "nutrition_support/meal_logs.rs"]
-mod support;
-
+use crate::common::food_workbook::second_dataset;
+use crate::support::{Nutrition, at, breakfast, nutrient};
 use axum::http::StatusCode;
-use common::food_workbook::second_dataset;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Nutrition, at, breakfast, nutrient};
 
 #[tokio::test]
 async fn a_logged_meal_keeps_scaled_snapshots_with_sources_and_totals() {

@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/meals.rs"]
-mod support;
-
+use crate::support::{Api, SKYR, by_name, protein_bowl};
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, SKYR, by_name, protein_bowl};
 
 #[tokio::test]
 async fn a_saved_meal_lists_its_ordered_items_by_reference_under_a_case_insensitively_unique_name()
