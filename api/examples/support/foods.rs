@@ -127,6 +127,16 @@ struct Portion {
     grams: f64,
 }
 
+struct HistoryPortion {
+    food_id: i64,
+    grams: f64,
+}
+
+struct HistoryMeal {
+    hour: i64,
+    portions: Vec<HistoryPortion>,
+}
+
 struct SyntheticMeal {
     hours_ago: i64,
     note: Option<&'static str>,
@@ -336,25 +346,52 @@ pub async fn seed_meals(
         let day = (now - chrono::TimeDelta::days(days_ago)).date_naive();
         let midnight = day.and_time(chrono::NaiveTime::MIN).and_utc();
         let vary = |step: i64, spread: i64| ((days_ago * step) % spread) as f64;
-        let history: [(i64, Vec<(i64, f64)>); 3] = [
-            (
-                7,
-                vec![(1693, 220.0 + vary(37, 80)), (60, 80.0 + vary(13, 30))],
-            ),
-            (
-                11,
-                vec![(907, 180.0 + vary(23, 60)), (300, 260.0 + vary(31, 90))],
-            ),
-            (
-                17,
-                vec![
-                    (907, 220.0 + vary(53, 80)),
-                    (300, 300.0 + vary(29, 120)),
-                    (3, 120.0 + vary(17, 60)),
+        let history: [HistoryMeal; 3] = [
+            HistoryMeal {
+                hour: 7,
+                portions: vec![
+                    HistoryPortion {
+                        food_id: 1693,
+                        grams: 220.0 + vary(37, 80),
+                    },
+                    HistoryPortion {
+                        food_id: 60,
+                        grams: 80.0 + vary(13, 30),
+                    },
                 ],
-            ),
+            },
+            HistoryMeal {
+                hour: 11,
+                portions: vec![
+                    HistoryPortion {
+                        food_id: 907,
+                        grams: 180.0 + vary(23, 60),
+                    },
+                    HistoryPortion {
+                        food_id: 300,
+                        grams: 260.0 + vary(31, 90),
+                    },
+                ],
+            },
+            HistoryMeal {
+                hour: 17,
+                portions: vec![
+                    HistoryPortion {
+                        food_id: 907,
+                        grams: 220.0 + vary(53, 80),
+                    },
+                    HistoryPortion {
+                        food_id: 300,
+                        grams: 300.0 + vary(29, 120),
+                    },
+                    HistoryPortion {
+                        food_id: 3,
+                        grams: 120.0 + vary(17, 60),
+                    },
+                ],
+            },
         ];
-        for (meal, (hour, portions)) in history.into_iter().enumerate() {
+        for (meal, HistoryMeal { hour, portions }) in history.into_iter().enumerate() {
             meal_logs::log_meal(
                 db,
                 foods,
@@ -365,7 +402,7 @@ pub async fn seed_meals(
                     portions: Some(
                         portions
                             .into_iter()
-                            .map(|(food_id, grams)| PortionRequest {
+                            .map(|HistoryPortion { food_id, grams }| PortionRequest {
                                 food_id: Some(food_id),
                                 barcode: None,
                                 grams,
