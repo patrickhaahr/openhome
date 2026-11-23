@@ -146,6 +146,23 @@ export function fire(
   return target.dispatchEvent(event)
 }
 
+export function fireKey(
+  target: EventTarget,
+  type: "keydown" | "keyup" | "keypress",
+  code: string,
+  repeat = false
+): boolean {
+  return target.dispatchEvent(
+    new KeyboardEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      key: code,
+      code,
+      repeat,
+    })
+  )
+}
+
 export function Page({
   blocked = false,
 }: {

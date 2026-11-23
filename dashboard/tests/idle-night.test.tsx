@@ -11,6 +11,7 @@ import {
   DAYTIME,
   fakeSources,
   fire,
+  fireKey,
   LOST_RELEASE_WAKE_MS,
   Page,
   pageOf,
@@ -258,6 +259,125 @@ test("after a lost release, the next touch works normally", async () => {
   await act(async () => fire(countKey(), "pointerup"))
   await act(async () => countKey().click())
   expect(countKey().textContent).toBe("Count 1")
+})
+
+function watchKeys(): string[] {
+  const reached: string[] = []
+
+  for (const type of ["keydown", "keyup", "keypress"])
+    countKey().addEventListener(type, (event) => {
+      if (event instanceof KeyboardEvent)
+        reached.push(`${event.type}:${event.code}`)
+    })
+
+  return reached
+}
+
+async function keyOn(
+  target: EventTarget,
+  type: "keydown" | "keyup" | "keypress",
+  code: string,
+  repeat = false
+): Promise<void> {
+  await act(async () => fireKey(target, type, code, repeat))
+}
+
+test("a Space held past the grace on the black screen wakes without activating the restored key", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const reached = watchKeys()
+
+  await keyOn(black() ?? window, "keydown", "Space")
+  await advance(1000)
+  expect(black()).not.toBeNull()
+
+  await keyOn(countKey(), "keyup", "Space")
+  await advance(WAKE_GRACE_MS - 1)
+  expect(black()).not.toBeNull()
+  await advance(1)
+  expect(black()).toBeNull()
+  expect(reached).toEqual([])
+
+  await keyOn(countKey(), "keydown", "Space")
+  await keyOn(countKey(), "keyup", "Space")
+  expect(reached).toEqual(["keydown:Space", "keyup:Space"])
+})
+
+test("an Enter held with repeats on the black screen never reaches the restored key", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const reached = watchKeys()
+
+  await keyOn(black() ?? window, "keydown", "Enter")
+  await advance(500)
+
+  for (let repeats = 0; repeats < 5; repeats += 1) {
+    await keyOn(countKey(), "keydown", "Enter", true)
+    await keyOn(countKey(), "keypress", "Enter")
+    await advance(33)
+  }
+
+  await keyOn(countKey(), "keyup", "Enter")
+  await advance(WAKE_GRACE_MS)
+  expect(black()).toBeNull()
+  expect(reached).toEqual([])
+  expect(countKey().textContent).toBe("Count 0")
+
+  await act(async () => countKey().click())
+  expect(countKey().textContent).toBe("Count 1")
+})
+
+test("a key that works normally after the black screen's key was released", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const reached = watchKeys()
+
+  await keyOn(black() ?? window, "keydown", "Space")
+  await keyOn(black() ?? window, "keyup", "Space")
+  await advance(WAKE_GRACE_MS)
+  expect(black()).toBeNull()
+
+  await keyOn(countKey(), "keydown", "KeyA")
+  await keyOn(countKey(), "keyup", "KeyA")
+  expect(reached).toEqual(["keydown:KeyA", "keyup:KeyA"])
+})
+
+test("after a lost keyup the page shows but that key stays swallowed until its keyup", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const reached = watchKeys()
+
+  await keyOn(black() ?? window, "keydown", "Space")
+  await advance(LOST_RELEASE_WAKE_MS)
+  expect(black()).toBeNull()
+
+  await keyOn(countKey(), "keydown", "Space", true)
+  await keyOn(countKey(), "keyup", "Space")
+  expect(reached).toEqual([])
+
+  await advance(WAKE_GRACE_MS)
+  await keyOn(countKey(), "keydown", "Space")
+  expect(reached).toEqual(["keydown:Space"])
+})
+
+test("after a lost keyup another key ends the guard and works normally", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const reached = watchKeys()
+
+  await keyOn(black() ?? window, "keydown", "Space")
+  await advance(LOST_RELEASE_WAKE_MS * 2)
+  expect(black()).toBeNull()
+
+  await keyOn(countKey(), "keydown", "KeyA")
+  await keyOn(countKey(), "keyup", "KeyA")
+  await keyOn(countKey(), "keyup", "Space")
+  expect(reached).toEqual(["keydown:KeyA", "keyup:KeyA", "keyup:Space"])
 })
 
 test("an Idle Block that ends a waking touch still swallows its release", async () => {

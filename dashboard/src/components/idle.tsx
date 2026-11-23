@@ -40,8 +40,6 @@ const trailingPointerEvents = [
   "touchcancel",
 ] as const
 
-const trailingKeyEvents = ["keyup", "keypress"] as const
-
 const activity = ["pointerdown", "pointermove", "keydown", "wheel"] as const
 
 type Phase =
@@ -54,9 +52,11 @@ type Phase =
       readonly restoreFocus: Element | null
     }
 
+type Contact = `pointer:${number}` | `key:${string}`
+
 type Gesture =
   | { readonly tag: "none" }
-  | { readonly tag: "held"; readonly pointers: ReadonlySet<number> }
+  | { readonly tag: "held"; readonly contacts: ReadonlySet<Contact> }
   | { readonly tag: "trailing" }
 
 type Room = {
@@ -75,8 +75,8 @@ type RoomEvent =
     }
   | { readonly type: "nightfall" }
   | { readonly type: "daybreak"; readonly slideshow: boolean }
-  | { readonly type: "pressed"; readonly pointer: number }
-  | { readonly type: "lifted"; readonly pointer: number }
+  | { readonly type: "pressed"; readonly contact: Contact }
+  | { readonly type: "lifted"; readonly contact: Contact }
   | { readonly type: "trailed" }
   | { readonly type: "overdue" }
   | { readonly type: "settled" }
@@ -94,11 +94,23 @@ function wokenTo(phase: Exclude<Phase, { tag: "awake" }>): Phase {
   return { tag: "awake", handBack: phase.restoreFocus }
 }
 
-function pressedBy(gesture: Gesture, pointer: number): Gesture {
+const noContacts: ReadonlySet<Contact> = new Set()
+
+function pointerContact(event: PointerEvent): Contact {
+  return `pointer:${event.pointerId}`
+}
+
+function keyContact(event: KeyboardEvent): Contact {
+  return `key:${event.code || event.key}`
+}
+
+function pressedBy(gesture: Gesture, contact: Contact): Gesture {
+  if (gesture.tag === "held" && gesture.contacts.has(contact)) return gesture
+
   return {
     tag: "held",
-    pointers: new Set(gesture.tag === "held" ? gesture.pointers : []).add(
-      pointer
+    contacts: new Set(gesture.tag === "held" ? gesture.contacts : []).add(
+      contact
     ),
   }
 }
@@ -107,12 +119,12 @@ function trailedBy(gesture: Gesture): Gesture {
   return gesture.tag === "held" ? gesture : { tag: "trailing" }
 }
 
-function liftedBy(gesture: Gesture, pointer: number): Gesture {
+function liftedBy(gesture: Gesture, contact: Contact): Gesture {
   if (gesture.tag !== "held") return { tag: "trailing" }
-  const pointers = new Set(gesture.pointers)
-  pointers.delete(pointer)
+  const contacts = new Set(gesture.contacts)
+  contacts.delete(contact)
 
-  return pointers.size > 0 ? { tag: "held", pointers } : { tag: "trailing" }
+  return contacts.size > 0 ? { tag: "held", contacts } : { tag: "trailing" }
 }
 
 function withGesture(room: Room, gesture: Gesture): Room {
@@ -181,10 +193,10 @@ function reduceRoom(room: Room, event: RoomEvent): Room {
       }
 
     case "pressed":
-      return withGesture(room, pressedBy(gesture, event.pointer))
+      return withGesture(room, pressedBy(gesture, event.contact))
 
     case "lifted":
-      return withGesture(room, liftedBy(gesture, event.pointer))
+      return withGesture(room, liftedBy(gesture, event.contact))
 
     case "trailed":
       return withGesture(room, trailedBy(gesture))
@@ -248,6 +260,7 @@ export function IdleProvider({
       ? "nothing"
       : "release"
 
+  const held = gesture.tag === "held" ? gesture.contacts : noContacts
   const blocked = blockers.size > 0
 
   const block = useCallback(() => {
@@ -359,11 +372,7 @@ export function IdleProvider({
 
   useEffect(() => {
     if (guard === "nothing") return
-
-    const trailing =
-      guard === "everything"
-        ? [...trailingPointerEvents, ...trailingKeyEvents]
-        : trailingPointerEvents
+    const covered = guard === "everything"
 
     function swallow(event: Event): void {
       if (event.cancelable) event.preventDefault()
@@ -371,29 +380,51 @@ export function IdleProvider({
     }
 
     function press(event: PointerEvent): void {
-      if (guard === "release" && event.isPrimary) {
+      if (!covered && event.isPrimary) {
         send({ type: "settled" })
 
         return
       }
 
       swallow(event)
-      send({ type: "pressed", pointer: event.pointerId })
-    }
-
-    function key(event: Event): void {
-      if (guard === "release") {
-        send({ type: "settled" })
-
-        return
-      }
-
-      trail(event)
+      send({ type: "pressed", contact: pointerContact(event) })
     }
 
     function lift(event: PointerEvent): void {
       swallow(event)
-      send({ type: "lifted", pointer: event.pointerId })
+      send({ type: "lifted", contact: pointerContact(event) })
+    }
+
+    function keyDown(event: KeyboardEvent): void {
+      const contact = keyContact(event)
+
+      if (covered) {
+        swallow(event)
+        send({ type: "pressed", contact })
+
+        return
+      }
+
+      if (held.has(contact)) {
+        swallow(event)
+
+        return
+      }
+
+      send({ type: "settled" })
+    }
+
+    function keyUp(event: KeyboardEvent): void {
+      const contact = keyContact(event)
+
+      if (!covered && !held.has(contact)) return
+
+      swallow(event)
+      send({ type: "lifted", contact })
+    }
+
+    function keyPress(event: KeyboardEvent): void {
+      if (covered || held.has(keyContact(event))) trail(event)
     }
 
     function trail(event: Event): void {
@@ -405,20 +436,25 @@ export function IdleProvider({
     window.addEventListener("pointerdown", press, options)
     window.addEventListener("pointerup", lift, options)
     window.addEventListener("pointercancel", lift, options)
-    window.addEventListener("keydown", key, options)
+    window.addEventListener("keydown", keyDown, options)
+    window.addEventListener("keyup", keyUp, options)
+    window.addEventListener("keypress", keyPress, options)
 
-    for (const type of trailing) window.addEventListener(type, trail, options)
+    for (const type of trailingPointerEvents)
+      window.addEventListener(type, trail, options)
 
     return () => {
       window.removeEventListener("pointerdown", press, options)
       window.removeEventListener("pointerup", lift, options)
       window.removeEventListener("pointercancel", lift, options)
-      window.removeEventListener("keydown", key, options)
+      window.removeEventListener("keydown", keyDown, options)
+      window.removeEventListener("keyup", keyUp, options)
+      window.removeEventListener("keypress", keyPress, options)
 
-      for (const type of trailing)
+      for (const type of trailingPointerEvents)
         window.removeEventListener(type, trail, options)
     }
-  }, [guard])
+  }, [guard, held])
 
   const cover = waking ? phase.from : phase.tag
 
