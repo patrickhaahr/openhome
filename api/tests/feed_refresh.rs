@@ -1,7 +1,8 @@
 mod common;
 
-use common::test_app_with_db;
-use openhome_api::services::feed;
+use common::{send_request_with_method, test_app_with_db};
+use http::{Method, StatusCode};
+use openhome_api::services::feed::{self, FeedFailure};
 
 #[tokio::test]
 async fn test_should_return_error_for_invalid_feed_url() {
@@ -23,7 +24,7 @@ async fn test_should_return_error_for_invalid_feed_url() {
     assert_eq!(result.feed_id, feed_id);
     assert_eq!(result.items_inserted, 0);
     assert_eq!(result.duplicates_skipped, 0);
-    assert!(result.error.is_some());
+    assert_eq!(result.error, Some(FeedFailure::Unavailable));
 }
 
 #[tokio::test]
@@ -45,7 +46,7 @@ async fn test_should_reject_http_feed_url() {
     assert_eq!(result.feed_id, feed_id);
     assert_eq!(result.items_inserted, 0);
     assert_eq!(result.duplicates_skipped, 0);
-    assert_eq!(result.error, Some("URL must use HTTPS scheme".to_string()));
+    assert_eq!(result.error, Some(FeedFailure::Unavailable));
 }
 
 #[tokio::test]
@@ -67,10 +68,7 @@ async fn test_should_reject_private_host_feed_url() {
     assert_eq!(result.feed_id, feed_id);
     assert_eq!(result.items_inserted, 0);
     assert_eq!(result.duplicates_skipped, 0);
-    assert_eq!(
-        result.error,
-        Some("refusing to fetch non-global address".to_string())
-    );
+    assert_eq!(result.error, Some(FeedFailure::Unavailable));
 }
 
 async fn store_feed_item(
@@ -128,4 +126,26 @@ async fn test_feed_items_are_deduplicated_per_feed() {
     store_feed_item(&state.db, other_feed_id, "https://example.com/item-1")
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn test_refresh_route_reports_only_a_typed_failure() {
+    let (app, state) = test_app_with_db().await;
+    sqlx::query!("INSERT INTO feeds (url) VALUES ('http://example.com/feed.xml')")
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let (status, body) = send_request_with_method(
+        app,
+        "/api/feeds/refresh",
+        Method::POST,
+        None,
+        Some("test-api-key"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["errors"][0]["error"], "unavailable");
+    assert!(!body.to_string().contains("HTTPS"));
 }
