@@ -52,6 +52,26 @@ function request(profile) {
         {method: "/getSystemSettings", payload: {category: "picture", keys: ["pictureMode"]}};
 }
 
+function abandoned(profile, event, next) {
+    var settled = event.type === "reply";
+    return settled || profile.state === "idle" || next.token === profile.token ? null : profile.token;
+}
+
+function dispatch(setting, event, service, timeout) {
+    var previous = setting.profile;
+    var next = transition(previous, event);
+    if (next === previous) return;
+    var stale = abandoned(previous, event, next);
+    setting.profile = next;
+    if (stale !== null) service.cancel(stale);
+    if (next.state === "idle") { timeout.stop(); return; }
+    var needed = request(next);
+    if (needed === null) return;
+    var token = service.call("luna://com.webos.settingsservice", needed.method, JSON.stringify(needed.payload));
+    setting.profile = transition(setting.profile, {type: "sent", token: token});
+    timeout.restart();
+}
+
 function parse(payload) {
     try {
         var data = JSON.parse(payload);

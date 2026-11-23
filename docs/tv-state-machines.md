@@ -88,8 +88,11 @@ checked once at start, separate from the supervisor's `client-disabled`.
   `profile`, one of `idle`, `reading`, `toggling`, `writing` or `verifying`, each carrying the
   observed `value` and `failed`. A non-idle state carries its Luna `token`; only a reply to that
   token moves it, a rejected or unreadable reply or the 5 s timer fails it, and an accepted write never changes
-  `value`. `tv/launcher/test-picture-profile.js` demonstrates these transitions. The QML wiring
-  (Luna calls, timer, subscription) stays assumed until the physical check.
+  `value`. A replaced or timed-out request is cancelled
+  after its token is invalidated and before the next is sent, so at most one is outstanding. Cancelling
+  stops the reply only: a timed-out write may still apply, and the next read shows the result.
+  `tv/launcher/test-picture-profile.js` demonstrates these transitions and the outstanding count through
+  `dispatch`. The QML wiring (real Luna service, timer, subscription) stays assumed until the physical check.
 - **Default-input 2D SDR check: deferred.** `picture-toggle.py` rejects anything other
   than default-input 2D SDR; the launcher's read does not. Aligning the launcher would
   change launcher behavior beyond #257, whose candidate was the unchecked verify

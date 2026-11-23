@@ -7,7 +7,7 @@ var vm = require('vm');
 
 var source = fs.readFileSync(path.join(__dirname, 'ui/PictureProfileLifecycle.js'), 'utf8');
 var lifecycle = vm.runInThisContext('(function () {' + source +
-  '\nreturn {UNKNOWN: UNKNOWN, pending: pending, transition: transition, request: request, parse: parse}; })')();
+  '\nreturn {UNKNOWN: UNKNOWN, pending: pending, transition: transition, request: request, dispatch: dispatch, parse: parse}; })')();
 
 function run(profile, events) { return events.reduce(lifecycle.transition, profile); }
 function reply(token, mode) { return {type: 'reply', token: token, accepted: true, mode: mode}; }
@@ -64,6 +64,68 @@ function oneFlightAtATime() {
   assert.strictEqual(lifecycle.transition(lifecycle.UNKNOWN, toggle), lifecycle.UNKNOWN, 'an unknown mode cannot be toggled');
 }
 
+function wire() {
+  var calls = [];
+  var outstanding = [];
+  var setting = {profile: lifecycle.UNKNOWN};
+  var timer = {running: false, stop: function () { timer.running = false; }, restart: function () { timer.running = true; }};
+  var service = {
+    call: function (uri, method) {
+      assert.deepStrictEqual(outstanding, [], 'the previous request is gone before the next is sent');
+      assert.strictEqual(setting.profile.token, null, 'the previous token is invalid before the next request is sent');
+      var token = calls.push(method);
+      outstanding.push(token);
+      return token;
+    },
+    cancel: function (token) {
+      assert(outstanding.indexOf(token) !== -1, 'only an outstanding request is cancelled');
+      assert.notStrictEqual(setting.profile.token, token, 'a token is invalid before its request is cancelled');
+      outstanding.splice(outstanding.indexOf(token), 1);
+    }
+  };
+  function dispatch(event) { lifecycle.dispatch(setting, event, service, timer); }
+  function answer(token, mode) {
+    outstanding = outstanding.filter(function (open) { return open !== token; });
+    dispatch(reply(token, mode));
+  }
+  return {setting: setting, calls: calls, dispatch: dispatch, answer: answer,
+    live: function () { return {outstanding: outstanding.slice(), timer: timer.running}; }};
+}
+
+function oneRequestIsOutstandingAtTheService() {
+  var luna = wire();
+  luna.dispatch(refresh);
+  luna.dispatch(refresh);
+  assert.deepStrictEqual(luna.live(), {outstanding: [2], timer: true}, 'a newer read cancels the one it replaces');
+  luna.answer(1, 'expert2');
+  assert.deepStrictEqual(view(luna.setting.profile), {state: 'reading', value: null, failed: false});
+  luna.answer(2, 'cinema');
+  assert.deepStrictEqual(view(luna.setting.profile), cinema);
+  assert.deepStrictEqual(luna.live(), {outstanding: [], timer: false});
+
+  luna.dispatch(refresh);
+  luna.dispatch(toggle);
+  assert.deepStrictEqual(luna.live().outstanding, [4], 'a toggle cancels the read it replaces');
+  luna.dispatch(refresh);
+  luna.dispatch(toggle);
+  luna.answer(4, 'cinema');
+  luna.answer(5);
+  luna.dispatch({type: 'observed', mode: 'cinema'});
+  assert.deepStrictEqual(luna.live().outstanding, [6]);
+  luna.answer(6, 'expert2');
+  assert.deepStrictEqual(luna.calls.slice(3), ['/getSystemSettings', '/setSystemSettings', '/getSystemSettings']);
+  assert.deepStrictEqual(view(luna.setting.profile), {state: 'idle', value: true, failed: false});
+  assert.deepStrictEqual(luna.live(), {outstanding: [], timer: false});
+
+  luna.dispatch(refresh);
+  luna.dispatch({type: 'observed', mode: 'cinema'});
+  assert.deepStrictEqual(luna.live().outstanding, [7], 'an observation leaves the read in flight');
+  luna.dispatch(timeout);
+  assert.deepStrictEqual(luna.live(), {outstanding: [], timer: false}, 'a timed-out request is cancelled');
+  luna.dispatch(refresh);
+  assert.deepStrictEqual(luna.live().outstanding, [8]);
+}
+
 function everyOperationHasAnExit() {
   operations.forEach(function (profile) {
     assert.deepStrictEqual(view(lifecycle.transition(profile, timeout)), failed);
@@ -108,6 +170,7 @@ function repliesAreParsed() {
 toggleReadsWritesAndReadsBack();
 acknowledgementIsNotDeviceState();
 oneFlightAtATime();
+oneRequestIsOutstandingAtTheService();
 everyOperationHasAnExit();
 lateCallbacksAreIgnored();
 observationsFollowTheRemote();

@@ -25,17 +25,7 @@ Item {
                 JSON.stringify({category: "picture", keys: ["pictureMode"], subscribe: true}));
         }
     }
-    function dispatch(event) {
-        var next = Lifecycle.transition(profile, event);
-        if (next === profile) return;
-        profile = next;
-        if (next.state === "idle") { timeout.stop(); return; }
-        var request = Lifecycle.request(next);
-        if (request === null) return;
-        var token = service.call("luna://com.webos.settingsservice", request.method, JSON.stringify(request.payload));
-        profile = Lifecycle.transition(profile, {type: "sent", token: token});
-        timeout.restart();
-    }
+    function dispatch(event) { Lifecycle.dispatch(setting, event, service, timeout); }
     function refresh() { if (active) watch(); dispatch({type: "refresh"}); }
     function toggle() { dispatch({type: "toggle"}); }
     Service {
