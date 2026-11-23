@@ -15,7 +15,7 @@ to infer personal state.
 
 Every operation requires `Authorization: Bearer <API_KEY>`. Dashboard holds this
 credential on the TanStack Start server. MCP forwards one authenticated Axum
-request per tool and returns its JSON unchanged.
+request per tool and returns its JSON unchanged, except that an array result (`household_users`, `watchlist_entries`) is wrapped as `{ "items": [...] }` because MCP `structuredContent` must be an object.
 
 | MCP tool | Authenticated Axum operation | Input |
 | --- | --- | --- |
