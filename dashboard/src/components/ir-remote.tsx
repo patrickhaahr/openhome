@@ -38,6 +38,10 @@ export type FullGroup<C extends string> = CommandGroup<C> & {
   keys: string
 }
 
+export type CommandIcons<C extends string> = Partial<Record<C, Icon>>
+
+type IconsByCommand = Partial<Record<string, Icon>>
+
 export type IrRemoteConfig<C extends string> = {
   id: string
   device: Extract<Device, "TV" | "speaker">
@@ -46,8 +50,8 @@ export type IrRemoteConfig<C extends string> = {
   icon: Icon
   primary: C
   labels: Record<C, string>
-  commandIcons: Partial<Record<C, Icon>>
-  plateIcons: Partial<Record<C, Icon>>
+  commandIcons: IconsByCommand
+  plateIcons: IconsByCommand
   plateIdentity: boolean
   worded: readonly C[]
   quickGroups: CommandGroup<C>[]
@@ -392,7 +396,7 @@ function RemoteButton<C extends string>({
   disabled: boolean
   onPress: (command: C) => void
 }): React.JSX.Element {
-  const CommandIcon: Icon | undefined =
+  const CommandIcon =
     (compact ? config.plateIcons[command] : undefined) ??
     config.commandIcons[command]
 
