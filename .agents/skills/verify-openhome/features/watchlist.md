@@ -6,6 +6,7 @@ Each Household User has a Watchlist of movies and whole series. Hermes adds titl
 
 - `watch-add-mcp` adds a manual title through `add_watchlist_entry` for an explicit owner.
 - `watch-replay` repeats the same `request_id` and arguments and gets the original entry with `replayed: true`.
+- `watch-tmdb-mcp` finds a title with `search_watchlist_titles` and adds it with its `tmdb_id`, so the entry comes back with overview, poster path and release date.
 - `watch-owner-required` omits `owner_id` and gets a clarification error with choices, with nothing written.
 - `watch-dashboard` shows the title in the Dashboard's Planned group with its owner's initial.
 
@@ -26,6 +27,7 @@ Preconditions:
 - **Add.** Run `mcp.sh call add_watchlist_entry '{"owner_id":"<alex>","kind":"movie","title":"Verify Harbour Lights","request_id":"verify-<run id>"}'`. The result has `replayed: false`, `status: "planned"` and today's `date_added`.
 - **Retry.** Run the identical call again. The result has `replayed: true` and the same entry `id`.
 - **Read back.** Run `curl -fsS -H "Authorization: Bearer $API_KEY" "$API_URL/api/watchlist/entries?owner_id=<alex>"`. The list holds exactly one `Verify Harbour Lights`.
+- **Enriched add.** Run `mcp.sh call search_watchlist_titles '{"kind":"movie","query":"Orbit"}'` (loopback catalogue), take `structuredContent.items[0].tmdb_id`, then run `mcp.sh call add_watchlist_entry` with it as `tmdb_id` plus a fresh `request_id`. The entry has the catalogue's `title`, `overview`, `poster_path` and `release_date`; `watchlist_entry` and the Axum read-back show the same values.
 - **Dashboard.** `preview_open` on the Dashboard port with path `/lists?tab=watch`, then `preview_wait_for` text `Verify Harbour Lights`. The `Planned` region's list shows the title, and the `Whose list` button reads `Alex 6 titles to watch` (5 seeded + 1).
 - **Proof.** Save the tool JSON as `01-…`–`04-…` and a `preview_snapshot` with `save: true` copied to `05-dashboard-watch.png` under `$EVIDENCE_DIR/watchlist/`.
 

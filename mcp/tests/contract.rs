@@ -64,6 +64,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "save_meal",
             "search_cards",
             "search_foods",
+            "search_watchlist_titles",
             "set_nutrition_goal",
             "sleep_recent",
             "supplements",
@@ -164,7 +165,12 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         }
         if matches!(
             tool.name.as_ref(),
-            "lookup_product" | "link_product" | "search_cards" | "add_binder_entry"
+            "lookup_product"
+                | "link_product"
+                | "search_cards"
+                | "add_binder_entry"
+                | "add_watchlist_entry"
+                | "search_watchlist_titles"
         ) {
             assert_eq!(
                 tool.annotations.as_ref().unwrap().open_world_hint,
@@ -187,6 +193,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "create_wishlist" => json!(["owner_id", "name"]),
             "add_wishlist_item" => json!(["title", "request_id"]),
             "add_watchlist_entry" => json!(["kind", "title", "request_id"]),
+            "search_watchlist_titles" => json!(["kind", "query"]),
             "watchlist_entry" | "delete_watchlist_entry" | "update_watchlist_entry" => {
                 json!(["owner_id", "entry_id"])
             }
