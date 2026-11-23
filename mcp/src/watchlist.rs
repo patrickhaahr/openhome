@@ -74,7 +74,7 @@ pub struct UpdateWatchlistEntryRequest {
 #[tool_router(router = watchlist_router, vis = "pub(crate)")]
 impl OpenHomeTools {
     #[tool(
-        description = "List household-visible Watchlist Entries with optional owner_id and planned/watching/completed status filters. Returns stable IDs, media kind, title, personal status, date added and completion date. Use household_users to discover owners with empty lists. Does not infer viewing history.",
+        description = "List household-visible Watchlist Entries with optional owner_id and planned/watching/completed status filters. Returns {items: [...]} with stable IDs, media kind, title, personal status, date added and completion date. Use household_users to discover owners with empty lists. Does not infer viewing history.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn watchlist_entries(

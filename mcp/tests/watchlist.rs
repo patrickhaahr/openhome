@@ -33,7 +33,7 @@ async fn manual_watchlist_tools_forward_owner_targeted_plans_and_api_receipts_un
         wishlist_call(&client, "household_users", json!({}))
             .await
             .structured_content,
-        Some(json!(owners))
+        Some(json!({"items": owners}))
     );
     let payload = json!({"kind":"series","title":"A Quiet Orbit","request_id":"mcp-watch-1"});
     let clarification = wishlist_call(&client, "add_watchlist_entry", payload.clone()).await;
@@ -80,7 +80,7 @@ async fn manual_watchlist_tools_forward_owner_targeted_plans_and_api_receipts_un
         .json()
         .await
         .unwrap();
-    assert_eq!(listed.structured_content, Some(direct));
+    assert_eq!(listed.structured_content, Some(json!({"items": direct})));
     let target = json!({"owner_id":owners[0]["id"],"entry_id":addition["entry"]["id"]});
     assert_eq!(
         wishlist_call(&client, "watchlist_entry", target.clone())
@@ -123,7 +123,7 @@ async fn manual_watchlist_tools_forward_owner_targeted_plans_and_api_receipts_un
         wishlist_call(&client, "watchlist_entries", json!({}))
             .await
             .structured_content,
-        Some(json!([]))
+        Some(json!({"items": []}))
     );
     client.cancel().await.unwrap();
 }
@@ -202,12 +202,12 @@ async fn watchlist_corrections_and_filters_forward_to_real_axum_with_omission_an
         .json()
         .await
         .unwrap();
-    assert_eq!(filtered.structured_content, Some(direct));
+    assert_eq!(filtered.structured_content, Some(json!({"items": direct})));
     assert_eq!(
         wishlist_call(&client, "watchlist_entries", json!({"status":"completed"}))
             .await
             .structured_content,
-        Some(json!([]))
+        Some(json!({"items": []}))
     );
     assert_eq!(
         wishlist_call(
@@ -217,7 +217,7 @@ async fn watchlist_corrections_and_filters_forward_to_real_axum_with_omission_an
         )
         .await
         .structured_content,
-        Some(json!([]))
+        Some(json!({"items": []}))
     );
     for patch in [
         json!({"completion_date":"2024-02-29"}),

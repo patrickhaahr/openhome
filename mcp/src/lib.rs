@@ -206,7 +206,7 @@ impl OpenHomeApi {
             Err(_) => None,
         };
         match body {
-            Some(body) if status.is_success() => CallToolResult::structured(body),
+            Some(body) if status.is_success() => CallToolResult::structured(object_body(body)),
             Some(body) if body.get("error").is_some() => CallToolResult::structured_error(body),
             _ => CallToolResult::structured_error(json!({
                 "error": format!(
@@ -216,6 +216,13 @@ impl OpenHomeApi {
                 "status": status.as_u16(),
             })),
         }
+    }
+}
+
+fn object_body(body: Value) -> Value {
+    match body {
+        Value::Array(_) => json!({"items": body}),
+        other => other,
     }
 }
 
@@ -248,7 +255,7 @@ impl OpenHomeTools {
 #[tool_router(router = household_router, vis = "pub(crate)")]
 impl OpenHomeTools {
     #[tool(
-        description = "Discover configured Household Users and their stable IDs. All Wishlists, Watchlists and Important Dates are household-visible; ownership and tags are not per-user authentication.",
+        description = "Discover configured Household Users and their stable IDs, returned as {items: [...]}. All Wishlists, Watchlists and Important Dates are household-visible; ownership and tags are not per-user authentication.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn household_users(&self) -> CallToolResult {

@@ -114,7 +114,7 @@ pub struct UpdateWishlistItemRequest {
 #[tool_router(router = wishlist_router, vis = "pub(crate)")]
 impl OpenHomeTools {
     #[tool(
-        description = "Discover all household-visible named Wishlists with their list IDs and owner IDs. Use these IDs for explicit destinations; never guess ownership.",
+        description = "Discover all household-visible named Wishlists with their list IDs and owner IDs, returned as {items: [...]}. Use these IDs for explicit destinations; never guess ownership.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn wishlists(&self) -> CallToolResult {
@@ -173,7 +173,7 @@ impl OpenHomeTools {
     }
 
     #[tool(
-        description = "Read all stored rich items of one household-visible Wishlist using its stable list_id. Returns the stored fields unchanged; does not infer products or purchase state.",
+        description = "Read all stored rich items of one household-visible Wishlist using its stable list_id. Returns {items: [...]} with the stored fields unchanged; does not infer products or purchase state.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn wishlist_items(
