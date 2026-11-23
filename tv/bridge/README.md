@@ -52,7 +52,7 @@ own freshness deadlines; neither implies the other.
 | Lifecycle | States | Exits |
 | --- | --- | --- |
 | Observation | `unavailable`, `fresh`, `stale` | Own deadlines, or a Copenhagen day change; results for another day are ignored |
-| Refresh | `idle`, `refreshing` | Its bounded upstream requests settle, or processing fails; only the current flight settles |
+| Refresh | `idle`, `refreshing` | Every bounded upstream request settles, even when processing one fails; only the current flight writes or settles. After a processing failure the next request waits for the 60-second retry deadline |
 | Command admission | `idle`, `sending` | Success, rejection, invalid body or the 12-second request deadline; the one-second start deadline is never released early |
 
 Restart clears all in-memory state. The launcher mirrors this: a state read is stale-marked on a

@@ -153,7 +153,7 @@ function createBridge(options) {
     var tick = {type: 'tick', at: at, day: dayOn(at)};
     observe('weather', tick);
     observe('recovery', tick);
-    return tick.day;
+    return tick;
   }
 
   function weatherEvent(body, day) {
@@ -170,15 +170,23 @@ function createBridge(options) {
     return reading ? {type: 'received', day: day, reading: reading} : {type: 'missed', day: day};
   }
 
-  function fetchInto(name, path, day, eventFrom) {
-    observe(name, {type: 'requested', at: now()});
+  function fetchInto(flight, name, path, tick, eventFrom) {
+    observe(name, {type: 'requested', at: tick.at});
+    function settle(event) { if (lifecycles.isCurrent(refresh, flight)) observe(name, event); }
     return Promise.resolve().then(function () { return request(path, 'GET', undefined, 7000); }).then(function (body) {
       rollDay();
-      observe(name, eventFrom(body, day));
+      settle(eventFrom(body, tick.day));
     }, function () {
       rollDay();
-      observe(name, {type: 'missed', day: day});
+      settle({type: 'missed', day: tick.day});
     });
+  }
+
+  function allSettled(tasks) {
+    var failures = [];
+    return Promise.all(tasks.map(function (task) {
+      return task.catch(function (error) { failures.push(error); });
+    })).then(function () { if (failures.length) throw failures[0]; });
   }
 
   function shown(observation, unavailable) {
@@ -186,23 +194,25 @@ function createBridge(options) {
   }
 
   function snapshot() {
-    return {day: rollDay(), weather: shown(observations.weather, unavailableWeather()),
+    return {day: rollDay().day, weather: shown(observations.weather, unavailableWeather()),
       recovery: shown(observations.recovery, unavailableRecovery())};
   }
 
   function getState() {
-    var day = rollDay();
+    var tick = rollDay();
     if (refresh.state === 'refreshing') return refresh.flight.result.then(getState);
-    var tasks = [];
-    if (now() >= observations.weather.dueAt) tasks.push(fetchInto('weather', '/api/weather', day, weatherEvent));
-    if (now() >= observations.recovery.dueAt) {
-      tasks.push(fetchInto('recovery', '/api/training/days/' + day + '/recovery', day, recoveryEvent));
-    }
     var flight = {};
-    function settle() { refresh = lifecycles.refresh(refresh, {type: 'settle', flight: flight}); }
-    flight.result = Promise.all(tasks).then(function () { settle(); return snapshot(); },
-      function (error) { settle(); throw error; });
+    var tasks = [];
     refresh = lifecycles.refresh(refresh, {type: 'start', flight: flight});
+    if (tick.at >= observations.weather.dueAt) {
+      tasks.push(fetchInto(flight, 'weather', '/api/weather', tick, weatherEvent));
+    }
+    if (tick.at >= observations.recovery.dueAt) {
+      tasks.push(fetchInto(flight, 'recovery', '/api/training/days/' + tick.day + '/recovery', tick, recoveryEvent));
+    }
+    function settle() { refresh = lifecycles.refresh(refresh, {type: 'settle', flight: flight}); }
+    flight.result = allSettled(tasks).then(function () { settle(); return snapshot(); },
+      function (error) { settle(); throw error; });
     return flight.result;
   }
 

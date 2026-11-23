@@ -9,6 +9,7 @@ var os = require('os');
 var path = require('path');
 var client = require('./client');
 var lifecycleTests = require('./test-lifecycles');
+var refreshTests = require('./test-refresh');
 var MINUTE = 60000;
 var now = Date.parse('2026-10-21T12:00:00Z');
 
@@ -165,20 +166,6 @@ async function cache() {
   assert.strictEqual(crossed.day, '2026-10-22');
   assert.strictEqual(crossed.recovery.state, 'unavailable');
   assert.strictEqual(crossed.weather.state, 'unavailable');
-
-  var clockFails = false;
-  var attempts = 0;
-  var interrupted = client.createBridge({now: function () {
-    if (clockFails) { clockFails = false; throw new Error('synthetic clock failure'); }
-    return now;
-  }, request: function (path) {
-    if (path === '/api/weather') clockFails = attempts++ === 0;
-    return Promise.resolve(path === '/api/weather' ? weather() : recovery());
-  }});
-  var failure;
-  try { await interrupted.getState(); } catch (error) { failure = error; }
-  assert(failure, 'a refresh that fails while settling rejects its readers');
-  assert.strictEqual((await interrupted.getState()).day, '2026-10-21', 'and releases the refresh slot');
 }
 
 async function commands() {
@@ -340,6 +327,7 @@ async function main() {
   await transforms();
   await configBoundary();
   await cache();
+  await refreshTests(weather, recovery);
   await commands();
   await acknowledgementIsNotDeviceState();
   await httpBoundary();

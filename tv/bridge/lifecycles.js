@@ -25,9 +25,11 @@ function observe(observation, event) {
   return observation;
 }
 
+function isCurrent(lifecycle, flight) { return lifecycle.state === 'refreshing' && lifecycle.flight === flight; }
+
 function refresh(lifecycle, event) {
   if (event.type === 'start' && lifecycle.state === 'idle') return {state: 'refreshing', flight: event.flight};
-  if (event.type === 'settle' && lifecycle.state === 'refreshing' && event.flight === lifecycle.flight) return {state: 'idle'};
+  if (event.type === 'settle' && isCurrent(lifecycle, event.flight)) return {state: 'idle'};
   return lifecycle;
 }
 
@@ -41,4 +43,4 @@ function admit(admission, event) {
   return admission;
 }
 
-module.exports = {RETRY_AFTER: RETRY_AFTER, unseen: unseen, observe: observe, refresh: refresh, admit: admit};
+module.exports = {RETRY_AFTER: RETRY_AFTER, unseen: unseen, observe: observe, isCurrent: isCurrent, refresh: refresh, admit: admit};

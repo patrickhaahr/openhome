@@ -48,7 +48,7 @@ else is stated from reading the source and is **assumed** until the physical che
 | Input Hook startup | Success; registry failure; unacknowledged reply; 10 s subprocess timeout | Demonstrated: `tv/tools/test-inputhook-startup.py` |
 | Boot steps | Three attempts each; a failure in one step does not stop the other; a hang in either is bounded only by the outer 90 s `timeout -t 90` in the `install-hooks.py` boot hook | Assumed (source) |
 | Picture shortcut script | Success or exit 1 on rejection, malformed reply or readback mismatch. A hung `luna-send-n` has no deadline, so the run could hold the caller's `flock -n` and block later presses | Assumed (source); the hang is an unproved non-terminal state, deferred (see below) |
-| Bridge refresh liveness | An exception thrown while settling rejects the waiting reads (503) and returns `refresh` to `idle`, so the next read retries. Unreachable from upstream data: `weatherFrom` and `recoveryFrom` are total over JSON-derived input | Demonstrated: `cache()` in `tv/bridge/test.js` with a failing clock |
+| Bridge refresh liveness | An exception thrown while processing one reply rejects the waiting reads (503) and returns `refresh` to `idle` once every request in that refresh has settled. Only the current flight writes observations. The failed observation keeps its retry deadline: reads make no upstream request for it until 60 s after it was requested, unless a new day or `discardAt` resets it first. Unreachable from upstream data: `weatherFrom` and `recoveryFrom` are total over JSON-derived input | Demonstrated: `tv/bridge/test-refresh.js` with a failing clock, including upstream call counts |
 
 ### Supervisor ownership (#259)
 

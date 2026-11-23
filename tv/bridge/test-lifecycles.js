@@ -16,7 +16,10 @@ function oneRefreshAtATime() {
   assert.deepStrictEqual(refreshing, {state: 'refreshing', flight: first});
   assert.strictEqual(lifecycles.refresh(refreshing, {type: 'start', flight: second}), refreshing);
   assert.strictEqual(lifecycles.refresh(refreshing, {type: 'settle', flight: second}), refreshing, 'only the current flight settles');
+  assert.strictEqual(lifecycles.isCurrent(refreshing, first), true);
+  assert.strictEqual(lifecycles.isCurrent(refreshing, second), false, 'only the current flight writes');
   var idle = lifecycles.refresh(refreshing, {type: 'settle', flight: first});
+  assert.strictEqual(lifecycles.isCurrent(idle, first), false, 'a settled flight writes nothing');
   assert.deepStrictEqual(idle, {state: 'idle'});
   assert.strictEqual(lifecycles.refresh(idle, {type: 'settle', flight: first}), idle, 'a late settlement is ignored');
 }
