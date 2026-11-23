@@ -305,7 +305,9 @@ export async function capture(
   })
 
   try {
-    await context.clock.setFixedTime(now)
+    await context.clock.setFixedTime(
+      job.scenario.clock === "daytime" ? new Date(now).setUTCHours(12) : now
+    )
     await context.addInitScript((mode) => {
       localStorage.setItem("openhome-theme", mode)
     }, job.theme)

@@ -16,6 +16,8 @@ import type { Album, AlbumRead, WallRead } from "@/lib/photos"
 
 export const TIMEOUT = 10_000
 
+export const DAYTIME = new Date("2026-10-17T12:00:00Z")
+
 export const LOST_RELEASE_WAKE_MS = 3000
 
 export const settings: IdleSettings = { timeoutMs: TIMEOUT, preview: false }
@@ -90,6 +92,7 @@ export function setReduced(value: boolean): void {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.setSystemTime(DAYTIME)
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   reduced = false
 
@@ -165,10 +168,10 @@ export function countKey(): HTMLButtonElement {
   return key
 }
 
-export async function wake(): Promise<void> {
-  const idle = screen()
+export async function wake(cover = screen): Promise<void> {
+  const idle = cover()
 
-  if (idle === null) throw new Error("Expected the slideshow")
+  if (idle === null) throw new Error("Expected the idle screen")
 
   await act(async () => {
     fire(idle, "pointerdown")
@@ -176,7 +179,7 @@ export async function wake(): Promise<void> {
     fire(idle, "click")
   })
   await advance(WAKE_GRACE_MS)
-  expect(screen()).toBeNull()
+  expect(cover()).toBeNull()
 }
 
 export function slides(): HTMLImageElement[] {
