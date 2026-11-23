@@ -37,7 +37,8 @@ A completely black screen that takes the Idle Slideshow's place from 23:00 to
 At 23:00 an idle Dashboard goes black at once and one in use after the usual
 inactivity. At 08:30 a black screen becomes the Idle Slideshow and a Dashboard in
 use carries on. Waking works as it does for the Idle Slideshow. Turning the
-slideshow off does not turn the Night Screen off.
+slideshow off does not turn the Night Screen off; 08:30 then returns to the page
+that was showing.
 _Avoid_: Display off, dark theme, dimmed slideshow
 
 **Idle Block**:

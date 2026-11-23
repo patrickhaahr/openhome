@@ -89,7 +89,7 @@ night uses the default five-minute timeout and 08:30 returns to the page.
 - The page underneath stays mounted and inert, so waking returns to exactly the page,
   scroll and drafts that were showing. The first touch or key only wakes: the whole
   gesture (pointer down, up and the click, or the key) is swallowed and the screen stays on
-  top for a moment after it, so no hidden control or device command is triggered.
+  top for a moment after the last finger lifts, so no hidden control or device command is triggered.
 
 For screenshots, `just dashboard-synthetic` sets `IDLE_PREVIEW=true`, which lets
 `?idle=now` (for example `http://localhost:3001/?idle=now`) start the slideshow at once, or the Night Screen during the night.

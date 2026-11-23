@@ -121,6 +121,33 @@ test("enters after the inactivity timeout, and activity restarts the countdown",
   expect(screen()).not.toBeNull()
 })
 
+test.each([
+  ["backward", -3_600_000],
+  ["forward", 3_600_000],
+])(
+  "a %s clock correction does not move the countdown",
+  async (_, correction) => {
+    await render(
+      <IdleProvider
+        settings={settings}
+        sources={fakeSources()}
+        now={() => DAYTIME}
+      >
+        <Page />
+      </IdleProvider>
+    )
+
+    await advance(TIMEOUT - 1000)
+    fire(window, "pointermove")
+    await advance(500)
+    vi.setSystemTime(Date.now() + correction)
+    await advance(TIMEOUT - 501)
+    expect(screen()).toBeNull()
+    await advance(1)
+    expect(screen()).not.toBeNull()
+  }
+)
+
 test("a timeout of zero never enters", async () => {
   await render(
     <IdleProvider

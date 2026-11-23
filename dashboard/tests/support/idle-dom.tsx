@@ -10,7 +10,7 @@ import { afterEach, beforeEach, expect, vi } from "vitest"
 import { WAKE_GRACE_MS } from "@/components/idle"
 import { useIdleBlock } from "@/components/idle-block"
 import type { IdleSources } from "@/components/idle-screen"
-import type { DeckPage, IdleSettings } from "@/lib/idle"
+import type { IdleSettings } from "@/lib/idle"
 import { unavailableWeather } from "@/lib/weather"
 import type { Album, AlbumRead, WallRead } from "@/lib/photos"
 
@@ -59,16 +59,16 @@ export function pageOf(
 }
 
 export function fakeSources(
-  albums: () => Promise<AlbumRead> = async () => readyAlbums,
-  page: (page: DeckPage) => Promise<WallRead> = async () => pageOf(3)
+  albums: IdleSources["albums"] = async () => readyAlbums,
+  page: IdleSources["page"] = async () => pageOf(3)
 ): IdleSources & { albumReads: () => number } {
   let reads = 0
 
   return {
-    albums: () => {
+    albums: (signal) => {
       reads += 1
 
-      return albums()
+      return albums(signal)
     },
     page,
     weather: async () => unavailableWeather,
@@ -132,9 +132,13 @@ export async function render(node: React.ReactNode): Promise<void> {
   await act(async () => root.render(node))
 }
 
-export function fire(target: EventTarget, type: string): boolean {
+export function fire(
+  target: EventTarget,
+  type: string,
+  pointer: PointerEventInit = { isPrimary: true }
+): boolean {
   const event = type.startsWith("pointer")
-    ? new PointerEvent(type, { bubbles: true, cancelable: true })
+    ? new PointerEvent(type, { ...pointer, bubbles: true, cancelable: true })
     : type.startsWith("key")
       ? new KeyboardEvent(type, { bubbles: true, cancelable: true, key: "a" })
       : new MouseEvent(type, { bubbles: true, cancelable: true })

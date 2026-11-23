@@ -3,6 +3,7 @@ import { act } from "react"
 import { beforeEach, expect, test } from "vitest"
 import { IdleProvider, NIGHT_CHECK_MS, WAKE_GRACE_MS } from "@/components/idle"
 import { DEFAULT_IDLE_SECONDS, isNight, type IdleSettings } from "@/lib/idle"
+import type { AlbumRead, WallRead } from "@/lib/photos"
 import {
   advance,
   container,
@@ -10,7 +11,10 @@ import {
   DAYTIME,
   fakeSources,
   fire,
+  LOST_RELEASE_WAKE_MS,
   Page,
+  pageOf,
+  readyAlbums,
   render,
   screen,
   settings,
@@ -112,6 +116,44 @@ test("a Dashboard in use at nightfall goes black only after the inactivity timeo
   expect(black()).not.toBeNull()
 })
 
+test("an inactivity timeout between two clock checks uses the time at which it fires", async () => {
+  await room()
+  await advance(1)
+  fire(window, "pointermove")
+  await advance(TIMEOUT - 1)
+  clock = NIGHTTIME
+  await advance(1)
+  expect(black()).not.toBeNull()
+  expect(screen()).toBeNull()
+  expect(sources.albumReads()).toBe(0)
+
+  await wake(black)
+  await turnTo(NIGHTTIME)
+  await advance(1)
+  fire(window, "pointermove")
+  await advance(TIMEOUT - 1)
+  clock = DAYTIME
+  expect(black()).toBeNull()
+  await advance(1)
+  expect(black()).toBeNull()
+  expect(screen()).not.toBeNull()
+})
+
+test("with the slideshow off, a timeout just after daybreak leaves the page showing", async () => {
+  clock = NIGHTTIME
+  await room({ settings: slideshowOff })
+  await advance(1)
+  fire(window, "pointermove")
+  await advance(DEFAULT_TIMEOUT - 1)
+  clock = DAYTIME
+  await advance(1)
+  expect(black()).toBeNull()
+  expect(screen()).toBeNull()
+
+  await turnTo(NIGHTTIME)
+  expect(black()).not.toBeNull()
+})
+
 test("a night screen is empty and reads nothing", async () => {
   clock = NIGHTTIME
   await room()
@@ -123,30 +165,116 @@ test("a night screen is empty and reads nothing", async () => {
   expect(sources.albumReads()).toBe(0)
 })
 
-test("a touch on the black screen only wakes, and inactivity returns to black", async () => {
+test.each([
+  ["a short hold", WAKE_GRACE_MS * 2],
+  ["a hold past the wake limit", LOST_RELEASE_WAKE_MS * 2],
+])(
+  "%s on the black screen only wakes, and inactivity returns to black",
+  async (_, hold) => {
+    clock = NIGHTTIME
+    await room()
+    const draft = container.querySelector("input")
+    draft?.focus()
+    await advance(TIMEOUT)
+
+    await act(async () => {
+      fire(black() ?? window, "pointerdown")
+      fire(black() ?? window, "touchstart")
+    })
+    await act(async () => fire(black() ?? window, "touchmove"))
+    expect(black()?.dataset.waking).toBe("true")
+    await advance(hold)
+
+    const released: string[] = []
+
+    for (const type of ["pointerup", "touchend", "mouseup", "click"])
+      countKey().addEventListener(type, () => released.push(type))
+
+    for (const type of ["pointerup", "touchend", "mouseup"])
+      await act(async () => fire(countKey(), type))
+    await advance(WAKE_GRACE_MS - 1)
+    await act(async () => fire(countKey(), "click"))
+    expect(released).toEqual([])
+    expect(countKey().textContent).toBe("Count 0")
+
+    await advance(WAKE_GRACE_MS)
+    expect(black()).toBeNull()
+    expect(document.activeElement).toBe(draft)
+
+    await act(async () => countKey().click())
+    expect(countKey().textContent).toBe("Count 1")
+
+    await advance(TIMEOUT)
+    expect(black()).not.toBeNull()
+    expect(screen()).toBeNull()
+  }
+)
+
+test("a cancelled touch on the black screen settles like a release", async () => {
   clock = NIGHTTIME
   await room()
-  const draft = container.querySelector("input")
-  draft?.focus()
   await advance(TIMEOUT)
+
+  await act(async () => fire(black() ?? window, "pointerdown"))
+  await advance(WAKE_GRACE_MS)
+  await act(async () => {
+    fire(black() ?? window, "pointercancel")
+    fire(black() ?? window, "touchcancel")
+  })
+  await advance(WAKE_GRACE_MS - 1)
+  expect(black()).not.toBeNull()
+  await advance(1)
+  expect(black()).toBeNull()
+})
+
+test("with two fingers on the black screen, only the last release settles", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const second: PointerEventInit = { pointerId: 2, isPrimary: false }
 
   await act(async () => {
     fire(black() ?? window, "pointerdown")
+    fire(black() ?? window, "pointerdown", second)
     fire(black() ?? window, "pointerup")
-    fire(countKey(), "click")
   })
-  expect(black()?.dataset.waking).toBe("true")
+  await advance(WAKE_GRACE_MS * 2)
+  expect(black()).not.toBeNull()
+
+  await act(async () => fire(black() ?? window, "pointerup", second))
   await advance(WAKE_GRACE_MS)
   expect(black()).toBeNull()
-  expect(countKey().textContent).toBe("Count 0")
-  expect(document.activeElement).toBe(draft)
+})
 
+test("after a lost release, the next touch works normally", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  await act(async () => fire(black() ?? window, "pointerdown"))
+  await advance(LOST_RELEASE_WAKE_MS)
+  expect(black()).toBeNull()
+
+  await act(async () => fire(countKey(), "pointerdown"))
+  await act(async () => fire(countKey(), "pointerup"))
   await act(async () => countKey().click())
   expect(countKey().textContent).toBe("Count 1")
+})
 
+test("an Idle Block that ends a waking touch still swallows its release", async () => {
+  clock = NIGHTTIME
+  await room()
   await advance(TIMEOUT)
-  expect(black()).not.toBeNull()
-  expect(screen()).toBeNull()
+  await act(async () => fire(black() ?? window, "pointerdown"))
+  await room({ blocked: true })
+  expect(black()).toBeNull()
+
+  await act(async () => fire(countKey(), "pointerup"))
+  await act(async () => countKey().click())
+  expect(countKey().textContent).toBe("Count 0")
+
+  await advance(WAKE_GRACE_MS)
+  await act(async () => countKey().click())
+  expect(countKey().textContent).toBe("Count 1")
 })
 
 test("daybreak leaves a Dashboard in use alone, then inactivity starts the slideshow", async () => {
@@ -202,4 +330,48 @@ test("with the slideshow off, a Dashboard in use at nightfall goes black after t
   expect(black()).toBeNull()
   await advance(1)
   expect(black()).not.toBeNull()
+})
+
+test("nightfall cancels the slideshow's reads and starts no further one", async () => {
+  let answerAlbums: (read: AlbumRead) => void = () => undefined
+  let albumSignal: AbortSignal | undefined
+  let pageReads = 0
+
+  sources = fakeSources(
+    (signal) =>
+      new Promise<AlbumRead>((resolve) => {
+        albumSignal = signal
+        answerAlbums = resolve
+      }),
+    async () => {
+      pageReads += 1
+
+      return pageOf(3)
+    }
+  )
+  await room()
+  await advance(TIMEOUT)
+  expect(albumSignal?.aborted).toBe(false)
+
+  await turnTo(NIGHTTIME)
+  expect(albumSignal?.aborted).toBe(true)
+  await act(async () => answerAlbums(readyAlbums))
+  await advance(1)
+  expect(pageReads).toBe(0)
+})
+
+test("nightfall cancels a photo page that is being read", async () => {
+  let pageSignal: AbortSignal | undefined
+
+  sources = fakeSources(undefined, (_, signal) => {
+    pageSignal = signal
+
+    return new Promise<WallRead>(() => undefined)
+  })
+  await room()
+  await advance(TIMEOUT)
+  expect(pageSignal?.aborted).toBe(false)
+
+  await turnTo(NIGHTTIME)
+  expect(pageSignal?.aborted).toBe(true)
 })
