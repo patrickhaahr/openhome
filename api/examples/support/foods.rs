@@ -121,12 +121,18 @@ enum Item {
     Product,
 }
 
-type SyntheticMeal = (
-    i64,
-    Option<&'static str>,
-    &'static [(Item, f64)],
-    Option<[u8; 3]>,
-);
+#[derive(Clone, Copy)]
+struct Portion {
+    item: Item,
+    grams: f64,
+}
+
+struct SyntheticMeal {
+    hours_ago: i64,
+    note: Option<&'static str>,
+    portions: &'static [Portion],
+    plate: Option<[u8; 3]>,
+}
 
 pub async fn seed_meals(
     db: &sqlx::SqlitePool,
@@ -208,34 +214,92 @@ pub async fn seed_meals(
     }
     let now = chrono::Utc::now();
     let meals: [SyntheticMeal; 5] = [
-        (27, None, &[(Food(1693), 200.0), (Food(60), 50.0)], None),
-        (
-            22,
-            Some("Synthetic note: dinner out"),
-            &[(Food(907), 180.0), (Food(300), 250.0)],
-            Some([214, 168, 74]),
-        ),
-        (
-            5,
-            Some("after the run"),
-            &[(Product, 150.0), (Food(60), 60.0), (Food(3), 120.0)],
-            Some([238, 226, 196]),
-        ),
-        (3, None, &[(Food(907), 150.0), (Food(300), 200.0)], None),
-        (1, None, &[(Food(3), 110.0)], None),
+        SyntheticMeal {
+            hours_ago: 27,
+            note: None,
+            portions: &[
+                Portion {
+                    item: Food(1693),
+                    grams: 200.0,
+                },
+                Portion {
+                    item: Food(60),
+                    grams: 50.0,
+                },
+            ],
+            plate: None,
+        },
+        SyntheticMeal {
+            hours_ago: 22,
+            note: Some("Synthetic note: dinner out"),
+            portions: &[
+                Portion {
+                    item: Food(907),
+                    grams: 180.0,
+                },
+                Portion {
+                    item: Food(300),
+                    grams: 250.0,
+                },
+            ],
+            plate: Some([214, 168, 74]),
+        },
+        SyntheticMeal {
+            hours_ago: 5,
+            note: Some("after the run"),
+            portions: &[
+                Portion {
+                    item: Product,
+                    grams: 150.0,
+                },
+                Portion {
+                    item: Food(60),
+                    grams: 60.0,
+                },
+                Portion {
+                    item: Food(3),
+                    grams: 120.0,
+                },
+            ],
+            plate: Some([238, 226, 196]),
+        },
+        SyntheticMeal {
+            hours_ago: 3,
+            note: None,
+            portions: &[
+                Portion {
+                    item: Food(907),
+                    grams: 150.0,
+                },
+                Portion {
+                    item: Food(300),
+                    grams: 200.0,
+                },
+            ],
+            plate: None,
+        },
+        SyntheticMeal {
+            hours_ago: 1,
+            note: None,
+            portions: &[Portion {
+                item: Food(3),
+                grams: 110.0,
+            }],
+            plate: None,
+        },
     ];
-    for (index, (hours_ago, note, portions, plate)) in meals.into_iter().enumerate() {
+    for (index, meal) in meals.into_iter().enumerate() {
         meal_logs::log_meal(
             db,
             foods,
             photos,
             LogMeal {
-                eaten_at: (now - chrono::TimeDelta::hours(hours_ago)).to_rfc3339(),
-                note: note.map(str::to_owned),
+                eaten_at: (now - chrono::TimeDelta::hours(meal.hours_ago)).to_rfc3339(),
+                note: meal.note.map(str::to_owned),
                 portions: Some(
-                    portions
+                    meal.portions
                         .iter()
-                        .map(|&(item, grams)| PortionRequest {
+                        .map(|&Portion { item, grams }| PortionRequest {
                             food_id: match item {
                                 Food(food_id) => Some(food_id),
                                 Product => None,
@@ -259,7 +323,7 @@ pub async fn seed_meals(
                 meal: None,
                 overrides: None,
                 request_id: format!("synthetic-meal-{index}"),
-                photo: plate.map(synthetic_plate),
+                photo: meal.plate.map(synthetic_plate),
             },
         )
         .await
