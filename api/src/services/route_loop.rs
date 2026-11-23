@@ -122,46 +122,100 @@ mod tests {
         }
     }
 
+    const CM_PER_METER: u32 = 100;
+    const WALKING_STEP_CM: u32 = 75;
+
+    fn parse_walking_steps(
+        count: f64,
+        step_length_cm: f64,
+    ) -> Result<LoopRequest, LoopRequestError> {
+        LoopRequest::parse(&body("walking", steps(count), step_length_cm))
+    }
+
     #[test]
-    fn converts_step_targets_with_the_requested_step_length() {
+    fn converts_ten_thousand_steps_of_the_requested_step_length_to_meters() {
+        const STEPS: u32 = 10_000;
         assert_eq!(
-            LoopRequest::parse(&body("walking", steps(10_000.0), 75.0)),
+            parse_walking_steps(f64::from(STEPS), f64::from(WALKING_STEP_CM)),
             Ok(LoopRequest {
                 activity: Activity::Walking,
                 target: LoopTarget::Steps {
-                    steps: 10_000,
-                    meters: 7500
+                    steps: STEPS,
+                    meters: STEPS * WALKING_STEP_CM / CM_PER_METER
                 },
-                step_length_cm: 75,
+                step_length_cm: WALKING_STEP_CM,
             })
         );
+    }
+
+    #[test]
+    fn rounds_converted_step_distances_to_whole_meters() {
+        const STEPS: u32 = 3333;
+        const STEP_LENGTH_CM: u32 = 77;
         assert_eq!(
-            LoopRequest::parse(&body("walking", steps(3333.0), 77.0)).map(|r| r.target.meters()),
-            Ok(2566)
+            parse_walking_steps(f64::from(STEPS), f64::from(STEP_LENGTH_CM))
+                .map(|request| request.target.meters()),
+            Ok(STEPS * STEP_LENGTH_CM / CM_PER_METER)
         );
-        for count in [1000.0, 40_000.0, 10_000.5, 0.0, f64::NAN] {
+    }
+
+    #[test]
+    fn rejects_steps_that_convert_outside_the_target_distance() {
+        const STEPS_BELOW_MINIMUM_DISTANCE: f64 = 1000.0;
+        const STEPS_ABOVE_MAXIMUM_DISTANCE: f64 = 40_000.0;
+        for count in [STEPS_BELOW_MINIMUM_DISTANCE, STEPS_ABOVE_MAXIMUM_DISTANCE] {
             assert_eq!(
-                LoopRequest::parse(&body("walking", steps(count), 75.0)),
+                parse_walking_steps(count, f64::from(WALKING_STEP_CM)),
                 Err(LoopRequestError::InvalidSteps)
             );
         }
-        for length in [39.0, 151.0, 75.5, f64::NAN] {
+    }
+
+    #[test]
+    fn rejects_fractional_empty_and_non_finite_step_counts() {
+        for count in [10_000.5, 0.0, f64::NAN] {
             assert_eq!(
-                LoopRequest::parse(&body("walking", steps(10_000.0), length)),
+                parse_walking_steps(count, f64::from(WALKING_STEP_CM)),
+                Err(LoopRequestError::InvalidSteps)
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_step_lengths_outside_the_range_and_fractional_ones() {
+        let just_below = f64::from(*STEP_LENGTH_CM.start()) - 1.0;
+        let just_above = f64::from(*STEP_LENGTH_CM.end()) + 1.0;
+        for length in [just_below, just_above, 75.5, f64::NAN] {
+            assert_eq!(
+                parse_walking_steps(10_000.0, length),
                 Err(LoopRequestError::InvalidStepLength)
             );
         }
     }
 
+    const ORIGIN: [f64; 2] = [12.5692, 55.6869];
+    const BLOCK_SIDE_DEGREES: f64 = 0.01;
+    const SMALL_BLOCK_SIDE_DEGREES: f64 = 0.004;
+    const METERS_PER_DEGREE_LATITUDE: f64 = 111_195.0;
+    const DISTANCE_TOLERANCE_METERS: f64 = 1.0;
+    const NUDGE_METERS: f64 = SHARED_WAY_METERS / 3.0;
+    const EASTWARD: f64 = 1.0;
+    const WESTWARD: f64 = -1.0;
+
     #[test]
-    fn measures_great_circle_distances() {
-        let distance = haversine([12.5692, 55.6869], [12.5692, 55.6969]);
-        assert!((distance - 1112.0).abs() < 1.0, "{distance}");
+    fn measures_the_distance_of_a_block_of_latitude_on_the_earth_sphere() {
+        let north = [ORIGIN[0], ORIGIN[1] + BLOCK_SIDE_DEGREES];
+        let distance = haversine(ORIGIN, north);
+        let expected = BLOCK_SIDE_DEGREES * METERS_PER_DEGREE_LATITUDE;
+        assert!(
+            (distance - expected).abs() < DISTANCE_TOLERANCE_METERS,
+            "{distance}"
+        );
     }
 
-    fn square(east: f64, side: f64) -> MeasuredLoop {
-        let [lon, lat]: [f64; 2] = [12.5692, 55.6869];
-        let east = east * side / lat.to_radians().cos();
+    fn square(direction: f64, side: f64) -> MeasuredLoop {
+        let [lon, lat] = ORIGIN;
+        let east = direction * side / lat.to_radians().cos();
         let corners = [
             [lon, lat],
             [lon, lat + side],
@@ -190,24 +244,66 @@ mod tests {
     }
 
     #[test]
-    fn tells_loops_on_other_ways_from_retraced_ones() {
-        let east = square(1.0, 0.01);
+    fn a_loop_is_not_distinct_from_itself() {
+        let east = square(EASTWARD, BLOCK_SIDE_DEGREES);
         assert!(!distinct(&east, &east));
-        let mut nudged = east.clone();
-        for point in &mut nudged.coordinates {
-            point[1] += 0.00018;
-        }
-        assert!(!distinct(&nudged, &east));
-        assert!(distinct(&square(-1.0, 0.01), &east));
-        let small = square(1.0, 0.004);
-        assert!(distinct(&east, &small));
     }
 
     #[test]
-    fn calibrates_later_requests_by_earlier_overshoot() {
-        assert_eq!(calibrated_length(5000.0, &[]), 5000);
-        assert_eq!(calibrated_length(5000.0, &[1.25]), 4000);
-        assert_eq!(calibrated_length(5000.0, &[3.0]), 3000);
+    fn a_loop_nudged_within_the_shared_way_distance_follows_the_same_ways() {
+        let east = square(EASTWARD, BLOCK_SIDE_DEGREES);
+        let mut nudged = east.clone();
+        for point in &mut nudged.coordinates {
+            point[1] += NUDGE_METERS / METERS_PER_DEGREE_LATITUDE;
+        }
+        assert!(!distinct(&nudged, &east));
+    }
+
+    #[test]
+    fn a_loop_to_the_west_shares_only_the_northbound_street_from_the_origin() {
+        let east = square(EASTWARD, BLOCK_SIDE_DEGREES);
+        assert!(distinct(&square(WESTWARD, BLOCK_SIDE_DEGREES), &east));
+    }
+
+    #[test]
+    fn a_larger_loop_around_a_small_one_in_its_corner_adds_new_ways() {
+        let east = square(EASTWARD, BLOCK_SIDE_DEGREES);
+        let small = square(EASTWARD, SMALL_BLOCK_SIDE_DEGREES);
+        assert!(distinct(&east, &small));
+    }
+
+    const CALIBRATION_TARGET_METERS: f64 = 5000.0;
+    const ROUNDING_TOLERANCE_METERS: f64 = 0.5;
+
+    fn assert_requested_length(overshoot: &[f64], expected: f64) {
+        let requested = f64::from(calibrated_length(CALIBRATION_TARGET_METERS, overshoot));
+        assert!(
+            (requested - expected).abs() <= ROUNDING_TOLERANCE_METERS,
+            "{requested} != {expected}"
+        );
+    }
+
+    #[test]
+    fn requests_the_target_length_when_no_loop_overshot_yet() {
+        assert_requested_length(&[], CALIBRATION_TARGET_METERS);
+    }
+
+    #[test]
+    fn a_loop_a_quarter_too_long_asks_for_four_fifths_of_the_target() {
+        const A_QUARTER_TOO_LONG: f64 = 1.25;
+        assert_requested_length(
+            &[A_QUARTER_TOO_LONG],
+            CALIBRATION_TARGET_METERS / A_QUARTER_TOO_LONG,
+        );
+    }
+
+    #[test]
+    fn a_wildly_long_loop_is_not_chased_below_the_calibration_floor() {
+        const WILDLY_TOO_LONG: f64 = 3.0;
+        assert_requested_length(
+            &[WILDLY_TOO_LONG],
+            CALIBRATION_TARGET_METERS * CALIBRATION.start(),
+        );
     }
 
     #[test]
