@@ -31,12 +31,52 @@ fn unavailable(feed_id: i64, what: &str) -> FeedFailure {
     FeedFailure::Unavailable
 }
 
-fn describe_without_url(error: reqwest::Error) -> String {
-    format!("{:?}", error.without_url())
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransportFault {
+    Timeout,
+    Connect,
+    Body,
+    Decode,
+    Redirect,
+    Request,
+    Other,
 }
 
-fn unavailable_after(feed_id: i64, what: &str, error: reqwest::Error) -> FeedFailure {
-    tracing::warn!(error = %describe_without_url(error), feed_id, "RSS feed: {what}");
+impl TransportFault {
+    fn classify(error: &reqwest::Error) -> Self {
+        if error.is_timeout() {
+            Self::Timeout
+        } else if error.is_connect() {
+            Self::Connect
+        } else if error.is_body() {
+            Self::Body
+        } else if error.is_decode() {
+            Self::Decode
+        } else if error.is_redirect() {
+            Self::Redirect
+        } else if error.is_request() {
+            Self::Request
+        } else {
+            Self::Other
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Timeout => "timeout",
+            Self::Connect => "connect",
+            Self::Body => "body",
+            Self::Decode => "decode",
+            Self::Redirect => "redirect",
+            Self::Request => "request",
+            Self::Other => "other",
+        }
+    }
+}
+
+fn unavailable_after(feed_id: i64, what: &str, error: &reqwest::Error) -> FeedFailure {
+    let fault = TransportFault::classify(error).as_str();
+    tracing::warn!(fault, feed_id, "RSS feed: {what}");
     FeedFailure::Unavailable
 }
 
@@ -53,7 +93,7 @@ async fn read_body(feed_id: i64, mut response: Response) -> Result<Vec<u8>, Feed
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|error| unavailable_after(feed_id, "reading the body failed", error))?
+        .map_err(|error| unavailable_after(feed_id, "reading the body failed", &error))?
     {
         if body.len() + chunk.len() > MAX_FEED_BYTES {
             return Err(FeedFailure::TooLarge);
@@ -171,6 +211,17 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         return result;
     };
 
+    fetch_feed(pool, &client, parsed_url, &mut result).await;
+    result
+}
+
+async fn fetch_feed(
+    pool: &SqlitePool,
+    client: &reqwest::Client,
+    url: Url,
+    result: &mut FeedResult,
+) {
+    let feed_id = result.feed_id;
     let feed_meta = match sqlx::query!(
         r#"
         SELECT etag, last_modified FROM feeds WHERE id = $1
@@ -187,7 +238,7 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         }
     };
 
-    let mut request = client.get(parsed_url.clone());
+    let mut request = client.get(url);
 
     if let Some(ref meta) = feed_meta {
         if let Some(etag) = &meta.etag {
@@ -198,27 +249,23 @@ pub async fn refresh_feed(pool: &SqlitePool, feed_id: i64, url: &str) -> FeedRes
         }
     }
 
-    let response = request.send().await;
-
-    let response = match response {
-        Ok(r) => r,
+    match request.send().await {
+        Ok(response) => ingest_response(pool, response, result).await,
         Err(e) => {
-            result.error = Some(unavailable_after(feed_id, "request failed", e));
-            return result;
+            let failure = unavailable_after(feed_id, "request failed", &e);
+            fail(pool, result, failure).await;
         }
-    };
+    }
+}
 
-    ingest_response(pool, response, &mut result).await;
-    result
+async fn fail(pool: &SqlitePool, result: &mut FeedResult, failure: FeedFailure) {
+    result.error = Some(failure);
+    record_failure(pool, result.feed_id, failure).await;
 }
 
 async fn ingest_response(pool: &SqlitePool, response: Response, result: &mut FeedResult) {
-    match ingest(pool, response, result).await {
-        Ok(()) => {}
-        Err(failure) => {
-            result.error = Some(failure);
-            record_failure(pool, result.feed_id, failure).await;
-        }
+    if let Err(failure) = ingest(pool, response, result).await {
+        fail(pool, result, failure).await;
     }
 }
 
@@ -265,8 +312,12 @@ async fn ingest(
 
     let body = String::from_utf8_lossy(&bytes);
 
-    let feed = feed_rs::parser::parse(body.as_bytes()).map_err(|e| {
-        tracing::warn!(error = ?e, feed_id, "RSS feed: parse failed");
+    let feed = feed_rs::parser::parse(body.as_bytes()).map_err(|_| {
+        tracing::warn!(
+            failure = FeedFailure::NotAFeed.as_str(),
+            feed_id,
+            "RSS feed: parse failed"
+        );
         FeedFailure::NotAFeed
     })?;
 

@@ -1,8 +1,10 @@
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tracing_subscriber::fmt::MakeWriter;
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -122,7 +124,7 @@ struct Stored {
     last_modified: Option<String>,
 }
 
-async fn ingest_stored(response: Response) -> (FeedResult, Stored) {
+async fn seeded_pool() -> SqlitePool {
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")
@@ -131,36 +133,44 @@ async fn ingest_stored(response: Response) -> (FeedResult, Stored) {
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     sqlx::query(
         "INSERT INTO feeds (id, url, etag, last_modified, last_error)
-         VALUES (1, 'https://example.com/feed.xml', ?, ?, 'stale')",
+         VALUES (1, 'https://example.com/feed.xml', ?, ?, 'too_large')",
     )
     .bind(SEEDED_ETAG)
     .bind(SEEDED_MODIFIED)
     .execute(&pool)
     .await
     .unwrap();
-    let mut result = FeedResult {
+    pool
+}
+
+fn blank_result() -> FeedResult {
+    FeedResult {
         feed_id: 1,
         url: String::new(),
         items_inserted: 0,
         duplicates_skipped: 0,
         error: None,
-    };
+    }
+}
 
-    ingest_response(&pool, response, &mut result).await;
-
+async fn read_stored(pool: &SqlitePool) -> Stored {
     let (last_error, etag, last_modified) =
         sqlx::query_as("SELECT last_error, etag, last_modified FROM feeds WHERE id = 1")
-            .fetch_one(&pool)
+            .fetch_one(pool)
             .await
             .unwrap();
-    (
-        result,
-        Stored {
-            last_error,
-            etag,
-            last_modified,
-        },
-    )
+    Stored {
+        last_error,
+        etag,
+        last_modified,
+    }
+}
+
+async fn ingest_stored(response: Response) -> (FeedResult, Stored) {
+    let pool = seeded_pool().await;
+    let mut result = blank_result();
+    ingest_response(&pool, response, &mut result).await;
+    (result, read_stored(&pool).await)
 }
 
 fn assert_failure_stored(result: &FeedResult, stored: &Stored, expected: FeedFailure) {
@@ -232,14 +242,134 @@ async fn test_should_store_unavailable_when_the_status_is_an_error() {
     assert_failure_stored(&result, &stored, FeedFailure::Unavailable);
 }
 
+#[derive(Clone, Default)]
+struct LogCapture(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogCapture {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> MakeWriter<'a> for LogCapture {
+    type Writer = Self;
+
+    fn make_writer(&'a self) -> Self {
+        self.clone()
+    }
+}
+
+impl LogCapture {
+    fn start(&self) -> tracing::subscriber::DefaultGuard {
+        tracing::subscriber::set_default(
+            tracing_subscriber::fmt()
+                .with_writer(self.clone())
+                .with_ansi(false)
+                .finish(),
+        )
+    }
+
+    fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
 #[tokio::test]
-async fn test_should_describe_a_request_failure_without_the_feed_url() {
-    let error = reqwest::get("http://127.0.0.1:1/feed.xml?token=feed-secret")
+async fn test_should_store_unavailable_when_the_request_cannot_be_sent() {
+    let pool = seeded_pool().await;
+    let mut result = blank_result();
+    let url = Url::parse("http://127.0.0.1:1/feed.xml").unwrap();
+
+    fetch_feed(&pool, &reqwest::Client::new(), url, &mut result).await;
+
+    assert_failure_stored(&result, &read_stored(&pool).await, FeedFailure::Unavailable);
+}
+
+#[tokio::test]
+async fn test_should_log_only_a_fixed_category_when_the_request_cannot_be_sent() {
+    let logs = LogCapture::default();
+    let _guard = logs.start();
+    let pool = seeded_pool().await;
+    let mut result = blank_result();
+    let url = Url::parse("http://127.0.0.1:1/feed.xml?token=feed-secret").unwrap();
+
+    fetch_feed(&pool, &reqwest::Client::new(), url, &mut result).await;
+
+    let text = logs.text();
+    assert!(text.contains("fault=\"connect\""), "{text}");
+    for leaked in [
+        "feed-secret",
+        "feed.xml",
+        "127.0.0.1",
+        "refused",
+        "os error",
+    ] {
+        assert!(!text.contains(leaked), "{leaked} leaked: {text}");
+    }
+}
+
+#[tokio::test]
+async fn test_should_log_no_feed_content_when_the_body_does_not_parse() {
+    let logs = LogCapture::default();
+    let _guard = logs.start();
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"version":"https://jsonfeed.org/version/1.1","title":"t","items":"echoed-secret"}"#,
+        ))
+        .mount(&server)
+        .await;
+
+    let (result, _) = ingest_stored(fetch(&server.uri()).await).await;
+
+    assert_eq!(result.error, Some(FeedFailure::NotAFeed));
+    let text = logs.text();
+    assert!(text.contains("not_a_feed"), "{text}");
+    assert!(!text.contains("echoed-secret"), "{text}");
+}
+
+#[tokio::test]
+async fn test_should_classify_transport_errors_into_fixed_categories() {
+    let refused = reqwest::get("http://127.0.0.1:1/").await.unwrap_err();
+    assert_eq!(TransportFault::classify(&refused), TransportFault::Connect);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (_socket, _) = listener.accept().await.unwrap();
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    });
+    let timed_out = reqwest::Client::builder()
+        .timeout(Duration::from_millis(100))
+        .build()
+        .unwrap()
+        .get(format!("http://{address}"))
+        .send()
         .await
         .unwrap_err();
+    assert_eq!(
+        TransportFault::classify(&timed_out),
+        TransportFault::Timeout
+    );
 
-    let description = describe_without_url(error);
-
-    assert!(!description.contains("feed-secret"), "{description}");
-    assert!(!description.contains("feed.xml"), "{description}");
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = [0_u8; 1024];
+        let _ = socket.read(&mut request).await;
+        socket
+            .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\nshort")
+            .await
+            .unwrap();
+    });
+    let mut response = fetch(&format!("http://{address}")).await;
+    response.chunk().await.unwrap();
+    let truncated = response.chunk().await.unwrap_err();
+    assert_eq!(TransportFault::classify(&truncated), TransportFault::Decode);
 }
