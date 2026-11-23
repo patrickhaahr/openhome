@@ -16,8 +16,8 @@ slow, hostile or chatty upstream from leaking into OpenHome or its logs.
   outcome. Upstream text is logged at most, never returned, so no provider
   message can reach a client or Hermes. Import failures say only that the food
   database is unavailable. An RSS refresh stores and returns one of
-  `unavailable`, `too_large` or `not_a_feed`, never upstream text, and logs only
-  the feed id and a fixed failure category because a feed URL can carry a token
+  `unavailable`, `too_large` or `not_a_feed`, never upstream text, and logs its transport
+  and parse failures as only the feed id and a fixed failure category because a feed URL can carry a token
   that upstream error text may echo.
 - **Upstream-specific meaning stays in the adapter.** Open Food Facts v2
   answers an unknown barcode with `status: 0`, usually with a 404, and that
