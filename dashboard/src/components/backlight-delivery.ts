@@ -47,9 +47,7 @@ export type Waiting =
   | Debounce
   | { readonly kind: "queued"; readonly action: BacklightAction }
 
-declare const deliveryBrand: unique symbol
-
-type DeliveryState =
+export type DeliveryState =
   | { readonly phase: "idle" }
   | { readonly phase: "debouncing"; readonly debounce: Debounce }
   | {
@@ -60,7 +58,19 @@ type DeliveryState =
     }
   | { readonly phase: "closed" }
 
-export type Delivery = DeliveryState & { readonly [deliveryBrand]: true }
+class Delivery {
+  readonly #state: DeliveryState
+
+  constructor(state: DeliveryState) {
+    this.#state = state
+  }
+
+  get state(): DeliveryState {
+    return this.#state
+  }
+}
+
+export type { Delivery }
 
 export type DeliveryEvent =
   | {
@@ -91,22 +101,18 @@ export type DeliveryStep = {
   readonly effects: ReadonlyArray<DeliveryEffect>
 }
 
-const own = (state: DeliveryState): Delivery =>
-  // SAFETY: the brand is type-only; this module's constructors are the sole producers of a Delivery.
-  state as Delivery
+export const initialDelivery = new Delivery({ phase: "idle" })
 
-export const initialDelivery = own({ phase: "idle" })
-
-const closed = own({ phase: "closed" })
+const closed = new Delivery({ phase: "closed" })
 
 const debouncing = (debounce: Debounce): Delivery =>
-  own({ phase: "debouncing", debounce })
+  new Delivery({ phase: "debouncing", debounce })
 
 const sending = (
   run: number,
   action: BacklightAction,
   next: Waiting | null
-): Delivery => own({ phase: "sending", run, action, next })
+): Delivery => new Delivery({ phase: "sending", run, action, next })
 
 const debounceOf = (selection: BacklightSelection, id: number): Debounce => ({
   kind: "debounce",
@@ -142,19 +148,20 @@ function edit(
   selection: BacklightSelection,
   id: number
 ): DeliveryStep {
+  const state = delivery.state
   const debounce = debounceOf(selection, id)
 
-  switch (delivery.phase) {
+  switch (state.phase) {
     case "closed":
       return step(delivery)
     case "sending":
-      return step(sending(delivery.run, delivery.action, debounce), [
-        ...cancelWaiting(delivery.next),
+      return step(sending(state.run, state.action, debounce), [
+        ...cancelWaiting(state.next),
         schedule(id),
       ])
     case "debouncing":
       return step(debouncing(debounce), [
-        cancel(delivery.debounce.id),
+        cancel(state.debounce.id),
         schedule(id),
       ])
     case "idle":
@@ -167,17 +174,19 @@ function perform(
   action: BacklightAction,
   run: number
 ): DeliveryStep {
-  switch (delivery.phase) {
+  const state = delivery.state
+
+  switch (state.phase) {
     case "closed":
       return step(delivery)
     case "sending":
       return step(
-        sending(delivery.run, delivery.action, queued(action)),
-        cancelWaiting(delivery.next)
+        sending(state.run, state.action, queued(action)),
+        cancelWaiting(state.next)
       )
     case "debouncing":
       return step(sending(run, action, null), [
-        cancel(delivery.debounce.id),
+        cancel(state.debounce.id),
         send(action, run),
       ])
     case "idle":
@@ -186,35 +195,39 @@ function perform(
 }
 
 function fire(delivery: Delivery, id: number, run: number): DeliveryStep {
-  if (delivery.phase === "debouncing" && delivery.debounce.id === id) {
+  const state = delivery.state
+
+  if (state.phase === "debouncing" && state.debounce.id === id) {
     const action: BacklightAction = {
       action: "select",
-      selection: delivery.debounce.selection,
+      selection: state.debounce.selection,
     }
 
     return step(sending(run, action, null), [send(action, run)])
   }
 
   if (
-    delivery.phase === "sending" &&
-    delivery.next?.kind === "debounce" &&
-    delivery.next.id === id
+    state.phase === "sending" &&
+    state.next?.kind === "debounce" &&
+    state.next.id === id
   ) {
     const action: BacklightAction = {
       action: "select",
-      selection: delivery.next.selection,
+      selection: state.next.selection,
     }
 
-    return step(sending(delivery.run, delivery.action, queued(action)))
+    return step(sending(state.run, state.action, queued(action)))
   }
 
   return step(delivery)
 }
 
 function settle(delivery: Delivery, run: number): DeliveryStep {
-  if (delivery.phase !== "sending") return step(delivery)
+  const state = delivery.state
 
-  const waiting = delivery.next
+  if (state.phase !== "sending") return step(delivery)
+
+  const waiting = state.next
 
   if (waiting === null) return step(initialDelivery)
 
@@ -225,11 +238,13 @@ function settle(delivery: Delivery, run: number): DeliveryStep {
 }
 
 function close(delivery: Delivery): DeliveryStep {
-  switch (delivery.phase) {
+  const state = delivery.state
+
+  switch (state.phase) {
     case "debouncing":
-      return step(closed, [cancel(delivery.debounce.id)])
+      return step(closed, [cancel(state.debounce.id)])
     case "sending":
-      return step(closed, cancelWaiting(delivery.next))
+      return step(closed, cancelWaiting(state.next))
     case "idle":
     case "closed":
       return step(closed)

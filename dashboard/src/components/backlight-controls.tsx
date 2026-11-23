@@ -71,10 +71,12 @@ export function BacklightControls({
     const { delivery: following, effects } = next(delivery.current, event)
     delivery.current = following
 
-    if (following.phase === "idle") {
+    const phase = following.state.phase
+
+    if (phase === "idle") {
       setPending(false)
       setDraft(null)
-    } else if (following.phase !== "closed") setPending(true)
+    } else if (phase !== "closed") setPending(true)
 
     for (const effect of effects) {
       if (effect.kind === "cancel") cancelTimer(effect.id)
@@ -120,7 +122,7 @@ export function BacklightControls({
       result = await change(action)
     } catch {}
 
-    const sending = delivery.current
+    const sending = delivery.current.state
 
     if (sending.phase !== "sending" || sending.run !== run) return
 
@@ -146,14 +148,14 @@ export function BacklightControls({
   }
 
   function perform(action: BacklightAction): void {
-    if (delivery.current.phase === "closed") return
+    if (delivery.current.state.phase === "closed") return
 
     if (action.action === "select") setDraft(action.selection)
     dispatch({ type: "perform", action, run: ++runs.current })
   }
 
   function edit(selection: BacklightSelection): void {
-    if (delivery.current.phase === "closed") return
+    if (delivery.current.state.phase === "closed") return
     setDraft(selection)
     setMessage("Waiting for your latest adjustment…")
     dispatch({ type: "edit", selection, id: ++runs.current })

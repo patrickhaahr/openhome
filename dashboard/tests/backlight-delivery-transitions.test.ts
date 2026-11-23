@@ -4,6 +4,8 @@ import {
   next,
   type Delivery,
   type DeliveryEvent,
+  type DeliveryState,
+  type DeliveryStep,
 } from "@/components/backlight-delivery"
 import type { BacklightAction, BacklightSelection } from "@/lib/backlight"
 
@@ -21,6 +23,10 @@ const selectTvSync: BacklightAction = { action: "select", selection: tvSync }
 
 const refresh: BacklightAction = { action: "refresh" }
 
+function outcome(step: DeliveryStep) {
+  return { state: step.delivery.state, effects: step.effects }
+}
+
 function run(events: ReadonlyArray<DeliveryEvent>): Delivery {
   return events.reduce(
     (delivery, event) => next(delivery, event).delivery,
@@ -36,7 +42,7 @@ describe("edit", () => {
       id: idA,
     })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "debouncing",
       debounce: { kind: "debounce", selection: off, id: idA },
     })
@@ -50,7 +56,7 @@ describe("edit", () => {
       id: idB,
     })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "debouncing",
       debounce: { kind: "debounce", selection: tvSync, id: idB },
     })
@@ -72,7 +78,7 @@ describe("edit", () => {
       id: idB,
     })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "sending",
       run: 1,
       action: refresh,
@@ -91,7 +97,7 @@ describe("edit", () => {
       id: idA,
     })
 
-    expect(step.delivery).toEqual({ phase: "closed" })
+    expect(step.delivery.state).toEqual({ phase: "closed" })
     expect(step.effects).toEqual([])
   })
 })
@@ -104,7 +110,7 @@ describe("perform", () => {
       run: 1,
     })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "sending",
       run: 1,
       action: refresh,
@@ -120,7 +126,7 @@ describe("perform", () => {
       run: 2,
     })
 
-    expect(step.delivery).toMatchObject({ phase: "sending", run: 2 })
+    expect(step.delivery.state).toMatchObject({ phase: "sending", run: 2 })
     expect(step.effects).toEqual([
       { kind: "cancel", id: idA },
       { kind: "send", action: refresh, run: 2 },
@@ -139,7 +145,7 @@ describe("perform", () => {
       run: 2,
     })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "sending",
       run: 1,
       action: refresh,
@@ -155,7 +161,10 @@ describe("perform", () => {
       run: 1,
     })
 
-    expect(step).toEqual({ delivery: { phase: "closed" }, effects: [] })
+    expect(outcome(step)).toEqual({
+      state: { phase: "closed" },
+      effects: [],
+    })
   })
 })
 
@@ -167,7 +176,7 @@ describe("fire", () => {
       run: 1,
     })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "sending",
       run: 1,
       action: selectOff,
@@ -184,7 +193,7 @@ describe("fire", () => {
 
     const step = next(sending, { type: "fire", id: idA, run: 2 })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "sending",
       run: 1,
       action: refresh,
@@ -196,8 +205,10 @@ describe("fire", () => {
   test("ignores a timer that is no longer current", () => {
     const debouncing = run([{ type: "edit", selection: off, id: idB }])
 
-    expect(next(debouncing, { type: "fire", id: idA, run: 1 })).toEqual({
-      delivery: debouncing,
+    expect(
+      outcome(next(debouncing, { type: "fire", id: idA, run: 1 }))
+    ).toEqual({
+      state: debouncing.state,
       effects: [],
     })
   })
@@ -210,7 +221,10 @@ describe("settle", () => {
       run: 2,
     })
 
-    expect(step).toEqual({ delivery: initialDelivery, effects: [] })
+    expect(outcome(step)).toEqual({
+      state: initialDelivery.state,
+      effects: [],
+    })
   })
 
   test("sends the queued action under the new run", () => {
@@ -221,7 +235,7 @@ describe("settle", () => {
 
     const step = next(sending, { type: "settle", run: 3 })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "sending",
       run: 3,
       action: selectTvSync,
@@ -240,7 +254,7 @@ describe("settle", () => {
 
     const step = next(sending, { type: "settle", run: 2 })
 
-    expect(step.delivery).toEqual({
+    expect(step.delivery.state).toEqual({
       phase: "debouncing",
       debounce: { kind: "debounce", selection: off, id: idA },
     })
@@ -248,8 +262,8 @@ describe("settle", () => {
   })
 
   test("is ignored outside a send", () => {
-    expect(next(initialDelivery, { type: "settle", run: 1 })).toEqual({
-      delivery: initialDelivery,
+    expect(outcome(next(initialDelivery, { type: "settle", run: 1 }))).toEqual({
+      state: initialDelivery.state,
       effects: [],
     })
   })
@@ -261,8 +275,8 @@ describe("close", () => {
       type: "close",
     })
 
-    expect(step).toEqual({
-      delivery: { phase: "closed" },
+    expect(outcome(step)).toEqual({
+      state: { phase: "closed" },
       effects: [{ kind: "cancel", id: idA }],
     })
   })
@@ -273,15 +287,15 @@ describe("close", () => {
       { type: "edit", selection: off, id: idA },
     ])
 
-    expect(next(sending, { type: "close" })).toEqual({
-      delivery: { phase: "closed" },
+    expect(outcome(next(sending, { type: "close" }))).toEqual({
+      state: { phase: "closed" },
       effects: [{ kind: "cancel", id: idA }],
     })
   })
 
   test("closes an idle delivery without effects", () => {
-    expect(next(initialDelivery, { type: "close" })).toEqual({
-      delivery: { phase: "closed" },
+    expect(outcome(next(initialDelivery, { type: "close" }))).toEqual({
+      state: { phase: "closed" },
       effects: [],
     })
   })
@@ -289,12 +303,16 @@ describe("close", () => {
 
 describe("Delivery", () => {
   test("cannot be built from a literal outside the module", () => {
+    expectTypeOf<{ readonly state: DeliveryState }>().not.toExtend<Delivery>()
     expectTypeOf<{ readonly phase: "idle" }>().not.toExtend<Delivery>()
-    expectTypeOf<{
-      readonly phase: "sending"
-      readonly run: number
-      readonly action: BacklightAction
-      readonly next: null
-    }>().not.toExtend<Delivery>()
+  })
+
+  test("cannot be forged by copying the members of an existing Delivery", () => {
+    type Copy = Pick<Delivery, keyof Delivery>
+
+    type Forged = Copy & { readonly state: { readonly phase: "closed" } }
+
+    expectTypeOf<Copy>().not.toExtend<Delivery>()
+    expectTypeOf<Forged>().not.toExtend<Delivery>()
   })
 })
