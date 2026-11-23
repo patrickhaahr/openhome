@@ -1,26 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-max_tokens=5000
-max_bytes=$((max_tokens * 4))
-generated='(^|/)(node_modules|vendor|dist|build|out|target|\.sqlx|\.tanstack|__generated__|generated)/|(\.lock|\.lockb|-lock\.json|-lock\.yaml|\.sum|\.min\.(js|css)|\.map|\.snap|\.svg)$|\.gen\.|_generated\.|\.pb\.'
-
 cd "$(git rev-parse --show-toplevel)"
+root=$PWD
 
-offenders=0
-while IFS= read -r -d '' path; do
-  [[ -f $path ]] || continue
-  [[ $path =~ $generated ]] && continue
-  size=$(stat -c %s -- "$path")
-  ((size <= max_bytes)) && continue
-  attrs=$(git check-attr file-size-guard linguist-generated linguist-vendored -- "$path")
-  grep -qE 'file-size-guard: unset|linguist-(generated|vendored): set' <<<"$attrs" && continue
-  head -n 5 -- "$path" | grep -qiE '@generated|do not edit|code generated' && continue
-  grep -qI . -- "$path" || continue
-  printf '%7d bytes (~%d tokens)  %s\n' "$size" $((size / 4)) "$path"
-  offenders=$((offenders + 1))
-done < <(git ls-files -z --cached --others --exclude-standard -- "$@")
+hook_command=$(git config --get hook.file-size-guard.command || true)
+read -r hook _ <<<"$hook_command"
+if [[ -z ${hook-} || ! -x $hook ]]; then
+  echo "git config hook.file-size-guard.command does not name an executable; install the global file-size-guard hook." >&2
+  exit 2
+fi
 
-((offenders == 0)) && exit 0
-echo "$offenders file(s) over $max_tokens tokens ($max_bytes bytes)." >&2
-exit 1
+unset GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+export GIT_DIR=$scratch GIT_WORK_TREE=$root
+git init -q
+git add -A -- "${@:-.}"
+"$hook"

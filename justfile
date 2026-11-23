@@ -4,7 +4,7 @@ default:
 # Full gate across repos
 check: file-size-check comment-check check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
 
-# List files over the pre-commit hook's 5000-token cap, optionally under the given paths
+# Run the global file-size-guard hook over the whole tree, optionally under the given paths
 [positional-arguments]
 file-size-check *paths:
     @bash scripts/file-size-check.sh "$@"
