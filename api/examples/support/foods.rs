@@ -174,52 +174,46 @@ pub async fn seed_meals(
     .await
     .map_err(|error| anyhow::anyhow!("linking the synthetic product failed: {error}"))?;
     let mut supplement_ids = Vec::new();
-    for (name, dose_unit, amounts, compounds) in [
-        (
-            "Vitamin D3",
-            DoseUnit::Capsule,
-            vec![AmountRequest {
+    for supplement in [
+        AddSupplement {
+            name: "Vitamin D3".into(),
+            dose_unit: DoseUnit::Capsule,
+            amounts: vec![AmountRequest {
                 key: "vitamin_d".into(),
                 value: 25.0,
                 unit: "µg".into(),
                 form: None,
             }],
-            vec![],
-        ),
-        (
-            "Creatine",
-            DoseUnit::Scoop,
-            vec![],
-            vec![CompoundRequest {
+            compounds: vec![],
+            request_id: "synthetic-supplement-Vitamin D3".into(),
+        },
+        AddSupplement {
+            name: "Creatine".into(),
+            dose_unit: DoseUnit::Scoop,
+            amounts: vec![],
+            compounds: vec![CompoundRequest {
                 name: "Creatine monohydrate".into(),
                 value: 3.0,
                 unit: "g".into(),
             }],
-        ),
-        (
-            "Vitamin D 250",
-            DoseUnit::Capsule,
-            vec![AmountRequest {
+            request_id: "synthetic-supplement-Creatine".into(),
+        },
+        AddSupplement {
+            name: "Vitamin D 250".into(),
+            dose_unit: DoseUnit::Capsule,
+            amounts: vec![AmountRequest {
                 key: "vitamin_d".into(),
                 value: 250.0,
                 unit: "µg".into(),
                 form: None,
             }],
-            vec![],
-        ),
+            compounds: vec![],
+            request_id: "synthetic-supplement-Vitamin D 250".into(),
+        },
     ] {
-        let added = supplements::add_supplement(
-            db,
-            AddSupplement {
-                name: name.into(),
-                dose_unit,
-                amounts,
-                compounds,
-                request_id: format!("synthetic-supplement-{name}"),
-            },
-        )
-        .await
-        .map_err(|error| anyhow::anyhow!("adding a synthetic Supplement failed: {error}"))?;
+        let added = supplements::add_supplement(db, supplement)
+            .await
+            .map_err(|error| anyhow::anyhow!("adding a synthetic Supplement failed: {error}"))?;
         supplement_ids.push(added.supplement.id);
     }
     let now = chrono::Utc::now();
