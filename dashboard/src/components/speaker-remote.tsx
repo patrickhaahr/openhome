@@ -29,7 +29,7 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
     "volume-down": MinusIcon,
     "volume-up": PlusIcon,
   } satisfies CommandIcons<SpeakerCommand>,
-  plateIcons: {},
+  plateIcons: {} satisfies CommandIcons<SpeakerCommand>,
   plateIdentity: true,
   worded: [],
   quickGroups: [
