@@ -18,10 +18,11 @@ import type {
 import {
   connectionLabel,
   unconfirmed,
-  type Debounce,
   type Delivery,
-  discard,
+  type DeliveryEvent,
   describe,
+  initialDelivery,
+  next,
 } from "@/components/backlight-delivery"
 import { BacklightReadout } from "@/components/backlight-readout"
 import { BacklightSetup } from "@/components/backlight-setup"
@@ -56,7 +57,7 @@ export function BacklightControls({
   const [sent, setSent] = useState<BacklightAction["action"] | null>(null)
   const [bedtimeRound, setBedtimeRound] = useState(0)
 
-  const delivery = useRef<Delivery>({ phase: "idle" })
+  const delivery = useRef<Delivery>(initialDelivery)
   const runs = useRef(0)
   const latestData = useRef(data)
   useEffect(() => {
@@ -65,53 +66,33 @@ export function BacklightControls({
   const [draft, setDraft] = useState<BacklightSelection | null>(null)
   useIdleBlock(pending)
 
-  function commit(next: Delivery): void {
-    delivery.current = next
+  function dispatch(event: DeliveryEvent): void {
+    const { delivery: following, effects } = next(delivery.current, event)
+    delivery.current = following
 
-    if (next.phase === "idle") {
+    if (following.phase === "idle") {
       setPending(false)
       setDraft(null)
-    } else if (next.phase !== "closed") setPending(true)
+    } else if (following.phase !== "closed") setPending(true)
+
+    for (const effect of effects) {
+      if (effect.kind === "cancel") clearTimeout(effect.timer)
+      else void deliver(effect.action, effect.run)
+    }
   }
 
   useEffect(
     () => () => {
-      const closing = delivery.current
+      const closing = next(delivery.current, { type: "close" })
+      delivery.current = closing.delivery
 
-      if (closing.phase === "debouncing") clearTimeout(closing.debounce.timer)
-      else if (closing.phase === "sending") discard(closing.next)
-      delivery.current = { phase: "closed" }
+      for (const effect of closing.effects)
+        if (effect.kind === "cancel") clearTimeout(effect.timer)
     },
     []
   )
 
-  function startDebounce(selection: BacklightSelection): Debounce {
-    const debounce: Debounce = {
-      kind: "debounce",
-      selection,
-      timer: setTimeout(() => fire(debounce), 200),
-    }
-
-    return debounce
-  }
-
-  function fire(debounce: Debounce): void {
-    const state = delivery.current
-
-    const action: BacklightAction = {
-      action: "select",
-      selection: debounce.selection,
-    }
-
-    if (state.phase === "debouncing" && state.debounce === debounce)
-      void deliver(action)
-    else if (state.phase === "sending" && state.next === debounce)
-      commit({ ...state, next: { kind: "queued", action } })
-  }
-
-  async function deliver(action: BacklightAction): Promise<void> {
-    const run = ++runs.current
-    commit({ phase: "sending", run, action, next: null })
+  async function deliver(action: BacklightAction, run: number): Promise<void> {
     setSent(action.action)
     setAlert(null)
     setMessage("Sending your latest selection…")
@@ -144,47 +125,27 @@ export function BacklightControls({
       announce(outcome.text, outcome.tag)
     }
 
-    const next = sending.next
-
-    if (next === null) commit({ phase: "idle" })
-    else if (next.kind === "queued") void deliver(next.action)
-    else commit({ phase: "debouncing", debounce: next })
+    dispatch({ type: "settle", run: ++runs.current })
   }
 
   function perform(action: BacklightAction): void {
-    const state = delivery.current
-
-    if (state.phase === "closed") return
+    if (delivery.current.phase === "closed") return
 
     if (action.action === "select") setDraft(action.selection)
-
-    if (state.phase === "sending") {
-      discard(state.next)
-      commit({ ...state, next: { kind: "queued", action } })
-
-      return
-    }
-
-    if (state.phase === "debouncing") clearTimeout(state.debounce.timer)
-    void deliver(action)
+    dispatch({ type: "perform", action, run: ++runs.current })
   }
 
   function edit(selection: BacklightSelection): void {
-    const state = delivery.current
-
-    if (state.phase === "closed") return
+    if (delivery.current.phase === "closed") return
     setDraft(selection)
     setMessage("Waiting for your latest adjustment…")
 
-    if (state.phase === "sending") {
-      discard(state.next)
-      commit({ ...state, next: startDebounce(selection) })
+    const timer = setTimeout(
+      () => dispatch({ type: "fire", timer, run: ++runs.current }),
+      200
+    )
 
-      return
-    }
-
-    if (state.phase === "debouncing") clearTimeout(state.debounce.timer)
-    commit({ phase: "debouncing", debounce: startDebounce(selection) })
+    dispatch({ type: "edit", selection, timer })
   }
 
   const status = current.state === "available" ? current.status : undefined
