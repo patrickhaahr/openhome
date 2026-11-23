@@ -27,13 +27,13 @@ Preconditions:
 - **Add.** Run `mcp.sh call add_watchlist_entry '{"owner_id":"<alex>","kind":"movie","title":"Verify Harbour Lights","request_id":"verify-<run id>"}'`. The result has `replayed: false`, `status: "planned"` and today's `date_added`.
 - **Retry.** Run the identical call again. The result has `replayed: true` and the same entry `id`.
 - **Read back.** Run `curl -fsS -H "Authorization: Bearer $API_KEY" "$API_URL/api/watchlist/entries?owner_id=<alex>"`. The list holds exactly one `Verify Harbour Lights`.
-- **Enriched add.** Run `mcp.sh call search_watchlist_titles '{"kind":"movie","query":"Orbit"}'` (loopback catalogue), take `structuredContent.items[0].tmdb_id`, then run `mcp.sh call add_watchlist_entry` with it as `tmdb_id` plus a fresh `request_id`. The entry has the catalogue's `title`, `overview`, `poster_path` and `release_date`; `watchlist_entry` and the Axum read-back show the same values.
+- **Enriched add.** Run `mcp.sh call search_watchlist_titles '{"kind":"movie","query":"Godfather"}'`, take `structuredContent.items[0].tmdb_id` (238, The Godfather), then run `mcp.sh call add_watchlist_entry` with it as `tmdb_id` plus a fresh `request_id`. The entry has the catalogue's `title`, `overview`, `poster_path` and `release_date`; `watchlist_entry` and the Axum read-back show the same values.
 - **Dashboard.** `preview_open` on the Dashboard port with path `/lists?tab=watch`, then `preview_wait_for` text `Verify Harbour Lights`. The `Planned` region's list shows the title, and the `Whose list` button reads `Alex 7 titles to watch` (5 seeded planned or watching + the 2 added).
-- **Proof.** Save the tool JSON as `01-…`–`04-…` and a `preview_snapshot` with `save: true` copied to `05-dashboard-watch.png` under `$EVIDENCE_DIR/watchlist/`.
+- **Proof.** Save the tool JSON as `01-…`–`06-…` and a `preview_snapshot` with `save: true` copied to `07-dashboard-watch.png` under `$EVIDENCE_DIR/watchlist/`.
 
 ## Gotchas
 
 - `household_users` IDs are regenerated on every launch. Never hard-code them.
 - Seed data already has `Spirited Away` for two owners, so use `Verify…` titles to avoid ambiguous assertions.
-- TMDB search uses a loopback catalogue unless `~/.config/openhome/tmdb-read-access-token` exists, in which case it hits live TMDB. Search **Orbit** (movie) or **Lighthouse** (series) only with the loopback catalogue.
+- TMDB search uses the stack's seed catalogue (`api/examples/dashboard_preview/seed/household.json`) unless `~/.config/openhome/tmdb-read-access-token` exists, in which case it hits live TMDB and the first result is not guaranteed to be the intended title. Enrich with **The Godfather** (movie) or **Frieren** (series): both are only on Sam's list. Alex already has `Spirited Away`, `Arcane` and `12 Angry Men`, and a second entry with the same owner, kind and `tmdb_id` is rejected. **Orbit** and **Lighthouse** exist only in the integration-test stub, not on this stack.
 - The Dashboard reads on navigation. After an MCP write, open or reload the page instead of expecting a live update.
