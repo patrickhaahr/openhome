@@ -104,9 +104,12 @@ fn forecast(seed: &WeatherSeed) -> Value {
     let first_local_midnight = first_day.and_time(NaiveTime::MIN).and_utc().timestamp();
     let midnight = |index: i64| first_local_midnight + index * 86_400 - offset;
     let day_of = |timestamp: i64| {
-        (timestamp + offset - first_local_midnight)
-            .div_euclid(86_400)
-            .clamp(0, 6) as usize
+        usize::try_from(
+            (timestamp + offset - first_local_midnight)
+                .div_euclid(86_400)
+                .clamp(0, 6),
+        )
+        .expect("clamped to a weekday index")
     };
     let hour_start = now.timestamp().div_euclid(3600) * 3600;
     let temperature = |timestamp: i64| {
