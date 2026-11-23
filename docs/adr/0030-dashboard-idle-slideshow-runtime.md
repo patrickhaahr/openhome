@@ -15,7 +15,10 @@ these rules hold.
   `trailing`, and each swallowed trailing event restarts it, so a late
   compatibility click hit-tested to the key beneath is still eaten. A release
   lost for 3 s shows the page but keeps `held`, so that release stays
-  swallowed, and the next primary press or a different key settles it.
+  swallowed. Another key pressed meanwhile reaches the page and leaves the held
+  key guarded; the guard ends on that key's own `keyup`, its own next
+  non-repeat `keydown` (a fresh press, which works normally), or the next
+  primary press.
 - **Inactivity is measured on the monotonic clock.** Activity is stamped with
   `performance.now()`, so moving the wall clock cannot stop or rush the cover.
   Whether the cover is the Night Screen is read from `now()` when the timer

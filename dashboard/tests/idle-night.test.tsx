@@ -364,7 +364,7 @@ test("after a lost keyup the page shows but that key stays swallowed until its k
   expect(reached).toEqual(["keydown:Space"])
 })
 
-test("after a lost keyup another key ends the guard and works normally", async () => {
+test("after a lost keyup another key reaches the page while the waking key stays swallowed", async () => {
   clock = NIGHTTIME
   await room()
   await advance(TIMEOUT)
@@ -376,8 +376,52 @@ test("after a lost keyup another key ends the guard and works normally", async (
 
   await keyOn(countKey(), "keydown", "KeyA")
   await keyOn(countKey(), "keyup", "KeyA")
+  await keyOn(countKey(), "keydown", "Space", true)
+  await keyOn(countKey(), "keypress", "Space")
   await keyOn(countKey(), "keyup", "Space")
-  expect(reached).toEqual(["keydown:KeyA", "keyup:KeyA", "keyup:Space"])
+  expect(reached).toEqual(["keydown:KeyA", "keyup:KeyA"])
+
+  await advance(WAKE_GRACE_MS)
+  await keyOn(countKey(), "keydown", "Space")
+  expect(reached).toEqual(["keydown:KeyA", "keyup:KeyA", "keydown:Space"])
+})
+
+test("after a lost keyup a fresh press of the same key works normally", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  const reached = watchKeys()
+
+  await keyOn(black() ?? window, "keydown", "Space")
+  await advance(LOST_RELEASE_WAKE_MS)
+  expect(black()).toBeNull()
+
+  await keyOn(countKey(), "keydown", "Space", true)
+  expect(reached).toEqual([])
+
+  await keyOn(countKey(), "keydown", "Space")
+  await keyOn(countKey(), "keypress", "Space")
+  await keyOn(countKey(), "keyup", "Space")
+  expect(reached).toEqual(["keydown:Space", "keypress:Space", "keyup:Space"])
+})
+
+test("an Idle Block that ends a waking key still swallows its repeats and keyup", async () => {
+  clock = NIGHTTIME
+  await room()
+  await advance(TIMEOUT)
+  await keyOn(black() ?? window, "keydown", "Space")
+  await room({ blocked: true })
+  expect(black()).toBeNull()
+  const reached = watchKeys()
+
+  await keyOn(countKey(), "keydown", "Space", true)
+  await keyOn(countKey(), "keypress", "Space")
+  await keyOn(countKey(), "keyup", "Space")
+  expect(reached).toEqual([])
+
+  await advance(WAKE_GRACE_MS)
+  await keyOn(countKey(), "keydown", "Space")
+  expect(reached).toEqual(["keydown:Space"])
 })
 
 test("an Idle Block that ends a waking touch still swallows its release", async () => {

@@ -77,6 +77,7 @@ type RoomEvent =
   | { readonly type: "daybreak"; readonly slideshow: boolean }
   | { readonly type: "pressed"; readonly contact: Contact }
   | { readonly type: "lifted"; readonly contact: Contact }
+  | { readonly type: "repressed"; readonly contact: Contact }
   | { readonly type: "trailed" }
   | { readonly type: "overdue" }
   | { readonly type: "settled" }
@@ -125,6 +126,14 @@ function liftedBy(gesture: Gesture, contact: Contact): Gesture {
   contacts.delete(contact)
 
   return contacts.size > 0 ? { tag: "held", contacts } : { tag: "trailing" }
+}
+
+function repressedBy(gesture: Gesture, contact: Contact): Gesture {
+  if (gesture.tag !== "held") return gesture
+  const contacts = new Set(gesture.contacts)
+  contacts.delete(contact)
+
+  return contacts.size > 0 ? { tag: "held", contacts } : { tag: "none" }
 }
 
 function withGesture(room: Room, gesture: Gesture): Room {
@@ -197,6 +206,9 @@ function reduceRoom(room: Room, event: RoomEvent): Room {
 
     case "lifted":
       return withGesture(room, liftedBy(gesture, event.contact))
+
+    case "repressed":
+      return { ...room, gesture: repressedBy(gesture, event.contact) }
 
     case "trailed":
       return withGesture(room, trailedBy(gesture))
@@ -406,12 +418,16 @@ export function IdleProvider({
       }
 
       if (held.has(contact)) {
-        swallow(event)
+        if (event.repeat) {
+          swallow(event)
+        } else {
+          send({ type: "repressed", contact })
+        }
 
         return
       }
 
-      send({ type: "settled" })
+      if (gesture.tag === "trailing") send({ type: "settled" })
     }
 
     function keyUp(event: KeyboardEvent): void {
@@ -454,7 +470,7 @@ export function IdleProvider({
       for (const type of trailingPointerEvents)
         window.removeEventListener(type, trail, options)
     }
-  }, [guard, held])
+  }, [guard, gesture.tag, held])
 
   const cover = waking ? phase.from : phase.tag
 
