@@ -215,6 +215,8 @@ function Vital({
   )
 }
 
+const STEADY_BAND_FRACTION = 0.03
+
 function toneOf(
   delta: number | null,
   better: "higher" | "lower" | "neither",
@@ -222,7 +224,8 @@ function toneOf(
 ): Band {
   if (delta === null || baseline === null || better === "neither") return "none"
 
-  if (Math.abs(delta) <= Math.abs(baseline) * 0.03) return "fair"
+  if (Math.abs(delta) <= Math.abs(baseline) * STEADY_BAND_FRACTION)
+    return "fair"
 
   return delta > 0 === (better === "higher") ? "good" : "poor"
 }

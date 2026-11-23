@@ -34,6 +34,10 @@ let container: HTMLDivElement
 
 const today = trainingDayOn(new Date())
 
+const WEEKLY_RANGE_DAYS = 90
+
+const DAYS_PER_WEEK = 7
+
 type FixtureBody = Readonly<
   Record<
     string,
@@ -233,16 +237,20 @@ test("draws 30 days of trends with missing days as gaps and a table for each cha
 })
 
 test("groups by ISO week and names the partial edge weeks", async () => {
-  const data = await readNutritionSummary({ range: 90, by: "week" })
+  const data = await readNutritionSummary({
+    range: WEEKLY_RANGE_DAYS,
+    by: "week",
+  })
+
   expect(data.state).toBe("available")
-  await render(data, "/food?view=trends&range=90")
+  await render(data, `/food?view=trends&range=${WEEKLY_RANGE_DAYS}`)
 
   expect(text('nav[aria-label="Food views"] [aria-current="page"]')).toEqual([
     "Trends",
   ])
 
   expect(text('nav[aria-label="Range"] [aria-current="page"]')).toEqual([
-    "90 days",
+    `${WEEKLY_RANGE_DAYS} days`,
   ])
   expect(text('nav[aria-label="Group by"] [aria-current="page"]')).toEqual([
     "Weeks",
@@ -251,10 +259,10 @@ test("groups by ISO week and names the partial edge weeks", async () => {
   expect(rows.every((row) => row[0]?.startsWith("Week of") === true)).toBe(true)
 
   const days = rows.map((row) =>
-    Number(/\((\d+) days? in range\)/.exec(row[0] ?? "")?.[1] ?? 7)
+    Number(/\((\d+) days? in range\)/.exec(row[0] ?? "")?.[1] ?? DAYS_PER_WEEK)
   )
 
-  expect(days.reduce((sum, count) => sum + count, 0)).toBe(90)
+  expect(days.reduce((sum, count) => sum + count, 0)).toBe(WEEKLY_RANGE_DAYS)
 
   if (new Date(`${today}T12:00:00Z`).getUTCDay() !== 0)
     expect(rows.at(-1)?.[0]).toMatch(/in range\)$/)
