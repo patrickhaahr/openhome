@@ -12,11 +12,20 @@ import {
   type IdleSources,
 } from "@/components/idle-screen"
 import { IdleContext } from "@/components/idle-block"
-import { slideMemory, wantsIdleNow, type IdleSettings } from "@/lib/idle"
+import { NightScreen } from "@/components/night-screen"
+import {
+  DEFAULT_IDLE_SECONDS,
+  isNight,
+  slideMemory,
+  wantsIdleNow,
+  type IdleSettings,
+} from "@/lib/idle"
 
 export const WAKE_GRACE_MS = 450
 
 const WAKE_LIMIT_MS = 3000
+
+export const NIGHT_CHECK_MS = 5000
 
 const swallowed = [
   "pointerup",
@@ -39,15 +48,23 @@ const activity = ["pointerdown", "pointermove", "keydown", "wheel"] as const
 type Phase =
   | { readonly tag: "awake"; readonly handBack: Element | null }
   | { readonly tag: "idle"; readonly restoreFocus: Element | null }
-  | { readonly tag: "waking"; readonly restoreFocus: Element | null }
+  | { readonly tag: "night"; readonly restoreFocus: Element | null }
+  | {
+      readonly tag: "waking"
+      readonly from: "idle" | "night"
+      readonly restoreFocus: Element | null
+    }
 
 type Room = {
   readonly phase: Phase
+  readonly night: boolean
   readonly blockers: ReadonlySet<symbol>
 }
 
 type RoomEvent =
   | { readonly type: "inactive"; readonly focus: Element | null }
+  | { readonly type: "nightfall" }
+  | { readonly type: "daybreak"; readonly slideshow: boolean }
   | { readonly type: "input" }
   | { readonly type: "settled" }
   | { readonly type: "blocked"; readonly token: symbol }
@@ -55,6 +72,7 @@ type RoomEvent =
 
 const initialRoom: Room = {
   phase: { tag: "awake", handBack: null },
+  night: false,
   blockers: new Set(),
 }
 
@@ -66,29 +84,60 @@ function wokenTo(phase: Phase): Phase {
 }
 
 function reduceRoom(room: Room, event: RoomEvent): Room {
-  const { phase, blockers } = room
+  const { phase, night, blockers } = room
 
   switch (event.type) {
     case "inactive":
       if (phase.tag !== "awake" || blockers.size > 0) return room
 
-      return { phase: { tag: "idle", restoreFocus: event.focus }, blockers }
+      return {
+        ...room,
+        phase: { tag: night ? "night" : "idle", restoreFocus: event.focus },
+      }
 
-    case "input":
-      if (phase.tag !== "idle") return room
+    case "nightfall":
+      if (night) return room
 
       return {
-        phase: { tag: "waking", restoreFocus: phase.restoreFocus },
-        blockers,
+        ...room,
+        night: true,
+        phase: phase.tag === "idle" ? { ...phase, tag: "night" } : phase,
+      }
+
+    case "daybreak":
+      if (!night) return room
+
+      return {
+        ...room,
+        night: false,
+        phase:
+          phase.tag !== "night"
+            ? phase
+            : event.slideshow
+              ? { ...phase, tag: "idle" }
+              : wokenTo(phase),
+      }
+
+    case "input":
+      if (phase.tag !== "idle" && phase.tag !== "night") return room
+
+      return {
+        ...room,
+        phase: {
+          tag: "waking",
+          from: phase.tag,
+          restoreFocus: phase.restoreFocus,
+        },
       }
 
     case "settled":
       if (phase.tag === "awake") return room
 
-      return { phase: wokenTo(phase), blockers }
+      return { ...room, phase: wokenTo(phase) }
 
     case "blocked":
       return {
+        ...room,
         phase: phase.tag === "awake" ? phase : wokenTo(phase),
         blockers: new Set(blockers).add(event.token),
       }
@@ -98,26 +147,33 @@ function reduceRoom(room: Room, event: RoomEvent): Room {
       const remaining = new Set(blockers)
       remaining.delete(event.token)
 
-      return { phase, blockers: remaining }
+      return { ...room, blockers: remaining }
     }
   }
 }
+
+const currentTime = (): Date => new Date()
 
 export function IdleProvider({
   settings,
   overlay,
   sources = serverSources,
+  now = currentTime,
   children,
 }: {
   settings: IdleSettings
   overlay?: React.ReactNode
   sources?: IdleSources
+  now?: () => Date
   children: React.ReactNode
 }): React.JSX.Element {
-  const [{ phase, blockers }, send] = useReducer(reduceRoom, initialRoom)
+  const [{ phase, night, blockers }, send] = useReducer(reduceRoom, initialRoom)
   const [memory] = useState(slideMemory)
   const screen = useRef<HTMLDivElement>(null)
+  const lastActivity = useRef(0)
   const { timeoutMs, preview } = settings
+  const slideshow = timeoutMs !== null
+  const inactivityMs = timeoutMs ?? (night ? DEFAULT_IDLE_SECONDS * 1000 : null)
   const awake = phase.tag === "awake"
   const showing = !awake
   const blocked = blockers.size > 0
@@ -130,32 +186,52 @@ export function IdleProvider({
   }, [])
 
   useEffect(() => {
-    if (!awake || blocked || timeoutMs === null) return
-    let last = Date.now()
-    let timer: ReturnType<typeof setTimeout> | undefined
-
-    const touched = (): void => {
-      last = Date.now()
+    function check(): void {
+      send(
+        isNight(now()) ? { type: "nightfall" } : { type: "daybreak", slideshow }
+      )
     }
 
+    check()
+    const timer = setInterval(check, NIGHT_CHECK_MS)
+
+    return () => clearInterval(timer)
+  }, [now, slideshow])
+
+  useEffect(() => {
+    if (!awake || blocked) return
+
+    function touched(): void {
+      lastActivity.current = Date.now()
+    }
+
+    touched()
+
+    for (const type of activity)
+      window.addEventListener(type, touched, { capture: true, passive: true })
+
+    return () => {
+      for (const type of activity)
+        window.removeEventListener(type, touched, { capture: true })
+    }
+  }, [awake, blocked])
+
+  useEffect(() => {
+    if (!awake || blocked || inactivityMs === null) return
+    const limit = inactivityMs
+    let timer: ReturnType<typeof setTimeout> | undefined
+
     function check(): void {
-      const left = last + (timeoutMs ?? 0) - Date.now()
+      const left = lastActivity.current + limit - Date.now()
 
       if (left <= 0) send({ type: "inactive", focus: document.activeElement })
       else timer = setTimeout(check, left)
     }
 
-    for (const type of activity)
-      window.addEventListener(type, touched, { capture: true, passive: true })
-    timer = setTimeout(check, timeoutMs)
+    check()
 
-    return () => {
-      clearTimeout(timer)
-
-      for (const type of activity)
-        window.removeEventListener(type, touched, { capture: true })
-    }
-  }, [awake, blocked, timeoutMs])
+    return () => clearTimeout(timer)
+  }, [awake, blocked, inactivityMs])
 
   useEffect(() => {
     if (!wantsIdleNow({ timeoutMs, preview }, window.location.search)) return
@@ -168,7 +244,7 @@ export function IdleProvider({
   }, [timeoutMs, preview])
 
   useEffect(() => {
-    if (phase.tag === "idle") {
+    if (phase.tag === "idle" || phase.tag === "night") {
       screen.current?.focus({ preventScroll: true })
 
       return
@@ -222,20 +298,24 @@ export function IdleProvider({
     }
   }, [showing])
 
+  const waking = phase.tag === "waking"
+  const cover = waking ? phase.from : phase.tag
+
   const state = useMemo(() => ({ phase: phase.tag, block }), [phase.tag, block])
 
   return (
     <IdleContext value={state}>
       {children}
-      {showing ? (
+      {cover === "idle" ? (
         <IdleScreen
           ref={screen}
-          waking={phase.tag === "waking"}
+          waking={waking}
           memory={memory}
           overlay={overlay}
           sources={sources}
         />
       ) : null}
+      {cover === "night" ? <NightScreen ref={screen} waking={waking} /> : null}
     </IdleContext>
   )
 }

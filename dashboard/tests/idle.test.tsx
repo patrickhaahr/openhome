@@ -25,6 +25,7 @@ import {
   asset,
   container,
   countKey,
+  DAYTIME,
   fakeSources,
   fire,
   Holder,
@@ -480,7 +481,6 @@ test("favours on-this-day photos first, labels only the shown photo, then keeps 
     }),
   }
 
-  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
   await render(
     <IdleProvider settings={settings} sources={sources}>
       <Page />
@@ -548,7 +548,7 @@ test("Copenhagen midnight replaces yesterday's photo queue and clears its captio
   }
 
   await render(
-    <IdleProvider settings={settings} sources={sources}>
+    <IdleProvider settings={settings} sources={sources} now={() => DAYTIME}>
       <Page />
     </IdleProvider>
   )
@@ -598,8 +598,6 @@ test("a cancelled run's late page failure cannot blank the photo its replacement
 })
 
 test("waking while the first photo is still loading leaves nothing behind for the next spell", async () => {
-  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
-
   await render(
     <IdleProvider settings={settings} sources={fakeSources()}>
       <Page />
@@ -621,8 +619,6 @@ test("waking while the first photo is still loading leaves nothing behind for th
 })
 
 test("waking during the dwell stops the rotation and the next spell carries on with the unseen photo", async () => {
-  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"))
-
   await render(
     <IdleProvider settings={settings} sources={fakeSources()}>
       <Page />
