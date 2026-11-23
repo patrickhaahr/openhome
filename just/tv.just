@@ -46,6 +46,7 @@ tv-check: tv-assets
     sh -n tv/tools/connect.sh
     sh -n tv/runtime/client-service.sh
     node --check tv/bridge/client.js
+    node --check tv/bridge/lifecycles.js
     node --check tv/bridge/preview.js
     node --check tv/tools/verify-client.js
     python3 -c 'import ast; from pathlib import Path; [ast.parse(p.read_text(), filename=str(p)) for directory in ("tv/runtime", "tv/tools") for p in Path(directory).glob("*.py")]'

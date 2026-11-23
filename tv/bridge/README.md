@@ -45,11 +45,16 @@ a fake HTTPS transport; they never call the real API or control devices.
 
 ## Lifecycles
 
-The bridge keeps independent facts separate. Weather and recovery each have their own freshness
-deadline; neither implies the other. `/state` has one shared in-flight refresh, cleared once its
-bounded upstream requests settle; results that arrive after a Copenhagen day change are dropped.
-Command admission is three separate checks: a known command, one in-flight slot (released on success,
-rejection or an invalid body) and the one-second start deadline (never released early). Restart clears
-all in-memory state. The launcher mirrors this: a state read is stale-marked on a non-200, invalid body
-or 10-second abort; a command is accepted or uncertain (14-second abort), never retried, and an
-accepted command is acknowledgement only.
+`lifecycles.js` owns every state and transition; `client.js` does the IO and passes events in.
+Both files are installed together. Weather and recovery are separate observations, each with its
+own freshness deadlines; neither implies the other.
+
+| Lifecycle | States | Exits |
+| --- | --- | --- |
+| Observation | `unavailable`, `fresh`, `stale` | Own deadlines, or a Copenhagen day change; results for another day are ignored |
+| Refresh | `idle`, `refreshing` | Its bounded upstream requests settle, or processing fails; only the current flight settles |
+| Command admission | `idle`, `sending` | Success, rejection, invalid body or the 12-second request deadline; the one-second start deadline is never released early |
+
+Restart clears all in-memory state. The launcher mirrors this: a state read is stale-marked on a
+non-200, invalid body or 10-second abort; a command is accepted or uncertain (14-second abort),
+never retried, and an accepted command is acknowledgement only.
