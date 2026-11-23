@@ -4,10 +4,10 @@ default:
 # Full gate across repos
 check: file-size-check comment-check check-api check-mcp check-mobile check-firmware check-cli check-dashboard deployment-check
 
-# Run the global file-size-guard hook over the whole tree, optionally under the given paths
+# Apply the commit hook's file-size rules to the whole working tree, optionally under the given paths
 [positional-arguments]
 file-size-check *paths:
-    @bash scripts/file-size-check.sh "$@"
+    @bash tools/git-file-size-guard --tree "$@"
 
 # Fail when a file holds more comments than scripts/comment-baseline.json allows (ADR 0018)
 comment-check:

@@ -82,11 +82,20 @@
   # https://devenv.sh/git-hooks/
   # Runs through devenv shell so it works even when git commit is invoked
   # outside the devenv environment (plain PATH lacks cargo/just).
-  git-hooks.hooks.just-check = {
-    enable = true;
-    name = "just check";
-    entry = "${pkgs.devenv}/bin/devenv";
-    args = [ "shell" "--" "just" "check" ];
-    pass_filenames = false;
+  git-hooks.hooks = {
+    git-file-size-guard = {
+      enable = true;
+      name = "git-file-size-guard";
+      entry = "bash tools/git-file-size-guard";
+      pass_filenames = false;
+      always_run = true;
+    };
+    just-check = {
+      enable = true;
+      name = "just check";
+      entry = "${pkgs.devenv}/bin/devenv";
+      args = [ "shell" "--" "just" "check" ];
+      pass_filenames = false;
+    };
   };
 }
