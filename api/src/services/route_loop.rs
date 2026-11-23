@@ -150,12 +150,13 @@ mod tests {
 
     #[test]
     fn rounds_converted_step_distances_to_whole_meters() {
-        const STEPS: u32 = 3333;
-        const STEP_LENGTH_CM: u32 = 77;
+        const STEPS_ROUNDING_UP: f64 = 3332.0;
+        const STEP_LENGTH_CM: f64 = 77.0;
+        const EXPECTED_METERS_ROUNDED_UP_FROM_2565_64: u32 = 2566;
         assert_eq!(
-            parse_walking_steps(f64::from(STEPS), f64::from(STEP_LENGTH_CM))
+            parse_walking_steps(STEPS_ROUNDING_UP, STEP_LENGTH_CM)
                 .map(|request| request.target.meters()),
-            Ok(STEPS * STEP_LENGTH_CM / CM_PER_METER)
+            Ok(EXPECTED_METERS_ROUNDED_UP_FROM_2565_64)
         );
     }
 
@@ -183,9 +184,14 @@ mod tests {
 
     #[test]
     fn rejects_step_lengths_outside_the_range_and_fractional_ones() {
-        let just_below = f64::from(*STEP_LENGTH_CM.start()) - 1.0;
-        let just_above = f64::from(*STEP_LENGTH_CM.end()) + 1.0;
-        for length in [just_below, just_above, 75.5, f64::NAN] {
+        const ONE_CM_BELOW_SHORTEST_STEP: f64 = 39.0;
+        const ONE_CM_ABOVE_LONGEST_STEP: f64 = 151.0;
+        for length in [
+            ONE_CM_BELOW_SHORTEST_STEP,
+            ONE_CM_ABOVE_LONGEST_STEP,
+            75.5,
+            f64::NAN,
+        ] {
             assert_eq!(
                 parse_walking_steps(10_000.0, length),
                 Err(LoopRequestError::InvalidStepLength)
@@ -198,7 +204,7 @@ mod tests {
     const SMALL_BLOCK_SIDE_DEGREES: f64 = 0.004;
     const METERS_PER_DEGREE_LATITUDE: f64 = 111_195.0;
     const DISTANCE_TOLERANCE_METERS: f64 = 1.0;
-    const NUDGE_METERS: f64 = SHARED_WAY_METERS / 3.0;
+    const NUDGE_OF_ABOUT_TWENTY_METERS_IN_DEGREES: f64 = 0.00018;
     const EASTWARD: f64 = 1.0;
     const WESTWARD: f64 = -1.0;
 
@@ -254,7 +260,7 @@ mod tests {
         let east = square(EASTWARD, BLOCK_SIDE_DEGREES);
         let mut nudged = east.clone();
         for point in &mut nudged.coordinates {
-            point[1] += NUDGE_METERS / METERS_PER_DEGREE_LATITUDE;
+            point[1] += NUDGE_OF_ABOUT_TWENTY_METERS_IN_DEGREES;
         }
         assert!(!distinct(&nudged, &east));
     }
@@ -300,10 +306,8 @@ mod tests {
     #[test]
     fn a_wildly_long_loop_is_not_chased_below_the_calibration_floor() {
         const WILDLY_TOO_LONG: f64 = 3.0;
-        assert_requested_length(
-            &[WILDLY_TOO_LONG],
-            CALIBRATION_TARGET_METERS * CALIBRATION.start(),
-        );
+        const SIXTY_PERCENT_OF_THE_TARGET_METERS: f64 = 3000.0;
+        assert_requested_length(&[WILDLY_TOO_LONG], SIXTY_PERCENT_OF_THE_TARGET_METERS);
     }
 
     #[test]
