@@ -32,6 +32,8 @@ const TARGET_KCAL = 2120
 
 const EATEN_KCAL = 1100
 
+const VITAMIN_D_ONLY_DAYS_AGO: ReadonlyArray<number> = [2, 1]
+
 const ONE_SECOND_MS = 1000
 
 const DAY_MS = 86_400_000
@@ -309,7 +311,7 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
 
     const mealLog = z.object({ meal_log: z.object({ day: z.string() }) })
 
-    for (const daysAgo of [2, 1]) {
+    for (const daysAgo of VITAMIN_D_ONLY_DAYS_AGO) {
       await post(
         micros.url,
         "/api/nutrition/meal-logs",
