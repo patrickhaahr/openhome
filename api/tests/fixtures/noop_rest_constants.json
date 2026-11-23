@@ -20,7 +20,7 @@
     "Rest.minNeedNights": 7,
     "Rest.maxNeedHours": 9.5,
     "Rest.populationNeedFloorHours(age: nil)": 8.0,
-    "IntelligenceEngine.sleepConsistencyNights": 28,
-    "IntelligenceEngine.habitualSleepFallbackEfficiency": 0.9
+    "IntelligenceEngine.analyzeRecent.nightlyHours.suffix": 28,
+    "IntelligenceEngine.computeHabitualSleep.efficiency ?? fallback": 0.9
   }
 }

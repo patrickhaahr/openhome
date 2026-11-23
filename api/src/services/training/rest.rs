@@ -258,8 +258,8 @@ mod tests {
             "Rest.minNeedNights": MIN_NEED_NIGHTS,
             "Rest.maxNeedHours": MAX_NEED_HOURS,
             "Rest.populationNeedFloorHours(age: nil)": NEED_FLOOR_HOURS,
-            "IntelligenceEngine.sleepConsistencyNights": CONSISTENCY_NIGHTS,
-            "IntelligenceEngine.habitualSleepFallbackEfficiency": FALLBACK_EFFICIENCY,
+            "IntelligenceEngine.analyzeRecent.nightlyHours.suffix": CONSISTENCY_NIGHTS,
+            "IntelligenceEngine.computeHabitualSleep.efficiency ?? fallback": FALLBACK_EFFICIENCY,
         });
         assert_eq!(copied, contract["constants"]);
     }
