@@ -1,7 +1,7 @@
 # Room writes these schema exports during the Android build (room.schemaLocation in mobile/app/build.gradle.kts).
 mobile/app/schemas/** linguist-generated
 
-# Per-second heart-rate samples from one recorded run, read by api/tests/common/reference_run.rs.
+# Per-second heart-rate samples from one recorded run, read by api/tests/training/reference_run.rs.
 api/tests/fixtures/reference_run_hr.csv -file-size-guard
 
 # Synthetic workout records the Dashboard preview seeds into its database (api/examples/dashboard_preview/seed.rs).

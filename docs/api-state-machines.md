@@ -61,7 +61,7 @@ its issue records the SQLx metadata handling; this document does not restate it.
 Only behavior with an accepted test in the repository is listed; this is a map to
 the suites, not a record of a run.
 
-- **Backlight** (`api/tests/backlight.rs`): rapid clients cancel partial uploads and
+- **Backlight** (`api/tests/backlight/`): rapid clients cancel partial uploads and
   keep only the latest target (`rapid_effect_clients_cancel_partial_uploads_and_keep_only_the_latest_target`);
   an outage retains the stale observation and recovers only the latest target under
   concurrent commands (`outage_retains_stale_observation_and_recovers_only_latest_target_during_concurrent_commands`);
@@ -71,7 +71,7 @@ the suites, not a record of a run.
   completes the accepted work; restart recovers the current window and only
   unexpired overrides; failed transition persistence is retried with the current
   clock before any device write.
-- **Routes** (`api/tests/route_loop.rs`): concurrent same-target cache reuse,
+- **Routes** (`api/tests/route_loop/`): concurrent same-target cache reuse,
   interrupted partial results, retention and selection protection, restart reads.
 - **Receipts** (`fitness_*_retries.rs`, `fitness_profile_revisions.rs`,
   `nutrition_meal_logs/`, domain suites): concurrent claims, conflict precedence,
@@ -83,7 +83,7 @@ the suites, not a record of a run.
 - **Nutrition weeks** (`api/tests/nutrition_targets/`): racing first reads return one
   stored winner (`concurrent_first_reads_agree_on_the_stored_winner`); a stored
   week survives Profile loss; the provisional/frozen boundary.
-- **NOOP push** (`api/tests/noop_push.rs`): byte-identical and cross-encoding retries,
+- **NOOP push** (`api/tests/noop_push/`): byte-identical and cross-encoding retries,
   conflicts, concurrent identical and differing-byte deliveries, out-of-order parts,
   staged parts across reconnects, supersession and late parts, rotation, backup and
   restart convergence (`baseline_retry_converges_after_restart_and_database_backup`).

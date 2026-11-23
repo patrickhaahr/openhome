@@ -51,5 +51,5 @@ shows no chart.
 
 ## Verification
 
-`api/tests/price_history.rs`, `mcp/tests/binder.rs` (`card_prices`), `dashboard/tests/binder-prices.test.tsx`
+`api/tests/binder/price_history.rs`, `mcp/tests/binder.rs` (`card_prices`), `dashboard/tests/binder-prices.test.tsx`
 and the recipe [`binder-prices.md`](../.agents/skills/verify-openhome/features/binder-prices.md).

@@ -99,7 +99,7 @@ Receiver implementation behavior the protocol does not specify, not deviations:
 
 ## Existing proof
 
-`api/tests/noop_push.rs` covers byte-identical and cross-encoding retries,
+`api/tests/noop_push/` covers byte-identical and cross-encoding retries,
 conflicts, per-source/device scoping, concurrent identical posts, concurrent
 differing-byte deliveries of one `batchId`, out-of-order parts, staged parts
 across reconnects, supersession and late parts, retries of applied
