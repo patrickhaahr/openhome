@@ -1,5 +1,19 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request.rs"]
+mod send_request;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use axum::Router;
 use http::StatusCode;
 use openhome_api::AppState;
@@ -39,9 +53,9 @@ fn ir_test_app(service: openhome_api::services::ir::IrService) -> Router {
 
 #[tokio::test]
 async fn test_status_endpoint_returns_503_when_service_not_configured() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
-    let (status, body) = common::send_request(app, "/api/ir", Some("test-api-key")).await;
+    let (status, body) = send_request(app, "/api/ir", Some("test-api-key")).await;
 
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body["error"], "IR service is not configured");
@@ -49,9 +63,9 @@ async fn test_status_endpoint_returns_503_when_service_not_configured() {
 
 #[tokio::test]
 async fn test_send_endpoint_returns_400_when_command_missing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app,
         "/api/ir/edifier",
         http::Method::POST,
@@ -82,7 +96,7 @@ async fn test_status_endpoint_returns_device_status() {
     let service = openhome_api::services::ir::IrService::new(&mock_server.uri()).unwrap();
     let app = ir_test_app(service);
 
-    let (status, body) = common::send_request(app, "/api/ir", Some("test-api-key")).await;
+    let (status, body) = send_request(app, "/api/ir", Some("test-api-key")).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["message"], "IR remote ready");
@@ -110,7 +124,7 @@ async fn test_status_endpoint_returns_503_when_device_is_unavailable() {
     let service = openhome_api::services::ir::IrService::new(&mock_server.uri()).unwrap();
     let app = ir_test_app(service);
 
-    let (status, body) = common::send_request(app, "/api/ir", Some("test-api-key")).await;
+    let (status, body) = send_request(app, "/api/ir", Some("test-api-key")).await;
 
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body["error"], "IR bridge offline");
@@ -132,7 +146,7 @@ async fn test_send_endpoint_proxies_command_to_device() {
     let service = openhome_api::services::ir::IrService::new(&mock_server.uri()).unwrap();
     let app = ir_test_app(service);
 
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app,
         "/api/ir/edifier",
         http::Method::POST,
@@ -161,7 +175,7 @@ async fn test_lgtv_send_endpoint_proxies_command_to_remote_resource() {
     let service = openhome_api::services::ir::IrService::new(&mock_server.uri()).unwrap();
     let app = ir_test_app(service);
 
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app,
         "/api/ir/lgtv",
         http::Method::POST,
@@ -181,7 +195,7 @@ async fn test_send_endpoint_rejects_get_requests() {
     let app = ir_test_app(service);
 
     let (status, _) =
-        common::send_request(app, "/api/ir/edifier?command=power", Some("test-api-key")).await;
+        send_request(app, "/api/ir/edifier?command=power", Some("test-api-key")).await;
 
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
 }
@@ -202,7 +216,7 @@ async fn test_send_endpoint_returns_404_for_unknown_command() {
     let service = openhome_api::services::ir::IrService::new(&mock_server.uri()).unwrap();
     let app = ir_test_app(service);
 
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app,
         "/api/ir/edifier",
         http::Method::POST,

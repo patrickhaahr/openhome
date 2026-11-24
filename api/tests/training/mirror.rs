@@ -1,3 +1,5 @@
+use crate::memory_noop_db::memory_noop_db;
+use crate::test_app_with_pools::test_app_with_pools;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
@@ -38,7 +40,7 @@ pub fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, field
 pub async fn test_app_with_noop_db(noop_db: SqlitePool) -> Router {
     let db = SqlitePool::connect(":memory:").await.unwrap();
     sqlx::migrate!("./migrations").run(&db).await.unwrap();
-    crate::common::test_app_with_pools(db, noop_db).0
+    test_app_with_pools(db, noop_db).0
 }
 
 pub struct Mirror {
@@ -50,7 +52,7 @@ pub struct Mirror {
 impl Mirror {
     pub async fn empty() -> Self {
         Self {
-            db: crate::common::memory_noop_db().await,
+            db: memory_noop_db().await,
             ids: 0,
             row_id: 0,
         }

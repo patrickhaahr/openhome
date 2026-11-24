@@ -1,7 +1,20 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pool.rs"]
+mod test_app_with_pool;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_pool::test_app_with_pool;
 use axum::Router;
-use common::send_request_with_method;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
@@ -76,13 +89,13 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_workout
     let path = dir.path().join("app.db");
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db.clone());
+    let (app, _) = test_app_with_pool(db.clone());
     let (status, first) = post(&app, workout(KEY)).await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
     db.close().await;
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
     let (status, retried) = post(&app, workout(KEY)).await;
     assert_eq!(status, StatusCode::OK, "{retried}");
     assert_eq!(retried, first);
@@ -106,7 +119,7 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_workout
 async fn simultaneous_deliveries_create_one_workout() {
     let dir = tempfile::tempdir().unwrap();
     let db = open_file_database(&dir.path().join("app.db")).await;
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
 
     let (one, two, three) = tokio::join!(
         post(&app, workout(KEY)),
@@ -127,7 +140,7 @@ async fn simultaneous_deliveries_create_one_workout() {
 
 #[tokio::test]
 async fn request_id_with_changed_arguments_conflicts_and_changes_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, workout(KEY)).await;
 
     let mut changed = workout(KEY);
@@ -149,7 +162,7 @@ async fn request_id_with_changed_arguments_conflicts_and_changes_nothing() {
 
 #[tokio::test]
 async fn a_rejected_request_consumes_no_request_id_and_writes_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut unknown_exercise = workout(KEY);
     unknown_exercise["exercises"][0]["exercise_id"] = json!(424_242);
@@ -163,7 +176,7 @@ async fn a_rejected_request_consumes_no_request_id_and_writes_nothing() {
 
 #[tokio::test]
 async fn an_old_retry_cannot_recreate_a_deleted_workout_or_claim_its_reused_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, workout(KEY)).await;
     let (status, _) = send_request_with_method(
         app.clone(),
@@ -186,7 +199,7 @@ async fn an_old_retry_cannot_recreate_a_deleted_workout_or_claim_its_reused_id()
 
 #[tokio::test]
 async fn changed_arguments_are_refused_before_a_deleted_workouts_target() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, workout(KEY)).await;
     let (status, _) = send_request_with_method(
         app.clone(),
@@ -228,7 +241,7 @@ async fn changed_arguments_are_refused_before_a_deleted_workouts_target() {
 
 #[tokio::test]
 async fn request_id_is_validated_and_requires_authentication() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = post(&app, workout("   ")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -247,7 +260,7 @@ async fn request_id_is_validated_and_requires_authentication() {
 
 #[tokio::test]
 async fn workouts_without_a_request_id_keep_creating_a_new_workout_each_call() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let mut body = workout(KEY);
     body.as_object_mut().unwrap().remove("request_id");
 

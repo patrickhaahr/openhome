@@ -1,4 +1,5 @@
 use crate::mirror::{Mirror, Window};
+use crate::send_request::send_request;
 use axum::http::StatusCode;
 use chrono::{Duration, Utc};
 use openhome_api::services::training::calendar::{CalendarDay, iso};
@@ -37,7 +38,7 @@ fn sleep(start_ts: i64, end_ts: i64, edited: bool) -> Value {
 
 async fn recent(mirror: &Mirror, count: &str, key: Option<&str>) -> (StatusCode, Value) {
     let app = crate::mirror::test_app_with_noop_db(mirror.db.clone()).await;
-    crate::common::send_request(app, &format!("/api/training/sleep/recent/{count}"), key).await
+    send_request(app, &format!("/api/training/sleep/recent/{count}"), key).await
 }
 
 #[tokio::test]
@@ -206,7 +207,7 @@ async fn journal_changes_do_not_affect_recent_sleep_or_training_context() {
     ];
     let mut before = Vec::new();
     for path in &paths {
-        let response = crate::common::send_request(app.clone(), path, Some("test-api-key")).await;
+        let response = send_request(app.clone(), path, Some("test-api-key")).await;
         assert_eq!(response.0, StatusCode::OK, "{}", response.1);
         before.push(response);
     }
@@ -229,7 +230,7 @@ async fn journal_changes_do_not_affect_recent_sleep_or_training_context() {
         )
         .await;
 
-    let recovery = crate::common::send_request(
+    let recovery = send_request(
         app.clone(),
         &format!("/api/training/days/{today}/recovery"),
         Some("test-api-key"),
@@ -237,7 +238,7 @@ async fn journal_changes_do_not_affect_recent_sleep_or_training_context() {
     .await;
     assert_eq!(recovery.0, StatusCode::UNPROCESSABLE_ENTITY);
     for (path, expected) in paths.iter().zip(before) {
-        let after = crate::common::send_request(app.clone(), path, Some("test-api-key")).await;
+        let after = send_request(app.clone(), path, Some("test-api-key")).await;
         assert_eq!(after, expected, "{path}");
     }
 }

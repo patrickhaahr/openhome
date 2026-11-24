@@ -1,6 +1,19 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pool.rs"]
+mod test_app_with_pool;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
-use common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_pool::test_app_with_pool;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
@@ -52,7 +65,7 @@ async fn test_workout_weight_migration_preserves_logged_workouts() {
     .await
     .unwrap();
 
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
     let (status, body) = send_request_with_method(
         app,
         "/api/workouts/1",
@@ -69,7 +82,7 @@ async fn test_workout_weight_migration_preserves_logged_workouts() {
 
 #[tokio::test]
 async fn test_list_exercises_returns_seeded_catalog() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,
@@ -134,7 +147,7 @@ async fn test_list_exercises_returns_seeded_catalog() {
 
 #[tokio::test]
 async fn test_list_exercises_filter_by_category() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,
@@ -156,7 +169,7 @@ async fn test_list_exercises_filter_by_category() {
 
 #[tokio::test]
 async fn test_list_exercises_filter_by_muscle_group() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,
@@ -177,7 +190,7 @@ async fn test_list_exercises_filter_by_muscle_group() {
 
 #[tokio::test]
 async fn test_list_exercises_filter_combined() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,
@@ -197,7 +210,7 @@ async fn test_list_exercises_filter_combined() {
 
 #[tokio::test]
 async fn test_get_exercise_by_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (_status, list) = send_request_with_method(
         app.clone(),
@@ -226,7 +239,7 @@ async fn test_get_exercise_by_id() {
 
 #[tokio::test]
 async fn test_get_exercise_404_for_unknown_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(
         app,
@@ -242,7 +255,7 @@ async fn test_get_exercise_404_for_unknown_id() {
 
 #[tokio::test]
 async fn test_create_exercise_returns_201() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Incline Dumbbell Press",
@@ -270,7 +283,7 @@ async fn test_create_exercise_returns_201() {
 
 #[tokio::test]
 async fn test_create_exercise_allows_optional_fields_null() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Mystery Movement",
@@ -293,7 +306,7 @@ async fn test_create_exercise_allows_optional_fields_null() {
 
 #[tokio::test]
 async fn test_create_exercise_rejects_unknown_category() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Bad Category Move",
@@ -315,7 +328,7 @@ async fn test_create_exercise_rejects_unknown_category() {
 
 #[tokio::test]
 async fn test_create_exercise_conflict_on_duplicate_name() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Pull-up",
@@ -337,7 +350,7 @@ async fn test_create_exercise_conflict_on_duplicate_name() {
 
 #[tokio::test]
 async fn test_patch_exercise_updates_fields() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Temp Exercise",
@@ -386,7 +399,7 @@ async fn test_patch_exercise_updates_fields() {
 
 #[tokio::test]
 async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Clearable Move",
@@ -431,7 +444,7 @@ async fn test_patch_exercise_null_clears_optional_fields_absent_keeps() {
 
 #[tokio::test]
 async fn test_patch_exercise_404_for_unknown_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let patch = json!({ "muscle_group": "back" });
     let (status, _) = send_request_with_method(
@@ -448,7 +461,7 @@ async fn test_patch_exercise_404_for_unknown_id() {
 
 #[tokio::test]
 async fn test_patch_exercise_conflict_on_duplicate_name() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Patch Conflict A",
@@ -479,7 +492,7 @@ async fn test_patch_exercise_conflict_on_duplicate_name() {
 
 #[tokio::test]
 async fn test_delete_exercise() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "name": "Delete Me Press",
@@ -518,7 +531,7 @@ async fn test_delete_exercise() {
 
 #[tokio::test]
 async fn test_delete_exercise_404_for_unknown_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(
         app,
@@ -534,7 +547,7 @@ async fn test_delete_exercise_404_for_unknown_id() {
 
 #[tokio::test]
 async fn test_exercises_require_auth() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) =
         send_request_with_method(app, "/api/exercises", Method::GET, None, None).await;

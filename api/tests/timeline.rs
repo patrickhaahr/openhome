@@ -1,6 +1,17 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
-use common::{send_request_with_method, test_app_with_db};
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_db::test_app_with_db;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 
@@ -69,7 +80,7 @@ async fn test_should_get_timeline_full_items_with_limit() {
 
 #[tokio::test]
 async fn test_should_return_422_for_invalid_before_id_full_view() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,
@@ -227,7 +238,7 @@ async fn test_should_paginate_timeline_compact_with_before_id() {
 
 #[tokio::test]
 async fn test_should_return_422_for_invalid_before_id_compact_view() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,
@@ -352,7 +363,7 @@ async fn test_should_mark_item_as_read() {
 
 #[tokio::test]
 async fn test_should_return_404_when_marking_unknown_item() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,

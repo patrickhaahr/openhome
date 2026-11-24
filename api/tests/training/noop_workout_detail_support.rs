@@ -1,10 +1,11 @@
-use crate::common;
 use crate::mirror::Mirror;
 use crate::mirror::noop_workout;
 use crate::reference_run::IMPORTED;
 use crate::reference_run::PUSHED_AT;
 use crate::reference_run::SOURCE;
 use crate::reference_run::WORKOUT_WINDOW;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -24,7 +25,7 @@ pub(crate) async fn detail(
     start: &str,
     api_key: Option<&str>,
 ) -> (StatusCode, Value) {
-    common::send_request(
+    send_request(
         app.clone(),
         &format!("/api/training/noop-workouts/{source}/{start}"),
         api_key,
@@ -39,7 +40,7 @@ pub(crate) async fn detail_of(app: &Router, source: &str, start: &str) -> Value 
 }
 
 pub(crate) async fn set_hr_max(app: &Router, hr_max_bpm: Option<i64>) {
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app.clone(),
         "/api/profile",
         Method::PATCH,
@@ -51,7 +52,7 @@ pub(crate) async fn set_hr_max(app: &Router, hr_max_bpm: Option<i64>) {
 }
 
 pub(crate) async fn workouts_on(app: &Router, day: &str) -> Value {
-    let (status, body) = common::send_request(
+    let (status, body) = send_request(
         app.clone(),
         &format!("/api/training/days/{day}/workouts"),
         Some(API_KEY),

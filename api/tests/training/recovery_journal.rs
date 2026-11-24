@@ -3,6 +3,7 @@ use crate::recovery_support::{
     API_KEY, COMPUTED, IMPORTED, REAL_PUSH_AT, SEP_20, SOURCE, covered_mirror, daily, journal,
     measured, real_mirror, sleep,
 };
+use crate::send_request::send_request;
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -259,7 +260,7 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
     assert_eq!(previous["sleep"]["sessions"], json!([]));
 
     let app = crate::mirror::test_app_with_noop_db(over.db).await;
-    let (status, context) = crate::common::send_request(
+    let (status, context) = send_request(
         app.clone(),
         "/api/training/context/2026-09-20/2026-09-20",
         Some(API_KEY),
@@ -284,7 +285,7 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
         ("resting_heart_rate", 50.0, "beats/min", IMPORTED),
         ("hrv", 70.0, "ms", COMPUTED),
     ] {
-        let (status, trend) = crate::common::send_request(
+        let (status, trend) = send_request(
             app.clone(),
             &format!("/api/training/trends/{metric}/2026-09-20/2026-09-20"),
             Some(API_KEY),

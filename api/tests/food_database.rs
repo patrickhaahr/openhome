@@ -1,4 +1,13 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request.rs"]
+mod send_request;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
 #[path = "food_workbook/builder.rs"]
 mod builder;
@@ -7,11 +16,12 @@ mod dataset_v1;
 #[path = "food_workbook/dataset_v2.rs"]
 mod dataset_v2;
 
+use crate::send_request::send_request;
+use crate::test_app_with_db::test_app_with_db;
 use std::path::PathBuf;
 
 use axum::{Router, http::StatusCode};
 use builder::{sha256, workbook};
-use common::{send_request, test_app_with_db};
 use dataset_v1::{first_dataset, parameters, skyr};
 use dataset_v2::second_dataset;
 use openhome_api::{

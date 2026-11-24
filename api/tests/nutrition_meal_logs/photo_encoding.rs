@@ -1,4 +1,4 @@
-use crate::common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{Nutrition, at, breakfast, synthetic, with_photo};
 use axum::{http::Method, http::StatusCode};
 use pretty_assertions::assert_eq;

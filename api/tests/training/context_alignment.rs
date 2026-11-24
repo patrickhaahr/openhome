@@ -3,6 +3,7 @@ use crate::context_support::{
 };
 use crate::mirror::Mirror;
 use crate::mirror::Window;
+use crate::send_request_with_method::send_request_with_method;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -18,14 +19,8 @@ const RING_DIP: i64 = 10;
 const PLANCHE_HOLD: i64 = 1;
 
 async fn post(app: &Router, uri: &str, body: Value) -> Value {
-    let (status, body) = crate::common::send_request_with_method(
-        app.clone(),
-        uri,
-        Method::POST,
-        Some(body),
-        Some(API_KEY),
-    )
-    .await;
+    let (status, body) =
+        send_request_with_method(app.clone(), uri, Method::POST, Some(body), Some(API_KEY)).await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
     body
 }

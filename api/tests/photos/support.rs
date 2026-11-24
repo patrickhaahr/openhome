@@ -1,4 +1,4 @@
-use crate::common;
+use crate::test_app_with_db::test_app_with_db;
 use axum::Router;
 use axum::body::Body;
 use axum::body::to_bytes;
@@ -29,7 +29,7 @@ pub(crate) async fn app(server: Option<&MockServer>) -> Router {
 }
 
 pub(crate) async fn app_with(server: Option<&MockServer>, albums: &[&str]) -> Router {
-    let (_, state) = common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let service = server.map(|server| {
         PhotoService::new(
             server.uri().parse().unwrap(),

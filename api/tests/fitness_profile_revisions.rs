@@ -1,7 +1,17 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use axum::Router;
-use common::send_request_with_method;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 
@@ -41,7 +51,7 @@ fn edit(revision: i64, height_cm: f64, sex: Option<&str>) -> Value {
 
 #[tokio::test]
 async fn an_older_or_repeated_revision_is_acknowledged_and_changes_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, newest) = patch(&app, edit(5, 180.0, Some("male"))).await;
     assert_eq!(status, StatusCode::OK, "{newest}");
@@ -58,7 +68,7 @@ async fn an_older_or_repeated_revision_is_acknowledged_and_changes_nothing() {
 
 #[tokio::test]
 async fn a_newer_revision_applies_and_its_null_clears() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     patch(&app, edit(1, 180.0, Some("male"))).await;
 
     let (status, body) = patch(&app, edit(2, 181.5, None)).await;
@@ -72,7 +82,7 @@ async fn a_newer_revision_applies_and_its_null_clears() {
 
 #[tokio::test]
 async fn the_first_edit_records_its_revision() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     patch(&app, edit(3, 180.0, None)).await;
     let (status, body) = patch(&app, edit(2, 170.0, None)).await;
@@ -84,7 +94,7 @@ async fn the_first_edit_records_its_revision() {
 
 #[tokio::test]
 async fn a_client_without_revisions_behaves_as_before_and_leaves_the_revision_alone() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, body) = patch(&app, json!({ "height_cm": 175.0 })).await;
     assert_eq!(status, StatusCode::OK);
@@ -105,7 +115,7 @@ async fn a_client_without_revisions_behaves_as_before_and_leaves_the_revision_al
 
 #[tokio::test]
 async fn a_revision_below_one_or_invalid_values_are_refused_and_change_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, kept) = patch(&app, edit(1, 180.0, None)).await;
 
     for bad in [

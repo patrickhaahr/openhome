@@ -1,13 +1,23 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
-use common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
 
 #[tokio::test]
 async fn test_body_weight_record_and_list_sorted_by_date() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     for (date, weight) in [
         ("2026-09-05", 75.5),
@@ -60,7 +70,7 @@ async fn test_body_weight_record_and_list_sorted_by_date() {
 
 #[tokio::test]
 async fn test_body_weight_ships_empty_and_conflicts_on_duplicate_date() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, list) = send_request_with_method(
         app.clone(),
@@ -97,7 +107,7 @@ async fn test_body_weight_ships_empty_and_conflicts_on_duplicate_date() {
 
 #[tokio::test]
 async fn test_body_weight_rejects_bad_input() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app.clone(),
@@ -123,7 +133,7 @@ async fn test_body_weight_rejects_bad_input() {
 
 #[tokio::test]
 async fn test_body_weight_requires_auth() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) =
         send_request_with_method(app, "/api/body_weight", Method::GET, None, None).await;

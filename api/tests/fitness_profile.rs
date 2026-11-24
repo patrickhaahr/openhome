@@ -1,13 +1,23 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
-use common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
 
 #[tokio::test]
 async fn test_profile_get_not_configured_then_patch_sets_fields() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, body) = send_request_with_method(
         app.clone(),
@@ -43,7 +53,7 @@ async fn test_profile_get_not_configured_then_patch_sets_fields() {
 
 #[tokio::test]
 async fn test_profile_patch_keeps_absent_fields() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(
         app.clone(),
@@ -71,7 +81,7 @@ async fn test_profile_patch_keeps_absent_fields() {
 
 #[tokio::test]
 async fn test_profile_patch_null_clears_fields() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(
         app.clone(),
@@ -98,7 +108,7 @@ async fn test_profile_patch_null_clears_fields() {
 
 #[tokio::test]
 async fn test_profile_requires_auth() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(app, "/api/profile", Method::GET, None, None).await;
 
@@ -107,7 +117,7 @@ async fn test_profile_requires_auth() {
 
 #[tokio::test]
 async fn test_profile_hr_max_bpm_set_get_clear() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (_, body) = send_request_with_method(
         app.clone(),
@@ -160,7 +170,7 @@ async fn test_profile_hr_max_bpm_bounds() {
         (240, StatusCode::OK),
         (241, StatusCode::BAD_REQUEST),
     ] {
-        let app = common::test_app().await;
+        let app = test_app().await;
         let (status, _) = send_request_with_method(
             app,
             "/api/profile",
@@ -175,7 +185,7 @@ async fn test_profile_hr_max_bpm_bounds() {
 
 #[tokio::test]
 async fn test_profile_hr_max_bpm_independent_of_height_and_sex() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     send_request_with_method(
         app.clone(),
@@ -213,7 +223,7 @@ async fn test_profile_hr_max_bpm_independent_of_height_and_sex() {
 
 #[tokio::test]
 async fn test_profile_birth_date_set_kept_and_cleared_with_patch_semantics() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let patch = |body: serde_json::Value| {
         send_request_with_method(
             app.clone(),

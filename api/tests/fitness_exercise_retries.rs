@@ -1,7 +1,20 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pool.rs"]
+mod test_app_with_pool;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_pool::test_app_with_pool;
 use axum::Router;
-use common::send_request_with_method;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
@@ -68,7 +81,7 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_exercis
     let path = dir.path().join("app.db");
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db.clone());
+    let (app, _) = test_app_with_pool(db.clone());
     let (status, first) = post(&app, exercise(KEY)).await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
     assert_eq!(first["name"], NAME);
@@ -77,7 +90,7 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_exercis
     db.close().await;
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
     let (status, retried) = post(&app, exercise(KEY)).await;
 
     assert_eq!(status, StatusCode::OK, "{retried}");
@@ -89,7 +102,7 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_exercis
 async fn simultaneous_deliveries_create_one_exercise() {
     let dir = tempfile::tempdir().unwrap();
     let db = open_file_database(&dir.path().join("app.db")).await;
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
 
     let (one, two, three) = tokio::join!(
         post(&app, exercise(KEY)),
@@ -110,7 +123,7 @@ async fn simultaneous_deliveries_create_one_exercise() {
 
 #[tokio::test]
 async fn request_id_with_changed_arguments_conflicts_and_changes_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, exercise(KEY)).await;
 
     let mut changed = exercise(KEY);
@@ -127,7 +140,7 @@ async fn request_id_with_changed_arguments_conflicts_and_changes_nothing() {
 
 #[tokio::test]
 async fn a_name_another_exercise_holds_conflicts_and_consumes_no_request_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, _) = post(&app, exercise("phone-exercise-other")).await;
 
     let (status, body) = post(&app, exercise(KEY)).await;
@@ -142,7 +155,7 @@ async fn a_name_another_exercise_holds_conflicts_and_consumes_no_request_id() {
 
 #[tokio::test]
 async fn an_invalid_category_consumes_no_request_id_and_writes_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut invalid = exercise(KEY);
     invalid["category"] = json!("cardio");
@@ -156,7 +169,7 @@ async fn an_invalid_category_consumes_no_request_id_and_writes_nothing() {
 
 #[tokio::test]
 async fn an_old_retry_cannot_recreate_a_deleted_exercise_or_claim_its_reused_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, exercise(KEY)).await;
     let (status, _) = send_request_with_method(
         app.clone(),
@@ -181,7 +194,7 @@ async fn an_old_retry_cannot_recreate_a_deleted_exercise_or_claim_its_reused_id(
 
 #[tokio::test]
 async fn changed_arguments_are_refused_before_a_deleted_exercises_target() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, exercise(KEY)).await;
     let (status, _) = send_request_with_method(
         app.clone(),
@@ -224,7 +237,7 @@ async fn changed_arguments_are_refused_before_a_deleted_exercises_target() {
 
 #[tokio::test]
 async fn request_id_is_validated_and_requires_authentication() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = post(&app, exercise("   ")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -243,7 +256,7 @@ async fn request_id_is_validated_and_requires_authentication() {
 
 #[tokio::test]
 async fn exercises_without_a_request_id_behave_as_before() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let mut body = exercise(KEY);
     body.as_object_mut().unwrap().remove("request_id");
 

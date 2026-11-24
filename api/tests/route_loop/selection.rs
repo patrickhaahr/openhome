@@ -1,5 +1,8 @@
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{NORTH_EAST, app_with_state, demo, generate, ok, provider, square, walk};
+use crate::test_app_with_db::test_app_with_db;
+use crate::test_app_with_pool::test_app_with_pool;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -25,12 +28,11 @@ async fn selected_route_survives_restart_without_a_provider_and_versions_replace
     let url = format!("sqlite:{}", file.display());
     let db = openhome_api::db::connect_sqlite(&url).await.unwrap();
     sqlx::migrate!("./migrations").run(&db).await.unwrap();
-    let (_, state) = crate::common::test_app_with_pool(db.clone());
+    let (_, state) = test_app_with_pool(db.clone());
     let server = provider(ok(square(5000, NORTH_EAST)), 6).await;
     let endpoint = ProviderEndpoint::parse(Some(&server.uri())).unwrap();
     let app = app_with_state(LoopPlanner::new(demo(), endpoint).unwrap(), state);
-    let (_, empty) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, empty) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(empty, json!({ "state": "none" }));
     let request = json!({ "activity": "running", "target": { "kind": "steps", "steps": 5000 }, "step_length_cm": 100 });
     let (_, generated) = generate(app.clone(), request).await;
@@ -56,15 +58,13 @@ async fn selected_route_survives_restart_without_a_provider_and_versions_replace
     db.close().await;
 
     let db = openhome_api::db::connect_sqlite(&url).await.unwrap();
-    let (_, state) = crate::common::test_app_with_pool(db.clone());
+    let (_, state) = test_app_with_pool(db.clone());
     let app = app_with_state(LoopPlanner::new(None, None).unwrap(), state);
-    let (_, restored) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, restored) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(restored, selected);
     let (_, failed) = generate(app.clone(), walk(6000)).await;
     assert_eq!(failed["state"], "unavailable");
-    let (_, restored) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, restored) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(restored, selected);
     let ((status_a, a), (status_b, b)) = tokio::join!(
         select(app.clone(), &distance_plan["plan"]["loops"][0]["id"]),
@@ -78,8 +78,7 @@ async fn selected_route_survives_restart_without_a_provider_and_versions_replace
     ];
     versions.sort_unstable();
     assert_eq!(versions, [2, 3]);
-    let (_, latest) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, latest) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(latest, if a["route"]["version"] == 3 { a } else { b });
     drop(app);
     db.close().await;
@@ -88,7 +87,7 @@ async fn selected_route_survives_restart_without_a_provider_and_versions_replace
 
 #[tokio::test]
 async fn selection_authenticates_rejects_forged_routes_and_preserves_previous_on_failed_write() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let db = state.db.clone();
     let server = provider(ok(square(5000, NORTH_EAST)), 6).await;
     let endpoint = ProviderEndpoint::parse(Some(&server.uri())).unwrap();
@@ -128,8 +127,7 @@ async fn selection_authenticates_rejects_forged_routes_and_preserves_previous_on
         .execute(&db).await.unwrap();
     let (status, _) = select(app.clone(), &generated["plan"]["loops"][0]["id"]).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    let (_, restored) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, restored) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(restored, selected);
     sqlx::query("DROP TRIGGER refuse_selection")
         .execute(&db)
@@ -141,7 +139,7 @@ async fn selection_authenticates_rejects_forged_routes_and_preserves_previous_on
 
 #[tokio::test]
 async fn a_replaced_selection_loses_its_protection_and_may_be_pruned() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let server = provider(ok(square(5000, NORTH_EAST)), 6).await;
     let endpoint = ProviderEndpoint::parse(Some(&format!("{}/ors", server.uri())))
         .unwrap()
@@ -160,8 +158,7 @@ async fn a_replaced_selection_loses_its_protection_and_may_be_pruned() {
     }
     let (status, _) = select(app.clone(), &first["plan"]["loops"][0]["id"]).await;
     assert_eq!(status, StatusCode::CONFLICT);
-    let (_, restored) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, restored) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(restored, replacement);
     let (status, repeat) = select(app, &second["plan"]["loops"][0]["id"]).await;
     assert_eq!(status, StatusCode::OK);
@@ -170,7 +167,7 @@ async fn a_replaced_selection_loses_its_protection_and_may_be_pruned() {
 
 #[tokio::test]
 async fn candidate_retention_keeps_reoffered_and_selected_routes_and_prunes_old_choices() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let db = state.db.clone();
     let server = provider(ok(square(5000, NORTH_EAST)), 6).await;
     let endpoint = ProviderEndpoint::parse(Some(&server.uri())).unwrap();
@@ -197,8 +194,7 @@ async fn candidate_retention_keeps_reoffered_and_selected_routes_and_prunes_old_
     assert_eq!(count, 97);
     let (status, _) = select(app.clone(), &oldest["plan"]["loops"][0]["id"]).await;
     assert_eq!(status, StatusCode::CONFLICT);
-    let (_, restored) =
-        crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
+    let (_, restored) = send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;
     assert_eq!(restored, selected);
     let (status, _) = select(app, &reoffered["plan"]["loops"][0]["id"]).await;
     assert_eq!(status, StatusCode::OK);

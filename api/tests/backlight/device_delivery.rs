@@ -1,12 +1,13 @@
-use crate::common::send_request;
+use crate::send_request::send_request;
 use crate::support::{RecoveringDevice, authenticated, select, wait_for_mode};
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::StatusCode;
 use openhome_api::services::backlight::BacklightService;
 
 #[tokio::test]
 async fn disconnecting_after_durable_acceptance_completes_the_accepted_device_work() {
     use std::sync::{Arc, atomic::Ordering::SeqCst};
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(RecoveringDevice::new());
     let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
         .await
@@ -74,7 +75,7 @@ async fn off_write_not_applied_reports_failure_while_readback_stays_honest() {
             })
         }
     }
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let service = BacklightService::new(state.db.clone(), Some(Arc::new(UnappliedDevice)), None)
         .await
         .unwrap();
@@ -154,7 +155,7 @@ async fn a_superseded_exchange_that_finished_writing_stays_acknowledged() {
             })
         }
     }
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(SentDevice::new());
     let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
         .await

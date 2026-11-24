@@ -1,7 +1,20 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pool.rs"]
+mod test_app_with_pool;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_pool::test_app_with_pool;
 use axum::Router;
-use common::send_request_with_method;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
@@ -89,7 +102,7 @@ async fn a_late_older_revision_cannot_roll_the_workout_back_even_after_an_api_re
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("app.db");
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db.clone());
+    let (app, _) = test_app_with_pool(db.clone());
     let id = create(&app).await;
 
     let (status, _) = patch(&app, id, edit(1, 6)).await;
@@ -99,7 +112,7 @@ async fn a_late_older_revision_cannot_roll_the_workout_back_even_after_an_api_re
     db.close().await;
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
     let (status, answered) = patch(&app, id, edit(2, 7)).await;
 
     assert_eq!(status, StatusCode::OK, "{answered}");
@@ -112,7 +125,7 @@ async fn a_late_older_revision_cannot_roll_the_workout_back_even_after_an_api_re
 
 #[tokio::test]
 async fn retrying_an_edit_after_a_lost_response_is_acknowledged_with_nothing_rewritten() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create(&app).await;
     let (_, first) = patch(&app, id, edit(1, 6)).await;
 
@@ -125,7 +138,7 @@ async fn retrying_an_edit_after_a_lost_response_is_acknowledged_with_nothing_rew
 
 #[tokio::test]
 async fn a_correction_replaces_everything_it_states_and_keeps_nested_notes() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create(&app).await;
 
     let (status, body) = patch(&app, id, edit(1, 6)).await;
@@ -140,7 +153,7 @@ async fn a_correction_replaces_everything_it_states_and_keeps_nested_notes() {
 
 #[tokio::test]
 async fn a_refused_edit_uses_up_no_revision() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create(&app).await;
 
     let mut unknown_exercise = edit(1, 6);
@@ -158,7 +171,7 @@ async fn a_refused_edit_uses_up_no_revision() {
 
 #[tokio::test]
 async fn an_unusable_revision_is_rejected_and_an_unknown_workout_stays_not_found() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create(&app).await;
 
     let (status, _) = patch(&app, id, edit(0, 6)).await;
@@ -171,7 +184,7 @@ async fn an_unusable_revision_is_rejected_and_an_unknown_workout_stays_not_found
 
 #[tokio::test]
 async fn a_new_client_continues_from_the_revision_it_downloads() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create(&app).await;
     patch(&app, id, edit(4, 6)).await;
 
@@ -186,7 +199,7 @@ async fn a_new_client_continues_from_the_revision_it_downloads() {
 
 #[tokio::test]
 async fn edits_without_a_revision_apply_as_before_and_keep_partial_semantics() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create(&app).await;
 
     let (status, body) = patch(&app, id, json!({ "name": "Renamed" })).await;

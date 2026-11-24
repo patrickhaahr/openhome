@@ -1,15 +1,16 @@
-use crate::common::send_request;
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{
     ControlledClock, ManualDevice, RecoveringDevice, authenticated, select, wait_for_mode,
 };
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::Method;
 use openhome_api::services::backlight::BacklightService;
 
 #[tokio::test]
 async fn restart_recovers_current_custom_window_and_only_unexpired_overrides() {
     use std::sync::Arc;
-    let (_, mut state) = crate::common::test_app_with_db().await;
+    let (_, mut state) = test_app_with_db().await;
     let file = std::env::temp_dir().join(format!("openhome-backlight-{}.db", uuid::Uuid::new_v4()));
     let database_url = format!("sqlite:{}?mode=rwc", file.display());
     state.db = sqlx::SqlitePool::connect(&database_url).await.unwrap();
@@ -79,7 +80,7 @@ async fn restart_recovers_current_custom_window_and_only_unexpired_overrides() {
 async fn outage_retains_stale_observation_and_recovers_only_latest_target_during_concurrent_commands()
  {
     use std::sync::{Arc, atomic::Ordering::SeqCst};
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(RecoveringDevice::new());
     let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
         .await
@@ -167,7 +168,7 @@ async fn outage_retains_stale_observation_and_recovers_only_latest_target_during
 #[tokio::test]
 async fn silent_reconnect_reapplies_current_target_but_healthy_refresh_does_not() {
     use std::sync::Arc;
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(RecoveringDevice::new());
     let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
         .await
@@ -206,7 +207,7 @@ async fn silent_reconnect_reapplies_current_target_but_healthy_refresh_does_not(
 #[tokio::test]
 async fn failed_transition_persistence_is_retried_with_current_clock_before_any_device_write() {
     use std::sync::Arc;
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
@@ -251,7 +252,7 @@ async fn failed_transition_persistence_is_retried_with_current_clock_before_any_
 #[tokio::test]
 async fn incomplete_readback_stays_stale_until_current_target_has_been_recovered() {
     use std::sync::{Arc, atomic::Ordering::SeqCst};
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(RecoveringDevice::new());
     let service = BacklightService::new(state.db.clone(), Some(device.clone()), None)
         .await

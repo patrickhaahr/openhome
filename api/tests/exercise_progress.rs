@@ -1,7 +1,20 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request.rs"]
+mod send_request;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use axum::Router;
-use common::{send_request, send_request_with_method};
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 
@@ -88,7 +101,7 @@ fn samples(line: &Value) -> Vec<(String, i64, f64)> {
 
 #[tokio::test]
 async fn bodyweight_reps_index_best_set_to_first_day_keeping_gaps_and_declines() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let pull_up = create_exercise(&app, "Synthetic Pull-up").await;
     log(&app, "2026-09-01", &[(pull_up, reps(&[8, 6, 5]))]).await;
     log(&app, "2026-09-03", &[(pull_up, reps(&[10, 7]))]).await;
@@ -123,7 +136,7 @@ async fn bodyweight_reps_index_best_set_to_first_day_keeping_gaps_and_declines()
 
 #[tokio::test]
 async fn timed_holds_index_longest_hold_and_show_plateaus() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let hold = create_exercise(&app, "Synthetic L-sit").await;
     log(&app, "2026-09-02", &[(hold, holds(&[20, 12]))]).await;
     log(&app, "2026-09-04", &[(hold, holds(&[15, 30]))]).await;
@@ -155,7 +168,7 @@ async fn timed_holds_index_longest_hold_and_show_plateaus() {
 
 #[tokio::test]
 async fn baseline_is_first_positive_day_and_earlier_zero_stays_observed() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let dip = create_exercise(&app, "Synthetic Dip").await;
     log(&app, "2026-09-01", &[(dip, reps(&[0]))]).await;
     log(&app, "2026-09-02", &[(dip, reps(&[4]))]).await;
@@ -187,7 +200,7 @@ async fn baseline_is_first_positive_day_and_earlier_zero_stays_observed() {
 
 #[tokio::test]
 async fn weighted_mixed_missing_and_never_logged_exercises_have_explicit_outcomes() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let weighted = create_exercise(&app, "Synthetic Weighted Dip").await;
     let mixed = create_exercise(&app, "Synthetic Handstand").await;
     let earlier = create_exercise(&app, "Synthetic Pistol Squat").await;
@@ -270,7 +283,7 @@ async fn weighted_mixed_missing_and_never_logged_exercises_have_explicit_outcome
 
 #[tokio::test]
 async fn weighted_estimates_select_valid_sets_preserve_declines_and_leave_old_progress_unchanged() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let lift = create_exercise(&app, "Synthetic Press").await;
     for (date, sets) in [
         ("2026-09-01", json!([{ "set_number": 1, "reps": 20 }])),
@@ -332,7 +345,7 @@ async fn weighted_estimates_select_valid_sets_preserve_declines_and_leave_old_pr
 
 #[tokio::test]
 async fn overflowing_estimates_do_not_hide_valid_sets_on_the_same_day() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let lift = create_exercise(&app, "Synthetic Overflow Press").await;
     log(
         &app,
@@ -372,7 +385,7 @@ async fn overflowing_estimates_do_not_hide_valid_sets_on_the_same_day() {
 
 #[tokio::test]
 async fn weighted_holds_mixed_kinds_and_out_of_range_estimates_are_unsupported() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     for (name, sets, reason) in [
         (
             "Synthetic Loaded Hold",
@@ -410,7 +423,7 @@ async fn weighted_holds_mixed_kinds_and_out_of_range_estimates_are_unsupported()
 
 #[tokio::test]
 async fn default_selection_is_the_most_recently_logged_exercises_up_to_the_bound() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let mut ids = Vec::new();
     for n in 0..25 {
         ids.push(create_exercise(&app, &format!("Synthetic Move {n:02}")).await);
@@ -435,7 +448,7 @@ async fn default_selection_is_the_most_recently_logged_exercises_up_to_the_bound
 
 #[tokio::test]
 async fn batch_bounds_are_enforced() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let ids: Vec<String> = (1..=25).map(|id| id.to_string()).collect();
     let cases = [
         ("to=2026-09-30", StatusCode::BAD_REQUEST),
@@ -488,7 +501,7 @@ async fn batch_bounds_are_enforced() {
 
 #[tokio::test]
 async fn combined_progress_requires_auth() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request(
         app,

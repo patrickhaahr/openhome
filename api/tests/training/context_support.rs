@@ -1,6 +1,6 @@
-use crate::common;
 use crate::mirror::Mirror;
 use crate::mirror::Window;
+use crate::send_request::send_request;
 use axum::Router;
 use axum::http::StatusCode;
 use chrono::Duration;
@@ -101,7 +101,7 @@ pub(crate) async fn context(
     to: &str,
     key: Option<&str>,
 ) -> (StatusCode, Value) {
-    common::send_request(
+    send_request(
         app.clone(),
         &format!("/api/training/context/{from}/{to}"),
         key,

@@ -1,4 +1,7 @@
 use crate::mirror::{Mirror, Window};
+use crate::send_request::send_request;
+use crate::test_app::test_app;
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::StatusCode;
 use chrono::Duration;
 use openhome_api::services::training::CalendarDay;
@@ -17,7 +20,7 @@ async fn trend(
     to: &str,
     key: Option<&str>,
 ) -> (StatusCode, Value) {
-    crate::common::send_request(
+    send_request(
         app,
         &format!("/api/training/trends/{metric}/{from}/{to}"),
         key,
@@ -100,7 +103,7 @@ async fn recovery_mirror() -> Mirror {
 
 #[tokio::test]
 async fn body_weight_uses_only_daily_records_and_counts_partial_weeks() {
-    let (app, state) = crate::common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     sqlx::query("INSERT INTO body_weight (date, weight_kg) VALUES ('2026-09-29', 80.0), ('2026-10-01', 79.0)")
         .execute(&state.db).await.unwrap();
     let (status, body) = trend(app, "body_weight", "2026-09-29", "2026-10-02", Some(KEY)).await;
@@ -285,7 +288,7 @@ async fn sleep_trend_returns_all_ninety_days_and_sparse_week_counts() {
 
 #[tokio::test]
 async fn rejects_unknown_metrics_invalid_ranges_and_missing_auth() {
-    let app = crate::common::test_app().await;
+    let app = test_app().await;
     for metric in ["weight", "strain", "resting_hr"] {
         assert_eq!(
             trend(app.clone(), metric, "2026-09-01", "2026-09-01", Some(KEY))

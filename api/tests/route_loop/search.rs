@@ -1,4 +1,4 @@
-use crate::common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{
     MAX_ATTEMPTS, NORTH_EAST, NORTH_WEST, ORIGIN, SOUTH_EAST, SOUTH_WEST, answer_seed, app, demo,
     distances, generate, ok, provider, rectangle, square, trip, walk,

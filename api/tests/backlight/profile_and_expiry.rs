@@ -1,8 +1,9 @@
-use crate::common::send_request;
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{
     ControlledClock, ManualDevice, RecoveringDevice, authenticated, select, wait_for_mode,
 };
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::Method;
 use axum::http::StatusCode;
 use openhome_api::services::backlight::BacklightService;
@@ -12,7 +13,7 @@ async fn missing_or_invalid_profile_blocks_recovery_without_capturing_or_guessin
 {
     use std::sync::Arc;
     for invalid in [None, Some("{\"schema_version\":99}")] {
-        let (_, state) = crate::common::test_app_with_db().await;
+        let (_, state) = test_app_with_db().await;
         sqlx::query("UPDATE backlight SET tv_sync_profile = ?, manual_override = NULL, intended = '{\"mode\":\"tv-sync\"}' WHERE id = 1").bind(invalid).execute(&state.db).await.unwrap();
         let device = Arc::new(ManualDevice {
             packets: std::sync::Mutex::default(),
@@ -43,7 +44,7 @@ async fn incomplete_profile_expires_off_override_and_persists_current_automatic_
  {
     use std::sync::Arc;
     for invalid in [None, Some("{\"schema_version\":99}")] {
-        let (_, state) = crate::common::test_app_with_db().await;
+        let (_, state) = test_app_with_db().await;
         sqlx::query("UPDATE backlight SET tv_sync_profile = ?, bedtime = ?, manual_override = ? WHERE id = 1")
             .bind(invalid)
             .bind(r#"{"enabled":true,"start":"23:00","end":"00:00","brightness":20}"#)
@@ -103,7 +104,7 @@ async fn incomplete_profile_expires_off_override_and_persists_current_automatic_
 async fn manual_command_expiring_while_waiting_for_the_worker_never_reaches_hardware() {
     use std::sync::{Arc, atomic::Ordering::SeqCst};
     for waiting_for_worker in [true, false] {
-        let (_, state) = crate::common::test_app_with_db().await;
+        let (_, state) = test_app_with_db().await;
         let device = Arc::new(RecoveringDevice::new());
         let clock = Arc::new(ControlledClock::at("2026-10-23T20:59:59Z"));
         let service = BacklightService::with_clock(
@@ -179,7 +180,7 @@ async fn manual_command_expiring_while_waiting_for_the_worker_never_reaches_hard
 #[tokio::test]
 async fn saving_a_valid_profile_resumes_profile_required_delivery() {
     use std::sync::Arc;
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     sqlx::query(
         "UPDATE backlight SET tv_sync_profile = NULL, manual_override = NULL, \
          intended = '{\"mode\":\"tv-sync\"}' WHERE id = 1",

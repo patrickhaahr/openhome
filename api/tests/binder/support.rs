@@ -1,3 +1,5 @@
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app_with_db::test_app_with_db;
 use axum::{
     Router,
     http::{Method, StatusCode},
@@ -19,8 +21,6 @@ use wiremock::{
     Mock, MockServer, Request, ResponseTemplate,
     matchers::{method, path_regex},
 };
-
-use crate::common::{send_request_with_method, test_app_with_db};
 
 pub const LISTED: [(&str, &[&str]); 7] = [
     ("OP01-001", &["OP01-001", "OP01-001_p1"]),

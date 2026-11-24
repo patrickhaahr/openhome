@@ -1,5 +1,5 @@
-use crate::common;
-use crate::common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app_with_db::test_app_with_db;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -23,7 +23,7 @@ pub(crate) const ORIGIN: [f64; 2] = [12.5692, 55.6869];
 pub(crate) const MAX_ATTEMPTS: u64 = 6;
 
 pub(crate) async fn app(origin: Option<MapOrigin>, provider: Option<&MockServer>) -> Router {
-    let (_, state) = common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let endpoint = provider.map(|server| {
         ProviderEndpoint::parse(Some(&format!("{}/ors", server.uri())))
             .unwrap()

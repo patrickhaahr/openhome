@@ -9,6 +9,7 @@ use crate::reference_run::IMPORTED;
 use crate::reference_run::PUSHED_AT;
 use crate::reference_run::SOURCE;
 use crate::reference_run::WORKOUT_WINDOW;
+use crate::send_request::send_request;
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -293,7 +294,7 @@ async fn a_captured_route_is_decoded_to_latitude_longitude_pairs_with_the_steps(
     assert_eq!(body["steps"], 5812);
     assert_eq!(body["has_route"], true);
     assert!(body.get("route").is_none(), "{body}");
-    let (status, with_route) = crate::common::send_request(
+    let (status, with_route) = send_request(
         app.clone(),
         &format!(
             "/api/training/noop-workouts/{}/{}/Running?route=true",
@@ -308,7 +309,7 @@ async fn a_captured_route_is_decoded_to_latitude_longitude_pairs_with_the_steps(
         with_route["route"],
         json!([[38.5, -120.2], [40.7, -120.95]])
     );
-    let (status, body) = crate::common::send_request(
+    let (status, body) = send_request(
         app.clone(),
         &format!(
             "/api/training/noop-workouts/{}/{}/Running?route=true",

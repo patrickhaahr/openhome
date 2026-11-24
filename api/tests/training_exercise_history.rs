@@ -1,5 +1,20 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request.rs"]
+mod send_request;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_db::test_app_with_db;
 use axum::Router;
 use axum::http::{Method, StatusCode};
 use pretty_assertions::assert_eq;
@@ -9,7 +24,7 @@ const KEY: &str = "test-api-key";
 const PULL_UP: i64 = 11;
 
 async fn log(app: &Router, workout: Value) -> i64 {
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app.clone(),
         "/api/workouts",
         Method::POST,
@@ -28,7 +43,7 @@ async fn history(
     to: &str,
     key: Option<&str>,
 ) -> (StatusCode, Value) {
-    common::send_request(
+    send_request(
         app.clone(),
         &format!("/api/training/exercises/{name}/history/{from}/{to}"),
         key,
@@ -38,7 +53,7 @@ async fn history(
 
 #[tokio::test]
 async fn returns_every_set_in_workout_and_logged_order_at_both_range_boundaries() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let first = log(
         &app,
         json!({"date": "2026-06-01", "name": "Pull A", "notes": "fresh",
@@ -108,7 +123,7 @@ async fn returns_every_set_in_workout_and_logged_order_at_both_range_boundaries(
 
 #[tokio::test]
 async fn rejects_oversized_history_instead_of_truncating_it() {
-    let (app, state) = common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     sqlx::query("INSERT INTO workouts (id, date) VALUES (1, '2026-09-01')")
         .execute(&state.db)
         .await
@@ -135,7 +150,7 @@ async fn rejects_oversized_history_instead_of_truncating_it() {
 
 #[tokio::test]
 async fn reports_empty_unknown_ambiguous_and_invalid_requests() {
-    let (app, state) = common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     let (status, body) = history(&app, "Pull-up", "2026-09-01", "2026-09-01", Some(KEY)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["workouts"], json!([]));

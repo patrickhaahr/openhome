@@ -1,7 +1,21 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pool.rs"]
+mod test_app_with_pool;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_db::test_app_with_db;
+use crate::test_app_with_pool::test_app_with_pool;
 use axum::Router;
-use common::send_request_with_method;
 use http::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
@@ -39,7 +53,7 @@ async fn stored(app: &Router) -> Vec<Value> {
 
 #[tokio::test]
 async fn retrying_a_committed_record_answers_with_the_same_one_and_stores_one() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, first) = post(&app, record("phone-weight-1", DATE, 75.5)).await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
@@ -54,7 +68,7 @@ async fn retrying_a_committed_record_answers_with_the_same_one_and_stores_one() 
 
 #[tokio::test]
 async fn a_retry_with_the_date_written_unpadded_is_the_same_operation() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, first) = post(&app, record("phone-weight-1", "2026-09-05", 75.5)).await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
@@ -66,7 +80,7 @@ async fn a_retry_with_the_date_written_unpadded_is_the_same_operation() {
 
 #[tokio::test]
 async fn one_request_id_with_changed_arguments_is_a_conflict_and_changes_nothing() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, record("phone-weight-1", DATE, 75.5)).await;
 
     let (status, body) = post(&app, record("phone-weight-1", DATE, 74.0)).await;
@@ -81,7 +95,7 @@ async fn one_request_id_with_changed_arguments_is_a_conflict_and_changes_nothing
 
 #[tokio::test]
 async fn a_new_request_id_for_a_recorded_date_is_still_a_duplicate_date() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let (_, first) = post(&app, record("phone-weight-1", DATE, 75.5)).await;
 
     for weight in [74.0, 75.5] {
@@ -94,7 +108,7 @@ async fn a_new_request_id_for_a_recorded_date_is_still_a_duplicate_date() {
 
 #[tokio::test]
 async fn a_record_from_a_client_without_request_ids_still_conflicts_both_ways() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, first) = post(&app, json!({ "date": DATE, "weight_kg": 75.5 })).await;
     assert_eq!(status, StatusCode::CREATED);
@@ -110,7 +124,7 @@ async fn a_record_from_a_client_without_request_ids_still_conflicts_both_ways() 
 
 #[tokio::test]
 async fn a_refused_record_uses_up_no_request_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = post(&app, record("phone-weight-1", DATE, 0.0)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -125,7 +139,7 @@ async fn a_refused_record_uses_up_no_request_id() {
 
 #[tokio::test]
 async fn an_unusable_request_id_is_refused_without_recording() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, body) = post(&app, record("  ", DATE, 75.5)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -135,7 +149,7 @@ async fn an_unusable_request_id_is_refused_without_recording() {
 
 #[tokio::test]
 async fn changed_arguments_are_refused_before_a_removed_records_target() {
-    let (app, state) = common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     let (status, _) = post(&app, record("phone-weight-1", DATE, 75.5)).await;
     assert_eq!(status, StatusCode::CREATED);
     sqlx::query("DELETE FROM body_weight")
@@ -187,7 +201,7 @@ async fn open_file_database(path: &std::path::Path) -> SqlitePool {
 async fn simultaneous_deliveries_record_one_weight() {
     let dir = tempfile::tempdir().unwrap();
     let db = open_file_database(&dir.path().join("app.db")).await;
-    let (app, _) = common::test_app_with_pool(db);
+    let (app, _) = test_app_with_pool(db);
 
     let (one, two, three) = tokio::join!(
         post(&app, record("phone-weight-1", DATE, 75.5)),
@@ -210,7 +224,7 @@ async fn simultaneous_deliveries_record_one_weight() {
 
 #[tokio::test]
 async fn a_retry_of_a_removed_record_does_not_recreate_it() {
-    let (app, state) = common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     post(&app, record("phone-weight-1", DATE, 75.5)).await;
     sqlx::query("DELETE FROM body_weight")
         .execute(&state.db)

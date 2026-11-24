@@ -1,7 +1,8 @@
-use crate::common;
 use crate::mirror::Mirror;
 use crate::mirror::Window;
 use crate::mirror::noop_workout;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -56,7 +57,7 @@ pub(crate) async fn app(mirror: &Mirror) -> Router {
 }
 
 pub(crate) async fn log_workout(app: &Router, workout: Value) -> i64 {
-    let (status, body) = common::send_request_with_method(
+    let (status, body) = send_request_with_method(
         app.clone(),
         "/api/workouts",
         Method::POST,
@@ -73,7 +74,7 @@ pub(crate) async fn workouts(
     day: &str,
     api_key: Option<&str>,
 ) -> (StatusCode, Value) {
-    common::send_request(
+    send_request(
         app.clone(),
         &format!("/api/training/days/{day}/workouts"),
         api_key,

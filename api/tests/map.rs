@@ -1,7 +1,17 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request.rs"]
+mod send_request;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request::send_request;
+use crate::test_app_with_db::test_app_with_db;
 use axum::{Router, http::StatusCode};
-use common::send_request;
 use openhome_api::{
     auth::{ApiKey, auth_middleware},
     routes,
@@ -9,7 +19,7 @@ use openhome_api::{
 };
 
 async fn app(origin: Option<MapOrigin>) -> Router {
-    let (_, state) = common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     routes::map::router(origin)
         .with_state(state)
         .layer(axum::middleware::from_fn(|req, next| {

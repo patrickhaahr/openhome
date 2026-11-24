@@ -1,7 +1,17 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use axum::Router;
-use common::send_request_with_method;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
@@ -47,7 +57,7 @@ async fn create_sample_workout(app: &Router) -> serde_json::Value {
 
 #[tokio::test]
 async fn test_create_workout_with_nested_exercises_and_sets() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, body) = send_request_with_method(
         app,
@@ -70,7 +80,7 @@ async fn test_create_workout_with_nested_exercises_and_sets() {
 
 #[tokio::test]
 async fn test_get_workout_embeds_exercises_and_sets_in_order() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let created = create_sample_workout(&app).await;
     let id = created["id"].as_i64().unwrap();
 
@@ -113,7 +123,7 @@ async fn test_get_workout_embeds_exercises_and_sets_in_order() {
 
 #[tokio::test]
 async fn test_get_workout_404_for_unknown_id() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(
         app,
@@ -129,7 +139,7 @@ async fn test_get_workout_404_for_unknown_id() {
 
 #[tokio::test]
 async fn test_list_workouts_newest_first_with_filters() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     for (date, name) in [
         ("2026-08-01", "Week 1"),
@@ -197,7 +207,7 @@ async fn test_list_workouts_newest_first_with_filters() {
 
 #[tokio::test]
 async fn test_patch_workout_updates_fields_and_replaces_sets() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let created = create_sample_workout(&app).await;
     let id = created["id"].as_i64().unwrap();
 
@@ -246,7 +256,7 @@ async fn test_patch_workout_updates_fields_and_replaces_sets() {
 
 #[tokio::test]
 async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let created = create_sample_workout(&app).await;
     let id = created["id"].as_i64().unwrap();
 
@@ -289,7 +299,7 @@ async fn test_patch_workout_null_clears_optional_fields_absent_keeps() {
 
 #[tokio::test]
 async fn test_delete_workout_removes_children() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let created = create_sample_workout(&app).await;
     let id = created["id"].as_i64().unwrap();
 
@@ -316,7 +326,7 @@ async fn test_delete_workout_removes_children() {
 
 #[tokio::test]
 async fn test_create_workout_rolls_back_on_bad_exercise_reference() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut body = sample_workout_body();
     body["exercises"][1]["exercise_id"] = json!(99999);
@@ -346,7 +356,7 @@ async fn test_create_workout_rolls_back_on_bad_exercise_reference() {
 
 #[tokio::test]
 async fn test_create_workout_rejects_set_without_reps_or_duration() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut body = sample_workout_body();
     body["exercises"][0]["sets"][0] = json!({ "set_number": 1, "weight_kg": 5.0 });
@@ -366,7 +376,7 @@ async fn test_create_workout_rejects_set_without_reps_or_duration() {
 
 #[tokio::test]
 async fn test_create_workout_rejects_rpe_out_of_range() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     for rpe in [0, 11] {
         let mut body = sample_workout_body();
@@ -386,7 +396,7 @@ async fn test_create_workout_rejects_rpe_out_of_range() {
 
 #[tokio::test]
 async fn test_create_workout_rejects_missing_date() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut body = sample_workout_body();
     body.as_object_mut().unwrap().remove("date");
@@ -405,7 +415,7 @@ async fn test_create_workout_rejects_missing_date() {
 
 #[tokio::test]
 async fn test_create_workout_rejects_non_iso_date() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut body = sample_workout_body();
     body["date"] = json!("08/23/2026");
@@ -425,7 +435,7 @@ async fn test_create_workout_rejects_non_iso_date() {
 
 #[tokio::test]
 async fn test_create_workout_normalizes_unpadded_date() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let mut body = sample_workout_body();
     body["date"] = json!("2026-8-3");
@@ -445,7 +455,7 @@ async fn test_create_workout_normalizes_unpadded_date() {
 
 #[tokio::test]
 async fn test_delete_exercise_conflict_when_logged_in_workout() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     create_sample_workout(&app).await;
 
     let (_, response) = send_request_with_method(
@@ -479,7 +489,7 @@ async fn test_delete_exercise_conflict_when_logged_in_workout() {
 
 #[tokio::test]
 async fn test_workouts_require_auth() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(app, "/api/workouts", Method::GET, None, None).await;
 

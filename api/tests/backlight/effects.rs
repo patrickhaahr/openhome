@@ -1,6 +1,7 @@
-use crate::common::send_request;
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{ManualDevice, authenticated, select};
+use crate::test_app_with_db::test_app_with_db;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -69,7 +70,7 @@ async fn rapid_effect_clients_cancel_partial_uploads_and_keep_only_the_latest_ta
         .await
         .expect("latest target should be durable while an earlier GATT operation is blocked");
     }
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(BlockedDevice {
         device: ManualDevice {
             packets: std::sync::Mutex::default(),
@@ -156,7 +157,7 @@ async fn rapid_effect_clients_cancel_partial_uploads_and_keep_only_the_latest_ta
 
 #[tokio::test]
 async fn native_effect_is_validated_durable_and_tv_sync_keeps_its_profile() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = std::sync::Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
@@ -260,7 +261,7 @@ async fn inactivity_hold_is_verified_on_device_without_changing_lighting_intent(
             })
         }
     }
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(Device {
         settings: Mutex::new(frame(&[0xaa, 0xa9, 0x0a, 6, 1, 2, 10, 0, 120, 0])),
         writes: Mutex::default(),

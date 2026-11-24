@@ -1,7 +1,17 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
 use axum::Router;
-use common::send_request_with_method;
 use http::Method;
 use http::StatusCode;
 use serde_json::json;
@@ -125,7 +135,7 @@ fn approx(actual: &serde_json::Value, expected: f64, what: &str) {
 
 #[tokio::test]
 async fn test_progress_returns_per_date_aggregates_with_epley() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create_progress_fixture(&app).await;
 
     let (status, body) = send_request_with_method(
@@ -185,7 +195,7 @@ async fn test_progress_returns_per_date_aggregates_with_epley() {
 
 #[tokio::test]
 async fn test_progress_from_to_filters_bound_series() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     let id = create_progress_fixture(&app).await;
 
     let (status, body) = send_request_with_method(
@@ -218,7 +228,7 @@ async fn test_progress_from_to_filters_bound_series() {
 
 #[tokio::test]
 async fn test_progress_empty_for_never_performed_exercise() {
-    let app = common::test_app().await;
+    let app = test_app().await;
     create_progress_fixture(&app).await;
 
     let (_, body) = send_request_with_method(
@@ -252,7 +262,7 @@ async fn test_progress_empty_for_never_performed_exercise() {
 
 #[tokio::test]
 async fn test_progress_404_for_unknown_exercise() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, _) = send_request_with_method(
         app,

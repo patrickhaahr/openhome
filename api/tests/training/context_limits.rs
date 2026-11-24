@@ -1,4 +1,5 @@
 use crate::context_support::{API_KEY, at, context, context_ok, day, mirror, noop_workout, sync};
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::StatusCode;
 use chrono::Duration;
 use pretty_assertions::assert_eq;
@@ -112,7 +113,7 @@ async fn returns_every_day_of_a_ninety_day_block_and_rejects_longer_ranges() {
 
 #[tokio::test]
 async fn rejects_a_block_whose_response_exceeds_the_byte_limit() {
-    let (app, state) = crate::common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     sqlx::query(
         "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 59) \
          INSERT INTO workouts (date, name) \
@@ -147,7 +148,7 @@ async fn rejects_a_block_whose_response_exceeds_the_byte_limit() {
 
 #[tokio::test]
 async fn rejects_a_block_with_too_many_logged_entries_rather_than_truncating() {
-    let (app, state) = crate::common::test_app_with_db().await;
+    let (app, state) = test_app_with_db().await;
     sqlx::query(
         "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 1001) \
          INSERT INTO workouts (date, name) SELECT '2026-09-15', 'Empty' FROM n",

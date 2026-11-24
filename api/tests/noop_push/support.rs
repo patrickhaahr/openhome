@@ -1,4 +1,4 @@
-use crate::common;
+use crate::test_app_with_db::test_app_with_db;
 use axum::Router;
 use axum::body::Body;
 use axum::http::Method;
@@ -31,7 +31,7 @@ pub(crate) async fn memory_push_db() -> SqlitePool {
 }
 
 pub(crate) async fn app_with_push_db(push_db: SqlitePool) -> Router {
-    let (api, _) = common::test_app_with_db().await;
+    let (api, _) = test_app_with_db().await;
     let push_state = PushState {
         db: push_db,
         token: PushToken::new(PUSH_TOKEN.to_string()).unwrap(),

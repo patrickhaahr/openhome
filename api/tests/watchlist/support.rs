@@ -1,4 +1,4 @@
-use crate::common::send_request_with_method;
+use crate::send_request_with_method::send_request_with_method;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;

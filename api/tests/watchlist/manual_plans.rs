@@ -1,6 +1,6 @@
-use crate::common::send_request_with_method;
-use crate::common::test_app_with_db;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{entry_path, owner, request};
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::Method;
 use axum::http::StatusCode;
 use serde_json::Value;

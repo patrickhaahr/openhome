@@ -1,6 +1,6 @@
-use crate::common;
-use crate::common::send_request;
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app_with_db::test_app_with_db;
 use axum::Router;
 use axum::http::Method;
 use axum::http::StatusCode;
@@ -10,7 +10,7 @@ use openhome_api::routes;
 use openhome_api::services::backlight::BacklightService;
 
 pub(crate) async fn app() -> Router {
-    let (_, state) = common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let service = BacklightService::new(state.db.clone(), None, None)
         .await
         .unwrap();

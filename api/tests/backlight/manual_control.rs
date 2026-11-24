@@ -1,6 +1,7 @@
-use crate::common::send_request;
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{ManualDevice, app, authenticated, select};
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::Method;
 use axum::http::StatusCode;
 use openhome_api::auth::ApiKey;
@@ -97,7 +98,7 @@ async fn captured_profile_is_private_durable_and_cannot_be_replaced_from_static_
             })
         }
     }
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(Device {
         mode: std::sync::atomic::AtomicU8::new(0),
         writes: std::sync::Mutex::new(Vec::new()),
@@ -188,7 +189,7 @@ async fn accepted_write_without_readback_does_not_invent_an_observation() {
             })
         }
     }
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let service = BacklightService::new(
         state.db.clone(),
         Some(std::sync::Arc::new(UnreadableDevice)),
@@ -220,7 +221,7 @@ async fn accepted_write_without_readback_does_not_invent_an_observation() {
 
 #[tokio::test]
 async fn manual_rgb_is_durable_and_tv_sync_restores_its_separate_brightness() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = std::sync::Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });

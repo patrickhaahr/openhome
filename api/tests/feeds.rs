@@ -1,12 +1,23 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
+#[path = "common/test_app.rs"]
+mod test_app;
+#[path = "common/test_app_with_db.rs"]
+mod test_app_with_db;
+#[path = "common/test_app_with_pools.rs"]
+mod test_app_with_pools;
 
-use common::{send_request_with_method, test_app_with_db};
+use crate::send_request_with_method::send_request_with_method;
+use crate::test_app::test_app;
+use crate::test_app_with_db::test_app_with_db;
 use http::{Method, StatusCode};
 use serde_json::json;
 
 #[tokio::test]
 async fn test_should_create_feed_and_return_201() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "url": "https://example.com/feed.xml"
@@ -60,7 +71,7 @@ async fn test_should_return_409_for_duplicate_feed_url() {
 
 #[tokio::test]
 async fn test_should_return_400_for_invalid_url() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let body = json!({
         "url": "not-a-valid-url"
@@ -143,7 +154,7 @@ async fn test_should_delete_feed_and_cascade_feed_items() {
 
 #[tokio::test]
 async fn test_should_return_404_when_deleting_nonexistent_feed() {
-    let app = common::test_app().await;
+    let app = test_app().await;
 
     let (status, response) = send_request_with_method(
         app,

@@ -1,7 +1,14 @@
-mod common;
+#[path = "common/memory_noop_db.rs"]
+mod memory_noop_db;
+#[path = "common/send_request.rs"]
+mod send_request;
+#[path = "common/send_request_with_method.rs"]
+mod send_request_with_method;
 
+use crate::memory_noop_db::memory_noop_db;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use axum::Router;
-use common::{memory_noop_db, send_request, send_request_with_method};
 use http::StatusCode;
 use openhome_api::AppState;
 use openhome_api::auth::{ApiKey, auth_middleware};

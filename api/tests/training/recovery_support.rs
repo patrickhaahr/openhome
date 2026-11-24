@@ -1,6 +1,6 @@
-use crate::common;
 use crate::mirror::Mirror;
 use crate::mirror::Window;
+use crate::send_request::send_request;
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -27,7 +27,7 @@ pub(crate) const SEP_20: i64 = 1_789_855_200;
 impl Mirror {
     pub(crate) async fn recovery(&self, day: &str, api_key: Option<&str>) -> (StatusCode, Value) {
         let app = crate::mirror::test_app_with_noop_db(self.db.clone()).await;
-        common::send_request(app, &format!("/api/training/days/{day}/recovery"), api_key).await
+        send_request(app, &format!("/api/training/days/{day}/recovery"), api_key).await
     }
 
     pub(crate) async fn recovery_day(&self, day: &str) -> Value {

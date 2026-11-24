@@ -1,13 +1,14 @@
-use crate::common::send_request;
-use crate::common::send_request_with_method;
+use crate::send_request::send_request;
+use crate::send_request_with_method::send_request_with_method;
 use crate::support::{ControlledClock, ManualDevice, app, authenticated, select, wait_for_mode};
+use crate::test_app_with_db::test_app_with_db;
 use axum::http::Method;
 use axum::http::StatusCode;
 use openhome_api::services::backlight::BacklightService;
 
 #[tokio::test]
 async fn bedtime_enable_applies_red_and_automatic_clears_a_durable_override() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = std::sync::Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
@@ -73,7 +74,7 @@ async fn bedtime_enable_applies_red_and_automatic_clears_a_durable_override() {
 #[tokio::test]
 async fn routine_runs_without_dashboard_expires_off_at_start_and_restores_saved_tv_sync_at_end() {
     use std::sync::Arc;
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
@@ -188,7 +189,7 @@ async fn omitted_bedtime_patch_preserves_settings_and_override_without_device_wr
 #[tokio::test]
 async fn bedtime_edits_apply_now_preserve_manual_expiry_and_persist_while_disabled() {
     use std::sync::Arc;
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
@@ -245,7 +246,7 @@ async fn bedtime_edits_apply_now_preserve_manual_expiry_and_persist_while_disabl
 
 #[tokio::test]
 async fn bedtime_patch_rejects_ambiguous_or_malformed_values_atomically() {
-    let (_, state) = crate::common::test_app_with_db().await;
+    let (_, state) = test_app_with_db().await;
     let device = std::sync::Arc::new(ManualDevice {
         packets: std::sync::Mutex::default(),
     });
