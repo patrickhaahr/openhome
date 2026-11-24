@@ -17,6 +17,7 @@ import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut"
 import { TelevisionSimpleIcon } from "@phosphor-icons/react/dist/csr/TelevisionSimple"
 import {
   IrRemote,
+  type CommandIcons,
   type IrRemoteConfig,
   type IrRemoteProps,
 } from "@/components/ir-remote"
@@ -62,8 +63,10 @@ const tvRemote: IrRemoteConfig<TvCommand> = {
     guide: ListBulletsIcon,
     "channel-up": CaretDoubleUpIcon,
     "channel-down": CaretDoubleDownIcon,
-  },
-  plateIcons: { power: TelevisionSimpleIcon },
+  } satisfies CommandIcons<TvCommand>,
+  plateIcons: {
+    power: TelevisionSimpleIcon,
+  } satisfies CommandIcons<TvCommand>,
   plateIdentity: false,
   worded: [],
   quickGroups: [{ label: "TV power", commands: ["power"] }],

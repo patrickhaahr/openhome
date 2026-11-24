@@ -7,6 +7,7 @@ use openhome_api::services::noop_push;
 use openhome_api::services::nutrition::food_database::{DatasetPin, FoodDatabase};
 use openhome_api::services::nutrition::meal_photos::MealPhotos;
 use openhome_api::services::nutrition::open_food_facts::OpenFoodFacts;
+use openhome_api::services::tmdb::TmdbService;
 use openhome_api::{AppState, DockerCache, auth, routes};
 use openhome_mcp::{ApiKey, MCP_PATH, OpenHomeApi, parse_api_url};
 use pretty_assertions::assert_eq;
@@ -47,6 +48,14 @@ pub async fn start_api() -> String {
 }
 
 pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
+    start_api_with(foods, None).await
+}
+
+pub async fn start_api_with_tmdb() -> String {
+    start_api_with(food_database(true).await, Some(tmdb().await)).await
+}
+
+async fn start_api_with(foods: FoodDatabase, tmdb: Option<TmdbService>) -> String {
     let labels = open_food_facts().await;
     let catalogue = binder::optcg().await;
     let db = training_log().await;
@@ -63,7 +72,7 @@ pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
     let api_key = auth::ApiKey::new(API_KEY.to_string());
     let app = routes::training::router()
         .merge(routes::wishlist::router(None))
-        .merge(routes::watchlist::router(None))
+        .merge(routes::watchlist::router(tmdb))
         .merge(routes::cards::router(catalogue.clone()))
         .merge(routes::binder::router(catalogue))
         .merge(routes::important_dates::router())
@@ -77,6 +86,40 @@ pub async fn start_api_with_foods(foods: FoodDatabase) -> String {
             auth::auth_middleware(request, next, api_key.clone())
         }));
     format!("http://{}", serve(app).await)
+}
+
+pub const TMDB_MOVIE_ID: i64 = 42;
+
+fn tmdb_movie() -> Value {
+    json!({
+        "id": TMDB_MOVIE_ID,
+        "title": "A Quiet Orbit",
+        "overview": "An entirely fictional journey among the stars.",
+        "poster_path": "/synthetic.jpg",
+        "release_date": "2020-02-29",
+    })
+}
+
+async fn tmdb() -> TmdbService {
+    let provider = Router::new()
+        .route(
+            "/3/search/movie",
+            axum::routing::get(|| async { axum::Json(json!({"results": [tmdb_movie()]})) }),
+        )
+        .route(
+            "/3/movie/{id}",
+            axum::routing::get(
+                |axum::extract::Path(id): axum::extract::Path<i64>| async move {
+                    if id == TMDB_MOVIE_ID {
+                        (axum::http::StatusCode::OK, axum::Json(tmdb_movie()))
+                    } else {
+                        (axum::http::StatusCode::NOT_FOUND, axum::Json(json!({})))
+                    }
+                },
+            ),
+        );
+    let url = format!("http://{}/3/", serve(provider).await);
+    TmdbService::new("synthetic-provider-token", url.parse().unwrap()).unwrap()
 }
 
 pub const SYNTHETIC_BARCODE: &str = "2001234567893";

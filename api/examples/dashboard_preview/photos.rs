@@ -75,6 +75,10 @@ fn rand(seed: u64) -> f64 {
     (z ^ (z >> 31)) as f64 / u64::MAX as f64
 }
 
+fn whole(value: f64) -> u64 {
+    u64::try_from(value as i64).unwrap_or_default()
+}
+
 fn photo_key(album: usize, photo: u32) -> u64 {
     (album as u64) << 32 | u64::from(photo)
 }
@@ -92,7 +96,7 @@ fn ratio(album: usize, photo: u32) -> (u32, u32) {
         (4, 5),
         (2, 3),
     ];
-    FRAMES[(rand(photo_key(album, photo) ^ 0xf0) * FRAMES.len() as f64) as usize]
+    FRAMES[whole(rand(photo_key(album, photo) ^ 0xf0) * FRAMES.len() as f64) as usize]
 }
 
 fn taken(album: &AlbumSeed, key: u64, photo: u32) -> String {

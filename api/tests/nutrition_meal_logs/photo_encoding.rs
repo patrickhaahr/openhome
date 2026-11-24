@@ -190,34 +190,51 @@ async fn an_undecodable_or_oversized_photo_rejects_the_whole_request_and_writes_
     assert_eq!(logged["photo"]["width"], 20);
 }
 
+const PATCH_SIZE: u32 = 32;
+const PATCH_CENTER: u32 = PATCH_SIZE / 2;
+const DISPLAY_P3_PATCH: [u8; 3] = [128, 200, 64];
+const SRGB_OF_DISPLAY_P3_PATCH: [u8; 3] = [103, 202, 19];
+const COLOUR_TOLERANCE: i16 = 6;
+const SRGB_NCLX_PARAMETERS: [u8; 7] = [0, 1, 0, 13, 0, 6, 128];
+
 #[tokio::test]
 async fn wide_gamut_photo_pixels_are_normalized_and_tagged_srgb_without_retaining_the_profile() {
     use image::{ImageEncoder, codecs::png::PngEncoder};
     let api = Nutrition::start().await;
-    let pixels = image::RgbImage::from_pixel(32, 32, image::Rgb([128, 200, 64]));
+    let pixels = image::RgbImage::from_pixel(PATCH_SIZE, PATCH_SIZE, image::Rgb(DISPLAY_P3_PATCH));
     let profile = moxcms::ColorProfile::new_display_p3().encode().unwrap();
     let mut png = Vec::new();
     let mut encoder = PngEncoder::new(&mut png);
     encoder.set_icc_profile(profile).unwrap();
     encoder
-        .write_image(pixels.as_raw(), 32, 32, image::ExtendedColorType::Rgb8)
+        .write_image(
+            pixels.as_raw(),
+            PATCH_SIZE,
+            PATCH_SIZE,
+            image::ExtendedColorType::Rgb8,
+        )
         .unwrap();
     let log = api.logged(with_photo(breakfast("wide-gamut"), &png)).await;
     for url in [&log["photo"]["url"], &log["photo"]["thumbnail"]["url"]] {
         let (_, _, avif) = api.media(url.as_str().unwrap()).await;
-        let (_, (r, g, b)) = synthetic::avif_pixel(&avif, 16, 16);
+        let (_, (r, g, b)) = synthetic::avif_pixel(&avif, PATCH_CENTER, PATCH_CENTER);
+        let decoded = [r, g, b];
         assert!(
-            (i16::from(r) - 103).abs() < 6
-                && (i16::from(g) - 202).abs() < 6
-                && (i16::from(b) - 19).abs() < 6,
-            "decoded sRGB patch: {r} {g} {b}"
+            decoded
+                .iter()
+                .zip(SRGB_OF_DISPLAY_P3_PATCH)
+                .all(
+                    |(actual, expected)| (i16::from(*actual) - i16::from(expected)).abs()
+                        < COLOUR_TOLERANCE
+                ),
+            "decoded sRGB patch: {decoded:?}"
         );
         let colr = avif
             .windows(8)
             .position(|bytes| bytes == b"colrnclx")
             .unwrap()
             + 8;
-        assert_eq!(&avif[colr..colr + 7], &[0, 1, 0, 13, 0, 6, 128]);
+        assert_eq!(&avif[colr..colr + 7], &SRGB_NCLX_PARAMETERS);
         assert!(!avif.windows(4).any(|bytes| bytes == b"prof"));
     }
 }

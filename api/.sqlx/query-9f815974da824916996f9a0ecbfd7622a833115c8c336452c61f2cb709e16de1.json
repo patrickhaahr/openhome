@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO feeds (url) VALUES ('http://example.com/feed.xml')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "9f815974da824916996f9a0ecbfd7622a833115c8c336452c61f2cb709e16de1"
+}

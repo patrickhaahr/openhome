@@ -1,14 +1,3 @@
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::many_single_char_names,
-    clippy::similar_names,
-    clippy::too_many_lines,
-    clippy::trivially_copy_pass_by_ref
-)]
-
 use std::sync::Arc;
 
 use openhome_api::{

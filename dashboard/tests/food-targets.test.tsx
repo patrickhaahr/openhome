@@ -20,6 +20,35 @@ import {
   write,
 } from "./support/food-dom"
 
+const ADULT_AGE_YEARS = 30
+
+const BIRTHDAY_DAYS_AGO = 120
+
+const BODY_WEIGHT_DAYS_AGO = 20
+
+const MEAL_GRAMS = 1000
+
+const TARGET_KCAL = 2120
+
+const EATEN_KCAL = 1100
+
+const VITAMIN_D_ONLY_DAYS_AGO: ReadonlyArray<number> = [2, 1]
+
+const ONE_SECOND_MS = 1000
+
+const DAY_MS = 86_400_000
+
+const kcal = (value: number) => value.toLocaleString("en-US")
+
+function adultBirthDate(today: string): string {
+  const birthday = shiftDay(today, -BIRTHDAY_DAYS_AGO)
+
+  return `${Number(birthday.slice(0, 4)) - ADULT_AGE_YEARS}${birthday.slice(4)}`.replace(
+    "-02-29",
+    "-02-28"
+  )
+}
+
 test("the goal control starts from the goal once it can be read", async () => {
   const data = await readNutritionDay({ day: trainingDayOn(new Date()) })
 
@@ -81,13 +110,7 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
       `Targets need the Profile's height, sex (male or female) and birth date, and a Body Weight on or before ${today}.`
     )
 
-    const birthday = shiftDay(today, -120)
-
-    const birthDate =
-      `${Number(birthday.slice(0, 4)) - 30}${birthday.slice(4)}`.replace(
-        "-02-29",
-        "-02-28"
-      )
+    const birthDate = adultBirthDate(today)
 
     expect(
       await write(targets.url, "PATCH", "/api/profile", {
@@ -98,23 +121,23 @@ test("the day shows its Calorie Target, eaten and remaining with macro progress,
     ).toBe(200)
     expect(
       await write(targets.url, "POST", "/api/body_weight", {
-        date: shiftDay(today, -20),
+        date: shiftDay(today, -BODY_WEIGHT_DAYS_AGO),
         weight_kg: 80,
       })
     ).toBe(201)
 
     const meal = await logMeal({
       api: targets.url,
-      eatenAt: new Date(Date.now() - 1000),
-      portions: [{ food_id: 907, grams: 1000 }],
+      eatenAt: new Date(Date.now() - ONE_SECOND_MS),
+      portions: [{ food_id: 907, grams: MEAL_GRAMS }],
     })
 
     await render(await readNutritionDay({ day: meal.day }))
 
     expect(rows("[data-slot='food-target-strip'] > div")).toEqual([
-      "Target 2,120 kcal",
-      "Eaten 1,100 kcal",
-      "Remaining 1,020 kcal",
+      `Target ${kcal(TARGET_KCAL)} kcal`,
+      `Eaten ${kcal(EATEN_KCAL)} kcal`,
+      `Remaining ${kcal(TARGET_KCAL - EATEN_KCAL)} kcal`,
     ])
     expect(text("[data-slot='food-target-basis']")).toEqual([
       "Lose 0.5 kg a week · Estimated Expenditure 2,670 kcal · Trend Weight 80 kg",
@@ -247,13 +270,7 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
       "Sex and birth date are set on the Workout page's Body view.",
     ])
 
-    const birthday = shiftDay(today, -120)
-
-    const birthDate =
-      `${Number(birthday.slice(0, 4)) - 30}${birthday.slice(4)}`.replace(
-        "-02-29",
-        "-02-28"
-      )
+    const birthDate = adultBirthDate(today)
 
     expect(
       await write(micros.url, "PATCH", "/api/profile", {
@@ -294,12 +311,12 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
 
     const mealLog = z.object({ meal_log: z.object({ day: z.string() }) })
 
-    for (const daysAgo of [2, 1]) {
+    for (const daysAgo of VITAMIN_D_ONLY_DAYS_AGO) {
       await post(
         micros.url,
         "/api/nutrition/meal-logs",
         {
-          eaten_at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
+          eaten_at: new Date(Date.now() - daysAgo * DAY_MS).toISOString(),
           supplement_doses: [{ supplement_id: vitaminD, doses: 1 }],
           request_id: crypto.randomUUID(),
         },
@@ -312,7 +329,7 @@ test("the day shows vitamins and minerals against their Recommended Intakes, ade
         micros.url,
         "/api/nutrition/meal-logs",
         {
-          eaten_at: new Date(Date.now() - 1000).toISOString(),
+          eaten_at: new Date(Date.now() - ONE_SECOND_MS).toISOString(),
           portions: [{ food_id: 3, grams: 200 }],
           supplement_doses: [
             { supplement_id: vitaminD, doses: 1 },

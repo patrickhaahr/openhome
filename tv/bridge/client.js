@@ -4,6 +4,7 @@ var fs = require('fs');
 var http = require('http');
 var https = require('https');
 var net = require('net');
+var lifecycles = require('./lifecycles');
 
 var PORT = 39479;
 var MAX_BYTES = 512 * 1024;
@@ -140,88 +141,99 @@ function requestApi(config, path, method, body, timeoutMs) {
 function createBridge(options) {
   var now = options.now || Date.now;
   var request = options.request;
-  var cachedDay = dayOn(now());
-  var weather = unavailableWeather();
-  var recovery = unavailableRecovery();
-  var weatherAt = 0;
-  var recoveryAt = 0;
-  var refreshing = null;
-  var commandPending = false;
-  var nextCommand = 0;
+  var today = dayOn(now());
+  var observations = {weather: lifecycles.unseen(today), recovery: lifecycles.unseen(today)};
+  var refresh = {state: 'idle'};
+  var admission = {state: 'idle', nextAt: 0};
+
+  function observe(name, event) { observations[name] = lifecycles.observe(observations[name], event); }
 
   function rollDay() {
-    var day = dayOn(now());
-    if (day !== cachedDay) {
-      cachedDay = day;
-      weather = unavailableWeather();
-      recovery = unavailableRecovery();
-      weatherAt = recoveryAt = 0;
-    }
-    if (weather.state === 'fresh' && Date.parse(weather.validUntil) <= now()) weather.state = 'stale';
-    if (weather.fetchedAt && now() - Date.parse(weather.fetchedAt) >= MAX_WEATHER_AGE) {
-      weather = unavailableWeather();
-      weatherAt = 0;
-    }
-    return day;
+    var at = now();
+    var tick = {type: 'tick', at: at, day: dayOn(at)};
+    observe('weather', tick);
+    observe('recovery', tick);
+    return tick;
   }
 
-  function refreshWeather(day) {
-    weatherAt = now() + MINUTE;
-    return Promise.resolve().then(function () { return request('/api/weather', 'GET', undefined, 7000); }).then(function (body) {
-      if (rollDay() !== day) return;
-      var next = weatherFrom(body, day, now());
-      if (next) {
-        weather = next;
-        weatherAt = next.state === 'fresh' ? Date.parse(next.validUntil) : now() + MINUTE;
-      } else if (weather.state !== 'unavailable') weather.state = 'stale';
-    }, function () { if (rollDay() === day && weather.state !== 'unavailable') weather.state = 'stale'; });
+  function weatherEvent(body, day) {
+    var reading = weatherFrom(body, day, now());
+    if (!reading) return {type: 'missed', day: day};
+    var staleAt = Date.parse(reading.validUntil);
+    return {type: 'received', day: day, reading: reading, staleAt: staleAt,
+      dueAt: reading.state === 'fresh' ? staleAt : now() + lifecycles.RETRY_AFTER,
+      discardAt: Date.parse(reading.fetchedAt) + MAX_WEATHER_AGE};
   }
 
-  function refreshRecovery(day) {
-    recoveryAt = now() + MINUTE;
-    return Promise.resolve().then(function () { return request('/api/training/days/' + day + '/recovery', 'GET', undefined, 7000); }).then(function (body) {
-      if (rollDay() !== day) return;
-      var next = recoveryFrom(body, day);
-      if (next) recovery = next;
-      else if (recovery.state !== 'unavailable') recovery.state = 'stale';
-    }, function () { if (rollDay() === day && recovery.state !== 'unavailable') recovery.state = 'stale'; });
+  function recoveryEvent(body, day) {
+    var reading = recoveryFrom(body, day);
+    return reading ? {type: 'received', day: day, reading: reading} : {type: 'missed', day: day};
   }
 
-  function finishRefresh() {
-    refreshing = null;
-    rollDay();
-    return JSON.parse(JSON.stringify({day: cachedDay, weather: weather, recovery: recovery}));
+  function fetchInto(flight, name, path, tick, eventFrom) {
+    observe(name, {type: 'requested', at: tick.at});
+    function settle(event) { if (lifecycles.isCurrent(refresh, flight)) observe(name, event); }
+    return Promise.resolve().then(function () { return request(path, 'GET', undefined, 7000); }).then(function (body) {
+      rollDay();
+      settle(eventFrom(body, tick.day));
+    }, function () {
+      rollDay();
+      settle({type: 'missed', day: tick.day});
+    });
+  }
+
+  function allSettled(tasks) {
+    var failures = [];
+    return Promise.all(tasks.map(function (task) {
+      return task.catch(function (error) { failures.push(error); });
+    })).then(function () { if (failures.length) throw failures[0]; });
+  }
+
+  function shown(observation, unavailable) {
+    return observation.state === 'unavailable' ? unavailable : Object.assign({}, observation.reading, {state: observation.state});
+  }
+
+  function snapshot() {
+    return {day: rollDay().day, weather: shown(observations.weather, unavailableWeather()),
+      recovery: shown(observations.recovery, unavailableRecovery())};
   }
 
   function getState() {
-    var day = rollDay();
-    if (refreshing) return refreshing.then(getState);
+    var tick = rollDay();
+    if (refresh.state === 'refreshing') return refresh.flight.result.then(getState);
+    var flight = {};
     var tasks = [];
-    if (now() >= weatherAt) tasks.push(refreshWeather(day));
-    if (now() >= recoveryAt) tasks.push(refreshRecovery(day));
-    refreshing = Promise.all(tasks).then(finishRefresh);
-    return refreshing;
-  }
-
-  function admit(name) {
-    if (!has(COMMANDS, name)) return {status: 404, body: {state: 'failed', reason: 'unknown-command'}};
-    if (commandPending) return {status: 409, body: {state: 'failed', reason: 'busy'}};
-    if (now() < nextCommand) return {status: 429, body: {state: 'failed', reason: 'rate-limited'}};
-    commandPending = true;
-    nextCommand = now() + 1000;
-    return null;
+    refresh = lifecycles.refresh(refresh, {type: 'start', flight: flight});
+    if (tick.at >= observations.weather.dueAt) {
+      tasks.push(fetchInto(flight, 'weather', '/api/weather', tick, weatherEvent));
+    }
+    if (tick.at >= observations.recovery.dueAt) {
+      tasks.push(fetchInto(flight, 'recovery', '/api/training/days/' + tick.day + '/recovery', tick, recoveryEvent));
+    }
+    function settle() { refresh = lifecycles.refresh(refresh, {type: 'settle', flight: flight}); }
+    flight.result = allSettled(tasks).then(function () { settle(); return snapshot(); },
+      function (error) { settle(); throw error; });
+    return flight.result;
   }
 
   function command(name) {
-    var rejection = admit(name);
-    if (rejection) return Promise.resolve(rejection);
+    if (!has(COMMANDS, name)) return Promise.resolve({status: 404, body: {state: 'failed', reason: 'unknown-command'}});
+    var flight = {};
+    var admitted = lifecycles.admit(admission, {type: 'send', at: now(), flight: flight});
+    if (admitted === admission) {
+      return Promise.resolve(admission.state === 'sending' ?
+        {status: 409, body: {state: 'failed', reason: 'busy'}} :
+        {status: 429, body: {state: 'failed', reason: 'rate-limited'}});
+    }
+    admission = admitted;
+    function settle() { admission = lifecycles.admit(admission, {type: 'settle', flight: flight}); }
     var action = COMMANDS[name];
     return Promise.resolve().then(function () { return request(action.path, 'POST', action.body, 12000); }).then(function (body) {
-      commandPending = false;
+      settle();
       return body && typeof body.message === 'string' ? {status: 200, body: {state: 'accepted'}} :
         {status: 502, body: {state: 'failed', reason: 'unavailable'}};
     }, function () {
-      commandPending = false;
+      settle();
       return {status: 502, body: {state: 'failed', reason: 'unavailable'}};
     });
   }

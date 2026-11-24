@@ -22,7 +22,7 @@ async fn wishlist_mutations_and_clarification_pass_through_the_authenticated_api
         .await
         .unwrap();
     let owners = wishlist_call(&client, "household_users", json!({})).await;
-    assert_eq!(owners.structured_content, Some(json!([owner])));
+    assert_eq!(owners.structured_content, Some(json!({"items": [owner]})));
     let created = wishlist_call(
         &client,
         "create_wishlist",
@@ -33,7 +33,7 @@ async fn wishlist_mutations_and_clarification_pass_through_the_authenticated_api
     let list = created.structured_content.unwrap();
     assert_eq!(list["owner_id"], owner["id"]);
     let lists = wishlist_call(&client, "wishlists", json!({})).await;
-    assert_eq!(lists.structured_content, Some(json!([list])));
+    assert_eq!(lists.structured_content, Some(json!({"items": [list]})));
     let payload = json!({"title":"A warm jacket","request_id":"mcp-wish-1"});
     let ambiguous = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
     assert_eq!(ambiguous.is_error, Some(true));
@@ -75,7 +75,10 @@ async fn wishlist_mutations_and_clarification_pass_through_the_authenticated_api
         .await
         .unwrap();
     assert_eq!(items.is_error, Some(false));
-    assert_eq!(items.structured_content, Some(direct.clone()));
+    assert_eq!(
+        items.structured_content,
+        Some(json!({"items": direct.clone()}))
+    );
     assert_eq!(direct, json!([addition["item"]]));
     payload["title"] = json!("Another wish");
     let conflict = wishlist_call(&client, "add_wishlist_item", payload.clone()).await;
@@ -162,7 +165,7 @@ async fn rich_item_management_uses_real_transport_with_partial_updates_and_delet
         wishlist_call(&client, "wishlist_items", json!({"list_id":list["id"]}))
             .await
             .structured_content,
-        Some(json!([]))
+        Some(json!({"items": []}))
     );
     let wrong = wishlist_call(
         &client,
@@ -261,7 +264,7 @@ async fn rich_item_management_uses_real_transport_with_partial_updates_and_delet
         wishlist_call(&client, "wishlist_items", json!({"list_id":list["id"]}))
             .await
             .structured_content,
-        Some(json!([]))
+        Some(json!({"items": []}))
     );
     client.cancel().await.unwrap();
 }

@@ -4,6 +4,7 @@
  */
 import QtQuick 2.12
 import "file:///var/lib/pearwebos/ui" as OH
+import "file:///var/lib/pearwebos/ui/LauncherLifecycles.js" as Lifecycles
 
 FocusScope {
     id: home
@@ -34,14 +35,13 @@ FocusScope {
     property int appIndex: 0
     property int controlIndex: 0
     property var now: new Date()
-    property var live: ({day: "", weather: {state: "unavailable", temperature: null, code: null, high: null, low: null, rain: null, wind: null}, recovery: {state: "unavailable", charge: null, rest: null, effort: null, freshness: "unknown"}})
-    property var readFlight: null
-    readonly property bool reading: readFlight !== null
-    property var commandFlight: null
-    property var commandOutcome: null
-    readonly property string pending: commandFlight ? commandFlight.command : ""
-    readonly property string acknowledged: commandOutcome && commandOutcome.accepted ? commandOutcome.command : ""
-    readonly property string failed: commandOutcome && !commandOutcome.accepted ? commandOutcome.command : ""
+    property var reader: Lifecycles.UNREAD
+    readonly property var live: reader.live
+    readonly property bool reading: reader.state === "reading"
+    property var sender: Lifecycles.UNSENT
+    readonly property string pending: sender.state === "sending" ? sender.command : ""
+    readonly property string acknowledged: sender.state === "accepted" ? sender.command : ""
+    readonly property string failed: sender.state === "uncertain" ? sender.command : ""
     readonly property var commands: ["lights-on", "lights-off", "speaker-bluetooth", "speaker-optical"]
     readonly property var labels: ["Tænd lys", "Sluk lys", "Bluetooth", "Optisk indgang"]
     readonly property var glyphs: ["bulb", "bulb-off", "bluetooth", "optical"]
@@ -106,16 +106,12 @@ FocusScope {
             if (key === Qt.Key_Down) openDrawer();
         }
     }
-    function markOffline() {
-        var copy = JSON.parse(JSON.stringify(live));
-        if (copy.weather.state !== "unavailable") copy.weather.state = "stale";
-        if (copy.recovery.state !== "unavailable") copy.recovery.state = "stale";
-        live = copy;
-    }
-    function settleRead(flight, data) {
-        if (readFlight !== flight) return;
-        readTimeout.stop(); readFlight = null;
-        if (data) live = data; else markOffline();
+    function readEvent(event) {
+        var next = Lifecycles.read(reader, event);
+        if (next === reader) return false;
+        reader = next;
+        if (next.state === "idle") readTimeout.stop();
+        return true;
     }
     function parseState(req) {
         try {
@@ -125,36 +121,33 @@ FocusScope {
         } catch (e) { return null; }
     }
     function refresh() {
-        if (reading) return;
         var req = new XMLHttpRequest();
-        var flight = {request: req};
-        readFlight = flight;
+        if (!readEvent({type: "start", flight: req})) return;
         req.open("GET", "http://127.0.0.1:39479/state");
         req.setRequestHeader("X-OpenHome-TV", "1");
         req.onreadystatechange = function() {
-            if (req.readyState === XMLHttpRequest.DONE) settleRead(flight, parseState(req));
+            if (req.readyState === XMLHttpRequest.DONE) readEvent({type: "settle", flight: req, data: parseState(req)});
         };
         readTimeout.restart(); req.send();
     }
-    function settleCommand(flight, accepted) {
-        if (commandFlight !== flight) return;
-        commandTimeout.stop(); commandFlight = null;
-        commandOutcome = {command: flight.command, accepted: accepted};
-        feedbackTimer.restart();
+    function sendEvent(event) {
+        var next = Lifecycles.send(sender, event);
+        if (next === sender) return false;
+        sender = next;
+        if (next.state === "sending") feedbackTimer.stop();
+        else if (next.state !== "idle") { commandTimeout.stop(); feedbackTimer.restart(); }
+        return true;
     }
     function send(command) {
-        if (commandFlight) return;
-        feedbackTimer.stop(); commandOutcome = null;
         var req = new XMLHttpRequest();
-        var flight = {request: req, command: command};
-        commandFlight = flight;
+        if (!sendEvent({type: "start", flight: req, command: command})) return;
         req.open("POST", "http://127.0.0.1:39479/command/" + command);
         req.setRequestHeader("X-OpenHome-TV", "1");
         req.onreadystatechange = function() {
             if (req.readyState !== XMLHttpRequest.DONE) return;
             var ok = false;
             try { ok = req.status === 200 && JSON.parse(req.responseText).state === "accepted"; } catch (e) {}
-            settleCommand(flight, ok);
+            sendEvent({type: "settle", flight: req, accepted: ok});
         };
         commandTimeout.restart(); req.send();
     }
@@ -190,42 +183,31 @@ FocusScope {
     Timer {
         id: readTimeout; interval: 10000
         onTriggered: {
-            var flight = home.readFlight;
-            if (!flight) return;
-            home.settleRead(flight, null);
-            flight.request.abort();
+            var flight = home.reader.flight;
+            if (home.readEvent({type: "timeout"})) flight.abort();
         }
     }
     Timer {
         id: commandTimeout; interval: 14000
         onTriggered: {
-            var flight = home.commandFlight;
-            if (!flight) return;
-            home.settleCommand(flight, false);
-            flight.request.abort();
+            var flight = home.sender.flight;
+            if (home.sendEvent({type: "timeout"})) flight.abort();
         }
     }
-    Timer { id: feedbackTimer; interval: 4500; onTriggered: { if (home.commandOutcome && home.commandOutcome.accepted) home.commandOutcome = null; } }
-    property string holdPhase: "idle"
-    property string releasingFrom: ""
-    function holdReset() { holdTimer.stop(); releaseTimer.stop(); holdPhase = "idle"; releasingFrom = ""; }
-    function holdEvent(name) {
-        var phase = holdPhase;
-        if (name === "press") {
-            if (phase === "idle") { holdPhase = "pressed"; holdTimer.restart(); }
-            else if (phase === "releasing") { releaseTimer.stop(); holdPhase = releasingFrom; releasingFrom = ""; }
-        } else if (name === "release") {
-            if (phase === "pressed" || phase === "held") { releasingFrom = phase; holdPhase = "releasing"; releaseTimer.restart(); }
-            else if (phase === "releasing") releaseTimer.restart();
-        } else if (name === "holdElapsed") {
-            if (phase === "pressed" || (phase === "releasing" && releasingFrom === "pressed")) {
-                if (!agentOpen && region === "apps") { holdReset(); uiController.startEdit("app"); }
-                else if (phase === "pressed") holdPhase = "held";
-                else releasingFrom = "held";
-            }
-        } else if (name === "releaseElapsed") {
-            if (phase === "releasing") { holdReset(); activate(); }
-        } else if (name === "cancel") holdReset();
+    Timer { id: feedbackTimer; interval: 4500; onTriggered: home.sendEvent({type: "feedbackElapsed"}) }
+    property var press: Lifecycles.RELEASED
+    readonly property var holdEffects: ({
+        startHoldTimer: function() { holdTimer.restart(); },
+        startReleaseTimer: function() { releaseTimer.restart(); },
+        stopReleaseTimer: function() { releaseTimer.stop(); },
+        stopTimers: function() { holdTimer.stop(); releaseTimer.stop(); },
+        edit: function() { uiController.startEdit("app"); },
+        activate: function() { activate(); }
+    })
+    function holdEvent(type) {
+        var next = Lifecycles.hold(press, {type: type, editable: !agentOpen && region === "apps"});
+        press = next.press;
+        next.effects.forEach(function(effect) { holdEffects[effect](); });
     }
     Timer { id: holdTimer; interval: 700; onTriggered: home.holdEvent("holdElapsed") }
     Timer { id: releaseTimer; interval: 150; onTriggered: home.holdEvent("releaseElapsed") }

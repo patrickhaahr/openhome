@@ -36,17 +36,17 @@ export const REST_MS = 60_000
 const MISSES = 4
 
 export type IdleSources = {
-  readonly albums: () => Promise<AlbumRead>
-  readonly page: (page: DeckPage) => Promise<WallRead>
+  readonly albums: (signal: AbortSignal) => Promise<AlbumRead>
+  readonly page: (page: DeckPage, signal: AbortSignal) => Promise<WallRead>
   readonly weather: () => Promise<WeatherRead>
-  readonly onThisDay: () => Promise<OnThisDayResult>
+  readonly onThisDay: (signal: AbortSignal) => Promise<OnThisDayResult>
 }
 
 export const serverSources: IdleSources = {
-  albums: () => getSlideshowAlbums(),
-  page: (page) => getWallPage({ data: page }),
+  albums: (signal) => getSlideshowAlbums({ signal }),
+  page: (page, signal) => getWallPage({ data: page, signal }),
   weather: () => getWeather(),
-  onThisDay: () => getOnThisDay({ data: {} }),
+  onThisDay: (signal) => getOnThisDay({ data: {}, signal }),
 }
 
 const reducedMotion = "(prefers-reduced-motion: reduce)"
@@ -213,8 +213,8 @@ function Slideshow({
 
     async function prepare(): Promise<SlideSource | null> {
       const [albums, memories] = await Promise.all([
-        sources.albums().catch(() => unavailablePhotos),
-        sources.onThisDay().catch(() => unavailablePhotos),
+        sources.albums(signal).catch(() => unavailablePhotos),
+        sources.onThisDay(signal).catch(() => unavailablePhotos),
       ])
 
       if (albums.state !== "ready") return null
@@ -227,7 +227,11 @@ function Slideshow({
       const normal = slideSource(
         pages,
         seed,
-        (page) => sources.page(page).catch(() => unavailablePhotos),
+        async (page) => {
+          signal.throwIfAborted()
+
+          return sources.page(page, signal).catch(() => unavailablePhotos)
+        },
         remembered?.day === day ? remembered.position : undefined
       )
 

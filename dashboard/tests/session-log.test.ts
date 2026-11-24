@@ -1,10 +1,14 @@
 import { expect, test } from "vitest"
 import { canPair, pairSessions } from "@/lib/session-log"
 
+const COPENHAGEN_SUMMER_OFFSET = "+02:00"
+
+const clockTimeOf = (start: string | undefined) => start?.slice(11, 16)
+
 const workout = (id: number, date: string) => ({ id, date })
 
 const strap = (start: string, sport: string, minutes: number | null) => ({
-  start: `${start}+02:00`,
+  start: `${start}${COPENHAGEN_SUMMER_OFFSET}`,
   sport,
   duration_min: minutes,
 })
@@ -95,9 +99,10 @@ test("equal lengths go to the earlier start", () => {
     ]
   )
 
-  expect(sessions.map((session) => session.strap?.start.slice(11, 16))).toEqual(
-    ["18:00", "07:00"]
-  )
+  expect(sessions.map((session) => clockTimeOf(session.strap?.start))).toEqual([
+    "18:00",
+    "07:00",
+  ])
   expect(sessions.map((session) => session.workout?.id)).toEqual([undefined, 1])
 })
 
@@ -112,7 +117,7 @@ test("two workouts and two candidates pair in order, one to one", () => {
 
   expect(
     sessions.map((session) => [
-      session.strap?.start.slice(11, 16),
+      clockTimeOf(session.strap?.start),
       session.workout?.id,
     ])
   ).toEqual([

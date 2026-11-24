@@ -19,10 +19,26 @@ pub struct AddWatchlistEntryRequest {
     pub owner_id: Option<String>,
     /// Movie or whole series; no episode or season tracking.
     pub kind: MediaKind,
-    /// Manual title, 1-500 characters. No provider metadata is fetched.
+    #[schemars(
+        description = "Title, 1-500 characters. With `tmdb_id` the stored title comes from TMDB instead."
+    )]
     pub title: String,
     /// Unique intended addition ID, 1-128 characters. Reuse identical arguments and ID after an uncertain response.
     pub request_id: String,
+    #[schemars(
+        description = "TMDB ID of the movie or series from `search_watchlist_titles`. Omit for a manual plan without metadata."
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tmdb_id: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SearchWatchlistTitlesRequest {
+    #[schemars(description = "Movie or whole series; searched separately on TMDB.")]
+    pub kind: MediaKind,
+    #[schemars(description = "Title to search for, 1-200 characters without control characters.")]
+    pub query: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -74,7 +90,7 @@ pub struct UpdateWatchlistEntryRequest {
 #[tool_router(router = watchlist_router, vis = "pub(crate)")]
 impl OpenHomeTools {
     #[tool(
-        description = "List household-visible Watchlist Entries with optional owner_id and planned/watching/completed status filters. Returns stable IDs, media kind, title, personal status, date added and completion date. Use household_users to discover owners with empty lists. Does not infer viewing history.",
+        description = "List household-visible Watchlist Entries with optional owner_id and planned/watching/completed status filters. Returns {items: [...]} with stable IDs, media kind, title, personal status, date added and completion date. Use household_users to discover owners with empty lists. Does not infer viewing history.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn watchlist_entries(
@@ -104,12 +120,37 @@ impl OpenHomeTools {
     }
 
     #[tool(
-        description = "Add a manual movie or whole-series plan for an explicit owner_id discovered with household_users. Missing owner returns one clarification question with choices and writes nothing. Generate a unique request_id per intention; reuse identical arguments and ID after an uncertain response. Accepted retries return replayed=true; changed arguments conflict. New entries start planned. No provider search or completion is inferred.",
+        description = "Search TMDB for movies or whole series by title and return {items: [...]} of candidates with tmdb_id, kind, title, overview, poster_path and release_date (at most 20). Pick the candidate that matches the user's request, asking when several fit; never choose by title alone when ambiguous. Pass its tmdb_id to add_watchlist_entry. A TMDB outage returns tmdb_unavailable; manual plans still work.",
+        annotations(read_only_hint = true, open_world_hint = true)
+    )]
+    async fn search_watchlist_titles(
+        &self,
+        Parameters(request): Parameters<SearchWatchlistTitlesRequest>,
+    ) -> CallToolResult {
+        let kind = match request.kind {
+            MediaKind::Movie => "movie",
+            MediaKind::Series => "series",
+        };
+        self.api
+            .request(
+                reqwest::Method::GET,
+                &["api", "watchlist", "search"],
+                None,
+                &[
+                    ("kind".into(), kind.into()),
+                    ("query".into(), request.query),
+                ],
+            )
+            .await
+    }
+
+    #[tool(
+        description = "Add a movie or whole-series plan for an explicit owner_id discovered with household_users. Pass tmdb_id from search_watchlist_titles to store TMDB's title, overview, poster and release date; omit it for a manual plan with the given title and no metadata. Missing owner returns one clarification question with choices and writes nothing. Generate a unique request_id per intention; reuse identical arguments and ID after an uncertain response. Accepted retries return replayed=true; changed arguments conflict. New entries start planned. Completion is never inferred.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
             idempotent_hint = true,
-            open_world_hint = false
+            open_world_hint = true
         )
     )]
     async fn add_watchlist_entry(

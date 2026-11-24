@@ -6,6 +6,7 @@ Each Household User has a Watchlist of movies and whole series. Hermes adds titl
 
 - `watch-add-mcp` adds a manual title through `add_watchlist_entry` for an explicit owner.
 - `watch-replay` repeats the same `request_id` and arguments and gets the original entry with `replayed: true`.
+- `watch-tmdb-mcp` finds a title with `search_watchlist_titles` and adds it with its `tmdb_id`, so the entry comes back with overview, poster path and release date.
 - `watch-owner-required` omits `owner_id` and gets a clarification error with choices, with nothing written.
 - `watch-dashboard` shows the title in the Dashboard's Planned group with its owner's initial.
 
@@ -22,16 +23,17 @@ Preconditions:
 - `doctor.sh` prints `OK`.
 - No entry titled `Verify Harbour Lights` exists (true after a fresh launch).
 
-- **Find the owner.** Run `mcp.sh call household_users '{}'`. `structuredContent` lists Alex, Robin and Sam with IDs; take Alex's.
+- **Find the owner.** Run `mcp.sh call household_users '{}'`. `structuredContent.items` lists Alex, Robin and Sam with IDs; take Alex's.
 - **Add.** Run `mcp.sh call add_watchlist_entry '{"owner_id":"<alex>","kind":"movie","title":"Verify Harbour Lights","request_id":"verify-<run id>"}'`. The result has `replayed: false`, `status: "planned"` and today's `date_added`.
 - **Retry.** Run the identical call again. The result has `replayed: true` and the same entry `id`.
 - **Read back.** Run `curl -fsS -H "Authorization: Bearer $API_KEY" "$API_URL/api/watchlist/entries?owner_id=<alex>"`. The list holds exactly one `Verify Harbour Lights`.
-- **Dashboard.** `preview_open` on the Dashboard port with path `/lists?tab=watch`, then `preview_wait_for` text `Verify Harbour Lights`. The `Planned` region's list shows the title, and the `Whose list` button reads `Alex 6 titles to watch` (5 seeded + 1).
-- **Proof.** Save the tool JSON as `01-…`–`04-…` and a `preview_snapshot` with `save: true` copied to `05-dashboard-watch.png` under `$EVIDENCE_DIR/watchlist/`.
+- **Enriched add.** Run `mcp.sh call search_watchlist_titles '{"kind":"movie","query":"Godfather"}'`, take `structuredContent.items[0].tmdb_id` (238, The Godfather), then run `mcp.sh call add_watchlist_entry` with it as `tmdb_id` plus a fresh `request_id`. The entry has the catalogue's `title`, `overview`, `poster_path` and `release_date`; `watchlist_entry` and the Axum read-back show the same values.
+- **Dashboard.** `preview_open` on the Dashboard port with path `/lists?tab=watch`, then `preview_wait_for` text `Verify Harbour Lights`. The `Planned` region's list shows the title, and the `Whose list` button reads `Alex 7 titles to watch` (5 seeded planned or watching + the 2 added).
+- **Proof.** Save the tool JSON as `01-…`–`06-…` and a `preview_snapshot` with `save: true` copied to `07-dashboard-watch.png` under `$EVIDENCE_DIR/watchlist/`.
 
 ## Gotchas
 
 - `household_users` IDs are regenerated on every launch. Never hard-code them.
 - Seed data already has `Spirited Away` for two owners, so use `Verify…` titles to avoid ambiguous assertions.
-- TMDB search uses a loopback catalogue unless `~/.config/openhome/tmdb-read-access-token` exists, in which case it hits live TMDB. Search **Orbit** (movie) or **Lighthouse** (series) only with the loopback catalogue.
+- TMDB search uses the stack's seed catalogue (`api/examples/dashboard_preview/seed/household.json`) unless `~/.config/openhome/tmdb-read-access-token` exists, in which case it hits live TMDB and the first result is not guaranteed to be the intended title. Enrich with **The Godfather** (movie) or **Frieren** (series): both are only on Sam's list. Alex already has `Spirited Away`, `Arcane` and `12 Angry Men`, and a second entry with the same owner, kind and `tmdb_id` is rejected. **Orbit** and **Lighthouse** exist only in the integration-test stub, not on this stack.
 - The Dashboard reads on navigation. After an MCP write, open or reload the page instead of expecting a live update.

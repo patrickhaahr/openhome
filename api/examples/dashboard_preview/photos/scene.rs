@@ -1,6 +1,6 @@
 use std::{f64::consts::TAU, io::Write};
 
-use super::{AlbumSeed, rand};
+use super::{AlbumSeed, rand, whole};
 
 type Rgb = [f64; 3];
 
@@ -10,7 +10,7 @@ fn hsl(hue: f64, saturation: f64, lightness: f64) -> Rgb {
     let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation.clamp(0.0, 1.0);
     let x = chroma * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
     let m = lightness - chroma / 2.0;
-    let (r, g, b) = match (hue / 60.0) as u32 {
+    let (red, green, blue) = match whole(hue / 60.0) {
         0 => (chroma, x, 0.0),
         1 => (x, chroma, 0.0),
         2 => (0.0, chroma, x),
@@ -18,7 +18,7 @@ fn hsl(hue: f64, saturation: f64, lightness: f64) -> Rgb {
         4 => (x, 0.0, chroma),
         _ => (chroma, 0.0, x),
     };
-    [r + m, g + m, b + m]
+    [red + m, green + m, blue + m]
 }
 
 fn mix(a: Rgb, b: Rgb, t: f64) -> Rgb {
@@ -160,14 +160,14 @@ fn city(frame: &Frame, x: f64, v: f64) -> Rgb {
         let depth = layer as f64;
         let width = 0.11 - 0.03 * depth;
         let column = (x / width).floor();
-        let cell = column as i64 as u64;
+        let cell = whole(column);
         let top = 0.32 + 0.1 * depth + 0.32 * frame.pick(100 + layer * 997 + cell);
         if v > top {
             let lightness = 0.2 + 0.08 * frame.pick(200 + cell) - 0.06 * depth;
             let mut wall = hsl(frame.hue + 200.0, 0.18, lightness);
             let fx = (x / width).fract();
-            let row = ((v - top) / 0.035).floor() as u64;
-            let slot = (fx * 5.0).floor() as u64;
+            let row = whole(((v - top) / 0.035).floor());
+            let slot = whole((fx * 5.0).floor());
             let inside = (fx * 5.0).fract() > 0.3 && ((v - top) / 0.035).fract() > 0.35;
             if fx > 0.08 && fx < 0.92 && inside {
                 let lit = frame.pick(300 + cell * 131 + row * 17 + slot) > 0.55 - 0.3 * frame.dusk;
@@ -199,7 +199,7 @@ fn forest(frame: &Frame, x: f64, v: f64) -> Rgb {
         let depth = layer as f64;
         let spacing = 0.1 + 0.05 * depth;
         let index = (x / spacing).floor();
-        let cell = index as i64 as u64;
+        let cell = whole(index);
         let centre = (index + 0.3 + 0.4 * frame.pick(500 + layer * 991 + cell)) * spacing;
         let base = 0.66 + 0.13 * depth;
         let height = 0.22 + 0.14 * depth + 0.12 * frame.pick(600 + cell);
@@ -233,7 +233,7 @@ fn bloom(frame: &Frame, x: f64, v: f64) -> Rgb {
     for (dx, dy) in (0..9).map(|i| (f64::from(i % 3) - 1.0, f64::from(i / 3) - 1.0)) {
         let cx = (x / size).floor() + dx;
         let cy = (v / size).floor() + dy;
-        let cell = (cx + 1.0) as u64 * 7919 + (cy + 1.0) as u64;
+        let cell = whole(cx + 1.0) * 7919 + whole(cy + 1.0);
         if frame.pick(700 + cell) < 0.35 {
             continue;
         }
@@ -248,7 +248,7 @@ fn bloom(frame: &Frame, x: f64, v: f64) -> Rgb {
         let edge = radius * (0.72 + 0.28 * (angle * petals).cos().abs());
         if distance < edge {
             let palette = [frame.hue + 200.0, 340.0, 48.0, 0.0, 300.0];
-            let hue = palette[(frame.pick(1300 + cell) * palette.len() as f64) as usize];
+            let hue = palette[whole(frame.pick(1300 + cell) * palette.len() as f64) as usize];
             let white = frame.pick(1300 + cell) > 0.8;
             color = if distance < radius * 0.22 {
                 hsl(44.0, 0.9, 0.55)
@@ -264,7 +264,7 @@ fn bloom(frame: &Frame, x: f64, v: f64) -> Rgb {
 
 pub(super) fn picture(width: u32, height: u32, album: &AlbumSeed, key: u64) -> Vec<u8> {
     let aspect = f64::from(width) / f64::from(height);
-    let seed = key ^ (album.hue as u64) << 40;
+    let seed = key ^ whole(album.hue) << 40;
     let dusk = rand(seed ^ 0xd5);
     let frame = Frame {
         hue: album.hue + 30.0 * (rand(seed ^ 0x11) - 0.5),
@@ -289,19 +289,19 @@ pub(super) fn picture(width: u32, height: u32, album: &AlbumSeed, key: u64) -> V
                 "snow" => hills(&frame, x, v, true),
                 _ => hills(&frame, x, v, false),
             };
-            pixels.extend(color.map(|channel| (channel.clamp(0.0, 1.0) * 255.0) as u8));
+            pixels.extend(color.map(|channel| whole(channel.clamp(0.0, 1.0) * 255.0) as u8));
         }
     }
     png(width, height, &pixels)
 }
 
 pub(super) fn png(width: u32, height: u32, rgb: &[u8]) -> Vec<u8> {
-    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+    fn chunk(out: &mut Vec<u8>, kind: [u8; 4], data: &[u8]) {
         out.extend((data.len() as u32).to_be_bytes());
         out.extend(kind);
         out.extend(data);
         let mut crc = flate2::Crc::new();
-        crc.update(kind);
+        crc.update(&kind);
         crc.update(data);
         out.extend(crc.sum().to_be_bytes());
     }
@@ -318,8 +318,8 @@ pub(super) fn png(width: u32, height: u32, rgb: &[u8]) -> Vec<u8> {
     header.extend(width.to_be_bytes());
     header.extend(height.to_be_bytes());
     header.extend([8, 2, 0, 0, 0]);
-    chunk(&mut out, b"IHDR", &header);
-    chunk(&mut out, b"IDAT", &compressed);
-    chunk(&mut out, b"IEND", &[]);
+    chunk(&mut out, *b"IHDR", &header);
+    chunk(&mut out, *b"IDAT", &compressed);
+    chunk(&mut out, *b"IEND", &[]);
     out
 }

@@ -54,7 +54,8 @@ Screenshot:  Home at night: giant clock, the sun below the horizon as a hollow r
   the date and today's weather, so the photo shows through. Flat tint only: no gradient,
   shadow, blur or glass behind the text. Later idle
   content (important dates) joins the same plate. Without photos the plate sits on the
-  bare ground. The first touch only wakes.
+  bare ground. The first touch only wakes. From 23:00 to 08:30 the Night Screen takes its
+  place: plain black, nothing on it.
 
 Round 2 and the genericness test live on their own page.
 

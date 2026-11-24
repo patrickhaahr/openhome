@@ -17,7 +17,6 @@ pub fn decode(encoded: &str) -> Option<Vec<Fix>> {
         };
         lat += d_lat;
         lon += d_lon;
-        #[allow(clippy::cast_precision_loss)]
         let fix = [lat as f64 / 1e5, lon as f64 / 1e5];
         if (-90.0..=90.0).contains(&fix[0]) && (-180.0..=180.0).contains(&fix[1]) {
             fixes.push(fix);

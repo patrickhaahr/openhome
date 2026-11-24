@@ -64,6 +64,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "save_meal",
             "search_cards",
             "search_foods",
+            "search_watchlist_titles",
             "set_nutrition_goal",
             "sleep_recent",
             "supplements",
@@ -164,7 +165,12 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
         }
         if matches!(
             tool.name.as_ref(),
-            "lookup_product" | "link_product" | "search_cards" | "add_binder_entry"
+            "lookup_product"
+                | "link_product"
+                | "search_cards"
+                | "add_binder_entry"
+                | "add_watchlist_entry"
+                | "search_watchlist_titles"
         ) {
             assert_eq!(
                 tool.annotations.as_ref().unwrap().open_world_hint,
@@ -187,6 +193,7 @@ async fn discovers_read_only_training_and_additive_wishlist_tools() {
             "create_wishlist" => json!(["owner_id", "name"]),
             "add_wishlist_item" => json!(["title", "request_id"]),
             "add_watchlist_entry" => json!(["kind", "title", "request_id"]),
+            "search_watchlist_titles" => json!(["kind", "query"]),
             "watchlist_entry" | "delete_watchlist_entry" | "update_watchlist_entry" => {
                 json!(["owner_id", "entry_id"])
             }
@@ -423,6 +430,41 @@ async fn unexpected_no_content_never_confirms_a_read_or_item_write() {
             "{tool} must not confirm an empty result"
         );
         assert_eq!(result.structured_content.unwrap()["status"], 204);
+    }
+    client.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn list_tools_wrap_array_results_in_an_items_object() {
+    let api = start_api().await;
+    let owner: Value = reqwest::Client::new()
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name": "Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+
+    for (tool, expected) in [
+        ("household_users", json!({"items": [owner]})),
+        ("watchlist_entries", json!({"items": []})),
+        ("wishlists", json!({"items": []})),
+    ] {
+        let result = wishlist_call(&client, tool, json!({})).await;
+        assert_eq!(result.is_error, Some(false), "{tool}");
+        assert_eq!(result.structured_content, Some(expected.clone()), "{tool}");
+        let text = result.content[0].as_text().unwrap().text.as_str();
+        assert_eq!(
+            serde_json::from_str::<Value>(text).unwrap(),
+            expected,
+            "{tool}"
+        );
     }
     client.cancel().await.unwrap();
 }

@@ -5,24 +5,54 @@ import type {
 } from "maplibre-gl"
 import { type MapLine, type MapRoutes } from "@/lib/map"
 
-export const mapThemes = {
-  day: {
-    style: "https://tiles.openfreemap.org/styles/positron",
-    origin: "#ff5b1f",
-    casing: "#ffffff",
-    alternative: "#5a5f69",
-    buildings: "#d9d9d2",
-  },
-  night: {
-    style: "https://tiles.openfreemap.org/styles/dark",
-    origin: "#ff6a2e",
-    casing: "#0b0c0e",
-    alternative: "#9a9ea6",
-    buildings: "#2a2c31",
-  },
+export const mapStyles = {
+  day: "https://tiles.openfreemap.org/styles/positron",
+  night: "https://tiles.openfreemap.org/styles/dark",
 } as const
 
-export type MapTheme = keyof typeof mapThemes
+export type MapTheme = keyof typeof mapStyles
+
+export type MapPalette = {
+  readonly origin: string
+  readonly casing: string
+  readonly alternative: string
+  readonly buildings: string
+}
+
+const paletteTokens = {
+  origin: "--sun",
+  casing: "--map-casing",
+  alternative: "--muted-ink",
+  buildings: "--map-buildings",
+} as const satisfies Record<keyof MapPalette, string>
+
+const probeAttribute = {
+  day: { name: "data-theme", value: "light" },
+  night: { name: "class", value: "dark" },
+} as const satisfies Record<MapTheme, { name: string; value: string }>
+
+export function mapPalette(theme: MapTheme): MapPalette {
+  const probe = document.createElement("div")
+  const { name, value } = probeAttribute[theme]
+  probe.setAttribute(name, value)
+  document.documentElement.append(probe)
+
+  try {
+    const style = getComputedStyle(probe)
+
+    const colour = (token: string): string =>
+      style.getPropertyValue(token).trim()
+
+    return {
+      origin: colour(paletteTokens.origin),
+      casing: colour(paletteTokens.casing),
+      alternative: colour(paletteTokens.alternative),
+      buildings: colour(paletteTokens.buildings),
+    }
+  } finally {
+    probe.remove()
+  }
+}
 
 export const LOCAL_ZOOM = 14
 
@@ -36,7 +66,7 @@ export const ROUTE_SOURCE = "route"
 
 export const BUILDINGS_SOURCE = "openmaptiles"
 
-export const buildingsLayer = (theme: MapTheme) =>
+export const buildingsLayer = (buildings: string) =>
   ({
     id: BUILDINGS_LAYER,
     type: "fill-extrusion",
@@ -45,7 +75,7 @@ export const buildingsLayer = (theme: MapTheme) =>
     minzoom: BUILDINGS_MIN_ZOOM,
     filter: ["!=", ["get", "hide_3d"], true],
     paint: {
-      "fill-extrusion-color": mapThemes[theme].buildings,
+      "fill-extrusion-color": buildings,
       "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
       "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
       "fill-extrusion-opacity": 0.9,

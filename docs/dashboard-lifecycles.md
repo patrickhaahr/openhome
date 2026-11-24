@@ -37,7 +37,7 @@ exit below is one of: proven by a test, supported by a named source, or listed u
 | Wish link read, media search | #268 | Retained simple | Each uses a debounce timer cleared on unmount and a ticket so only the newest answer applies; the status is display-only and never blocks a save. See [Liveness limits](#liveness-limits) |
 | Slideshow playback | [#269](https://github.com/patrickhaahr/openhome/issues/269) | Refactored | One effect run owns what it draws: `Stage` is written only through `show()`, guarded by the run's `AbortSignal`; `Loaded` is `loaded`, `failed` or `cancelled`; load keys never repeat. `dashboard/src/components/idle-screen.tsx` |
 | Deck advancement | #269 | Already explicit | `slideSource` and `dealPages` in `lib/idle.ts` stay a bounded sequential protocol: pages are dealt once in a seeded order, one page is read at a time, and a remembered position carries on across spells. A state model would restate the iteration |
-| Idle and wake | [#270](https://github.com/patrickhaahr/openhome/issues/270) | Refactored | `reduceRoom` is the only transition boundary for `awake`, `idle`, `waking`; timers and listeners report events and never read state. `idle` and `waking` carry the focus to restore. `dashboard/src/components/idle.tsx` |
+| Idle and wake | [#270](https://github.com/patrickhaahr/openhome/issues/270) | Refactored | `reduceRoom` is the only transition boundary for `awake`, `idle`, `night`, `waking`; timers and listeners report events and never read state. `idle`, `night` and `waking` carry the focus to restore. `Gesture` (`none`, `held` by pointer or key, `trailing`) says how much of the wake gesture is still to be swallowed. `dashboard/src/components/idle.tsx` |
 | Idle blockers | #270 | Already explicit | Each `useIdleBlock` holds its own token and releases it alone, so several reasons are held independently of the phase. `idle-block.ts` was not changed |
 | Photo page requests | [#271](https://github.com/patrickhaahr/openhome/issues/271) | Refactored | `PhotoWall` owns one `PageRequest` (`idle`, `loading` and `failed`, each carrying its cursor) behind a single-flight token; loaded items and the next cursor stay separate view data. See [ADR 0009](adr/0009-immich-selected-albums.md) |
 | Weather polling | [#272](https://github.com/patrickhaahr/openhome/issues/272) | Refactored | `LiveWeather` holds one `Polling` (`scheduled`, `reading`, `hidden`, terminal `disposed`) per effect generation; forecast freshness expires independently. See [ADR 0006](adr/0006-weather-provider-and-cache.md) |
@@ -62,10 +62,12 @@ test in `dashboard/tests` drives it; "source" means a named bound the code relie
 | List save | `sending` | acknowledged, then `refreshing` (proven) | a rejected receipt or thrown call settles `rejected` (proven) | closing the sheet does not cancel; the lifetime guard skips `done` (proven) | server 5 s (source); browser call not demonstrated | the retry record survives reload |
 | List save | `refreshing` | `saved` | a failed re-read is `saved-unread` and still resolves `true` (proven) | a late step cannot overwrite a settled save (proven) | not demonstrated | the retry record is already spent |
 | Slideshow | image load (`load()`) | `loaded` | `failed`; a run of failures rests (proven) | the run's abort settles the load as `cancelled` at once through its own listener; a late image event cannot settle a newer load (proven) | no app timeout: the image event on the browser hop is left only by load, error or abort (abort proven, event not demonstrated) | waking mid-load keeps the unseen photo (proven) |
-| Slideshow | `prepare()` and page read (`source.next()`) | the call resolves and the run continues | a rejection or unavailable result rests the ground (proven for an unreachable library) | abort does not settle the call: the browser call to the server function stays pending after abort and the run's `await` ends only when the call it is awaiting settles. After `prepare()` settles the run may await `source.next()` and may issue a page request (not when `prepare()` gave no source, nor for an on-this-day photo), and returns without drawing once it reaches the abort check or the cancellation-aware catch; a late failure cannot blank a replacement (proven). Cancellation does not prevent that request | upstream 7 s / 45 s on the Axum request (source); the browser hop has no timeout or abort, so the old run can stay pending indefinitely (not demonstrated to end) | a replacement run starts empty and does not wait for the old one |
+| Slideshow | `prepare()` and page read (`source.next()`) | the call resolves and the run continues | a rejection or unavailable result rests the ground (proven for an unreachable library) | abort cancels the album, on-this-day and page reads in flight through the run's `AbortSignal`, and no page read starts after it (proven); a late failure cannot blank a replacement (proven) | upstream 7 s / 45 s on the Axum request (source); the browser hop has no timeout and is left only by the abort | a replacement run starts empty and does not wait for the old one |
 | Slideshow | dwell and rest | timer | none | abort stops it; waking mid-dwell leaves the position unmoved (proven) | the timer is the bound | the next spell continues the deck |
 | Idle and wake | `awake` countdown | timer enters `idle` (proven) | none | a block or input restarts it (proven) | the countdown | none |
-| Idle and wake | `waking` | grace elapses or release arrives (proven) | a lost release wakes at `WAKE_LIMIT_MS` (proven) | a block returns the room awake with focus (proven); unmount releases input capture (proven) | `WAKE_GRACE_MS`, `WAKE_LIMIT_MS` (existing) | none |
+| Idle and wake | `night` | daybreak becomes `idle`, or `awake` with the slideshow off (proven) | none | input starts `waking`; a block returns the room awake (proven) | none: daybreak is rechecked every 5 s from the clock | page reload starts `awake` |
+| Idle and wake | `waking` | the grace after the last release or key elapses (proven) | a lost release wakes at `WAKE_LIMIT_MS` (proven) | a block returns the room awake with focus (proven); unmount releases input capture (proven) | `WAKE_GRACE_MS`, `WAKE_LIMIT_MS` (existing) | none |
+| Idle and wake | gesture `held`, `trailing` | the last release of a pointer or key starts `trailing`; its grace ends at `none` (proven) | after a lost release the next primary press, the held key's own non-repeat press or its `keyup` ends it, while a different key reaches the page and leaves the guard in place (proven) | a block or the wake limit uncovers the page but the held key's repeats and `keyup` are still swallowed (proven) | `trailing`: `WAKE_GRACE_MS`; `held` has none by design, so a long hold cannot leak on its own; a primary press ends the whole gesture, so a key still held after it can reach the page | inactivity or page reload |
 | Photo pages | `loading` | page settles to `idle` or ends at a null cursor (proven) | `failed` keeps photos and retries the same cursor (proven) | a settlement after unmount is ignored (proven) | server 7 s / 45 s (source); browser call not demonstrated | none |
 | Weather | `scheduled` | timer starts a read | none | hiding cancels the timer; replacement or disposal clears it (proven) | the schedule | showing refreshes |
 | Weather | `reading` | result applies and schedules | an unavailable result retries after 60 s (proven) | a read finishing after replacement or disposal is discarded; none overlaps within a generation (proven) | server 7 s (source); browser call not demonstrated | showing again never starts a second read (proven) |
@@ -93,16 +95,10 @@ of them, because no source requires one.
   not covered by a test that mounts the page inside an `IdleProvider`). A stuck weather read
   is left only by disposal or by the effect re-running when the forecast is replaced.
 - **Slideshow preparation and page reads.** `prepare()` (the album and on-this-day reads)
-  and `source.next()` are browser calls to Dashboard server functions that take no abort
-  signal. Aborting a run does not settle them: the cancelled run stays pending until the
-  call it is awaiting settles. The server bounds the Axum request (7 s per album, 45 s for
-  all photos), but the browser hop has no timeout here, so a call that never answers leaves
-  that old run pending for the page's life. A replacement run is independent of it. After
-  `prepare()` settles, the run may await `source.next()` and may issue a page request (not
-  when `prepare()` gave no source, nor when the next photo is an on-this-day one); it
-  returns without drawing once it reaches the abort check or the cancellation-aware catch.
-  Cancellation neither prevents that request nor settles the old run. This is unproved,
-  not guaranteed away, and no timeout or retry policy was added or is invented here.
+  and `source.next()` pass the run's `AbortSignal` to the server-function call, so ending
+  a run cancels them. While a run lasts, the server bounds the Axum request (7 s per album,
+  45 s for all photos) but the browser hop has no timeout, so a call that never answers
+  keeps the run waiting until it is aborted.
 - **MapLibre `load` handler.** MapLibre 6 calls `load` listeners without catching, so an
   exception there would leave the vector view loading with no timer. A source audit found
   no reachable throw (invalid layers arrive as `error` events; the only throwing call, a
@@ -124,7 +120,8 @@ Kept separate by design, so none is a combination case of another:
   the board's server state.
 - Slideshow: the stage being drawn versus the remembered deck position versus the unseen
   page reads.
-- Idle: the phase versus the blocker tokens versus the focus to restore.
+- Idle: the phase versus the wake gesture versus the blocker tokens versus the focus to
+  restore.
 - Photos: the page request versus the loaded items versus the next cursor.
 - Weather: polling activity versus forecast freshness.
 - Maps: attempt resource versus `MapView` status, `Perspective` and `BuildingCoverage`.
