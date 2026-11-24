@@ -21,7 +21,8 @@ request per tool and returns its JSON unchanged, except that an array result (`h
 | --- | --- | --- |
 | `household_users` | `GET /api/household-users` | None; discovers all owners, including empty watchlists |
 | `watchlist_entries` | `GET /api/watchlist/entries` | Optional `owner_id` and `status` filters; omitted filters read across all owners/statuses |
-| `add_watchlist_entry` | `POST /api/watchlist/entries` | `kind`, `title`, `request_id`, explicit `owner_id` |
+| `search_watchlist_titles` | `GET /api/watchlist/search` | `kind` and `query`; returns up to 20 TMDB candidates as `{ "items": [...] }` |
+| `add_watchlist_entry` | `POST /api/watchlist/entries` | `kind`, `title`, `request_id`, explicit `owner_id`, optional `tmdb_id` |
 | `watchlist_entry` | `GET /api/household-users/{owner_id}/watchlist/entries/{entry_id}` | Explicit owner and entry IDs |
 | `update_watchlist_entry` | `PATCH /api/household-users/{owner_id}/watchlist/entries/{entry_id}` | Explicit owner/entry IDs; optional `status`, `date_added`, `completion_date` |
 | `delete_watchlist_entry` | `DELETE /api/household-users/{owner_id}/watchlist/entries/{entry_id}` | Explicit owner and entry IDs |
@@ -157,9 +158,10 @@ add an existing owner/kind/provider title with a new request ID also returns 409
 Configuration, quota, search and detail failures return sanitized 503
 `code: "tmdb_unavailable"`, never an empty successful search. The dashboard keeps
 the manual title/type form available and provides **Add manually** after selection.
-No metadata failure consumes a request ID. Existing MCP tools continue to support
-manual plans and return enriched entries unchanged; this slice adds provider
-selection and enrichment to the dashboard/API, without new agent tools.
+No metadata failure consumes a request ID. MCP `add_watchlist_entry` accepts the optional `tmdb_id` and returns the enriched
+entry unchanged; `search_watchlist_titles` lets an agent find the ID. The agent
+chooses the candidate; nothing matches titles automatically, and an entry added
+without `tmdb_id` stays manual.
 
 TMDB confirms free non-commercial developer access with attribution in its
 [FAQ](https://developer.themoviedb.org/docs/faq). The Watchlist's Credits area shows
