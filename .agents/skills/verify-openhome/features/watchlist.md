@@ -22,7 +22,7 @@ Preconditions:
 - `doctor.sh` prints `OK`.
 - No entry titled `Verify Harbour Lights` exists (true after a fresh launch).
 
-- **Find the owner.** Run `mcp.sh call household_users '{}'`. `structuredContent` lists Alex, Robin and Sam with IDs; take Alex's.
+- **Find the owner.** Run `mcp.sh call household_users '{}'`. `structuredContent.items` lists Alex, Robin and Sam with IDs; take Alex's.
 - **Add.** Run `mcp.sh call add_watchlist_entry '{"owner_id":"<alex>","kind":"movie","title":"Verify Harbour Lights","request_id":"verify-<run id>"}'`. The result has `replayed: false`, `status: "planned"` and today's `date_added`.
 - **Retry.** Run the identical call again. The result has `replayed: true` and the same entry `id`.
 - **Read back.** Run `curl -fsS -H "Authorization: Bearer $API_KEY" "$API_URL/api/watchlist/entries?owner_id=<alex>"`. The list holds exactly one `Verify Harbour Lights`.

@@ -5,7 +5,7 @@ resolution ([ADR 0004](adr/0004-household-users-and-list-ownership.md),
 [ADR 0005](adr/0005-wishlist-writes-through-mcp.md)). All reads are household-visible.
 Ownership checks select the intended destination; they do not introduce private
 accounts or change fitness ownership. MCP forwards one authenticated API request
-per tool and returns the JSON unchanged.
+per tool and returns the JSON unchanged, except that an array result (`household_users`, `wishlists`, `wishlist_items`) is wrapped as `{ "items": [...] }` because MCP `structuredContent` must be an object.
 
 ## Provisioning and discovery
 

@@ -426,3 +426,38 @@ async fn unexpected_no_content_never_confirms_a_read_or_item_write() {
     }
     client.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn list_tools_wrap_array_results_in_an_items_object() {
+    let api = start_api().await;
+    let owner: Value = reqwest::Client::new()
+        .post(format!("{api}/api/household-users"))
+        .bearer_auth(API_KEY)
+        .json(&json!({"name": "Member A"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client = connect(&start_mcp(&api, API_KEY).await, API_KEY)
+        .await
+        .unwrap();
+
+    for (tool, expected) in [
+        ("household_users", json!({"items": [owner]})),
+        ("watchlist_entries", json!({"items": []})),
+        ("wishlists", json!({"items": []})),
+    ] {
+        let result = wishlist_call(&client, tool, json!({})).await;
+        assert_eq!(result.is_error, Some(false), "{tool}");
+        assert_eq!(result.structured_content, Some(expected.clone()), "{tool}");
+        let text = result.content[0].as_text().unwrap().text.as_str();
+        assert_eq!(
+            serde_json::from_str::<Value>(text).unwrap(),
+            expected,
+            "{tool}"
+        );
+    }
+    client.cancel().await.unwrap();
+}
