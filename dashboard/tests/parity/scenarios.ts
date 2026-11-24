@@ -52,6 +52,7 @@ export type Scenario = {
   readonly steps?: readonly Step[]
   readonly capture?: "full" | "viewport"
   readonly motion?: "reduce" | "no-preference"
+  readonly clock?: "now" | "daytime"
 }
 
 const every: readonly ViewportName[] = [
@@ -323,6 +324,7 @@ export const scenarios: readonly Scenario[] = [
   {
     id: "idle",
     path: "/?idle=now",
+    clock: "daytime",
     viewports: every,
     expect: { role: "region", name: "Now" },
   },

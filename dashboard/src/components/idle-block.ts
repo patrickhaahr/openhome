@@ -1,6 +1,6 @@
 import { createContext, use, useEffect } from "react"
 
-export type IdlePhase = "awake" | "idle" | "waking"
+export type IdlePhase = "awake" | "idle" | "night" | "waking"
 
 type IdleState = {
   readonly phase: IdlePhase

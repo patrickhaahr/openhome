@@ -179,3 +179,20 @@ export function copenhagenDay(at: Date): string {
     day: "2-digit",
   }).format(at)
 }
+
+const copenhagenTime = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Copenhagen",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+})
+
+const NIGHT_STARTS = "23:00"
+
+const NIGHT_ENDS = "08:30"
+
+export function isNight(at: Date): boolean {
+  const time = copenhagenTime.format(at)
+
+  return time >= NIGHT_STARTS || time < NIGHT_ENDS
+}

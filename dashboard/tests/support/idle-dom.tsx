@@ -10,11 +10,13 @@ import { afterEach, beforeEach, expect, vi } from "vitest"
 import { WAKE_GRACE_MS } from "@/components/idle"
 import { useIdleBlock } from "@/components/idle-block"
 import type { IdleSources } from "@/components/idle-screen"
-import type { DeckPage, IdleSettings } from "@/lib/idle"
+import type { IdleSettings } from "@/lib/idle"
 import { unavailableWeather } from "@/lib/weather"
 import type { Album, AlbumRead, WallRead } from "@/lib/photos"
 
 export const TIMEOUT = 10_000
+
+export const DAYTIME = new Date("2026-10-17T12:00:00Z")
 
 export const LOST_RELEASE_WAKE_MS = 3000
 
@@ -57,16 +59,16 @@ export function pageOf(
 }
 
 export function fakeSources(
-  albums: () => Promise<AlbumRead> = async () => readyAlbums,
-  page: (page: DeckPage) => Promise<WallRead> = async () => pageOf(3)
+  albums: IdleSources["albums"] = async () => readyAlbums,
+  page: IdleSources["page"] = async () => pageOf(3)
 ): IdleSources & { albumReads: () => number } {
   let reads = 0
 
   return {
-    albums: () => {
+    albums: (signal) => {
       reads += 1
 
-      return albums()
+      return albums(signal)
     },
     page,
     weather: async () => unavailableWeather,
@@ -90,6 +92,7 @@ export function setReduced(value: boolean): void {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.setSystemTime(DAYTIME)
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   reduced = false
 
@@ -129,14 +132,35 @@ export async function render(node: React.ReactNode): Promise<void> {
   await act(async () => root.render(node))
 }
 
-export function fire(target: EventTarget, type: string): boolean {
+export function fire(
+  target: EventTarget,
+  type: string,
+  pointer: PointerEventInit = { isPrimary: true }
+): boolean {
   const event = type.startsWith("pointer")
-    ? new PointerEvent(type, { bubbles: true, cancelable: true })
+    ? new PointerEvent(type, { ...pointer, bubbles: true, cancelable: true })
     : type.startsWith("key")
       ? new KeyboardEvent(type, { bubbles: true, cancelable: true, key: "a" })
       : new MouseEvent(type, { bubbles: true, cancelable: true })
 
   return target.dispatchEvent(event)
+}
+
+export function fireKey(
+  target: EventTarget,
+  type: "keydown" | "keyup" | "keypress",
+  code: string,
+  repeat = false
+): boolean {
+  return target.dispatchEvent(
+    new KeyboardEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      key: code,
+      code,
+      repeat,
+    })
+  )
 }
 
 export function Page({
@@ -165,10 +189,10 @@ export function countKey(): HTMLButtonElement {
   return key
 }
 
-export async function wake(): Promise<void> {
-  const idle = screen()
+export async function wake(cover = screen): Promise<void> {
+  const idle = cover()
 
-  if (idle === null) throw new Error("Expected the slideshow")
+  if (idle === null) throw new Error("Expected the idle screen")
 
   await act(async () => {
     fire(idle, "pointerdown")
@@ -176,7 +200,7 @@ export async function wake(): Promise<void> {
     fire(idle, "click")
   })
   await advance(WAKE_GRACE_MS)
-  expect(screen()).toBeNull()
+  expect(cover()).toBeNull()
 }
 
 export function slides(): HTMLImageElement[] {
