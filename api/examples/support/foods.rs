@@ -121,12 +121,28 @@ enum Item {
     Product,
 }
 
-type SyntheticMeal = (
-    i64,
-    Option<&'static str>,
-    &'static [(Item, f64)],
-    Option<[u8; 3]>,
-);
+#[derive(Clone, Copy)]
+struct Portion {
+    item: Item,
+    grams: f64,
+}
+
+struct HistoryPortion {
+    food_id: i64,
+    grams: f64,
+}
+
+struct HistoryMeal {
+    hour: i64,
+    portions: Vec<HistoryPortion>,
+}
+
+struct SyntheticMeal {
+    hours_ago: i64,
+    note: Option<&'static str>,
+    portions: &'static [Portion],
+    plate: Option<[u8; 3]>,
+}
 
 pub async fn seed_meals(
     db: &sqlx::SqlitePool,
@@ -158,84 +174,136 @@ pub async fn seed_meals(
     .await
     .map_err(|error| anyhow::anyhow!("linking the synthetic product failed: {error}"))?;
     let mut supplement_ids = Vec::new();
-    for (name, dose_unit, amounts, compounds) in [
-        (
-            "Vitamin D3",
-            DoseUnit::Capsule,
-            vec![AmountRequest {
+    for supplement in [
+        AddSupplement {
+            name: "Vitamin D3".into(),
+            dose_unit: DoseUnit::Capsule,
+            amounts: vec![AmountRequest {
                 key: "vitamin_d".into(),
                 value: 25.0,
                 unit: "µg".into(),
                 form: None,
             }],
-            vec![],
-        ),
-        (
-            "Creatine",
-            DoseUnit::Scoop,
-            vec![],
-            vec![CompoundRequest {
+            compounds: vec![],
+            request_id: "synthetic-supplement-Vitamin D3".into(),
+        },
+        AddSupplement {
+            name: "Creatine".into(),
+            dose_unit: DoseUnit::Scoop,
+            amounts: vec![],
+            compounds: vec![CompoundRequest {
                 name: "Creatine monohydrate".into(),
                 value: 3.0,
                 unit: "g".into(),
             }],
-        ),
-        (
-            "Vitamin D 250",
-            DoseUnit::Capsule,
-            vec![AmountRequest {
+            request_id: "synthetic-supplement-Creatine".into(),
+        },
+        AddSupplement {
+            name: "Vitamin D 250".into(),
+            dose_unit: DoseUnit::Capsule,
+            amounts: vec![AmountRequest {
                 key: "vitamin_d".into(),
                 value: 250.0,
                 unit: "µg".into(),
                 form: None,
             }],
-            vec![],
-        ),
+            compounds: vec![],
+            request_id: "synthetic-supplement-Vitamin D 250".into(),
+        },
     ] {
-        let added = supplements::add_supplement(
-            db,
-            AddSupplement {
-                name: name.into(),
-                dose_unit,
-                amounts,
-                compounds,
-                request_id: format!("synthetic-supplement-{name}"),
-            },
-        )
-        .await
-        .map_err(|error| anyhow::anyhow!("adding a synthetic Supplement failed: {error}"))?;
+        let added = supplements::add_supplement(db, supplement)
+            .await
+            .map_err(|error| anyhow::anyhow!("adding a synthetic Supplement failed: {error}"))?;
         supplement_ids.push(added.supplement.id);
     }
     let now = chrono::Utc::now();
     let meals: [SyntheticMeal; 5] = [
-        (27, None, &[(Food(1693), 200.0), (Food(60), 50.0)], None),
-        (
-            22,
-            Some("Synthetic note: dinner out"),
-            &[(Food(907), 180.0), (Food(300), 250.0)],
-            Some([214, 168, 74]),
-        ),
-        (
-            5,
-            Some("after the run"),
-            &[(Product, 150.0), (Food(60), 60.0), (Food(3), 120.0)],
-            Some([238, 226, 196]),
-        ),
-        (3, None, &[(Food(907), 150.0), (Food(300), 200.0)], None),
-        (1, None, &[(Food(3), 110.0)], None),
+        SyntheticMeal {
+            hours_ago: 27,
+            note: None,
+            portions: &[
+                Portion {
+                    item: Food(1693),
+                    grams: 200.0,
+                },
+                Portion {
+                    item: Food(60),
+                    grams: 50.0,
+                },
+            ],
+            plate: None,
+        },
+        SyntheticMeal {
+            hours_ago: 22,
+            note: Some("Synthetic note: dinner out"),
+            portions: &[
+                Portion {
+                    item: Food(907),
+                    grams: 180.0,
+                },
+                Portion {
+                    item: Food(300),
+                    grams: 250.0,
+                },
+            ],
+            plate: Some([214, 168, 74]),
+        },
+        SyntheticMeal {
+            hours_ago: 5,
+            note: Some("after the run"),
+            portions: &[
+                Portion {
+                    item: Product,
+                    grams: 150.0,
+                },
+                Portion {
+                    item: Food(60),
+                    grams: 60.0,
+                },
+                Portion {
+                    item: Food(3),
+                    grams: 120.0,
+                },
+            ],
+            plate: Some([238, 226, 196]),
+        },
+        SyntheticMeal {
+            hours_ago: 3,
+            note: None,
+            portions: &[
+                Portion {
+                    item: Food(907),
+                    grams: 150.0,
+                },
+                Portion {
+                    item: Food(300),
+                    grams: 200.0,
+                },
+            ],
+            plate: None,
+        },
+        SyntheticMeal {
+            hours_ago: 1,
+            note: None,
+            portions: &[Portion {
+                item: Food(3),
+                grams: 110.0,
+            }],
+            plate: None,
+        },
     ];
-    for (index, (hours_ago, note, portions, plate)) in meals.into_iter().enumerate() {
+    for (index, meal) in meals.into_iter().enumerate() {
         meal_logs::log_meal(
             db,
             foods,
             photos,
             LogMeal {
-                eaten_at: (now - chrono::TimeDelta::hours(hours_ago)).to_rfc3339(),
-                note: note.map(str::to_owned),
+                eaten_at: (now - chrono::TimeDelta::hours(meal.hours_ago)).to_rfc3339(),
+                note: meal.note.map(str::to_owned),
                 portions: Some(
-                    portions
+                    meal.portions
                         .iter()
-                        .map(|&(item, grams)| PortionRequest {
+                        .map(|&Portion { item, grams }| PortionRequest {
                             food_id: match item {
                                 Food(food_id) => Some(food_id),
                                 Product => None,
@@ -259,7 +327,7 @@ pub async fn seed_meals(
                 meal: None,
                 overrides: None,
                 request_id: format!("synthetic-meal-{index}"),
-                photo: plate.map(synthetic_plate),
+                photo: meal.plate.map(synthetic_plate),
             },
         )
         .await
@@ -272,25 +340,52 @@ pub async fn seed_meals(
         let day = (now - chrono::TimeDelta::days(days_ago)).date_naive();
         let midnight = day.and_time(chrono::NaiveTime::MIN).and_utc();
         let vary = |step: i64, spread: i64| ((days_ago * step) % spread) as f64;
-        let history: [(i64, Vec<(i64, f64)>); 3] = [
-            (
-                7,
-                vec![(1693, 220.0 + vary(37, 80)), (60, 80.0 + vary(13, 30))],
-            ),
-            (
-                11,
-                vec![(907, 180.0 + vary(23, 60)), (300, 260.0 + vary(31, 90))],
-            ),
-            (
-                17,
-                vec![
-                    (907, 220.0 + vary(53, 80)),
-                    (300, 300.0 + vary(29, 120)),
-                    (3, 120.0 + vary(17, 60)),
+        let history: [HistoryMeal; 3] = [
+            HistoryMeal {
+                hour: 7,
+                portions: vec![
+                    HistoryPortion {
+                        food_id: 1693,
+                        grams: 220.0 + vary(37, 80),
+                    },
+                    HistoryPortion {
+                        food_id: 60,
+                        grams: 80.0 + vary(13, 30),
+                    },
                 ],
-            ),
+            },
+            HistoryMeal {
+                hour: 11,
+                portions: vec![
+                    HistoryPortion {
+                        food_id: 907,
+                        grams: 180.0 + vary(23, 60),
+                    },
+                    HistoryPortion {
+                        food_id: 300,
+                        grams: 260.0 + vary(31, 90),
+                    },
+                ],
+            },
+            HistoryMeal {
+                hour: 17,
+                portions: vec![
+                    HistoryPortion {
+                        food_id: 907,
+                        grams: 220.0 + vary(53, 80),
+                    },
+                    HistoryPortion {
+                        food_id: 300,
+                        grams: 300.0 + vary(29, 120),
+                    },
+                    HistoryPortion {
+                        food_id: 3,
+                        grams: 120.0 + vary(17, 60),
+                    },
+                ],
+            },
         ];
-        for (meal, (hour, portions)) in history.into_iter().enumerate() {
+        for (meal, HistoryMeal { hour, portions }) in history.into_iter().enumerate() {
             meal_logs::log_meal(
                 db,
                 foods,
@@ -301,7 +396,7 @@ pub async fn seed_meals(
                     portions: Some(
                         portions
                             .into_iter()
-                            .map(|(food_id, grams)| PortionRequest {
+                            .map(|HistoryPortion { food_id, grams }| PortionRequest {
                                 food_id: Some(food_id),
                                 barcode: None,
                                 grams,
