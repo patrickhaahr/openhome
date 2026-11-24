@@ -7,6 +7,7 @@ import { SpeakerSimpleSlashIcon } from "@phosphor-icons/react/dist/csr/SpeakerSi
 import { WaveformIcon } from "@phosphor-icons/react/dist/csr/Waveform"
 import {
   IrRemote,
+  type CommandIcons,
   type IrRemoteConfig,
   type IrRemoteProps,
 } from "@/components/ir-remote"
@@ -27,8 +28,8 @@ const speakerRemote: IrRemoteConfig<SpeakerCommand> = {
     mute: SpeakerSimpleSlashIcon,
     "volume-down": MinusIcon,
     "volume-up": PlusIcon,
-  },
-  plateIcons: {},
+  } satisfies CommandIcons<SpeakerCommand>,
+  plateIcons: {} satisfies CommandIcons<SpeakerCommand>,
   plateIdentity: true,
   worded: [],
   quickGroups: [
