@@ -49,8 +49,10 @@ tv-check: tv-assets
     node --check tv/bridge/lifecycles.js
     node --check tv/bridge/preview.js
     node --check tv/tools/verify-client.js
+    node --check tv/launcher/ui/PictureProfileLifecycle.js
     python3 -c 'import ast; from pathlib import Path; [ast.parse(p.read_text(), filename=str(p)) for directory in ("tv/runtime", "tv/tools") for p in Path(directory).glob("*.py")]'
     node tv/bridge/test.js
+    node tv/launcher/test-picture-profile.js
     python3 tv/tools/test-inputhook-startup.py
     qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
     python3 tv/tools/build-pear.py
