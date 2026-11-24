@@ -1,4 +1,4 @@
-use crate::common::food_workbook::second_dataset;
+use crate::dataset_v2::second_dataset;
 use crate::support::{Nutrition, at, breakfast};
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;

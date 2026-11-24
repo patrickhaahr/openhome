@@ -1,5 +1,3 @@
-pub mod food_workbook;
-
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
@@ -83,7 +81,6 @@ pub fn create_mock_state_with_switchbot(service: SwitchbotService) -> AppState {
     }
 }
 
-#[allow(dead_code)]
 pub async fn memory_noop_db() -> SqlitePool {
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
