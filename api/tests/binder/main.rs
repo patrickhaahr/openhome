@@ -2,6 +2,7 @@
 mod common;
 
 mod ecb;
+mod logs;
 mod support;
 
 mod binder;

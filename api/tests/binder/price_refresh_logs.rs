@@ -1,25 +1,11 @@
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::logs;
 use crate::support::*;
 use axum::http::StatusCode;
 use openhome_api::services::{optcg::Optcg, price_refresh};
 use serde_json::{Value, json};
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
-
-#[derive(Clone, Default)]
-struct Captured(Arc<Mutex<Vec<u8>>>);
-
-impl std::io::Write for Captured {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 
 const SECRET: &str = "upstream-secret";
 
@@ -74,16 +60,7 @@ async fn a_failing_catalogue_answer_never_puts_its_text_in_the_logs() {
         ResponseTemplate::new(500).set_body_string(SECRET),
     ];
 
-    let logs = Captured::default();
-    let _capture = tracing::subscriber::set_default(
-        tracing_subscriber::fmt()
-            .with_writer({
-                let logs = logs.clone();
-                move || logs.clone()
-            })
-            .with_ansi(false)
-            .finish(),
-    );
+    logs::capture_this_thread();
     let catalogue = Optcg::new(origin.parse().unwrap()).unwrap();
     for answer in answers {
         mount_once(&server, answer).await;
@@ -93,7 +70,7 @@ async fn a_failing_catalogue_answer_never_puts_its_text_in_the_logs() {
         assert_eq!(pass.failed, 1);
     }
 
-    let logs = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
+    let logs = logs::captured_on_this_thread();
     assert!(
         logs.contains("OP01-001"),
         "the failure is still logged: {logs}"

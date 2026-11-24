@@ -137,6 +137,7 @@ pub async fn catalogue_requests(server: &MockServer) -> usize {
 }
 
 pub async fn app(server: &MockServer) -> (Router, AppState) {
+    crate::logs::install();
     let (_, state) = test_app_with_db().await;
     let catalogue = Optcg::new(server.uri().parse().unwrap()).unwrap();
     let app = routes::wishlist::router(None)
