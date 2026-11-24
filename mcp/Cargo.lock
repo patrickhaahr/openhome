@@ -1907,6 +1907,7 @@ version = "0.3.8"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "openhome-api",
  "pretty_assertions",
  "reqwest",

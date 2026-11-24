@@ -35,6 +35,7 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 url = "2.5"
 
 [dev-dependencies]
+base64 = "0.22"
 openhome-api = { path = "../api" }
 pretty_assertions = "1"
 rmcp = { version = "3.4.1", features = ["client", "transport-streamable-http-client-reqwest"] }
