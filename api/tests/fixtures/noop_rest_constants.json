@@ -1,0 +1,26 @@
+{
+  "source": {
+    "repository": "noop",
+    "commit": "8e4b0c16e7640607600fa6bde5424095eba6034e",
+    "files": [
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift",
+      "Strand/Data/IntelligenceEngine.swift"
+    ]
+  },
+  "constants": {
+    "Rest.defaultNeedHours": 8.0,
+    "Rest.restorativeTarget": 0.5,
+    "Rest.deepShareTarget": 0.13,
+    "Rest.deepFloorFactor": 0.5,
+    "Rest.neutralConsistency": 0.5,
+    "Rest.wDuration": 0.5,
+    "Rest.wEfficiency": 0.2,
+    "Rest.wRestorative": 0.2,
+    "Rest.wConsistency": 0.1,
+    "Rest.minNeedNights": 7,
+    "Rest.maxNeedHours": 9.5,
+    "Rest.populationNeedFloorHours(age: nil)": 8.0,
+    "IntelligenceEngine.analyzeRecent.nightlyHours.suffix": 28,
+    "IntelligenceEngine.computeHabitualSleep.efficiency ?? fallback": 0.9
+  }
+}

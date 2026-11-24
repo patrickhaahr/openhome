@@ -166,6 +166,11 @@ async fn history_hours(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use serde_json::{Value, json};
+
+    const NOOP_REST_CONTRACT: &str =
+        include_str!("../../../tests/fixtures/noop_rest_constants.json");
 
     fn close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1e-9, "{actual} != {expected}");
@@ -235,5 +240,27 @@ mod tests {
         let value = sleep_consistency(&[6.0, 8.0, 10.0]).unwrap();
         assert!((value - 0.795_876).abs() < 1e-6);
         close(sleep_consistency(&[1.0, 100.0, 1.0]).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn copied_constants_match_the_pinned_noop_values() {
+        let contract: Value = serde_json::from_str(NOOP_REST_CONTRACT).unwrap();
+        let copied = json!({
+            "Rest.defaultNeedHours": DEFAULT_NEED_HOURS,
+            "Rest.restorativeTarget": RESTORATIVE_TARGET,
+            "Rest.deepShareTarget": DEEP_SHARE_TARGET,
+            "Rest.deepFloorFactor": DEEP_FLOOR_FACTOR,
+            "Rest.neutralConsistency": NEUTRAL_CONSISTENCY,
+            "Rest.wDuration": WEIGHT_DURATION,
+            "Rest.wEfficiency": WEIGHT_EFFICIENCY,
+            "Rest.wRestorative": WEIGHT_RESTORATIVE,
+            "Rest.wConsistency": WEIGHT_CONSISTENCY,
+            "Rest.minNeedNights": MIN_NEED_NIGHTS,
+            "Rest.maxNeedHours": MAX_NEED_HOURS,
+            "Rest.populationNeedFloorHours(age: nil)": NEED_FLOOR_HOURS,
+            "IntelligenceEngine.analyzeRecent.nightlyHours.suffix": CONSISTENCY_NIGHTS,
+            "IntelligenceEngine.computeHabitualSleep.efficiency ?? fallback": FALLBACK_EFFICIENCY,
+        });
+        assert_eq!(copied, contract["constants"]);
     }
 }
