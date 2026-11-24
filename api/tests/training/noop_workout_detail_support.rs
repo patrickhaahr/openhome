@@ -15,7 +15,7 @@ use serde_json::json;
 pub(crate) const API_KEY: &str = "test-api-key";
 
 pub(crate) async fn app(mirror: &Mirror) -> Router {
-    common::test_app_with_noop_db(mirror.db.clone()).await
+    crate::mirror::test_app_with_noop_db(mirror.db.clone()).await
 }
 
 pub(crate) async fn detail(

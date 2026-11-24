@@ -22,7 +22,7 @@ async fn rejects_a_day_with_too_many_noop_workouts_rather_than_truncating() {
         "2026-09-17T02:00:00.000Z",
     )
     .await;
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
 
     let (status, body) = context(&app, "2026-09-14", "2026-09-16", Some(API_KEY)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -49,7 +49,7 @@ async fn places_noop_workouts_on_their_local_day_across_the_25_hour_dst_day() {
         "2026-10-27T02:00:00.000Z",
     )
     .await;
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
 
     let body = context_ok(&app, "2026-10-25", "2026-10-26").await;
     let starts = |index: usize| -> Vec<Value> {
@@ -79,7 +79,7 @@ async fn returns_every_day_of_a_ninety_day_block_and_rejects_longer_ranges() {
         "2026-08-31T02:00:00.000Z",
     )
     .await;
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
     let body = context_ok(&app, "2026-06-01", "2026-08-29").await;
     let days = body["days"].as_array().unwrap();
     assert_eq!(days.len(), 90);

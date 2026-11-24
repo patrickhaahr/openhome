@@ -74,7 +74,7 @@ async fn aligns_logged_training_body_weight_and_recovery_by_day() {
         "2026-10-02T02:00:00.000Z",
     )
     .await;
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
     post(
         &app,
         "/api/body_weight",
@@ -212,7 +212,7 @@ async fn aligns_logged_training_body_weight_and_recovery_by_day() {
 
 #[tokio::test]
 async fn keeps_logged_training_when_noop_has_never_pushed() {
-    let app = crate::common::test_app_with_noop_db(Mirror::empty().await.db).await;
+    let app = crate::mirror::test_app_with_noop_db(Mirror::empty().await.db).await;
     let workout = log_workout(
         &app,
         json!({"date": "2026-09-29", "name": "Legs", "notes": null, "exercises": []}),
@@ -260,7 +260,7 @@ async fn reports_recovery_and_workout_freshness_separately() {
             )
             .await;
     }
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
 
     let body = context_ok(&app, "2026-09-28", "2026-09-29").await;
     assert_eq!(body["noop"]["installation_id"], SOURCE);
@@ -320,7 +320,7 @@ async fn edited_sleep_selects_the_computed_night() {
             "2026-09-17T02:00:00.000Z",
         )
         .await;
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
 
     let body = context_ok(&app, "2026-09-15", "2026-09-15").await;
     assert_eq!(

@@ -26,7 +26,7 @@ pub(crate) const SEP_20: i64 = 1_789_855_200;
 
 impl Mirror {
     pub(crate) async fn recovery(&self, day: &str, api_key: Option<&str>) -> (StatusCode, Value) {
-        let app = common::test_app_with_noop_db(self.db.clone()).await;
+        let app = crate::mirror::test_app_with_noop_db(self.db.clone()).await;
         common::send_request(app, &format!("/api/training/days/{day}/recovery"), api_key).await
     }
 

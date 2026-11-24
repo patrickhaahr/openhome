@@ -52,7 +52,7 @@ async fn test_workout_weight_migration_preserves_logged_workouts() {
     .await
     .unwrap();
 
-    let (app, _) = common::test_app_with_pool(db, None);
+    let (app, _) = common::test_app_with_pool(db);
     let (status, body) = send_request_with_method(
         app,
         "/api/workouts/1",

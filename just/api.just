@@ -34,7 +34,7 @@ api-test-one name:
 api-test-unit name:
     cargo test --lib {{name}} -- --exact
 
-# Run one API integration test file (just api-test-integration my_integration)
+# Run one API integration-test binary: a tests/NAME.rs file or tests/NAME/ directory (just api-test-integration nutrition_meals)
 [group('api')]
 [working-directory: 'api']
 api-test-integration name:

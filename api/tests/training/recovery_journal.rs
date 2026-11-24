@@ -258,7 +258,7 @@ async fn rejects_a_sleep_night_over_the_session_cap_instead_of_truncating() {
     let previous = over.recovery_day("2026-09-19").await;
     assert_eq!(previous["sleep"]["sessions"], json!([]));
 
-    let app = crate::common::test_app_with_noop_db(over.db).await;
+    let app = crate::mirror::test_app_with_noop_db(over.db).await;
     let (status, context) = crate::common::send_request(
         app.clone(),
         "/api/training/context/2026-09-20/2026-09-20",

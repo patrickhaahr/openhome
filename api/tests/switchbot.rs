@@ -2,12 +2,30 @@ mod common;
 
 use axum::Router;
 use http::StatusCode;
+use openhome_api::AppState;
 use serde_json::json;
+use sqlx::SqlitePool;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+fn mock_state_with_switchbot(
+    service: openhome_api::services::switchbot::SwitchbotService,
+) -> AppState {
+    AppState {
+        db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        adguard_service: None,
+        docker_service: None,
+        ir_service: None,
+        switchbot_service: Some(service),
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+            openhome_api::DockerCache::default(),
+        )),
+    }
+}
+
 fn switchbot_test_app(service: openhome_api::services::switchbot::SwitchbotService) -> Router {
-    let state = common::create_mock_state_with_switchbot(service);
+    let state = mock_state_with_switchbot(service);
 
     Router::new()
         .merge(openhome_api::routes::switchbot::router())

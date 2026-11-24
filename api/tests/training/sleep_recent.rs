@@ -36,7 +36,7 @@ fn sleep(start_ts: i64, end_ts: i64, edited: bool) -> Value {
 }
 
 async fn recent(mirror: &Mirror, count: &str, key: Option<&str>) -> (StatusCode, Value) {
-    let app = crate::common::test_app_with_noop_db(mirror.db.clone()).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db.clone()).await;
     crate::common::send_request(app, &format!("/api/training/sleep/recent/{count}"), key).await
 }
 
@@ -199,7 +199,7 @@ async fn journal_changes_do_not_affect_recent_sleep_or_training_context() {
             &accepted,
         )
         .await;
-    let app = crate::common::test_app_with_noop_db(mirror.db.clone()).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db.clone()).await;
     let paths = [
         "/api/training/sleep/recent/1".to_owned(),
         format!("/api/training/context/{today}/{today}"),

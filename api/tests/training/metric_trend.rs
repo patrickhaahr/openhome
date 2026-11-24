@@ -128,7 +128,7 @@ async fn body_weight_uses_only_daily_records_and_counts_partial_weeks() {
 #[tokio::test]
 async fn four_noop_metrics_preserve_sources_nulls_and_week_boundaries() {
     let mirror = recovery_mirror().await;
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
     for (metric, unit, first, second, second_source) in [
         ("sleep_duration", "min", 420.0, 450.0, IMPORTED),
         ("resting_heart_rate", "beats/min", 50.0, 48.0, IMPORTED),
@@ -200,7 +200,7 @@ async fn edited_sleep_uses_the_computed_night_on_the_25_hour_dst_day() {
         .push(SOURCE, COMPUTED, starts, &[session], pushed)
         .await;
 
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
     let (status, body) = trend(app, "sleep_duration", "2026-10-25", "2026-10-26", Some(KEY)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["daily_points"][0]["value"], 430.0);
@@ -214,7 +214,7 @@ async fn edited_sleep_uses_the_computed_night_on_the_25_hour_dst_day() {
 #[tokio::test]
 async fn late_push_turns_unknown_coverage_into_a_confirmed_measurement() {
     let mut mirror = Mirror::empty().await;
-    let app = crate::common::test_app_with_noop_db(mirror.db.clone()).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db.clone()).await;
     let read = || trend(app.clone(), "hrv", "2026-09-29", "2026-09-29", Some(KEY));
     let (status, before) = read().await;
     assert_eq!(status, StatusCode::OK);
@@ -266,7 +266,7 @@ async fn sleep_trend_returns_all_ninety_days_and_sparse_week_counts() {
         mirror.push(SOURCE, device, days, &[], pushed).await;
         mirror.push(SOURCE, device, starts, &[], pushed).await;
     }
-    let app = crate::common::test_app_with_noop_db(mirror.db).await;
+    let app = crate::mirror::test_app_with_noop_db(mirror.db).await;
     let (status, body) = trend(app, "sleep_duration", "2026-06-01", "2026-08-29", Some(KEY)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let points = body["daily_points"].as_array().unwrap();

@@ -89,7 +89,7 @@ async fn a_late_older_revision_cannot_roll_the_workout_back_even_after_an_api_re
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("app.db");
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db.clone(), None);
+    let (app, _) = common::test_app_with_pool(db.clone());
     let id = create(&app).await;
 
     let (status, _) = patch(&app, id, edit(1, 6)).await;
@@ -99,7 +99,7 @@ async fn a_late_older_revision_cannot_roll_the_workout_back_even_after_an_api_re
     db.close().await;
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db, None);
+    let (app, _) = common::test_app_with_pool(db);
     let (status, answered) = patch(&app, id, edit(2, 7)).await;
 
     assert_eq!(status, StatusCode::OK, "{answered}");

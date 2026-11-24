@@ -119,7 +119,7 @@ async fn opens_only_workouts_in_the_merged_list() {
     }
 
     let (status, _) = detail(
-        &crate::common::test_app_with_noop_db(Mirror::empty().await.db).await,
+        &crate::mirror::test_app_with_noop_db(Mirror::empty().await.db).await,
         IMPORTED,
         "2026-09-26T18:00:00+02:00",
         Some(API_KEY),

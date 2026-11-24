@@ -41,7 +41,7 @@ impl Api {
         let url = format!("sqlite:{}", dir.path().join("app.db").display());
         let db = db::connect_sqlite(&url).await.unwrap();
         sqlx::migrate!("./migrations").run(&db).await.unwrap();
-        let (fitness, state) = test_app_with_pool(db.clone(), None);
+        let (fitness, state) = test_app_with_pool(db.clone());
         Self::finish(server, dir, db, fitness, state).await
     }
 

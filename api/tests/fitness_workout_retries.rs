@@ -76,13 +76,13 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_workout
     let path = dir.path().join("app.db");
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db.clone(), None);
+    let (app, _) = common::test_app_with_pool(db.clone());
     let (status, first) = post(&app, workout(KEY)).await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
     db.close().await;
 
     let db = open_file_database(&path).await;
-    let (app, _) = common::test_app_with_pool(db, None);
+    let (app, _) = common::test_app_with_pool(db);
     let (status, retried) = post(&app, workout(KEY)).await;
     assert_eq!(status, StatusCode::OK, "{retried}");
     assert_eq!(retried, first);
@@ -106,7 +106,7 @@ async fn retry_after_a_lost_response_survives_an_api_restart_as_the_same_workout
 async fn simultaneous_deliveries_create_one_workout() {
     let dir = tempfile::tempdir().unwrap();
     let db = open_file_database(&dir.path().join("app.db")).await;
-    let (app, _) = common::test_app_with_pool(db, None);
+    let (app, _) = common::test_app_with_pool(db);
 
     let (one, two, three) = tokio::join!(
         post(&app, workout(KEY)),

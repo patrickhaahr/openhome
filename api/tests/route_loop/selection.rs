@@ -25,7 +25,7 @@ async fn selected_route_survives_restart_without_a_provider_and_versions_replace
     let url = format!("sqlite:{}", file.display());
     let db = openhome_api::db::connect_sqlite(&url).await.unwrap();
     sqlx::migrate!("./migrations").run(&db).await.unwrap();
-    let (_, state) = crate::common::test_app_with_pool(db.clone(), None);
+    let (_, state) = crate::common::test_app_with_pool(db.clone());
     let server = provider(ok(square(5000, NORTH_EAST)), 6).await;
     let endpoint = ProviderEndpoint::parse(Some(&server.uri())).unwrap();
     let app = app_with_state(LoopPlanner::new(demo(), endpoint).unwrap(), state);
@@ -56,7 +56,7 @@ async fn selected_route_survives_restart_without_a_provider_and_versions_replace
     db.close().await;
 
     let db = openhome_api::db::connect_sqlite(&url).await.unwrap();
-    let (_, state) = crate::common::test_app_with_pool(db.clone(), None);
+    let (_, state) = crate::common::test_app_with_pool(db.clone());
     let app = app_with_state(LoopPlanner::new(None, None).unwrap(), state);
     let (_, restored) =
         crate::common::send_request(app.clone(), "/api/routes/active", Some("test-api-key")).await;

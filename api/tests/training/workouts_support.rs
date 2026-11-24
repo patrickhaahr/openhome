@@ -52,7 +52,7 @@ pub(crate) async fn mirror_with(
 }
 
 pub(crate) async fn app(mirror: &Mirror) -> Router {
-    common::test_app_with_noop_db(mirror.db.clone()).await
+    crate::mirror::test_app_with_noop_db(mirror.db.clone()).await
 }
 
 pub(crate) async fn log_workout(app: &Router, workout: Value) -> i64 {

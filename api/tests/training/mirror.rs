@@ -1,3 +1,4 @@
+use axum::Router;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use openhome_api::routes::noop_push::{PUSH_PATH, PushState, router as push_router};
@@ -32,6 +33,12 @@ pub fn noop_workout(start_ts: i64, end_ts: i64, sport: &str, source: &str, field
         data[&name] = value;
     }
     json!({"type": "record", "key": {"startTs": start_ts, "sport": sport}, "data": data})
+}
+
+pub async fn test_app_with_noop_db(noop_db: SqlitePool) -> Router {
+    let db = SqlitePool::connect(":memory:").await.unwrap();
+    sqlx::migrate!("./migrations").run(&db).await.unwrap();
+    crate::common::test_app_with_pools(db, noop_db).0
 }
 
 pub struct Mirror {
