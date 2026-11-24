@@ -1,5 +1,5 @@
 use crate::error::{AppError, Result};
-use crate::services::feed;
+use crate::services::feed::{self, FeedFailure};
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
@@ -71,7 +71,7 @@ struct RefreshSummary {
 struct FeedRefreshError {
     feed_id: i64,
     url: String,
-    error: String,
+    error: FeedFailure,
 }
 
 pub fn router() -> Router<crate::AppState> {

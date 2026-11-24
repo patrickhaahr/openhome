@@ -11,15 +11,14 @@ slow, hostile or chatty upstream from leaking into OpenHome or its logs.
   DTU Data serves its workbook through a short redirect to its object store, so
   `food_database/import.rs` follows up to five, under a 64 MiB cap that leaves
   headroom over the 6.1 workbook (about 12.6 MB). The wishlist fetcher follows
-  up to three, vetting each hop. The RSS feed fetcher breaks the cap rule: it
-  buffers the whole body before checking its 2 MiB limit
-  ([#335](https://github.com/patrickhaahr/openhome/issues/335)).
+  up to three, vetting each hop. The RSS feed fetcher caps the body at 2 MiB.
 - **Opaque failures.** Every upstream failure becomes one `Unavailable`
   outcome. Upstream text is logged at most, never returned, so no provider
   message can reach a client or Hermes. Import failures say only that the food
-  database is unavailable. RSS feeds are the exception: a refresh stores HTTP
-  and parse errors in `last_error` and returns every error's text in the
-  refresh summary ([#335](https://github.com/patrickhaahr/openhome/issues/335)).
+  database is unavailable. An RSS refresh stores and returns one of
+  `unavailable`, `too_large` or `not_a_feed`, never upstream text, and logs its transport
+  and parse failures as only the feed id and a fixed failure category because a feed URL can carry a token
+  that upstream error text may echo.
 - **Upstream-specific meaning stays in the adapter.** Open Food Facts v2
   answers an unknown barcode with `status: 0`, usually with a 404, and that
   means not found. The OPTCG catalogue answers an unlisted code with its own
