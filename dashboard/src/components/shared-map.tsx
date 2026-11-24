@@ -11,7 +11,8 @@ import {
 } from "@/lib/map"
 import {
   buildingsLayer,
-  mapThemes,
+  mapPalette,
+  mapStyles,
   type MapTheme,
   LOCAL_ZOOM,
   BUILDINGS_PITCH,
@@ -114,13 +115,15 @@ export function SharedMap({
       ({ Map, setWorkerUrl }) => {
         if (owner.phase() === "released") return
 
+        const palette = mapPalette(theme)
+
         let created: MapLibreMap
 
         try {
           setWorkerUrl(workerUrl)
           created = new Map({
             container: element,
-            style: mapThemes[theme].style,
+            style: mapStyles[theme],
             center: resume.current?.center ?? [
               origin.longitude,
               origin.latitude,
@@ -169,7 +172,7 @@ export function SharedMap({
 
             created.addLayer(
               {
-                ...buildingsLayer(theme),
+                ...buildingsLayer(palette.buildings),
                 layout: { visibility: presentation(mode.current).buildings },
               },
               firstLabel
@@ -190,7 +193,7 @@ export function SharedMap({
               "line-sort-key": ["case", ["get", "focused"], 1, 0],
             },
             paint: {
-              "line-color": mapThemes[theme].casing,
+              "line-color": palette.casing,
               "line-width": ["case", ["get", "focused"], 9, 6],
             },
           })
@@ -207,8 +210,8 @@ export function SharedMap({
               "line-color": [
                 "case",
                 ["get", "focused"],
-                mapThemes[theme].origin,
-                mapThemes[theme].alternative,
+                palette.origin,
+                palette.alternative,
               ],
               "line-width": ["case", ["get", "focused"], 5, 3],
               "line-opacity": ["case", ["get", "focused"], 1, 0.75],
@@ -232,9 +235,9 @@ export function SharedMap({
               source: "endpoint",
               paint: {
                 "circle-radius": 12,
-                "circle-color": mapThemes[theme].casing,
+                "circle-color": palette.casing,
                 "circle-stroke-width": 3,
-                "circle-stroke-color": mapThemes[theme].origin,
+                "circle-stroke-color": palette.origin,
               },
             })
           }
@@ -256,7 +259,7 @@ export function SharedMap({
             source: "origin",
             paint: {
               "circle-radius": 18,
-              "circle-color": mapThemes[theme].origin,
+              "circle-color": palette.origin,
               "circle-opacity": 0.18,
             },
           })
@@ -266,9 +269,9 @@ export function SharedMap({
             source: "origin",
             paint: {
               "circle-radius": 7,
-              "circle-color": mapThemes[theme].origin,
+              "circle-color": palette.origin,
               "circle-stroke-width": 3,
-              "circle-stroke-color": mapThemes[theme].casing,
+              "circle-stroke-color": palette.casing,
             },
           })
 
@@ -412,7 +415,6 @@ export function SharedMap({
       <RasterMap
         origin={origin}
         routes={routes}
-        palette={mapThemes[theme]}
         shade={theme}
         credit={credit}
         controls={controls}

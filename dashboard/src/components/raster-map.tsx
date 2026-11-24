@@ -13,6 +13,7 @@ import {
   MapNotices,
   TilesIncomplete,
 } from "@/components/shared-map-status"
+import { mapPalette } from "@/components/shared-map-config"
 import {
   evenPadding,
   routePadding,
@@ -89,12 +90,6 @@ export function startMapAttempt<Resource extends { remove(): void }>({
   }
 }
 
-export type RasterPalette = {
-  readonly origin: string
-  readonly casing: string
-  readonly alternative: string
-}
-
 type RasterView =
   | { state: "loading" }
   | { state: "ready"; tiles: "complete" | "incomplete" }
@@ -115,14 +110,12 @@ function routeBounds(lines: ReadonlyArray<MapLine>): LatLngBoundsExpression {
 export function RasterMap({
   origin,
   routes,
-  palette,
   shade,
   credit,
   controls = true,
 }: {
   origin: MapOrigin
   routes: MapRoutes | undefined
-  palette: RasterPalette
   shade: "day" | "night"
   credit?: string | undefined
   controls?: boolean
@@ -225,6 +218,8 @@ export function RasterMap({
 
     if (current === undefined || group === undefined || L === undefined) return
 
+    const palette = mapPalette(shade)
+
     group.clearLayers()
 
     const lines = routes?.lines ?? []
@@ -305,7 +300,7 @@ export function RasterMap({
       maxZoom: 16,
       animate: !prefersReducedMotion(),
     })
-  }, [routes, palette, origin.latitude, origin.longitude, created])
+  }, [routes, shade, origin.latitude, origin.longitude, created])
 
   function reload(): void {
     setView({ state: "loading" })

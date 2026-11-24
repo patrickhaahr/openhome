@@ -235,7 +235,8 @@
   }
 }
 
-:root {
+:root,
+[data-theme="light"] {
   color-scheme: light;
   --ground: #f4f4f0;
   --raised: #ffffff;
@@ -247,6 +248,8 @@
   --wash-strong: rgb(18 20 24 / 9%);
   --sun: #ff5b1f;
   --sun-glow: rgb(255 91 31 / 22%);
+  --map-casing: var(--raised);
+  --map-buildings: #d9d9d2;
   --danger: #b42318;
   --scrim: rgb(244 244 240 / 86%);
   --tile: rgb(18 20 24 / 4.5%);
@@ -323,6 +326,8 @@
   --wash-strong: rgb(236 236 230 / 11%);
   --sun: #ff6a2e;
   --sun-glow: rgb(255 106 46 / 26%);
+  --map-casing: var(--ground);
+  --map-buildings: #2a2c31;
   --danger: #ff8a7a;
   --scrim: rgb(11 12 14 / 84%);
   --tile: rgb(236 236 230 / 5.5%);
