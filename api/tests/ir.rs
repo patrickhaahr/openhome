@@ -2,12 +2,28 @@ mod common;
 
 use axum::Router;
 use http::StatusCode;
+use openhome_api::AppState;
 use serde_json::json;
+use sqlx::SqlitePool;
 use wiremock::matchers::{body_string, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+fn mock_state_with_ir(service: openhome_api::services::ir::IrService) -> AppState {
+    AppState {
+        db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        adguard_service: None,
+        docker_service: None,
+        ir_service: Some(service),
+        switchbot_service: None,
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+            openhome_api::DockerCache::default(),
+        )),
+    }
+}
+
 fn ir_test_app(service: openhome_api::services::ir::IrService) -> Router {
-    let state = common::create_mock_state_with_ir(service);
+    let state = mock_state_with_ir(service);
 
     Router::new()
         .merge(openhome_api::routes::ir::router())

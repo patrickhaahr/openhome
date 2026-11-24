@@ -187,7 +187,7 @@ async fn open_file_database(path: &std::path::Path) -> SqlitePool {
 async fn simultaneous_deliveries_record_one_weight() {
     let dir = tempfile::tempdir().unwrap();
     let db = open_file_database(&dir.path().join("app.db")).await;
-    let (app, _) = common::test_app_with_pool(db, None);
+    let (app, _) = common::test_app_with_pool(db);
 
     let (one, two, three) = tokio::join!(
         post(&app, record("phone-weight-1", DATE, 75.5)),

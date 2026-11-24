@@ -1,4 +1,4 @@
-use crate::common::food_workbook::second_dataset;
+use crate::dataset_v2::second_dataset;
 use crate::support::{Api, SKYR, UNLINKED, by_name, product_at, protein_bowl};
 use axum::{http::Method, http::StatusCode};
 use pretty_assertions::assert_eq;
@@ -245,14 +245,14 @@ async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_bef
 
     api.reimport(
         "3",
-        crate::common::food_workbook::workbook(
-            &crate::common::food_workbook::parameters("g/100g"),
+        crate::builder::workbook(
+            &crate::dataset_v1::parameters("g/100g"),
             &[
-                crate::common::food_workbook::SyntheticFood {
+                crate::builder::SyntheticFood {
                     id: 2,
-                    ..crate::common::food_workbook::rye_bread()
+                    ..crate::dataset_v2::rye_bread()
                 },
-                crate::common::food_workbook::skyr(12.0),
+                crate::dataset_v1::skyr(12.0),
             ],
         ),
     )
@@ -307,14 +307,14 @@ async fn a_meal_whose_food_left_the_food_database_must_be_updated_before_it_is_l
 
     api.reimport(
         "3",
-        crate::common::food_workbook::workbook(
-            &crate::common::food_workbook::parameters("g/100g"),
+        crate::builder::workbook(
+            &crate::dataset_v1::parameters("g/100g"),
             &[
-                crate::common::food_workbook::SyntheticFood {
+                crate::builder::SyntheticFood {
                     id: 2,
-                    ..crate::common::food_workbook::rye_bread()
+                    ..crate::dataset_v2::rye_bread()
                 },
-                crate::common::food_workbook::skyr(12.0),
+                crate::dataset_v1::skyr(12.0),
             ],
         ),
     )

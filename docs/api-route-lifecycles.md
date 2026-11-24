@@ -73,7 +73,7 @@ No migrations, checked SQL text or SQLx metadata changed.
 
 No tests were edited or run, and no build/format/lint/check commands were run
 for this implementation. GLM owns validation and commits. Existing proof is in
-`api/tests/route_loop.rs`; coverage must be assessed rather than assumed.
+`api/tests/route_loop/`; coverage must be assessed rather than assumed.
 
 Meaningful seam coverage includes concurrent same-target cache reuse; six-seed
 exhaustion with zero/partial matches; provider failure and invalid geometry

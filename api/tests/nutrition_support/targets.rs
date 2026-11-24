@@ -1,7 +1,6 @@
-use crate::{
-    common::food_workbook::first_dataset, common::food_workbook::sha256,
-    common::send_request_with_method, common::test_app_with_db, common::test_app_with_pool,
-};
+use crate::builder::sha256;
+use crate::common::{send_request_with_method, test_app_with_db, test_app_with_pool};
+use crate::dataset_v1::first_dataset;
 use axum::{Router, http::Method, http::StatusCode};
 use chrono::{Datelike, Days, NaiveDate, Utc};
 use openhome_api::{
@@ -42,7 +41,7 @@ impl Api {
         let url = format!("sqlite:{}", dir.path().join("app.db").display());
         let db = db::connect_sqlite(&url).await.unwrap();
         sqlx::migrate!("./migrations").run(&db).await.unwrap();
-        let (fitness, state) = test_app_with_pool(db.clone(), None);
+        let (fitness, state) = test_app_with_pool(db.clone());
         Self::finish(server, dir, db, fitness, state).await
     }
 

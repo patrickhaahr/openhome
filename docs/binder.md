@@ -178,15 +178,15 @@ discards every stored Card, image and unlisted-code marker.
 ## Verification
 
 Run `devenv shell -- just api-check mcp-check`. The domain proof is
-`api/tests/cards.rs`: authenticated HTTP on migrated SQLite against a loopback
+`api/tests/binder/cards.rs`: authenticated HTTP on migrated SQLite against a loopback
 catalogue (first lookup, cached lookup, unlisted and malformed codes, each
-failure kind, image serving). `api/tests/binder.rs` covers additions, owner
+failure kind, image serving). `api/tests/binder/binder.rs` covers additions, owner
 clarification, merging, unlisted cards, outages and ordering,
-`api/tests/binder_retries.rs` covers receipts and simultaneous retries, and the
+`api/tests/binder/retries.rs` covers receipts and simultaneous retries, and the
 Card Code ordering unit test is in `api/src/services/binder.rs`.
-`api/tests/binder_values.rs` and `api/tests/exchange_rates.rs` cover values, stale
+`api/tests/binder/values.rs` and `api/tests/binder/exchange_rates.rs` cover values, stale
 flags, the ECB refresh and its failures against a synthetic ECB server.
-`api/tests/binder_edits.rs` covers partial updates, validation, the language
+`api/tests/binder/edits.rs` covers partial updates, validation, the language
 collision, wrong owners, deletion and the Household User cascade.
 `mcp/tests/binder.rs` drives `search_cards`, `add_binder_entry`, `binder_entries`,
 `update_binder_entry` and `delete_binder_entry` through the real Streamable HTTP

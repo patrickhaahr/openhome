@@ -1,10 +1,19 @@
 mod common;
 
+#[path = "food_workbook/builder.rs"]
+mod builder;
+#[path = "food_workbook/dataset_v1.rs"]
+mod dataset_v1;
+#[path = "food_workbook/dataset_v2.rs"]
+mod dataset_v2;
+
 use std::path::PathBuf;
 
 use axum::{Router, http::StatusCode};
-use common::food_workbook::{first_dataset, parameters, second_dataset, sha256, skyr, workbook};
+use builder::{sha256, workbook};
 use common::{send_request, test_app_with_db};
+use dataset_v1::{first_dataset, parameters, skyr};
+use dataset_v2::second_dataset;
 use openhome_api::{
     auth::{ApiKey, auth_middleware},
     db, routes,

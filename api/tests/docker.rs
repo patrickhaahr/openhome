@@ -1,8 +1,53 @@
 mod common;
 
-use common::{send_request, send_request_with_method, test_app_with_docker};
+use axum::Router;
+use common::{memory_noop_db, send_request, send_request_with_method};
 use http::StatusCode;
+use openhome_api::AppState;
+use openhome_api::auth::{ApiKey, auth_middleware};
+use openhome_api::routes::{
+    adguard::router as adguard_router, docker::router as docker_router,
+    feeds::router as feeds_router, fitness::router as fitness_router,
+    health::router as health_router, ir::router as ir_router,
+    switchbot::router as switchbot_router, timeline::router as timeline_router,
+    training::router as training_router,
+};
+use openhome_api::services::docker::DockerService;
 use serde_json::json;
+use sqlx::SqlitePool;
+
+async fn test_app_with_docker() -> Router {
+    let api_key = ApiKey::new("test-api-key".to_string());
+
+    let db = SqlitePool::connect(":memory:").await.unwrap();
+    sqlx::migrate!("./migrations").run(&db).await.unwrap();
+
+    let state = AppState {
+        db,
+        noop_db: memory_noop_db().await,
+        adguard_service: None,
+        docker_service: DockerService::new().ok(),
+        ir_service: None,
+        switchbot_service: None,
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+            openhome_api::DockerCache::default(),
+        )),
+    };
+
+    health_router()
+        .merge(adguard_router())
+        .merge(docker_router())
+        .merge(feeds_router())
+        .merge(fitness_router())
+        .merge(ir_router())
+        .merge(switchbot_router())
+        .merge(timeline_router())
+        .merge(training_router())
+        .with_state(state)
+        .layer(axum::middleware::from_fn(move |req, next| {
+            auth_middleware(req, next, api_key.clone())
+        }))
+}
 
 #[tokio::test]
 async fn test_list_containers_returns_unauthorized_without_api_key() {

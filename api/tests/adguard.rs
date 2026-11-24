@@ -2,7 +2,23 @@ mod common;
 
 use axum::Router;
 use http::StatusCode;
+use openhome_api::AppState;
 use serde_json::json;
+use sqlx::SqlitePool;
+
+fn mock_state_with_adguard(service: openhome_api::services::adguard::AdguardService) -> AppState {
+    AppState {
+        db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        noop_db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
+        adguard_service: Some(service),
+        docker_service: None,
+        ir_service: None,
+        switchbot_service: None,
+        docker_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+            openhome_api::DockerCache::default(),
+        )),
+    }
+}
 
 #[tokio::test]
 async fn test_status_endpoint_returns_503_when_service_not_configured() {
@@ -154,7 +170,7 @@ async fn test_pause_endpoint_with_adguard_service() {
         false,
     )
     .unwrap();
-    let state = common::create_mock_state_with_adguard(service);
+    let state = mock_state_with_adguard(service);
 
     let app = Router::new()
         .merge(openhome_api::routes::adguard::router())
