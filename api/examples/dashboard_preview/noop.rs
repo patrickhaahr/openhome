@@ -498,10 +498,15 @@ fn loop_route(length_m: f64, seed: u64) -> String {
 }
 
 fn encode_signed(value: i64, out: &mut String) {
-    let mut value = if value < 0 { !(value << 1) } else { value << 1 };
-    while value >= 0x20 {
-        out.push(char::from(((0x20 | (value & 0x1f)) + 63) as u8));
-        value >>= 5;
+    let zigzag = if value < 0 { !(value << 1) } else { value << 1 };
+    let mut remaining = zigzag.cast_unsigned();
+    while remaining >= 0x20 {
+        out.push(polyline_digit((0x20 | (remaining & 0x1f)) + 63));
+        remaining >>= 5;
     }
-    out.push(char::from((value + 63) as u8));
+    out.push(polyline_digit(remaining + 63));
+}
+
+fn polyline_digit(code: u64) -> char {
+    char::from(u8::try_from(code).expect("a polyline digit is ASCII"))
 }
