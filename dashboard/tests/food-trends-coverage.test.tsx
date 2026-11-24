@@ -35,6 +35,14 @@ let container: HTMLDivElement
 
 const today = trainingDayOn(new Date())
 
+const FIRST_LOGGED_DAYS_AGO = 12
+
+const LAST_LOGGED_DAYS_AGO = 3
+
+const UNLOGGED_DAY_AGO = 7
+
+const SUPPLEMENT_DAYS_AGO: ReadonlyArray<number> = [10, 9]
+
 type Json =
   | string
   | number
@@ -78,15 +86,18 @@ beforeAll(async () => {
     .object({ supplement: z.object({ id: z.string() }) })
     .parse(JSON.parse(added))
 
-  for (let daysAgo = 12; daysAgo >= 3; daysAgo -= 1) {
-    if (daysAgo === 7) continue
+  for (
+    let daysAgo = FIRST_LOGGED_DAYS_AGO;
+    daysAgo >= LAST_LOGGED_DAYS_AGO;
+    daysAgo -= 1
+  ) {
+    if (daysAgo === UNLOGGED_DAY_AGO) continue
     await send("POST", "/api/nutrition/meal-logs", {
       eaten_at: `${shiftDay(today, -daysAgo)}T11:00:00Z`,
       portions: [{ food_id: 1693, grams: 300 }],
-      supplement_doses:
-        daysAgo === 10 || daysAgo === 9
-          ? [{ supplement_id: supplement.id, doses: 1 }]
-          : [],
+      supplement_doses: SUPPLEMENT_DAYS_AGO.includes(daysAgo)
+        ? [{ supplement_id: supplement.id, doses: 1 }]
+        : [],
       request_id: crypto.randomUUID(),
     })
   }
