@@ -15,6 +15,7 @@ if not key or any(c.isspace() for c in key):
 config = json.dumps({"apiKey": key, "transportHost": "100.120.132.42", "serverName": "openhome.haahr.me"}).encode()
 files = {
     "var/lib/openhome-tv/client.js": ((root / "bridge/client.js").read_bytes(), 0o644),
+    "var/lib/openhome-tv/lifecycles.js": ((root / "bridge/lifecycles.js").read_bytes(), 0o644),
     "var/lib/openhome-tv/client-service.sh": ((root / "runtime" / "client-service.sh").read_bytes(), 0o755),
     "var/lib/openhome-tv/picture-toggle.py": ((root / "runtime" / "picture-toggle.py").read_bytes(), 0o644),
     "var/lib/openhome-tv/client.json": (config, 0o600),

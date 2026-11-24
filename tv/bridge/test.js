@@ -8,6 +8,8 @@ var fs = require('fs');
 var os = require('os');
 var path = require('path');
 var client = require('./client');
+var lifecycleTests = require('./test-lifecycles');
+var refreshTests = require('./test-refresh');
 var MINUTE = 60000;
 var now = Date.parse('2026-10-21T12:00:00Z');
 
@@ -214,6 +216,17 @@ async function commands() {
   assert.strictEqual(attempts, 2);
 }
 
+async function acknowledgementIsNotDeviceState() {
+  var bridge = client.createBridge({now: function () { return now; }, request: function (path) {
+    if (path === '/api/lights/on') return Promise.resolve({message: 'Lights on', state: 'on'});
+    return Promise.resolve(path === '/api/weather' ? weather() : recovery());
+  }});
+  var before = await bridge.getState();
+  assert.deepStrictEqual(await bridge.command('lights-on'), {status: 200, body: {state: 'accepted'}});
+  assert.deepStrictEqual(await bridge.getState(), before);
+  assert.deepStrictEqual(Object.keys(before), ['day', 'weather', 'recovery']);
+}
+
 function localRequest(port, path, method, overrides, body) {
   return new Promise(function (resolve, reject) {
     var headers = Object.assign({Host: '127.0.0.1:39479', 'X-OpenHome-TV': '1'}, overrides);
@@ -296,17 +309,30 @@ async function upstreamBounds() {
     await rejects(client.requestApi(config, '/api/weather', 'GET', undefined, 100));
     mode = 'timeout';
     await rejects(client.requestApi(config, '/api/weather', 'GET', undefined, 5));
+    var clock = now;
+    var bounded = client.createBridge({now: function () { return clock; }, request: function (path, method, body) {
+      return client.requestApi(config, path, method, body, 5);
+    }});
+    assert.strictEqual((await bounded.command('lights-on')).status, 502);
+    assert.strictEqual((await bounded.getState()).weather.state, 'unavailable');
+    mode = 'valid';
+    clock += 1000;
+    assert.strictEqual((await bounded.command('lights-on')).status, 200, 'the request deadline releases a hung command');
+    assert.strictEqual((await bounded.getState()).weather.state, 'unavailable', 'the request deadline releases a hung refresh');
   } finally { https.request = original; }
 }
 
 async function main() {
+  lifecycleTests();
   await transforms();
   await configBoundary();
   await cache();
+  await refreshTests(weather, recovery);
   await commands();
+  await acknowledgementIsNotDeviceState();
   await httpBoundary();
   await upstreamBounds();
-  console.log('TV bridge: contracts, cache, midnight/DST, command acknowledgement, HTTP boundary and transport bounds passed');
+  console.log('TV bridge: lifecycles, contracts, cache, midnight/DST, command acknowledgement, HTTP boundary and transport bounds passed');
 }
 
 main().catch(function (error) { console.error(error); process.exitCode = 1; });
