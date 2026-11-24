@@ -1,12 +1,8 @@
-mod common;
-#[path = "nutrition_support/meal_logs.rs"]
-mod support;
-
+use crate::common::send_request_with_method;
+use crate::support::{Nutrition, at, breakfast, synthetic, with_photo};
 use axum::{http::Method, http::StatusCode};
-use common::send_request_with_method;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Nutrition, at, breakfast, synthetic, with_photo};
 
 #[tokio::test]
 async fn a_photo_is_stored_upright_without_metadata_as_avif_with_a_thumbnail() {

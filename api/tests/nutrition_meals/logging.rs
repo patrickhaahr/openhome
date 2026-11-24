@@ -1,12 +1,8 @@
-mod common;
-#[path = "nutrition_support/meals.rs"]
-mod support;
-
+use crate::common::food_workbook::second_dataset;
+use crate::support::{Api, SKYR, UNLINKED, by_name, product_at, protein_bowl};
 use axum::{http::Method, http::StatusCode};
-use common::food_workbook::second_dataset;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, SKYR, UNLINKED, by_name, product_at, protein_bowl};
 
 #[tokio::test]
 async fn logging_a_meal_by_name_copies_its_items_as_portions_with_overrides_and_records_its_name() {
@@ -249,14 +245,14 @@ async fn a_product_whose_linked_food_left_the_food_database_must_be_relinked_bef
 
     api.reimport(
         "3",
-        common::food_workbook::workbook(
-            &common::food_workbook::parameters("g/100g"),
+        crate::common::food_workbook::workbook(
+            &crate::common::food_workbook::parameters("g/100g"),
             &[
-                common::food_workbook::SyntheticFood {
+                crate::common::food_workbook::SyntheticFood {
                     id: 2,
-                    ..common::food_workbook::rye_bread()
+                    ..crate::common::food_workbook::rye_bread()
                 },
-                common::food_workbook::skyr(12.0),
+                crate::common::food_workbook::skyr(12.0),
             ],
         ),
     )
@@ -311,14 +307,14 @@ async fn a_meal_whose_food_left_the_food_database_must_be_updated_before_it_is_l
 
     api.reimport(
         "3",
-        common::food_workbook::workbook(
-            &common::food_workbook::parameters("g/100g"),
+        crate::common::food_workbook::workbook(
+            &crate::common::food_workbook::parameters("g/100g"),
             &[
-                common::food_workbook::SyntheticFood {
+                crate::common::food_workbook::SyntheticFood {
                     id: 2,
-                    ..common::food_workbook::rye_bread()
+                    ..crate::common::food_workbook::rye_bread()
                 },
-                common::food_workbook::skyr(12.0),
+                crate::common::food_workbook::skyr(12.0),
             ],
         ),
     )

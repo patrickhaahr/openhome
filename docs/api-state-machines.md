@@ -74,13 +74,13 @@ the suites, not a record of a run.
 - **Routes** (`api/tests/route_loop.rs`): concurrent same-target cache reuse,
   interrupted partial results, retention and selection protection, restart reads.
 - **Receipts** (`fitness_*_retries.rs`, `fitness_profile_revisions.rs`,
-  `nutrition_meal_logs.rs`, domain suites): concurrent claims, conflict precedence,
+  `nutrition_meal_logs/`, domain suites): concurrent claims, conflict precedence,
   deletion fences, legacy results, revision acknowledgement.
-- **Meal photos** (`api/tests/nutrition_meal_logs.rs`): rejected photos write nothing,
+- **Meal photos** (`api/tests/nutrition_meal_logs/`): rejected photos write nothing,
   replay and conflict, attach/replace/remove, and refusal/cleanup against real file
   databases. Power-loss durability and dropped-future cleanup are **not** established;
   see the module limits.
-- **Nutrition weeks** (`api/tests/nutrition_targets.rs`): racing first reads return one
+- **Nutrition weeks** (`api/tests/nutrition_targets/`): racing first reads return one
   stored winner (`concurrent_first_reads_agree_on_the_stored_winner`); a stored
   week survives Profile loss; the provisional/frozen boundary.
 - **NOOP push** (`api/tests/noop_push.rs`): byte-identical and cross-encoding retries,

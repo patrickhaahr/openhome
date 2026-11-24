@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/products.rs"]
-mod support;
-
+use crate::support::{Api, SKYR, UNKNOWN, amount, found, meal, nutrient, skyr_label};
 use axum::{http::Method, http::StatusCode};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, SKYR, UNKNOWN, amount, found, meal, nutrient, skyr_label};
 
 #[tokio::test]
 async fn a_product_portion_takes_label_values_first_and_its_linked_food_fills_the_gaps() {

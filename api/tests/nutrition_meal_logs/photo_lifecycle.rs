@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/meal_logs.rs"]
-mod support;
-
+use crate::support::{Nutrition, at, breakfast, lock_app_db, release, synthetic, with_photo};
 use axum::{http::Method, http::StatusCode};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Nutrition, at, breakfast, lock_app_db, release, synthetic, with_photo};
 
 #[tokio::test]
 async fn a_retried_log_with_a_photo_replays_and_another_photo_conflicts() {

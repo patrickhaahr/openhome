@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/supplements.rs"]
-mod support;
-
+use crate::support::{Api, creatine, fish_oil};
 use axum::http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::json;
-use support::{Api, creatine, fish_oil};
 
 #[tokio::test]
 async fn a_meal_takes_supplement_doses_by_reference_and_logs_them_with_dose_overrides() {

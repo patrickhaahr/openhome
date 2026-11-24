@@ -1,10 +1,6 @@
-mod common;
-#[path = "nutrition_support/micronutrients.rs"]
-mod support;
-
+use crate::support::{Api, coverage, limit_flags, limits, nutrient, woman};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, coverage, limit_flags, limits, nutrient, woman};
 
 #[tokio::test]
 async fn a_day_above_an_upper_limit_is_a_caution_and_a_seven_day_average_above_it_says_cut_down() {

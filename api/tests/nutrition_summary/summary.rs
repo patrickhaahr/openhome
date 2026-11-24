@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/summary.rs"]
-mod support;
-
+use crate::support::{Api, day_from_today, three_logged_days};
 use axum::{http::Method, http::StatusCode};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, day_from_today, three_logged_days};
 
 #[tokio::test]
 async fn weeks_run_monday_to_sunday_and_edge_weeks_cover_only_the_range() {

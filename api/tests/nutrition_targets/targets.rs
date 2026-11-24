@@ -1,12 +1,8 @@
-mod common;
-#[path = "nutrition_support/targets.rs"]
-mod support;
-
+use crate::support::{Api, man, today};
 use axum::http::StatusCode;
 use chrono::{Datelike, Days};
 use pretty_assertions::assert_eq;
 use serde_json::json;
-use support::{Api, man, today};
 
 #[tokio::test]
 async fn targets_are_unavailable_until_the_profile_and_a_body_weight_allow_them() {

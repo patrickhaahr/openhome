@@ -1,11 +1,7 @@
-mod common;
-#[path = "nutrition_support/summary.rs"]
-mod support;
-
+use crate::support::{Api, CHICKEN, day_from_today};
 use axum::{http::Method, http::StatusCode};
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Api, CHICKEN, day_from_today};
 
 #[tokio::test]
 async fn targets_are_the_mean_of_each_days_target_and_reading_fixes_past_weeks() {

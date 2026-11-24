@@ -1,13 +1,11 @@
-mod common;
-#[path = "nutrition_support/meal_logs.rs"]
-mod support;
-
+use crate::common::{
+    food_workbook::second_dataset, food_workbook::sha256, send_request_with_method,
+};
+use crate::support::{Nutrition, app, at, breakfast, open, photos};
 use axum::{http::Method, http::StatusCode};
-use common::{food_workbook::second_dataset, food_workbook::sha256, send_request_with_method};
 use openhome_api::services::nutrition::food_database::DatasetPin;
 use pretty_assertions::assert_eq;
 use serde_json::{Value, json};
-use support::{Nutrition, app, at, breakfast, open, photos};
 
 #[tokio::test]
 async fn a_retried_request_id_replays_conflicts_on_changes_and_never_recreates_a_deleted_log() {
