@@ -32,7 +32,7 @@
  "api/noop_migrations/20260925234639_receiver_state.up.sql": 4,
  "api/noop_migrations/20260925235820_append_streams.up.sql": 11,
  "api/noop_migrations/20260926001649_replace_window_streams.up.sql": 22,
- "cli/src/main.rs": 17,
+ "cli/src/main.rs": 16,
  "mcp/src/binder.rs": 18,
  "mcp/src/important_dates.rs": 17,
  "mcp/src/nutrition.rs": 117,
