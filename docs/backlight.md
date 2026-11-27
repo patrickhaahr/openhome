@@ -36,6 +36,13 @@ restores the saved brightness. White balance, black-screen settings and camera
 geometry are never changed by these commands. This is not a complete camera
 calibration export.
 
+The CLI selects modes with `openhome backlight tv`, `red`, `color <rgb>`, `off`
+and `automatic`, and reads status with `openhome backlight status`. `<rgb>` is hex
+(`0080ff`, `'#0080ff'` with the `#` quoted for the shell) or `red,green,blue`
+(`0,128,255`). `red` and `color` send
+brightness 100 unless `--brightness` is given; `tv` without it restores the saved
+profile brightness.
+
 The native camera inactivity hold can be read with `openhome backlight inactivity`
 and set with `openhome backlight inactivity --seconds 300` (or the corresponding
 `devenv shell -- just cli-run ...` recipe). The authenticated API provides

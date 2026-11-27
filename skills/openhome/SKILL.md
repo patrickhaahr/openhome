@@ -1,10 +1,10 @@
 ---
 name: openhome
-description: 'Control OpenHome (the smart home) through the first-party `openhome` CLI. Use for any natural-language OpenHome request: checking health, turning lights on or off, IR remote commands for the Edifier speaker or LG TV, opening TV apps, or managing AdGuard Protection (status, enable, disable, timed pause). Examples: "turn off my lights", "pause AdGuard for 30 minutes", "mute the speaker", "open YouTube on the TV".'
+description: 'Control OpenHome (the smart home) through the first-party `openhome` CLI. Use for any natural-language OpenHome request: checking health, turning lights on or off, IR remote commands for the Edifier speaker or LG TV, opening TV apps, managing AdGuard Protection (status, enable, disable, timed pause), or setting the TV Backlight (TV Sync, red, any RGB color, off). Examples: "turn off my lights", "make the backlight blue", "pause AdGuard for 30 minutes", "mute the speaker", "open YouTube on the TV".'
 metadata:
   hermes:
     category: smart-home
-    tags: [openhome, lights, ir, adguard, smart-home]
+    tags: [openhome, lights, ir, adguard, backlight, smart-home]
     requires_toolsets: [terminal]
 ---
 
@@ -51,7 +51,30 @@ openhome adguard status
 openhome adguard enable
 openhome adguard disable
 openhome adguard pause <minutes>   # resumes automatically
+
+# TV Backlight. Brightness is 0-100; red and color default to 100.
+openhome backlight status
+openhome backlight tv [--brightness <0-100>]   # TV Sync: follows the screen
+openhome backlight red [--brightness <0-100>]
+openhome backlight color <rgb> [--brightness <0-100>]
+openhome backlight off
+openhome backlight automatic   # drop manual overrides, follow Bedtime
 ```
 
-`<command>` and `<minutes>` come from the user request; the API decides which
+For `<rgb>`, pass the color the user named as bare hex (`0080ff`) or as
+`red,green,blue` (`0,128,255`). Translate a color name into hex yourself. Quote a
+leading `#` (`'#0080ff'`), because the shell treats it as a comment.
+
+`backlight tv`, `red` and `color` are manual overrides that apply immediately.
+While Bedtime Mode is enabled, an override expires at the next Bedtime start or
+end. Use `backlight automatic` when the user asks to reset the Backlight or
+return it to normal: it clears the override and applies the current routine
+target.
+
+A selection is saved before the Bluetooth write, so the command can succeed
+while the device write fails. Before reporting that the Backlight changed, check
+`command`, `recovery` and `observed` in the JSON and report a failure if they
+show one.
+
+`<command>`, `<minutes>` and `<rgb>` come from the user request; the API decides which
 commands are valid (`openhome ir status` lists what is available).
