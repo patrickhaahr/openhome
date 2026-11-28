@@ -4,12 +4,10 @@ import subprocess
 import sys
 import time
 
-from tv_paths import SSH, TV_ROOT as root
+import preview_bridge
+from tv_paths import TV_ROOT as root
 
-
-
-def remote(command, **kwargs):
-    return subprocess.run(SSH + [command], check=True, **kwargs)
+remote = preview_bridge.remote
 
 
 def keys(*names):
@@ -22,9 +20,9 @@ def capture(name):
     shutil.copy(root / "private" / ("public-" + name + ".jpg"), root / "screenshots" / (name + ".jpg"))
 
 
-remote("cat > /tmp/openhome-tv-preview.js", input=(root / "bridge/preview.js").read_bytes())
+preview_bridge.upload("preview", (root / "bridge/preview.js").read_bytes())
 try:
-    remote("touch /var/lib/openhome-tv/client-disabled && /var/lib/openhome-tv/client-service.sh stop && { setsid node /tmp/openhome-tv-preview.js </dev/null >/tmp/openhome-tv-preview.log 2>&1 & }")
+    preview_bridge.launch("preview")
     time.sleep(2)
     remote("/var/lib/pearwebos/pearwebos on")
     capture("openhome")
@@ -35,5 +33,5 @@ try:
     keys("OK")
     capture("ember-speaking")
 finally:
-    remote("for p in /proc/[0-9]*/cmdline; do [ -r \"$p\" ] || continue; command=$(tr '\\000' ' ' < \"$p\" 2>/dev/null) || continue; case \"$command\" in 'node /tmp/openhome-tv-preview.js '*) pid=${p#/proc/}; kill \"${pid%/cmdline}\";; esac; done; rm -f /tmp/openhome-tv-preview.js /tmp/openhome-tv-preview.log /var/lib/openhome-tv/client-disabled; /var/lib/openhome-tv/client-service.sh start; /var/lib/pearwebos/pearwebos on")
+    preview_bridge.restore("preview")
 print("Public screenshots use synthetic values; the TV is back on the real API.")
