@@ -304,9 +304,21 @@ async fn push_rows(
     Ok(())
 }
 
+fn seeding_instant() -> anyhow::Result<i64> {
+    if std::env::var("OPENHOME_PREVIEW_COMPLETE_TODAY").as_deref() == Ok("true") {
+        midnight(
+            today()
+                .checked_add_days(Days::new(1))
+                .expect("tomorrow exists"),
+        )
+    } else {
+        Ok(Utc::now().timestamp())
+    }
+}
+
 pub async fn seed(db: &SqlitePool) -> anyhow::Result<()> {
     let training: Training = serde_json::from_str(include_str!("seed/training.json"))?;
-    let now = Utc::now().timestamp();
+    let now = seeding_instant()?;
     let oldest = training
         .nights
         .iter()
