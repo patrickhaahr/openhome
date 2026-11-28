@@ -26,7 +26,7 @@ type NavLayoutState = {
 
 const NavLayoutContext = createContext<NavLayoutState | null>(null)
 
-function remember(cookie: string): void {
+export function remember(cookie: string): void {
   // oxlint-disable-next-line unicorn/no-document-cookie -- see remember's comment.
   document.cookie = cookie
 }
