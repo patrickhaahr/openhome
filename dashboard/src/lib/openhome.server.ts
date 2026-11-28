@@ -1,6 +1,7 @@
 import "@tanstack/react-start/server-only"
 import { z } from "zod"
 import type { ConnectionState } from "./connection"
+import { answerDemo } from "./demo/demo.server"
 
 type PrivateConnection = {
   baseUrl: URL
@@ -74,6 +75,10 @@ export async function requestOpenHome({
   query?: Record<string, string> | undefined
   json?: { readonly [key: string]: JsonValue }
 }): Promise<OpenHomeResponse> {
+  const demo = await answerDemo({ path, method, query: query ?? {} })
+
+  if (demo !== undefined) return { state: "received", response: demo }
+
   const config = parseConfiguration()
 
   if (config.state !== "ready") return config

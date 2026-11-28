@@ -10,6 +10,7 @@ import { ThemeScript } from "@/components/daylight"
 import { daylight } from "@/lib/daylight"
 import { readCurrency } from "@/lib/currency.functions"
 import { readIdleSettings } from "@/lib/idle.functions"
+import { readDataMode } from "@/lib/demo/data-mode.functions"
 import { readNavPrefs } from "@/lib/nav-layout.functions"
 
 import appCss from "../styles.css?url"
@@ -18,6 +19,7 @@ export const Route = createRootRoute({
   loader: () => ({
     openedAt: new Date().toISOString(),
     nav: readNavPrefs(),
+    dataMode: readDataMode(),
     currency: readCurrency(),
     idle: readIdleSettings(),
   }),

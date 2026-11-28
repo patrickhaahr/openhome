@@ -3,6 +3,7 @@ import { useTransition } from "react"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise"
 import { ShieldCheckIcon } from "@phosphor-icons/react/dist/csr/ShieldCheck"
 import { NavLayoutSwitch } from "@/components/nav-layout"
+import { DataModeSwitch } from "@/components/data-mode"
 import { PageTitle } from "@/components/page-tools"
 import { Button } from "@/components/ui/button"
 import type { ConnectionState } from "@/lib/connection"
@@ -141,6 +142,12 @@ function ConnectionPage() {
           Navigation layout
         </h2>
         <NavLayoutSwitch />
+      </section>
+      <section aria-labelledby="data-heading">
+        <h2 id="data-heading" className="sr-only">
+          Health and workout data
+        </h2>
+        <DataModeSwitch />
       </section>
       {health.state === "missing-configuration" ? <SetupInstructions /> : null}
     </div>

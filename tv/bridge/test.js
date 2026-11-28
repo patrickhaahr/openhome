@@ -10,6 +10,7 @@ var path = require('path');
 var client = require('./client');
 var lifecycleTests = require('./test-lifecycles');
 var refreshTests = require('./test-refresh');
+var demoTests = require('./test-demo');
 var MINUTE = 60000;
 var now = Date.parse('2026-10-21T12:00:00Z');
 
@@ -328,11 +329,12 @@ async function main() {
   await configBoundary();
   await cache();
   await refreshTests(weather, recovery);
+  await demoTests();
   await commands();
   await acknowledgementIsNotDeviceState();
   await httpBoundary();
   await upstreamBounds();
-  console.log('TV bridge: lifecycles, contracts, cache, midnight/DST, command acknowledgement, HTTP boundary and transport bounds passed');
+  console.log('TV bridge: lifecycles, contracts, cache, midnight/DST, command acknowledgement, HTTP boundary, demo bridge and transport bounds passed');
 }
 
 main().catch(function (error) { console.error(error); process.exitCode = 1; });

@@ -129,6 +129,12 @@ dashboard-synthetic: dashboard-synthetic-build
     pids+=($!)
     wait -n
 
+# Record the synthetic API's health and workout responses into the Dashboard's Demo data snapshot
+[group('dashboard')]
+[working-directory: 'dashboard']
+dashboard-demo-snapshot: dashboard-synthetic-build
+    bun scripts/demo-snapshot.ts
+
 # Watch dashboard tests
 [group('dashboard')]
 [working-directory: 'dashboard']

@@ -41,8 +41,11 @@ They never touch a household database, credential or upstream.
 - **Knobs.** The `OPENHOME_PREVIEW_*` variables and `--food-database=importing`
   are documented in the verify-openhome skill. One more,
   `OPENHOME_PREVIEW_ALBUMS=<n>`, limits the selected Immich albums to the first
-  *n*. After the price-history replay, the preview waits 25 s on the first
-  scheduler start (nine codes at a two-second pace) and 3 s on later starts.
+  *n*. `OPENHOME_PREVIEW_COMPLETE_TODAY=true` seeds today's sleep, naps and
+  workouts in full instead of ending them at the moment of the start, so a
+  capture made at night still shows a finished day. After the price-history
+  replay, the preview waits 25 s on the first scheduler start (nine codes at a
+  two-second pace) and 3 s on later starts.
 - **verify-openhome runs.** Runs and evidence live outside the checkout, so
   they survive worktree removal. The stack starts under `setsid`, so `down.sh`
   stops exactly the process group that run started.

@@ -48,6 +48,7 @@ tv-check: tv-assets
     node --check tv/bridge/client.js
     node --check tv/bridge/lifecycles.js
     node --check tv/bridge/preview.js
+    node --check tv/bridge/demo.js
     node --check tv/launcher/ui/LauncherLifecycles.js
     node --check tv/tools/verify-client.js
     node --check tv/launcher/ui/PictureProfileLifecycle.js
@@ -55,6 +56,7 @@ tv-check: tv-assets
     node tv/bridge/test.js
     node tv/launcher/test-picture-profile.js
     python3 tv/tools/test-inputhook-startup.py
+    python3 tv/tools/test-preview-bridge.py
     node tv/launcher/test-launcher.js
     qmlformat tv/launcher/OpenHome.qml tv/launcher/ui/*.qml > /dev/null
     python3 tv/tools/build-pear.py
@@ -88,6 +90,16 @@ tv-client-check:
 [group('tv')]
 tv-preview-capture:
     python3 tv/tools/capture-preview.py
+
+# Show mock recovery on the TV for filming: stops the real TV client until tv-demo-stop
+[group('tv')]
+tv-demo-start:
+    python3 tv/tools/demo-bridge.py start
+
+# Put the real TV client back after tv-demo-start
+[group('tv')]
+tv-demo-stop:
+    python3 tv/tools/demo-bridge.py stop
 
 # Restore the exact setting values changed during TV setup
 [group('tv')]

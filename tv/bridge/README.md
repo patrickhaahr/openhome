@@ -58,3 +58,11 @@ own freshness deadlines; neither implies the other.
 Restart clears all in-memory state. The launcher mirrors this: a state read is stale-marked on a
 non-200, invalid body or 10-second abort; a command is accepted or uncertain (14-second abort),
 never retried, and an accepted command is acknowledgement only.
+
+## Demo data for filming
+
+`just tv-demo-start` swaps the client for `demo.js`, which answers today's recovery from the Dashboard's
+Demo data snapshot (the capture day's scores, shifted to today) and sends every other request, including
+weather and commands, through the real client and its credentials. `just tv-demo-stop` restores the real
+client. The start recipe leaves the `client-disabled` flag in place, so a reboot keeps the real client
+off until the stop recipe runs. Neither recipe runs `pearwebos on`: open the launcher yourself.

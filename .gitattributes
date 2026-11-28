@@ -11,3 +11,6 @@ api/examples/dashboard_preview/seed/workouts.json -file-size-guard
 scripts/comment-baseline.json -file-size-guard
 
 assets/expo/projektdokumentation.pdf linguist-generated
+
+# Synthetic health and workout API responses the Dashboard serves in Demo data mode (`just dashboard-demo-snapshot`).
+dashboard/src/lib/demo/snapshot.json -file-size-guard linguist-generated
