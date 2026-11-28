@@ -14,6 +14,13 @@ The glanceable overview shown by the Dashboard, where selecting a feature opens
 its focused view and inactivity returns to the overview.
 _Avoid_: Home Tab, permanent widget grid
 
+**Demo Data**:
+A per-device Dashboard mode, chosen on the Connection page or with `?demo=on` and
+`?demo=off`, that answers health and workout reads from a recorded synthetic
+snapshot shifted to today. Photos, weather, lists and controls stay real, saves
+are refused, and the household database is never read or written.
+_Avoid_: Test mode, fake account
+
 **Dashboard Remote**:
 A Dashboard control surface for one IR Remote. It shows only the Remote Buttons
 whose Commands the Axum API currently reports, omitting rather than disabling
